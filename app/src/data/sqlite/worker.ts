@@ -136,7 +136,7 @@ function applyRenames(db: Db) {
   for (const r of RENAMED_VALUES) if (hasTable(r.table)) db.exec(r.sql);
 }
 
-function ensureSchema(sqlite3: Db, db: Db) {
+export function ensureSchema(sqlite3: Db, db: Db) {
   const expected = schemaHash(schema);
   if (Number(db.selectValue("PRAGMA user_version")) === expected) return;
   // Renamed values may break the old CHECKs until the tables are rebuilt with the new ones.

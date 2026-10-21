@@ -15,6 +15,29 @@ export type DataChange =
   | { scope: "templates" }
   | { scope: "bookmarks" };
 
+/** Where and whether this device syncs (stored per device; see data/sync/SyncEngine.ts). */
+export interface SyncConfig {
+  /** The Kubus server, e.g. https://notes.example.com */
+  url: string;
+  token: string;
+  enabled: boolean;
+}
+export interface SyncStatus {
+  state: "off" | "idle" | "syncing" | "error";
+  /** ISO time of the last successful sync. */
+  lastSync: string | null;
+  error: string | null;
+}
+export interface SyncControl {
+  readonly config: SyncConfig;
+  /** A new object whenever it changes (for useSyncExternalStore). */
+  readonly status: SyncStatus;
+  subscribe(listener: () => void): () => void;
+  /** Saves the settings and syncs right away when enabled. */
+  configure(config: SyncConfig): Promise<void>;
+  syncNow(): Promise<void>;
+}
+
 /**
  * The only door from the UI to persistence. Today it is backed by local SQLite;
  * a future sync-aware implementation (local replica + Postgres) plugs in here
@@ -23,6 +46,8 @@ export type DataChange =
 export interface Repository {
   /** persistent=false means an in-memory fallback: data is lost on reload. */
   readonly storage: { persistent: boolean };
+  /** Syncing with the Kubus server. */
+  readonly sync: SyncControl;
 
   /** Notified after every successful write; returns an unsubscribe function. */
   subscribe(listener: (change: DataChange) => void): () => void;

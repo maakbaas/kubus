@@ -61,7 +61,9 @@ body,
   display: flex;
   flex-direction: column;
   block-size: 100vh;
-  padding: 0;
+  block-size: 100dvh; /* a phone's address bar and home indicator are not part of the page */
+  /* Home-screen app: keep clear of the notch (landscape) and the home indicator. */
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   box-sizing: border-box;
 }
 .ws-pane__spacer {

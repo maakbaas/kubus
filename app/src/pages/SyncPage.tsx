@@ -1,0 +1,77 @@
+import { useId, useState, useSyncExternalStore } from "react";
+import { Button, Form, InlineNotification, PasswordInput, Stack, TextInput, Toggle } from "@carbon/react";
+import { useStore } from "../app/store";
+import { PageHeader } from "../ui/PageHeader";
+
+const STATE_TEXT = { off: "Off", idle: "Up to date", syncing: "Syncing…", error: "Failed" } as const;
+
+/** Where this device syncs to: the Kubus server's address and token, switched on and off. */
+export function SyncPage() {
+  const { repo } = useStore();
+  const uid = useId();
+  const { sync } = repo;
+  const status = useSyncExternalStore(sync.subscribe.bind(sync), () => sync.status);
+  const [draft, setDraft] = useState(sync.config);
+  const [saving, setSaving] = useState(false);
+
+  const save = async (e?: { preventDefault(): void }) => {
+    e?.preventDefault();
+    setSaving(true);
+    try {
+      await sync.configure(draft);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <PageHeader
+        title="Sync"
+        subtitle="Keeps this device's data in step with your Kubus server. The data stays on this device too, so Kubus works offline."
+      />
+      {status.error && <InlineNotification kind="error" title="Sync failed" subtitle={status.error} hideCloseButton />}
+      <Form onSubmit={save} noValidate>
+        <Stack gap={6}>
+          <TextInput
+            size="sm"
+            id={`${uid}-url`}
+            labelText="Server"
+            placeholder="https://notes.example.com"
+            value={draft.url}
+            onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
+          />
+          <PasswordInput
+            size="sm"
+            id={`${uid}-token`}
+            labelText="Token"
+            helperText="The KUBUS_TOKEN of the server."
+            value={draft.token}
+            onChange={(e) => setDraft((d) => ({ ...d, token: e.target.value }))}
+          />
+          <Toggle
+            size="sm"
+            id={`${uid}-enabled`}
+            labelText="Sync this device"
+            labelA="Off"
+            labelB="On"
+            toggled={draft.enabled}
+            onToggle={(enabled) => setDraft((d) => ({ ...d, enabled }))}
+          />
+          <p className="helper">
+            {STATE_TEXT[status.state]}
+            {status.lastSync && `, last synced ${new Date(status.lastSync).toLocaleString()}`}
+          </p>
+          <div>
+            <Button size="sm" kind="primary" type="submit" disabled={saving}>
+              Save
+            </Button>{" "}
+            <Button size="sm" kind="secondary" disabled={status.state === "syncing"} onClick={() => void sync.syncNow()}>
+              Sync now
+            </Button>
+          </div>
+        </Stack>
+      </Form>
+    </>
+  );
+}

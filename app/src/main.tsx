@@ -5,6 +5,7 @@ import "@carbon/styles/css/styles.css";
 import "./styles.css";
 import { App } from "./app/App";
 import { suppressShellContextMenu } from "./platform/contextMenu";
+import { registerServiceWorker } from "./platform/serviceWorker";
 import { useMediaQuery } from "./ui/useMediaQuery";
 
 function Root() {
@@ -17,6 +18,7 @@ function Root() {
 }
 
 suppressShellContextMenu();
+registerServiceWorker();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

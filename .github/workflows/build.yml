@@ -111,3 +111,23 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist-artifacts/*
+
+  # The server: type check, and the Docker image builds (web app included).
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Type check
+        working-directory: server
+        run: |
+          npm ci
+          npm run typecheck
+
+      - name: Docker image
+        run: docker build -f server/Dockerfile .

@@ -15,7 +15,7 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   key of `TOGGLE_ICONS` in `ui/ToggleInput.tsx`: heart, star, flag, bookmark, checkmark, thumbs up,
   faces; outlined when off, filled when on; null = Carbon's checkbox). Every place that toggles
   such a value uses `ToggleInput`, never `Checkbox` directly. Markdown task boxes stay GFM boxes.
-- **Markdown is strictly GitHub Flavored Markdown.** The Milkdown editor (`src/ui/MarkdownEditor.tsx`)
+- **Markdown is strictly GitHub Flavored Markdown.** The Milkdown editor (`app/src/ui/MarkdownEditor.tsx`)
   loads only the CommonMark + GFM presets (plus non-syntax utilities: history, listener,
   clipboard, upload, prism). Don't add syntax plugins (math, emoji, diagrams, frontmatter, Crepe, …),
   and any future renderer must also be GFM-only. Behaviour-only additions are fine: clickable task
@@ -36,13 +36,13 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
 - **Type editor header is the editor** for the type's icon (button + popover picker) and name
   (heading-sized input).
 - **Types have an icon** from the full Carbon set (`object_types.icon`, an `@carbon/icons-react`
-  export name). The icon module is lazy-loaded (`src/ui/objectIcons.tsx`); the picker is a search
-  box over a grid of matches. App icon: `public/favicon.svg` (Cube, white on #0f62fe),
-  rendered to `src-tauri/icons` with `tauri icon`. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
+  export name). The icon module is lazy-loaded (`app/src/ui/objectIcons.tsx`); the picker is a search
+  box over a grid of matches. App icon: `app/public/favicon.svg` (Cube, white on #0f62fe),
+  rendered to `desktop/icons` with `tauri icon`. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
   names, the lock or the `kubus.*` storage keys, orphans existing data).
 - The Milkdown editor reports changes synchronously (`changes` plugin); don't switch back to the
   debounced listener plugin, which lost text typed right before saving.
-- **Templates** (`#/templates`, `src/domain/templates.ts`, table `templates`, field kind
+- **Templates** (`#/templates`, `app/src/domain/templates.ts`, table `templates`, field kind
   `template`): Markdown with `{{ … }}` sections of JavaScript over `$variables` (stored as
   `params`), plus the built-ins `$now` / `$object` (the object itself, n8n style; details in the
   header of `templates.ts`). A Template field picks one (`fields.template_id`) and maps each
@@ -67,7 +67,7 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
     object page layout; `ui/FieldModal.tsx`, which also edits template fields). They are ordinary
     fields of the type, shown in the picker's own view; adding asks for confirmation (the field
     belongs to the type, not the view).
-- **Field order and layouts** (`src/domain/fieldLayout.ts`, `ui/FieldOrderEditor.tsx`): one
+- **Field order and layouts** (`app/src/domain/fieldLayout.ts`, `ui/FieldOrderEditor.tsx`): one
   approach for which fields show in which order: table columns, card fields and object pages
   (`orderFields`; null = all in the type's order). Object pages show an object view
   (`object_types.object_views`, JSON: name + layout = editable, field names shown, fields + order):
@@ -82,7 +82,7 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   there is one view without unsaved changes; a changed view's tab shows " *". When a layout hides
   fields or isn't editable, an edit icon switches to the standard page (all fields, editable)
   for the time being.
-- **Bookmarks** (`src/domain/bookmarks.ts`, table `bookmarks`): a bookmark icon on a view (tab strip,
+- **Bookmarks** (`app/src/domain/bookmarks.ts`, table `bookmarks`): a bookmark icon on a view (tab strip,
   next to the star) and on an object (page header, next to (i)) toggles a link in the side nav's
   Bookmarks branch. A view bookmark opens `…/objects?view=<id>`. Labels are snapshots, refreshed
   while the bookmarked page is shown; bookmarks of deleted views / objects aren't listed.
@@ -90,13 +90,13 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   list-of-strings values (ASCII case-insensitive; an FTS index can come later).
 - **Local first.** The app works fully offline on the device's own SQLite database.
 - **Future:** the same templates render whole objects and query results (see Templates).
-- **Future: sync.** The local SQLite becomes an offline-first replica of a Postgres-backed server.
+- **Sync.** The local SQLite is an offline-first replica of a Postgres-backed server (see "Sync with Postgres").
 - **One codebase, many shells.** Desktop runs in Tauri; iOS (and anything else) runs the same web
   build as a home-screen web app (PWA). No native-only features in the core app.
 - **Responsive UI** built strictly with the Carbon Design System (`@carbon/react`): use Carbon
   components for every control (DatePicker/TimePicker, NumberInput, ComboBox, …), never native
   inputs or hand-rolled widgets.
-- **Pre-alpha, but data is kept where possible.** No migration scripts: when `src/data/schema.sql`
+- **Pre-alpha, but data is kept where possible.** No migration scripts: when `app/src/data/schema.sql`
   changes, simple changes (new tables, indexes, nullable or defaulted columns; removed plain
   columns; changed CHECKs, e.g. a new field kind: the table is rebuilt with its rows) are applied
   in place and the data is kept; anything else (retyped columns, new NOT NULL columns without
@@ -164,28 +164,28 @@ says "entry"; a field's own kind is called "Field type" in the UI to keep "Type"
 
 ```
 React UI (Carbon)  ──>  Repository interface  ──>  SqliteRepository  ──>  SQLite (WASM) in a Web Worker
-src/pages, src/ui       src/data/repository.ts     src/data/sqlite/       persisted in OPFS (SAH-pool VFS)
+app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqlite/       persisted in OPFS (SAH-pool VFS)
 ```
 
-- **Tauri is only a window.** `src-tauri` has no commands or DB bindings; its only plugin is
-  `opener` (links open in the system browser), reached via `src/platform/openExternal.ts`, which
-  falls back to `window.open` on the web. New native capabilities go in `src/platform/` the same way. All logic and
+- **Tauri is only a window.** `desktop` has no commands or DB bindings; its only plugin is
+  `opener` (links open in the system browser), reached via `app/src/platform/openExternal.ts`, which
+  falls back to `window.open` on the web. New native capabilities go in `app/src/platform/` the same way. All logic and
   storage live in the web frontend so the identical build runs in a browser / iOS home-screen app.
   Do not add Tauri-only APIs to the core; if a native capability is ever needed, put it behind an
   interface with a web fallback.
 - **SQLite runs in the browser** via `@sqlite.org/sqlite-wasm` inside a dedicated worker
-  (`src/data/sqlite/worker.ts`), stored with the `opfs-sahpool` VFS (no COOP/COEP headers needed;
+  (`app/src/data/sqlite/worker.ts`), stored with the `opfs-sahpool` VFS (no COOP/COEP headers needed;
   Safari 16.4+). Without OPFS it falls back to an in-memory DB and the UI shows a warning.
-- **Repository boundary.** The UI only talks to `Repository` (`src/data/repository.ts`). A
+- **Repository boundary.** The UI only talks to `Repository` (`app/src/data/repository.ts`). A
   sync-aware implementation slots in here later without touching the UI.
 - **Change feed.** After every committed write the repository emits a `DataChange`
   (`types`, `objects` of a type / object, `views` of a type) via `repo.subscribe`. Anything that
-  shows data refreshes through `useDataChanges` (src/app/useDataChanges.ts) rather than relying
+  shows data refreshes through `useDataChanges` (app/src/app/useDataChanges.ts) rather than relying
   on whoever made the edit: object lists, object pages, reference labels, counts and the store's
   types all do. A sync layer must emit the same changes for data arriving from the server.
 - **Writes are change sets.** Each mutating repository method collects its statements and commits
   them in one transaction (`SqlClient.write`). This is the natural unit for a future sync outbox.
-- **Objects are loaded once and shared** (`src/app/objectCache.ts`, hook `useObjects`): while any
+- **Objects are loaded once and shared** (`app/src/app/objectCache.ts`, hook `useObjects`): while any
   pane shows a type, its objects live in one cache, kept current from the change feed (a changed
   object is re-read alone; a type whose fields changed is reloaded) and dropped 10 s after the
   last viewer leaves. Unchanged objects keep their identity, which memoized rows
@@ -194,12 +194,12 @@ src/pages, src/ui       src/data/repository.ts     src/data/sqlite/       persis
   uses `Repository.listLabels` (ids + labels, no values) unless a field's choice filter needs the
   target's objects. Stable `ObjectActions` (delegating to the latest handlers) keep rows from
   re-rendering; keep new actions delegating the same way.
-- **Domain model** (`src/domain`) is storage-agnostic. `fieldKinds.ts` is the registry of field
+- **Domain model** (`app/src/domain`) is storage-agnostic. `fieldKinds.ts` is the registry of field
   kinds (DB column, codec, formatting); `ui/FieldInput.tsx` holds the matching editors.
 - **Renames** of tables, columns or stored values go in `RENAMES` / `RENAMED_VALUES` in
   `worker.ts`: applied before the upgrade (with CHECKs ignored until the rebuild), so renaming
   keeps the data. (Expressions → templates was done this way.)
-- **Schema** is one file, `src/data/schema.sql`. The worker stores a hash of it in
+- **Schema** is one file, `app/src/data/schema.sql`. The worker stores a hash of it in
   `PRAGMA user_version`; on mismatch it builds the new schema in an in-memory database, compares,
   adds missing tables/columns/indexes and drops removed columns in place (`upgradeAdditively`
   in `worker.ts`). Only an incompatible change drops and recreates everything.
@@ -208,13 +208,13 @@ src/pages, src/ui       src/data/repository.ts     src/data/sqlite/       persis
 
 Extension points are registries, not special cases in pages:
 
-- **Query** (`src/domain/query.ts`): filters, sort, grouping as plain data (`ViewQuery`) plus a pure
+- **Query** (`app/src/domain/query.ts`): filters, sort, grouping as plain data (`ViewQuery`) plus a pure
   `applyQuery()`. Everything field-kind specific (filter operators, sort key, group keys, text for
   search) is in one `KIND_RULES` table: a new field kind or operator is added there. Pseudo fields
   `$title`, `$updated`, `$created` can be sorted on; the default query sorts by `$title`.
-- **View types** (`src/views/`): a `ViewTypeDefinition` (kind, label, icon, default options,
+- **View types** (`app/src/views/`): a `ViewTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, the `View` component, optional `OptionsEditor`) registered
-  in `VIEW_TYPES` (`src/views/index.ts`). Today: `table` (title column links to the object; string,
+  in `VIEW_TYPES` (`app/src/views/index.ts`). Today: `table` (title column links to the object; string,
   number, date(time) and object cells edit in place via the shared `ui/FieldEditor`; the last row is empty but for a "+" in the title column, which turns it into an add row
   with inputs per editable column (text aligned with the column); header sorting; grouping = one table per
   group in a collapsible Carbon Accordion; columns as wide as their content on one line while
@@ -225,7 +225,7 @@ Extension points are registries, not special cases in pages:
   a fixed ratio (image shown whole, the rest filled with its average colour) or the images'
   average ratio (filled, cropped); with no title and no fields a card is just its cover). A view type only
   renders a `QueryResult`; it never filters or sorts itself. Shared cell rendering: `views/cells.tsx`.
-- **Saved views** (`src/domain/views.ts`, table `views`): name + kind + JSON config `{ query, options }`.
+- **Saved views** (`app/src/domain/views.ts`, table `views`): name + kind + JSON config `{ query, options }`.
   Every new type gets an ordinary "All" view (table, all objects, sorted by title), created
   with the type in `saveType`; it can be renamed (view settings), edited, starred or deleted like
   any other; "+" adds one ("New", then "New 2", …) as a copy of what is shown, unsaved changes
@@ -240,11 +240,11 @@ Extension points are registries, not special cases in pages:
 
 ### Workspace (tabs and tiling)
 
-- `src/workspace/layout.ts`: the layout as data (a tree of splits and panes; panes hold tabs, a tab
+- `app/src/workspace/layout.ts`: the layout as data (a tree of splits and panes; panes hold tabs, a tab
   holds a route path) with pure operations (open/close/move/split/resize, `restoreWorkspace`).
   `Workspace.tsx` renders it with Carbon tabs; drag a tab onto a pane's edge to split, onto its
   center or tab bar to move it; dividers resize. Layout is remembered per device (localStorage).
-- Every tab renders `AppRoutes` (`src/app/routes.tsx`) in its own `MemoryRouter`. There is no
+- Every tab renders `AppRoutes` (`app/src/app/routes.tsx`) in its own `MemoryRouter`. There is no
   global router: in-app links are plain `href="#/…"` anchors, intercepted per tab (click = this tab,
   Ctrl/Cmd/middle click = new tab); links in the side nav go to the active tab. Code that
   navigates uses `useNavigate()` (this tab) or `useOpenRelated()` (beside / new tab).
@@ -253,7 +253,7 @@ Extension points are registries, not special cases in pages:
   `useOpenRelated(path, mode)` with `openModeOf(event)`: plain click = this tab; Ctrl/Cmd click =
   beside (the pane to the right, reused or split off; a new tab on windows < 72rem); middle click =
   new tab. Such links carry `data-own-click`.
-- The side nav is a Carbon TreeView (`src/app/NavTree.tsx`): Bookmarks, Types (with every
+- The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Types (with every
   type below it) and Templates; branches remember being open per device.
 - There is no header bar. The side nav toggle (filled/outlined panel icon) sits left of the side
   nav's search while the nav is shown; while it is hidden it leads the top-left pane's tab strip,
@@ -295,41 +295,65 @@ Extension points are registries, not special cases in pages:
 - A field's kind and reference target are immutable after creation (changing them would need
   value conversion).
 
-### Planned: sync with Postgres
+### Sync with Postgres (the server and the sync engine)
 
-**Topology.** The client never talks to Postgres directly: browsers / the iOS PWA can only do
-HTTP and WebSockets, not the Postgres wire protocol. Always `app ──HTTPS/WS──> sync server ──>
-Postgres`. A direct connection from the Tauri shell would be desktop-only and break the one-web-
-build rule. The same server later serves remote data sources (see Vision).
+Repo layout: `app/` the web app (what Tauri and the phone run), `desktop/` the Tauri shell,
+`server/` the sync server (Node 24, runs its TypeScript directly, only dependency `pg`),
+`shared/sync.ts` the protocol both sides import (the list of synced tables / columns / types and
+the request shapes).
 
-**Already in place (no client rework needed):** client UUIDs, `updated_at` per row and per field
-value, soft deletes, typed columns mapping 1:1 to Postgres, every write one transaction (change
-set), the `Repository` boundary, and the `DataChange` feed that refreshes the UI for data arriving
-from elsewhere.
+**Topology.** `app ──HTTPS──> server ──> Postgres` (an already running one, `DATABASE_URL`). The
+client never talks to Postgres: browsers and the iOS PWA can only do HTTP. One container
+(`server/Dockerfile`, `docker-compose.yml`, `.env` with `DATABASE_URL` and `KUBUS_TOKEN`) serves the
+sync API at `/api` and the built web app at `/`, so the phone installs the app from the server
+(same origin, no CORS). Auth is one shared bearer token (`KUBUS_TOKEN`); the app's Sync page
+(`#/sync`, `pages/SyncPage.tsx`) holds server URL + token + on/off, per device (localStorage
+`kubus.sync`). A readable Postgres replica (not end-to-end encrypted) was chosen, as the hub
+vision wants server-side queries and remote sources later.
 
-**Still to build, all behind `Repository`:** an outbox written in the same transaction as each
-change set; the push/pull engine and auth; hybrid logical clock timestamps (robust to clock skew)
-with `replica_id`; image files transferred separately (object storage or `bytea`).
+**Client** (`app/src/data/sync/SyncEngine.ts`, created by `SqliteRepository`, exposed as `repo.sync`):
+- *Outbox by triggers.* `schema.sql` has `AFTER INSERT/UPDATE` triggers on every synced table that
+  queue the row's key in `sync_outbox` (local only), in the same transaction as the change; so no
+  repository method knows about sync. Rows the engine applies from the server are not queued
+  (`meta` row `sync_applying` is set during the apply). `worker.ts` `upgradeInPlace` also
+  (re)creates triggers. A new synced table or column needs: `shared/sync.ts`, `server/schema.sql`
+  (CREATE + ALTER line) and triggers in `schema.sql`; `sync/spec.test.ts` fails until they agree.
+- *One request does push and pull*: `POST /api/sync { since, changes }` returns `{ cursor, changes }`
+  (rows with server `seq` > since). Applying the response, clearing the sent part of the outbox
+  (`id <= snapshot`; edits made during the request stay queued) and storing `meta.sync_cursor` is
+  one local transaction. Pulls are incremental (per row; `field_values` rows are single fields).
+- *Merge*: a row replaces the local one only if its `updated_at` is newer (field-level last writer
+  wins, since every value is its own row). Files are immutable and inserted if missing. `now()`
+  never goes below a timestamp received from the server (`observeStamp`), a cheap guard against clock
+  skew instead of a hybrid logical clock.
+- *First sync with a server* (or a changed server URL) queues all local rows.
+- *When*: 2 s after a local write, every 30 s, on `online`, when the app becomes visible, and when the
+  server signals a change (`GET /api/events`, server-sent events read with `fetch` so the token goes
+  in a header; reconnects with backoff). Applied changes are announced as `DataChange`s, so every
+  view refreshes as for a local write.
 
-**Model: like Actual Budget.** Actual is local-first SQLite too and syncs single-field messages
-`(dataset, row, column, value, timestamp)` with an HLC, using a Merkle trie to find quickly what
-two replicas are missing. Our `field_values` rows already have that shape
-`(object, field, value, updated_at)`, so the outbox should hold Actual-style field messages. The
-difference: Actual's server is a dumb relay storing an opaque (optionally end-to-end encrypted)
-message log; ours applies the messages to a real, queryable Postgres.
+**Server** (`server/src`): `sync.ts` runs a request in one transaction under an advisory lock, so
+`seq` (from `sync_seq`, taken per written row) order is commit order and a cursor never skips a row.
+`server/schema.sql` is generated from `shared/sync.ts` (jsonb, timestamptz, bytea, …; no foreign
+keys or checks) and applied idempotently at start. `events.ts` is the change signal. Proxies must not
+buffer `/api/events` (nginx: `proxy_buffering off`); polling covers a dropped stream.
 
-**Open decision:** end-to-end encryption (Actual-style relay, server can't read data) *or* a
-readable Postgres replica (server-side queries, other clients, sharing, remote sources). They pull
-in opposite directions; the hub vision favours the readable replica.
+**iOS / home-screen app.** The same web build: `app/public/manifest.webmanifest`, apple-touch-icon and
+meta tags in `app/index.html`, safe-area padding in `styles.css`, and a service worker (`app/sw.js`,
+emitted by the build with a version stamp; `platform/serviceWorker.ts` registers it in production
+web builds only) that caches the app shell, so it starts offline. iOS needs HTTPS for OPFS and
+service workers: put the container behind a TLS proxy or tunnel (Caddy, Tailscale serve, Cloudflare
+tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 
-**Known trade-offs:**
-- Field-level last-writer-wins is fine for one person on several devices; concurrent offline
-  edits to the *same markdown field* lose one side. Acceptable at first; a text CRDT (e.g. Yjs)
-  for markdown fields is the upgrade path.
-- Once the server is the source of truth, the pre-alpha "schema change wipes the local DB" rule
-  stops losing data (the replica just re-syncs). Until sync exists there is no backup: if real
-  notes go in before then, build export/import as a stopgap.
-- Consider existing sync tooling (ElectricSQL, PowerSync, cr-sqlite) before hand-rolling.
+**Known limits / next steps:**
+- Last writer wins per field; concurrent offline edits to the *same markdown field* lose one side
+  (upgrade path: a text CRDT such as Yjs for markdown). Equal timestamps on two devices don't converge.
+- Files travel inline (base64) and are never deleted on the server; a pull is not paged.
+- One user, one token. A device that is not synced can lose its data on a schema wipe; with the
+  server the replica re-syncs, so enable sync before putting real notes in.
+- Not built: hybrid logical clocks, Merkle-trie diffing (Actual Budget style), end-to-end encryption,
+  Postgres `LISTEN/NOTIFY` for several server instances. Consider ElectricSQL / PowerSync / cr-sqlite
+  before growing this.
 
 ### Known constraints / risks
 
@@ -369,7 +393,8 @@ stale peer range.
 
 - `npm run dev`: Tauri desktop app with hot reload (runs `dev:web` on port 1420).
 - `npm run dev:web`: same app in a normal browser at http://localhost:1420.
-- `npm run typecheck`, `npm run build:web`, `npm run build` (desktop bundle).
+- `npm run typecheck`, `npm test`, `npm run build:web` (to `app/dist`), `npm run build` (desktop bundle).
+- Server: `docker compose up --build` (needs `.env`, see `.env.example`); or `cd server && npm install && npm run dev` with `DATABASE_URL` and `KUBUS_TOKEN` set.
 
 ## Conventions
 

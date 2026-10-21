@@ -6,6 +6,7 @@ import { TemplatesPage } from "../pages/TemplatesPage";
 import { NewObjectPage } from "../pages/NewObjectPage";
 import { ObjectListPage } from "../pages/ObjectListPage";
 import { SearchPage } from "../pages/SearchPage";
+import { SyncPage } from "../pages/SyncPage";
 import { TypeEditorPage } from "../pages/TypeEditorPage";
 import { TypesPage } from "../pages/TypesPage";
 import { NotFound } from "../ui/NotFound";
@@ -18,6 +19,7 @@ export function AppRoutes() {
       <Route path="/search" element={<SearchPage />} />
       <Route path="/types" element={<TypesPage />} />
       <Route path="/bookmarks" element={<BookmarksPage />} />
+      <Route path="/sync" element={<SyncPage />} />
       <Route path="/templates" element={<TemplatesPage />} />
       <Route path="/templates/new" element={<TemplateEditorPage />} />
       <Route path="/templates/:templateId" element={<TemplateEditorPage key="edit" />} />

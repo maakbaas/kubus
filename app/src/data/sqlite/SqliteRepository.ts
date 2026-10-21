@@ -19,6 +19,7 @@ import { parseObjectViews, withDefaultObjectView, type ObjectView } from "../../
 import { hasSections, isTemplateOutput, type Template } from "../../domain/templates";
 import type { SavedView } from "../../domain/views";
 import type { DataChange, Repository } from "../repository";
+import { SyncEngine } from "../sync/SyncEngine";
 import { SqlClient } from "./client";
 import type { Statement } from "./protocol";
 
@@ -113,7 +114,12 @@ function parseJson<T>(text: string | null, fallback: T): T {
  * future sync outbox would record).
  */
 export class SqliteRepository implements Repository {
-  private constructor(private db: SqlClient) {}
+  private constructor(private db: SqlClient) {
+    this.sync = new SyncEngine(db, (...changes) => this.emit(...changes));
+    this.subscribe(() => this.sync.localChange());
+  }
+
+  readonly sync: SyncEngine;
 
   private listeners = new Set<(change: DataChange) => void>();
 

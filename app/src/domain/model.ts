@@ -160,7 +160,16 @@ export function suggestPlural(singular: string): string {
 }
 
 export const newId = (): string => crypto.randomUUID();
-export const now = (): string => new Date().toISOString();
+// Timestamps are what sync merges by (newest wins). They never go back below a stamp that was
+// seen, e.g. one received from a device whose clock runs ahead (a cheap stand-in for a hybrid
+// logical clock), and every stamp of a session is later than the one before.
+let lastStamp = 0;
+export const now = (): string => new Date((lastStamp = Math.max(Date.now(), lastStamp + 1))).toISOString();
+/** Records a timestamp received from elsewhere, so later local stamps are newer than it. */
+export const observeStamp = (iso: string) => {
+  const t = Date.parse(iso);
+  if (t > lastStamp) lastStamp = t;
+};
 
 const metaField = (id: string, name: string): FieldDef => ({
   id, typeId: "", name, kind: "datetime", targetTypeId: null, templateId: null, templateArgs: {}, choiceFilter: [], toggleIcon: null, position: 0,
