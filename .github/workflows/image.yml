@@ -1,0 +1,47 @@
+name: Server image
+
+# Builds the server image (server + built web app, see server/Dockerfile) and publishes it to
+# GitHub Container Registry as ghcr.io/<owner>/<repo>:latest (and :<commit>) on every push to main,
+# so a Docker host (e.g. a NAS) can just pull it. Make the package public once in GitHub
+# (profile > Packages > kubus > Package settings) if the host should pull without logging in.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: image
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IBM_TELEMETRY_DISABLED: 'true'
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          # amd64 for most hosts, arm64 for ARM NAS devices and Raspberry Pis.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

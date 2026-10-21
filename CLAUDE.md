@@ -394,7 +394,7 @@ stale peer range.
 - `npm run dev`: Tauri desktop app with hot reload (runs `dev:web` on port 1420).
 - `npm run dev:web`: same app in a normal browser at http://localhost:1420.
 - `npm run typecheck`, `npm test`, `npm run build:web` (to `app/dist`), `npm run build` (desktop bundle).
-- Server: `docker compose up --build` (fill in the placeholders in `docker-compose.yml` first); or `cd server && npm install && npm run dev` with `DATABASE_URL` and `KUBUS_TOKEN` set.
+- Server: `docker compose up -d` (fill in the placeholders in `docker-compose.yml` first; it pulls the image that `.github/workflows/image.yml` publishes to ghcr.io); or `cd server && npm install && npm run dev` with `DATABASE_URL` and `KUBUS_TOKEN` set.
 
 ## Conventions
 

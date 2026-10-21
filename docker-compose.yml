@@ -1,10 +1,10 @@
-# The Kubus server: sync API and web app on one port. Postgres is external and already running:
-# fill in the two placeholders below, then `docker compose up --build`.
+# The Kubus server: sync API and web app on one port. The image is built by GitHub Actions
+# (.github/workflows/image.yml). Postgres is external and already running: fill in the two
+# placeholders below, then `docker compose up -d`. Update with `docker compose pull && docker compose up -d`.
 services:
   server:
-    build:
-      context: .
-      dockerfile: server/Dockerfile
+    image: ghcr.io/maakbaas/kubus:latest
+    pull_policy: always
     environment:
       # Your existing Postgres. host.docker.internal reaches one on the Docker host.
       DATABASE_URL: postgres://USER:PASSWORD@host.docker.internal:5432/DATABASE
