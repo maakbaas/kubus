@@ -9,6 +9,7 @@
     "build": "tauri build",
     "build:web": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -39,6 +40,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "sass": "^1.105.2",
     "typescript": "~5.9.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
   }
 }
