@@ -35,7 +35,7 @@ jobs:
       # which is most of the build time.
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: desktop
 
       - run: npm ci
 
@@ -46,8 +46,8 @@ jobs:
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          sed -i "0,/^version = \".*\"/s//version = \"$version\"/" src-tauri/Cargo.toml
-          sed -i "s/\"version\": \".*\"/\"version\": \"$version\"/" src-tauri/tauri.conf.json
+          sed -i "0,/^version = \".*\"/s//version = \"$version\"/" desktop/Cargo.toml
+          sed -i "s/\"version\": \".*\"/\"version\": \"$version\"/" desktop/tauri.conf.json
           sed -i "0,/\"version\": \".*\"/s//\"version\": \"$version\"/" package.json
 
       - name: Type check
@@ -61,16 +61,16 @@ jobs:
         run: npm run build:web
 
       - name: Rust format
-        working-directory: src-tauri
+        working-directory: desktop
         run: cargo fmt --check
 
       # Warnings are errors.
       - name: Clippy
-        working-directory: src-tauri
+        working-directory: desktop
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Rust test
-        working-directory: src-tauri
+        working-directory: desktop
         run: cargo test
 
       # Same command as on a developer machine: NSIS (.exe) and MSI installers, plus the bare
@@ -82,8 +82,8 @@ jobs:
         with:
           name: kubus-installer-${{ github.sha }}
           path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
+            desktop/target/release/bundle/nsis/*.exe
+            desktop/target/release/bundle/msi/*.msi
           if-no-files-found: error
           retention-days: 14
 
@@ -92,7 +92,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: kubus-portable-${{ github.sha }}
-          path: src-tauri/target/release/kubus.exe
+          path: desktop/target/release/kubus.exe
           if-no-files-found: error
           retention-days: 14
 

@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
-    "dev:web": "vite",
+    "dev:web": "vite --config app/vite.config.ts",
     "build": "tauri build",
-    "build:web": "tsc --noEmit && vite build",
+    "build:web": "tsc --noEmit && vite build --config app/vite.config.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --config app/vite.config.ts",
     "tauri": "tauri"
   },
   "dependencies": {
