@@ -1,0 +1,44 @@
+{
+  "name": "pkms",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "dev:web": "vite",
+    "build": "tauri build",
+    "build:web": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@carbon/icons-react": "^11.90.0",
+    "@carbon/react": "^1.118.0",
+    "@milkdown/kit": "^7.22.3",
+    "@milkdown/plugin-prism": "^7.22.3",
+    "@milkdown/react": "^7.22.3",
+    "@sqlite.org/sqlite-wasm": "^3.53.4-build2",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-opener": "^2.7.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "react-router": "^7.18.4",
+    "refractor": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.3",
+    "@types/hast": "^3.0.5",
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "sass": "^1.105.2",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.4"
+  }
+}

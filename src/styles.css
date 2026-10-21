@@ -1,0 +1,2463 @@
+/* App-level layout on top of Carbon. Colors come from Carbon theme tokens. */
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+.app-root {
+  /* Narrowest a tiled pane gets: an iPhone 16's viewport width, so every pane can show what
+     the phone layout shows. Also read by the divider drag in Workspace.tsx. */
+  --pane-min-width: 393px;
+  min-height: 100vh;
+  background: var(--cds-background);
+  color: var(--cds-text-primary);
+
+  /* Carbon type tokens, with Carbon's values. The precompiled @carbon/styles CSS only
+     defines these inside a few components, so declare them app-wide to use them anywhere. */
+  --cds-body-01-font-size: 0.875rem;
+  --cds-body-01-font-weight: 400;
+  --cds-body-01-line-height: 1.42857;
+  --cds-body-01-letter-spacing: 0.16px;
+  /* Carbon's sans stack (the body font), for text inside elements set in code-02. */
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, ".SFNSText-Regular", sans-serif;
+  --cds-code-02-font-family: "IBM Plex Mono", system-ui, -apple-system, BlinkMacSystemFont, ".SFNSText-Regular", monospace;
+  --cds-code-02-font-size: 0.875rem;
+  --cds-code-02-font-weight: 400;
+  --cds-code-02-line-height: 1.42857;
+  --cds-code-02-letter-spacing: 0.32px;
+  /* Carbon's text inputs use body-compact-01; read-only values use it too so text lines up. */
+  --cds-body-compact-01-font-size: 0.875rem;
+  --cds-body-compact-01-font-weight: 400;
+  --cds-body-compact-01-line-height: 1.28572;
+  --cds-body-compact-01-letter-spacing: 0.16px;
+  --cds-spacing-01: 0.125rem;
+  --cds-spacing-02: 0.25rem;
+  --cds-spacing-03: 0.5rem;
+  --cds-spacing-05: 1rem;
+  --cds-spacing-06: 1.5rem;
+  --cds-spacing-07: 2rem;
+  --cds-spacing-10: 4rem;
+  /* Page titles use heading-04 (compact UI: more room for content). */
+  --cds-heading-04-font-size: 1.75rem;
+  --cds-heading-04-line-height: 1.28572;
+  --cds-spacing-13: 10rem;
+}
+
+/* The side nav becomes persistent at Carbon's lg breakpoint (66rem). */
+.app-content {
+  padding: 4.5rem 1rem 3rem;
+  box-sizing: border-box;
+}
+.app-content--bare {
+  padding-top: 2rem;
+}
+
+/* Workspace: fills the window (there is no header bar); panes scroll on their own. The page
+   padding moves from the content area into each tab. */
+.app-content.app-content--workspace {
+  display: flex;
+  flex-direction: column;
+  block-size: 100vh;
+  padding: 0;
+  box-sizing: border-box;
+}
+.ws-pane__spacer {
+  flex: 1;
+}
+/* The side nav toggle leading the top-left tab strip; its copy in the active pane's strip only
+   shows on phones (which show only the active pane, see below). */
+.ws-pane__lead {
+  display: flex;
+  padding-inline: var(--cds-spacing-03);
+}
+.ws-pane__lead--phone {
+  display: none;
+}
+.ws {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+}
+.ws > *,
+.ws-split__child {
+  display: flex;
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+.ws > * {
+  flex: 1;
+}
+.ws-split--row > .ws-split__child {
+  min-inline-size: var(--pane-min-width);
+}
+.ws-split {
+  flex: 1;
+  display: flex;
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+.ws-split--row {
+  flex-direction: row;
+}
+.ws-split--column {
+  flex-direction: column;
+}
+.ws-divider {
+  flex: none;
+  background: var(--cds-border-subtle);
+  touch-action: none;
+}
+.ws-split--row > .ws-divider {
+  inline-size: 4px;
+  cursor: col-resize;
+}
+.ws-split--column > .ws-divider {
+  block-size: 4px;
+  cursor: row-resize;
+}
+.ws-divider:hover {
+  background: var(--cds-border-interactive);
+}
+.ws-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+/* Contained tabs, used as Carbon intends: the selected tab has the pane's background, so tab
+   and content read as one surface; unselected tabs (and the rest of the bar) use Carbon's
+   layer-accent, and there is no separator line between tabs and content. */
+.ws-pane__tabs {
+  display: flex;
+  align-items: center;
+  min-block-size: 3rem; /* contained tabs' height, kept when no tab is open */
+  background: var(--cds-layer-accent);
+}
+/* A strip at the window's top edge gets a little room above its tabs, in its own colour: as
+   wide as the gutters between panes (4px). */
+.ws-pane--top > .ws-pane__tabs {
+  padding-block-start: var(--cds-spacing-02);
+}
+.ws-pane__tabs .cds--tabs.cds--tabs--contained .cds--tabs__nav-item--selected,
+.ws-pane__tabs .cds--tabs.cds--tabs--contained .cds--tabs__nav-item--selected:hover {
+  background-color: var(--cds-background);
+}
+.ws-pane__tabs .cds--tabs {
+  flex: 1;
+  min-inline-size: 0;
+}
+/* A tab (its x included) never gets wider than the bar: a long page name ends in "…" only when
+   the tabs together no longer fit. Each tab's floor (its natural width, at most 16rem) is set
+   from Workspace.tsx; with more tabs than fit, Carbon's scroll buttons take over. */
+.ws-pane__tabs .cds--tabs__nav-item {
+  flex-shrink: 1;
+  min-inline-size: 0;
+}
+/* The list as a whole is limited to the bar; tabs only shrink (and end in "…") once their
+   natural widths together no longer fit. */
+.ws-pane__tabs .cds--tab--list {
+  max-inline-size: 100%;
+}
+/* The close button overlaps the link's end padding, and the link clips at its padding edge, so
+   the label clips itself inside the content box: the text ends in "…" before the x. */
+.ws-pane__tabs .cds--tabs__nav-item-label {
+  display: block;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Slack so a tab sized to its text isn't cut by subpixel rounding while there is room. */
+  padding-inline-end: 0.125rem;
+}
+.ws-pane:not(.ws-pane--active) .ws-pane__tabs .cds--tabs__nav-item--selected {
+  box-shadow: none; /* only the active pane's tab carries the selection accent */
+}
+.ws-pane__tabs--empty {
+  justify-content: flex-end;
+}
+.ws-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cds-spacing-05);
+  text-align: center;
+}
+.ws-pane__frame {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+}
+.ws-pane__body {
+  flex: 1;
+  min-block-size: 0;
+  overflow: auto;
+  /* Space for the scrollbar is always kept, on both sides, so content neither jumps when a
+     scrollbar appears nor sits off-centre. */
+  scrollbar-gutter: stable both-edges;
+}
+/* Compact: one spacing-05 around the page (the scrollbar gutter adds to the sides). */
+.ws-tab-content {
+  padding: var(--cds-spacing-05);
+}
+/* The loading indicator while the database opens, centred in the window (pages show nothing
+   while loading: their data takes a fraction of a second, a spinner would only flash). */
+.page-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.page-loading--window {
+  position: fixed;
+}
+/* Drop zones while dragging a tab: highlight where it will land. */
+.ws-drop {
+  position: absolute;
+  pointer-events: none;
+  background: var(--cds-highlight);
+  opacity: 0.6;
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+.ws-drop--center { inset: 0; }
+.ws-drop--left { inset: 0 50% 0 0; }
+.ws-drop--right { inset: 0 0 0 50%; }
+.ws-drop--top { inset: 0 0 50% 0; }
+.ws-drop--bottom { inset: 50% 0 0 0; }
+/* Phones: no tiling, only the active pane. */
+@media (max-width: 42rem) {
+  .ws-split {
+    display: contents;
+  }
+  .ws-divider,
+  .ws-split__child:not(:has(.ws-pane--active)) {
+    display: none;
+  }
+  .ws-pane__lead--phone {
+    display: flex;
+  }
+  /* The one pane shown is always at the top. */
+  .ws-pane > .ws-pane__tabs {
+    padding-block-start: var(--cds-spacing-02);
+  }
+}
+@media (min-width: 66rem) {
+  .app-content {
+    padding: 5rem 2rem 3rem;
+  }
+  /* Room for the docked side nav (it can be collapsed with the header's menu button). */
+  .app-content--nav-docked {
+    margin-left: calc(var(--nav-width, 16rem) + 4px); /* nav + gutter */
+  }
+  /* The docked side nav takes the user's width (resized via .nav-gutter); no width animation
+     (opening, closing or dragging), so it follows the pointer and the toggle instantly. */
+  .cds--side-nav--ux {
+    transition: none;
+  }
+  .cds--side-nav--ux.cds--side-nav--expanded {
+    inline-size: var(--nav-width, 16rem);
+    max-inline-size: none;
+  }
+  .nav-gutter {
+    position: fixed;
+    z-index: 7999; /* just below the side nav (8000), so its popovers cover the gutter */
+    inset-block: 0;
+    inset-inline-start: var(--nav-width, 16rem);
+    inline-size: 4px;
+    cursor: col-resize;
+  }
+}
+
+/* A size container: its own width decides the narrow layout (see the @container rules below). */
+.page-header {
+  margin-bottom: var(--cds-spacing-05);
+  container-type: inline-size;
+}
+/* Carbon's breadcrumb, by the pane's width rather than the window's: crumbs in a wrapping line,
+   one crumb per line in a narrow header (Carbon does that below its md breakpoint). */
+.page-header .cds--breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: var(--cds-spacing-03);
+}
+/* A crumb longer than the line (a long object title) ends in "…" instead of running under the
+   header's buttons. */
+.page-header__main > :first-child {
+  min-inline-size: 0;
+}
+.page-header .cds--breadcrumb-item {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.page-header .cds--breadcrumb-item > * {
+  display: block; /* Carbon's links are inline-flex, which can't end in an ellipsis */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-inline-size: 0;
+}
+/* Breadcrumb + title wrap within their column; the actions stay at the very top right. */
+.page-header__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cds-spacing-05);
+}
+.page-header__main {
+  flex: 1;
+  min-inline-size: 0;
+}
+.page-header__actions {
+  flex: none;
+  display: flex;
+  gap: 0; /* icon buttons sit flush, like in a Carbon toolbar */
+}
+.page-header__title {
+  font-size: var(--cds-heading-04-font-size);
+  line-height: var(--cds-heading-04-line-height);
+  font-weight: 400;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.page-header__subtitle {
+  color: var(--cds-text-secondary);
+  margin: 0.25rem 0 0;
+}
+.page-header__actions .cds--btn {
+  white-space: nowrap; /* a button label stays on one line; the title wraps instead */
+}
+/* "New …" header buttons (NewButton): the full button, its label ending in "…" when long; in a
+   narrow header (below 36rem) only the + icon button. */
+.new-button__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-inline-size: 0;
+}
+.page-header__actions .cds--popover-container:has(.new-button--icon) {
+  display: none;
+}
+@container (max-width: 36rem) {
+  .page-header__actions .new-button--full {
+    display: none;
+  }
+  /* Narrow: breadcrumb and actions share the top line; the title gets the full width below. */
+  .page-header__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "crumb actions" "title title";
+    /* Top: a breadcrumb that wraps to several lines keeps the buttons at its first line. */
+    align-items: start;
+    column-gap: var(--cds-spacing-05);
+    row-gap: var(--cds-spacing-03);
+  }
+  .page-header__main {
+    display: contents;
+  }
+  .page-header__main > :first-child {
+    grid-area: crumb;
+    /* Its first line (label-01, 1rem high) centred on the 2rem buttons beside it. */
+    padding-block-start: var(--cds-spacing-03);
+  }
+  .page-header__main > :first-child .cds--breadcrumb {
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: 0;
+  }
+  .page-header__main > :not(:first-child) {
+    grid-area: title;
+    min-inline-size: 0;
+  }
+  .page-header__actions {
+    grid-area: actions;
+  }
+  .page-header__actions .cds--popover-container:has(.new-button--icon) {
+    display: inline-block;
+  }
+}
+
+.cds--inline-notification {
+  margin-bottom: 1rem;
+  max-width: 100%;
+}
+
+/* Types overview */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+.type-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 9rem;
+}
+.type-tile__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.type-tile__title {
+  font-size: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.type-tile__title svg {
+  fill: currentColor;
+  flex: none;
+}
+
+/* Icon picker: a button showing the current icon; the search + grid live in a popover. */
+.icon-picker.cds--popover-container {
+  display: block;
+}
+.icon-picker > .cds--popover-container svg,
+.icon-picker > button svg {
+  fill: currentColor;
+}
+
+/* Editable page title (type editor): icon button + name styled as the page heading. */
+.page-header__row > div:has(> .title-edit) {
+  flex: 1;
+  min-inline-size: 0;
+}
+.title-edit {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-02); /* the borderless icon button has its own padding */
+}
+.title-edit > .cds--form-item {
+  flex: 1;
+  min-inline-size: 0;
+}
+.title-edit .cds--text-input {
+  /* One heading-04 line, like the page title it edits. */
+  block-size: calc(var(--cds-heading-04-font-size) * var(--cds-heading-04-line-height));
+  padding: 0 var(--cds-spacing-03);
+  font-size: var(--cds-heading-04-font-size);
+  line-height: var(--cds-heading-04-line-height);
+  font-weight: 400;
+  background: transparent;
+  border-bottom: 1px solid transparent;
+}
+.title-edit .cds--text-input:hover {
+  border-bottom-color: var(--cds-border-strong);
+}
+.title-edit .cds--text-input::placeholder {
+  color: var(--cds-text-placeholder);
+}
+/* Page title with the type's icon in front (objects list). */
+.title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.title-with-icon svg {
+  fill: currentColor;
+  flex: none;
+}
+/* Carbon caps popover content at 23rem; the panel sets its own width. */
+.icon-picker .cds--popover-content {
+  max-inline-size: none;
+}
+.icon-picker__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  inline-size: min(24rem, 80vw);
+  padding: 0.75rem;
+}
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 3rem);
+  max-block-size: 15rem; /* 5 rows; more matches scroll within the popover */
+  overflow-y: auto;
+}
+.icon-grid svg {
+  fill: var(--cds-icon-primary);
+}
+.icon-grid__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-block-size: 2rem;
+}
+.icon-grid__footer .helper {
+  margin: 0;
+  flex: 1;
+  min-inline-size: 0;
+}
+.icon-grid__footer .cds--btn {
+  flex: none;
+}
+.type-tile__desc {
+  color: var(--cds-text-secondary);
+  flex: 1;
+}
+.type-tile__meta {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.type-tile__meta .cds--tag {
+  margin: 0;
+}
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 2rem;
+}
+.empty-state__title {
+  font-size: 1.25rem;
+}
+
+/* Forms */
+/* Form-like pages (type editor, template editor, new object, object pages) have a capped width
+   and sit centred in a wider tab. */
+.form-page {
+  max-width: 48rem;
+  margin-inline: auto;
+}
+/* Item pages (an object, a new object): at most 700px of content, centred in a wider tab. */
+.form-page.object-view {
+  max-inline-size: 700px;
+  margin-inline: auto;
+}
+.name-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+@media (max-width: 42rem) {
+  .name-pair {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+}
+
+/* Search highlighting */
+.search-mark {
+  background: var(--cds-highlight);
+  color: inherit;
+  padding: 0;
+}
+
+/* Read-only markdown (search results): editor styles without the editing chrome.
+   Doubled class so these win over .md-editor__content, which is defined later. */
+/* Same text rules as ProseMirror's editable area, so a paragraph wraps identically in
+   view and edit (ligatures change glyph widths, and with them where lines break). */
+.md-view {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0;
+  overflow-wrap: break-word;
+}
+.md-view :is(p, h1, h2, h3, h4, h5, h6, td, th) {
+  white-space: break-spaces;
+}
+.md-editor__content.md-view {
+  min-height: 0;
+  overflow: visible;
+  padding: 0;
+}
+.md-editor__content.md-view--excerpt {
+  overflow: hidden;
+  max-height: 12rem;
+  color: var(--cds-text-secondary);
+}
+/* Only search excerpts shrink images; the object view shows them like the editor does. */
+.md-view--excerpt img {
+  max-height: 8rem;
+}
+.md-view__link {
+  color: var(--cds-link-primary);
+  text-decoration: underline;
+}
+/* Task items: the checkbox in the gutter left of the text, exactly where the editor draws it. */
+.md-view li.task-list-item {
+  list-style: none;
+  position: relative;
+  padding-left: 1.5rem;
+}
+/* Flush left: task lists have no marker; other lists only indent as far as their marker needs. */
+.md-view ul,
+.md-view ol {
+  padding-left: 1rem;
+}
+.md-view ul.contains-task-list {
+  padding-left: 0;
+}
+.md-view__task {
+  position: absolute;
+  left: 0;
+  top: calc((1.5em - 1rem) / 2 + 2px);
+  width: 1rem;
+  height: 1rem;
+  box-sizing: border-box;
+  border: 1px solid var(--cds-icon-primary);
+  border-radius: 2px;
+}
+.md-view__task[data-checked="true"] {
+  background: var(--cds-icon-primary);
+}
+.md-view__task--toggle {
+  cursor: pointer;
+}
+.md-view__task--toggle:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: 1px;
+}
+/* On object pages a task list is laid out like a checklist field, in view and editor alike: rows
+   2rem high (24px line + 0.25rem above and below), the box where a checklist's box is (the
+   field's own 1rem inset), the text where a checklist item's text starts (2rem box + 1rem inset),
+   and a checked item lightened. */
+.object-fields .md-view li.task-list-item,
+.object-fields .md-editor__content li[data-item-type="task"] {
+  /* The text 1px lower than centred, as a checklist item's text reads beside its box. */
+  padding: calc(0.25rem + 1px) 0 calc(0.25rem - 1px) 3rem;
+}
+.object-fields .md-view li.task-list-item > .md-view__task {
+  top: calc(0.25rem + (1.5em - 1rem) / 2 + 2px);
+}
+.object-fields .md-editor__content li[data-item-type="task"]::before {
+  top: calc(0.25rem + (1.5em - 1rem) / 2 + 2px);
+}
+.object-fields .md-editor__content li[data-item-type="task"][data-checked="true"]::after {
+  top: calc(0.25rem + (1.5em - 1rem) / 2 + 2px + 0.1875rem);
+}
+.object-fields .md-view li.task-list-item:has(> .md-view__task[data-checked="true"]),
+.object-fields .md-editor__content li[data-item-type="task"][data-checked="true"] {
+  color: var(--cds-text-secondary);
+}
+/* Checkmark, same geometry as the editor's task checkbox. */
+.md-view__task[data-checked="true"]::after {
+  content: "";
+  position: absolute;
+  left: calc(0.3125rem - 1px);
+  top: calc(0.1875rem - 1px);
+  width: 0.375rem;
+  height: 0.5625rem;
+  box-sizing: border-box;
+  border: solid var(--cds-icon-inverse);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Global search */
+/* The side nav sits on Carbon's first layer (grey on the white page, a step lighter in dark
+   mode), setting it apart from the content; its search is wrapped in <Layer> to match. */
+.cds--side-nav {
+  background-color: var(--cds-layer-01);
+}
+/* No header bar: the side nav (and its overlay on narrow screens) starts at the window's top. */
+.cds--side-nav--ux,
+.cds--side-nav__overlay {
+  inset-block-start: 0;
+}
+/* The button that hides the menu, then the search box. The button sits exactly where the one
+   that shows the menu sits in the top-left tab strip, so toggling doesn't move it: the strip's
+   room above its tabs (.ws-pane--top, spacing-02) plus centring the 2rem button in its 3rem
+   (spacing-03), and the strip's spacing beside it (.ws-pane__lead, spacing-03). */
+.side-nav-search {
+  padding: calc(var(--cds-spacing-02) + var(--cds-spacing-03)) var(--cds-spacing-05) var(--cds-spacing-03) var(--cds-spacing-03);
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+}
+.side-nav-search > .cds--search {
+  flex: 1;
+  min-inline-size: 0;
+}
+.search-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem; /* between title and each matched field */
+}
+.search-hit__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.search-hit__title .cds--tag {
+  margin: 0;
+}
+.search-hit__title svg {
+  fill: var(--cds-icon-primary);
+  flex: none;
+}
+.search-hit__excerpt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.search-hit__field {
+  font-size: 0.75rem;
+  color: var(--cds-text-helper);
+}
+.search-hit__more {
+  font-size: 0.75rem;
+  color: var(--cds-text-helper);
+}
+.search-hit__snippet {
+  color: var(--cds-text-secondary);
+  font-size: 0.875rem;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.helper {
+  color: var(--cds-text-secondary);
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+.field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 13rem auto; /* room for "List of objects" with its icon */
+  gap: 1rem;
+  align-items: start;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+/* Reference fields get an extra "Refers to" column. */
+.field-row--reference {
+  grid-template-columns: minmax(0, 1fr) 13rem 13rem auto;
+}
+.field-row__actions {
+  display: flex;
+  padding-top: 1.5rem; /* align with inputs below their labels */
+}
+.add-field {
+  margin-top: 1rem;
+}
+@media (max-width: 42rem) {
+  .field-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .field-row__actions {
+    padding-top: 0;
+  }
+}
+
+/* Field inputs */
+/* Date pickers fill the form column like other inputs (Carbon fixes them at 18rem),
+   on the new-object form and in inline field editors alike. */
+.form-page .cds--date-picker,
+.form-page .cds--date-picker-container,
+.objects-table .cds--date-picker,
+.objects-table .cds--date-picker-container {
+  inline-size: 100%;
+}
+.form-page .cds--date-picker.cds--date-picker--single .cds--date-picker__input,
+.objects-table .cds--date-picker.cds--date-picker--single .cds--date-picker__input {
+  inline-size: 100%;
+}
+/* The input sits in an unclassed span inside the flex wrapper; let it grow. */
+.form-page .cds--date-picker-input__wrapper > span,
+.objects-table .cds--date-picker-input__wrapper > span {
+  flex: 1;
+}
+/* Date & time: the date stretches, the time keeps its compact width; no gap between them. */
+.datetime-input {
+  display: flex;
+  align-items: flex-start;
+}
+.datetime-input > .cds--form-item:first-child {
+  flex: 1;
+  min-inline-size: 0;
+}
+.datetime-input > :last-child {
+  flex: 0 0 auto; /* Carbon form items grow by default */
+}
+.list-input__row {
+  display: flex;
+  align-items: center;
+}
+.list-input__row .cds--form-item {
+  flex: 1;
+}
+/* "+" under a list: a little closer to the last item than the items are to each other (their
+   gap is spacing-03), at the same place in the view and the editor. */
+.list-input__add {
+  margin-block-start: calc(-1 * var(--cds-spacing-02));
+}
+/* Checklist: each row's checkbox in front of its text, in view and editor alike (so the text
+   stays put when editing starts). */
+/* Its box sits where a Checkbox field's does (object pages give both the same inset), a gap
+   before the item's text. */
+/* A first "+" (empty list) sits at the field's top like any row, not pulled up. */
+.list-input__row.list-input__add:first-child {
+  margin-block-start: 0;
+}
+/* An empty list: a line above the "+", like the line under an item. */
+.list-input__add--empty {
+  border-block-start: 1px solid var(--cds-border-subtle);
+}
+.ref-combo {
+  flex: 1;
+  min-inline-size: 0;
+}
+.checklist-box {
+  flex: none;
+  display: flex;
+  align-items: center;
+  box-sizing: content-box;
+  inline-size: 2rem;
+  min-block-size: 2rem;
+}
+.checklist-box .cds--form-item {
+  margin: 0;
+}
+/* The box centred on the text beside it: the text sits a little low in its 2rem row (its 1px
+   bottom border, and lowercase text reading below its line's middle), so the box comes down too. */
+.checklist-box .cds--checkbox-wrapper {
+  transform: translateY(1px);
+}
+.checklist-row {
+  display: flex;
+  align-items: center;
+}
+.checklist-row > :is(.view-field__value, .cds--form-item) {
+  flex: 1;
+  min-inline-size: 0;
+}
+/* A Checkbox field's name beside its box: where a checklist item's text starts (the value
+   box's 1rem inset), in the body text style. */
+.checkbox-field__name {
+  display: flex;
+  align-items: center;
+  min-block-size: 2rem;
+  padding-inline-start: var(--cds-spacing-05);
+  color: var(--cds-text-primary);
+  font-size: var(--cds-body-compact-01-font-size);
+  line-height: var(--cds-body-compact-01-line-height);
+  letter-spacing: var(--cds-body-compact-01-letter-spacing);
+  cursor: pointer;
+}
+.object-field--no-label .checkbox-field__name {
+  display: none;
+}
+.checklist-row__done {
+  color: var(--cds-text-secondary);
+}
+/* A toggle icon (Checkbox / Checklist fields) in place of the box: its 1rem icon sits where the
+   box's glyph would, so the 2rem button reaches 0.5rem past it on each side. */
+.toggle-input.cds--btn {
+  margin-inline: -0.5rem;
+  padding: 0;
+  inline-size: 2rem;
+  justify-content: center;
+}
+.toggle-input .cds--btn__icon {
+  position: static;
+  margin: 0;
+}
+.toggle-input.cds--btn {
+  color: var(--cds-icon-primary);
+}
+.toggle-input.cds--btn .cds--btn__icon path {
+  fill: currentColor;
+}
+.toggle-icon-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+}
+
+/* Carbon caps the drop area at 20rem; match the other fields' width instead. */
+.image-input .cds--file-browse-btn {
+  max-inline-size: none;
+}
+.image-input .cds--file__drop-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-block-size: 6rem;
+}
+/* The image with its remove button laid over the corner, so editing adds no height. */
+.image-input__preview {
+  position: relative;
+  display: block; /* not inline-block: that leaves descender space below the image */
+  inline-size: fit-content;
+  max-width: 100%;
+}
+.image-input__preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 20rem;
+  object-fit: contain;
+}
+.image-input__actions {
+  position: absolute;
+  top: var(--cds-spacing-03);
+  right: var(--cds-spacing-03);
+  display: flex;
+  gap: 1px;
+  opacity: 0;
+  transition: opacity 70ms;
+}
+.image-input__preview:hover .image-input__actions,
+.image-input__preview:focus-within .image-input__actions {
+  opacity: 1;
+}
+/* No hover on touch screens: keep the buttons visible. */
+@media (hover: none) {
+  .image-input__actions {
+    opacity: 1;
+  }
+}
+
+/* Markdown editor (Milkdown is headless; styled with Carbon tokens) */
+/* .cds--form-item is a flex column with align-items: flex-start; stretch the editor. */
+.md-field {
+  width: 100%;
+}
+/* Carbon's FormLabel has no bottom margin; match the other fields' labels (and the read-only view). */
+.md-field > .cds--label {
+  margin-bottom: 0.5rem;
+}
+.md-editor {
+  position: relative; /* anchors the link popover */
+  align-self: stretch;
+  background: var(--cds-field);
+  border-bottom: 1px solid var(--cds-border-strong);
+}
+.md-editor:focus-within {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+/* Height follows the content: it grows, never scrolls inside. */
+.md-editor__content {
+  padding: 0.75rem 1rem;
+  outline: none;
+  /* Never wider than the field: long words, links and code wrap instead of scrolling. */
+  overflow-wrap: anywhere;
+  min-inline-size: 0;
+  color: var(--cds-text-primary);
+  /* Carbon body-01, set here so editor and view (different parents) agree. */
+  font-size: var(--cds-body-01-font-size);
+  line-height: var(--cds-body-01-line-height);
+  letter-spacing: var(--cds-body-01-letter-spacing);
+}
+/* One text size everywhere in markdown. Carbon enlarges <p>; the editor wraps list items and
+   cells in <p> but the read-only view doesn't, so without this the same list renders larger
+   while editing. */
+.md-editor__content :is(p, li, td, th, blockquote) {
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+}
+/* Code uses Carbon code-02, in editor and view alike. */
+.md-editor__content :is(code, pre) {
+  font-family: var(--cds-code-02-font-family);
+  font-size: var(--cds-code-02-font-size);
+  line-height: var(--cds-code-02-line-height);
+  letter-spacing: var(--cds-code-02-letter-spacing);
+}
+.md-editor__content > * + * {
+  margin-top: 0.75rem;
+}
+.md-editor__content h1 { font-size: 1.75rem; line-height: 1.3; }
+.md-editor__content h2 { font-size: 1.5rem; line-height: 1.3; }
+.md-editor__content h3 { font-size: 1.25rem; line-height: 1.4; }
+.md-editor__content h4,
+.md-editor__content h5,
+.md-editor__content h6 { font-size: 1rem; font-weight: 600; }
+.md-editor__content strong { font-weight: 600; }
+.md-editor__content em { font-style: italic; }
+.md-editor__content a { color: var(--cds-link-primary); text-decoration: underline; }
+.md-editor__content ul { list-style: disc; padding-left: 1.5rem; }
+.md-editor__content ol { list-style: decimal; padding-left: 1.5rem; }
+/* Task items: a Carbon-style checkbox drawn on the <li>, in the gutter left of
+   the text, vertically centered on the first line (line box = 1.5em). Clicks on
+   it are handled by the taskToggle plugin in MarkdownEditor.tsx. */
+.md-editor__content li[data-item-type="task"] {
+  list-style: none;
+  position: relative;
+  margin-left: -1.5rem;
+  padding-left: 1.5rem;
+}
+.md-editor__content li[data-item-type="task"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc((1.5em - 1rem) / 2 + 2px); /* +2px: optical alignment with the text */
+  width: 1rem;
+  height: 1rem;
+  box-sizing: border-box;
+  border: 1px solid var(--cds-icon-primary);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+.md-editor__content li[data-item-type="task"][data-checked="true"]::before {
+  border-color: var(--cds-icon-primary);
+  background: var(--cds-icon-primary);
+}
+/* Checkmark */
+.md-editor__content li[data-item-type="task"][data-checked="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0.3125rem;
+  top: calc((1.5em - 1rem) / 2 + 2px + 0.1875rem);
+  width: 0.375rem;
+  height: 0.5625rem;
+  box-sizing: border-box;
+  border: solid var(--cds-icon-inverse);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.md-editor__content li > p { margin: 0; }
+.md-editor__content blockquote {
+  border-left: 3px solid var(--cds-border-strong);
+  padding-left: 1rem;
+  color: var(--cds-text-secondary);
+}
+.md-editor__content code {
+  font-family: "IBM Plex Mono", monospace;
+  background: var(--cds-layer-accent-01);
+  padding: 0 0.25rem;
+}
+.md-editor__content pre {
+  background: var(--cds-layer-accent-01);
+  padding: 0.75rem 1rem;
+  white-space: pre-wrap; /* code wraps (keeping its indentation) rather than scrolling */
+}
+.md-editor__content pre code { padding: 0; background: none; }
+/* Code block language select: laid over the block's top-right corner (no added height). */
+.md-code-block {
+  position: relative;
+}
+.md-code-block__language {
+  /* Centered on the first line: a one-line block has equal space above and below it. */
+  --inset: calc((2 * 0.75rem + var(--cds-code-02-line-height) * var(--cds-code-02-font-size) - 2rem) / 2);
+  position: absolute;
+  top: var(--inset);
+  right: var(--inset);
+  z-index: 1;
+  inline-size: max-content;
+  opacity: 0;
+  transition: opacity 70ms;
+}
+.md-code-block:hover .md-code-block__language,
+.md-code-block:focus-within .md-code-block__language {
+  opacity: 1;
+}
+@media (hover: none) {
+  .md-code-block__language {
+    opacity: 1;
+  }
+}
+/* Carbon's inline select is transparent and full width (made for toolbars); over code it
+   needs to fit its content and use the field background. */
+.md-code-block__language .cds--select-input {
+  inline-size: auto;
+  block-size: 2rem;
+  background-color: var(--cds-field);
+  font-size: var(--cds-body-compact-01-font-size);
+}
+.md-code-block__language .cds--select-input:hover {
+  background-color: var(--cds-field-hover);
+}
+.md-editor__content hr { border: 0; border-top: 1px solid var(--cds-border-subtle); }
+.md-editor__content table { border-collapse: collapse; max-inline-size: 100%; }
+/* While editing too, a table is as wide as its content, like in the view (ProseMirror's table
+   styles make it full width with fixed columns). */
+.md-editor .ProseMirror table {
+  inline-size: auto;
+  table-layout: auto;
+}
+/* Row and column handles of the hovered table cell, on the table's edges (MarkdownEditor). */
+.md-table-handle {
+  position: absolute;
+  z-index: 10;
+}
+/* The handle itself (not the buttons in its menu): subtle, no background or border, just its
+   dots in the secondary icon colour; 1rem across the table's edge, 1.5rem along it (on touch
+   screens 1.5rem by 2rem, big enough to tap; MarkdownEditor positions them by the same sizes). */
+.md-table-handle > .cds--popover-container > .cds--icon-tooltip .cds--btn {
+  min-block-size: 0;
+  min-inline-size: 0;
+  padding: 0;
+  justify-content: center;
+  align-items: center;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+.md-table-handle--row > .cds--popover-container > .cds--icon-tooltip .cds--btn {
+  inline-size: 1rem;
+  block-size: 1.5rem;
+}
+.md-table-handle--col > .cds--popover-container > .cds--icon-tooltip .cds--btn {
+  inline-size: 1.5rem;
+  block-size: 1rem;
+}
+@media (pointer: coarse) {
+  .md-table-handle--row > .cds--popover-container > .cds--icon-tooltip .cds--btn {
+    inline-size: 1.5rem;
+    block-size: 2rem;
+  }
+  .md-table-handle--col > .cds--popover-container > .cds--icon-tooltip .cds--btn {
+    inline-size: 2rem;
+    block-size: 1.5rem;
+  }
+}
+.md-table-handle > .cds--popover-container > .cds--icon-tooltip .cds--btn svg {
+  fill: var(--cds-icon-secondary);
+}
+.md-table-handle > .cds--popover-container > .cds--icon-tooltip .cds--btn:hover svg,
+.md-table-handle > .cds--popover-container > .cds--icon-tooltip .cds--btn--selected svg {
+  fill: var(--cds-icon-primary);
+}
+/* The row or column a handle selected: Carbon's highlight over its cells. */
+.md-editor .ProseMirror .selectedCell::after {
+  background: var(--cds-highlight);
+  opacity: 0.5;
+}
+.md-editor__content th,
+.md-editor__content td {
+  border: 1px solid var(--cds-border-subtle);
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+}
+.md-editor__content th { font-weight: 600; background: var(--cds-layer-accent-01); }
+/* The editor wraps a cell's text in a <p>, which Carbon sets to weight 400: let it inherit. */
+.md-editor__content th > p { font-weight: inherit; }
+/* An empty cell keeps one line's height in the view, as in the editor (whose cells always hold
+   a paragraph): an invisible character gives it its line. */
+.md-view :is(td, th):empty::before { content: "\200b"; }
+.md-editor__content img { max-width: 100%; }
+
+.md-editor__content img.ProseMirror-selectednode {
+  outline: 2px solid var(--cds-focus);
+}
+
+/* Link hover popover: a Carbon Popover anchored to a fixed box over the link. */
+/* Box over the hovered link, in .md-editor coordinates (left/top/size set inline). */
+.md-link-popover {
+  position: absolute;
+  z-index: 10;
+}
+.md-link-popover__popover {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* Carbon caps popover content at 23rem; our wrapper sets its own limit. */
+:is(.md-link-popover, .md-table-menu) .cds--popover .cds--popover-content {
+  max-inline-size: none;
+}
+.md-link-popover__anchor {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.md-link-popover__content {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+  width: max-content;
+  /* Long URLs are cut off with an ellipsis (full URL in the tooltip). */
+  max-width: min(28rem, 80vw);
+}
+.md-link-popover__href {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  line-height: 2rem; /* same height as the icon buttons, so the text is vertically centred */
+  color: var(--cds-text-inverse);
+}
+/* High-contrast (dark) popover: ghost buttons need inverse colours. */
+/* Icon buttons on the dark (high contrast) link popover and table toolbar. */
+:is(.md-link-popover, .md-table-menu) .cds--btn--ghost svg {
+  fill: var(--cds-icon-inverse);
+}
+:is(.md-link-popover, .md-table-menu) .cds--btn--ghost:disabled svg {
+  fill: var(--cds-icon-on-color-disabled);
+}
+:is(.md-link-popover, .md-table-menu) .cds--btn--ghost:not(:disabled):hover {
+  background: var(--cds-background-inverse-hover);
+}
+
+/* Code syntax coloring (prism/refractor tokens) using the IBM/Carbon palette. */
+.cds--white {
+  --code-comment: #6f6f6f;  /* gray 60 */
+  --code-keyword: #8a3ffc;  /* purple 60 */
+  --code-string: #198038;   /* green 60 */
+  --code-number: #0043ce;   /* blue 70 */
+  --code-function: #005d5d; /* teal 70 */
+  --code-tag: #da1e28;      /* red 60 */
+  --code-attr: #8e6a00;     /* yellow 60 */
+  --code-operator: #525252; /* gray 70 */
+}
+.cds--g100 {
+  --code-comment: #8d8d8d;  /* gray 50 */
+  --code-keyword: #be95ff;  /* purple 40 */
+  --code-string: #6fdc8c;   /* green 30 */
+  --code-number: #78a9ff;   /* blue 40 */
+  --code-function: #3ddbd9; /* teal 30 */
+  --code-tag: #ff8389;      /* red 40 */
+  --code-attr: #f1c21b;     /* yellow 30 */
+  --code-operator: #c6c6c6; /* gray 30 */
+}
+:is(.md-editor__content pre, .code-editor__highlight) .token.comment,
+:is(.md-editor__content pre, .code-editor__highlight) .token.prolog,
+:is(.md-editor__content pre, .code-editor__highlight) .token.doctype,
+:is(.md-editor__content pre, .code-editor__highlight) .token.cdata { color: var(--code-comment); font-style: italic; }
+:is(.md-editor__content pre, .code-editor__highlight) .token.keyword,
+:is(.md-editor__content pre, .code-editor__highlight) .token.atrule,
+:is(.md-editor__content pre, .code-editor__highlight) .token.important,
+:is(.md-editor__content pre, .code-editor__highlight) .token.builtin { color: var(--code-keyword); }
+:is(.md-editor__content pre, .code-editor__highlight) .token.string,
+:is(.md-editor__content pre, .code-editor__highlight) .token.char,
+:is(.md-editor__content pre, .code-editor__highlight) .token.regex,
+:is(.md-editor__content pre, .code-editor__highlight) .token.inserted,
+:is(.md-editor__content pre, .code-editor__highlight) .token.url { color: var(--code-string); }
+:is(.md-editor__content pre, .code-editor__highlight) .token.number,
+:is(.md-editor__content pre, .code-editor__highlight) .token.boolean,
+:is(.md-editor__content pre, .code-editor__highlight) .token.constant,
+:is(.md-editor__content pre, .code-editor__highlight) .token.symbol { color: var(--code-number); }
+:is(.md-editor__content pre, .code-editor__highlight) .token.function,
+:is(.md-editor__content pre, .code-editor__highlight) .token.class-name { color: var(--code-function); }
+:is(.md-editor__content pre, .code-editor__highlight) .token.tag,
+:is(.md-editor__content pre, .code-editor__highlight) .token.selector,
+:is(.md-editor__content pre, .code-editor__highlight) .token.deleted { color: var(--code-tag); }
+:is(.md-editor__content pre, .code-editor__highlight) .token.attr-name,
+:is(.md-editor__content pre, .code-editor__highlight) .token.property,
+:is(.md-editor__content pre, .code-editor__highlight) .token.variable { color: var(--code-attr); }
+:is(.md-editor__content pre, .code-editor__highlight) .token.operator,
+:is(.md-editor__content pre, .code-editor__highlight) .token.punctuation,
+:is(.md-editor__content pre, .code-editor__highlight) .token.entity { color: var(--code-operator); }
+
+/* Object fields read one step up Carbon's type scale (body-compact-02, body-02, label-02).
+   Overriding the tokens, not individual sizes, scales Carbon's inputs, dropdowns and labels,
+   the markdown text and the read-only values together, so view and edit stay identical. */
+.object-fields {
+  --cds-body-compact-01-font-size: 1rem;
+  --cds-body-compact-01-line-height: 1.375;
+  --cds-body-compact-01-letter-spacing: 0;
+  --cds-body-01-font-size: 1rem;
+  --cds-body-01-line-height: 1.5;
+  --cds-body-01-letter-spacing: 0;
+  --cds-label-01-font-size: 0.875rem;
+  --cds-label-01-line-height: 1.28572;
+  --cds-label-01-letter-spacing: 0.16px;
+}
+
+/* Object view (read-only record). Each field mirrors its edit-form input: same label,
+   same height (2rem, Carbon's small inputs) and inner padding (1rem), so view and edit don't jump. */
+/* Same box model as .cds--form-item, so labels take exactly the same space. */
+.view-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.view-field__value {
+  display: flex;
+  align-items: center;
+  min-block-size: 2rem;
+  /* One line of text exactly fills the small input's 2rem (minus its 1px bottom border). */
+  padding: calc((2rem - 1px - 1lh) / 2) 1rem;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--cds-border-subtle);
+  font-size: var(--cds-body-compact-01-font-size);
+  line-height: var(--cds-body-compact-01-line-height);
+  letter-spacing: var(--cds-body-compact-01-letter-spacing);
+  overflow-wrap: anywhere;
+}
+/* Dates and times use Carbon's date/time input style (code-02), like their editors. */
+.view-field__value--date,
+.view-field__value--datetime {
+  font-family: var(--cds-code-02-font-family);
+  font-size: var(--cds-code-02-font-size);
+  line-height: var(--cds-code-02-line-height);
+  letter-spacing: var(--cds-code-02-letter-spacing);
+  /* Carbon's date input sets its text 1px lower than its body-compact inputs. */
+  padding-block: calc((2rem - 1px - 1lh) / 2 + 1px) calc((2rem - 1px - 1lh) / 2 - 1px);
+}
+/* Date & time: the date where the date input's text is, the time where the time input's is
+   (the time input is 4.875rem wide with 1rem inner padding; this box has 1rem padding). */
+.view-datetime__date {
+  flex: 1;
+}
+.view-datetime__time {
+  flex: none;
+  inline-size: 2.875rem;
+}
+/* Markdown: same padding as the editor's content area; height follows the content. */
+.view-field__value--markdown {
+  display: block;
+  padding: 0.75rem 1rem;
+}
+/* A template's rendered result (HTML, Markdown) is a block like a markdown field: the same
+   space above and below, before the line under the field. */
+.view-field__value--template:has(> :is(.html-frame, .md-view)) {
+  display: block;
+  padding-block: 0.75rem;
+}
+.view-field__value--image {
+  display: block;
+  min-block-size: 0; /* as tall as the image, like the edit preview */
+  padding: 0;
+  border-bottom: 0;
+}
+.view-field__value--image.view-field__value--empty {
+  padding: 0;
+  min-block-size: 6rem; /* the drop area's height */
+}
+/* Click-to-edit affordance on read-only values. */
+/* Hover shows a blue bar on the left, like the side nav's selected item (an inset shadow, so
+   nothing moves). */
+.view-field__editable {
+  cursor: pointer;
+  transition: box-shadow 70ms;
+}
+/* Markdown is text: show a text cursor; clicking starts editing at that spot. */
+.view-field__value--markdown.view-field__editable {
+  cursor: text;
+}
+.view-field__editable:hover {
+  box-shadow: inset 3px 0 0 var(--cds-border-interactive);
+}
+.view-field__editable:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+.view-field__rows.view-field__editable:hover {
+  box-shadow: none;
+}
+.view-field__rows.view-field__editable .view-field__value {
+  transition: box-shadow 70ms;
+}
+.view-field__rows.view-field__editable:hover .view-field__value {
+  box-shadow: inset 3px 0 0 var(--cds-border-interactive);
+}
+
+/* List of strings: one row per item, like the form's inputs. */
+.view-field__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-03); /* same as the editor's item rows (Carbon Stack gap 3) */
+}
+.object-view__tags,
+.object-view__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+.object-view__tags {
+  gap: 0.5rem;
+}
+.object-view__tags .cds--tag {
+  margin: 0;
+}
+.object-view__muted {
+  color: var(--cds-text-secondary);
+}
+/* A read-only image keeps its own width, at the start of the field (not stretched by the
+   field's column, which would centre it). */
+.object-view__image {
+  align-self: flex-start;
+  display: block;
+  max-width: 100%;
+  max-height: 20rem; /* same as the edit form's image preview */
+  object-fit: contain;
+}
+
+/* Object cards (objects list on narrow screens) */
+/* Cards: a responsive grid, the same gap between rows and columns at every width. */
+.object-cards {
+  display: grid;
+  /* Columns are counted in CardsView (useCardColumns): the count whose card width is closest to the target. */
+  grid-template-columns: repeat(var(--card-columns, 4), minmax(0, 1fr));
+  gap: var(--cds-spacing-05);
+}
+.object-card__cover {
+  margin: calc(-1 * var(--cds-spacing-05)) calc(-1 * var(--cds-spacing-05)) var(--cds-spacing-05);
+  background: var(--cds-layer-accent-01);
+}
+/* Around a whole-shown image: its average colour, nudged a few percent towards the theme's
+   layer colour (a touch lighter in light themes, darker in dark ones). */
+.object-card__cover[style*="--cover-tint"] {
+  background: color-mix(in srgb, var(--cover-tint) 92%, var(--cds-layer-01));
+}
+/* Every cover area has the view's shape (--cover-ratio). A fixed shape shows the image whole
+   inside it; "automatic" (the images' average shape) fills it, cropping what sticks out. */
+.object-card__cover img {
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: var(--cover-ratio, 4 / 3);
+  object-fit: contain;
+}
+.object-cards--auto-ratio .object-card__cover img {
+  object-fit: cover;
+}
+/* A markdown cover: the text in the cover's shape, cut off where it doesn't fit, in Carbon's
+   secondary text colour (search excerpts are height-capped; covers aren't). */
+.object-card__cover--markdown {
+  aspect-ratio: var(--cover-ratio, 4 / 3);
+  overflow: hidden;
+  background: none; /* part of the card, separated from its text by a rule */
+  border-block-end: 1px solid var(--cds-border-subtle);
+}
+.object-card__cover--markdown .md-editor__content.md-view--excerpt {
+  /* The text fills the cover and fades out just above the rule, showing that it continues. */
+  block-size: 100%;
+  box-sizing: border-box;
+  /* …ending in a few pixels of plain card colour (spacing-03) right above the rule. */
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - var(--cds-spacing-10) - var(--cds-spacing-03)),
+    transparent calc(100% - var(--cds-spacing-03))
+  );
+  max-height: none;
+  padding: var(--cds-spacing-05);
+  color: var(--cds-text-helper); /* subtle: a preview, not the card's text */
+}
+/* A card without any text is just its cover, edge to edge. */
+.object-card--image-only .object-card__cover {
+  margin-block-end: calc(-1 * var(--cds-spacing-05));
+}
+/* In view settings the checkbox spans the options grid. */
+.view-options > .cds--form-item.cds--checkbox-wrapper {
+  grid-column: 1 / -1;
+}
+.object-cards__empty {
+  margin: 0;
+  padding: 1rem;
+  background: var(--cds-layer-01);
+}
+.object-card__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  overflow-wrap: anywhere;
+}
+/* Label and value side by side, labels in a fixed column. */
+.object-card__fields {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  gap: 0.375rem 1rem;
+  align-items: baseline;
+}
+.object-card__field {
+  display: contents;
+}
+.object-card__field dt {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.object-card__field dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* Nothing may overflow a card, however narrow the card width setting makes it: the card is a
+   size container; below 16rem labels stack above their values, and every child can shrink. */
+.object-card {
+  container-type: inline-size;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+.object-card__fields > *,
+.object-card__field dd > * {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+@container (max-width: 16rem) {
+  .object-card__fields {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0;
+  }
+  .object-card__field dd {
+    margin-block-end: var(--cds-spacing-03);
+  }
+}
+
+/* Objects page: view tabs, toolbar, view settings panel */
+/* Icon buttons sit flush, as everywhere (tab strip, page header): only the search box keeps a
+   gap before them. */
+.objects-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0;
+  row-gap: var(--cds-spacing-03);
+  margin-bottom: var(--cds-spacing-05);
+}
+/* The search box takes whatever the buttons leave, so extra buttons (save, reset, …) shrink it
+   instead of wrapping the row; it only wraps once it would get narrower than spacing-13. */
+.objects-toolbar > .cds--search {
+  flex: 1 1 0;
+  min-inline-size: var(--cds-spacing-13);
+  margin-inline-end: var(--cds-spacing-03);
+}
+.objects-toolbar > :not(.cds--search) {
+  flex: none;
+}
+.view-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+}
+.view-kind svg {
+  fill: currentColor;
+  flex: none;
+}
+/* Toolbar popovers (filter, sort and group, view settings). Carbon caps popover content at
+   23rem; the panel sets its own width. */
+.toolbar-popover .cds--popover-content {
+  max-inline-size: none;
+}
+.toolbar-popover__panel {
+  inline-size: min(28rem, calc(100vw - 2 * var(--cds-spacing-05)));
+  padding: var(--cds-spacing-05);
+}
+.toolbar-popover__panel--fit {
+  inline-size: max-content;
+}
+.view-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-05);
+}
+.query-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-06);
+}
+.query-editor section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cds-spacing-03);
+}
+/* Inputs span the popover's width. */
+.query-editor section > .cds--form-item,
+.query-editor section > .cds--select {
+  align-self: stretch;
+}
+/* "Add filter" sits the same distance below the rules as below "Showing all objects.". */
+.query-editor .helper {
+  margin: 0;
+}
+.query-editor__add {
+  margin-block-start: var(--cds-spacing-05);
+}
+.query-editor__title {
+  font-size: var(--cds-body-compact-01-font-size);
+  font-weight: 600;
+}
+.query-editor__rule {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--cds-spacing-03);
+  align-items: center;
+}
+.query-editor__pair,
+.view-options {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--cds-spacing-05);
+}
+@media (max-width: 42rem) {
+  .query-editor__rule,
+  .query-editor__pair,
+  .view-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Group headings (table rows / card sections) */
+.table-group__title {
+  font-size: var(--cds-body-compact-01-font-size);
+  font-weight: 600;
+}
+/* Grouped tables / cards: Carbon's accordion indents and pads its content; it uses the full width. */
+.table-groups .cds--accordion__content,
+.table-groups .cds--accordion--start .cds--accordion__content,
+.view-groups .cds--accordion__content,
+.view-groups .cds--accordion--start .cds--accordion__content {
+  margin: 0;
+  padding: 0 0 var(--cds-spacing-05);
+}
+.table-groups .cds--accordion__item--active > .cds--accordion__wrapper,
+.view-groups .cds--accordion__item--active > .cds--accordion__wrapper {
+  padding-block: 0;
+}
+/* Groups show open at once: Carbon fades an open item in from closed when it appears
+   (@starting-style), so every group flashed closed and its table appeared after. Opening and
+   closing a group is instant too. */
+.table-groups .cds--accordion__wrapper,
+.view-groups .cds--accordion__wrapper {
+  transition: none;
+}
+/* Carbon's start-aligned caret has a 2px top margin that pushes it below center in the small heading. */
+.table-groups .cds--accordion--start .cds--accordion__arrow,
+.view-groups .cds--accordion--start .cds--accordion__arrow {
+  margin-block-start: 0;
+}
+/* Carbon's group lines stay; a group's last row doesn't add another beside them. */
+.table-groups tbody tr:last-child td,
+.table-groups tbody tr:last-child th {
+  border-block-end: 0;
+}
+.table-groups > .cds--data-table-container {
+  margin-top: var(--cds-spacing-05);
+}
+.view-group__count {
+  margin-left: var(--cds-spacing-03);
+  font-weight: 400;
+  color: var(--cds-text-secondary);
+}
+.table-add-row td {
+  padding-block: var(--cds-spacing-03);
+}
+.view-empty {
+  padding: var(--cds-spacing-05);
+}
+
+/* Tables */
+/* Whole image, scaled to the row height (never cropped). */
+.image-thumb {
+  display: block;
+  block-size: var(--cds-spacing-06); /* fits Carbon's small table row */
+  inline-size: auto;
+  max-inline-size: 6rem;
+  object-fit: contain;
+}
+/* Carbon's dropdowns put an inline-block label in a block wrapper, which adds a couple of
+   pixels above it; lay them out like .cds--form-item so labels sit like every other field's. */
+.cds--list-box__wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Checkbox fields are toggled right in the table / cards. */
+.cell-checkbox {
+  display: inline-flex;
+}
+.cell-checkbox .cds--form-item {
+  margin: 0;
+}
+/* Inline-editable table cells fill their cell, so empty values can be clicked too. */
+.cell-editable {
+  display: flex;
+  align-items: center;
+  min-block-size: 1.5rem;
+  margin: -0.25rem -0.5rem;
+  padding: 0.25rem 0.5rem;
+  cursor: text;
+}
+.cell-editable:hover {
+  background: var(--cds-layer-hover);
+}
+.cell-editable:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+/* The table is as wide as its content (no wider than the pane), so columns sit left and keep
+   their text on one line while there is room; only when the pane is too narrow does the
+   browser wrap them, in proportion to their content. */
+.objects-table .cds--data-table {
+  inline-size: auto;
+}
+/* A percentage column width would stretch an auto-width table to the pane. */
+.objects-table .row-actions {
+  inline-size: auto;
+}
+.objects-table td {
+  overflow-wrap: anywhere;
+}
+/* Names and titles (link cells) break only between words: breaking anywhere would let a long
+   neighbouring cell squeeze them until a word splits. */
+.objects-table td:has(> a) {
+  overflow-wrap: break-word;
+}
+.objects-table :is(td, th).row-actions {
+  text-align: end;
+}
+/* Small (2rem) controls fill a small row exactly: no vertical cell padding around them. */
+.objects-table td.row-actions,
+.objects-table .table-add-row td {
+  padding-block: 0;
+}
+/* Add row: inputs are laid over their cells (out of the flow), so opening the row never
+   changes column widths. A small gap (spacing-02 per side) keeps neighbouring inputs apart;
+   each input's text inset shrinks by the same amount, so typed text starts exactly below the
+   column's text (cell padding 1rem = gap + input inset). */
+.objects-table .table-add-row td {
+  position: relative;
+  block-size: calc(2rem + 1px); /* as tall as the idle "+" row (2rem button + its border) */
+}
+.add-cell {
+  position: absolute;
+  inset: 0 var(--cds-spacing-02);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+/* Right-aligned with the trash icons above (inside the cell's 1rem end padding). */
+.add-cell--actions {
+  inset: 0 var(--cds-spacing-05) 0 auto;
+  flex-direction: row;
+  align-items: center;
+}
+ /* Inputs laid over a cell (add row, cell editor) never reach past it, however narrow the
+   column: Carbon gives some inputs a minimum or fixed width (number 9.375rem, date picker 18rem,
+   combo box …) that would overlap the next column. Every part of them shrinks to the cell. */
+.add-cell :where(*:not(svg, svg *, .cds--popover, .cds--popover *, [role="listbox"], [role="listbox"] *)),
+.cell-overlay :where(*:not(svg, svg *, .cds--popover, .cds--popover *, [role="listbox"], [role="listbox"] *)) {
+  min-inline-size: 0 !important;
+  max-inline-size: 100%;
+}
+.add-cell :is(.cds--date-picker, .cds--date-picker-container, .cds--date-picker-input__wrapper, .cds--date-picker__input, .cds--time-picker, .cds--number, .cds--number input[type="number"], .cds--list-box__wrapper, .cds--list-box, .cds--text-input-wrapper),
+.cell-overlay :is(.cds--date-picker, .cds--date-picker-container, .cds--date-picker-input__wrapper, .cds--date-picker__input, .cds--time-picker, .cds--number, .cds--number input[type="number"], .cds--list-box__wrapper, .cds--list-box, .cds--text-input-wrapper) {
+  inline-size: 100%;
+}
+.objects-table .table-add-row :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box__field, .cds--text-input--empty) {
+  padding-inline-start: calc(1rem - var(--cds-spacing-02));
+}
+/* Editing in a cell without content jump (same rules as the object page): the input covers
+   the cell exactly. Carbon cells and inputs both indent text by 1rem and use body-compact-01,
+   so the text stays where it was; the input is the row's height (Carbon "sm" rows, 2rem),
+   so the row doesn't grow. */
+.objects-table td.cell--editing {
+  position: relative;
+}
+.cell-sizer {
+  visibility: hidden;
+}
+/* Wide tables: the box is no box; the overlay is anchored to the cell itself. */
+.cell-edit-box {
+  display: contents;
+}
+.cell-overlay {
+  position: absolute;
+  inset: 0;
+  /* Rows can be taller than the 2rem input (e.g. an image column): centre the input, as the
+     cell centres its text. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+/* The cell's text sits 1px lower than an input's (its bottom border lifts the input's text). */
+.objects-table td.cell--editing :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box) {
+  block-size: 2rem;
+  padding-block-start: var(--cds-spacing-01);
+}
+/* Number inputs in a cell (cell editor, add row) have no steppers, so they don't keep Carbon's
+   room for them (80px, which left a narrow column almost no room for the number itself). */
+.cell-overlay .cds--number input[type="number"],
+.add-cell .cds--number input[type="number"] {
+  min-inline-size: 0;
+  padding-inline-end: var(--cds-spacing-03);
+}
+.add-cell .cds--number__controls {
+  display: none;
+}
+/* Date inputs in a cell have no calendar icon: the column is only as wide as the date, so the
+   icon would sit on the text (focusing the input opens the calendar anyway). Nor Carbon's room
+   for it. */
+:is(.cell-overlay, .add-cell) .cds--date-picker__icon {
+  display: none;
+}
+:is(.cell-overlay, .add-cell) .cds--date-picker__input {
+  padding-inline-end: var(--cds-spacing-03);
+}
+/* Dates read in Carbon's date input style (code-02), like their editor, and on one line: a
+   date (and its time) never wraps, so the column is never narrower than one and the cell
+   editor, a single line, matches the cell. */
+.objects-table td:is(.cell--date, .cell--datetime) {
+  font-family: var(--cds-code-02-font-family);
+  letter-spacing: var(--cds-code-02-letter-spacing);
+  white-space: nowrap;
+}
+.row-actions__menu {
+  display: none; /* stacked tables only (see .table-wrap[data-stacked]) */
+}
+.row-actions {
+  white-space: nowrap;
+  width: 1%; /* shrink to the buttons */
+  text-align: right;
+}
+.clickable-row {
+  cursor: pointer;
+}
+.table-empty {
+  color: var(--cds-text-secondary);
+}
+
+/* View tabs with the default-view star at their right. */
+/* The margin sits on the bar, not the tabs, so the icon buttons centre on the tab labels. */
+.views-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--cds-spacing-05);
+}
+.views-bar > .cds--tabs {
+  flex: 0 1 auto;
+  inline-size: auto; /* Carbon makes tabs full width; "+" follows the last tab */
+  min-inline-size: 0;
+}
+.views-bar__spacer {
+  flex: 1;
+}
+/* Object pages: a little more room between the object view tabs and the first field. */
+.object-view .views-bar {
+  margin-bottom: var(--cds-spacing-06);
+}
+/* In a toolbar popover, view-type options stack in one column. */
+.toolbar-popover .view-options {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Image columns centre their thumbnails; the header is left-aligned like every other column. */
+.objects-table td.cell--image .image-thumb {
+  margin-inline: auto;
+}
+/* An empty markdown field is as tall as the empty editor it turns into (one body-01 line plus
+   the editor's 0.75rem padding and the field's bottom border). */
+.view-field__value--markdown.view-field__value--empty {
+  min-block-size: calc(2 * 0.75rem + var(--cds-body-01-font-size) * var(--cds-body-01-line-height) + 1px);
+}
+/* The idle add row's "+" icon starts where the column's text starts: the 2rem icon button
+   centres a 1rem icon, so the cell's 1rem inset shrinks by that 0.5rem. */
+.objects-table td.table-add-row__plus {
+  padding-inline-start: calc(1rem - var(--cds-spacing-03));
+}
+/* Object details popover: label / value pairs. */
+.object-info {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--cds-spacing-03) var(--cds-spacing-05);
+  font-size: var(--cds-body-compact-01-font-size);
+  line-height: var(--cds-body-compact-01-line-height);
+}
+.object-info dt {
+  color: var(--cds-text-secondary);
+}
+/* An icon followed by its text (field labels with their kind, types in dropdowns). */
+.icon-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+  vertical-align: top; /* no baseline gap: a label keeps its usual height with the icon in it */
+  max-block-size: 1lh;
+}
+.icon-label svg {
+  flex: none;
+  fill: currentColor;
+}
+/* A checkbox field: header label above, the box centred in an input-height (2rem) row. */
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  min-block-size: 2rem;
+}
+.checkbox-field .cds--form-item {
+  margin: 0;
+}
+/* Item pages: field text starts flush with the page edge (title, breadcrumb). Each field is
+   pulled 1rem left so its box's own 1rem inset puts the text at the edge (the box border sits
+   1rem further left; its right edge stays); labels and checkboxes, without an inset, get the
+   1rem back as padding. */
+.object-fields > :not(.form-actions, .image-input, .view-field--image, .object-field--no-label),
+.object-field--no-label > :not(.image-input, .view-field--image) {
+  margin-inline-start: calc(-1 * var(--cds-spacing-05));
+}
+.object-fields > :not(.form-actions, .image-input, .view-field--image) .cds--label,
+.object-fields .checkbox-field,
+.object-fields .checklist-box {
+  padding-inline-start: var(--cds-spacing-05);
+}
+/* An image has no inner inset: its edge itself lines up with the text. */
+/* The form for a new object is an ordinary form: its boxes (not their text) line up with the
+   page edge, like the image drop zone and the buttons. */
+.object-fields.object-fields--form > :not(.form-actions, .image-input, .object-field--no-label) {
+  margin-inline-start: 0;
+}
+.object-fields.object-fields--form > :not(.form-actions, .image-input) .cds--label,
+.object-fields.object-fields--form .checkbox-field,
+.object-fields.object-fields--form .checklist-box {
+  padding-inline-start: 0;
+}
+/* An object's title is editable in place: the input's text inset is cancelled by pulling the box
+   left, so the text doesn't move when editing starts. */
+.object-title {
+  cursor: text;
+}
+/* Editing: the same block as at rest (it wraps the same way), marked by an outline around it. */
+.object-title--editing {
+  /* The field background of the page's other editors; the shadow spreads it around the text
+     without taking any room. */
+  background: var(--cds-field);
+  box-shadow: 0 0 0 var(--cds-spacing-02) var(--cds-field);
+  outline: 2px solid var(--cds-focus);
+  outline-offset: var(--cds-spacing-02);
+  white-space: pre-wrap;
+}
+/* Sliders in view settings span the popover's width (Carbon caps them at 40rem / min width). */
+.view-options .cds--slider-container {
+  inline-size: 100%;
+}
+.view-options .cds--slider {
+  flex: 1;
+  min-inline-size: 0;
+  max-inline-size: none;
+}
+
+/* Templates: the list table and the editor's formula / test values. */
+.templates-table__code,
+.template-code :is(input, textarea),
+.template-test code,
+.template-test__value,
+.field-row__param,
+.template-text {
+  font-family: var(--cds-code-02-font-family);
+  letter-spacing: var(--cds-code-02-letter-spacing);
+}
+.templates-table__code {
+  overflow-wrap: anywhere;
+}
+/* A long template is cut off after two lines, in a column that stops growing at 40rem. */
+.templates-table__excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  max-inline-size: 40rem;
+}
+.templates-table__code input,
+.templates-table__code .cell-inline-editor .cell-textarea {
+  font-family: var(--cds-code-02-font-family);
+  letter-spacing: var(--cds-code-02-letter-spacing);
+}
+.template-test {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: var(--cds-spacing-05);
+  align-items: end;
+}
+.template-test__result {
+  grid-column: 1 / -1;
+}
+/* The result preview: as wide as the inputs above it (not pulled left like on object pages), with
+   room between the rendered result and its bottom rule. */
+.template-test__preview .view-field__value {
+  padding-block-end: var(--cds-spacing-05);
+}
+.template-test__value {
+  min-block-size: 2rem;
+  display: flex;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+/* A failing template section: Carbon's warning icon before its message (TemplateWarning). The
+   icon's mark is drawn in gray 100 on the yellow, as in Carbon's own warnings (no token for it). */
+.template-warning {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--cds-spacing-02);
+  color: var(--cds-text-secondary);
+}
+.template-warning svg {
+  flex: none;
+  align-self: center;
+  fill: var(--cds-support-warning);
+}
+.template-warning svg [data-icon-path="inner-path"] {
+  fill: #161616;
+  opacity: 1;
+}
+/* Type editor: a template field's variable → field mapping, under its row. */
+.field-row__mapping {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: var(--cds-spacing-05);
+}
+/* The choice filter editor isn't a mapping cell: its rules fill the whole row. */
+.field-row__mapping > .query-editor {
+  grid-column: 1 / -1;
+}
+/* A checkbox below a dialog's text gets a paragraph's distance from it (Carbon zeroes form-item
+   margins inside a modal, hence the specificity). */
+.cds--modal-content .cds--form-item.modal-checkbox {
+  margin-block-start: var(--cds-spacing-05);
+}
+
+/* Editing a wrapped text cell: an editable block in place of the cell's text (CellTextBox). Its
+   negative margins reach the cell's edges (Carbon's small-row cell padding: 0.4375rem, 1rem)
+   and the same padding brings the text back, so it lays out and wraps exactly as before. */
+.cell-inline-editor .cell-textarea {
+  display: block;
+  /* Its own height (Carbon's text area is 100% high, which in a cell overflows: scrollbar). */
+  block-size: auto;
+  overflow: hidden;
+  /* Natural width (Carbon's text area is 100% wide with a minimum), so the column keeps the width
+     its text gave it: margins and padding cancel out, leaving just the text. */
+  inline-size: auto;
+  min-inline-size: 0;
+  max-inline-size: none;
+  margin: -0.4375rem calc(-1 * var(--cds-spacing-05));
+  padding: 0.4375rem var(--cds-spacing-05);
+  /* 2px more room at the line end than the cell's text had: an editable line also needs space
+     for the caret, else a line that exactly fit would wrap. */
+  margin-inline-end: calc(-1 * var(--cds-spacing-05) - 2px);
+  /* Carbon's bottom line drawn inside the box (not a border), so the box is exactly the cell's
+     height and never sticks out of the table (that brought up a scrollbar). */
+  border-block-end: 0;
+  box-shadow: inset 0 -1px 0 var(--cds-border-strong);
+  min-block-size: 0;
+  resize: none;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--cds-body-compact-01-font-size);
+  line-height: var(--cds-body-compact-01-line-height);
+  letter-spacing: var(--cds-body-compact-01-letter-spacing);
+  /* The cell's own text colour (Carbon table cells use the secondary text colour; the text area's
+     darker primary colour made the text look bolder). */
+  color: inherit;
+  /* Inputs in Carbon's data tables use the second field layer (whiter); text areas aren't in
+     its list, so the same here. */
+  background-color: var(--cds-field-02);
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+/* The side nav's tree (NavTree): a little room above and below. */
+.nav-tree {
+  padding-block: var(--cds-spacing-03);
+}
+/* A long name is cut off with "…"; its icon always stays. */
+.nav-tree :is(.cds--tree-node__icon, .nav-tree__icon) {
+  flex: none;
+}
+.nav-tree__icon {
+  display: inline-flex;
+}
+.nav-tree__icon svg {
+  fill: currentColor;
+}
+.nav-tree .cds--tree-node__label {
+  min-inline-size: 0;
+}
+.nav-tree .cds--tree-node__label__text {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A dialog with dropdowns / combo boxes: their menus may extend past the dialog instead of being
+   clipped by it (Carbon clips the dialog's content). */
+.cds--modal.modal--menus .cds--modal-container,
+.cds--modal.modal--menus .cds--modal-content {
+  overflow: visible;
+}
+
+/* Narrow panes: every table restacks as cards. Each row is a card; each cell a line with its
+   column name (data-label) on the left; the row's icons at the bottom right. Driven by the
+   table's own width (container query), so a narrow tiled pane gets it as well as a phone. */
+.table-wrap {
+  container: table / inline-size;
+}
+/* While a pane widens, a table is briefly narrower than its box (FillTable widens its last
+   column from a ResizeObserver): the box has the rows' colour, so no page colour flashes beside
+   them. Stacked as cards (narrow), the box stays clear. */
+.objects-table .cds--data-table-content {
+  background: var(--cds-layer);
+  /* Carbon makes this box scroll sideways (overflow-x: auto). Tables here fit their pane (shared
+     widths shrink, stacked cards), so a scrollbar could only come from sub-pixel rounding or an
+     overlaid editor: clip instead, which never shows one. */
+  overflow: clip;
+}
+/* Set by FillTable (views/TableView.tsx): the pane is narrow, or the columns don't fit it. */
+.table-wrap[data-stacked] .cds--data-table-content {
+  background: none;
+  /* Cards have no columns to overflow sideways: the row actions' popover must not be clipped. */
+  overflow: visible;
+}
+.table-wrap[data-stacked] {
+  .objects-table thead {
+    display: none;
+  }
+  .objects-table :is(table, tbody) {
+    display: block;
+    inline-size: auto !important; /* FillTable sizes columns; cards don't have any */
+    background: none;
+  }
+  /* Each row is its own small table, with space before the next. */
+  .objects-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
+  }
+  /* Labels in one column as wide as the longest of the card (subgrid), values beside them. */
+  .objects-table tbody tr {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    block-size: auto;
+    background: none;
+  }
+  .objects-table tbody td {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    column-gap: var(--cds-spacing-05);
+    align-items: center;
+    inline-size: auto !important;
+    block-size: auto;
+    min-block-size: 2rem;
+    padding: var(--cds-spacing-02) var(--cds-spacing-05);
+    border: 0;
+    border-block-end: 1px solid var(--cds-border-subtle);
+    background: var(--cds-layer-01);
+  }
+  /* The labels are the card's header column, shaded like the table's header row: each label
+     fills its line's label column, out to the card's edge; a gap before the value. */
+  .objects-table tbody td[data-label]::before {
+    content: attr(data-label);
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    margin-block: calc(-1 * var(--cds-spacing-02));
+    margin-inline-start: calc(-1 * var(--cds-spacing-05));
+    padding: var(--cds-spacing-02) var(--cds-spacing-05);
+    background: var(--cds-layer-accent-01);
+    /* The label is the body font even where the value is code-02 (dates, template code). */
+    font-family: var(--font-sans);
+    letter-spacing: var(--cds-body-compact-01-letter-spacing);
+    font-weight: 600;
+    color: var(--cds-text-primary);
+    overflow-wrap: anywhere;
+  }
+  /* Editable values: the hover reaches the card's edge on the right and the label on the left
+     (the line's padding is 1rem at the sides, 0.25rem above and below); the padding brings the
+     text back to where it was. */
+  .objects-table tbody td .cell-editable {
+    margin: calc(-1 * var(--cds-spacing-02)) calc(-1 * var(--cds-spacing-05));
+    padding: var(--cds-spacing-02) var(--cds-spacing-05);
+    align-self: stretch; /* the line's full height, not just the text's */
+  }
+  .objects-table tbody td .cell-edit-box {
+    align-self: stretch;
+  }
+  /* An editing cell: the editor takes the value's place, beside the label. The box around the
+     hidden value (which sizes the line) anchors it, so it adds nothing to the line's height; it
+     reaches back over the label gap and out to the card's edge and the line's padding, because the
+     input indents its text by the 1rem a wide cell has as padding: the text stays where the
+     value's was. */
+  .objects-table tbody td.cell--editing {
+    position: static;
+  }
+  .objects-table tbody td.cell--editing > .cell-edit-box {
+    display: block;
+    position: relative;
+    grid-column: 2;
+  }
+  .objects-table tbody td.cell--editing .cell-edit-box > .cell-overlay {
+    inset: calc(-1 * var(--cds-spacing-02)) calc(-1 * var(--cds-spacing-05));
+  }
+  /* The editor is centred on the value's own line here (not on a cell with a bottom border), so
+     the input's text needs no 1px lift. */
+  .objects-table tbody td.cell--editing .cell-edit-box :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box) {
+    padding-block-start: 0;
+  }
+  /* A wrapped text editor: the cell's padding here is 0.25rem / 1rem (not a wide cell's), and it
+     must end at the card's edge, not 2px past it (clipped there). */
+  .objects-table tbody td .cell-inline-editor .cell-textarea {
+    margin: calc(-1 * var(--cds-spacing-02)) calc(-1 * var(--cds-spacing-05));
+    padding: var(--cds-spacing-02) var(--cds-spacing-05);
+  }
+  /* The row's actions: a menu in the card's top-right corner, over its first line (which keeps
+     room for it), so they take no line of their own. The icons of a wide table are hidden. */
+  .objects-table tbody tr {
+    position: relative;
+  }
+  .objects-table tbody td.row-actions {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    display: flex;
+    padding: 0;
+    border: 0;
+    background: none;
+    inline-size: auto !important;
+    min-block-size: 0;
+  }
+  .objects-table tbody td.row-actions .row-action-icon {
+    display: none;
+  }
+  .objects-table tbody td.row-actions .row-actions__menu {
+    display: inline-flex;
+  }
+  /* The menu's icons keep their ghost buttons' size; the dark popover is the md-table-menu one. */
+  .objects-table tbody tr > td:first-child {
+    padding-inline-end: calc(var(--cds-spacing-05) + 2rem);
+  }
+  .objects-table tbody td.row-actions:empty,
+  .objects-table tbody td:not([data-label]):empty {
+    display: none;
+  }
+  /* No "+" row as a card of its own: the page's "New …" button adds objects here. */
+  .objects-table tbody tr.table-add-row--idle {
+    display: none;
+  }
+  /* Images sit at the start of their value, like the other values (wide tables centre them). */
+  .objects-table tbody td.cell--image .image-thumb {
+    margin-inline: 0;
+  }
+  /* No row hover on cards: Carbon's hover adds borders (things shift) and tints the whole row,
+     icons included; the icons are buttons with their own hover. */
+  .objects-table .cds--data-table tbody tr:hover td {
+    border-block-start: 0;
+    border-block-end: 1px solid var(--cds-border-subtle);
+    background: var(--cds-layer-01);
+    color: inherit;
+  }
+  .objects-table .cds--data-table tbody tr:hover,
+  .objects-table .cds--data-table tbody tr:hover td.row-actions {
+    border: 0;
+    background: none;
+  }
+}
+
+/* Field order editor: a row per field, checkbox (shown) and up / down when shown. */
+.field-order .cds--form-item.cds--checkbox-wrapper {
+  margin: 0;
+}
+.field-order__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cds-spacing-03);
+  min-block-size: 2rem;
+}
+.field-order__moves {
+  display: flex;
+}
+/* "Add field" under the list: set apart from the last field row. */
+.field-order__add {
+  margin-block-start: var(--cds-spacing-05);
+}
+/* Object page layout popover. */
+.object-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-05);
+  min-inline-size: 16rem;
+}
+/* A field shown without its name (object page layout). The wrapper is no box of its own, so the
+   field stays a direct item of the stack (same gaps). */
+.object-field--no-label {
+  display: contents;
+}
+.object-field--no-label :is(.cds--label, legend.cds--label) {
+  display: none;
+}
+
+/* Template editor: a text area over a highlighted copy of its text, line numbers beside it
+   (ui/TemplateCodeEditor.tsx). Both layers share font, padding and wrapping exactly; the text
+   area's own text is transparent, so only its caret and selection show. The highlighted copy
+   sets the height; the text area covers it. */
+.code-editor {
+  align-self: stretch; /* Carbon's form item lines its children up at the start, content-wide */
+  display: flex;
+  background: var(--cds-field);
+  border-block-end: 1px solid var(--cds-border-strong);
+  font-family: var(--cds-code-02-font-family);
+  font-size: var(--cds-code-02-font-size);
+  line-height: var(--cds-code-02-line-height);
+  letter-spacing: var(--cds-code-02-letter-spacing);
+}
+.code-editor:focus-within {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+.code-editor__gutter {
+  position: relative;
+  flex: none;
+  /* Numbers sit at their line's measured top; the gutter is as wide as the longest number. */
+  inline-size: calc(max(var(--digits, 1), 2) * 1ch + var(--cds-spacing-05) + var(--cds-spacing-03));
+  border-inline-end: 1px solid var(--cds-border-subtle);
+  color: var(--cds-text-placeholder);
+  text-align: end;
+  user-select: none;
+}
+.code-editor__gutter > div {
+  position: absolute;
+  inset-inline-end: var(--cds-spacing-03);
+}
+.code-editor__scroll {
+  flex: 1;
+  min-inline-size: 0;
+}
+.code-editor__area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.code-editor__highlight,
+.code-editor__input {
+  grid-area: 1 / 1;
+  margin: 0;
+  padding: var(--cds-spacing-03) var(--cds-spacing-05);
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+}
+/* At least six lines high, like a text area. */
+.code-editor__highlight {
+  min-block-size: calc(6lh + 2 * var(--cds-spacing-03));
+  color: var(--cds-text-primary);
+  pointer-events: none;
+}
+.code-editor__input {
+  block-size: 100%;
+  inline-size: 100%;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--cds-text-primary);
+  outline: none;
+}
+.code-editor__input::placeholder {
+  color: var(--cds-text-placeholder);
+}
+/* The text area lies on top (its caret must show, also over a {{ }} section's background), so
+   its selection is see-through: the highlighted text stays readable under it. */
+.code-editor__input::selection {
+  background: color-mix(in srgb, var(--cds-highlight) 50%, transparent);
+}
+/* The {{ }} sections stand out a little from the Markdown / HTML around them. */
+.code-editor__section {
+  background: var(--cds-layer-accent-01);
+}
+
+/* A template's HTML: a sandboxed frame as wide as the field, as tall as its content (it reports
+   its height); on a card cover it fills the cover and lets clicks through to the card. */
+.html-frame {
+  display: block;
+  inline-size: 100%;
+  block-size: 2rem;
+  border: 0;
+  background: transparent;
+}
+.html-frame--fill {
+  position: absolute;
+  inset: 0;
+  block-size: 100%;
+  pointer-events: none;
+}
+/* An image URL (from a template) that can't be loaded: a box like the image upload area. */
+.image-missing {
+  box-sizing: border-box;
+  inline-size: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cds-spacing-03);
+  min-block-size: 6rem;
+  padding: var(--cds-spacing-05);
+  border: 1px dashed var(--cds-border-strong);
+  color: var(--cds-text-secondary);
+  font-size: var(--cds-body-compact-01-font-size);
+  line-height: var(--cds-body-compact-01-line-height);
+  text-align: center;
+}
+.image-missing svg {
+  fill: currentColor;
+}
+.image-missing--compact {
+  display: inline;
+  inline-size: auto;
+  min-block-size: 0;
+  padding: 0;
+  border: 0;
+}
+.object-card__cover--html,
+.object-card__cover:has(> .image-missing) {
+  position: relative;
+  aspect-ratio: var(--cover-ratio, 4 / 3);
+  overflow: hidden;
+}
+.object-card__cover .image-missing {
+  position: absolute;
+  inset: 0;
+  min-block-size: 0;
+}
+.template-html-note {
+  color: var(--cds-text-secondary);
+}
+
+/* Templates on an object view only (layout popover): one block per template, under a rule. */
+.view-templates {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cds-spacing-05);
+}
+.view-templates > .cds--label {
+  margin: 0;
+}
+.view-templates__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-03);
+  align-self: stretch;
+  padding-block-start: var(--cds-spacing-05);
+  border-block-start: 1px solid var(--cds-border-subtle);
+}
+.view-templates__head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--cds-spacing-02);
+}
+.view-templates__head > .cds--form-item {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+/* Side nav labels end in "…" when too long. With autoAlign, Carbon wraps a node's text in its
+   tooltip (a popover container, a wrapper and a button) that don't shrink, so the text never
+   got narrower than itself; let each of them shrink to the row. */
+.nav-tree .cds--tree-node__label__details > .cds--popover-container {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+.nav-tree [data-fits] .cds--popover-content {
+  display: none;
+}
+.nav-tree .cds--tooltip-content {
+  padding: var(--cds-spacing-01) var(--cds-spacing-03);
+}
+.nav-tree .cds--tree-node__label__details :is(.cds--tooltip-trigger__wrapper, .cds--tree-node__label__text-button) {
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
