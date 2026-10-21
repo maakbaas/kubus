@@ -4,6 +4,3 @@
 app/dist
 dist
 desktop
-.env
-.env.*
-!.env.example
