@@ -38,8 +38,8 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
 - **Types have an icon** from the full Carbon set (`object_types.icon`, an `@carbon/icons-react`
   export name). The icon module is lazy-loaded (`src/ui/objectIcons.tsx`); the picker is a search
   box over a grid of matches. App icon: `public/favicon.svg` (Cube, white on #0f62fe),
-  rendered to `src-tauri/icons` with `tauri icon`. Display name: Kubus. Internal names stay `pkms` (app identifier `com.pkms.app`, database
-  and pool file names, the `pkms-db` lock, `pkms.*` storage keys): renaming them would orphan existing data.
+  rendered to `src-tauri/icons` with `tauri icon`. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
+  names, the lock or the `kubus.*` storage keys, orphans existing data).
 - The Milkdown editor reports changes synchronously (`changes` plugin); don't switch back to the
   debounced listener plugin, which lost text typed right before saving.
 - **Templates** (`#/templates`, `src/domain/templates.ts`, table `templates`, field kind
@@ -344,7 +344,7 @@ in opposite directions; the hub vision favours the readable replica.
 - **Never install the SAH-pool VFS while another worker may hold its files.** If
   `installOpfsSAHPoolVfs()` fails to open a pool file, its error path calls `removeVfs()`, which
   deletes the pool directory, i.e. the database (this happened on reload-after-save). The worker
-  therefore takes a Web Lock (`pkms-db`) for its lifetime and probes every pool file before
+  therefore takes a Web Lock (`kubus-db`) for its lifetime and probes every pool file before
   installing (`acquireDbLock` / `poolFilesFree` in `worker.ts`). Keep both.
 
 - **Typed columns map to Postgres** as `text`, `double precision`, `date`, `timestamptz`,
@@ -353,7 +353,7 @@ in opposite directions; the hub vision favours the readable replica.
   it (shows an error). Fine for Tauri/PWA; for multi-tab web use, coordinate via a SharedWorker or
   Web Locks leader election later.
 - **Storage lives in the web view, not a visible file.** On desktop the DB is inside the WebView2
-  profile (`%LOCALAPPDATA%\com.pkms.app\EBWebView`). Export/import (sqlite file or JSON) is needed for
+  profile (`%LOCALAPPDATA%\com.kubus.app\EBWebView`). Export/import (sqlite file or JSON) is needed for
   backups. Changing the app identifier or `useHttpsScheme` changes the origin and orphans the data.
 - **iOS eviction:** Safari can evict storage under pressure; home-screen apps are exempt from the
   7-day rule and we request `navigator.storage.persist()`. Once sync exists the server is the backup.

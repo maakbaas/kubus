@@ -1,11 +1,11 @@
 [package]
-name = "pkms"
+name = "kubus"
 version = "0.1.0"
 description = "Personal knowledge management on a relational store"
 edition = "2021"
 
 [lib]
-name = "pkms_lib"
+name = "kubus_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

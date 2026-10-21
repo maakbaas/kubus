@@ -1,4 +1,4 @@
--- pkms database schema.
+-- Kubus database schema.
 --
 -- PRE-ALPHA: there are no migrations. When this file changes, the worker detects
 -- it (hash stored in PRAGMA user_version) and upgrades the local database in place

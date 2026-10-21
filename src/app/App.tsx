@@ -28,8 +28,8 @@ export function App() {
   );
 }
 
-const NAV_DOCKED_KEY = "pkms.navDocked";
-const NAV_WIDTH_KEY = "pkms.navWidth";
+const NAV_DOCKED_KEY = "kubus.navDocked";
+const NAV_WIDTH_KEY = "kubus.navWidth";
 /** Docked side nav width limits in rem (Carbon's default width is 16rem). */
 const NAV_WIDTH = { min: 12, max: 32, initial: 16 };
 

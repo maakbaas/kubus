@@ -83,7 +83,7 @@ ${frameBaseStyles()}
     const key = JSON.stringify(size);
     if (key !== last) {
       last = key;
-      parent.postMessage({ pkmsFrame: size }, "*");
+      parent.postMessage({ kubusFrame: size }, "*");
     }
   };
   // Content can change size at any time (images, maps, charts loading): watch its elements.
@@ -187,7 +187,7 @@ export function HtmlFrame({
   useEffect(() => {
     if (fill) return;
     const onMessage = (e: MessageEvent) => {
-      const s = (e.data as { pkmsFrame?: FrameSize } | null)?.pkmsFrame;
+      const s = (e.data as { kubusFrame?: FrameSize } | null)?.kubusFrame;
       if (e.source === frame.current?.contentWindow && s && typeof s.natural === "number") setSize(s);
     };
     window.addEventListener("message", onMessage);

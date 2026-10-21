@@ -49,8 +49,8 @@ import {
 // In-app links (href="#/...") are intercepted: plain click = this tab, Ctrl/Cmd/middle click =
 // new tab. Links outside tabs (side nav, header) go to the active tab.
 
-const STORAGE_KEY = "pkms.workspace";
-const TAB_MIME = "application/x-pkms-tab";
+const STORAGE_KEY = "kubus.workspace";
+const TAB_MIME = "application/x-kubus-tab";
 
 /** What changes the workspace: stable for its lifetime, so using it re-renders nothing. */
 interface WorkspaceActions {

@@ -6,7 +6,7 @@ import { readPref, writePref } from "../ui/localPrefs";
 import { TypeIcon } from "../ui/typeIcons";
 import { useStore } from "./store";
 
-const EXPANDED_KEY = "pkms.navExpanded";
+const EXPANDED_KEY = "kubus.navExpanded";
 
 
 // TreeNode renders its icon as a component; one stable component per type icon name.

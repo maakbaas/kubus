@@ -6,8 +6,8 @@ import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import schema from "../schema.sql?raw";
 import type { OpenResult, Request, Response, Statement } from "./protocol";
 
-const DB_FILE = "/pkms.sqlite3";
-const POOL_NAME = "pkms-sahpool";
+const DB_FILE = "/kubus.sqlite3";
+const POOL_NAME = "kubus-sahpool";
 const POOL_DIR = `.${POOL_NAME}`; // the SAH pool's default directory for this name
 
 // The oo1 API's TypeScript overloads are very strict; we only use a small, stable subset.
@@ -28,7 +28,7 @@ function acquireDbLock(timeoutMs = 10_000): Promise<void> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     navigator.locks
-      .request("pkms-db", { signal: controller.signal }, () => {
+      .request("kubus-db", { signal: controller.signal }, () => {
         clearTimeout(timer);
         resolve();
         return new Promise<void>(() => {}); // held until the worker terminates
