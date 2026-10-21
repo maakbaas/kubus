@@ -1,6 +1,7 @@
 import { useEffect, useState, type PointerEvent } from "react";
 import { IconButton, InlineNotification, Layer, Loading, Search, SideNav } from "@carbon/react";
 import { OpenPanelFilledLeft, OpenPanelLeft } from "@carbon/icons-react";
+import { SyncStatusButton } from "../ui/SyncStatusButton";
 import { GlobalLinks, useWorkspace, WorkspaceProvider, WorkspaceView } from "../workspace/Workspace";
 import { readPref, writePref } from "../ui/localPrefs";
 import { useMediaQuery } from "../ui/useMediaQuery";
@@ -164,7 +165,7 @@ function Shell() {
             hideCloseButton
           />
         )}
-        <WorkspaceView tabStripStart={navShown ? null : navToggle} />
+        <WorkspaceView tabStripStart={navShown ? null : navToggle} tabStripEnd={<SyncStatusButton onOpen={() => ws.navigate("/sync")} />} />
       </main>
     </>
   );

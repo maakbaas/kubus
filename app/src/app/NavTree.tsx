@@ -1,6 +1,6 @@
 import { useState, type ElementType, type MouseEvent } from "react";
 import { TreeNode, TreeView } from "@carbon/react";
-import { Bookmark as BookmarkIcon, Cube, Code as TemplateIcon, Renew as SyncIcon } from "@carbon/icons-react";
+import { Bookmark as BookmarkIcon, Cube, Code as TemplateIcon } from "@carbon/icons-react";
 import { bookmarkPath } from "../domain/bookmarks";
 import { readPref, writePref } from "../ui/localPrefs";
 import { TypeIcon } from "../ui/typeIcons";
@@ -30,7 +30,7 @@ function typeIcon(name: string | null): ElementType {
 
 /**
  * The side nav as a Carbon tree: Bookmarks (bookmarked views and objects), Types (its page,
- * with every type below it) Templates and Sync. Choosing a node opens its page in the active tab
+ * with every type below it) and Templates. Choosing a node opens its page in the active tab
  * (through `navigate`: Carbon's tree stops clicks, so plain links wouldn't reach the workspace).
  * The selected node follows the active tab's page (a bookmark of it wins). Middle click opens a
  * node's page in a new tab.
@@ -63,16 +63,13 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
           ? "bookmarks"
           : pathname.startsWith("/templates")
             ? "templates"
-            : pathname === "/sync"
-              ? "sync"
-              : undefined;
+            : undefined;
 
   // Every node's page, by node id (Carbon renders the id on the node's <li>), for middle clicks.
   const paths: Record<string, string> = {
     bookmarks: "/bookmarks",
     objects: "/types",
     templates: "/templates",
-    sync: "/sync",
     ...Object.fromEntries(bookmarks.map((b) => [`bookmark-${b.id}`, bookmarkPath(b)])),
     ...Object.fromEntries(types.map((t) => [`type-${t.id}`, `/types/${t.id}/objects`])),
   };
@@ -126,7 +123,6 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
           ))}
         </TreeNode>
         <TreeNode autoAlign id="templates" label="Templates" onSelect={() => navigate("/templates")} renderIcon={TemplateIcon} />
-        <TreeNode autoAlign id="sync" label="Sync" onSelect={() => navigate("/sync")} renderIcon={SyncIcon} />
       </TreeView>
     </div>
   );

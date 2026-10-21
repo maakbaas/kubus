@@ -36,6 +36,11 @@ export interface SyncControl {
   /** Saves the settings and syncs right away when enabled. */
   configure(config: SyncConfig): Promise<void>;
   syncNow(): Promise<void>;
+  /**
+   * Forgets the server: clears the settings and what sync remembered about it. The device keeps its
+   * data; connecting again later counts as a first connection (the server's data replaces it).
+   */
+  disconnect(): Promise<void>;
   /** True when connecting to `url` would replace this device's data with the server's (first time). */
   isNewServer(url: string): boolean;
 }

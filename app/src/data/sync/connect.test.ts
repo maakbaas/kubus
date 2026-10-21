@@ -5,7 +5,7 @@ import schema from "../schema.sql?raw";
 import type { SyncRequest, SyncResponse } from "../../../../shared/sync";
 
 const store = new Map<string, string>();
-vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) });
+vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) });
 vi.stubGlobal("document", { addEventListener() {}, visibilityState: "visible" });
 vi.stubGlobal("addEventListener", () => {});
 vi.stubGlobal("location", { protocol: "http:", hostname: "localhost", origin: "http://localhost" });
@@ -126,5 +126,24 @@ describe("first connection to a server", () => {
     await engine.syncNow();
     // later syncs are ordinary: they send what changed since the cursor
     expect(requests.at(-1)?.since).toBe(1);
+  });
+
+  it("forgets the server on disconnect, keeping the local data", async () => {
+    server(() => ({ cursor: 1, changes: { object_types: [type("t1")] } }));
+    const db = await localDevice();
+    const engine = new SyncEngine(db as never, () => {});
+    await engine.configure(config);
+    expect(engine.isNewServer(config.url)).toBe(false);
+
+    await engine.disconnect();
+
+    expect(engine.status.state).toBe("off");
+    expect(engine.config).toMatchObject({ token: "", enabled: false });
+    expect(engine.isNewServer(config.url)).toBe(true); // connecting again is a first connection
+    expect(db.names("object_types")).toEqual(["t1"]); // the data stays
+    expect(db.db.prepare("SELECT count(*) AS n FROM meta WHERE key IN ('sync_server', 'sync_cursor')").get()).toEqual({ n: 0 });
+    const calls = requests.length;
+    await engine.syncNow(); // off: no request
+    expect(requests).toHaveLength(calls);
   });
 });

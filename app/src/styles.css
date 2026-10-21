@@ -78,6 +78,34 @@ body,
 .ws-pane__lead--phone {
   display: none;
 }
+/* The sync status ending the top-right tab strip, right of "+"; the copy in the active pane's
+   strip only shows on phones. */
+.ws-pane__end {
+  display: flex;
+  padding-inline-end: var(--cds-spacing-02);
+}
+.ws-pane__end--phone {
+  display: none;
+}
+.sync-status--idle svg {
+  fill: var(--cds-support-success);
+}
+.sync-status--error svg {
+  fill: var(--cds-support-error);
+}
+.sync-status--syncing svg {
+  animation: sync-spin 1.2s linear infinite;
+}
+@keyframes sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sync-status--syncing svg {
+    animation: none;
+  }
+}
 .ws {
   flex: 1;
   min-block-size: 0;
@@ -242,7 +270,8 @@ body,
   .ws-split__child:not(:has(.ws-pane--active)) {
     display: none;
   }
-  .ws-pane__lead--phone {
+  .ws-pane__lead--phone,
+  .ws-pane__end--phone {
     display: flex;
   }
   /* The one pane shown is always at the top. */

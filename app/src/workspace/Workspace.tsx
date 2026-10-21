@@ -86,6 +86,7 @@ const WorkspaceActionsContext = createContext<WorkspaceActions | null>(null);
 const TabIdContext = createContext<string | null>(null);
 /** What starts the top-left pane's tab strip (the side nav toggle; see WorkspaceView). */
 const TabStripStartContext = createContext<ReactNode>(null);
+const TabStripEndContext = createContext<ReactNode>(null);
 
 export function useWorkspace(): WorkspaceApi {
   const ws = useContext(WorkspaceContext);
@@ -371,6 +372,13 @@ function PaneView({ pane }: { pane: PaneNode }) {
     stripStart && (topLeft || active) ? (
       <span className={topLeft ? "ws-pane__lead" : "ws-pane__lead ws-pane__lead--phone"}>{stripStart}</span>
     ) : null;
+  // The sync status ends the top-right strip, right of "+" (on phones: the active pane's strip).
+  const stripEnd = useContext(TabStripEndContext);
+  const topRight = topPanes(ws.workspace.root).at(-1)?.id === pane.id;
+  const end =
+    stripEnd && (topRight || active) ? (
+      <span className={topRight ? "ws-pane__end" : "ws-pane__end ws-pane__end--phone"}>{stripEnd}</span>
+    ) : null;
 
   if (pane.tabs.length === 0) {
     // Every tab was closed: an empty workspace, with a way back in.
@@ -380,6 +388,7 @@ function PaneView({ pane }: { pane: PaneNode }) {
           {lead}
           <span className="ws-pane__spacer" />
           {newTab}
+          {end}
         </div>
         <div className="ws-pane__body ws-empty">
           <p className="helper">Nothing is open. Pick a type in the menu or{" "}
@@ -438,6 +447,7 @@ function PaneView({ pane }: { pane: PaneNode }) {
           </TabList>
         </Tabs>
         {newTab}
+        {end}
       </div>
       {/* The drop highlight covers the whole pane body, scrollbar gutters included: it sits on
           this frame, outside the scrolling body. */}
@@ -547,8 +557,11 @@ function tabsOf(node: LayoutNode): WorkspaceTab[] {
   return node.kind === "pane" ? node.tabs : node.children.flatMap(tabsOf);
 }
 
-/** Renders the workspace layout; `tabStripStart` (the side nav toggle) leads the top-left tab strip. */
-export function WorkspaceView({ tabStripStart }: { tabStripStart?: ReactNode }) {
+/**
+ * Renders the workspace layout; `tabStripStart` (the side nav toggle) leads the top-left tab strip,
+ * `tabStripEnd` (the sync status) ends the top-right one.
+ */
+export function WorkspaceView({ tabStripStart, tabStripEnd }: { tabStripStart?: ReactNode; tabStripEnd?: ReactNode }) {
   const ws = useWorkspace();
   const tabs = tabsOf(ws.workspace.root);
   // Closed tabs drop their element.
@@ -564,7 +577,9 @@ export function WorkspaceView({ tabStripStart }: { tabStripStart?: ReactNode }) 
   return (
     <div className="ws">
       <TabStripStartContext.Provider value={tabStripStart}>
-        <LayoutView node={ws.workspace.root} />
+        <TabStripEndContext.Provider value={tabStripEnd}>
+          <LayoutView node={ws.workspace.root} />
+        </TabStripEndContext.Provider>
       </TabStripStartContext.Provider>
       {tabs.map((t) => createPortal(<TabContent tab={t} />, tabHost(t.id), t.id))}
     </div>

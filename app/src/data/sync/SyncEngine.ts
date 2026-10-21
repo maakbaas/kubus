@@ -128,6 +128,24 @@ export class SyncEngine implements SyncControl {
     await this.syncNow();
   }
 
+  async disconnect(): Promise<void> {
+    this.config = { url: defaultUrl(), token: "", enabled: false };
+    clearTimeout(this.debounce);
+    this.listenForChanges(); // closes the change signal
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
+      localStorage.removeItem(SERVER_KEY);
+    } catch {
+      // storage blocked: nothing to forget
+    }
+    await this.running; // a sync in flight finishes first
+    await this.db.write([
+      { sql: "DELETE FROM sync_outbox" },
+      { sql: "DELETE FROM meta WHERE key IN ('sync_server', 'sync_cursor')" },
+    ]);
+    this.setStatus({ state: "off", lastSync: null, error: null });
+  }
+
   /** The repository calls this after every local write. */
   localChange() {
     if (this.applying || !this.active) return;

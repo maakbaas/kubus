@@ -14,6 +14,8 @@ export function SyncPage() {
   const status = useSyncExternalStore(sync.subscribe.bind(sync), () => sync.status);
   const [draft, setDraft] = useState(sync.config);
   const [saving, setSaving] = useState(false);
+  // Whether a server is saved (the Disconnect button), as opposed to what is typed.
+  const [connected, setConnected] = useState(sync.config.token !== "");
   const { confirm, dialog } = useConfirm();
 
   const save = async (e?: { preventDefault(): void }) => {
@@ -32,9 +34,22 @@ export function SyncPage() {
     setSaving(true);
     try {
       await sync.configure(draft);
+      setConnected(draft.token !== "");
     } finally {
       setSaving(false);
     }
+  };
+
+  const disconnect = async () => {
+    const ok = await confirm({
+      title: "Disconnect from the server?",
+      body: "This device keeps its data but stops syncing. Connecting again later replaces this device's data with the server's.",
+      confirmLabel: "Disconnect",
+    });
+    if (!ok) return;
+    await sync.disconnect();
+    setDraft(sync.config);
+    setConnected(false);
   };
 
   return (
@@ -78,10 +93,15 @@ export function SyncPage() {
           <div>
             <Button size="sm" kind="primary" type="submit" disabled={saving}>
               Save
-            </Button>{" "}
-            <Button size="sm" kind="secondary" disabled={status.state === "syncing"} onClick={() => void sync.syncNow()}>
-              Sync now
             </Button>
+            {connected && (
+              <>
+                {" "}
+                <Button size="sm" kind="danger--tertiary" onClick={() => void disconnect()}>
+                  Disconnect
+                </Button>
+              </>
+            )}
           </div>
         </Stack>
       </Form>

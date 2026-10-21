@@ -307,7 +307,9 @@ client never talks to Postgres: browsers and the iOS PWA can only do HTTP. One c
 (`server/Dockerfile`, `docker-compose.yml` with `DATABASE_URL` and `KUBUS_TOKEN`) serves the
 sync API at `/api` and the built web app at `/`, so the phone installs the app from the server
 (same origin, no CORS). Auth is one shared bearer token (`KUBUS_TOKEN`); the app's Sync page
-(`#/sync`, `pages/SyncPage.tsx`) holds server URL + token + on/off, per device (localStorage
+(`#/sync`, `pages/SyncPage.tsx`, opened from the status icon ending the top-right tab strip,
+`ui/SyncStatusButton.tsx`) holds server URL + token + on/off + Disconnect (forgets the server; the
+device keeps its data and the next connection is a first one), per device (localStorage
 `kubus.sync`). A readable Postgres replica (not end-to-end encrypted) was chosen, as the hub
 vision wants server-side queries and remote sources later.
 
