@@ -1,14 +1,18 @@
-# The Kubus server: sync API and web app on one port. Postgres is external and already running;
-# put its connection string in .env (see .env.example).
+# The Kubus server: sync API and web app on one port. Postgres is external and already running:
+# fill in the two placeholders below, then `docker compose up --build`.
 services:
   server:
     build:
       context: .
       dockerfile: server/Dockerfile
-    env_file: .env
+    environment:
+      # Your existing Postgres. host.docker.internal reaches one on the Docker host.
+      DATABASE_URL: postgres://USER:PASSWORD@host.docker.internal:5432/DATABASE
+      # Shared secret of all your devices; enter it with the server URL on the app's Sync page.
+      # Any long random string, e.g. node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+      KUBUS_TOKEN: change-me
     ports:
       - "8080:8080"
-    # Lets DATABASE_URL use host.docker.internal for a Postgres on the Docker host.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
