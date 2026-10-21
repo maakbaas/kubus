@@ -1,0 +1,9 @@
+.git
+.github
+**/node_modules
+app/dist
+dist
+desktop
+.env
+.env.*
+!.env.example

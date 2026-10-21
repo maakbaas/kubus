@@ -138,3 +138,43 @@ CREATE TABLE bookmarks (
   deleted_at TEXT
 );
 CREATE INDEX idx_bookmarks_target ON bookmarks(target_id);
+
+-- Sync (app/src/data/sync, shared/sync.ts). Local only, never replicated: every insert / update of
+-- a synced table queues the row's key here, in the same transaction as the change. The sync
+-- engine sends the queued rows and clears them. Rows the engine itself applies from the server
+-- are not queued (it sets meta 'sync_applying' meanwhile). Files are immutable: insert only.
+CREATE TABLE sync_outbox (
+  id  INTEGER PRIMARY KEY,
+  tbl TEXT NOT NULL,
+  pk  TEXT NOT NULL            -- the row's id, or a JSON array of its key columns
+);
+CREATE TRIGGER sync_object_types_insert AFTER INSERT ON object_types WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('object_types', NEW.id); END;
+CREATE TRIGGER sync_object_types_update AFTER UPDATE ON object_types WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('object_types', NEW.id); END;
+CREATE TRIGGER sync_templates_insert AFTER INSERT ON templates WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('templates', NEW.id); END;
+CREATE TRIGGER sync_templates_update AFTER UPDATE ON templates WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('templates', NEW.id); END;
+CREATE TRIGGER sync_fields_insert AFTER INSERT ON fields WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('fields', NEW.id); END;
+CREATE TRIGGER sync_fields_update AFTER UPDATE ON fields WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('fields', NEW.id); END;
+CREATE TRIGGER sync_views_insert AFTER INSERT ON views WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('views', NEW.id); END;
+CREATE TRIGGER sync_views_update AFTER UPDATE ON views WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('views', NEW.id); END;
+CREATE TRIGGER sync_objects_insert AFTER INSERT ON objects WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('objects', NEW.id); END;
+CREATE TRIGGER sync_objects_update AFTER UPDATE ON objects WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('objects', NEW.id); END;
+CREATE TRIGGER sync_files_insert AFTER INSERT ON files WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('files', NEW.id); END;
+CREATE TRIGGER sync_field_values_insert AFTER INSERT ON field_values WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('field_values', json_array(NEW.object_id, NEW.field_id)); END;
+CREATE TRIGGER sync_field_values_update AFTER UPDATE ON field_values WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('field_values', json_array(NEW.object_id, NEW.field_id)); END;
+CREATE TRIGGER sync_bookmarks_insert AFTER INSERT ON bookmarks WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('bookmarks', NEW.id); END;
+CREATE TRIGGER sync_bookmarks_update AFTER UPDATE ON bookmarks WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('bookmarks', NEW.id); END;

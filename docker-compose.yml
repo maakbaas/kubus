@@ -1,0 +1,14 @@
+# The Kubus server: sync API and web app on one port. Postgres is external and already running;
+# put its connection string in .env (see .env.example).
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    env_file: .env
+    ports:
+      - "8080:8080"
+    # Lets DATABASE_URL use host.docker.internal for a Postgres on the Docker host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

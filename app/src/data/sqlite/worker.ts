@@ -157,7 +157,7 @@ function ensureSchema(sqlite3: Db, db: Db) {
 }
 
 interface SchemaObject {
-  type: "table" | "index";
+  type: "table" | "index" | "trigger";
   name: string;
   tbl_name: string;
   sql: string;
@@ -177,7 +177,7 @@ function normalizeSql(sql: string): string {
 
 /**
  * Brings an existing database up to schema.sql while keeping its data. Missing tables and
- * indexes are created. A table whose definition changed is rebuilt (SQLite's documented
+ * indexes (and triggers) are created. A table whose definition changed is rebuilt (SQLite's documented
  * procedure, run while foreign keys are off): created anew from schema.sql, its rows copied
  * over by column name, the old table dropped and the new one renamed, its indexes recreated.
  * Returns false (nothing changed) when the rows can't be carried over (a column changed type
@@ -186,7 +186,7 @@ function normalizeSql(sql: string): string {
 function upgradeInPlace(sqlite3: Db, db: Db): boolean {
   const objects = (d: Db): SchemaObject[] =>
     d.exec({
-      sql: "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE type IN ('table', 'index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%'",
+      sql: "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE type IN ('table', 'index', 'trigger') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%'",
       rowMode: "object",
       returnValue: "resultRows",
     });
@@ -230,6 +230,12 @@ function upgradeInPlace(sqlite3: Db, db: Db): boolean {
     // Indexes: missing ones, and all of a rebuilt table's (they were dropped with it).
     for (const i of target.filter((o) => o.type === "index")) {
       if (!have.has(i.name) || rebuilt.has(i.tbl_name)) statements.push(i.sql);
+    }
+    // Triggers: new or changed ones are (re)created; a rebuilt table's were dropped with it.
+    for (const g of target.filter((o) => o.type === "trigger")) {
+      const current = have.get(g.name);
+      if (current && !rebuilt.has(g.tbl_name) && normalizeSql(current.sql) === normalizeSql(g.sql)) continue;
+      statements.push(`DROP TRIGGER IF EXISTS "${g.name}"`, g.sql);
     }
     for (const sql of statements) db.exec(sql);
     return true;

@@ -1,0 +1,22 @@
+# Build context is the repo root: docker build -f server/Dockerfile .
+# One image: the server (Node runs its TypeScript directly) plus the built web app it serves.
+
+FROM node:24 AS web
+ENV IBM_TELEMETRY_DISABLED=true
+WORKDIR /build
+COPY package.json package-lock.json .npmrc tsconfig.json ./
+RUN npm ci
+COPY shared shared
+COPY app app
+RUN npm run build:web
+
+FROM node:24-slim
+WORKDIR /srv
+COPY server/package.json server/package-lock.json server/
+RUN cd server && npm ci --omit=dev
+COPY server server
+COPY shared shared
+COPY --from=web /build/app/dist app/dist
+ENV PORT=8080
+EXPOSE 8080
+CMD ["node", "server/src/index.ts"]
