@@ -36,6 +36,8 @@ export interface SyncControl {
   /** Saves the settings and syncs right away when enabled. */
   configure(config: SyncConfig): Promise<void>;
   syncNow(): Promise<void>;
+  /** True when connecting to `url` would replace this device's data with the server's (first time). */
+  isNewServer(url: string): boolean;
 }
 
 /**

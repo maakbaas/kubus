@@ -2,6 +2,7 @@ import { useId, useState, useSyncExternalStore } from "react";
 import { Button, Form, InlineNotification, PasswordInput, Stack, TextInput, Toggle } from "@carbon/react";
 import { useStore } from "../app/store";
 import { PageHeader } from "../ui/PageHeader";
+import { useConfirm } from "../ui/useConfirm";
 
 const STATE_TEXT = { off: "Off", idle: "Up to date", syncing: "Syncing…", error: "Failed" } as const;
 
@@ -13,9 +14,21 @@ export function SyncPage() {
   const status = useSyncExternalStore(sync.subscribe.bind(sync), () => sync.status);
   const [draft, setDraft] = useState(sync.config);
   const [saving, setSaving] = useState(false);
+  const { confirm, dialog } = useConfirm();
 
   const save = async (e?: { preventDefault(): void }) => {
     e?.preventDefault();
+    if (
+      draft.enabled &&
+      sync.isNewServer(draft.url) &&
+      !(await confirm({
+        title: "Connect to this server?",
+        body: "The server is the source of truth. If it already holds data, that replaces all data on this device. If it is empty, this device's data is uploaded to it.",
+        confirmLabel: "Connect",
+      }))
+    ) {
+      return;
+    }
     setSaving(true);
     try {
       await sync.configure(draft);
@@ -72,6 +85,7 @@ export function SyncPage() {
           </div>
         </Stack>
       </Form>
+      {dialog}
     </>
   );
 }

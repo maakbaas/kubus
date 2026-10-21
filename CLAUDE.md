@@ -326,7 +326,10 @@ vision wants server-side queries and remote sources later.
   wins, since every value is its own row). Files are immutable and inserted if missing. `now()`
   never goes below a timestamp received from the server (`observeStamp`), a cheap guard against clock
   skew instead of a hybrid logical clock.
-- *First sync with a server* (or a changed server URL) queues all local rows.
+- *First connection to a server* (or a changed server URL): the server is the source of truth. If it
+  holds data, that replaces everything on the device (one local transaction, nothing is sent; the
+  Sync page asks for confirmation first, `isNewServer`). Only an empty server takes the device's data
+  instead: all local rows are queued and uploaded.
 - *When*: 2 s after a local write, every 30 s, on `online`, when the app becomes visible, and when the
   server signals a change (`GET /api/events`, server-sent events read with `fetch` so the token goes
   in a header; reconnects with backoff). Applied changes are announced as `DataChange`s, so every
@@ -350,7 +353,8 @@ tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
   (upgrade path: a text CRDT such as Yjs for markdown). Equal timestamps on two devices don't converge.
 - Files travel inline (base64) and are never deleted on the server; a pull is not paged.
 - One user, one token. A device that is not synced can lose its data on a schema wipe; with the
-  server the replica re-syncs, so enable sync before putting real notes in.
+  server the replica re-syncs, so enable sync before putting real notes in. Connecting a device that
+  has data of its own to a server that has data too discards the device's data (no merge).
 - Not built: hybrid logical clocks, Merkle-trie diffing (Actual Budget style), end-to-end encryption,
   Postgres `LISTEN/NOTIFY` for several server instances. Consider ElectricSQL / PowerSync / cr-sqlite
   before growing this.

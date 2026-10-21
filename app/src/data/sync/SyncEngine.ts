@@ -21,11 +21,14 @@ import type { Statement } from "../sqlite/protocol";
 //    sent part of the outbox and storing the cursor is one local transaction.
 //  * Merging: a row replaces the local one only when its updated_at is newer. Values are rows of
 //    their own, so two devices editing different fields of an object never conflict.
-//  * First sync with a server (or after changing the server): everything local is queued.
+//  * First connection to a server (or a different one): the server is the source of truth, so what
+//    it holds replaces this device's data. Only an empty server takes this device's data instead
+//    (everything local is queued for upload).
 //  * When: shortly after a local change, every 30 s, when coming online or back to the app, and
 //    when the server signals a change (server-sent events).
 
 const STORAGE_KEY = "kubus.sync";
+const SERVER_KEY = "kubus.syncServer";
 const POLL_MS = 30_000;
 const DEBOUNCE_MS = 2_000;
 
@@ -158,15 +161,9 @@ export class SyncEngine implements SyncControl {
     return this.running;
   }
 
-  private async syncOnce() {
+  /** One request to the server: sends rows, receives the ones changed since the cursor. */
+  private async post(request: SyncRequest): Promise<SyncResponse> {
     const { url, token } = this.config;
-    await this.seedIfNewServer(url);
-
-    const meta = await this.db.select<{ value: string }>("SELECT value FROM meta WHERE key = 'sync_cursor'");
-    const since = Number(meta[0]?.value ?? 0);
-    const upTo = (await this.db.select<{ n: number | null }>("SELECT max(id) AS n FROM sync_outbox"))[0]?.n ?? 0;
-    const request: SyncRequest = { since, changes: await this.readOutbox(upTo) };
-
     let response: Response;
     try {
       response = await fetch(`${url}/api/sync`, {
@@ -179,7 +176,18 @@ export class SyncEngine implements SyncControl {
     }
     if (response.status === 401) throw new Error("The server did not accept the token");
     if (!response.ok) throw new Error(`Server error ${response.status}`);
-    const { cursor, changes } = (await response.json()) as SyncResponse;
+    return (await response.json()) as SyncResponse;
+  }
+
+  private async syncOnce() {
+    if (await this.connectToNewServer(this.config.url)) return;
+
+    const meta = await this.db.select<{ value: string }>("SELECT value FROM meta WHERE key = 'sync_cursor'");
+    const since = Number(meta[0]?.value ?? 0);
+    const upTo = (await this.db.select<{ n: number | null }>("SELECT max(id) AS n FROM sync_outbox"))[0]?.n ?? 0;
+    const request: SyncRequest = { since, changes: await this.readOutbox(upTo) };
+
+    const { cursor, changes } = await this.post(request);
 
     const statements: Statement[] = [
       { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_applying', '1')" },
@@ -196,16 +204,60 @@ export class SyncEngine implements SyncControl {
     await this.announce(changes);
   }
 
-  /** A different server (or none before) knows nothing of our data: queue all of it. */
-  private async seedIfNewServer(url: string) {
+  /** True when this device has not synced with `url` yet: connecting replaces its data (see below). */
+  isNewServer(url: string): boolean {
+    try {
+      return localStorage.getItem(SERVER_KEY) !== url.trim().replace(/\/+$/, "");
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * First connection to this server (or a different one). The server is the source of truth: if it
+   * holds data, that replaces everything on this device (one local transaction, nothing is sent).
+   * An empty server has nothing to respect, so this device's data is queued for upload instead,
+   * which the sync that follows sends. Returns true when the local data was replaced.
+   */
+  private async connectToNewServer(url: string): Promise<boolean> {
     const known = await this.db.select<{ value: string }>("SELECT value FROM meta WHERE key = 'sync_server'");
-    if (known[0]?.value === url) return;
-    await this.db.write([
-      { sql: "DELETE FROM sync_outbox" },
-      ...SYNC_TABLES.map((t) => ({ sql: `INSERT INTO sync_outbox (tbl, pk) SELECT '${t.name}', ${keyOf(t)} FROM ${t.name}` })),
-      { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_cursor', '0')" },
-      { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_server', ?1)", bind: [url] },
-    ]);
+    if (known[0]?.value === url) return false;
+
+    const remote = await this.post({ since: 0, changes: {} });
+    const remember = [{ sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_server', ?1)", bind: [url] }];
+    let replaced = false;
+    if (SYNC_TABLES.some((t) => (remote.changes[t.name] ?? []).length > 0)) {
+      const oldTypes = (await this.db.select<{ id: string }>("SELECT id FROM object_types")).map((r) => r.id);
+      const statements: Statement[] = [
+        { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_applying', '1')" },
+        { sql: "PRAGMA defer_foreign_keys = ON" },
+        { sql: "DELETE FROM sync_outbox" },
+        // Children first: foreign keys point from field values and files' users to what they reference.
+        ...[...SYNC_TABLES].reverse().map((t) => ({ sql: `DELETE FROM ${t.name}` })),
+      ];
+      for (const t of SYNC_TABLES) for (const row of remote.changes[t.name] ?? []) statements.push(applyStatement(t, row));
+      statements.push(
+        { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_cursor', ?1)", bind: [String(remote.cursor)] },
+        ...remember,
+        { sql: "DELETE FROM meta WHERE key = 'sync_applying'" },
+      );
+      await this.db.write(statements);
+      replaced = true;
+      await this.announce(remote.changes, oldTypes);
+    } else {
+      await this.db.write([
+        { sql: "DELETE FROM sync_outbox" },
+        ...SYNC_TABLES.map((t) => ({ sql: `INSERT INTO sync_outbox (tbl, pk) SELECT '${t.name}', ${keyOf(t)} FROM ${t.name}` })),
+        { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_cursor', '0')" },
+        ...remember,
+      ]);
+    }
+    try {
+      localStorage.setItem(SERVER_KEY, url);
+    } catch {
+      // storage blocked: the page just asks again next time
+    }
+    return replaced;
   }
 
   private async readOutbox(upTo: number): Promise<WireChanges> {
@@ -231,7 +283,7 @@ export class SyncEngine implements SyncControl {
   }
 
   /** Tells the UI what the server changed, the way a local write would. */
-  private async announce(changes: WireChanges) {
+  private async announce(changes: WireChanges, replacedTypes: string[] = []) {
     const out: DataChange[] = [];
     const objects = new Map<string, string>(); // object id -> type id
     for (const r of changes.objects ?? []) objects.set(String(r.id), String(r.type_id));
@@ -246,6 +298,11 @@ export class SyncEngine implements SyncControl {
     if (changes.object_types?.length || changes.fields?.length) out.push({ scope: "types" });
     if (changes.templates?.length) out.push({ scope: "templates" });
     if (changes.bookmarks?.length) out.push({ scope: "bookmarks" });
+    // Everything was replaced: whatever the old data showed is gone or different now.
+    if (replacedTypes.length > 0) {
+      out.push({ scope: "types" }, { scope: "templates" }, { scope: "bookmarks" });
+      for (const typeId of replacedTypes) out.push({ scope: "objects", typeId }, { scope: "views", typeId });
+    }
     for (const typeId of new Set((changes.views ?? []).map((r) => String(r.type_id)))) out.push({ scope: "views", typeId });
     for (const [objectId, typeId] of objects) out.push({ scope: "objects", typeId, objectId });
 
