@@ -1,18 +1,40 @@
-# The Kubus server: sync API and web app on one port. The image is built by GitHub Actions
-# (.github/workflows/image.yml). Postgres is external and already running: fill in the two
-# placeholders below, then `docker compose up -d`. Update with `docker compose pull && docker compose up -d`.
+# The Kubus server (sync API and web app on one port) with its own Postgres. The server image is
+# built by GitHub Actions (.github/workflows/image.yml). Change the two passwords/tokens below,
+# then `docker compose up -d`. Update with `docker compose pull && docker compose up -d`.
+# To use a Postgres you already run instead, delete the `db` service and `depends_on`, and point
+# DATABASE_URL at it (host.docker.internal reaches one on the Docker host).
 services:
+  db:
+    container_name: kubus-db
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: kubus
+      POSTGRES_PASSWORD: change-me-too
+      POSTGRES_DB: kubus
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kubus -d kubus"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   server:
+    container_name: kubus
     image: ghcr.io/maakbaas/kubus:latest
     pull_policy: always
     environment:
-      # Your existing Postgres. host.docker.internal reaches one on the Docker host.
-      DATABASE_URL: postgres://USER:PASSWORD@host.docker.internal:5432/DATABASE
+      DATABASE_URL: postgres://kubus:change-me-too@db:5432/kubus
       # Shared secret of all your devices; enter it with the server URL on the app's Sync page.
       # Any long random string, e.g. node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
       KUBUS_TOKEN: change-me
     ports:
       - "8080:8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  pgdata:

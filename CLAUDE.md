@@ -302,7 +302,7 @@ Repo layout: `app/` the web app (what Tauri and the phone run), `desktop/` the T
 `shared/sync.ts` the protocol both sides import (the list of synced tables / columns / types and
 the request shapes).
 
-**Topology.** `app ──HTTPS──> server ──> Postgres` (an already running one, `DATABASE_URL`). The
+**Topology.** `app ──HTTPS──> server ──> Postgres` (the example `docker-compose.yml` runs its own; any other via `DATABASE_URL`). The
 client never talks to Postgres: browsers and the iOS PWA can only do HTTP. One container
 (`server/Dockerfile`, `docker-compose.yml` with `DATABASE_URL` and `KUBUS_TOKEN`) serves the
 sync API at `/api` and the built web app at `/`, so the phone installs the app from the server
@@ -400,7 +400,7 @@ stale peer range.
 - `npm run dev`: Tauri desktop app with hot reload (runs `dev:web` on port 1420).
 - `npm run dev:web`: same app in a normal browser at http://localhost:1420.
 - `npm run typecheck`, `npm test`, `npm run build:web` (to `app/dist`), `npm run build` (desktop bundle).
-- Server: `docker compose up -d` (fill in the placeholders in `docker-compose.yml` first; it pulls the image that `.github/workflows/image.yml` publishes to ghcr.io); or `cd server && npm install && npm run dev` with `DATABASE_URL` and `KUBUS_TOKEN` set.
+- Server: `docker compose up -d` (change the passwords in `docker-compose.yml` first; it starts its own Postgres and pulls the image that `.github/workflows/image.yml` publishes to ghcr.io); or `cd server && npm install && npm run dev` with `DATABASE_URL` and `KUBUS_TOKEN` set.
 
 ## Conventions
 
