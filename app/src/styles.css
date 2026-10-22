@@ -307,8 +307,8 @@ body {
 /* Compact: one spacing-05 around the page (the scrollbar gutter adds to the sides). */
 .ws-tab-content {
   padding: var(--cds-spacing-05);
-  /* Content scrolls clear of the home indicator. */
-  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom));
+  /* Content scrolls clear of the home indicator and of an on-screen keyboard (keyboardInset.ts). */
+  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
 }
 /* The loading indicator while the database opens, centred in the window (pages show nothing
    while loading: their data takes a fraction of a second, a spinner would only flash). */

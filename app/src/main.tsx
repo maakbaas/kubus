@@ -6,6 +6,7 @@ import "./styles.css";
 import { App } from "./app/App";
 import { suppressShellContextMenu } from "./platform/contextMenu";
 import { registerServiceWorker } from "./platform/serviceWorker";
+import { trackKeyboardInset } from "./platform/keyboardInset";
 import { useMediaQuery } from "./ui/useMediaQuery";
 
 function Root() {
@@ -23,6 +24,7 @@ for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
   document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
 }
 registerServiceWorker();
+trackKeyboardInset();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
