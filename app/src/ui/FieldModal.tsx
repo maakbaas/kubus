@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Dropdown, InlineNotification, Modal, Stack, TextInput } from "@carbon/react";
+import { Button, Dropdown, InlineNotification, Modal, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
 import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
 import { isReferenceKind, newId, typeDraft, type FieldDef, type FieldKind, type ObjectType, type TemplateArg } from "../domain/model";
@@ -10,6 +10,7 @@ import { TOGGLE_CHOICES, TOGGLE_ICONS, ToggleIconLabel } from "./ToggleInput";
 import { ObjectTypeLabel } from "./typeIcons";
 import { ChoiceFilterEditor } from "./ChoiceFilterEditor";
 import { TemplateArgInput } from "./TemplateArgInput";
+import { NewTemplateModal } from "./NewTemplateModal";
 import type { FilterRule } from "../domain/query";
 import { errorMessage, useConfirm } from "./useConfirm";
 
@@ -42,11 +43,14 @@ export function FieldModal({
   const [args, setArgs] = useState<Record<string, TemplateArg>>(field?.templateArgs ?? {});
   const [choiceFilter, setChoiceFilter] = useState<FilterRule[]>(field?.choiceFilter ?? []);
   const [toggleIcon, setToggleIcon] = useState<string | null>(field?.toggleIcon ?? null);
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
+  // Just created: the store may not list it yet.
+  const [created, setCreated] = useState<Template>();
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
-  const template = templates.find((t) => t.id === templateId);
+  const template = templates.find((t) => t.id === templateId) ?? (created?.id === templateId ? created : undefined);
   const target = types.find((t) => t.id === targetTypeId);
   const taken = type.fields.some((f) => f.id !== field?.id && f.name.trim().toLowerCase() === name.trim().toLowerCase());
   const nameError = !name.trim() ? "Name is required" : taken ? "Another field has this name" : undefined;
@@ -197,6 +201,11 @@ export function FieldModal({
             invalidText={choiceError}
           />
         )}
+        {kind === "template" && (
+          <Button size="sm" kind="tertiary" onClick={() => setCreatingTemplate(true)}>
+            New template
+          </Button>
+        )}
         {kind === "template" &&
           template?.params.map((p) => (
             <TemplateArgInput
@@ -221,6 +230,17 @@ export function FieldModal({
         </p>
       </Stack>
     </Modal>
+    {creatingTemplate && (
+      <NewTemplateModal
+        onClose={() => setCreatingTemplate(false)}
+        onCreated={(t) => {
+          setCreated(t);
+          setTemplateId(t.id);
+          setArgs({});
+          setCreatingTemplate(false);
+        }}
+      />
+    )}
     {dialog}
     </>,
     document.querySelector(".app-root") ?? document.body,
