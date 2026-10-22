@@ -145,7 +145,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const update = useCallback((fn: (ws: Workspace) => Workspace) => setWorkspace(fn), []);
 
-  // Back / forward for the active tab: mouse back/forward buttons, Alt+←/→, the browser-back key.
+  // Back / forward for the active tab: mouse back/forward buttons, Alt+←/→, the browser-back key,
+  // and (home-screen app) the OS swipe gestures.
   const histories = useRef(new Map<string, TabHistory>());
   const registerHistory = useCallback((tabId: string, history: TabHistory) => {
     histories.current.set(tabId, history);
@@ -173,9 +174,37 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       e.preventDefault();
       go(back ? "back" : "forward");
     };
+    // The OS back / forward gestures (iOS edge swipes) only know the browser's history, while
+    // every tab keeps its own in memory. In a home-screen app the browser history is therefore
+    // just three sentinel entries with the page on the middle one: a pop onto the first is a
+    // back, onto the last a forward, for the active tab; then the middle one is restored.
+    const standalone = matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
+    const onPopState = (e: PopStateEvent) => {
+      const at = e.state?.kubus;
+      if (at === "back") {
+        go("back");
+        history.forward();
+      } else if (at === "forward") {
+        go("forward");
+        history.back();
+      }
+    };
+    if (standalone) {
+      const at = history.state?.kubus;
+      if (at === "back") history.forward();
+      else if (at === "forward") history.back();
+      else if (at !== "middle") {
+        history.replaceState({ kubus: "back" }, "");
+        history.pushState({ kubus: "middle" }, "");
+        history.pushState({ kubus: "forward" }, "");
+        history.back();
+      }
+      window.addEventListener("popstate", onPopState);
+    }
     window.addEventListener("mouseup", onMouseUp);
     window.addEventListener("keydown", onKeyDown);
     return () => {
+      window.removeEventListener("popstate", onPopState);
       window.removeEventListener("mouseup", onMouseUp);
       window.removeEventListener("keydown", onKeyDown);
     };
