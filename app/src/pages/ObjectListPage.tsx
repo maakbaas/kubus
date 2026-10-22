@@ -404,7 +404,11 @@ function ObjectsPage({ type }: { type: ObjectType }) {
               itemToElement={(t) => <ViewKindLabel kind={t} />}
               renderSelectedItem={(t) => <ViewKindLabel kind={t} />}
               onChange={({ selectedItem: next }) => {
-                if (next) setView((v) => ({ ...v, kind: next.kind, options: next.defaultOptions(type) }));
+                if (next) setView((v) => {
+                  // The field selection and order carry over to the other view type.
+                  const fields = viewType(v.kind).fieldsOf(v.options);
+                  return { ...v, kind: next.kind, options: next.withFields(next.defaultOptions(type), fields) };
+                });
               }}
             />
             {vt.OptionsEditor && <vt.OptionsEditor type={type} options={view.options} onChange={(options) => setView((v) => ({ ...v, options }))} />}

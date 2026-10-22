@@ -645,6 +645,8 @@ export const tableView = defineViewType<TableOptions>({
     const ids = new Set(pickableFields(type).map((f) => f.id));
     return { columns: Array.isArray(o.columns) ? o.columns.filter((id) => ids.has(id)) : null };
   },
+  fieldsOf: (o) => o.columns,
+  withFields: (o, columns) => ({ ...o, columns }),
   View: TableView,
   OptionsEditor: TableOptionsEditor,
 });

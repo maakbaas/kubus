@@ -401,6 +401,8 @@ export const cardsView = defineViewType<CardOptions>({
   label: "Cards",
   icon: GridIcon,
   defaultOptions: (type) => ({ fields: null, coverFieldId: imageFields(type)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, hiddenLabels: [], hideEmpty: false }),
+  fieldsOf: (o) => o.fields,
+  withFields: (o, fields) => ({ ...o, fields }),
   normalizeOptions(raw, type) {
     const o = (raw ?? {}) as Partial<CardOptions>;
     const ids = new Set(pickableFields(type).map((f) => f.id));

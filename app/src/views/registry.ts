@@ -52,6 +52,9 @@ export interface ViewTypeDefinition<O = unknown> {
   defaultOptions(type: ObjectType): O;
   /** Turns stored (possibly outdated) options into valid ones, e.g. dropping removed fields. */
   normalizeOptions(raw: unknown, type: ObjectType): O;
+  /** The shown fields in order (null = all), carried over when the view type is switched. */
+  fieldsOf(options: O): string[] | null;
+  withFields(options: O, fields: string[] | null): O;
   View: ComponentType<ViewProps<O>>;
   /** Settings specific to this view type, shown in the view settings panel. */
   OptionsEditor?: ComponentType<{ type: ObjectType; options: O; onChange(options: O): void }>;
