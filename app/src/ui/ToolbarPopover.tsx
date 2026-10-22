@@ -53,7 +53,9 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, ch
   useEffect(() => {
     if (!open) return;
     const margin = 16;
-    const content = () => root.current?.querySelector<HTMLElement>(".cds--popover-content") ?? null;
+    // The panel's own content: the IconButton's tooltip is a popover too, and comes first.
+    const content = () => root.current?.querySelector<HTMLElement>(":scope > .cds--popover > .cds--popover-content") ?? null;
+    const caret = (el: HTMLElement) => el.querySelector<HTMLElement>(":scope > .cds--popover-caret");
     const bounds = () => {
       const pane = root.current?.closest(".ws-pane__body")?.getBoundingClientRect();
       return { left: Math.max(pane?.left ?? 0, 0), right: Math.min(pane?.right ?? window.innerWidth, window.innerWidth) };
@@ -69,12 +71,17 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, ch
       if (!el) return;
       // CSS `translate` is independent of the `transform` autoAlign positions with.
       el.style.translate = "";
+      const tip = caret(el);
+      if (tip) tip.style.translate = "";
       const r = el.getBoundingClientRect();
       const b = bounds();
       let dx = 0;
       if (r.right > b.right - margin) dx = b.right - margin - r.right;
       if (r.left + dx < b.left + margin) dx = b.left + margin - r.left;
-      if (dx) el.style.translate = `${dx}px 0`;
+      if (!dx) return;
+      el.style.translate = `${dx}px 0`;
+      // The caret is inside the panel: shifted back, so it keeps pointing at the button.
+      if (tip) tip.style.translate = `${-dx}px 0`;
     };
     const update = () => {
       measure();
@@ -100,6 +107,8 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, ch
       moves.disconnect();
       observer?.disconnect();
       if (el) el.style.translate = "";
+      const tip = el && caret(el);
+      if (tip) tip.style.translate = "";
     };
   }, [open]);
   // Decided once focus has settled: closed for a press outside or focus that moved elsewhere,
