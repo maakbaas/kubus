@@ -38,7 +38,7 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
 - **Types have an icon** from the full Carbon set (`object_types.icon`, an `@carbon/icons-react`
   export name). The icon module is lazy-loaded (`app/src/ui/objectIcons.tsx`); the picker is a search
   box over a grid of matches. App icon: `app/public/favicon.svg` (isometric cube, three shades of Carbon blue, transparent background),
-  rendered to `desktop/icons` with `tauri icon` (`--ios-color '#262626'`); the PWA's apple-touch-icon / icon-1024 are the cube at 60% on #262626. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
+  rendered to `desktop/icons` with `tauri icon` (`--ios-color '#262626'`); the PWA's icon-1024 is the cube at 60% on #262626; the apple-touch-icon (iOS home screen) is the cube at 70%, rendered from `favicon.svg`. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
   names, the lock or the `kubus.*` storage keys, orphans existing data).
 - The Milkdown editor reports changes synchronously (`changes` plugin); don't switch back to the
   debounced listener plugin, which lost text typed right before saving.
@@ -236,7 +236,7 @@ Extension points are registries, not special cases in pages:
   set via `setDefaultView`), else the first; with no views left it shows an unsaved table that can
   be saved. Changes are ephemeral: while the shown view differs from
   its saved version, icon buttons beside the star offer Discard changes and Save changes to view
-  ("+" saves them as a new view instead). Search is never saved.
+  ("+" saves them as a new view instead). Search is never saved. A shown view without unsaved changes follows its stored settings when they change elsewhere (sync, another pane) instead of turning into "changed".
 
 ### Workspace (tabs and tiling)
 
@@ -266,6 +266,14 @@ Extension points are registries, not special cases in pages:
 - Closing every tab leaves an empty workspace (no tab is reopened automatically); middle click
   on a tab closes it.
 - Phones show only the active pane.
+- **Tab width** (`fit` in `PaneView`, `Workspace.tsx`, plus `.ws-pane__tabs` in `styles.css`): a
+  tab's natural width is its text plus padding and close button. Cap = min(16rem, 80% of the room
+  for tabs), where the room is the `.cds--tabs` box minus the scroll buttons while they show
+  (never the tab list's own width: it is only as wide as its tabs, so a lone tab would cap itself).
+  Each tab gets floor = min(natural, cap) and ceiling = cap. Tabs shrink (labels end in "…") only
+  when together they don't fit, longest first; when even the floors don't fit the list scrolls
+  (Carbon's buttons) and the active tab is centred. Recomputed on title / active-tab changes and
+  strip resizes (`ResizeObserver`).
 
 ### Data model (sync-ready conventions)
 
@@ -343,7 +351,7 @@ vision wants server-side queries and remote sources later.
 keys or checks) and applied idempotently at start. `events.ts` is the change signal. Proxies must not
 buffer `/api/events` (nginx: `proxy_buffering off`); polling covers a dropped stream.
 
-**iOS / home-screen app.** The same web build (status bar `black-translucent`: the tab strip is padded by `safe-area-inset-top` so its colour runs behind it; `body` is fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position: fixed; inset: 0`): `app/public/manifest.webmanifest`, apple-touch-icon and
+**iOS / home-screen app.** The same web build (status bar `black-translucent`: the tab strip is padded by `safe-area-inset-top` so its colour runs behind it, and `body::before` paints the inset itself in the strip's colour; `body` is fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position: fixed; inset: 0`): `app/public/manifest.webmanifest`, apple-touch-icon and
 meta tags in `app/index.html`, safe-area padding in `styles.css`, and a service worker (`app/sw.js`,
 emitted by the build with a version stamp; `platform/serviceWorker.ts` registers it in production
 web builds only) that caches the app shell, so it starts offline. iOS needs HTTPS for OPFS and
@@ -411,6 +419,7 @@ stale peer range.
   breadcrumb; `xs` for modals). Tables use `sm` (2rem rows), not `xs`, because inline editors
   are small (2rem) inputs and must fit the row. Read-only field geometry is tuned to these 2rem
   inputs. Page padding is one `spacing-05`; page titles are heading-04.
+- **Popovers never make the page scroll**: toolbar popover panels are capped to the room beside their button (`--popover-room`, set by `ToolbarPopover`) and scroll inside; the icon picker is capped likewise.
 - **Popovers, tooltips and dropdown menus use `autoAlign`** (Carbon's floating placement): they
   flip to the side with room and aren't clipped by pane edges. Add it to every new `Popover`,
   `IconButton`, `Dropdown`, `ComboBox`, `FilterableMultiSelect`.
