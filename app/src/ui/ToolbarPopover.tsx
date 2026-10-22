@@ -85,8 +85,19 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, ch
     const el = content();
     const observer = el ? new ResizeObserver(update) : undefined;
     if (el) observer?.observe(el);
+    // autoAlign places the panel asynchronously (and again on scroll or a flip): shift it back
+    // inside after every move, not only after the first one. Only a new transform counts, so the
+    // shift's own style change doesn't loop.
+    let placedAt = el?.style.transform;
+    const moves = new MutationObserver(() => {
+      if (!el || el.style.transform === placedAt) return;
+      placedAt = el.style.transform;
+      place();
+    });
+    if (el) moves.observe(el, { attributes: true, attributeFilter: ["style"] });
     return () => {
       window.removeEventListener("resize", update);
+      moves.disconnect();
       observer?.disconnect();
       if (el) el.style.translate = "";
     };

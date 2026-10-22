@@ -423,6 +423,10 @@ stale peer range.
   are small (2rem) inputs and must fit the row. Read-only field geometry is tuned to these 2rem
   inputs. Page padding is one `spacing-05`; page titles are heading-04.
 - **Popovers never make the page scroll**: toolbar popover panels are capped to the room beside their button (`--popover-room`, set by `ToolbarPopover`) and scroll inside; the icon picker is capped likewise.
+- **`#root` is the frame popovers are placed in** (`contain: layout`, the body's box): Floating UI
+  then positions relative to it instead of the window, where in WebKit it adds
+  `visualViewport.offsetTop`, which iOS 26 reports as the status bar's height (popovers sat that
+  far too low). Keep it.
 - **Popovers, tooltips and dropdown menus use `autoAlign`** (Carbon's floating placement): they
   flip to the side with room and aren't clipped by pane edges. Add it to every new `Popover`,
   `IconButton`, `Dropdown`, `ComboBox`, `FilterableMultiSelect`.
