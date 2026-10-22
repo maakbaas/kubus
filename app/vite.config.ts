@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -42,6 +43,16 @@ export default defineConfig({
       generateBundle() {
         const source = readFileSync(fileURLToPath(new URL("sw.js", import.meta.url)), "utf8");
         this.emitFile({ type: "asset", fileName: "sw.js", source: source.replaceAll("__BUILD__", Date.now().toString(36)) });
+      },
+    },
+    {
+      // iOS keeps the icon it fetched when the app was added, and Safari caches the file by URL:
+      // a content hash in the href makes (re)adding the app always fetch the current icon.
+      name: "apple-touch-icon-version",
+      transformIndexHtml(html) {
+        const icon = readFileSync(fileURLToPath(new URL("public/apple-touch-icon.png", import.meta.url)));
+        const hash = createHash("sha256").update(icon).digest("hex").slice(0, 8);
+        return html.replace('href="/apple-touch-icon.png"', `href="/apple-touch-icon.png?v=${hash}"`);
       },
     },
   ],

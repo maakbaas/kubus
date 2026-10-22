@@ -351,7 +351,7 @@ vision wants server-side queries and remote sources later.
 keys or checks) and applied idempotently at start. `events.ts` is the change signal. Proxies must not
 buffer `/api/events` (nginx: `proxy_buffering off`); polling covers a dropped stream.
 
-**iOS / home-screen app.** The same web build (status bar `black-translucent`: the tab strip is padded by `safe-area-inset-top` so its colour runs behind it, and `body::before` paints the inset itself in the strip's colour; `body` is fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position: fixed; inset: 0`): `app/public/manifest.webmanifest`, apple-touch-icon and
+**iOS / home-screen app.** The same web build (status bar `black-translucent`: the tab strip is padded by `safe-area-inset-top` so its colour runs behind it, and `body::before` paints the inset itself in the strip's colour; `body` is fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position: fixed; inset: 0`): `app/public/manifest.webmanifest`, apple-touch-icon (its href gets a content hash at build, `vite.config.ts`; iOS never refreshes an installed icon, so a changed icon only shows after removing and re-adding the app) and
 meta tags in `app/index.html`, safe-area padding in `styles.css`, and a service worker (`app/sw.js`,
 emitted by the build with a version stamp; `platform/serviceWorker.ts` registers it in production
 web builds only) that caches the app shell, so it starts offline. iOS needs HTTPS for OPFS and
