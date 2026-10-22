@@ -2030,6 +2030,19 @@ body::before {
 .object-fields.object-fields--form .checklist-box {
   padding-inline-start: 0;
 }
+/* Phones: no room to push boxes to the pane edge. Boxes sit half an inset in from both sides
+   (centred, a little space each side) and labels follow, so text stays near the title's edge. */
+@media (max-width: 42rem) {
+  .object-fields:not(.object-fields--form) > :not(.form-actions, .image-input, .view-field--image, .object-field--no-label),
+  .object-field--no-label > :not(.image-input, .view-field--image) {
+    margin-inline: calc(-0.5 * var(--cds-spacing-05));
+  }
+  .object-fields:not(.object-fields--form) > :not(.form-actions, .image-input, .view-field--image) .cds--label,
+  .object-fields:not(.object-fields--form) .checkbox-field,
+  .object-fields:not(.object-fields--form) .checklist-box {
+    padding-inline-start: calc(0.5 * var(--cds-spacing-05));
+  }
+}
 /* An object's title is editable in place: the input's text inset is cancelled by pulling the box
    left, so the text doesn't move when editing starts. */
 .object-title {
