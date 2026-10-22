@@ -355,9 +355,13 @@ function PaneView({ pane }: { pane: PaneNode }) {
     if (!bar) return;
     const fit = () => {
       const items = bar.querySelectorAll<HTMLElement>(".cds--tabs__nav-item");
-      const list = bar.querySelector<HTMLElement>(".cds--tab--list");
+      const tabs = bar.querySelector<HTMLElement>(".cds--tabs");
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      const cap = Math.min(16 * rem, list ? list.clientWidth * 0.8 : Infinity);
+      // The room for tabs: the tabs' box less the scroll buttons while they show. (Not the list's
+      // own width: that is only as wide as its tabs, so a lone tab would cap itself.)
+      let room = tabs ? tabs.clientWidth : Infinity;
+      tabs?.querySelectorAll<HTMLElement>(".cds--tab--overflow-nav-button").forEach((b) => (room -= b.offsetWidth));
+      const cap = Math.min(16 * rem, room * 0.8);
       for (const item of items) {
         const label = item.querySelector<HTMLElement>(".cds--tabs__nav-item-label");
         if (!label) continue;

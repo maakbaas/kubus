@@ -77,7 +77,7 @@ function ObjectsPage({ type }: { type: ObjectType }) {
 
   // The latest shown state, so a reload of the views (sync, another pane) can tell whether the
   // shown view has unsaved changes of its own.
-  const shown = useRef<{ activeId: string | null; view: ViewState; reference: ViewState }>();
+  const shown = useRef<{ activeId: string | null; view: ViewState; reference: ViewState } | undefined>(undefined);
   const loadViews = useCallback(
     () =>
       repo.listViews(type.id).then((list) => {
