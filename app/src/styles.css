@@ -21,6 +21,12 @@ html {
     background: #161616;
   }
 }
+/* No iOS long-press menu / share sheet on links and images (it is inherited, but Safari applies
+   it to anchors and images themselves). */
+a,
+img {
+  -webkit-touch-callout: none;
+}
 body {
   position: fixed;
   inset: 0;
