@@ -512,6 +512,19 @@ body {
 }
 
 /* Icon picker: a button showing the current icon; the search + grid live in a popover. */
+/* Carbon draws a popover's drop shadow as `filter` on .cds--popover, the parent of the panel that
+   autoAlign positions with `position: fixed`. Since Safari 26 a filter is a containing block for
+   fixed descendants ("Fixed CSS filters to establish a containing block like transform does",
+   Safari 26.0 release notes); Floating UI still assumes WebKit doesn't, so in iOS 26 every panel
+   was placed relative to .cds--popover (which, with autoAlign, spans the nearest positioned
+   ancestor) instead of the window: toolbar panels a tab strip too low, row and table menus off
+   screen. The same shadow as a box-shadow on the panel itself creates no containing block. */
+.cds--popover--drop-shadow .cds--popover {
+  filter: none;
+}
+.cds--popover--drop-shadow > .cds--popover > .cds--popover-content {
+  box-shadow: 0 0.125rem 0.125rem rgb(0 0 0 / 0.2);
+}
 .icon-picker.cds--popover-container {
   display: block;
 }
