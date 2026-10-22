@@ -18,7 +18,7 @@ and fill them with objects that link to each other.
 - **Markdown (GFM) editor** without a toolbar: type your formatting, paste or drop images.
 - **Templates.** `{{ … }}` sections of JavaScript compute values, render Markdown or HTML, and are
   reusable across types.
-- **Links between objects** (reference fields) and global search.
+- **Global search** across all your objects.
 - **Workspace.** Tabs and tiled panes, side by side, like an editor.
 - **Local first.** Everything runs offline on a SQLite database in the app itself.
 - **Sync.** Optionally sync every device with your own server backed by Postgres.
