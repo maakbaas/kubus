@@ -75,7 +75,7 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, ch
       <PopoverContent>
         <div
           className={fit ? "toolbar-popover__panel toolbar-popover__panel--fit" : "toolbar-popover__panel"}
-          style={room !== undefined ? ({ "--popover-room": `${Math.max(room, 128)}px` } as React.CSSProperties) : undefined}
+          style={room !== undefined ? ({ "--popover-room": `${Math.max(room, 0)}px` } as React.CSSProperties) : undefined}
           onKeyDown={(e) => {
             // An Escape closing a dialog opened from here reaches this panel too (React portal).
             if (e.key !== "Escape" || e.defaultPrevented || (e.target as Element).closest?.(".cds--modal")) return;
