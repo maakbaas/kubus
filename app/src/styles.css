@@ -6,16 +6,6 @@ body,
   margin: 0;
   min-height: 100%;
 }
-/* The frame that fixed layers and floating popovers are placed in: the (fixed) body's box, so the
-   same box as the viewport. Popovers, menus and tooltips (Carbon's autoAlign, Floating UI,
-   strategy fixed) are then positioned relative to this element, by its client rect, instead of the
-   window: there, in WebKit, Floating UI adds visualViewport.offsetTop, which iOS 26 reports as the
-   status bar's height, so every popover sat that far below its button (Safari and home-screen app). */
-#root {
-  position: absolute;
-  inset: 0; /* exactly the body's box, however tall its content (.app-root is 100vh) */
-  contain: layout;
-}
 
 /* App-like behaviour (home-screen app): the document itself never scrolls, bounces or zooms;
    only the panes' bodies scroll. */

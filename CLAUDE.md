@@ -354,7 +354,7 @@ vision wants server-side queries and remote sources later.
 keys or checks) and applied idempotently at start. `events.ts` is the change signal. Proxies must not
 buffer `/api/events` (nginx: `proxy_buffering off`); polling covers a dropped stream.
 
-**iOS / home-screen app.** The same web build (status bar opaque, coloured by `theme-color` like the tab strip: no `black-translucent`, which on iOS 26 draws a fade over the page's top and shortens the viewport by the top inset, leaving a band at the bottom and placing popovers too low; iOS reads it at install, so re-add the app after changing it; `body` is fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position: fixed; inset: 0`): `app/public/manifest.webmanifest`, apple-touch-icon (its href gets a content hash at build, `vite.config.ts`; iOS never refreshes an installed icon, so a changed icon only shows after removing and re-adding the app) and
+**iOS / home-screen app.** The same web build (no `black-translucent`, which on iOS 26.1+ draws a fade over the page's top that a page can't turn off, and shortens the viewport by the top inset, leaving a band at the bottom; so the status bar is iOS's opaque white one, which neither page colours nor `theme-color` tint; iOS reads the style at install, so re-add the app after changing it; `body` is fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position: fixed; inset: 0`): `app/public/manifest.webmanifest`, apple-touch-icon (its href gets a content hash at build, `vite.config.ts`; iOS never refreshes an installed icon, so a changed icon only shows after removing and re-adding the app) and
 meta tags in `app/index.html`, safe-area padding in `styles.css`, and a service worker (`app/sw.js`,
 emitted by the build with a version stamp; `platform/serviceWorker.ts` registers it in production
 web builds only) that caches the app shell, so it starts offline. iOS needs HTTPS for OPFS and
@@ -423,10 +423,6 @@ stale peer range.
   are small (2rem) inputs and must fit the row. Read-only field geometry is tuned to these 2rem
   inputs. Page padding is one `spacing-05`; page titles are heading-04.
 - **Popovers never make the page scroll**: toolbar popover panels are capped to the room beside their button (`--popover-room`, set by `ToolbarPopover`) and scroll inside; the icon picker is capped likewise.
-- **`#root` is the frame popovers are placed in** (`contain: layout`, the body's box): Floating UI
-  then positions relative to it instead of the window, where in WebKit it adds
-  `visualViewport.offsetTop`, which iOS 26 reports as the status bar's height (popovers sat that
-  far too low). Keep it.
 - **Popovers, tooltips and dropdown menus use `autoAlign`** (Carbon's floating placement): they
   flip to the side with room and aren't clipped by pane edges. Add it to every new `Popover`,
   `IconButton`, `Dropdown`, `ComboBox`, `FilterableMultiSelect`.

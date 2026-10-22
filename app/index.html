@@ -10,10 +10,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Kubus" />
-    <!-- No apple-mobile-web-app-status-bar-style: black-translucent makes iOS 26 draw a fade over the
-         page's top and gives a viewport one inset short (a band at the bottom, popovers placed too
-         low). The status bar is opaque instead, coloured by theme-color like the tab strip below it
-         (Carbon's layer-accent, white / g100). iOS reads this at install: re-add the app to apply. -->
+    <!-- No apple-mobile-web-app-status-bar-style: black-translucent makes iOS 26.1+ draw a fade over
+         the page's top (no opt-out). The home-screen app's status bar is then iOS's opaque white
+         one; neither the page's colours nor theme-color tint it there. iOS reads this at install.
+         theme-color is for other browsers: Carbon's layer-accent, like the tab strip. -->
     <meta name="theme-color" content="#e0e0e0" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#393939" media="(prefers-color-scheme: dark)" />
     <title>Kubus</title>
