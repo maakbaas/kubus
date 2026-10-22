@@ -297,7 +297,8 @@ body {
   min-block-size: 0;
   overflow: auto;
   overscroll-behavior: none; /* no rubber-band bounce */
-  -webkit-overflow-scrolling: touch;
+  /* No -webkit-overflow-scrolling: touch (momentum scrolling is the default since iOS 13): it makes
+     the pane a stacking context on iOS, which put dialogs opened in it below the sticky tab strip. */
   /* Space for the scrollbar is always kept, on both sides, so content neither jumps when a
      scrollbar appears nor sits off-centre. */
   scrollbar-gutter: stable both-edges;

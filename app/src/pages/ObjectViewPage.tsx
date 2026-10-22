@@ -189,8 +189,8 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
     setRenameRequest((r) => r + 1);
     return saveViews([...objectViews, { id, name, layout, isDefault: false }]);
   }
-  const addButton = (
-    <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Add view" onClick={addView}>
+  const addButton = (align: "bottom" | "bottom-end") => (
+    <IconButton autoAlign kind="ghost" size="sm" align={align} label="Add view" onClick={addView}>
       <Add />
     </IconButton>
   );
@@ -273,18 +273,6 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
                   {standard ? <Checkmark /> : <Edit />}
                 </IconButton>
               )}
-              <ToolbarPopover label="Page layout" icon={SettingsAdjust} fit openRequest={renameRequest}>
-                <ObjectLayoutSettings
-                  type={type}
-                  renameRequest={renameRequest}
-                  view={activeView}
-                  layout={current}
-                  titleFieldId={titleField?.id}
-                  onChange={(patch) => setDraft({ ...current, ...patch })}
-                  onError={(e) => setError(errorMessage(e))}
-                />
-              </ToolbarPopover>
-              {!showBar && addButton}
               <BookmarkButton kind="object" typeId={type.id} targetId={object.id} label={title} onError={(e) => setError(errorMessage(e))} />
               {/* Metadata lives in a popover; more facts about the object can be added to its list. */}
               <ToolbarPopover label="Details" icon={Information} fit>
@@ -303,9 +291,22 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
                 </dl>
               </ToolbarPopover>
               {/* Subtle: a ghost icon button; the confirmation dialog carries the danger styling. */}
-              <IconButton autoAlign size="sm" kind="ghost" align="bottom-end" label={`Delete ${type.name}`} onClick={remove}>
+              <IconButton autoAlign size="sm" kind="ghost" align="bottom" label={`Delete ${type.name}`} onClick={remove}>
                 <TrashCan />
               </IconButton>
+              {/* The page's layout last: its settings, and "+" for a new layout while there is no tab bar. */}
+              <ToolbarPopover label="Page layout" icon={SettingsAdjust} fit openRequest={renameRequest}>
+                <ObjectLayoutSettings
+                  type={type}
+                  renameRequest={renameRequest}
+                  view={activeView}
+                  layout={current}
+                  titleFieldId={titleField?.id}
+                  onChange={(patch) => setDraft({ ...current, ...patch })}
+                  onError={(e) => setError(errorMessage(e))}
+                />
+              </ToolbarPopover>
+              {!showBar && addButton("bottom-end")}
             </>
           )
         }
@@ -332,7 +333,7 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
               ))}
             </TabList>
           </Tabs>
-          {addButton}
+          {addButton("bottom")}
           <span className="views-bar__spacer" />
           {changed && (
             <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Discard changes" onClick={() => setDraft(null)}>
