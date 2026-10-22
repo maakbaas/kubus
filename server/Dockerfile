@@ -1,7 +1,10 @@
 # Build context is the repo root: docker build -f server/Dockerfile .
 # One image: the server (Node runs its TypeScript directly) plus the built web app it serves.
 
-FROM node:24 AS web
+# The web app is the same files on every platform: build it once, natively on the build machine
+# ($BUILDPLATFORM), not again under QEMU for arm64, where npm ci + vite (esbuild) took minutes and
+# sometimes hung.
+FROM --platform=$BUILDPLATFORM node:24 AS web
 ENV IBM_TELEMETRY_DISABLED=true
 WORKDIR /build
 COPY package.json package-lock.json .npmrc tsconfig.json ./
