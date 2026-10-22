@@ -10,11 +10,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Kubus" />
-    <!-- Translucent: the page runs behind the status bar, so the tab strip's colour (Carbon's
-         layer-accent) shows there. The strip is sticky with a solid background, which is what keeps
-         iOS from blurring that area and what Safari tints its bar from (.ws-pane__tabs in
-         styles.css). iOS reads this at install. -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- No apple-mobile-web-app-status-bar-style (= default): the page starts below the status bar,
+         and iOS colours the bar from the page, from the sticky tab strip (.ws-pane__tabs in
+         styles.css), as Safari does. black-translucent instead gets a fade over the top that the
+         page can't turn off (iOS 26.1+). iOS reads this at install: re-add the app after changing it.
+         theme-color is for other browsers. -->
     <meta name="theme-color" content="#e0e0e0" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#393939" media="(prefers-color-scheme: dark)" />
     <title>Kubus</title>

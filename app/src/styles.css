@@ -21,15 +21,6 @@ html {
     background: #161616;
   }
 }
-/* iOS 26 home-screen apps with a translucent status bar and viewport-fit=cover get a viewport one
-   top inset shorter than the screen (WebKit bug 301108), and fixed layers (workspace, side nav,
-   overlay) stop that far above the bottom, leaving a band. A document as tall as the screen gets
-   the full viewport; the cap keeps it from scrolling. */
-@media (display-mode: standalone) {
-  html {
-    min-height: min(100lvh, calc(100% + env(safe-area-inset-top)));
-  }
-}
 /* No iOS long-press menu / share sheet on links and images (it is inherited, but Safari applies
    it to anchors and images themselves). */
 a,
@@ -212,13 +203,12 @@ body {
   /* contained tabs' height plus the top padding, kept when no tab is open */
   min-block-size: calc(3rem + var(--strip-pad));
   background: var(--cds-layer-accent);
-  /* The header Safari takes the status bar's colour from (Safari, iOS 26+): it samples the first
-     fixed or sticky element at the top centre that is (nearly) full width, deeper than 10px and
-     solid. Sticky changes nothing here (the strip never scrolls); with the strip's padding by the
-     top inset its colour also runs behind a translucent status bar (home-screen app, index.html),
-     which keeps iOS from blurring that area. Nothing may sit above it there: a fixed element hit
-     first (even body, through a ::before) ends the search. z-index keeps its tooltips above pane
-     content (sticky makes the strip a stacking context). */
+  /* The header iOS takes the status bar's colour from (Safari and the home-screen app, iOS 26+):
+     it samples the first fixed or sticky element at the top centre that is (nearly) full width,
+     deeper than 10px and solid; in the home-screen app that also keeps iOS from blurring the bar.
+     Sticky changes nothing here (the strip never scrolls). Nothing fixed may sit above it there: a
+     fixed element hit first (even body, through a ::before) ends the search. z-index keeps its
+     tooltips above pane content (sticky makes the strip a stacking context). */
   position: sticky;
   top: 0;
   z-index: 1;
