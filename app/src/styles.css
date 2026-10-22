@@ -31,19 +31,6 @@ html {
     background: #161616;
   }
 }
-/* A home-screen app's opaque status bar (index.html) takes the document's background: paint it in
-   the tab strip's colour (Carbon's layer-accent; the tokens live on .app-root, not here). The
-   workspace covers the rest of the document. */
-@media (display-mode: standalone) {
-  html {
-    background: #e0e0e0;
-  }
-}
-@media (display-mode: standalone) and (prefers-color-scheme: dark) {
-  html {
-    background: #393939;
-  }
-}
 /* No iOS long-press menu / share sheet on links and images (it is inherited, but Safari applies
    it to anchors and images themselves). */
 a,
