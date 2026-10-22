@@ -417,7 +417,8 @@ function ObjectsPage({ type }: { type: ObjectType }) {
       {/* Nothing until everything is in (a fraction of a second): a placeholder table would only
           flash, shaped unlike the real one. */}
       {objects !== null && savedViews !== null && !refsLoading && (
-        <vt.View type={type} result={result} options={view.options} refs={refs} search={search} actions={actions} />
+        // Keyed by the shown view so group collapse state isn't carried over to another view.
+        <vt.View key={activeId ?? ""} type={type} result={result} options={view.options} refs={refs} search={search} actions={actions} />
       )}
 
       {dialog}

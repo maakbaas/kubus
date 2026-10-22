@@ -56,8 +56,8 @@ function NewObjectForm({ type }: { type: ObjectType }) {
 
     setSaving(true);
     try {
-      const id = await repo.createObject(type, values);
-      navigate(`${listPath}/${id}`, { replace: true });
+      await repo.createObject(type, values);
+      navigate(listPath, { replace: true });
     } catch (e) {
       setError(errorMessage(e));
       setSaving(false);
