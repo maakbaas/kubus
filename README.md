@@ -13,7 +13,7 @@ and fill them with objects that link to each other.
 - **Views.** Show a type as a table or as cards, with filters, sorting and grouping. Save as many
   views per type as you like, star a default, bookmark the ones you use most.
 - **Edit in place.** Click any field to edit it, no forms or save buttons.
-- **Markdown (GFM) editor** without a toolbar: type your formatting, paste or drop images.
+- **Markdown (GFM) editor**: type your formatting, paste or drop images.
 - **Templates.** `{{ … }}` sections of JavaScript compute values, render Markdown or HTML, and are
   reusable across types.
 - **Global search** across all your objects.
