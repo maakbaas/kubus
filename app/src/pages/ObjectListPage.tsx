@@ -75,7 +75,21 @@ function ObjectsPage({ type }: { type: ObjectType }) {
     return () => cancelAnimationFrame(frame);
   }, [renameRequest, activeId]);
 
-  const loadViews = useCallback(() => repo.listViews(type.id).then(setSavedViews, (e) => setError(errorMessage(e))), [repo, type]);
+  // The latest shown state, so a reload of the views (sync, another pane) can tell whether the
+  // shown view has unsaved changes of its own.
+  const shown = useRef<{ activeId: string | null; view: ViewState; reference: ViewState }>();
+  const loadViews = useCallback(
+    () =>
+      repo.listViews(type.id).then((list) => {
+        setSavedViews(list);
+        // A shown view without unsaved changes follows its stored settings when they change
+        // elsewhere, instead of turning into "changed".
+        const cur = shown.current;
+        const next = cur?.activeId ? list.find((v) => v.id === cur.activeId) : undefined;
+        if (cur && next && sameView(cur.view, cur.reference)) setView(normalized(type, next));
+      }, (e) => setError(errorMessage(e))),
+    [repo, type],
+  );
   useEffect(() => {
     loadViews();
   }, [loadViews]);
@@ -90,6 +104,7 @@ function ObjectsPage({ type }: { type: ObjectType }) {
   const active = views.find((v) => v.id === activeId) ?? null;
   const reference = active ? normalized(type, active) : base;
   const changed = !sameView(view, reference);
+  shown.current = { activeId, view, reference };
 
   // Until the referenced objects' labels are in, a reference would read as "(deleted)" (in
   // groups, sorting, filters): the list waits for them.

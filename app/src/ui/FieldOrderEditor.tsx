@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button, Checkbox, FormGroup, IconButton } from "@carbon/react";
-import { Add, ArrowDown, ArrowUp, Edit, Tag, TagNone } from "@carbon/icons-react";
+import { Add, ArrowDown, ArrowUp, Tag, TagNone } from "@carbon/icons-react";
 import { isMetaField, type FieldDef, type ObjectType } from "../domain/model";
 import { FieldLabel } from "./fieldKindIcons";
 import { FieldModal } from "./FieldModal";
@@ -12,7 +12,7 @@ import { FieldModal } from "./FieldModal";
  * `hiddenByDefault` (e.g. an object page's title field, already shown as its title), which still
  * show when ticked. With `hiddenLabels`, each shown
  * field also gets a toggle for its name. With `type`, fields can be added here (a field of the
- * type, shown in this view; templates too) and template fields edited.
+ * type, shown in this view; templates too).
  */
 export function FieldOrderEditor({
   id,
@@ -34,11 +34,11 @@ export function FieldOrderEditor({
   /** Fields shown without their name; omit for no name toggles. */
   hiddenLabels?: string[];
   onHiddenLabelsChange?(ids: string[]): void;
-  /** The type: enables adding fields and editing template fields from here. */
+  /** The type: enables adding fields from here. */
   type?: ObjectType;
 }) {
-  /** The field being edited, or "new"; null = no dialog. */
-  const [fieldDialog, setFieldDialog] = useState<FieldDef | "new" | null>(null);
+  /** Whether the add-field dialog is open. */
+  const [adding, setAdding] = useState(false);
   const base = fields.filter((f) => !hiddenByDefault.includes(f.id) && !isMetaField(f)).map((f) => f.id);
   const shown = (value ?? base).filter((fid) => fields.some((f) => f.id === fid));
   const hidden = fields.filter((f) => !shown.includes(f.id));
@@ -78,11 +78,6 @@ export function FieldOrderEditor({
                     {nameHidden ? <TagNone /> : <Tag />}
                   </IconButton>
                 )}
-                {type && f.kind === "template" && (
-                  <IconButton autoAlign kind="ghost" size="sm" label="Edit template" onClick={() => setFieldDialog(f)}>
-                    <Edit />
-                  </IconButton>
-                )}
                 <IconButton autoAlign kind="ghost" size="sm" label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
                   <ArrowUp />
                 </IconButton>
@@ -95,19 +90,19 @@ export function FieldOrderEditor({
         );
       })}
       {type && (
-        <Button kind="tertiary" size="sm" renderIcon={Add} iconDescription="Add field" className="field-order__add" onClick={() => setFieldDialog("new")}>
+        <Button kind="tertiary" size="sm" renderIcon={Add} iconDescription="Add field" className="field-order__add" onClick={() => setAdding(true)}>
           Add field
         </Button>
       )}
-      {type && fieldDialog && (
+      {type && adding && (
         <FieldModal
           type={type}
-          field={fieldDialog === "new" ? null : fieldDialog}
-          onClose={() => setFieldDialog(null)}
+          field={null}
+          onClose={() => setAdding(false)}
           onSaved={() => {
             // The field is saved already and every view showing all fields has it; a view with its
             // own order only gets it once chosen there.
-            setFieldDialog(null);
+            setAdding(false);
           }}
         />
       )}
