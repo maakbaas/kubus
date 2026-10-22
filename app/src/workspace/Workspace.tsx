@@ -410,7 +410,7 @@ function PaneView({ pane }: { pane: PaneNode }) {
           {end}
         </div>
         <div className="ws-pane__body ws-empty">
-          <p className="helper">Nothing is open. Pick a type in the menu or{" "}
+          <p className="helper">Pick a type in the menu or{" "}
             <Link
               href="#"
               onClick={(e: React.MouseEvent) => {
