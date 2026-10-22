@@ -2,11 +2,12 @@ import type { ObjectType } from "../domain/model";
 import { useEffect, useState } from "react";
 import { Cube, type CarbonIconType } from "@carbon/icons-react";
 
+// (The glob is relative to this file: Vite's root is app/, while node_modules is at the repo root.)
 // Every Carbon icon is its own module (`@carbon/icons-react/es/<Name>.js`), loaded on demand
 // and cached, so only the icons actually shown are fetched. Until one is there (or when unset or
 // unknown) types show the default Cube icon.
 
-const loaders = import.meta.glob<{ default: CarbonIconType }>("/node_modules/@carbon/icons-react/es/[A-Z0-9]*.js");
+const loaders = import.meta.glob<{ default: CarbonIconType }>("../../../node_modules/@carbon/icons-react/es/[A-Z0-9]*.js");
 
 const loaderFor = new Map<string, () => Promise<{ default: CarbonIconType }>>();
 for (const [path, load] of Object.entries(loaders)) {
