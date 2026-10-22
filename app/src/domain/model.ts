@@ -199,12 +199,12 @@ export function labelField(type: ObjectType, object: ObjectInstance): FieldDef |
 }
 
 /** The label of an object without a label field value. */
-export const untitledLabel = (type: ObjectType, objectId: string): string => `Untitled ${type.name} (${objectId.slice(0, 6)})`;
+export const untitledLabel = (type: ObjectType): string => type.name;
 
 /** Human label for an object, e.g. in reference pickers and headings. */
 export function objectLabel(type: ObjectType, object: ObjectInstance): string {
   const field = labelField(type, object);
-  return field ? String(object.values[field.id]) : untitledLabel(type, object.id);
+  return field ? String(object.values[field.id]) : untitledLabel(type);
 }
 
 /** An object's label as stored (see Repository.listLabels): null when it has no label field value. */

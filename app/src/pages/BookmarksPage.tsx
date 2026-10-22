@@ -127,7 +127,7 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
         [
           ...views.map((v): Target => ({ kind: "view", id: v.id, text: `View: ${v.name}`, label: `${type.pluralName} / ${v.name}` })),
           ...labels.map((e): Target => {
-            const label = e.label ?? untitledLabel(type, e.id);
+            const label = e.label ?? untitledLabel(type);
             return { kind: "object", id: e.id, text: label, label };
           }),
         ].filter((t) => !taken.has(t.id)),

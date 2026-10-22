@@ -146,7 +146,7 @@ export function useReferenceOptions(type: ObjectType): RefOptions {
           if (!labels) {
             const nestedType = types.find((x) => x.id === typeId);
             const items = cache.labels.snapshot(typeId).items ?? [];
-            labels = new Map(items.map((l) => [l.id, l.label ?? (nestedType ? untitledLabel(nestedType, l.id) : "")]));
+            labels = new Map(items.map((l) => [l.id, l.label ?? (nestedType ? untitledLabel(nestedType) : "")]));
             nestedLabels.set(typeId, labels);
           }
           return labels.get(id) ?? "";
@@ -159,7 +159,7 @@ export function useReferenceOptions(type: ObjectType): RefOptions {
           return { id: e.id, label: objectLabel(target, e), ...(excludedBy.length ? { excludedBy } : {}) };
         });
       } else if (target) {
-        options = (items as ObjectLabel[]).map((l) => ({ id: l.id, label: l.label ?? untitledLabel(target, l.id) }));
+        options = (items as ObjectLabel[]).map((l) => ({ id: l.id, label: l.label ?? untitledLabel(target) }));
       }
       byTarget[t.id] = { deps, options };
     }
