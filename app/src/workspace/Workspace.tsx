@@ -458,14 +458,23 @@ function PaneView({ pane }: { pane: PaneNode }) {
         rest -= naturals[i];
       }
       for (const { item, natural, least } of sized) {
-        const width = `${Math.max(Math.min(natural, cut), least)}px`;
-        item.style.minInlineSize = width;
-        item.style.maxInlineSize = width;
+        if (natural <= cut) {
+          // Not cut: at least its natural width, free to grow to the cap (a measurement a fraction
+          // short, or made before the web font loaded, must not cut the label).
+          item.style.minInlineSize = `${natural}px`;
+          item.style.maxInlineSize = `${cap}px`;
+        } else {
+          const width = `${Math.max(cut, least)}px`;
+          item.style.minInlineSize = width;
+          item.style.maxInlineSize = width;
+        }
       }
       // Centre the active tab so the ones around it show.
       bar.querySelector<HTMLElement>(".cds--tabs__nav-item--selected")?.scrollIntoView({ inline: "center", block: "nearest" });
     };
     fit();
+    // Labels widen once the web font is in: measure again.
+    void document.fonts?.ready.then(fit);
     const observer = new ResizeObserver(fit);
     observer.observe(bar);
     return () => observer.disconnect();
