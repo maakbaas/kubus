@@ -1403,7 +1403,8 @@ body::before {
   /* One line of text exactly fills the small input's 2rem (minus its 1px bottom border). */
   padding: calc((2rem - 1px - 1lh) / 2) 1rem;
   box-sizing: border-box;
-  border-bottom: 1px solid var(--cds-border-subtle);
+  /* The line under a value is kept (transparent) so view and edit mode keep one geometry. */
+  border-bottom: 1px solid transparent;
   font-size: var(--cds-body-compact-01-font-size);
   line-height: var(--cds-body-compact-01-line-height);
   letter-spacing: var(--cds-body-compact-01-letter-spacing);
