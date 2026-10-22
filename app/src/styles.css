@@ -44,30 +44,6 @@ body {
   -webkit-touch-callout: none;
 }
 
-/* The status bar is transparent in a home-screen app (index.html): this strip paints the area
-   behind it in the tab strip's colour. iOS 26.1+ blurs that area unless a fixed element with a
-   solid background spans the top edge; this strip is such an element, so it must stay a real,
-   painted element on top (a pseudo-element or an unpainted strip didn't stop the blur). */
-.status-bar-sampler {
-  display: none;
-}
-@media (display-mode: standalone) {
-  .status-bar-sampler {
-    display: block;
-    position: fixed;
-    inset: 0 0 auto;
-    height: env(safe-area-inset-top);
-    z-index: 2147483647;
-    pointer-events: none;
-    background-color: #e0e0e0; /* the tab strip's colour (layer-accent, white theme) */
-  }
-}
-@media (display-mode: standalone) and (prefers-color-scheme: dark) {
-  .status-bar-sampler {
-    background-color: #393939; /* layer-accent, g100 */
-  }
-}
-
 .app-root {
   /* Narrowest a tiled pane gets: an iPhone 16's viewport width, so every pane can show what
      the phone layout shows. Also read by the divider drag in Workspace.tsx. */
@@ -236,6 +212,16 @@ body {
   /* contained tabs' height plus the top padding, kept when no tab is open */
   min-block-size: calc(3rem + var(--strip-pad));
   background: var(--cds-layer-accent);
+  /* The header Safari takes the status bar's colour from (Safari, iOS 26+): it samples the first
+     fixed or sticky element at the top centre that is (nearly) full width, deeper than 10px and
+     solid. Sticky changes nothing here (the strip never scrolls); with the strip's padding by the
+     top inset its colour also runs behind a translucent status bar (home-screen app, index.html),
+     which keeps iOS from blurring that area. Nothing may sit above it there: a fixed element hit
+     first (even body, through a ::before) ends the search. z-index keeps its tooltips above pane
+     content (sticky makes the strip a stacking context). */
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 /* A strip at the window's top edge gets a little room above its tabs, in its own colour: as
    wide as the gutters between panes (4px). */
