@@ -208,14 +208,18 @@ body::before {
 .ws-pane__tabs {
   display: flex;
   align-items: center;
-  min-block-size: 3rem; /* contained tabs' height, kept when no tab is open */
+  --strip-pad: 0rem;
+  box-sizing: border-box;
+  padding-block-start: var(--strip-pad);
+  /* contained tabs' height plus the top padding, kept when no tab is open */
+  min-block-size: calc(3rem + var(--strip-pad));
   background: var(--cds-layer-accent);
 }
 /* A strip at the window's top edge gets a little room above its tabs, in its own colour: as
    wide as the gutters between panes (4px). */
 .ws-pane--top > .ws-pane__tabs {
   /* The status bar is transparent in a home-screen app: the strip's colour runs behind it. */
-  padding-block-start: calc(var(--cds-spacing-02) + env(safe-area-inset-top));
+  --strip-pad: calc(var(--cds-spacing-02) + env(safe-area-inset-top));
 }
 /* The strip never moves: no scrolling or bouncing of the page by touches on it (the tabs
    themselves may still pan sideways). */
@@ -347,7 +351,7 @@ body::before {
   }
   /* The one pane shown is always at the top. */
   .ws-pane > .ws-pane__tabs {
-    padding-block-start: calc(var(--cds-spacing-02) + env(safe-area-inset-top));
+    --strip-pad: calc(var(--cds-spacing-02) + env(safe-area-inset-top));
   }
 }
 @media (min-width: 66rem) {
