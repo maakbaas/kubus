@@ -770,12 +770,24 @@ body::before {
 .cds--side-nav__overlay {
   inset-block-start: 0;
 }
+/* Fixed layers span the screen by their four edges, not by 100vh / 100% - 3rem: in a home-screen
+   app 100vh stops short of the bottom (a white band), and the nav's 3rem header offset is gone. */
+.cds--side-nav {
+  block-size: auto;
+}
+.cds--side-nav__overlay-active,
+.cds--modal {
+  inset: 0;
+  block-size: auto;
+  inline-size: auto;
+}
 /* The button that hides the menu, then the search box. The button sits exactly where the one
    that shows the menu sits in the top-left tab strip, so toggling doesn't move it: the strip's
    room above its tabs (.ws-pane--top, spacing-02) plus centring the 2rem button in its 3rem
    (spacing-03), and the strip's spacing beside it (.ws-pane__lead, spacing-03). */
 .side-nav-search {
-  padding: calc(var(--cds-spacing-02) + var(--cds-spacing-03)) var(--cds-spacing-05) var(--cds-spacing-03) var(--cds-spacing-03);
+  /* Below the status bar (the nav's colour runs behind it), like the tab strip. */
+  padding: calc(var(--cds-spacing-02) + var(--cds-spacing-03) + env(safe-area-inset-top)) var(--cds-spacing-05) var(--cds-spacing-03) var(--cds-spacing-03);
   display: flex;
   align-items: center;
   gap: var(--cds-spacing-03);
