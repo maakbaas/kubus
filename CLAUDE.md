@@ -356,7 +356,10 @@ vision wants server-side queries and remote sources later.
 keys or checks) and applied idempotently at start. `events.ts` is the change signal. Proxies must not
 buffer `/api/events` (nginx: `proxy_buffering off`); polling covers a dropped stream.
 
-**iOS / home-screen app.** The same web build (no status bar style meta, i.e. `default`: the page starts below the status bar and iOS colours it from the page: the first fixed / sticky, full-width, solid element at the top centre, which is the top tab strip (`position: sticky; top: 0`, solid background), as in Safari (iOS 26+); without such an element the bar is the page background (white) and on iOS 27 it can be blurred; nothing fixed may sit above the strip (a separate fixed strip, or `body::before` on the fixed body, ends the search); `black-translucent` gets a fade over the top that the page can't remove (iOS 26.1+) and a viewport one inset short (WebKit bug 301108), so don't use it; iOS reads the style at install, so re-add the app after changing it; `body` is fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position: fixed; inset: 0`): `app/public/manifest.webmanifest`, apple-touch-icon (its href gets a content hash at build, `vite.config.ts`; iOS never refreshes an installed icon, so a changed icon only shows after removing and re-adding the app) and
+**iOS / home-screen app.** The same web build. Status bar: no style meta (`default`); iOS
+colours the bar from the top tab strip (sticky, solid, full width; see Conventions). `body` is
+fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position: fixed; inset: 0`.
+Files: `app/public/manifest.webmanifest`, apple-touch-icon (its href gets a content hash at build, `vite.config.ts`; iOS never refreshes an installed icon, so a changed icon only shows after removing and re-adding the app) and
 meta tags in `app/index.html`, safe-area padding in `styles.css`, and a service worker (`app/sw.js`,
 emitted by the build with a version stamp; `platform/serviceWorker.ts` registers it in production
 web builds only) that caches the app shell, so it starts offline. iOS needs HTTPS for OPFS and
@@ -400,8 +403,6 @@ tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
   backups. Changing the app identifier or `useHttpsScheme` changes the origin and orphans the data.
 - **iOS eviction:** Safari can evict storage under pressure; home-screen apps are exempt from the
   7-day rule and we request `navigator.storage.persist()`. Once sync exists the server is the backup.
-- **Offline web:** a service worker (not yet added) must cache the app shell so the PWA launches
-  without network.
 - macOS/Linux Tauri builds use WKWebView/WebKitGTK; OPFS support there is not yet verified.
 
 ## Commands
@@ -425,10 +426,13 @@ stale peer range.
   are small (2rem) inputs and must fit the row. Read-only field geometry is tuned to these 2rem
   inputs. Page padding is one `spacing-05`; page titles are heading-04.
 - **Popovers never make the page scroll**: toolbar popover panels are capped to the room beside their button (`--popover-room`, set by `ToolbarPopover`) and scroll inside; the icon picker is capped likewise.
-- **No `filter` on an ancestor of a floating panel** (Carbon's popover drop shadow is replaced by a
-  box-shadow on the panel, `styles.css`): since Safari 26 a filter is a containing block for
-  `position: fixed`, which Floating UI doesn't expect in WebKit, so on iOS panels landed far from
-  their trigger (or off screen). Use box-shadow for shadows around popovers.
+- **Safari / iOS rules** (each has its reason in a comment in `styles.css`):
+  - No `filter` on an ancestor of a floating panel; shadows around popovers are box-shadows
+    (Safari 26 makes a filter a containing block for `position: fixed`; Floating UI doesn't know).
+  - The top tab strip stays `position: sticky; top: 0` with a solid background, and nothing fixed
+    sits above it: iOS takes the status bar colour from it (and blurs the bar otherwise).
+  - No `apple-mobile-web-app-status-bar-style: black-translucent` (an unremovable fade on iOS 26.1+).
+  - No `-webkit-overflow-scrolling: touch` (a stacking context on iOS: dialogs fell under the strip).
 - **Popovers, tooltips and dropdown menus use `autoAlign`** (Carbon's floating placement): they
   flip to the side with room and aren't clipped by pane edges. Add it to every new `Popover`,
   `IconButton`, `Dropdown`, `ComboBox`, `FilterableMultiSelect`.
