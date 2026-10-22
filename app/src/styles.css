@@ -1654,7 +1654,8 @@ body::before {
   max-inline-size: none;
 }
 .toolbar-popover__panel {
-  inline-size: min(28rem, calc(100vw - 2 * var(--cds-spacing-05)));
+  inline-size: min(28rem, var(--popover-width, calc(100vw - 2 * var(--cds-spacing-05))));
+  max-inline-size: var(--popover-width, 100vw);
   padding: var(--cds-spacing-05);
   /* Taller than the room there is: scrolls inside instead of scrolling the page. */
   max-block-size: var(--popover-room, calc(100dvh - 4rem));

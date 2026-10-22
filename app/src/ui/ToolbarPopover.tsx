@@ -44,18 +44,52 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, ch
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
   }, [open]);
-  // The panel never makes the page scroll: it gets at most the room on the roomier side of its
-  // button (autoAlign flips to that side) and scrolls inside when its content is taller.
+  // The panel never makes the page scroll and never leaves its pane: it gets at most the room on
+  // the roomier side of its button (autoAlign flips to that side) and scrolls inside when taller,
+  // is at most as wide as the pane minus a margin, and is shifted back inside when autoAlign
+  // placed it across a pane edge.
   const [room, setRoom] = useState<number>();
+  const [maxWidth, setMaxWidth] = useState<number>();
   useEffect(() => {
     if (!open) return;
+    const margin = 16;
+    const content = () => root.current?.querySelector<HTMLElement>(".cds--popover-content") ?? null;
+    const bounds = () => {
+      const pane = root.current?.closest(".ws-pane__body")?.getBoundingClientRect();
+      return { left: Math.max(pane?.left ?? 0, 0), right: Math.min(pane?.right ?? window.innerWidth, window.innerWidth) };
+    };
     const measure = () => {
       const r = root.current?.getBoundingClientRect();
-      if (r) setRoom(Math.max(r.top, window.innerHeight - r.bottom) - 16);
+      if (r) setRoom(Math.max(r.top, window.innerHeight - r.bottom) - margin);
+      const b = bounds();
+      setMaxWidth(Math.max(b.right - b.left - 2 * margin, 0));
     };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    const place = () => {
+      const el = content();
+      if (!el) return;
+      // CSS `translate` is independent of the `transform` autoAlign positions with.
+      el.style.translate = "";
+      const r = el.getBoundingClientRect();
+      const b = bounds();
+      let dx = 0;
+      if (r.right > b.right - margin) dx = b.right - margin - r.right;
+      if (r.left + dx < b.left + margin) dx = b.left + margin - r.left;
+      if (dx) el.style.translate = `${dx}px 0`;
+    };
+    const update = () => {
+      measure();
+      requestAnimationFrame(place);
+    };
+    update();
+    window.addEventListener("resize", update);
+    const el = content();
+    const observer = el ? new ResizeObserver(update) : undefined;
+    if (el) observer?.observe(el);
+    return () => {
+      window.removeEventListener("resize", update);
+      observer?.disconnect();
+      if (el) el.style.translate = "";
+    };
   }, [open]);
   // Decided once focus has settled: closed for a press outside or focus that moved elsewhere,
   // kept open when focus merely dropped (to the body) or stayed inside.
@@ -75,7 +109,12 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, ch
       <PopoverContent>
         <div
           className={fit ? "toolbar-popover__panel toolbar-popover__panel--fit" : "toolbar-popover__panel"}
-          style={room !== undefined ? ({ "--popover-room": `${Math.max(room, 0)}px` } as React.CSSProperties) : undefined}
+          style={
+            {
+              ...(room !== undefined && { "--popover-room": `${Math.max(room, 0)}px` }),
+              ...(maxWidth !== undefined && { "--popover-width": `${maxWidth}px` }),
+            } as React.CSSProperties
+          }
           onKeyDown={(e) => {
             // An Escape closing a dialog opened from here reaches this panel too (React portal).
             if (e.key !== "Escape" || e.defaultPrevented || (e.target as Element).closest?.(".cds--modal")) return;
