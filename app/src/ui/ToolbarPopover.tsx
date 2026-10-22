@@ -44,6 +44,19 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, ch
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
   }, [open]);
+  // The panel never makes the page scroll: it gets at most the room on the roomier side of its
+  // button (autoAlign flips to that side) and scrolls inside when its content is taller.
+  const [room, setRoom] = useState<number>();
+  useEffect(() => {
+    if (!open) return;
+    const measure = () => {
+      const r = root.current?.getBoundingClientRect();
+      if (r) setRoom(Math.max(r.top, window.innerHeight - r.bottom) - 16);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open]);
   // Decided once focus has settled: closed for a press outside or focus that moved elsewhere,
   // kept open when focus merely dropped (to the body) or stayed inside.
   const requestClose = () =>
@@ -62,6 +75,7 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, ch
       <PopoverContent>
         <div
           className={fit ? "toolbar-popover__panel toolbar-popover__panel--fit" : "toolbar-popover__panel"}
+          style={room !== undefined ? ({ "--popover-room": `${Math.max(room, 128)}px` } as React.CSSProperties) : undefined}
           onKeyDown={(e) => {
             // An Escape closing a dialog opened from here reaches this panel too (React portal).
             if (e.key !== "Escape" || e.defaultPrevented || (e.target as Element).closest?.(".cds--modal")) return;

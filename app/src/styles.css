@@ -566,6 +566,8 @@ body {
   gap: 0.5rem;
   inline-size: min(24rem, 80vw);
   padding: 0.75rem;
+  max-block-size: calc(100dvh - 4rem);
+  overflow-y: auto;
 }
 .icon-grid {
   display: grid;
@@ -1623,6 +1625,10 @@ body {
 .toolbar-popover__panel {
   inline-size: min(28rem, calc(100vw - 2 * var(--cds-spacing-05)));
   padding: var(--cds-spacing-05);
+  /* Taller than the room there is: scrolls inside instead of scrolling the page. */
+  max-block-size: var(--popover-room, calc(100dvh - 4rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .toolbar-popover__panel--fit {
   inline-size: max-content;
