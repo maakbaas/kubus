@@ -273,8 +273,10 @@ Extension points are registries, not special cases in pages:
   tab's natural width is its text plus padding and close button. Cap = min(16rem, 80% of the room
   for tabs), where the room is the `.cds--tabs` box minus the scroll buttons while they show
   (never the tab list's own width: it is only as wide as its tabs, so a lone tab would cap itself).
-  Each tab gets floor = min(natural, cap) and ceiling = cap. Tabs shrink (labels end in "…") only
-  when together they don't fit, longest first; when even the floors don't fit the list scrolls
+  When the tabs don't fit, the longest are cut (labels end in "…") to one width, as wide as still
+  lets all fit, and shorter tabs keep their whole label until the cut reaches them (each width is set
+  from `fit`; flexbox would shrink every tab in proportion). A tab keeps at least its close button and
+  6rem of text, so short names ("Locations") are never cut; when even that doesn't fit the list scrolls
   (Carbon's buttons) and the active tab is centred. Recomputed on title / active-tab changes and
   strip resizes (`ResizeObserver`).
 

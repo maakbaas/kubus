@@ -414,9 +414,11 @@ function PaneView({ pane }: { pane: PaneNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasTabs]);
 
-  // Tabs shrink (and end in "…") only as far as needed, longest first: each tab's floor is its own
-  // natural width, at most 16rem. A plain CSS floor can't say that, and flexbox otherwise shrinks
-  // every tab in proportion, short ones included.
+  // Tabs are cut (end in "…") only as far as needed, longest first: when they don't fit, the
+  // longest are cut to one width, as wide as still lets all fit; shorter tabs keep their whole
+  // label until the cut reaches them. A tab keeps at least its close button and 6rem of text (a
+  // short name like "Locations" is never cut); when even that doesn't fit, the list scrolls. Flexbox would shrink every tab in proportion,
+  // short ones included, so each tab gets its width set here.
   // A tab is also never wider than 80% of the room between the scroll buttons, so the active tab
   // fits whole with its neighbours peeking in on both sides.
   const tabTitles = pane.tabs.map((t) => ws.titles[t.id] ?? "").join("|");
@@ -425,7 +427,7 @@ function PaneView({ pane }: { pane: PaneNode }) {
     const bar = tabBar.current;
     if (!bar) return;
     const fit = () => {
-      const items = bar.querySelectorAll<HTMLElement>(".cds--tabs__nav-item");
+      const items = [...bar.querySelectorAll<HTMLElement>(".cds--tabs__nav-item")];
       const tabs = bar.querySelector<HTMLElement>(".cds--tabs");
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
       // The room for tabs: the tabs' box less the scroll buttons while they show. (Not the list's
@@ -433,14 +435,32 @@ function PaneView({ pane }: { pane: PaneNode }) {
       let room = tabs ? tabs.clientWidth : Infinity;
       tabs?.querySelectorAll<HTMLElement>(".cds--tab--overflow-nav-button").forEach((b) => (room -= b.offsetWidth));
       const cap = Math.min(16 * rem, room * 0.8);
-      for (const item of items) {
+      const sized = items.flatMap((item) => {
         const label = item.querySelector<HTMLElement>(".cds--tabs__nav-item-label");
-        if (!label) continue;
+        if (!label) return [];
         item.style.minInlineSize = "0";
         item.style.maxInlineSize = "none";
-        const natural = label.scrollWidth + (item.offsetWidth - label.clientWidth);
-        item.style.minInlineSize = `${Math.min(natural, cap)}px`;
-        item.style.maxInlineSize = `${cap}px`;
+        const chrome = item.offsetWidth - label.clientWidth; // padding and close button
+        const natural = Math.min(label.scrollWidth + chrome, cap);
+        return [{ item, natural, least: Math.min(natural, chrome + 6 * rem) }];
+      });
+      // The cut: the widest width w with sum(min(natural, w)) <= the room (Infinity: all fit). The
+      // whole box counts here: once the tabs fit, the scroll buttons go.
+      let cut = Infinity;
+      let rest = tabs ? tabs.clientWidth : Infinity;
+      const naturals = sized.map((t) => t.natural).sort((x, y) => x - y);
+      for (let i = 0; i < naturals.length; i++) {
+        const share = rest / (naturals.length - i);
+        if (naturals[i] > share) {
+          cut = Math.floor(share);
+          break;
+        }
+        rest -= naturals[i];
+      }
+      for (const { item, natural, least } of sized) {
+        const width = `${Math.max(Math.min(natural, cut), least)}px`;
+        item.style.minInlineSize = width;
+        item.style.maxInlineSize = width;
       }
       // Centre the active tab so the ones around it show.
       bar.querySelector<HTMLElement>(".cds--tabs__nav-item--selected")?.scrollIntoView({ inline: "center", block: "nearest" });
