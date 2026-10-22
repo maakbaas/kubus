@@ -277,15 +277,16 @@ body {
   flex-direction: column;
   min-block-size: 0;
 }
-/* A subtle fade below the tab strip while the page is scrolled down. */
+/* While the page is scrolled down, content fades out below the tab strip: into the tab's own
+   background (the selected tab and the page share it), so it reads as one surface. */
 .ws-pane__frame::before {
   content: "";
   position: absolute;
   inset: 0 0 auto 0;
-  block-size: 1rem;
+  block-size: 0.75rem;
   z-index: 1;
   pointer-events: none;
-  background: linear-gradient(to bottom, rgb(0 0 0 / 0.14), transparent);
+  background: linear-gradient(to bottom, var(--cds-background), transparent);
   opacity: 0;
   transition: opacity 0.15s;
 }
