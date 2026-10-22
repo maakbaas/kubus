@@ -1059,7 +1059,7 @@ body::before {
 }
 /* Height follows the content: it grows, never scrolls inside. */
 .md-editor__content {
-  padding: 0.75rem 1rem;
+  padding: var(--block-pad-top) 1rem 0.75rem;
   outline: none;
   /* Never wider than the field: long words, links and code wrap instead of scrolling. */
   overflow-wrap: anywhere;
@@ -1381,6 +1381,13 @@ body::before {
   --cds-label-01-letter-spacing: 0.16px;
 }
 
+/* Space above a multi-line value (markdown, HTML): the same as above one line of text in a
+   2rem box, so the gap under a label is the same for every field. */
+:root,
+.object-fields {
+  --block-pad-top: calc((2rem - 1px - var(--cds-body-compact-01-font-size) * var(--cds-body-compact-01-line-height)) / 2);
+}
+
 /* Object view (read-only record). Each field mirrors its edit-form input: same label,
    same height (2rem, Carbon's small inputs) and inner padding (1rem), so view and edit don't jump. */
 /* Same box model as .cds--form-item, so labels take exactly the same space. */
@@ -1424,13 +1431,13 @@ body::before {
 /* Markdown: same padding as the editor's content area; height follows the content. */
 .view-field__value--markdown {
   display: block;
-  padding: 0.75rem 1rem;
+  padding: var(--block-pad-top) 1rem 0.75rem;
 }
 /* A template's rendered result (HTML, Markdown) is a block like a markdown field: the same
    space above and below, before the line under the field. */
 .view-field__value--template:has(> :is(.html-frame, .md-view)) {
   display: block;
-  padding-block: 0.75rem;
+  padding-block: var(--block-pad-top) 0.75rem;
 }
 .view-field__value--image {
   display: block;
