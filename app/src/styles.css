@@ -21,6 +21,15 @@ html {
     background: #161616;
   }
 }
+/* iOS 26 home-screen apps with a translucent status bar and viewport-fit=cover get a viewport one
+   top inset shorter than the screen (WebKit bug 301108), and fixed layers (workspace, side nav,
+   overlay) stop that far above the bottom, leaving a band. A document as tall as the screen gets
+   the full viewport; the cap keeps it from scrolling. */
+@media (display-mode: standalone) {
+  html {
+    min-height: min(100lvh, calc(100% + env(safe-area-inset-top)));
+  }
+}
 /* No iOS long-press menu / share sheet on links and images (it is inherited, but Safari applies
    it to anchors and images themselves). */
 a,
@@ -33,6 +42,44 @@ body {
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-touch-callout: none;
+}
+
+/* The status bar is transparent in a home-screen app: whatever is behind it shows. Paint that
+   strip in the tab strip's colour, so the two read as one (the strip itself continues below it). */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  block-size: env(safe-area-inset-top);
+  background: var(--cds-layer-accent, var(--cds-layer-accent-01, #e0e0e0));
+  pointer-events: none;
+}
+
+/* iOS 26.1+ draws a blur / fade over the top of a home-screen app with a translucent status bar,
+   unless a fixed element spans the top edge with a solid background colour (iOS samples it there).
+   This strip (index.html) is that element, painting nothing: its background is clipped to its
+   text, and it has none. Workaround from real-device reports, not an Apple API:
+   tips.ojapp.app/en/ios-27-pwa-top-blur-workaround-2 (method 2). */
+.status-bar-sampler {
+  display: none;
+}
+@media (display-mode: standalone) {
+  .status-bar-sampler {
+    display: block;
+    position: fixed;
+    inset: 0 0 auto;
+    height: 11px;
+    z-index: 2147483647;
+    pointer-events: none;
+    background-color: #e0e0e0; /* the tab strip's colour (layer-accent, white theme) */
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+}
+@media (display-mode: standalone) and (prefers-color-scheme: dark) {
+  .status-bar-sampler {
+    background-color: #393939; /* layer-accent, g100 */
+  }
 }
 
 .app-root {
@@ -207,7 +254,7 @@ body {
 /* A strip at the window's top edge gets a little room above its tabs, in its own colour: as
    wide as the gutters between panes (4px). */
 .ws-pane--top > .ws-pane__tabs {
-  /* The top inset is 0 with iOS's opaque status bar (index.html); kept for any shell that overlays one. */
+  /* The status bar is transparent in a home-screen app: the strip's colour runs behind it. */
   --strip-pad: calc(var(--cds-spacing-02) + env(safe-area-inset-top));
 }
 /* The strip never moves: no scrolling or bouncing of the page by touches on it (the tabs
@@ -792,7 +839,7 @@ body {
    room above its tabs (.ws-pane--top, spacing-02) plus centring the 2rem button in its 3rem
    (spacing-03), and the strip's spacing beside it (.ws-pane__lead, spacing-03). */
 .side-nav-search {
-  /* Clear of a status bar drawn over the page (top inset), like the tab strip. */
+  /* Below the status bar (the nav's colour runs behind it), like the tab strip. */
   padding: calc(var(--cds-spacing-02) + var(--cds-spacing-03) + env(safe-area-inset-top)) var(--cds-spacing-05) var(--cds-spacing-03) var(--cds-spacing-03);
   display: flex;
   align-items: center;
