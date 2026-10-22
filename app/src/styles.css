@@ -44,22 +44,10 @@ body {
   -webkit-touch-callout: none;
 }
 
-/* The status bar is transparent in a home-screen app: whatever is behind it shows. Paint that
-   strip in the tab strip's colour, so the two read as one (the strip itself continues below it). */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0 0 auto 0;
-  block-size: env(safe-area-inset-top);
-  background: var(--cds-layer-accent, var(--cds-layer-accent-01, #e0e0e0));
-  pointer-events: none;
-}
-
-/* iOS 26.1+ draws a blur / fade over the top of a home-screen app with a translucent status bar,
-   unless a fixed element spans the top edge with a solid background colour (iOS samples it there).
-   This strip (index.html) is that element, painting nothing: its background is clipped to its
-   text, and it has none. Workaround from real-device reports, not an Apple API:
-   tips.ojapp.app/en/ios-27-pwa-top-blur-workaround-2 (method 2). */
+/* The status bar is transparent in a home-screen app (index.html): this strip paints the area
+   behind it in the tab strip's colour. iOS 26.1+ blurs that area unless a fixed element with a
+   solid background spans the top edge; this strip is such an element, so it must stay a real,
+   painted element on top (a pseudo-element or an unpainted strip didn't stop the blur). */
 .status-bar-sampler {
   display: none;
 }
@@ -68,12 +56,10 @@ body::before {
     display: block;
     position: fixed;
     inset: 0 0 auto;
-    height: 11px;
+    height: env(safe-area-inset-top);
     z-index: 2147483647;
     pointer-events: none;
     background-color: #e0e0e0; /* the tab strip's colour (layer-accent, white theme) */
-    -webkit-background-clip: text;
-    background-clip: text;
   }
 }
 @media (display-mode: standalone) and (prefers-color-scheme: dark) {
