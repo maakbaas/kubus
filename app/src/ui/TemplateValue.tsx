@@ -11,6 +11,7 @@ import { MarkdownView } from "./MarkdownView";
 
 /** App tokens a frame's base styles use: passed in as resolved values (the frame has no Carbon CSS). */
 const FRAME_TOKENS = [
+  "--cds-background",
   "--cds-text-primary",
   "--cds-text-secondary",
   "--cds-link-primary",
@@ -27,10 +28,10 @@ const FRAME_TOKENS = [
  * (:where), so any CSS in the template overrides them. Spacing goes only between text blocks:
  * the divs a map or chart library creates (often absolutely placed) are left alone.
  */
-function frameBaseStyles(): string {
+function frameBaseStyles(dark: boolean): string {
   const app = getComputedStyle(document.querySelector(".app-root") ?? document.body);
   const tokens = FRAME_TOKENS.map((t) => `${t}:${app.getPropertyValue(t).trim()};`).join("");
-  return `:root{${tokens}}
+  return `:root{${tokens}color-scheme:${dark ? "dark" : "light"};}
 :where(html,body){margin:0;height:100%;}
 html{overflow:hidden;}
 html.measuring,html.measuring body{height:auto;}
@@ -58,9 +59,9 @@ html.measuring,html.measuring body{height:auto;}
 :where(img,svg,canvas,video){max-width:100%;}`;
 }
 
-function frameDocument(html: string, fill: boolean): string {
+function frameDocument(html: string, fill: boolean, dark: boolean): string {
   return `<!doctype html><html class="${fill ? "in-card" : "in-page"}"><head><meta charset="utf-8"><style>
-${frameBaseStyles()}
+${frameBaseStyles(dark)}
 </style></head><body>${html}<script>
 (() => {
   const root = document.documentElement;
@@ -195,7 +196,7 @@ export function HtmlFrame({
   }, [fill]);
   // Rebuilt when the theme flips (light / dark): the frame's colours are the app's, passed in.
   const dark = useMediaQuery("(prefers-color-scheme: dark)");
-  const doc = useMemo(() => (html === undefined ? undefined : frameDocument(html, fill)), [html, fill, dark]);
+  const doc = useMemo(() => (html === undefined ? undefined : frameDocument(html, fill, dark)), [html, fill, dark]);
   const fills = !!size && !size.height && !size.ratio && size.natural < FILL_THRESHOLD;
   useEffect(() => {
     if (size) onFill?.(fills);
