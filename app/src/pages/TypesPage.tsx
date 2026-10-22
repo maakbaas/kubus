@@ -166,12 +166,12 @@ export function TypesPage() {
                         );
                         if (editing.start?.wrapped) return <div className="cell-inline-editor">{editor}</div>;
                         return (
-                          <>
+                          <div className="cell-edit-box">
                             <div className="cell-editable cell-sizer" aria-hidden>
                               {t.description}
                             </div>
                             <div className="cell-overlay">{editor}</div>
-                          </>
+                          </div>
                         );
                       })()
                     ) : (
