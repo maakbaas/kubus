@@ -1,7 +1,5 @@
 # Kubus
 
-*Obsidian, where your notes can embed and link live data.*
-
 Kubus is a personal knowledge manager like Obsidian, but backed by a relational store instead of
 Markdown files. You define your own types (Book, Person, Meeting, …) with the fields you want,
 and fill them with objects that link to each other.
