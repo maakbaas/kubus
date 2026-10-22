@@ -38,7 +38,7 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
 - **Types have an icon** from the full Carbon set (`object_types.icon`, an `@carbon/icons-react`
   export name). The icon module is lazy-loaded (`app/src/ui/objectIcons.tsx`); the picker is a search
   box over a grid of matches. App icon: `app/public/favicon.svg` (isometric cube, three shades of Carbon blue, transparent background),
-  rendered to `desktop/icons` with `tauri icon` (`--ios-color '#a6c8ff'`); the PWA's icon-1024 is the cube at 60% on #262626; the apple-touch-icon (iOS home screen) and the Tauri iOS icons are the cube at 70% on #a6c8ff (a blue lighter than the cube's lightest), rendered from `favicon.svg`. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
+  rendered to `desktop/icons` with `tauri icon` (`--ios-color '#d0e2ff'`); the PWA's icon-1024 is the cube at 60% on #262626; the apple-touch-icon (iOS home screen) and the Tauri iOS icons are the cube at 70% on #d0e2ff (a blue lighter than the cube's lightest), rendered from `favicon.svg`. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
   names, the lock or the `kubus.*` storage keys, orphans existing data).
 - The Milkdown editor reports changes synchronously (`changes` plugin); don't switch back to the
   debounced listener plugin, which lost text typed right before saving.
