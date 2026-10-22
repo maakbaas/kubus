@@ -262,9 +262,10 @@ Extension points are registries, not special cases in pages:
   remembered per device). Docked, it is resizable by dragging the gutter at its edge
   (`--nav-width`, 12–32rem, remembered per device).
 - Each tab keeps its own history for its lifetime (outside navigation is pushed into it); mouse
-  back/forward buttons, Alt+←/→ and the browser-back key act on the active tab. In a home-screen
-  app the OS swipe gestures do too: the browser history is three sentinel entries (back / middle /
-  forward) and a pop onto an outer one is a tab back / forward, after which the middle is restored.
+  back/forward buttons, Alt+←/→ and the browser-back key act on the active tab. On touch devices (home-screen
+  app or not) the OS swipe gestures do too: the browser history is three sentinel entries (back /
+  middle / forward); a pop onto the first is a tab back, as far as the tab's own history goes and
+  only then on to what was open before the app; onto the last a tab forward; the middle is restored.
 - Closing every tab leaves an empty workspace (no tab is reopened automatically); middle click
   on a tab closes it.
 - Phones show only the active pane.

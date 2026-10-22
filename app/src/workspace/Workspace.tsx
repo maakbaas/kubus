@@ -15,7 +15,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { MemoryRouter, useLocation, useNavigate } from "react-router";
+import { MemoryRouter, useLocation, useNavigate, useNavigationType } from "react-router";
 import { IconButton, Link, Tab, TabList, Tabs } from "@carbon/react";
 import { Add } from "@carbon/icons-react";
 import { AppRoutes } from "../app/routes";
@@ -74,6 +74,8 @@ interface WorkspaceApi extends WorkspaceActions {
 interface TabHistory {
   back(): void;
   forward(): void;
+  canGoBack(): boolean;
+  canGoForward(): boolean;
 }
 
 const WorkspaceContext = createContext<WorkspaceApi | null>(null);
@@ -146,7 +148,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const update = useCallback((fn: (ws: Workspace) => Workspace) => setWorkspace(fn), []);
 
   // Back / forward for the active tab: mouse back/forward buttons, Alt+←/→, the browser-back key,
-  // and (home-screen app) the OS swipe gestures.
+  // and, on touch devices, the OS swipe gestures.
   const histories = useRef(new Map<string, TabHistory>());
   const registerHistory = useCallback((tabId: string, history: TabHistory) => {
     histories.current.set(tabId, history);
@@ -157,10 +159,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const current = useRef(workspace);
   current.current = workspace;
   useEffect(() => {
-    const go = (direction: "back" | "forward") => {
+    const activeHistory = () => {
       const tab = activeTab(current.current);
-      if (tab) histories.current.get(tab.id)?.[direction]();
+      return tab ? histories.current.get(tab.id) : undefined;
     };
+    const go = (direction: "back" | "forward") => activeHistory()?.[direction]();
     const onMouseUp = (e: globalThis.MouseEvent) => {
       if (e.button === 3 || e.button === 4) {
         e.preventDefault();
@@ -174,27 +177,34 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       e.preventDefault();
       go(back ? "back" : "forward");
     };
-    // The OS back / forward gestures (iOS edge swipes) only know the browser's history, while
-    // every tab keeps its own in memory. In a home-screen app the browser history is therefore
-    // just three sentinel entries with the page on the middle one: a pop onto the first is a
-    // back, onto the last a forward, for the active tab; then the middle one is restored.
-    const standalone = matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
+    // The OS back / forward gestures (edge swipes, the browser's back button) only know the
+    // browser's history, while every tab keeps its own in memory. So on touch devices (home-screen app or not) the
+    // browser history is three sentinel entries with the page on the middle one. A pop onto the first is a back:
+    // the active tab goes back as far as it can, and only when it can't does the browser go on
+    // back to what was open before the app. A pop onto the last is a forward, as far as the tab
+    // has one. The middle entry is restored after each.
+    const touch = matchMedia("(pointer: coarse)").matches;
     const onPopState = (e: PopStateEvent) => {
       const at = e.state?.kubus;
+      const tab = activeHistory();
       if (at === "back") {
-        go("back");
-        history.forward();
+        if (tab?.canGoBack()) {
+          tab.back();
+          history.forward();
+        } else {
+          history.back();
+        }
       } else if (at === "forward") {
-        go("forward");
+        if (tab?.canGoForward()) tab.forward();
         history.back();
       }
     };
-    if (standalone) {
+    if (touch) {
       const at = history.state?.kubus;
       if (at === "back") history.forward();
       else if (at === "forward") history.back();
       else if (at !== "middle") {
-        history.replaceState({ kubus: "back" }, "");
+        history.replaceState({ ...history.state, kubus: "back" }, "");
         history.pushState({ kubus: "middle" }, "");
         history.pushState({ kubus: "forward" }, "");
         history.back();
@@ -284,7 +294,30 @@ function TabRouterBridge({ tab }: { tab: WorkspaceTab }) {
   }, [path, tab.id, update]);
 
   // Back / forward (mouse buttons, Alt+arrows) act on the active tab's history.
-  useEffect(() => registerHistory(tab.id, { back: () => navigate(-1), forward: () => navigate(1) }), [registerHistory, tab.id, navigate]);
+  // Which entries the tab's history holds is tracked by location key (a memory history can't be asked).
+  const navType = useNavigationType();
+  const keys = useRef({ list: [location.key], at: 0 });
+  const k = keys.current;
+  if (k.list[k.at] !== location.key) {
+    if (navType === "PUSH") {
+      k.list.splice(k.at + 1, Infinity, location.key);
+      k.at += 1;
+    } else if (navType === "REPLACE") {
+      k.list[k.at] = location.key;
+    } else if (k.list.includes(location.key)) {
+      k.at = k.list.indexOf(location.key);
+    }
+  }
+  useEffect(
+    () =>
+      registerHistory(tab.id, {
+        back: () => navigate(-1),
+        forward: () => navigate(1),
+        canGoBack: () => keys.current.at > 0,
+        canGoForward: () => keys.current.at < keys.current.list.length - 1,
+      }),
+    [registerHistory, tab.id, navigate],
+  );
 
   return (
     <InAppLinks onNavigate={(to, newTab) => (newTab ? ws.openTab(to) : navigate(to))}>
