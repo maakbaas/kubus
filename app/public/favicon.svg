@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-  <!-- App icon: an isometric cube in the three colors (red top, purple left, blue right), scaled to 85% of the height on a transparent background, with transparent seams between the faces; drawn on a 16px grid so it stays crisp small. -->
+  <!-- App icon: an isometric cube in three shades of Carbon blue (top #0f62fe, right lighter, left lightest), scaled to 85% of the height on a transparent background, with transparent seams between the faces; drawn on a 16px grid so it stays crisp small. -->
   <mask id="seams" maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16">
     <rect width="16" height="16" fill="#fff"/>
     <path d="M1 4 8 8 15 4M8 8V16" fill="none" stroke="#000" stroke-width="1.5"/>
   </mask>
   <g mask="url(#seams)">
-    <path d="M8 1.2 13.95 4.6 8 8 2.05 4.6Z" fill="#e03500"/>
-    <path d="M2.05 4.6 8 8V14.8L2.05 11.4Z" fill="#ff5ce9"/>
-    <path d="M13.95 4.6 8 8V14.8L13.95 11.4Z" fill="#337eff"/>
+    <path d="M8 1.2 13.95 4.6 8 8 2.05 4.6Z" fill="#0f62fe"/>
+    <path d="M2.05 4.6 8 8V14.8L2.05 11.4Z" fill="#78a9ff"/>
+    <path d="M13.95 4.6 8 8V14.8L13.95 11.4Z" fill="#4589ff"/>
   </g>
 </svg>

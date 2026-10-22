@@ -166,6 +166,9 @@ export function FieldInput({
       if (compact) return box;
       return (
         <div className="cds--form-item">
+          <div className="cds--label">
+            <FieldLabel field={field} />
+          </div>
           <div className="checklist-row">
             <span className="checklist-box">{box}</span>
             <label htmlFor={id} className={`checkbox-field__name${value === true ? " checklist-row__done" : ""}`}>
@@ -188,7 +191,8 @@ export function FieldInput({
           autoComplete="off"
           placeholder={placeholder}
           value={String(value)}
-          onChange={(e) => onChange(e.target.value)}
+          // The iOS decimal keyboard types a comma where a dot is expected (outside {{ }} code).
+          onChange={(e) => onChange(e.target.value.includes("{{") ? e.target.value : e.target.value.replace(",", "."))}
           {...small}
           {...invalid}
         />

@@ -301,6 +301,8 @@ function PaneView({ pane }: { pane: PaneNode }) {
   // on the DOM itself.
   const root = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
+  // Scrolled away from the top: a fade shows below the tab strip.
+  const [scrolled, setScrolled] = useState(false);
   const tabBar = useRef<HTMLDivElement>(null);
   const latest = useRef({ ws, active, zone, paneId: pane.id });
   latest.current = { ws, active, zone, paneId: pane.id };
@@ -451,8 +453,8 @@ function PaneView({ pane }: { pane: PaneNode }) {
       </div>
       {/* The drop highlight covers the whole pane body, scrollbar gutters included: it sits on
           this frame, outside the scrolling body. */}
-      <div ref={frame} className="ws-pane__frame">
-        <div className="ws-pane__body">
+      <div ref={frame} className="ws-pane__frame" data-scrolled={scrolled || undefined}>
+        <div className="ws-pane__body" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
           {pane.tabs.map((t) => (
             <TabSlot key={t.id} tabId={t.id} hidden={t.id !== pane.activeTabId} />
           ))}

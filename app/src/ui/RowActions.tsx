@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IconButton, Popover, PopoverContent, TableCell } from "@carbon/react";
 import { OverflowMenuHorizontal } from "@carbon/icons-react";
 
@@ -30,15 +30,36 @@ export function RowActions({ children }: { children(inMenu: boolean): ReactNode 
 /** The dark popover behind one button, styled like the markdown editor's table menu. */
 function RowActionsMenu({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLSpanElement>(null);
+  const pressedOutside = useRef(false);
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      pressedOutside.current = !root.current?.contains(e.target as Node);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [open]);
+  // Only a press outside (or Escape) closes it. Carbon also asks to close when focus is lost,
+  // which on iOS (where tapping a button focuses nothing) shut the menu the moment it opened.
+  const requestClose = () => {
+    if (!pressedOutside.current) return;
+    pressedOutside.current = false;
+    setOpen(false);
+  };
   return (
-    <Popover open={open} align="bottom-end" autoAlign highContrast className="row-actions__menu" onRequestClose={() => setOpen(false)}>
+    <Popover ref={root} open={open} align="bottom-end" autoAlign highContrast className="row-actions__menu" onRequestClose={requestClose}>
       <IconButton autoAlign kind="ghost" size="sm" align="left" label="Actions" isSelected={open} onClick={() => setOpen((o) => !o)}>
         <OverflowMenuHorizontal />
       </IconButton>
       <PopoverContent>
         {/* Any action closes it. Its buttons exist only while it is open: every row has this
             menu, and closed copies of every row's buttons made tables slow to open. */}
-        <div className="md-link-popover__content md-table-menu" onClick={() => setOpen(false)}>
+        <div
+          className="md-link-popover__content md-table-menu"
+          onClick={() => setOpen(false)}
+          onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+        >
           {open && children}
         </div>
       </PopoverContent>

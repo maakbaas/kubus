@@ -37,8 +37,8 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   (heading-sized input).
 - **Types have an icon** from the full Carbon set (`object_types.icon`, an `@carbon/icons-react`
   export name). The icon module is lazy-loaded (`app/src/ui/objectIcons.tsx`); the picker is a search
-  box over a grid of matches. App icon: `app/public/favicon.svg` (Cube, white on #0f62fe),
-  rendered to `desktop/icons` with `tauri icon`. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
+  box over a grid of matches. App icon: `app/public/favicon.svg` (isometric cube, three shades of Carbon blue, transparent background),
+  rendered to `desktop/icons` with `tauri icon` (`--ios-color '#262626'`); the PWA's apple-touch-icon / icon-1024 are the cube at 60% on #262626. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
   names, the lock or the `kubus.*` storage keys, orphans existing data).
 - The Milkdown editor reports changes synchronously (`changes` plugin); don't switch back to the
   debounced listener plugin, which lost text typed right before saving.
@@ -343,7 +343,7 @@ vision wants server-side queries and remote sources later.
 keys or checks) and applied idempotently at start. `events.ts` is the change signal. Proxies must not
 buffer `/api/events` (nginx: `proxy_buffering off`); polling covers a dropped stream.
 
-**iOS / home-screen app.** The same web build: `app/public/manifest.webmanifest`, apple-touch-icon and
+**iOS / home-screen app.** The same web build (status bar `black-translucent`: the tab strip is padded by `safe-area-inset-top` so its colour runs behind it; `body` is fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position: fixed; inset: 0`): `app/public/manifest.webmanifest`, apple-touch-icon and
 meta tags in `app/index.html`, safe-area padding in `styles.css`, and a service worker (`app/sw.js`,
 emitted by the build with a version stamp; `platform/serviceWorker.ts` registers it in production
 web builds only) that caches the app shell, so it starts offline. iOS needs HTTPS for OPFS and

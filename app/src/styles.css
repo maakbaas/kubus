@@ -7,6 +7,28 @@ body,
   min-height: 100%;
 }
 
+/* App-like behaviour (home-screen app): the document itself never scrolls, bounces or zooms;
+   only the panes' bodies scroll. */
+html {
+  background: var(--cds-background, #fff);
+  overscroll-behavior: none;
+  touch-action: manipulation; /* no double-tap zoom */
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  html {
+    background: #161616;
+  }
+}
+body {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+}
+
 .app-root {
   /* Narrowest a tiled pane gets: an iPhone 16's viewport width, so every pane can show what
      the phone layout shows. Also read by the divider drag in Workspace.tsx. */
@@ -60,10 +82,12 @@ body,
 .app-content.app-content--workspace {
   display: flex;
   flex-direction: column;
-  block-size: 100vh;
-  block-size: 100dvh; /* a phone's address bar and home indicator are not part of the page */
-  /* Home-screen app: keep clear of the notch (landscape) and the home indicator. */
-  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* Fixed to all four edges: the whole screen, down to the bottom of a home-screen app (100vh /
+     100dvh stop short of it there). Only the sides keep clear of the notch (landscape); the top
+     (status bar) and bottom (home indicator) are padded inside the tab strip and pane bodies. */
+  position: fixed;
+  inset: 0;
+  padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
   box-sizing: border-box;
 }
 .ws-pane__spacer {
@@ -87,11 +111,14 @@ body,
 .ws-pane__end--phone {
   display: none;
 }
-.sync-status--idle svg {
-  fill: var(--cds-support-success);
+/* Carbon's ghost icon button fills the icon's <path> with the icon colour (more specific than
+   a rule on the svg), so the status colours go on the path, and the class may sit on the
+   button or on its tooltip wrapper. */
+.sync-status--idle :is(svg, path) {
+  fill: var(--cds-support-success) !important;
 }
-.sync-status--error svg {
-  fill: var(--cds-support-error);
+.sync-status--error :is(svg, path) {
+  fill: var(--cds-support-error) !important;
 }
 .sync-status--syncing svg {
   animation: sync-spin 1.2s linear infinite;
@@ -170,7 +197,15 @@ body,
 /* A strip at the window's top edge gets a little room above its tabs, in its own colour: as
    wide as the gutters between panes (4px). */
 .ws-pane--top > .ws-pane__tabs {
-  padding-block-start: var(--cds-spacing-02);
+  /* The status bar is transparent in a home-screen app: the strip's colour runs behind it. */
+  padding-block-start: calc(var(--cds-spacing-02) + env(safe-area-inset-top));
+}
+/* The strip never moves: no scrolling or bouncing of the page by touches on it (the tabs
+   themselves may still pan sideways). */
+.ws-pane__tabs {
+  touch-action: pan-x;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .ws-pane__tabs .cds--tabs.cds--tabs--contained .cds--tabs__nav-item--selected,
 .ws-pane__tabs .cds--tabs.cds--tabs--contained .cds--tabs__nav-item--selected:hover {
@@ -223,10 +258,27 @@ body,
   flex-direction: column;
   min-block-size: 0;
 }
+/* A subtle fade below the tab strip while the page is scrolled down. */
+.ws-pane__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  block-size: 1rem;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.14), transparent);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.ws-pane__frame[data-scrolled]::before {
+  opacity: 1;
+}
 .ws-pane__body {
   flex: 1;
   min-block-size: 0;
   overflow: auto;
+  overscroll-behavior: none; /* no rubber-band bounce */
+  -webkit-overflow-scrolling: touch;
   /* Space for the scrollbar is always kept, on both sides, so content neither jumps when a
      scrollbar appears nor sits off-centre. */
   scrollbar-gutter: stable both-edges;
@@ -234,6 +286,8 @@ body,
 /* Compact: one spacing-05 around the page (the scrollbar gutter adds to the sides). */
 .ws-tab-content {
   padding: var(--cds-spacing-05);
+  /* Content scrolls clear of the home indicator. */
+  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom));
 }
 /* The loading indicator while the database opens, centred in the window (pages show nothing
    while loading: their data takes a fraction of a second, a spinner would only flash). */
@@ -276,7 +330,7 @@ body,
   }
   /* The one pane shown is always at the top. */
   .ws-pane > .ws-pane__tabs {
-    padding-block-start: var(--cds-spacing-02);
+    padding-block-start: calc(var(--cds-spacing-02) + env(safe-area-inset-top));
   }
 }
 @media (min-width: 66rem) {

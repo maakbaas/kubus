@@ -631,6 +631,9 @@ function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed }: V
     // the box, then the field's name where an item's text starts (clicking it toggles too).
     return (
       <div className="view-field">
+        <div className="cds--label">
+          <FieldLabel field={field} />
+        </div>
         <div className="checklist-row">
           <span className="checklist-box">
             <ToggleInput icon={field.toggleIcon} id={boxId} label={field.name} checked={value === true} onChange={onSave} />

@@ -18,6 +18,10 @@ function Root() {
 }
 
 suppressShellContextMenu();
+// iOS ignores user-scalable=no for pinch gestures in some versions; this stops them everywhere.
+for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
+  document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+}
 registerServiceWorker();
 
 createRoot(document.getElementById("root")!).render(
