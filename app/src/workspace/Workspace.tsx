@@ -184,12 +184,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     // back to what was open before the app. A pop onto the last is a forward, as far as the tab
     // has one. The middle entry is restored after each.
     const touch = matchMedia("(pointer: coarse)").matches;
+    // A tab back takes over from whatever lies ahead in the browser (a page navigated to from
+    // the app): once the middle entry is back, a fresh forward entry replaces it, so a forward
+    // swipe leads to the tab's own next page.
+    let renewForward = false;
     const onPopState = (e: PopStateEvent) => {
       const at = e.state?.kubus;
       const tab = activeHistory();
-      if (at === "back") {
+      if (at === "middle" && renewForward) {
+        renewForward = false;
+        history.pushState({ kubus: "forward" }, "");
+        history.back();
+      } else if (at === "back") {
         if (tab?.canGoBack()) {
           tab.back();
+          renewForward = true;
           history.forward();
         } else {
           history.back();
