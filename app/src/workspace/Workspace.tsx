@@ -346,18 +346,35 @@ function PaneView({ pane }: { pane: PaneNode }) {
   // Tabs shrink (and end in "…") only as far as needed, longest first: each tab's floor is its own
   // natural width, at most 16rem. A plain CSS floor can't say that, and flexbox otherwise shrinks
   // every tab in proportion, short ones included.
+  // A tab is also never wider than 80% of the room between the scroll buttons, so the active tab
+  // fits whole with its neighbours peeking in on both sides.
   const tabTitles = pane.tabs.map((t) => ws.titles[t.id] ?? "").join("|");
+  const activeTabId = pane.activeTabId;
   useLayoutEffect(() => {
-    const items = tabBar.current?.querySelectorAll<HTMLElement>(".cds--tabs__nav-item") ?? [];
-    const cap = 16 * parseFloat(getComputedStyle(document.documentElement).fontSize);
-    for (const item of items) {
-      const label = item.querySelector<HTMLElement>(".cds--tabs__nav-item-label");
-      if (!label) continue;
-      item.style.minInlineSize = "0";
-      const natural = label.scrollWidth + (item.offsetWidth - label.clientWidth);
-      item.style.minInlineSize = `${Math.min(natural, cap)}px`;
-    }
-  }, [tabTitles]);
+    const bar = tabBar.current;
+    if (!bar) return;
+    const fit = () => {
+      const items = bar.querySelectorAll<HTMLElement>(".cds--tabs__nav-item");
+      const list = bar.querySelector<HTMLElement>(".cds--tab--list");
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const cap = Math.min(16 * rem, list ? list.clientWidth * 0.8 : Infinity);
+      for (const item of items) {
+        const label = item.querySelector<HTMLElement>(".cds--tabs__nav-item-label");
+        if (!label) continue;
+        item.style.minInlineSize = "0";
+        item.style.maxInlineSize = "none";
+        const natural = label.scrollWidth + (item.offsetWidth - label.clientWidth);
+        item.style.minInlineSize = `${Math.min(natural, cap)}px`;
+        item.style.maxInlineSize = `${cap}px`;
+      }
+      // Centre the active tab so the ones around it show.
+      bar.querySelector<HTMLElement>(".cds--tabs__nav-item--selected")?.scrollIntoView({ inline: "center", block: "nearest" });
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [tabTitles, activeTabId]);
 
   const newTab = (
     <IconButton autoAlign label="New tab" kind="ghost" size="sm" align="bottom-end" onClick={() => ws.update((w) => openTab(w, HOME, pane.id))}>
