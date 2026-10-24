@@ -33,6 +33,8 @@ export interface ItemActions {
   groupPreset?(groupKey: string): Record<string, FieldValue>;
   /** The field the items are grouped by: a new item takes its group's value, not edited. */
   groupBy?: string | null;
+  /** Opens the form for a new item (the collection page's "New" button). */
+  openNew?(mode?: OpenMode): void;
   /** Creates an item from the values entered inline (the table's add row). */
   create?(values: Record<string, FieldValue>): Promise<void>;
   /** The primary sort, and a way to change it (e.g. clicking a column header). */
@@ -54,6 +56,8 @@ export interface BlockProps<O> {
   fields: FieldDef[];
   layout: FieldLayout;
   options: O;
+  /** Stores changed options right away (a block that edits its own content, like Markdown). */
+  onOptions(options: O): void;
   refs: RefOptions;
   /** Free-text search, for highlighting matches. */
   search: string;

@@ -928,8 +928,13 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   grid-template-columns: minmax(0, 1fr) 13rem auto; /* room for "List of items" with its icon */
   gap: 1rem;
   align-items: start;
-  padding: 1rem 0;
+  /* Room beside the inputs, so a selected row's grey block reaches past them on both sides. */
+  padding: 1rem 0.5rem;
+  margin-inline: -0.5rem;
   border-bottom: 1px solid var(--cds-border-subtle);
+}
+.field-row[data-selected] {
+  box-shadow: none;
 }
 /* Reference fields get an extra "Refers to" column. */
 .field-row--reference {
@@ -1184,7 +1189,8 @@ img[data-lightbox] {
 }
 /* Height follows the content: it grows, never scrolls inside. */
 .md-editor__content {
-  padding: var(--block-pad-top) 1rem 0.75rem;
+  /* The same space under the text as above it (a line of text then fills a 2rem input's height). */
+  padding: var(--block-pad-top) 1rem var(--block-pad-top);
   outline: none;
   /* Never wider than the field: long words, links and code wrap instead of scrolling. */
   overflow-wrap: anywhere;
@@ -1567,18 +1573,18 @@ img[data-lightbox] {
 /* Markdown: same padding as the editor's content area; height follows the content. */
 .view-field__value--markdown {
   display: block;
-  padding: var(--block-pad-top) 1rem 0.75rem;
+  padding: var(--block-pad-top) 1rem var(--block-pad-top);
 }
 /* A component's rendered result (HTML, Markdown) is a block like a markdown field: the same
    space above and below, before the line under the field. */
 .view-field__value--component:has(> :is(.html-frame, .md-view)) {
   display: block;
-  padding-block: var(--block-pad-top) 0.75rem;
+  padding-block: var(--block-pad-top);
 }
 /* HTML: its frame as a block like a component's. */
 .view-field__value--html:not(.view-field__value--empty) {
   display: block;
-  padding-block: var(--block-pad-top) 0.75rem;
+  padding-block: var(--block-pad-top);
 }
 .view-field__value--image {
   display: block;
@@ -1821,6 +1827,12 @@ img[data-lightbox] {
 }
 .toolbar-popover__panel--fit {
   inline-size: max-content;
+}
+.toolbar-popover__panel--narrow {
+  inline-size: min(20rem, var(--popover-width, calc(100vw - 2 * var(--cds-spacing-05))));
+}
+.toolbar-popover__panel--wide {
+  inline-size: min(40rem, var(--popover-width, calc(100vw - 2 * var(--cds-spacing-05))));
 }
 .view-settings {
   display: flex;
@@ -2191,8 +2203,36 @@ img[data-lightbox] {
   font-weight: 400; /* at this size the name needs no bold */
   overflow-wrap: anywhere;
 }
-.block-settings__remove,
-.item-layout__add {
+/* On an item page a block's name is a field heading: a label, with no line under it. */
+/* The block's heading is a field label, so it uses the field type scale; only the content under it
+   (tables, cards) keeps the smaller collection page scale that .item-fields > .block sets. */
+.item-fields > .block > .block__header {
+  --cds-label-01-font-size: 0.875rem;
+  --cds-label-01-line-height: 1.28572;
+  --cds-label-01-letter-spacing: 0.16px;
+}
+.block--field > .block__header {
+  border-block-end: 0;
+  /* As tall as a field label, the 2rem menu buttons centred on it (they overhang a little), so
+     the heading sits where a field's label does and the gap to the content is a field's. */
+  block-size: 1rem;
+  min-block-size: 0;
+  margin-block-end: var(--cds-spacing-03);
+}
+/* Blocks in a row are spaced by the page's own gap, as fields are (not also by their top margin). */
+.item-fields > .block + .block {
+  margin-block-start: 0;
+}
+.block--field .block__title {
+  cursor: default;
+  margin: 0;
+  flex: none;
+  inline-size: auto;
+  font-size: var(--cds-label-01-font-size);
+  line-height: 1rem;
+  letter-spacing: var(--cds-label-01-letter-spacing);
+}
+.block-settings__remove {
   align-self: flex-start;
 }
 .block-list__name {
@@ -2212,9 +2252,9 @@ img[data-lightbox] {
   margin-inline: auto;
 }
 /* An empty markdown field is as tall as the empty editor it turns into (one body-01 line plus
-   the editor's 0.75rem padding and the field's bottom border). */
+   the editor's padding above and below and the field's bottom border). */
 .view-field__value--markdown.view-field__value--empty {
-  min-block-size: calc(2 * 0.75rem + var(--cds-body-01-font-size) * var(--cds-body-01-line-height) + 1px);
+  min-block-size: calc(2 * var(--block-pad-top) + var(--cds-body-01-font-size) * var(--cds-body-01-line-height) + 1px);
 }
 /* The idle add row's "+" icon starts where the column's text starts: the 2rem icon button
    centres a 1rem icon, so the cell's 1rem inset shrinks by that 0.5rem. */
@@ -2471,6 +2511,18 @@ img[data-lightbox] {
 .cds--modal.modal--menus .cds--modal-content {
   overflow: visible;
 }
+/* Carbon caps the dialog's height and scrolls its content; without that clipping, content that
+   grows (a field type's extra inputs) would spill out of the capped box. The dialog grows with its
+   content instead. */
+@media (min-width: 42rem) {
+  .cds--modal.modal--menus .cds--modal-container {
+    block-size: auto;
+    max-block-size: none;
+  }
+  .cds--modal.modal--menus .cds--modal-content {
+    max-block-size: none;
+  }
+}
 
 /* Narrow panes: every table restacks as cards. Each row is a card; each cell a line with its
    column name (data-label) on the left; the row's icons at the bottom right. Driven by the
@@ -2692,6 +2744,14 @@ img[data-lightbox] {
 /* "Add field" under the list: set apart from the last field row. */
 .field-order__add {
   margin-block-start: var(--cds-spacing-05);
+}
+/* "Add field" / "Add block" under a list span its width (the menu button's trigger too). */
+.field-order__add,
+.item-layout__add,
+.field-order__add .cds--btn,
+.item-layout__add .cds--btn {
+  inline-size: 100%;
+  max-inline-size: none;
 }
 /* Item page layout popover. */
 .item-layout {
@@ -2943,4 +3003,64 @@ body[data-reordering] [data-reorder-row] {
 }
 [data-drop-after]::after {
   inset-block-end: -1px;
+}
+/* Edited in place: the editor needs no visible label, the block's text is the content. */
+.markdown-block--editing .md-field > .cds--label {
+  display: none;
+}
+/* A {{ }} section in the Markdown editor: a chip, its code edited from a dialog. */
+.md-editor .md-section {
+  display: inline-block;
+  padding: 0 0.25rem;
+  border-radius: 2px;
+  background: var(--cds-layer-accent);
+  font-family: var(--cds-code-02-font-family, monospace);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.md-editor .md-section.ProseMirror-selectednode {
+  outline: 2px solid var(--cds-focus);
+}
+/* A Markdown block reads like a Markdown field (the field type scale) wherever it is, not like
+   the tables and cards around it, which keep the smaller collection page scale. */
+.markdown-block {
+  --cds-body-compact-01-font-size: 1rem;
+  --cds-body-compact-01-line-height: 1.375;
+  --cds-body-01-font-size: 1rem;
+  --cds-body-01-line-height: 1.5;
+  --cds-body-01-letter-spacing: 0;
+  --cds-label-01-font-size: 0.875rem;
+  --cds-label-01-line-height: 1.28572;
+  --cds-label-01-letter-spacing: 0.16px;
+  /* The space above a line of text in a 2rem box, from this scale: outside item pages the page
+     level value is not defined (the box's whole padding would then be dropped). */
+  --block-pad-top: calc((2rem - 1px - var(--cds-body-compact-01-font-size) * var(--cds-body-compact-01-line-height)) / 2);
+  /* Its box (read-only and editing alike, so nothing moves) is pulled into the page margin, as an
+     item page field's is: the box's own 1rem padding puts the text at the page edge, in line with
+     tables and the block headings, and the editor has room around its text. (Blocks are left out
+     of the item page rule that does this for fields.) */
+  margin-inline-start: calc(-1 * var(--cds-spacing-05));
+}
+@media (max-width: 42rem) {
+  .markdown-block {
+    margin-inline: calc(-0.5 * var(--cds-spacing-05));
+  }
+}
+/* The code dialog (opened from a section chip): its label sits at the left, Carbon's room under the
+   content (for a scroll fade) is not needed. It sits inside the item page's fields, whose labels are
+   inset to line up with their inputs' text, so that inset is cancelled (specific enough to beat
+   those rules, also the phone ones). */
+.section-dialog .cds--label {
+  text-align: start;
+  align-self: flex-start;
+}
+.cds--modal.section-dialog.section-dialog .cds--label {
+  padding-inline-start: 0;
+}
+.section-dialog .cds--modal-content {
+  padding-block-end: var(--cds-spacing-05);
+  margin-block-end: 0;
+}
+.section-dialog .cds--modal-content > .cds--form-item {
+  margin-block-end: 0;
 }

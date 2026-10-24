@@ -1,9 +1,10 @@
-import { Button, FormGroup, IconButton } from "@carbon/react";
-import { Add, TrashCan } from "@carbon/icons-react";
+import { FormGroup, IconButton } from "@carbon/react";
+import { TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import type { ViewBlock } from "../domain/views";
 import { moveBlock, useReorder } from "../ui/useReorder";
 import { blockType } from ".";
+import { AddBlockButton, type NewBlockSpec } from "./AddBlockButton";
 import type { ComponentBlockOptions } from "./ComponentBlock";
 
 /** A block's name (its heading, its row in lists): its title, else its component's name or its type ("Table", "Cards"). */
@@ -30,7 +31,7 @@ export function BlockListEditor({
   blocks: ViewBlock[];
   onMove(blocks: ViewBlock[]): void;
   onRemove(ids: string[], asked: boolean): void;
-  onAdd(): void;
+  onAdd(spec: NewBlockSpec): void;
 }) {
   const name = useBlockName();
   const reorder = useReorder({
@@ -61,9 +62,7 @@ export function BlockListEditor({
           </div>
         );
       })}
-      <Button kind="tertiary" size="sm" renderIcon={Add} className="field-order__add" onClick={onAdd}>
-        Add block
-      </Button>
+      <AddBlockButton place="collection" className="field-order__add" onAdd={onAdd} />
       {reorder.dialog}
     </FormGroup>
   );

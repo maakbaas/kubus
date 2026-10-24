@@ -216,10 +216,15 @@ export function groupPreset(collection: Collection, query: ViewQuery, groupKey: 
 export const PAGE_ITEM = "$item";
 export const pageItemField = (fieldId: string) => `${PAGE_ITEM}.${fieldId}`;
 
-/** Filters with page-item values filled in from the page's item (no page: they match nothing). */
-export function resolvePageValues(filters: FilterRule[], page: Item | null): FilterRule[] {
-  if (!filters.some((r) => r.value.startsWith(PAGE_ITEM))) return filters;
+/**
+ * Filters with page-item values filled in from the page's item (no page: they match nothing).
+ * A value with {{ }} sections ("{{ $item.Name }}") is rendered by `evalText`.
+ */
+export function resolvePageValues(filters: FilterRule[], page: Item | null, evalText?: (text: string) => string): FilterRule[] {
+  const sectioned = (r: FilterRule) => r.value.includes("{{");
+  if (!filters.some((r) => r.value.startsWith(PAGE_ITEM) || sectioned(r))) return filters;
   return filters.map((r) => {
+    if (sectioned(r)) return { ...r, value: evalText && page ? evalText(r.value) : "" };
     if (r.value === PAGE_ITEM) return { ...r, value: page?.id ?? "" };
     if (!r.value.startsWith(`${PAGE_ITEM}.`)) return r;
     const v = page?.values[r.value.slice(PAGE_ITEM.length + 1)];

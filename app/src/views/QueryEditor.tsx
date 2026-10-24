@@ -46,7 +46,8 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
       </Select>
     );
   }
-  const type = field.kind === "number" ? "number" : field.kind === "date" || field.kind === "datetime" ? "date" : "text";
+  // On an item page a value may hold {{ $item.Name }}, which number and date inputs would refuse.
+  const type = page ? "text" : field.kind === "number" ? "number" : field.kind === "date" || field.kind === "datetime" ? "date" : "text";
   return (
     <TextInput
       id={id}
@@ -54,7 +55,7 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
       hideLabel
       size="sm"
       type={type}
-      placeholder={type === "date" ? "yyyy-mm-dd" : "Value"}
+      placeholder={page ? "Value or {{ $item.Name }}" : type === "date" ? "yyyy-mm-dd" : "Value"}
       value={rule.value}
       onChange={(e) => onChange(e.target.value)}
     />

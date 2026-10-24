@@ -4,6 +4,7 @@ import { ArrowsVertical, ChevronDown, ChevronRight, Filter, ListChecked, Setting
 import { useStore } from "../app/store";
 import { orderFields } from "../domain/fieldLayout";
 import { newId, pickableFields, type Collection } from "../domain/model";
+import { fieldLookup, render } from "../domain/components";
 import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolvePageValues, type FilterRule, type QueryResult } from "../domain/query";
 import { blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
@@ -39,10 +40,11 @@ function BlockKindLabel({ kind }: { kind: BlockTypeDefinition }) {
  * page's collection, filtered to the items referring to the page's item ("Books by this
  * Author"); a new item added there refers to it too.
  */
-export function newPageBlock(target: Collection, page: Collection): ViewBlock {
+export function newPageBlock(target: Collection, page: Collection, spec?: { kind: string; options?: unknown }): ViewBlock {
   const link = target.fields.find((f) => (f.kind === "item" || f.kind === "item_list") && f.targetCollectionId === page.id);
   const filters: FilterRule[] = link ? [{ id: newId(), fieldId: link.id, operator: "is", value: PAGE_ITEM }] : [];
-  return normalizeBlock(target, { ...newBlock("table", blockType("table").defaultOptions(target)), collectionId: target.id, filters });
+  const kind = spec?.kind ?? "table";
+  return normalizeBlock(target, { ...newBlock(kind, spec?.options ?? blockType(kind).defaultOptions(target)), collectionId: target.id, filters });
 }
 
 /** Sorted by title (ascending), not grouped: what every block starts with. */
@@ -82,6 +84,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
         <ToolbarPopover
           label={own ? `Own filter (${filterCount})` : viewFilters === null && filterCount > 0 ? `Filter (${filterCount})` : "Filter"}
           icon={Filter}
+          width="wide"
           active={own || (viewFilters === null && filterCount > 0)}
           onOpenChange={onOpenChange}
         >
@@ -116,7 +119,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
         </ToolbarPopover>
       )}
       {uses.fields && (
-        <ToolbarPopover label="Fields" icon={ListChecked} onOpenChange={onOpenChange}>
+        <ToolbarPopover label="Fields" icon={ListChecked} width="narrow" onOpenChange={onOpenChange}>
           <div className="view-settings">
             {uses.fields.hideEmpty && (
               <div className="view-options__checks">
@@ -144,7 +147,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
         </ToolbarPopover>
       )}
       {/* A gear, not the type's icon: this is also where the type is switched. */}
-      <ToolbarPopover label="Block settings" icon={Settings} onOpenChange={onOpenChange}>
+      <ToolbarPopover label="Block settings" icon={Settings} width="narrow" onOpenChange={onOpenChange}>
         <div className="view-settings">
           {page && (
             <Dropdown<Collection>
@@ -238,7 +241,13 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const uses = type.uses(block.options, components);
   // Page-item values ("this item") filled in from the page's item.
   const base = blockQuery(viewFilters, block);
-  const filters = useMemo(() => resolvePageValues(base.filters, page?.item ?? null), [base.filters, page]);
+  const filters = useMemo(() => {
+    // {{ }} in a filter value reads the page's item as $item.
+    const evalText = page
+      ? (text: string) => String(render({ params: [], code: text }, [], page.item, fieldLookup(page.collection, page.item, page.refLabel)) ?? "")
+      : undefined;
+    return resolvePageValues(base.filters, page?.item ?? null, evalText);
+  }, [base.filters, page]);
   const query = useMemo(() => ({ ...base, filters }), [filters, base.sort, base.groupBy, base.groupOrder]); // eslint-disable-line react-hooks/exhaustive-deps
   const result = useMemo(
     () => (data.items && uses.query ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),
@@ -256,19 +265,35 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
     onError,
   });
   const blockName = useBlockName();
-  const collapsed = state.blocks.includes(block.id);
+  // On an item page a block is headed like a field (its name as a label) and never collapses.
+  const collapsed = !page && state.blocks.includes(block.id);
   const toggleCollapsed = () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
   return (
-    <section className="block">
+    <section className={page ? "block block--field" : "block"}>
       <div className="block__header">
-        <IconButton autoAlign kind="ghost" size="sm" align="top-start" label={collapsed ? "Expand" : "Collapse"} aria-expanded={!collapsed} onClick={toggleCollapsed}>
-          {collapsed ? <ChevronRight /> : <ChevronDown />}
-        </IconButton>
-        {/* The name toggles too, like an accordion heading (the icon button is its keyboard control). */}
-        <h2 className="block__title" onClick={toggleCollapsed}>
-          {blockName(block)}
-        </h2>
+        {page ? (
+          // A Markdown block without a name is just its text, with no heading.
+          (block.title || type.kind !== "markdown") && (
+            <h2 className="block__title cds--label">
+              {/* The block type's icon, like a field's kind icon in its label. */}
+              <span className="icon-label">
+                <type.icon size={16} aria-hidden="true" />
+                {blockName(block)}
+              </span>
+            </h2>
+          )
+        ) : (
+          <>
+            <IconButton autoAlign kind="ghost" size="sm" align="top-start" label={collapsed ? "Expand" : "Collapse"} aria-expanded={!collapsed} onClick={toggleCollapsed}>
+              {collapsed ? <ChevronRight /> : <ChevronDown />}
+            </IconButton>
+            {/* The name toggles too, like an accordion heading (the icon button is its keyboard control). */}
+            <h2 className="block__title" onClick={toggleCollapsed}>
+              {blockName(block)}
+            </h2>
+          </>
+        )}
         <span className="views-bar__spacer" />
         <BlockMenus
           collection={collection}
@@ -293,6 +318,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           fields={fields}
           layout={block.layout}
           options={block.options}
+          onOptions={(options) => onSet({ options })}
           refs={data.refs}
           search={search}
           actions={actions}
