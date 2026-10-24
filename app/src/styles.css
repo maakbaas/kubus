@@ -401,7 +401,7 @@ body {
   flex-wrap: wrap;
   margin-bottom: var(--cds-spacing-03);
 }
-/* A crumb longer than the line (a long object title) ends in "…" instead of running under the
+/* A crumb longer than the line (a long item title) ends in "…" instead of running under the
    header's buttons. */
 .page-header__main > :first-child {
   min-inline-size: 0;
@@ -501,7 +501,7 @@ body {
   max-width: 100%;
 }
 
-/* Types overview */
+/* Collections overview */
 .tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
@@ -552,7 +552,7 @@ body {
   fill: currentColor;
 }
 
-/* Editable page title (type editor): icon button + name styled as the page heading. */
+/* Editable page title (collection editor): icon button + name styled as the page heading. */
 .page-header__row > div:has(> .title-edit) {
   flex: 1;
   min-inline-size: 0;
@@ -582,7 +582,7 @@ body {
 .title-edit .cds--text-input::placeholder {
   color: var(--cds-text-placeholder);
 }
-/* Page title with the type's icon in front (objects list). */
+/* Page title with the collection's icon in front (items list). */
 .title-with-icon {
   display: flex;
   align-items: center;
@@ -654,14 +654,14 @@ body {
 }
 
 /* Forms */
-/* Form-like pages (type editor, template editor, new object, object pages) have a capped width
+/* Form-like pages (collection editor, component editor, new item, item pages) have a capped width
    and sit centred in a wider tab. */
 .form-page {
   max-width: 48rem;
   margin-inline: auto;
 }
-/* Item pages (an object, a new object): at most 700px of content, centred in a wider tab. */
-.form-page.object-view {
+/* Item pages (an item, a new item): at most 700px of content, centred in a wider tab. */
+.form-page.item-view {
   max-inline-size: 700px;
   margin-inline: auto;
 }
@@ -706,7 +706,7 @@ body {
   max-height: 12rem;
   color: var(--cds-text-secondary);
 }
-/* Only search excerpts shrink images; the object view shows them like the editor does. */
+/* Only search excerpts shrink images; the item view shows them like the editor does. */
 .md-view--excerpt img {
   max-height: 8rem;
 }
@@ -748,26 +748,26 @@ body {
   outline: 2px solid var(--cds-focus);
   outline-offset: 1px;
 }
-/* On object pages a task list is laid out like a checklist field, in view and editor alike: rows
+/* On item pages a task list is laid out like a checklist field, in view and editor alike: rows
    2rem high (24px line + 0.25rem above and below), the box where a checklist's box is (the
    field's own 1rem inset), the text where a checklist item's text starts (2rem box + 1rem inset),
    and a checked item lightened. */
-.object-fields .md-view li.task-list-item,
-.object-fields .md-editor__content li[data-item-type="task"] {
+.item-fields .md-view li.task-list-item,
+.item-fields .md-editor__content li[data-item-type="task"] {
   /* The text 1px lower than centred, as a checklist item's text reads beside its box. */
   padding: calc(0.25rem + 1px) 0 calc(0.25rem - 1px) 3rem;
 }
-.object-fields .md-view li.task-list-item > .md-view__task {
+.item-fields .md-view li.task-list-item > .md-view__task {
   top: calc(0.25rem + (1.5em - 1rem) / 2 + 2px);
 }
-.object-fields .md-editor__content li[data-item-type="task"]::before {
+.item-fields .md-editor__content li[data-item-type="task"]::before {
   top: calc(0.25rem + (1.5em - 1rem) / 2 + 2px);
 }
-.object-fields .md-editor__content li[data-item-type="task"][data-checked="true"]::after {
+.item-fields .md-editor__content li[data-item-type="task"][data-checked="true"]::after {
   top: calc(0.25rem + (1.5em - 1rem) / 2 + 2px + 0.1875rem);
 }
-.object-fields .md-view li.task-list-item:has(> .md-view__task[data-checked="true"]),
-.object-fields .md-editor__content li[data-item-type="task"][data-checked="true"] {
+.item-fields .md-view li.task-list-item:has(> .md-view__task[data-checked="true"]),
+.item-fields .md-editor__content li[data-item-type="task"][data-checked="true"] {
   color: var(--cds-text-secondary);
 }
 /* Checkmark, same geometry as the editor's task checkbox. */
@@ -868,7 +868,7 @@ body {
 }
 .field-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 13rem auto; /* room for "List of objects" with its icon */
+  grid-template-columns: minmax(0, 1fr) 13rem auto; /* room for "List of items" with its icon */
   gap: 1rem;
   align-items: start;
   padding: 1rem 0;
@@ -896,20 +896,20 @@ body {
 
 /* Field inputs */
 /* Date pickers fill the form column like other inputs (Carbon fixes them at 18rem),
-   on the new-object form and in inline field editors alike. */
+   on the new-item form and in inline field editors alike. */
 .form-page .cds--date-picker,
 .form-page .cds--date-picker-container,
-.objects-table .cds--date-picker,
-.objects-table .cds--date-picker-container {
+.items-table .cds--date-picker,
+.items-table .cds--date-picker-container {
   inline-size: 100%;
 }
 .form-page .cds--date-picker.cds--date-picker--single .cds--date-picker__input,
-.objects-table .cds--date-picker.cds--date-picker--single .cds--date-picker__input {
+.items-table .cds--date-picker.cds--date-picker--single .cds--date-picker__input {
   inline-size: 100%;
 }
 /* The input sits in an unclassed span inside the flex wrapper; let it grow. */
 .form-page .cds--date-picker-input__wrapper > span,
-.objects-table .cds--date-picker-input__wrapper > span {
+.items-table .cds--date-picker-input__wrapper > span {
   flex: 1;
 }
 /* Date & time: the date stretches, the time keeps its compact width; no gap between them. */
@@ -947,7 +947,7 @@ body {
 }
 /* Checklist: each row's checkbox in front of its text, in view and editor alike (so the text
    stays put when editing starts). */
-/* Its box sits where a Checkbox field's does (object pages give both the same inset), a gap
+/* Its box sits where a Checkbox field's does (item pages give both the same inset), a gap
    before the item's text. */
 /* A first "+" (empty list) sits at the field's top like any row, not pulled up. */
 .list-input__row.list-input__add:first-child {
@@ -998,7 +998,7 @@ body {
   letter-spacing: var(--cds-body-compact-01-letter-spacing);
   cursor: pointer;
 }
-.object-field--no-label .checkbox-field__name {
+.item-field--no-label .checkbox-field__name {
   display: none;
 }
 .checklist-row__done {
@@ -1072,11 +1072,11 @@ body {
   }
 }
 
-/* Images that open the lightbox (ui/Lightbox.tsx) on click; not card covers (they open the object). */
+/* Images that open the lightbox (ui/Lightbox.tsx) on click; not card covers (they open the item). */
 img[data-lightbox] {
   cursor: zoom-in;
 }
-.object-card__cover img[data-lightbox],
+.item-card__cover img[data-lightbox],
 .md-view--excerpt img[data-lightbox] {
   cursor: inherit;
 }
@@ -1434,10 +1434,10 @@ img[data-lightbox] {
 :is(.md-editor__content pre, .code-editor__highlight) .token.punctuation,
 :is(.md-editor__content pre, .code-editor__highlight) .token.entity { color: var(--code-operator); }
 
-/* Object fields read one step up Carbon's type scale (body-compact-02, body-02, label-02).
+/* Item fields read one step up Carbon's type scale (body-compact-02, body-02, label-02).
    Overriding the tokens, not individual sizes, scales Carbon's inputs, dropdowns and labels,
    the markdown text and the read-only values together, so view and edit stay identical. */
-.object-fields {
+.item-fields {
   --cds-body-compact-01-font-size: 1rem;
   --cds-body-compact-01-line-height: 1.375;
   --cds-body-compact-01-letter-spacing: 0;
@@ -1452,11 +1452,11 @@ img[data-lightbox] {
 /* Space above a multi-line value (markdown, HTML): the same as above one line of text in a
    2rem box, so the gap under a label is the same for every field. */
 :root,
-.object-fields {
+.item-fields {
   --block-pad-top: calc((2rem - 1px - var(--cds-body-compact-01-font-size) * var(--cds-body-compact-01-line-height)) / 2);
 }
 
-/* Object view (read-only record). Each field mirrors its edit-form input: same label,
+/* Item view (read-only record). Each field mirrors its edit-form input: same label,
    same height (2rem, Carbon's small inputs) and inner padding (1rem), so view and edit don't jump. */
 /* Same box model as .cds--form-item, so labels take exactly the same space. */
 .view-field {
@@ -1499,13 +1499,13 @@ img[data-lightbox] {
   display: block;
   padding: var(--block-pad-top) 1rem 0.75rem;
 }
-/* A template's rendered result (HTML, Markdown) is a block like a markdown field: the same
+/* A component's rendered result (HTML, Markdown) is a block like a markdown field: the same
    space above and below, before the line under the field. */
-.view-field__value--template:has(> :is(.html-frame, .md-view)) {
+.view-field__value--component:has(> :is(.html-frame, .md-view)) {
   display: block;
   padding-block: var(--block-pad-top) 0.75rem;
 }
-/* HTML: its frame as a block like a template's. */
+/* HTML: its frame as a block like a component's. */
 .view-field__value--html:not(.view-field__value--empty) {
   display: block;
   padding-block: var(--block-pad-top) 0.75rem;
@@ -1554,24 +1554,24 @@ img[data-lightbox] {
   flex-direction: column;
   gap: var(--cds-spacing-03); /* same as the editor's item rows (Carbon Stack gap 3) */
 }
-.object-view__tags,
-.object-view__links {
+.item-view__tags,
+.item-view__links {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
 }
-.object-view__tags {
+.item-view__tags {
   gap: 0.5rem;
 }
-.object-view__tags .cds--tag {
+.item-view__tags .cds--tag {
   margin: 0;
 }
-.object-view__muted {
+.item-view__muted {
   color: var(--cds-text-secondary);
 }
 /* A read-only image keeps its own width, at the start of the field (not stretched by the
    field's column, which would centre it). */
-.object-view__image {
+.item-view__image {
   align-self: flex-start;
   display: block;
   max-width: 100%;
@@ -1579,43 +1579,43 @@ img[data-lightbox] {
   object-fit: contain;
 }
 
-/* Object cards (objects list on narrow screens) */
+/* Item cards (items list on narrow screens) */
 /* Cards: a responsive grid, the same gap between rows and columns at every width. */
-.object-cards {
+.item-cards {
   display: grid;
   /* Columns are counted in CardsView (useCardColumns): the count whose card width is closest to the target. */
   grid-template-columns: repeat(var(--card-columns, 4), minmax(0, 1fr));
   gap: var(--cds-spacing-05);
 }
-.object-card__cover {
+.item-card__cover {
   margin: calc(-1 * var(--cds-spacing-05)) calc(-1 * var(--cds-spacing-05)) var(--cds-spacing-05);
   background: var(--cds-layer-accent-01);
 }
 /* Around a whole-shown image: its average colour, nudged a few percent towards the theme's
    layer colour (a touch lighter in light themes, darker in dark ones). */
-.object-card__cover[style*="--cover-tint"] {
+.item-card__cover[style*="--cover-tint"] {
   background: color-mix(in srgb, var(--cover-tint) 92%, var(--cds-layer-01));
 }
 /* Every cover area has the view's shape (--cover-ratio). A fixed shape shows the image whole
    inside it; "automatic" (the images' average shape) fills it, cropping what sticks out. */
-.object-card__cover img {
+.item-card__cover img {
   display: block;
   inline-size: 100%;
   aspect-ratio: var(--cover-ratio, 4 / 3);
   object-fit: contain;
 }
-.object-cards--auto-ratio .object-card__cover img {
+.item-cards--auto-ratio .item-card__cover img {
   object-fit: cover;
 }
 /* A markdown cover: the text in the cover's shape, cut off where it doesn't fit, in Carbon's
    secondary text colour (search excerpts are height-capped; covers aren't). */
-.object-card__cover--markdown {
+.item-card__cover--markdown {
   aspect-ratio: var(--cover-ratio, 4 / 3);
   overflow: hidden;
   background: none; /* part of the card, separated from its text by a rule */
   border-block-end: 1px solid var(--cds-border-subtle);
 }
-.object-card__cover--markdown .md-editor__content.md-view--excerpt {
+.item-card__cover--markdown .md-editor__content.md-view--excerpt {
   /* The text fills the cover and fades out just above the rule, showing that it continues. */
   block-size: 100%;
   box-sizing: border-box;
@@ -1630,17 +1630,17 @@ img[data-lightbox] {
   color: var(--cds-text-helper); /* subtle: a preview, not the card's text */
 }
 /* A card without any text is just its cover, edge to edge. */
-.object-card--image-only .object-card__cover {
+.item-card--image-only .item-card__cover {
   margin-block-end: calc(-1 * var(--cds-spacing-05));
 }
 /* Cover on the left: the cover takes two fifths of the card, from its top to its bottom edge
    (the image centred in it at the view's shape), the title and fields beside it. */
-.object-card--cover-left {
+.item-card--cover-left {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   align-items: start;
 }
-.object-card--cover-left .object-card__cover {
+.item-card--cover-left .item-card__cover {
   align-self: stretch;
   display: flex;
   flex-direction: column;
@@ -1648,79 +1648,87 @@ img[data-lightbox] {
   margin: calc(-1 * var(--cds-spacing-05)) var(--cds-spacing-05) calc(-1 * var(--cds-spacing-05)) calc(-1 * var(--cds-spacing-05));
 }
 /* "Automatic" shape: the image fills the whole column, cropped like the top covers. */
-.object-cards--auto-ratio .object-card--cover-left .object-card__cover:has(> img) {
+.item-cards--auto-ratio .item-card--cover-left .item-card__cover:has(> img) {
   position: relative;
   min-block-size: 6rem;
 }
-.object-cards--auto-ratio .object-card--cover-left .object-card__cover > img {
+.item-cards--auto-ratio .item-card--cover-left .item-card__cover > img {
   position: absolute;
   inset: 0;
   block-size: 100%;
   aspect-ratio: auto;
 }
-.object-card--cover-left .object-card__cover--markdown {
+.item-card--cover-left .item-card__cover--markdown {
   border-block-end: 0;
   border-inline-end: 1px solid var(--cds-border-subtle);
 }
-/* In view settings the checkbox spans the options grid. */
-.view-options > .cds--form-item.cds--checkbox-wrapper {
+/* In view settings the option checkboxes span the options grid, one per 2rem row like the rows
+   of the field list below them (.field-order__row), with no gap between them. */
+.view-options__checks {
   grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
 }
-.object-cards__empty {
+.view-options__checks > .cds--form-item.cds--checkbox-wrapper {
+  margin: 0;
+  min-block-size: 2rem;
+  justify-content: center;
+}
+.item-cards__empty {
   margin: 0;
   padding: 1rem;
   background: var(--cds-layer-01);
 }
-.object-card__title {
+.item-card__title {
   font-size: 1rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
   overflow-wrap: anywhere;
 }
 /* Label and value side by side, labels in a fixed column. */
-.object-card__fields {
+.item-card__fields {
   display: grid;
   grid-template-columns: 6rem minmax(0, 1fr);
   gap: 0.375rem 1rem;
   align-items: baseline;
 }
-.object-card__field {
+.item-card__field {
   display: contents;
 }
-.object-card__field dt {
+.item-card__field dt {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.object-card__field dd {
+.item-card__field dd {
   margin: 0;
   overflow-wrap: anywhere;
 }
 /* Nothing may overflow a card, however narrow the card width setting makes it: the card is a
    size container; below 16rem labels stack above their values, and every child can shrink. */
-.object-card {
+.item-card {
   container-type: inline-size;
   min-inline-size: 0;
   overflow: hidden;
 }
-.object-card__fields > *,
-.object-card__field dd > * {
+.item-card__fields > *,
+.item-card__field dd > * {
   min-inline-size: 0;
   max-inline-size: 100%;
 }
 @container (max-width: 16rem) {
-  .object-card__fields {
+  .item-card__fields {
     grid-template-columns: minmax(0, 1fr);
     row-gap: 0;
   }
-  .object-card__field dd {
+  .item-card__field dd {
     margin-block-end: var(--cds-spacing-03);
   }
 }
 
-/* Objects page: view tabs, toolbar, view settings panel */
+/* Items page: view tabs, toolbar, view settings panel */
 /* Icon buttons sit flush, as everywhere (tab strip, page header): only the search box keeps a
    gap before them. */
-.objects-toolbar {
+.items-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1730,12 +1738,12 @@ img[data-lightbox] {
 }
 /* The search box takes whatever the buttons leave, so extra buttons (save, reset, …) shrink it
    instead of wrapping the row; it only wraps once it would get narrower than spacing-13. */
-.objects-toolbar > .cds--search {
+.items-toolbar > .cds--search {
   flex: 1 1 0;
   min-inline-size: var(--cds-spacing-13);
   margin-inline-end: var(--cds-spacing-03);
 }
-.objects-toolbar > :not(.cds--search) {
+.items-toolbar > :not(.cds--search) {
   flex: none;
 }
 .view-kind {
@@ -1787,7 +1795,7 @@ img[data-lightbox] {
 .query-editor section > .cds--select {
   align-self: stretch;
 }
-/* "Add filter" sits the same distance below the rules as below "Showing all objects.". */
+/* "Add filter" sits the same distance below the rules as below "Showing all items.". */
 .query-editor .helper {
   margin: 0;
 }
@@ -1910,34 +1918,34 @@ img[data-lightbox] {
 /* The table is as wide as its content (no wider than the pane), so columns sit left and keep
    their text on one line while there is room; only when the pane is too narrow does the
    browser wrap them, in proportion to their content. */
-.objects-table .cds--data-table {
+.items-table .cds--data-table {
   inline-size: auto;
 }
 /* A percentage column width would stretch an auto-width table to the pane. */
-.objects-table .row-actions {
+.items-table .row-actions {
   inline-size: auto;
 }
-.objects-table td {
+.items-table td {
   overflow-wrap: anywhere;
 }
 /* Names and titles (link cells) break only between words: breaking anywhere would let a long
    neighbouring cell squeeze them until a word splits. */
-.objects-table td:has(> a) {
+.items-table td:has(> a) {
   overflow-wrap: break-word;
 }
-.objects-table :is(td, th).row-actions {
+.items-table :is(td, th).row-actions {
   text-align: end;
 }
 /* Small (2rem) controls fill a small row exactly: no vertical cell padding around them. */
-.objects-table td.row-actions,
-.objects-table .table-add-row td {
+.items-table td.row-actions,
+.items-table .table-add-row td {
   padding-block: 0;
 }
 /* Add row: inputs are laid over their cells (out of the flow), so opening the row never
    changes column widths. A small gap (spacing-02 per side) keeps neighbouring inputs apart;
    each input's text inset shrinks by the same amount, so typed text starts exactly below the
    column's text (cell padding 1rem = gap + input inset). */
-.objects-table .table-add-row td {
+.items-table .table-add-row td {
   position: relative;
   block-size: calc(2rem + 1px); /* as tall as the idle "+" row (2rem button + its border) */
 }
@@ -1966,14 +1974,14 @@ img[data-lightbox] {
 .cell-overlay :is(.cds--date-picker, .cds--date-picker-container, .cds--date-picker-input__wrapper, .cds--date-picker__input, .cds--time-picker, .cds--number, .cds--number input[type="number"], .cds--list-box__wrapper, .cds--list-box, .cds--text-input-wrapper) {
   inline-size: 100%;
 }
-.objects-table .table-add-row :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box__field, .cds--text-input--empty) {
+.items-table .table-add-row :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box__field, .cds--text-input--empty) {
   padding-inline-start: calc(1rem - var(--cds-spacing-02));
 }
-/* Editing in a cell without content jump (same rules as the object page): the input covers
+/* Editing in a cell without content jump (same rules as the item page): the input covers
    the cell exactly. Carbon cells and inputs both indent text by 1rem and use body-compact-01,
    so the text stays where it was; the input is the row's height (Carbon "sm" rows, 2rem),
    so the row doesn't grow. */
-.objects-table td.cell--editing {
+.items-table td.cell--editing {
   position: relative;
 }
 .cell-sizer {
@@ -1993,7 +2001,7 @@ img[data-lightbox] {
   justify-content: center;
 }
 /* The cell's text sits 1px lower than an input's (its bottom border lifts the input's text). */
-.objects-table td.cell--editing :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box) {
+.items-table td.cell--editing :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box) {
   block-size: 2rem;
   padding-block-start: var(--cds-spacing-01);
 }
@@ -2019,7 +2027,7 @@ img[data-lightbox] {
 /* Dates read in Carbon's date input style (code-02), like their editor, and on one line: a
    date (and its time) never wraps, so the column is never narrower than one and the cell
    editor, a single line, matches the cell. */
-.objects-table td:is(.cell--date, .cell--datetime) {
+.items-table td:is(.cell--date, .cell--datetime) {
   font-family: var(--cds-code-02-font-family);
   letter-spacing: var(--cds-code-02-letter-spacing);
   white-space: nowrap;
@@ -2054,8 +2062,8 @@ img[data-lightbox] {
 .views-bar__spacer {
   flex: 1;
 }
-/* Object pages: a little more room between the object view tabs and the first field. */
-.object-view .views-bar {
+/* Item pages: a little more room between the item view tabs and the first field. */
+.item-view .views-bar {
   margin-bottom: var(--cds-spacing-06);
 }
 /* In a toolbar popover, view-type options stack in one column. */
@@ -2063,7 +2071,7 @@ img[data-lightbox] {
   grid-template-columns: minmax(0, 1fr);
 }
 /* Image columns centre their thumbnails; the header is left-aligned like every other column. */
-.objects-table td.cell--image .image-thumb {
+.items-table td.cell--image .image-thumb {
   margin-inline: auto;
 }
 /* An empty markdown field is as tall as the empty editor it turns into (one body-01 line plus
@@ -2073,21 +2081,21 @@ img[data-lightbox] {
 }
 /* The idle add row's "+" icon starts where the column's text starts: the 2rem icon button
    centres a 1rem icon, so the cell's 1rem inset shrinks by that 0.5rem. */
-.objects-table td.table-add-row__plus {
+.items-table td.table-add-row__plus {
   padding-inline-start: calc(1rem - var(--cds-spacing-03));
 }
-/* Object details popover: label / value pairs. */
-.object-info {
+/* Item details popover: label / value pairs. */
+.item-info {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--cds-spacing-03) var(--cds-spacing-05);
   font-size: var(--cds-body-compact-01-font-size);
   line-height: var(--cds-body-compact-01-line-height);
 }
-.object-info dt {
+.item-info dt {
   color: var(--cds-text-secondary);
 }
-/* An icon followed by its text (field labels with their kind, types in dropdowns). */
+/* An icon followed by its text (field labels with their kind, collections in dropdowns). */
 .icon-label {
   display: inline-flex;
   align-items: center;
@@ -2112,46 +2120,46 @@ img[data-lightbox] {
    pulled 1rem left so its box's own 1rem inset puts the text at the edge (the box border sits
    1rem further left; its right edge stays); labels and checkboxes, without an inset, get the
    1rem back as padding. */
-.object-fields > :not(.form-actions, .image-input, .view-field--image, .object-field--no-label),
-.object-field--no-label > :not(.image-input, .view-field--image) {
+.item-fields > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label),
+.item-field--no-label > :not(.image-input, .view-field--image) {
   margin-inline-start: calc(-1 * var(--cds-spacing-05));
 }
-.object-fields > :not(.form-actions, .image-input, .view-field--image) .cds--label,
-.object-fields .checkbox-field,
-.object-fields .checklist-box {
+.item-fields > :not(.form-actions, .image-input, .view-field--image) .cds--label,
+.item-fields .checkbox-field,
+.item-fields .checklist-box {
   padding-inline-start: var(--cds-spacing-05);
 }
 /* An image has no inner inset: its edge itself lines up with the text. */
-/* The form for a new object is an ordinary form: its boxes (not their text) line up with the
+/* The form for a new item is an ordinary form: its boxes (not their text) line up with the
    page edge, like the image drop zone and the buttons. */
-.object-fields.object-fields--form > :not(.form-actions, .image-input, .object-field--no-label) {
+.item-fields.item-fields--form > :not(.form-actions, .image-input, .item-field--no-label) {
   margin-inline-start: 0;
 }
-.object-fields.object-fields--form > :not(.form-actions, .image-input) .cds--label,
-.object-fields.object-fields--form .checkbox-field,
-.object-fields.object-fields--form .checklist-box {
+.item-fields.item-fields--form > :not(.form-actions, .image-input) .cds--label,
+.item-fields.item-fields--form .checkbox-field,
+.item-fields.item-fields--form .checklist-box {
   padding-inline-start: 0;
 }
 /* Phones: no room to push boxes to the pane edge. Boxes sit half an inset in from both sides
    (centred, a little space each side) and labels follow, so text stays near the title's edge. */
 @media (max-width: 42rem) {
-  .object-fields:not(.object-fields--form) > :not(.form-actions, .image-input, .view-field--image, .object-field--no-label),
-  .object-field--no-label > :not(.image-input, .view-field--image) {
+  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label),
+  .item-field--no-label > :not(.image-input, .view-field--image) {
     margin-inline: calc(-0.5 * var(--cds-spacing-05));
   }
-  .object-fields:not(.object-fields--form) > :not(.form-actions, .image-input, .view-field--image) .cds--label,
-  .object-fields:not(.object-fields--form) .checkbox-field,
-  .object-fields:not(.object-fields--form) .checklist-box {
+  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image) .cds--label,
+  .item-fields:not(.item-fields--form) .checkbox-field,
+  .item-fields:not(.item-fields--form) .checklist-box {
     padding-inline-start: calc(0.5 * var(--cds-spacing-05));
   }
 }
-/* An object's title is editable in place: the input's text inset is cancelled by pulling the box
+/* An item's title is editable in place: the input's text inset is cancelled by pulling the box
    left, so the text doesn't move when editing starts. */
-.object-title {
+.item-title {
   cursor: text;
 }
 /* Editing: the same block as at rest (it wraps the same way), marked by an outline around it. */
-.object-title--editing {
+.item-title--editing {
   /* The field background of the page's other editors; the shadow spreads it around the text
      without taking any room. */
   background: var(--cds-field);
@@ -2170,69 +2178,69 @@ img[data-lightbox] {
   max-inline-size: none;
 }
 
-/* Templates: the list table and the editor's formula / test values. */
-.templates-table__code,
-.template-code :is(input, textarea),
-.template-test code,
-.template-test__value,
+/* Components: the list table and the editor's formula / test values. */
+.components-table__code,
+.component-code :is(input, textarea),
+.component-test code,
+.component-test__value,
 .field-row__param {
   font-family: var(--cds-code-02-font-family);
   letter-spacing: var(--cds-code-02-letter-spacing);
 }
-.templates-table__code {
+.components-table__code {
   overflow-wrap: anywhere;
 }
-/* A long template is cut off after two lines, in a column that stops growing at 40rem. */
-.templates-table__excerpt {
+/* A long component is cut off after two lines, in a column that stops growing at 40rem. */
+.components-table__excerpt {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
   max-inline-size: 40rem;
 }
-.templates-table__code input,
-.templates-table__code .cell-inline-editor .cell-textarea {
+.components-table__code input,
+.components-table__code .cell-inline-editor .cell-textarea {
   font-family: var(--cds-code-02-font-family);
   letter-spacing: var(--cds-code-02-letter-spacing);
 }
-.template-test {
+.component-test {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
   gap: var(--cds-spacing-05);
   align-items: end;
 }
-.template-test__result {
+.component-test__result {
   grid-column: 1 / -1;
 }
-/* The result preview: as wide as the inputs above it (not pulled left like on object pages), with
+/* The result preview: as wide as the inputs above it (not pulled left like on item pages), with
    room between the rendered result and its bottom rule. */
-.template-test__preview .view-field__value {
+.component-test__preview .view-field__value {
   padding-block-end: var(--cds-spacing-05);
 }
-.template-test__value {
+.component-test__value {
   min-block-size: 2rem;
   display: flex;
   align-items: center;
   overflow-wrap: anywhere;
 }
-/* A failing template section: Carbon's warning icon before its message (TemplateWarning). The
+/* A failing component section: Carbon's warning icon before its message (ComponentWarning). The
    icon's mark is drawn in gray 100 on the yellow, as in Carbon's own warnings (no token for it). */
-.template-warning {
+.component-warning {
   display: inline-flex;
   align-items: baseline;
   gap: var(--cds-spacing-02);
   color: var(--cds-text-secondary);
 }
-.template-warning svg {
+.component-warning svg {
   flex: none;
   align-self: center;
   fill: var(--cds-support-warning);
 }
-.template-warning svg [data-icon-path="inner-path"] {
+.component-warning svg [data-icon-path="inner-path"] {
   fill: #161616;
   opacity: 1;
 }
-/* Type editor: a template field's variable → field mapping, under its row. */
+/* Collection editor: a component field's variable → field mapping, under its row. */
 .field-row__mapping {
   grid-column: 1 / -1;
   display: grid;
@@ -2335,7 +2343,7 @@ img[data-lightbox] {
 /* While a pane widens, a table is briefly narrower than its box (FillTable widens its last
    column from a ResizeObserver): the box has the rows' colour, so no page colour flashes beside
    them. Stacked as cards (narrow), the box stays clear. */
-.objects-table .cds--data-table-content {
+.items-table .cds--data-table-content {
   background: var(--cds-layer);
   /* Carbon makes this box scroll sideways (overflow-x: auto). Tables here fit their pane (shared
      widths shrink, stacked cards), so a scrollbar could only come from sub-pixel rounding or an
@@ -2347,7 +2355,7 @@ img[data-lightbox] {
 .table-wrap--scroll .cds--data-table-content {
   overflow-x: auto;
 }
-.table-wrap--scroll .objects-table td {
+.table-wrap--scroll .items-table td {
   overflow-wrap: break-word;
 }
 /* Set by FillTable (views/TableView.tsx): the pane is narrow, or the columns don't fit it. */
@@ -2357,28 +2365,28 @@ img[data-lightbox] {
   overflow: visible;
 }
 .table-wrap[data-stacked] {
-  .objects-table thead {
+  .items-table thead {
     display: none;
   }
-  .objects-table :is(table, tbody) {
+  .items-table :is(table, tbody) {
     display: block;
     inline-size: auto !important; /* FillTable sizes columns; cards don't have any */
     background: none;
   }
   /* Each row is its own small table, with space before the next. */
-  .objects-table tbody {
+  .items-table tbody {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05);
   }
   /* Labels in one column as wide as the longest of the card (subgrid), values beside them. */
-  .objects-table tbody tr {
+  .items-table tbody tr {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
     block-size: auto;
     background: none;
   }
-  .objects-table tbody td {
+  .items-table tbody td {
     display: grid;
     grid-column: 1 / -1;
     grid-template-columns: subgrid;
@@ -2394,7 +2402,7 @@ img[data-lightbox] {
   }
   /* The labels are the card's header column, shaded like the table's header row: each label
      fills its line's label column, out to the card's edge; a gap before the value. */
-  .objects-table tbody td[data-label]::before {
+  .items-table tbody td[data-label]::before {
     content: attr(data-label);
     display: flex;
     align-items: center;
@@ -2403,7 +2411,7 @@ img[data-lightbox] {
     margin-inline-start: calc(-1 * var(--cds-spacing-05));
     padding: var(--cds-spacing-02) var(--cds-spacing-05);
     background: var(--cds-layer-accent-01);
-    /* The label is the body font even where the value is code-02 (dates, template code). */
+    /* The label is the body font even where the value is code-02 (dates, component code). */
     font-family: var(--font-sans);
     letter-spacing: var(--cds-body-compact-01-letter-spacing);
     font-weight: 600;
@@ -2413,12 +2421,12 @@ img[data-lightbox] {
   /* Editable values: the hover reaches the card's edge on the right and the label on the left
      (the line's padding is 1rem at the sides, 0.25rem above and below); the padding brings the
      text back to where it was. */
-  .objects-table tbody td .cell-editable {
+  .items-table tbody td .cell-editable {
     margin: calc(-1 * var(--cds-spacing-02)) calc(-1 * var(--cds-spacing-05));
     padding: var(--cds-spacing-02) var(--cds-spacing-05);
     align-self: stretch; /* the line's full height, not just the text's */
   }
-  .objects-table tbody td .cell-edit-box {
+  .items-table tbody td .cell-edit-box {
     align-self: stretch;
   }
   /* An editing cell: the editor takes the value's place, beside the label. The box around the
@@ -2426,34 +2434,34 @@ img[data-lightbox] {
      reaches back over the label gap and out to the card's edge and the line's padding, because the
      input indents its text by the 1rem a wide cell has as padding: the text stays where the
      value's was. */
-  .objects-table tbody td.cell--editing {
+  .items-table tbody td.cell--editing {
     position: static;
   }
-  .objects-table tbody td.cell--editing > .cell-edit-box {
+  .items-table tbody td.cell--editing > .cell-edit-box {
     display: block;
     position: relative;
     grid-column: 2;
   }
-  .objects-table tbody td.cell--editing .cell-edit-box > .cell-overlay {
+  .items-table tbody td.cell--editing .cell-edit-box > .cell-overlay {
     inset: calc(-1 * var(--cds-spacing-02)) calc(-1 * var(--cds-spacing-05));
   }
   /* The editor is centred on the value's own line here (not on a cell with a bottom border), so
      the input's text needs no 1px lift. */
-  .objects-table tbody td.cell--editing .cell-edit-box :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box) {
+  .items-table tbody td.cell--editing .cell-edit-box :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box) {
     padding-block-start: 0;
   }
   /* A wrapped text editor: the cell's padding here is 0.25rem / 1rem (not a wide cell's), and it
      must end at the card's edge, not 2px past it (clipped there). */
-  .objects-table tbody td .cell-inline-editor .cell-textarea {
+  .items-table tbody td .cell-inline-editor .cell-textarea {
     margin: calc(-1 * var(--cds-spacing-02)) calc(-1 * var(--cds-spacing-05));
     padding: var(--cds-spacing-02) var(--cds-spacing-05);
   }
   /* The row's actions: a menu in the card's top-right corner, over its first line (which keeps
      room for it), so they take no line of their own. The icons of a wide table are hidden. */
-  .objects-table tbody tr {
+  .items-table tbody tr {
     position: relative;
   }
-  .objects-table tbody td.row-actions {
+  .items-table tbody td.row-actions {
     position: absolute;
     inset-block-start: 0;
     inset-inline-end: 0;
@@ -2464,38 +2472,38 @@ img[data-lightbox] {
     inline-size: auto !important;
     min-block-size: 0;
   }
-  .objects-table tbody td.row-actions .row-action-icon {
+  .items-table tbody td.row-actions .row-action-icon {
     display: none;
   }
-  .objects-table tbody td.row-actions .row-actions__menu {
+  .items-table tbody td.row-actions .row-actions__menu {
     display: inline-flex;
   }
   /* The menu's icons keep their ghost buttons' size; the dark popover is the md-table-menu one. */
-  .objects-table tbody tr > td:first-child {
+  .items-table tbody tr > td:first-child {
     padding-inline-end: calc(var(--cds-spacing-05) + 2rem);
   }
-  .objects-table tbody td.row-actions:empty,
-  .objects-table tbody td:not([data-label]):empty {
+  .items-table tbody td.row-actions:empty,
+  .items-table tbody td:not([data-label]):empty {
     display: none;
   }
-  /* No "+" row as a card of its own: the page's "New …" button adds objects here. */
-  .objects-table tbody tr.table-add-row--idle {
+  /* No "+" row as a card of its own: the page's "New …" button adds items here. */
+  .items-table tbody tr.table-add-row--idle {
     display: none;
   }
   /* Images sit at the start of their value, like the other values (wide tables centre them). */
-  .objects-table tbody td.cell--image .image-thumb {
+  .items-table tbody td.cell--image .image-thumb {
     margin-inline: 0;
   }
   /* No row hover on cards: Carbon's hover adds borders (things shift) and tints the whole row,
      icons included; the icons are buttons with their own hover. */
-  .objects-table .cds--data-table tbody tr:hover td {
+  .items-table .cds--data-table tbody tr:hover td {
     border-block-start: 0;
     border-block-end: 1px solid var(--cds-border-subtle);
     background: var(--cds-layer-01);
     color: inherit;
   }
-  .objects-table .cds--data-table tbody tr:hover,
-  .objects-table .cds--data-table tbody tr:hover td.row-actions {
+  .items-table .cds--data-table tbody tr:hover,
+  .items-table .cds--data-table tbody tr:hover td.row-actions {
     border: 0;
     background: none;
   }
@@ -2519,24 +2527,24 @@ img[data-lightbox] {
 .field-order__add {
   margin-block-start: var(--cds-spacing-05);
 }
-/* Object page layout popover. */
-.object-layout {
+/* Item page layout popover. */
+.item-layout {
   display: flex;
   flex-direction: column;
   gap: var(--cds-spacing-05);
   min-inline-size: 16rem;
 }
-/* A field shown without its name (object page layout). The wrapper is no box of its own, so the
+/* A field shown without its name (item page layout). The wrapper is no box of its own, so the
    field stays a direct item of the stack (same gaps). */
-.object-field--no-label {
+.item-field--no-label {
   display: contents;
 }
-.object-field--no-label :is(.cds--label, legend.cds--label) {
+.item-field--no-label :is(.cds--label, legend.cds--label) {
   display: none;
 }
 
-/* Template editor: a text area over a highlighted copy of its text, line numbers beside it
-   (ui/TemplateCodeEditor.tsx). Both layers share font, padding and wrapping exactly; the text
+/* Component editor: a text area over a highlighted copy of its text, line numbers beside it
+   (ui/ComponentCodeEditor.tsx). Both layers share font, padding and wrapping exactly; the text
    area's own text is transparent, so only its caret and selection show. The highlighted copy
    sets the height; the text area covers it. */
 .code-editor {
@@ -2594,7 +2602,7 @@ img[data-lightbox] {
   color: var(--cds-text-primary);
   pointer-events: none;
 }
-/* Editing a field in place (HTML, a template field on an object page): as tall as the code, so a
+/* Editing a field in place (HTML, a component field on an item page): as tall as the code, so a
    one-line value stays one line high. */
 .field-editor .code-editor__highlight {
   min-block-size: 0;
@@ -2622,7 +2630,7 @@ img[data-lightbox] {
   background: var(--cds-layer-accent-01);
 }
 
-/* A template's HTML: a sandboxed frame as wide as the field, as tall as its content (it reports
+/* A component's HTML: a sandboxed frame as wide as the field, as tall as its content (it reports
    its height); on a card cover it fills the cover and lets clicks through to the card. */
 .html-frame {
   display: block;
@@ -2637,7 +2645,7 @@ img[data-lightbox] {
   block-size: 100%;
   pointer-events: none;
 }
-/* An image URL (from a template) that can't be loaded: a box like the image upload area. */
+/* An image URL (from a component) that can't be loaded: a box like the image upload area. */
 .image-missing {
   box-sizing: border-box;
   inline-size: 100%;
@@ -2664,32 +2672,32 @@ img[data-lightbox] {
   padding: 0;
   border: 0;
 }
-.object-card__cover--html,
-.object-card__cover:has(> .image-missing) {
+.item-card__cover--html,
+.item-card__cover:has(> .image-missing) {
   position: relative;
   aspect-ratio: var(--cover-ratio, 4 / 3);
   overflow: hidden;
 }
-.object-card__cover .image-missing {
+.item-card__cover .image-missing {
   position: absolute;
   inset: 0;
   min-block-size: 0;
 }
-.template-html-note {
+.component-html-note {
   color: var(--cds-text-secondary);
 }
 
-/* Templates on an object view only (layout popover): one block per template, under a rule. */
-.view-templates {
+/* Components on an item view only (layout popover): one block per component, under a rule. */
+.view-components {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--cds-spacing-05);
 }
-.view-templates > .cds--label {
+.view-components > .cds--label {
   margin: 0;
 }
-.view-templates__item {
+.view-components__item {
   display: flex;
   flex-direction: column;
   gap: var(--cds-spacing-03);
@@ -2697,12 +2705,12 @@ img[data-lightbox] {
   padding-block-start: var(--cds-spacing-05);
   border-block-start: 1px solid var(--cds-border-subtle);
 }
-.view-templates__head {
+.view-components__head {
   display: flex;
   align-items: flex-end;
   gap: var(--cds-spacing-02);
 }
-.view-templates__head > .cds--form-item {
+.view-components__head > .cds--form-item {
   flex: 1;
   min-inline-size: 0;
 }

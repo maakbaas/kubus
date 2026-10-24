@@ -109,18 +109,9 @@ function schemaHash(text: string): number {
  * in place, and stored values that name them are updated. Each step applies only when the old
  * name is still there. (Pre-alpha: kept until no database with the old names exists.)
  */
-const RENAMES: ({ table: string; to: string } | { table: string; column: string; to: string })[] = [
-  { table: "expressions", to: "templates" },
-  { table: "fields", column: "expression_id", to: "template_id" },
-  { table: "fields", column: "expression_args", to: "template_args" },
-  { table: "object_types", column: "entry_views", to: "object_views" },
-  { table: "objects", column: "entry_view_id", to: "object_view_id" },
-];
-const RENAMED_VALUES = [
-  { table: "fields", sql: "UPDATE fields SET kind = 'template' WHERE kind = 'expression'" },
-  { table: "bookmarks", sql: "UPDATE bookmarks SET kind = 'object' WHERE kind = 'entry'" },
-  { table: "templates", sql: "UPDATE templates SET code = REPLACE(code, '$entry', '$object') WHERE code LIKE '%$entry%'" },
-];
+const RENAMES: ({ table: string; to: string } | { table: string; column: string; to: string })[] = [];
+/** Statements updating stored values that name renamed things, run after RENAMES. */
+const RENAMED_VALUES: { table: string; sql: string }[] = [];
 
 function applyRenames(db: Db) {
   const hasTable = (name: string) => db.selectValue("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", [name]) === 1;
@@ -177,7 +168,7 @@ function normalizeSql(sql: string): string {
 
 /**
  * Brings an existing database up to schema.sql while keeping its data. Missing tables and
- * indexes (and triggers) are created. A table whose definition changed is rebuilt (SQLite's documented
+ * indexes (and triggers) are created, removed ones dropped. A table whose definition changed is rebuilt (SQLite's documented
  * procedure, run while foreign keys are off): created anew from schema.sql, its rows copied
  * over by column name, the old table dropped and the new one renamed, its indexes recreated.
  * Returns false (nothing changed) when the rows can't be carried over (a column changed type
@@ -236,6 +227,13 @@ function upgradeInPlace(sqlite3: Db, db: Db): boolean {
       const current = have.get(g.name);
       if (current && !rebuilt.has(g.tbl_name) && normalizeSql(current.sql) === normalizeSql(g.sql)) continue;
       statements.push(`DROP TRIGGER IF EXISTS "${g.name}"`, g.sql);
+    }
+    // Tables, indexes and triggers schema.sql no longer has go (a removed table with its rows).
+    const wanted = new Set(target.map((o) => o.name));
+    for (const o of have.values()) {
+      if (wanted.has(o.name)) continue;
+      if (o.type === "table") statements.push(`DROP TABLE IF EXISTS "${o.name}"`);
+      else statements.unshift(`DROP ${o.type.toUpperCase()} IF EXISTS "${o.name}"`);
     }
     for (const sql of statements) db.exec(sql);
     return true;

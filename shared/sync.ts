@@ -24,15 +24,22 @@ const stamps = { created_at: "timestamp", updated_at: "timestamp", deleted_at: "
 /** In foreign-key order (referenced tables first). `meta` and the outbox are local only. */
 export const SYNC_TABLES: SyncTable[] = [
   {
-    name: "object_types",
+    name: "spaces",
+    key: ["id"],
+    version: "updated_at",
+    columns: { id: "text", name: "text", icon: "text", position: "int", ...stamps },
+  },
+  {
+    name: "collections",
     key: ["id"],
     version: "updated_at",
     columns: {
-      id: "text", name: "text", plural_name: "text", icon: "text", description: "text", object_views: "json", ...stamps,
+      id: "text", name: "text", plural_name: "text", icon: "text", description: "text", item_views: "json",
+      space_ids: "json", ...stamps,
     },
   },
   {
-    name: "templates",
+    name: "components",
     key: ["id"],
     version: "updated_at",
     columns: {
@@ -44,8 +51,8 @@ export const SYNC_TABLES: SyncTable[] = [
     key: ["id"],
     version: "updated_at",
     columns: {
-      id: "text", type_id: "text", name: "text", kind: "text", target_type_id: "text", template_id: "text",
-      template_args: "json", choice_filter: "json", toggle_icon: "text", position: "int", ...stamps,
+      id: "text", collection_id: "text", name: "text", kind: "text", target_collection_id: "text", component_id: "text",
+      component_args: "json", choice_filter: "json", toggle_icon: "text", position: "int", ...stamps,
     },
   },
   {
@@ -53,14 +60,14 @@ export const SYNC_TABLES: SyncTable[] = [
     key: ["id"],
     version: "updated_at",
     columns: {
-      id: "text", type_id: "text", name: "text", kind: "text", config: "json", position: "int", is_default: "int", ...stamps,
+      id: "text", collection_id: "text", name: "text", kind: "text", config: "json", position: "int", is_default: "int", ...stamps,
     },
   },
   {
-    name: "objects",
+    name: "items",
     key: ["id"],
     version: "updated_at",
-    columns: { id: "text", type_id: "text", object_view_id: "text", ...stamps },
+    columns: { id: "text", collection_id: "text", space_id: "text", item_view_id: "text", ...stamps },
   },
   {
     name: "files",
@@ -70,10 +77,10 @@ export const SYNC_TABLES: SyncTable[] = [
   },
   {
     name: "field_values",
-    key: ["object_id", "field_id"],
+    key: ["item_id", "field_id"],
     version: "updated_at",
     columns: {
-      object_id: "text", field_id: "text", value_text: "text", value_number: "number", value_date: "date",
+      item_id: "text", field_id: "text", value_text: "text", value_number: "number", value_date: "date",
       value_datetime: "timestamp", value_bool: "bool", value_ref: "text", value_file: "text", value_json: "json",
       updated_at: "timestamp",
     },
@@ -83,7 +90,8 @@ export const SYNC_TABLES: SyncTable[] = [
     key: ["id"],
     version: "updated_at",
     columns: {
-      id: "text", kind: "text", type_id: "text", target_id: "text", label: "text", position: "int", ...stamps,
+      id: "text", kind: "text", collection_id: "text", space_id: "text", target_id: "text", label: "text", position: "int",
+      ...stamps,
     },
   },
 ];

@@ -5,18 +5,18 @@ import { useStore } from "../app/store";
 import type { BookmarkKind } from "../domain/bookmarks";
 
 /**
- * Bookmark toggle for a view or an object: outlined = not bookmarked, filled = in the side nav.
+ * Bookmark toggle for a view or an item: outlined = not bookmarked, filled = in the side nav.
  * While shown it also keeps the bookmark's label in step with the current name.
  */
 export function BookmarkButton({
   kind,
-  typeId,
+  collectionId,
   targetId,
   label,
   onError,
 }: {
   kind: BookmarkKind;
-  typeId: string;
+  collectionId: string;
   targetId: string;
   label: string;
   onError(e: unknown): void;
@@ -34,7 +34,7 @@ export function BookmarkButton({
       align="bottom"
       label={marked ? "Remove bookmark" : "Bookmark"}
       aria-pressed={marked}
-      onClick={() => (marked ? repo.removeBookmark(targetId) : repo.addBookmark(kind, typeId, targetId, label)).catch(onError)}
+      onClick={() => (marked ? repo.removeBookmark(targetId) : repo.addBookmark(kind, collectionId, targetId, label)).catch(onError)}
     >
       {marked ? <BookmarkFilled /> : <Bookmark />}
     </IconButton>

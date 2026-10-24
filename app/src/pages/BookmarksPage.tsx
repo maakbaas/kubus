@@ -18,15 +18,15 @@ import {
 import { TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { bookmarkPath, type BookmarkKind } from "../domain/bookmarks";
-import { untitledLabel, type ObjectType } from "../domain/model";
+import { untitledLabel, type Collection } from "../domain/model";
 import { NewButton } from "../ui/NewButton";
-import { TypeIcon, ObjectTypeLabel } from "../ui/typeIcons";
+import { CollectionIcon, CollectionLabel } from "../ui/collectionIcons";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage } from "../ui/useConfirm";
 import { RowActions, rowButtonProps } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
 
-/** Something that can be bookmarked: one of a type's views or objects. */
+/** Something that can be bookmarked: one of a collection's views or items. */
 interface Target {
   kind: BookmarkKind;
   id: string;
@@ -38,10 +38,10 @@ interface Target {
 
 /**
  * All bookmarks as a table (name opens it; what it is: "Note" or "View of Notes"; remove), plus "New bookmark":
- * pick a type, then one of its views or objects.
+ * pick a collection, then one of its views or items.
  */
 export function BookmarksPage() {
-  const { repo, types, bookmarks } = useStore();
+  const { repo, collections, bookmarks } = useStore();
   const [error, setError] = useState<string>();
   const [adding, setAdding] = useState(false);
   const fail = (e: unknown) => setError(errorMessage(e));
@@ -50,7 +50,7 @@ export function BookmarksPage() {
     <>
       <PageHeader
         title="Bookmarks"
-        subtitle="Views and objects in the side nav. Bookmark one with its bookmark icon, or add one here."
+        subtitle="Views and items in the side nav. Bookmark one with its bookmark icon, or add one here."
         actions={<NewButton label="New bookmark" onClick={() => setAdding(true)} />}
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
@@ -64,24 +64,24 @@ export function BookmarksPage() {
             <TableHead>
               <TableRow>
                 <TableHeader>Name</TableHeader>
-                <TableHeader>Type</TableHeader>
+                <TableHeader>Collection</TableHeader>
                 <TableHeader aria-label="Actions" />
               </TableRow>
             </TableHead>
             <TableBody>
               {bookmarks.map((b) => {
-                const type = types.find((t) => t.id === b.typeId);
+                const collection = collections.find((t) => t.id === b.collectionId);
                 return (
                   <TableRow key={b.id}>
                     <TableCell data-label="Name">
                       <Link href={`#${bookmarkPath(b)}`}>{b.label}</Link>
                     </TableCell>
-                    <TableCell data-label="Type">
-                      {type && (
+                    <TableCell data-label="Collection">
+                      {collection && (
                         <span className="icon-label">
-                          <TypeIcon name={type.icon} />
-                          {/* "Note" for an object, "View of Notes" for a view. */}
-                          {b.kind === "view" ? `View of ${type.pluralName}` : type.name}
+                          <CollectionIcon name={collection.icon} />
+                          {/* "Note" for an item, "View of Notes" for a view. */}
+                          {b.kind === "view" ? `View of ${collection.pluralName}` : collection.name}
                         </span>
                       )}
                     </TableCell>
@@ -110,25 +110,25 @@ export function BookmarksPage() {
 }
 
 function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: unknown): void }) {
-  const { repo, types, bookmarks } = useStore();
-  const [type, setType] = useState<ObjectType | null>(types[0] ?? null);
+  const { repo, collections, bookmarks } = useStore();
+  const [collection, setCollection] = useState<Collection | null>(collections[0] ?? null);
   const [targets, setTargets] = useState<Target[]>([]);
   const [target, setTarget] = useState<Target | null>(null);
 
-  // The chosen type's views and objects, minus what is already bookmarked.
+  // The chosen collection's views and items, minus what is already bookmarked.
   useEffect(() => {
     setTarget(null);
-    if (!type) return setTargets([]);
+    if (!collection) return setTargets([]);
     let cancelled = false;
-    Promise.all([repo.listViews(type.id), repo.listLabels(type)]).then(([views, labels]) => {
+    Promise.all([repo.listViews(collection.id), repo.listLabels(collection)]).then(([views, labels]) => {
       if (cancelled) return;
       const taken = new Set(bookmarks.map((b) => b.targetId));
       setTargets(
         [
-          ...views.map((v): Target => ({ kind: "view", id: v.id, text: `View: ${v.name}`, label: `${type.pluralName} / ${v.name}` })),
+          ...views.map((v): Target => ({ kind: "view", id: v.id, text: `View: ${v.name}`, label: `${collection.pluralName} / ${v.name}` })),
           ...labels.map((e): Target => {
-            const label = e.label ?? untitledLabel(type);
-            return { kind: "object", id: e.id, text: label, label };
+            const label = e.label ?? untitledLabel(collection);
+            return { kind: "item", id: e.id, text: label, label };
           }),
         ].filter((t) => !taken.has(t.id)),
       );
@@ -137,7 +137,7 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repo, type]);
+  }, [repo, collection]);
 
   return (
     <Modal
@@ -147,31 +147,31 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
       className="modal--menus"
       primaryButtonText="Add"
       secondaryButtonText="Cancel"
-      primaryButtonDisabled={!type || !target}
+      primaryButtonDisabled={!collection || !target}
       onRequestClose={onClose}
       onRequestSubmit={() => {
-        if (!type || !target) return;
-        repo.addBookmark(target.kind, type.id, target.id, target.label).then(onClose, onError);
+        if (!collection || !target) return;
+        repo.addBookmark(target.kind, collection.id, target.id, target.label).then(onClose, onError);
       }}
     >
       <Stack gap={5}>
-        <Dropdown<ObjectType> autoAlign
+        <Dropdown<Collection> autoAlign
           size="sm"
-          id="bookmark-object"
-          titleText="Type"
-          label="Choose a type"
-          items={types}
-          selectedItem={type ?? undefined}
+          id="bookmark-item"
+          titleText="Collection"
+          label="Choose a collection"
+          items={collections}
+          selectedItem={collection ?? undefined}
           itemToString={(t) => t?.pluralName ?? ""}
-          itemToElement={(t) => <ObjectTypeLabel type={{ ...t, name: t.pluralName }} />}
-          renderSelectedItem={(t) => <ObjectTypeLabel type={{ ...t, name: t.pluralName }} />}
-          onChange={({ selectedItem }) => setType(selectedItem ?? null)}
+          itemToElement={(t) => <CollectionLabel collection={{ ...t, name: t.pluralName }} />}
+          renderSelectedItem={(t) => <CollectionLabel collection={{ ...t, name: t.pluralName }} />}
+          onChange={({ selectedItem }) => setCollection(selectedItem ?? null)}
         />
         <ComboBox<Target> autoAlign
           size="sm"
           id="bookmark-target"
-          titleText="View or object"
-          placeholder="Search views and objects"
+          titleText="View or item"
+          placeholder="Search views and items"
           items={targets}
           selectedItem={target}
           itemToString={(t) => t?.text ?? ""}

@@ -3,11 +3,11 @@ import { ComboBox } from "@carbon/react";
 import type { FieldDef } from "../domain/model";
 import { choicesFor, type RefOption } from "./useReferenceOptions";
 
-/** Room a menu of a few objects needs below the box (rem), else it opens upwards. */
+/** Room a menu of a few items needs below the box (rem), else it opens upwards. */
 const MENU_ROOM_REM = 15;
 
 /**
- * One object of a reference field, chosen from a ComboBox. Its menu opens downwards unless the
+ * One item of a reference field, chosen from a ComboBox. Its menu opens downwards unless the
  * window has no room below it: there it would extend the page (a second scrollbar), so it opens
  * upwards instead.
  */

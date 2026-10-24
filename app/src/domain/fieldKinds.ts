@@ -1,7 +1,7 @@
 import { checklistProgress } from "./checklist";
 import type { FieldKind, FieldValue } from "./model";
 
-// Registry of field kinds. Adding a kind = add an object here, a column mapping
+// Registry of field kinds. Adding a kind = add an item here, a column mapping
 // in the schema/CHECK constraint, and an input in ui/FieldInput.tsx.
 
 export type ValueColumn =
@@ -21,7 +21,7 @@ export interface FieldKindSpec {
   toDb(value: FieldValue): string | number | null;
   /**
    * Plain-text rendering, also used for sorting/searching in tables.
-   * Not meaningful for reference kinds (needs the referenced objects; see useReferenceOptions).
+   * Not meaningful for reference kinds (needs the referenced items; see useReferenceOptions).
    */
   format(value: FieldValue): string;
 }
@@ -164,7 +164,7 @@ export const fieldKinds: Record<FieldKind, FieldKindSpec> = {
     toDb: optionalStringToDb,
     format: (v) => (typeof v === "string" ? markdownPreview(v) : ""),
   },
-  // Shown in a sandboxed frame on object pages (as a template's HTML output is); its text elsewhere.
+  // Shown in a sandboxed frame on item pages (as a component's HTML output is); its text elsewhere.
   html: {
     label: "HTML",
     column: "value_text",
@@ -210,8 +210,8 @@ export const fieldKinds: Record<FieldKind, FieldKindSpec> = {
     // The file id; tables render it as a thumbnail.
     format: (v) => (typeof v === "string" ? v : ""),
   },
-  object: {
-    label: "Object",
+  item: {
+    label: "Item",
     column: "value_ref",
     fromDb: optionalString,
     toDb: optionalStringToDb,
@@ -232,17 +232,17 @@ export const fieldKinds: Record<FieldKind, FieldKindSpec> = {
     // Tables and cards show how far along it is.
     format: checklistProgress,
   },
-  object_list: {
-    label: "List of objects",
+  item_list: {
+    label: "List of items",
     column: "value_json",
     fromDb: listFromDb,
     toDb: listToDb,
     format: (v) => (Array.isArray(v) ? v.join(", ") : ""),
   },
-  // Computed by a template when objects are shown (domain/templates.ts); never written, so
+  // Computed by a component when items are shown (domain/components.ts); never written, so
   // its column is only nominal.
-  template: {
-    label: "Template",
+  component: {
+    label: "Component",
     column: "value_text",
     fromDb: optionalString,
     toDb: () => null,

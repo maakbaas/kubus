@@ -20,7 +20,7 @@ import type { Statement } from "../sqlite/protocol";
 //    (the server's sequence number), in one request. Applying what came back, clearing the
 //    sent part of the outbox and storing the cursor is one local transaction.
 //  * Merging: a row replaces the local one only when its updated_at is newer. Values are rows of
-//    their own, so two devices editing different fields of an object never conflict.
+//    their own, so two devices editing different fields of an item never conflict.
 //  * First connection to a server (or a different one): the server is the source of truth, so what
 //    it holds replaces this device's data. Only an empty server takes this device's data instead
 //    (everything local is queued for upload).
@@ -245,7 +245,7 @@ export class SyncEngine implements SyncControl {
     const remember = [{ sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_server', ?1)", bind: [url] }];
     let replaced = false;
     if (SYNC_TABLES.some((t) => (remote.changes[t.name] ?? []).length > 0)) {
-      const oldTypes = (await this.db.select<{ id: string }>("SELECT id FROM object_types")).map((r) => r.id);
+      const oldCollections = (await this.db.select<{ id: string }>("SELECT id FROM collections")).map((r) => r.id);
       const statements: Statement[] = [
         { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_applying', '1')" },
         { sql: "PRAGMA defer_foreign_keys = ON" },
@@ -261,7 +261,7 @@ export class SyncEngine implements SyncControl {
       );
       await this.db.write(statements);
       replaced = true;
-      await this.announce(remote.changes, oldTypes);
+      await this.announce(remote.changes, oldCollections);
     } else {
       await this.db.write([
         { sql: "DELETE FROM sync_outbox" },
@@ -301,28 +301,28 @@ export class SyncEngine implements SyncControl {
   }
 
   /** Tells the UI what the server changed, the way a local write would. */
-  private async announce(changes: WireChanges, replacedTypes: string[] = []) {
+  private async announce(changes: WireChanges, replacedCollections: string[] = []) {
     const out: DataChange[] = [];
-    const objects = new Map<string, string>(); // object id -> type id
-    for (const r of changes.objects ?? []) objects.set(String(r.id), String(r.type_id));
-    const valueOf = (changes.field_values ?? []).map((r) => String(r.object_id)).filter((id) => !objects.has(id));
+    const items = new Map<string, string>(); // item id -> collection id
+    for (const r of changes.items ?? []) items.set(String(r.id), String(r.collection_id));
+    const valueOf = (changes.field_values ?? []).map((r) => String(r.item_id)).filter((id) => !items.has(id));
     if (valueOf.length > 0) {
-      const rows = await this.db.select<{ id: string; type_id: string }>(
-        "SELECT id, type_id FROM objects WHERE id IN (SELECT value FROM json_each(?1))",
+      const rows = await this.db.select<{ id: string; collection_id: string }>(
+        "SELECT id, collection_id FROM items WHERE id IN (SELECT value FROM json_each(?1))",
         [JSON.stringify([...new Set(valueOf)])],
       );
-      for (const r of rows) objects.set(r.id, r.type_id);
+      for (const r of rows) items.set(r.id, r.collection_id);
     }
-    if (changes.object_types?.length || changes.fields?.length) out.push({ scope: "types" });
-    if (changes.templates?.length) out.push({ scope: "templates" });
+    if (changes.collections?.length || changes.fields?.length) out.push({ scope: "collections" });
+    if (changes.components?.length) out.push({ scope: "components" });
     if (changes.bookmarks?.length) out.push({ scope: "bookmarks" });
     // Everything was replaced: whatever the old data showed is gone or different now.
-    if (replacedTypes.length > 0) {
-      out.push({ scope: "types" }, { scope: "templates" }, { scope: "bookmarks" });
-      for (const typeId of replacedTypes) out.push({ scope: "objects", typeId }, { scope: "views", typeId });
+    if (replacedCollections.length > 0) {
+      out.push({ scope: "collections" }, { scope: "components" }, { scope: "bookmarks" });
+      for (const collectionId of replacedCollections) out.push({ scope: "items", collectionId }, { scope: "views", collectionId });
     }
-    for (const typeId of new Set((changes.views ?? []).map((r) => String(r.type_id)))) out.push({ scope: "views", typeId });
-    for (const [objectId, typeId] of objects) out.push({ scope: "objects", typeId, objectId });
+    for (const collectionId of new Set((changes.views ?? []).map((r) => String(r.collection_id)))) out.push({ scope: "views", collectionId });
+    for (const [itemId, collectionId] of items) out.push({ scope: "items", collectionId, itemId });
 
     for (const t of SYNC_TABLES) for (const r of changes[t.name] ?? []) if (typeof r.updated_at === "string") observeStamp(r.updated_at);
     this.applying = true;

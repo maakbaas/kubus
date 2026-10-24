@@ -15,10 +15,10 @@ const highlight = (text: string, language: string): ReactNode[] =>
   refractor.registered(language) ? toReact(refractor.highlight(text, language).children as HastNode[]) : [text];
 
 /**
- * A template, highlighted: the text around the {{ }} sections as Markdown (or HTML, for HTML
+ * A component, highlighted: the text around the {{ }} sections as Markdown (or HTML, for HTML
  * output), the sections as JavaScript, the braces as punctuation.
  */
-function highlightTemplate(code: string, textLanguage: string): ReactNode[] {
+function highlightComponent(code: string, textLanguage: string): ReactNode[] {
   const parts: ReactNode[] = [];
   let at = 0;
   for (const m of code.matchAll(/\{\{([\s\S]*?)\}\}/g)) {
@@ -38,13 +38,13 @@ function highlightTemplate(code: string, textLanguage: string): ReactNode[] {
 }
 
 /**
- * The template editor (also HTML fields' editor): a plain text area (so typing, undo, selection and IME behave natively)
+ * The component editor (also HTML fields' editor): a plain text area (so typing, undo, selection and IME behave natively)
  * over an identically laid out, highlighted copy of its text, with line numbers beside it. Long
  * lines wrap to the width there is; each number sits at the first row of its line (measured in
  * the highlighted copy). It grows with its content. Looks like a Carbon text area (field background, bottom border, label,
  * helper text).
  */
-export function TemplateCodeEditor({
+export function ComponentCodeEditor({
   id,
   labelText,
   helperText,
@@ -63,7 +63,7 @@ export function TemplateCodeEditor({
   onChange(value: string): void;
 }) {
   const lines = value.split("\n").length;
-  const highlighted = useMemo(() => highlightTemplate(value, html ? "markup" : "markdown"), [value, html]);
+  const highlighted = useMemo(() => highlightComponent(value, html ? "markup" : "markdown"), [value, html]);
   const pre = useRef<HTMLPreElement>(null);
   /** Where each line starts (px from the top), wrapped lines taking several rows. */
   const [tops, setTops] = useState<number[]>([]);

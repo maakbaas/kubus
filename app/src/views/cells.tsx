@@ -5,51 +5,51 @@ import { isOpenableUrl, openExternal } from "../platform/openExternal";
 import { ToggleInput } from "../ui/ToggleInput";
 import { openModeOf } from "../workspace/Workspace";
 import { useStore } from "../app/store";
-import { outputOf } from "../domain/templates";
-import { TemplateValue } from "../ui/TemplateValue";
-import { fieldValue, isMetaField, type FieldDef, type FieldKind, type FieldValue, type ObjectInstance } from "../domain/model";
+import { outputOf } from "../domain/components";
+import { ComponentValue } from "../ui/ComponentValue";
+import { fieldValue, isMetaField, type FieldDef, type FieldKind, type FieldValue, type Item } from "../domain/model";
 import { Highlight } from "../ui/Highlight";
 import { ImageThumb } from "../ui/images";
-import { ObjectLink } from "../ui/ObjectLink";
+import { ItemLink } from "../ui/ItemLink";
 import { formatValue, type RefOptions } from "../ui/useReferenceOptions";
-import type { ObjectActions } from "./registry";
+import type { ItemActions } from "./registry";
 
 interface Props {
   field: FieldDef;
-  object: ObjectInstance;
+  item: Item;
   refs: RefOptions;
   /** Search text to highlight. */
   search: string;
-  actions: ObjectActions;
+  actions: ItemActions;
 }
 
 /**
- * Props for a link or tile that opens an object (a table's title cell, a card): plain click here,
+ * Props for a link or tile that opens an item (a table's title cell, a card): plain click here,
  * Ctrl/Cmd click beside, middle click in a new tab (see openModeOf); keyboard activation here.
  */
-export function objectLinkProps(object: ObjectInstance, actions: ObjectActions) {
+export function itemLinkProps(item: Item, actions: ItemActions) {
   return {
     "data-own-click": true,
     onClick: (e: MouseEvent | KeyboardEvent) => {
       e.preventDefault();
-      actions.open(object, "button" in e ? openModeOf(e) : "here");
+      actions.open(item, "button" in e ? openModeOf(e) : "here");
     },
     onAuxClick: (e: MouseEvent) => {
       if (e.button !== 1) return;
       e.preventDefault();
-      actions.open(object, "tab");
+      actions.open(item, "tab");
     },
   };
 }
 
 /** Field kinds whose value can be edited right inside a table cell (the rest need more room). */
-const INLINE_KINDS: ReadonlySet<FieldKind> = new Set<FieldKind>(["string", "number", "date", "datetime", "object"]);
+const INLINE_KINDS: ReadonlySet<FieldKind> = new Set<FieldKind>(["string", "number", "date", "datetime", "item"]);
 export const isInlineEditable = (kind: FieldKind) => INLINE_KINDS.has(kind);
 export { isMetaField };
 
 /**
  * Markdown as a one-line preview (syntax stripped, see markdownPreviewParts) whose links stay
- * links: they open in the browser, without also opening the object or editing the cell.
+ * links: they open in the browser, without also opening the item or editing the cell.
  */
 function MarkdownPreview({ source, search }: { source: string; search: string }) {
   return (
@@ -77,48 +77,48 @@ function MarkdownPreview({ source, search }: { source: string; search: string })
 }
 
 /** One field value inside a view (table cell, card line), shared by every view type. */
-export function FieldCell({ field, object, refs, search, actions }: Props) {
-  const { templates } = useStore();
-  const value: FieldValue = fieldValue(object, field);
-  // HTML (a field, or a template's result) shows its text; without any (a chart, a map) a note.
-  const html = field.kind === "html" || (field.kind === "template" && outputOf(field, templates) === "html");
+export function FieldCell({ field, item, refs, search, actions }: Props) {
+  const { components } = useStore();
+  const value: FieldValue = fieldValue(item, field);
+  // HTML (a field, or a component's result) shows its text; without any (a chart, a map) a note.
+  const html = field.kind === "html" || (field.kind === "component" && outputOf(field, components) === "html");
   if (html && typeof value === "string" && value) {
     const text = htmlPreview(value);
-    return text ? <Highlight text={text} query={search} /> : <TemplateValue value={value} output="html" variant="cell" search={search} />;
+    return text ? <Highlight text={text} query={search} /> : <ComponentValue value={value} output="html" variant="cell" search={search} />;
   }
-  // Template images show as a thumbnail; other results as text.
-  if (field.kind === "template") {
-    const output = outputOf(field, templates);
-    if (output === "image") return <TemplateValue value={value} output={output} variant="cell" search={search} />;
+  // Component images show as a thumbnail; other results as text.
+  if (field.kind === "component") {
+    const output = outputOf(field, components);
+    if (output === "image") return <ComponentValue value={value} output={output} variant="cell" search={search} />;
     // Text and number results read exactly like a string or number field (no Markdown preview,
     // which would strip characters such as `*`).
     if (output !== "markdown") return <Highlight text={value == null ? "" : String(value)} query={search} />;
   }
-  if ((field.kind === "markdown" || field.kind === "template") && typeof value === "string") return <MarkdownPreview source={value} search={search} />;
+  if ((field.kind === "markdown" || field.kind === "component") && typeof value === "string") return <MarkdownPreview source={value} search={search} />;
   if (field.kind === "checkbox") {
     return (
-      // Toggling must not also open the object (row click / card link).
+      // Toggling must not also open the item (row click / card link).
       <span className="cell-checkbox" onClick={(e) => e.stopPropagation()}>
         <ToggleInput
           icon={field.toggleIcon}
-          id={`cell-${object.id}-${field.id}`}
+          id={`cell-${item.id}-${field.id}`}
           label={field.name}
           checked={value === true}
-          onChange={(checked) => actions.setValue(object, field, checked)}
+          onChange={(checked) => actions.setValue(item, field, checked)}
         />
       </span>
     );
   }
   if (field.kind === "image") return typeof value === "string" && value ? <ImageThumb fileId={value} alt="" /> : null;
-  if (field.kind === "object_list" && Array.isArray(value)) {
-    const options = refs[field.targetTypeId ?? ""];
+  if (field.kind === "item_list" && Array.isArray(value)) {
+    const options = refs[field.targetCollectionId ?? ""];
     if (options) {
       return (
         <>
           {value.map((id, i) => (
             <span key={`${id}-${i}`}>
               {i > 0 && ", "}
-              <ObjectLink field={field} id={id} refs={refs} search={search} />
+              <ItemLink field={field} id={id} refs={refs} search={search} />
             </span>
           ))}
         </>

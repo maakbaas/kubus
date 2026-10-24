@@ -24,7 +24,7 @@ export function PageHeader({ title, current, subtitle, breadcrumbs = [], actions
           right; the subtitle below spans the full width. */}
       <div className="page-header__row">
         <div className="page-header__main">
-      {/* A top-level page (no parents) shows itself as a link with a trailing slash ("Types /");
+      {/* A top-level page (no parents) shows itself as a link with a trailing slash ("Collections /");
           deeper pages show their parents as links, ending in the current page as plain text. */}
       {breadcrumbs.length === 0 ? (
         <Breadcrumb>

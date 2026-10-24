@@ -6,46 +6,46 @@ import {
   type FieldDef,
   type FieldKind,
   type FieldValue,
-  type ObjectInstance,
-  type ObjectLabel,
-  type ObjectType,
-  type ObjectTypeDraft,
+  type Item,
+  type ItemLabel,
+  type Collection,
+  type CollectionDraft,
   valuesEqual,
-  parseTemplateArgs,
+  parseComponentArgs,
 } from "../../domain/model";
 import { defaultQuery, type FilterRule } from "../../domain/query";
 import type { Bookmark, BookmarkKind } from "../../domain/bookmarks";
-import { parseObjectViews, withDefaultObjectView, type ObjectView } from "../../domain/fieldLayout";
-import { hasSections, isTemplateOutput, type Template } from "../../domain/templates";
-import type { SavedView } from "../../domain/views";
+import { parseItemViews, withDefaultItemView, type ItemView } from "../../domain/fieldLayout";
+import { hasSections, isComponentOutput, type Component } from "../../domain/components";
+import type { CollectionView } from "../../domain/views";
 import type { DataChange, Repository } from "../repository";
 import { SyncEngine } from "../sync/SyncEngine";
 import { SqlClient } from "./client";
 import type { Statement } from "./protocol";
 
-interface TypeRow {
+interface CollectionRow {
   id: string;
   name: string;
   plural_name: string;
   icon: string | null;
   description: string;
-  object_views: string | null;
+  item_views: string | null;
   created_at: string;
   updated_at: string;
 }
 interface FieldRow {
   id: string;
-  type_id: string;
+  collection_id: string;
   name: string;
   kind: FieldKind;
-  target_type_id: string | null;
-  template_id: string | null;
-  template_args: string | null;
+  target_collection_id: string | null;
+  component_id: string | null;
+  component_args: string | null;
   choice_filter: string | null;
   toggle_icon: string | null;
   position: number;
 }
-interface TemplateRow {
+interface ComponentRow {
   id: string;
   name: string;
   params: string;
@@ -57,7 +57,7 @@ interface TemplateRow {
 }
 interface ViewRow {
   id: string;
-  type_id: string;
+  collection_id: string;
   name: string;
   kind: string;
   config: string;
@@ -66,15 +66,15 @@ interface ViewRow {
   created_at: string;
   updated_at: string;
 }
-interface ObjectRow {
+interface ItemRow {
   id: string;
-  type_id: string;
-  object_view_id: string | null;
+  collection_id: string;
+  item_view_id: string | null;
   created_at: string;
   updated_at: string;
 }
 interface ValueRow {
-  object_id: string;
+  item_id: string;
   field_id: string;
   value_text: string | null;
   value_number: number | null;
@@ -88,12 +88,12 @@ interface ValueRow {
 
 const toField = (r: FieldRow): FieldDef => ({
   id: r.id,
-  typeId: r.type_id,
+  collectionId: r.collection_id,
   name: r.name,
   kind: r.kind,
-  targetTypeId: r.target_type_id,
-  templateId: r.template_id,
-  templateArgs: parseTemplateArgs(r.template_args),
+  targetCollectionId: r.target_collection_id,
+  componentId: r.component_id,
+  componentArgs: parseComponentArgs(r.component_args),
   choiceFilter: parseJson<FilterRule[]>(r.choice_filter, []),
   toggleIcon: r.toggle_icon,
   position: r.position,
@@ -133,8 +133,8 @@ export class SqliteRepository implements Repository {
     for (const change of changes) for (const listener of this.listeners) listener(change);
   }
 
-  private async typeOfObject(objectId: string): Promise<string | undefined> {
-    return (await this.db.select<{ type_id: string }>("SELECT type_id FROM objects WHERE id = ?1", [objectId]))[0]?.type_id;
+  private async collectionOfItem(itemId: string): Promise<string | undefined> {
+    return (await this.db.select<{ collection_id: string }>("SELECT collection_id FROM items WHERE id = ?1", [itemId]))[0]?.collection_id;
   }
 
   static async open(): Promise<SqliteRepository> {
@@ -148,45 +148,45 @@ export class SqliteRepository implements Repository {
     return { persistent: this.db.info.persistent };
   }
 
-  async listTypes(): Promise<ObjectType[]> {
-    const types = await this.db.select<TypeRow>(
-      "SELECT * FROM object_types WHERE deleted_at IS NULL ORDER BY plural_name COLLATE NOCASE",
+  async listCollections(): Promise<Collection[]> {
+    const collections = await this.db.select<CollectionRow>(
+      "SELECT * FROM collections WHERE deleted_at IS NULL ORDER BY plural_name COLLATE NOCASE",
     );
     const fields = await this.db.select<FieldRow>(
       "SELECT * FROM fields WHERE deleted_at IS NULL ORDER BY position, created_at",
     );
-    return types.map((t) => ({
+    return collections.map((t) => ({
       id: t.id,
       name: t.name,
       pluralName: t.plural_name,
       icon: t.icon,
       description: t.description,
-      fields: fields.filter((f) => f.type_id === t.id).map(toField),
-      objectViews: withDefaultObjectView(parseObjectViews(t.object_views)),
+      fields: fields.filter((f) => f.collection_id === t.id).map(toField),
+      itemViews: withDefaultItemView(parseItemViews(t.item_views)),
       createdAt: t.created_at,
       updatedAt: t.updated_at,
     }));
   }
 
-  async saveType(draft: ObjectTypeDraft): Promise<void> {
+  async saveCollection(draft: CollectionDraft): Promise<void> {
     const ts = now();
     const writes: Statement[] = [];
-    const existing = await this.db.select<{ id: string }>("SELECT id FROM object_types WHERE id = ?1", [draft.id]);
+    const existing = await this.db.select<{ id: string }>("SELECT id FROM collections WHERE id = ?1", [draft.id]);
     if (existing.length === 0) {
       writes.push({
-        sql: "INSERT INTO object_types (id, name, plural_name, icon, description, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+        sql: "INSERT INTO collections (id, name, plural_name, icon, description, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
         bind: [draft.id, draft.name, draft.pluralName, draft.icon, draft.description, ts],
       });
-      // Every type starts with an ordinary (renamable, deletable) "All" view: a table of all
-      // objects sorted by title; its options are filled in by the view type's normalizeOptions.
+      // Every collection starts with an ordinary (renamable, deletable) "All" view: a table of all
+      // items sorted by title; its options are filled in by the view type's normalizeOptions.
       writes.push({
-        sql: `INSERT INTO views (id, type_id, name, kind, config, position, is_default, created_at, updated_at)
+        sql: `INSERT INTO views (id, collection_id, name, kind, config, position, is_default, created_at, updated_at)
               VALUES (?1, ?2, 'All', 'table', ?3, 0, 0, ?4, ?4)`,
         bind: [newId(), draft.id, JSON.stringify({ query: defaultQuery(), options: null }), ts],
       });
     }
 
-    const stored = await this.db.select<FieldRow>("SELECT * FROM fields WHERE type_id = ?1 AND deleted_at IS NULL", [
+    const stored = await this.db.select<FieldRow>("SELECT * FROM fields WHERE collection_id = ?1 AND deleted_at IS NULL", [
       draft.id,
     ]);
     const storedById = new Map(stored.map((f) => [f.id, f]));
@@ -196,26 +196,26 @@ export class SqliteRepository implements Repository {
       const old = storedById.get(f.id);
       if (!old) {
         writes.push({
-          sql: "INSERT INTO fields (id, type_id, name, kind, target_type_id, template_id, template_args, choice_filter, toggle_icon, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?10, ?11, ?8, ?9, ?9)",
-          bind: [f.id, draft.id, f.name, f.kind, f.targetTypeId, f.templateId, args(f), position, ts, choices(f), f.toggleIcon],
+          sql: "INSERT INTO fields (id, collection_id, name, kind, target_collection_id, component_id, component_args, choice_filter, toggle_icon, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?10, ?11, ?8, ?9, ?9)",
+          bind: [f.id, draft.id, f.name, f.kind, f.targetCollectionId, f.componentId, args(f), position, ts, choices(f), f.toggleIcon],
         });
       } else if (
         old.name !== f.name ||
         old.position !== position ||
-        old.template_id !== f.templateId ||
-        (old.template_args ?? null) !== args(f) ||
+        old.component_id !== f.componentId ||
+        (old.component_args ?? null) !== args(f) ||
         (old.choice_filter ?? null) !== choices(f) ||
         old.toggle_icon !== f.toggleIcon
       ) {
         // Kind and target are immutable once created (values would need conversion); an
-        // template field's template may change (its values are computed, not stored).
+        // component field's component may change (its values are computed, not stored).
         writes.push({
-          sql: "UPDATE fields SET name = ?1, position = ?2, template_id = ?3, template_args = ?4, updated_at = ?5, choice_filter = ?7, toggle_icon = ?8 WHERE id = ?6",
+          sql: "UPDATE fields SET name = ?1, position = ?2, component_id = ?3, component_args = ?4, updated_at = ?5, choice_filter = ?7, toggle_icon = ?8 WHERE id = ?6",
           bind: [
             f.name,
             position,
-            old.kind === "template" ? f.templateId : old.template_id,
-            old.kind === "template" ? args(f) : old.template_args,
+            old.kind === "component" ? f.componentId : old.component_id,
+            old.kind === "component" ? args(f) : old.component_args,
             ts,
             f.id,
             choices(f),
@@ -230,122 +230,122 @@ export class SqliteRepository implements Repository {
     }
 
     writes.push({
-      sql: "UPDATE object_types SET name = ?1, plural_name = ?2, icon = ?3, description = ?4, updated_at = ?5 WHERE id = ?6",
+      sql: "UPDATE collections SET name = ?1, plural_name = ?2, icon = ?3, description = ?4, updated_at = ?5 WHERE id = ?6",
       bind: [draft.name, draft.pluralName, draft.icon, draft.description, ts, draft.id],
     });
     for (const old of removed) {
       writes.push(...(await this.releaseFilesWhere("field_id = ?1", [old.id])));
     }
     await this.db.write(writes);
-    this.emit({ scope: "types" });
+    this.emit({ scope: "collections" });
   }
 
-  async deleteType(typeId: string): Promise<void> {
-    const referencing = await this.db.select<{ field: string; type: string }>(
-      `SELECT f.name AS field, t.name AS type FROM fields f JOIN object_types t ON t.id = f.type_id
-        WHERE f.target_type_id = ?1 AND f.type_id <> ?1 AND f.deleted_at IS NULL AND t.deleted_at IS NULL`,
-      [typeId],
+  async deleteCollection(collectionId: string): Promise<void> {
+    const referencing = await this.db.select<{ field: string; collection: string }>(
+      `SELECT f.name AS field, t.name AS collection FROM fields f JOIN collections t ON t.id = f.collection_id
+        WHERE f.target_collection_id = ?1 AND f.collection_id <> ?1 AND f.deleted_at IS NULL AND t.deleted_at IS NULL`,
+      [collectionId],
     );
     if (referencing.length > 0) {
-      const where = referencing.map((r) => `“${r.field}” of ${r.type}`).join(", ");
+      const where = referencing.map((r) => `“${r.field}” of ${r.collection}`).join(", ");
       throw new Error(`Still referenced by ${where}. Remove those fields first.`);
     }
     const ts = now();
     await this.db.write([
       {
-        sql: "UPDATE objects SET deleted_at = ?1, updated_at = ?1 WHERE type_id = ?2 AND deleted_at IS NULL",
-        bind: [ts, typeId],
+        sql: "UPDATE items SET deleted_at = ?1, updated_at = ?1 WHERE collection_id = ?2 AND deleted_at IS NULL",
+        bind: [ts, collectionId],
       },
       {
-        sql: "UPDATE fields SET deleted_at = ?1, updated_at = ?1 WHERE type_id = ?2 AND deleted_at IS NULL",
-        bind: [ts, typeId],
+        sql: "UPDATE fields SET deleted_at = ?1, updated_at = ?1 WHERE collection_id = ?2 AND deleted_at IS NULL",
+        bind: [ts, collectionId],
       },
       {
-        sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE type_id = ?2 AND deleted_at IS NULL",
-        bind: [ts, typeId],
+        sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE collection_id = ?2 AND deleted_at IS NULL",
+        bind: [ts, collectionId],
       },
-      { sql: "UPDATE object_types SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, typeId] },
-      ...(await this.releaseFilesWhere("object_id IN (SELECT id FROM objects WHERE type_id = ?1)", [typeId])),
+      { sql: "UPDATE collections SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, collectionId] },
+      ...(await this.releaseFilesWhere("item_id IN (SELECT id FROM items WHERE collection_id = ?1)", [collectionId])),
     ]);
-    this.emit({ scope: "types" }, { scope: "objects", typeId }, { scope: "views", typeId });
+    this.emit({ scope: "collections" }, { scope: "items", collectionId }, { scope: "views", collectionId });
   }
 
-  async countObjectsByType(): Promise<Record<string, number>> {
-    const rows = await this.db.select<{ type_id: string; n: number }>(
-      "SELECT type_id, COUNT(*) AS n FROM objects WHERE deleted_at IS NULL GROUP BY type_id",
+  async countItemsByCollection(): Promise<Record<string, number>> {
+    const rows = await this.db.select<{ collection_id: string; n: number }>(
+      "SELECT collection_id, COUNT(*) AS n FROM items WHERE deleted_at IS NULL GROUP BY collection_id",
     );
-    return Object.fromEntries(rows.map((r) => [r.type_id, r.n]));
+    return Object.fromEntries(rows.map((r) => [r.collection_id, r.n]));
   }
 
-  async listObjects(type: ObjectType): Promise<ObjectInstance[]> {
-    const objects = await this.db.select<ObjectRow>(
-      "SELECT * FROM objects WHERE type_id = ?1 AND deleted_at IS NULL ORDER BY updated_at DESC",
-      [type.id],
+  async listItems(collection: Collection): Promise<Item[]> {
+    const items = await this.db.select<ItemRow>(
+      "SELECT * FROM items WHERE collection_id = ?1 AND deleted_at IS NULL ORDER BY updated_at DESC",
+      [collection.id],
     );
     const values = await this.db.select<ValueRow>(
       `SELECT fv.* FROM field_values fv
-         JOIN objects o ON o.id = fv.object_id
-        WHERE o.type_id = ?1 AND o.deleted_at IS NULL`,
-      [type.id],
+         JOIN items o ON o.id = fv.item_id
+        WHERE o.collection_id = ?1 AND o.deleted_at IS NULL`,
+      [collection.id],
     );
-    return this.assemble(type, objects, values);
+    return this.assemble(collection, items, values);
   }
 
-  async getObject(type: ObjectType, objectId: string): Promise<ObjectInstance | null> {
-    const objects = await this.db.select<ObjectRow>(
-      "SELECT * FROM objects WHERE id = ?1 AND type_id = ?2 AND deleted_at IS NULL",
-      [objectId, type.id],
+  async getItem(collection: Collection, itemId: string): Promise<Item | null> {
+    const items = await this.db.select<ItemRow>(
+      "SELECT * FROM items WHERE id = ?1 AND collection_id = ?2 AND deleted_at IS NULL",
+      [itemId, collection.id],
     );
-    if (objects.length === 0) return null;
-    const values = await this.db.select<ValueRow>("SELECT * FROM field_values WHERE object_id = ?1", [objectId]);
-    return this.assemble(type, objects, values)[0];
+    if (items.length === 0) return null;
+    const values = await this.db.select<ValueRow>("SELECT * FROM field_values WHERE item_id = ?1", [itemId]);
+    return this.assemble(collection, items, values)[0];
   }
 
-  async listLabels(type: ObjectType, objectIds?: string[]): Promise<ObjectLabel[]> {
-    // Same rule as labelField: the first string field (in the type's field order) whose value
+  async listLabels(collection: Collection, itemIds?: string[]): Promise<ItemLabel[]> {
+    // Same rule as labelField: the first string field (in the collection's field order) whose value
     // isn't blank.
-    return this.db.select<ObjectLabel>(
+    return this.db.select<ItemLabel>(
       `SELECT o.id AS id,
               (SELECT fv.value_text FROM field_values fv JOIN fields f ON f.id = fv.field_id
-                WHERE fv.object_id = o.id AND f.kind = 'string' AND f.deleted_at IS NULL
+                WHERE fv.item_id = o.id AND f.kind = 'string' AND f.deleted_at IS NULL
                   AND trim(fv.value_text, ' ' || char(9, 10, 13)) <> ''
                 ORDER BY f.position, f.created_at LIMIT 1) AS label
-         FROM objects o
-        WHERE o.type_id = ?1 AND o.deleted_at IS NULL
+         FROM items o
+        WHERE o.collection_id = ?1 AND o.deleted_at IS NULL
           AND (?2 IS NULL OR o.id IN (SELECT value FROM json_each(?2)))`,
-      [type.id, objectIds ? JSON.stringify(objectIds) : null],
+      [collection.id, itemIds ? JSON.stringify(itemIds) : null],
     );
   }
 
-  async createObject(type: ObjectType, values: Record<string, FieldValue>): Promise<string> {
+  async createItem(collection: Collection, values: Record<string, FieldValue>): Promise<string> {
     const id = newId();
     const ts = now();
     const writes: Statement[] = [
-      { sql: "INSERT INTO objects (id, type_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)", bind: [id, type.id, ts] },
+      { sql: "INSERT INTO items (id, collection_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)", bind: [id, collection.id, ts] },
     ];
-    // Only actual values: an empty field has no row, and template fields are computed, never stored.
-    for (const field of type.fields) {
+    // Only actual values: an empty field has no row, and component fields are computed, never stored.
+    for (const field of collection.fields) {
       const value = values[field.id];
-      if (value != null && field.kind !== "template") writes.push(valueStatement(id, field, value, ts));
+      if (value != null && field.kind !== "component") writes.push(valueStatement(id, field, value, ts));
     }
     await this.db.write(writes);
-    this.emit({ scope: "objects", typeId: type.id, objectId: id });
+    this.emit({ scope: "items", collectionId: collection.id, itemId: id });
     return id;
   }
 
-  async updateObject(type: ObjectType, objectId: string, values: Record<string, FieldValue>): Promise<void> {
-    const current = await this.getObject(type, objectId);
-    if (!current) throw new Error("Object not found");
+  async updateItem(collection: Collection, itemId: string, values: Record<string, FieldValue>): Promise<void> {
+    const current = await this.getItem(collection, itemId);
+    if (!current) throw new Error("Item not found");
     const ts = now();
     const writes: Statement[] = [];
     const replacedFiles: string[] = [];
     // Only touch changed fields: keeps per-field updated_at meaningful for merges.
-    for (const field of type.fields) {
+    for (const field of collection.fields) {
       if (!(field.id in values)) continue;
       const next = values[field.id] ?? null;
       const prev = current.values[field.id];
       if (valuesEqual(next, prev)) continue;
-      writes.push(valueStatement(objectId, field, next, ts));
+      writes.push(valueStatement(itemId, field, next, ts));
       if (field.kind === "image" && typeof prev === "string") replacedFiles.push(prev);
       if ((field.kind === "markdown" || field.kind === "html") && typeof prev === "string") {
         const kept = new Set(typeof next === "string" ? fileIdsIn(next) : []);
@@ -353,22 +353,22 @@ export class SqliteRepository implements Repository {
       }
     }
     if (writes.length === 0) return;
-    writes.push({ sql: "UPDATE objects SET updated_at = ?1 WHERE id = ?2", bind: [ts, objectId] });
+    writes.push({ sql: "UPDATE items SET updated_at = ?1 WHERE id = ?2", bind: [ts, itemId] });
     writes.push(...replacedFiles.flatMap(releaseFile));
     await this.db.write(writes);
-    this.emit({ scope: "objects", typeId: type.id, objectId });
+    this.emit({ scope: "items", collectionId: collection.id, itemId });
   }
 
-  async listViews(typeId: string): Promise<SavedView[]> {
+  async listViews(collectionId: string): Promise<CollectionView[]> {
     const rows = await this.db.select<ViewRow>(
-      "SELECT * FROM views WHERE type_id = ?1 AND deleted_at IS NULL ORDER BY position, created_at",
-      [typeId],
+      "SELECT * FROM views WHERE collection_id = ?1 AND deleted_at IS NULL ORDER BY position, created_at",
+      [collectionId],
     );
     return rows.map((r) => {
-      const config = JSON.parse(r.config) as Pick<SavedView, "query" | "options">;
+      const config = JSON.parse(r.config) as Pick<CollectionView, "query" | "options">;
       return {
         id: r.id,
-        typeId: r.type_id,
+        collectionId: r.collection_id,
         name: r.name,
         kind: r.kind,
         query: config.query,
@@ -381,69 +381,69 @@ export class SqliteRepository implements Repository {
     });
   }
 
-  async saveView(view: SavedView): Promise<void> {
+  async saveView(view: CollectionView): Promise<void> {
     const ts = now();
     const config = JSON.stringify({ query: view.query, options: view.options });
     await this.db.write([
       {
-        sql: `INSERT INTO views (id, type_id, name, kind, config, position, created_at, updated_at)
+        sql: `INSERT INTO views (id, collection_id, name, kind, config, position, created_at, updated_at)
               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
               ON CONFLICT (id) DO UPDATE SET
                 name = excluded.name, kind = excluded.kind, config = excluded.config,
                 position = excluded.position, updated_at = excluded.updated_at`,
-        bind: [view.id, view.typeId, view.name, view.kind, config, view.position, ts],
+        bind: [view.id, view.collectionId, view.name, view.kind, config, view.position, ts],
       },
     ]);
-    this.emit({ scope: "views", typeId: view.typeId });
+    this.emit({ scope: "views", collectionId: view.collectionId });
   }
 
-  async setDefaultView(typeId: string, viewId: string | null): Promise<void> {
+  async setDefaultView(collectionId: string, viewId: string | null): Promise<void> {
     await this.db.write([
       {
         sql: `UPDATE views SET is_default = (id IS ?2), updated_at = ?3
-               WHERE type_id = ?1 AND deleted_at IS NULL AND is_default IS NOT (id IS ?2)`,
-        bind: [typeId, viewId, now()],
+               WHERE collection_id = ?1 AND deleted_at IS NULL AND is_default IS NOT (id IS ?2)`,
+        bind: [collectionId, viewId, now()],
       },
     ]);
-    this.emit({ scope: "views", typeId });
+    this.emit({ scope: "views", collectionId });
   }
 
-  async saveObjectViews(typeId: string, views: ObjectView[]): Promise<void> {
+  async saveItemViews(collectionId: string, views: ItemView[]): Promise<void> {
     await this.db.write([
-      { sql: "UPDATE object_types SET object_views = ?1, updated_at = ?2 WHERE id = ?3", bind: [JSON.stringify(views), now(), typeId] },
+      { sql: "UPDATE collections SET item_views = ?1, updated_at = ?2 WHERE id = ?3", bind: [JSON.stringify(views), now(), collectionId] },
     ]);
-    this.emit({ scope: "types" });
+    this.emit({ scope: "collections" });
   }
 
-  async pinObjectView(objectId: string, viewId: string | null): Promise<void> {
+  async pinItemView(itemId: string, viewId: string | null): Promise<void> {
     await this.db.write([
-      { sql: "UPDATE objects SET object_view_id = ?1, updated_at = ?2 WHERE id = ?3", bind: [viewId, now(), objectId] },
+      { sql: "UPDATE items SET item_view_id = ?1, updated_at = ?2 WHERE id = ?3", bind: [viewId, now(), itemId] },
     ]);
-    const typeId = await this.typeOfObject(objectId);
-    if (typeId) this.emit({ scope: "objects", typeId, objectId });
+    const collectionId = await this.collectionOfItem(itemId);
+    if (collectionId) this.emit({ scope: "items", collectionId, itemId });
   }
 
   async listBookmarks(): Promise<Bookmark[]> {
     const rows = await this.db.select<{
       id: string;
       kind: BookmarkKind;
-      type_id: string;
+      collection_id: string;
       target_id: string;
       label: string;
       position: number;
       created_at: string;
     }>(
-      // Bookmarks of deleted views and objects aren't shown.
-      `SELECT b.* FROM bookmarks b JOIN object_types t ON t.id = b.type_id AND t.deleted_at IS NULL
+      // Bookmarks of deleted views and items aren't shown.
+      `SELECT b.* FROM bookmarks b JOIN collections t ON t.id = b.collection_id AND t.deleted_at IS NULL
         WHERE b.deleted_at IS NULL
           AND (b.kind <> 'view' OR EXISTS (SELECT 1 FROM views v WHERE v.id = b.target_id AND v.deleted_at IS NULL))
-          AND (b.kind <> 'object' OR EXISTS (SELECT 1 FROM objects o WHERE o.id = b.target_id AND o.deleted_at IS NULL))
+          AND (b.kind <> 'item' OR EXISTS (SELECT 1 FROM items o WHERE o.id = b.target_id AND o.deleted_at IS NULL))
         ORDER BY b.position, b.created_at`,
     );
     return rows.map((r) => ({
       id: r.id,
       kind: r.kind,
-      typeId: r.type_id,
+      collectionId: r.collection_id,
       targetId: r.target_id,
       label: r.label,
       position: r.position,
@@ -451,13 +451,13 @@ export class SqliteRepository implements Repository {
     }));
   }
 
-  async addBookmark(kind: BookmarkKind, typeId: string, targetId: string, label: string): Promise<void> {
+  async addBookmark(kind: BookmarkKind, collectionId: string, targetId: string, label: string): Promise<void> {
     const ts = now();
     await this.db.write([
       {
-        sql: `INSERT INTO bookmarks (id, kind, type_id, target_id, label, position, created_at, updated_at)
+        sql: `INSERT INTO bookmarks (id, kind, collection_id, target_id, label, position, created_at, updated_at)
               SELECT ?1, ?2, ?3, ?4, ?5, COALESCE(MAX(position), -1) + 1, ?6, ?6 FROM bookmarks WHERE deleted_at IS NULL`,
-        bind: [newId(), kind, typeId, targetId, label, ts],
+        bind: [newId(), kind, collectionId, targetId, label, ts],
       },
     ]);
     this.emit({ scope: "bookmarks" });
@@ -482,77 +482,77 @@ export class SqliteRepository implements Repository {
     this.emit({ scope: "bookmarks" });
   }
 
-  async listTemplates(): Promise<Template[]> {
-    const rows = await this.db.select<TemplateRow>("SELECT * FROM templates WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE");
+  async listComponents(): Promise<Component[]> {
+    const rows = await this.db.select<ComponentRow>("SELECT * FROM components WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE");
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
       params: parseJson<string[]>(r.params, []),
       code: r.code,
-      output: isTemplateOutput(r.output) ? r.output : "markdown",
+      output: isComponentOutput(r.output) ? r.output : "markdown",
       frameRatio: r.frame_ratio,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
   }
 
-  async saveTemplate(x: Template): Promise<void> {
+  async saveComponent(x: Component): Promise<void> {
     await this.db.write([
       {
-        sql: `INSERT INTO templates (id, name, params, code, output, frame_ratio, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?6, ?7, ?5, ?5)
+        sql: `INSERT INTO components (id, name, params, code, output, frame_ratio, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?6, ?7, ?5, ?5)
               ON CONFLICT (id) DO UPDATE SET name = excluded.name, params = excluded.params, code = excluded.code,
                 output = excluded.output, frame_ratio = excluded.frame_ratio, updated_at = excluded.updated_at`,
         bind: [x.id, x.name, JSON.stringify(x.params), x.code, now(), x.output, x.frameRatio],
       },
     ]);
-    this.emit({ scope: "templates" });
+    this.emit({ scope: "components" });
   }
 
-  async deleteTemplate(templateId: string, options: { withFields?: boolean } = {}): Promise<void> {
-    const users = await this.db.select<{ id: string; field: string; type: string }>(
-      `SELECT f.id, f.name AS field, t.name AS type FROM fields f JOIN object_types t ON t.id = f.type_id
-        WHERE f.template_id = ?1 AND f.deleted_at IS NULL AND t.deleted_at IS NULL`,
-      [templateId],
+  async deleteComponent(componentId: string, options: { withFields?: boolean } = {}): Promise<void> {
+    const users = await this.db.select<{ id: string; field: string; collection: string }>(
+      `SELECT f.id, f.name AS field, t.name AS collection FROM fields f JOIN collections t ON t.id = f.collection_id
+        WHERE f.component_id = ?1 AND f.deleted_at IS NULL AND t.deleted_at IS NULL`,
+      [componentId],
     );
     if (users.length > 0 && !options.withFields) {
-      throw new Error(`Still used by ${users.map((u) => `“${u.field}” of ${u.type}`).join(", ")}. Remove those fields first.`);
+      throw new Error(`Still used by ${users.map((u) => `“${u.field}” of ${u.collection}`).join(", ")}. Remove those fields first.`);
     }
-    // A type always keeps a field: one whose only fields use this template can't lose them.
-    const emptied = await this.db.select<{ type: string }>(
-      `SELECT t.name AS type FROM object_types t
+    // A collection always keeps a field: one whose only fields use this component can't lose them.
+    const emptied = await this.db.select<{ collection: string }>(
+      `SELECT t.name AS collection FROM collections t
         WHERE t.deleted_at IS NULL
-          AND EXISTS (SELECT 1 FROM fields f WHERE f.type_id = t.id AND f.deleted_at IS NULL AND f.template_id = ?1)
-          AND NOT EXISTS (SELECT 1 FROM fields f WHERE f.type_id = t.id AND f.deleted_at IS NULL AND f.template_id IS NOT ?1)`,
-      [templateId],
+          AND EXISTS (SELECT 1 FROM fields f WHERE f.collection_id = t.id AND f.deleted_at IS NULL AND f.component_id = ?1)
+          AND NOT EXISTS (SELECT 1 FROM fields f WHERE f.collection_id = t.id AND f.deleted_at IS NULL AND f.component_id IS NOT ?1)`,
+      [componentId],
     );
     if (emptied.length > 0) {
-      throw new Error(`${emptied.map((e) => e.type).join(", ")} would be left without fields. Add another field there first.`);
+      throw new Error(`${emptied.map((e) => e.collection).join(", ")} would be left without fields. Add another field there first.`);
     }
     const ts = now();
     await this.db.write([
-      // Its fields go first (soft delete, like removing them in the type editor).
+      // Its fields go first (soft delete, like removing them in the collection editor).
       ...users.map((u) => ({ sql: "UPDATE fields SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, u.id] })),
-      { sql: "UPDATE templates SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, templateId] },
+      { sql: "UPDATE components SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, componentId] },
     ]);
-    this.emit({ scope: "templates" }, ...(users.length > 0 ? [{ scope: "types" } as const] : []));
+    this.emit({ scope: "components" }, ...(users.length > 0 ? [{ scope: "collections" } as const] : []));
   }
 
   async deleteView(viewId: string): Promise<void> {
-    const typeId = (await this.db.select<{ type_id: string }>("SELECT type_id FROM views WHERE id = ?1", [viewId]))[0]?.type_id;
+    const collectionId = (await this.db.select<{ collection_id: string }>("SELECT collection_id FROM views WHERE id = ?1", [viewId]))[0]?.collection_id;
     await this.db.write([{ sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [now(), viewId] }]);
-    if (typeId) this.emit({ scope: "views", typeId });
+    if (collectionId) this.emit({ scope: "views", collectionId });
   }
 
-  async deleteObject(objectId: string): Promise<void> {
-    const typeId = await this.typeOfObject(objectId);
+  async deleteItem(itemId: string): Promise<void> {
+    const collectionId = await this.collectionOfItem(itemId);
     await this.db.write([
-      { sql: "UPDATE objects SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [now(), objectId] },
-      ...(await this.releaseFilesWhere("object_id = ?1", [objectId])),
+      { sql: "UPDATE items SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [now(), itemId] },
+      ...(await this.releaseFilesWhere("item_id = ?1", [itemId])),
     ]);
-    if (typeId) this.emit({ scope: "objects", typeId, objectId });
+    if (collectionId) this.emit({ scope: "items", collectionId, itemId });
   }
 
-  async search(query: string, types: ObjectType[], limit = 50): Promise<ObjectInstance[]> {
+  async search(query: string, collections: Collection[], limit = 50): Promise<Item[]> {
     const q = query.trim();
     if (!q) return [];
     // Case-insensitive for ASCII only (SQLite's lower()); fine until there is an FTS index.
@@ -560,7 +560,7 @@ export class SqliteRepository implements Repository {
     // "\[\[" (and "*" as "\*", …), which a search for what was typed must still find.
     const hits = await this.db.select<{ id: string }>(
       `SELECT o.id FROM field_values fv
-         JOIN objects o ON o.id = fv.object_id
+         JOIN items o ON o.id = fv.item_id
          JOIN fields f ON f.id = fv.field_id
         WHERE o.deleted_at IS NULL AND f.deleted_at IS NULL
           AND f.kind IN ('string', 'markdown', 'html', 'string_list', 'checklist')
@@ -572,19 +572,19 @@ export class SqliteRepository implements Repository {
     );
     if (hits.length === 0) return [];
     const ids = JSON.stringify(hits.map((h) => h.id));
-    const objects = await this.db.select<ObjectRow>("SELECT * FROM objects WHERE id IN (SELECT value FROM json_each(?1))", [
+    const items = await this.db.select<ItemRow>("SELECT * FROM items WHERE id IN (SELECT value FROM json_each(?1))", [
       ids,
     ]);
     const values = await this.db.select<ValueRow>(
-      "SELECT * FROM field_values WHERE object_id IN (SELECT value FROM json_each(?1))",
+      "SELECT * FROM field_values WHERE item_id IN (SELECT value FROM json_each(?1))",
       [ids],
     );
-    const byId = new Map<string, ObjectInstance>();
-    for (const type of types) {
-      const own = objects.filter((o) => o.type_id === type.id);
-      if (own.length > 0) this.assemble(type, own, values).forEach((e) => byId.set(e.id, e));
+    const byId = new Map<string, Item>();
+    for (const collection of collections) {
+      const own = items.filter((o) => o.collection_id === collection.id);
+      if (own.length > 0) this.assemble(collection, own, values).forEach((e) => byId.set(e.id, e));
     }
-    return hits.map((h) => byId.get(h.id)).filter((e): e is ObjectInstance => !!e);
+    return hits.map((h) => byId.get(h.id)).filter((e): e is Item => !!e);
   }
 
   async releaseFiles(fileIds: string[]): Promise<void> {
@@ -626,23 +626,23 @@ export class SqliteRepository implements Repository {
     return rows[0] ?? null;
   }
 
-  private assemble(type: ObjectType, objects: ObjectRow[], values: ValueRow[]): ObjectInstance[] {
-    const fieldsById = new Map(type.fields.map((f) => [f.id, f]));
-    const byObject = new Map<string, Record<string, FieldValue>>();
+  private assemble(collection: Collection, items: ItemRow[], values: ValueRow[]): Item[] {
+    const fieldsById = new Map(collection.fields.map((f) => [f.id, f]));
+    const byItem = new Map<string, Record<string, FieldValue>>();
     for (const v of values) {
       const field = fieldsById.get(v.field_id);
       if (!field) continue; // value of a removed field
       const spec = fieldKinds[field.kind];
-      const record = byObject.get(v.object_id) ?? {};
+      const record = byItem.get(v.item_id) ?? {};
       // A number with {{ }} sections is stored as its text (see valueStatement).
       record[field.id] = field.kind === "number" && v.value_number == null && v.value_text != null ? v.value_text : spec.fromDb(v[spec.column]);
-      byObject.set(v.object_id, record);
+      byItem.set(v.item_id, record);
     }
-    return objects.map((o) => ({
+    return items.map((o) => ({
       id: o.id,
-      typeId: o.type_id,
-      values: byObject.get(o.id) ?? {},
-      objectViewId: o.object_view_id,
+      collectionId: o.collection_id,
+      values: byItem.get(o.id) ?? {},
+      itemViewId: o.item_view_id,
       createdAt: o.created_at,
       updatedAt: o.updated_at,
     }));
@@ -650,8 +650,8 @@ export class SqliteRepository implements Repository {
 }
 
 /**
- * Deletes a file once no live object uses it. Runs after the statements that drop
- * the reference, in the same transaction. Rows of soft-deleted objects/fields
+ * Deletes a file once no live item uses it. Runs after the statements that drop
+ * the reference, in the same transaction. Rows of soft-deleted items/fields
  * still point at their files (and the FK forbids dangling ones), so those links
  * are cleared first — only when no live reference remains.
  */
@@ -659,7 +659,7 @@ function releaseFile(fileId: string): Statement[] {
   // A live use is an image field value, or a markdown or HTML value mentioning `files/<id>`.
   const liveUse = `EXISTS (
       SELECT 1 FROM field_values fv
-        JOIN objects o ON o.id = fv.object_id
+        JOIN items o ON o.id = fv.item_id
         JOIN fields f ON f.id = fv.field_id
        WHERE o.deleted_at IS NULL AND f.deleted_at IS NULL
          AND (fv.value_file = ?1 OR (f.kind IN ('markdown', 'html') AND instr(fv.value_text, 'files/' || ?1) > 0)))`;
@@ -678,14 +678,14 @@ function releaseFile(fileId: string): Statement[] {
 }
 
 /** A reference field's choice filters as stored (JSON), or null for other fields / none. */
-const choices = (f: ObjectTypeDraft["fields"][number]) =>
-  (f.kind === "object" || f.kind === "object_list") && f.choiceFilter.length > 0 ? JSON.stringify(f.choiceFilter) : null;
+const choices = (f: CollectionDraft["fields"][number]) =>
+  (f.kind === "item" || f.kind === "item_list") && f.choiceFilter.length > 0 ? JSON.stringify(f.choiceFilter) : null;
 
-/** A template field's variable mapping as stored (JSON), or null for other fields / none. */
-const args = (f: ObjectTypeDraft["fields"][number]) =>
-  f.kind === "template" && Object.keys(f.templateArgs).length > 0 ? JSON.stringify(f.templateArgs) : null;
+/** A component field's variable mapping as stored (JSON), or null for other fields / none. */
+const args = (f: CollectionDraft["fields"][number]) =>
+  f.kind === "component" && Object.keys(f.componentArgs).length > 0 ? JSON.stringify(f.componentArgs) : null;
 
-function valueStatement(objectId: string, field: FieldDef, value: FieldValue, ts: string): Statement {
+function valueStatement(itemId: string, field: FieldDef, value: FieldValue, ts: string): Statement {
   const spec = fieldKinds[field.kind];
   const cols: Record<string, string | number | null> = {
     value_text: null,
@@ -701,10 +701,10 @@ function valueStatement(objectId: string, field: FieldDef, value: FieldValue, ts
   // A number field's {{ }} sections (computed when shown) are text: kept in value_text.
   if (field.kind === "number" && hasSections(value)) cols.value_text = value;
   return {
-    sql: `INSERT INTO field_values (object_id, field_id, value_text, value_number, value_date, value_datetime,
+    sql: `INSERT INTO field_values (item_id, field_id, value_text, value_number, value_date, value_datetime,
                                       value_bool, value_ref, value_file, value_json, updated_at)
           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-          ON CONFLICT (object_id, field_id) DO UPDATE SET
+          ON CONFLICT (item_id, field_id) DO UPDATE SET
             value_text = excluded.value_text,
             value_number = excluded.value_number,
             value_date = excluded.value_date,
@@ -715,7 +715,7 @@ function valueStatement(objectId: string, field: FieldDef, value: FieldValue, ts
             value_json = excluded.value_json,
             updated_at = excluded.updated_at`,
     bind: [
-      objectId,
+      itemId,
       field.id,
       cols.value_text,
       cols.value_number,

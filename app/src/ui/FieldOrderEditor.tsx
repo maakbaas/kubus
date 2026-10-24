@@ -1,18 +1,18 @@
 import { useState } from "react";
 import { Button, Checkbox, FormGroup, IconButton } from "@carbon/react";
 import { Add, ArrowDown, ArrowUp, Tag, TagNone } from "@carbon/icons-react";
-import { isMetaField, type FieldDef, type ObjectType } from "../domain/model";
+import { isMetaField, type FieldDef, type Collection } from "../domain/model";
 import { FieldLabel } from "./fieldKindIcons";
 import { FieldModal } from "./FieldModal";
 
 /**
- * Picks which fields are shown and in which order (table columns, card fields, object pages):
+ * Picks which fields are shown and in which order (table columns, card fields, item pages):
  * every field with a checkbox, the shown ones first in their order with up / down arrows, the
- * hidden ones after them. `value` null = the default: all fields in the type's order, except
- * `hiddenByDefault` (e.g. an object page's title field, already shown as its title), which still
+ * hidden ones after them. `value` null = the default: all fields in the collection's order, except
+ * `hiddenByDefault` (e.g. an item page's title field, already shown as its title), which still
  * show when ticked. With `hiddenLabels`, each shown
- * field also gets a toggle for its name. With `type`, fields can be added here (a field of the
- * type, shown in this view; templates too).
+ * field also gets a toggle for its name. With `collection`, fields can be added here (a field of the
+ * collection, shown in this view; components too).
  */
 export function FieldOrderEditor({
   id,
@@ -23,7 +23,7 @@ export function FieldOrderEditor({
   hiddenByDefault = [],
   hiddenLabels,
   onHiddenLabelsChange,
-  type,
+  collection,
 }: {
   id: string;
   label: string;
@@ -34,8 +34,8 @@ export function FieldOrderEditor({
   /** Fields shown without their name; omit for no name toggles. */
   hiddenLabels?: string[];
   onHiddenLabelsChange?(ids: string[]): void;
-  /** The type: enables adding fields from here. */
-  type?: ObjectType;
+  /** The collection: enables adding fields from here. */
+  collection?: Collection;
 }) {
   /** Whether the add-field dialog is open. */
   const [adding, setAdding] = useState(false);
@@ -89,14 +89,14 @@ export function FieldOrderEditor({
           </div>
         );
       })}
-      {type && (
+      {collection && (
         <Button kind="tertiary" size="sm" renderIcon={Add} iconDescription="Add field" className="field-order__add" onClick={() => setAdding(true)}>
           Add field
         </Button>
       )}
-      {type && adding && (
+      {collection && adding && (
         <FieldModal
-          type={type}
+          collection={collection}
           field={null}
           onClose={() => setAdding(false)}
           onSaved={() => {

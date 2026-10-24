@@ -1,0 +1,188 @@
+// One loaded copy of each collection's items (and of their labels), shared by every pane and page.
+//
+// Pages used to load a collection's items themselves, so the same items could be in memory several
+// times and every pane re-read them on its own. Here a collection is loaded once while anything
+// shows it, kept up to date from the repository's change feed (one changed item is re-read, not
+// the whole collection), and dropped shortly after the last viewer leaves. Items that didn't change
+// keep their identity, so what is derived from them (computed values, memoized rows) stays valid.
+
+import type { DataChange, Repository } from "../data/repository";
+import type { Item, ItemLabel, Collection } from "../domain/model";
+
+/** What a viewer sees of a collection; replaced (never changed) whenever the collection changes. */
+export interface Snapshot<T> {
+  /** null until loaded. */
+  items: T[] | null;
+  error?: string;
+  /** Counts the changes, for viewers that combine several collections. */
+  version: number;
+}
+
+const EMPTY: Snapshot<never> = { items: null, version: 0 };
+
+/** How long a collection stays (and stays current) after its last viewer left, e.g. switching tabs back. */
+const GRACE_MS = 10_000;
+
+interface Source<T> {
+  list(collection: Collection): Promise<T[]>;
+  one(collection: Collection, id: string): Promise<T | null>;
+}
+
+interface Entry<T> {
+  snapshot: Snapshot<T>;
+  listeners: Set<() => void>;
+  /** The collection's field ids in order: when they change, what was loaded may no longer fit. */
+  fieldKey: string;
+  /** Single-item reloads in progress, by id. */
+  reloading: Map<string, Promise<void>>;
+  /** Counts full loads, so a slow older one can't overwrite a newer one. */
+  generation: number;
+  dropTimer?: ReturnType<typeof setTimeout>;
+}
+
+const fieldKeyOf = (collection: Collection | undefined) => (collection ? collection.fields.map((f) => f.id).join(",") : "");
+const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** The loaded items of each collection, by collection id. */
+export class SharedCache<T extends { id: string }> {
+  private entries = new Map<string, Entry<T>>();
+
+  constructor(
+    private source: Source<T>,
+    private collectionOf: (collectionId: string) => Collection | undefined,
+  ) {}
+
+  /** What is loaded for a collection now (an empty snapshot when nothing shows it). */
+  snapshot(collectionId: string): Snapshot<T> {
+    return this.entries.get(collectionId)?.snapshot ?? (EMPTY as Snapshot<T>);
+  }
+
+  /** Starts keeping the collection's items loaded and current for `listener`; returns the unsubscribe. */
+  subscribe(collectionId: string, listener: () => void): () => void {
+    let entry = this.entries.get(collectionId);
+    if (!entry) {
+      const collection = this.collectionOf(collectionId);
+      entry = {
+        snapshot: { items: collection ? null : [], version: 0 },
+        listeners: new Set(),
+        fieldKey: fieldKeyOf(collection),
+        reloading: new Map(),
+        generation: 0,
+      };
+      this.entries.set(collectionId, entry);
+      if (collection) void this.reload(collectionId);
+    }
+    clearTimeout(entry.dropTimer);
+    const own = entry;
+    own.listeners.add(listener);
+    return () => {
+      own.listeners.delete(listener);
+      if (own.listeners.size > 0) return;
+      own.dropTimer = setTimeout(() => {
+        if (own.listeners.size === 0 && this.entries.get(collectionId) === own) this.entries.delete(collectionId);
+      }, GRACE_MS);
+    };
+  }
+
+  /** Loads the whole collection again. */
+  async reload(collectionId: string): Promise<void> {
+    const entry = this.entries.get(collectionId);
+    const collection = this.collectionOf(collectionId);
+    if (!entry || !collection) return;
+    const generation = ++entry.generation;
+    try {
+      const items = await this.source.list(collection);
+      if (entry.generation === generation) this.set(entry, items);
+    } catch (e) {
+      if (entry.generation === generation) this.set(entry, entry.snapshot.items, messageOf(e));
+    }
+  }
+
+  /** Reads one item again: replaced when known, added when new, dropped when gone. */
+  refresh(collectionId: string, id: string): Promise<void> {
+    const entry = this.entries.get(collectionId);
+    const collection = this.collectionOf(collectionId);
+    if (!entry || !collection) return Promise.resolve();
+    if (!entry.snapshot.items) {
+      // A full load is under way, perhaps started before this change: it must start again.
+      return this.reload(collectionId);
+    }
+    const job: Promise<void> = this.source
+      .one(collection, id)
+      .then((item) => {
+        const list = entry.snapshot.items;
+        if (!list) return;
+        const rest = list.filter((x) => x.id !== id);
+        if (!item) return this.set(entry, rest);
+        this.set(entry, rest.length === list.length ? [item, ...rest] : list.map((x) => (x.id === id ? item : x)));
+      })
+      .catch((e) => this.set(entry, entry.snapshot.items, messageOf(e)))
+      .finally(() => {
+        if (entry.reloading.get(id) === job) entry.reloading.delete(id);
+      });
+    entry.reloading.set(id, job);
+    return job;
+  }
+
+  /** The reload of an item already under way (begun by its change), else a new one. */
+  settled(collectionId: string, id: string): Promise<void> {
+    return this.entries.get(collectionId)?.reloading.get(id) ?? this.refresh(collectionId, id);
+  }
+
+  /** Changes one item right away (an edit shown before it is saved); the saved result replaces it. */
+  patch(collectionId: string, id: string, update: (item: T) => T) {
+    const entry = this.entries.get(collectionId);
+    const list = entry?.snapshot.items;
+    if (entry && list) this.set(entry, list.map((x) => (x.id === id ? update(x) : x)));
+  }
+
+  /** Applies a committed change. */
+  handle(change: DataChange) {
+    if (change.scope !== "items") return;
+    if (change.itemId) void this.refresh(change.collectionId, change.itemId);
+    else void this.reload(change.collectionId);
+  }
+
+  /** The collections were reloaded: collections whose collection got other fields are loaded again. */
+  collectionsChanged() {
+    for (const [collectionId, entry] of this.entries) {
+      const key = fieldKeyOf(this.collectionOf(collectionId));
+      if (key === entry.fieldKey) continue;
+      entry.fieldKey = key;
+      void this.reload(collectionId);
+    }
+  }
+
+  private set(entry: Entry<T>, items: T[] | null, error?: string) {
+    entry.snapshot = { items, error, version: entry.snapshot.version + 1 };
+    for (const listener of entry.listeners) listener();
+  }
+}
+
+/** The shared collections: items, and their labels alone (what references and pickers need). */
+export class ItemCache {
+  readonly items: SharedCache<Item>;
+  readonly labels: SharedCache<ItemLabel>;
+  private unsubscribe: () => void;
+
+  constructor(repo: Repository, collectionOf: (collectionId: string) => Collection | undefined) {
+    this.items = new SharedCache({ list: (t) => repo.listItems(t), one: (t, id) => repo.getItem(t, id) }, collectionOf);
+    this.labels = new SharedCache(
+      { list: (t) => repo.listLabels(t), one: async (t, id) => (await repo.listLabels(t, [id]))[0] ?? null },
+      collectionOf,
+    );
+    this.unsubscribe = repo.subscribe((change) => {
+      this.items.handle(change);
+      this.labels.handle(change);
+    });
+  }
+
+  collectionsChanged() {
+    this.items.collectionsChanged();
+    this.labels.collectionsChanged();
+  }
+
+  dispose() {
+    this.unsubscribe();
+  }
+}

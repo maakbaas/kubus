@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "@carbon/react";
 import { openModeOf, useOpenRelated } from "../workspace/Workspace";
 
-/** A link to a related object: click = here, Ctrl/Cmd click = beside, middle click = new tab. */
+/** A link to a related item: click = here, Ctrl/Cmd click = beside, middle click = new tab. */
 export function RelatedLink({ path, children }: { path: string; children: ReactNode }) {
   const openRelated = useOpenRelated();
   return (

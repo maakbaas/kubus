@@ -5,9 +5,9 @@ import { useNavigate, useSearchParams } from "react-router";
 import { ContainedList, ContainedListItem, InlineNotification, Tag } from "@carbon/react";
 import { useStore } from "../app/store";
 import { markdownExcerpt, type MarkdownExcerpt } from "../domain/markdownExcerpt";
-import { objectLabel, labelField, type FieldDef, type ObjectInstance, type ObjectType } from "../domain/model";
+import { itemLabel, labelField, type FieldDef, type Item, type Collection } from "../domain/model";
 import { Highlight } from "../ui/Highlight";
-import { TypeIcon } from "../ui/typeIcons";
+import { CollectionIcon } from "../ui/collectionIcons";
 import { MarkdownView } from "../ui/MarkdownView";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage } from "../ui/useConfirm";
@@ -26,12 +26,12 @@ function textExcerpt(text: string, query: string): string {
  * An excerpt for every field whose value contains the query, in field order.
  * The label field is skipped: it is already shown (highlighted) as the result's title.
  */
-function excerpts(type: ObjectType, object: ObjectInstance, query: string): Excerpt[] {
+function excerpts(collection: Collection, item: Item, query: string): Excerpt[] {
   const q = query.toLowerCase();
-  const title = labelField(type, object);
-  return type.fields.flatMap((field): Excerpt[] => {
+  const title = labelField(collection, item);
+  return collection.fields.flatMap((field): Excerpt[] => {
     if (field.id === title?.id) return [];
-    const v = object.values[field.id];
+    const v = item.values[field.id];
     if (field.kind === "markdown" && typeof v === "string" && v.toLowerCase().includes(q)) {
       const markdown = markdownExcerpt(v, query);
       // Empty when the match is only in syntax spanning blocks (e.g. a URL); nothing useful to show.
@@ -58,26 +58,26 @@ function excerpts(type: ObjectType, object: ObjectInstance, query: string): Exce
 }
 
 export function SearchPage() {
-  const { repo, types } = useStore();
+  const { repo, collections } = useStore();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const typed = params.get("q") ?? "";
   // The results with the query they are for: shown until the next ones are in, so the list
   // doesn't empty (and a spinner flash) on every keystroke.
-  const [results, setResults] = useState<{ query: string; objects: ObjectInstance[] } | null>(null);
+  const [results, setResults] = useState<{ query: string; items: Item[] } | null>(null);
   const query = results?.query ?? "";
   const [error, setError] = useState<string>();
-  // The latest types, read when the search runs (a type edit alone doesn't search again).
-  const typesRef = useRef(types);
-  typesRef.current = types;
+  // The latest collections, read when the search runs (a collection edit alone doesn't search again).
+  const collectionsRef = useRef(collections);
+  collectionsRef.current = collections;
 
   // The box searches as you type: query once typing pauses, not on every keystroke.
   useEffect(() => {
     let cancelled = false;
     const timer = window.setTimeout(
       () =>
-        repo.search(typed, typesRef.current).then(
-          (objects) => !cancelled && setResults({ query: typed, objects }),
+        repo.search(typed, collectionsRef.current).then(
+          (items) => !cancelled && setResults({ query: typed, items }),
           (e) => !cancelled && setError(errorMessage(e)),
         ),
       150,
@@ -89,39 +89,39 @@ export function SearchPage() {
   }, [repo, typed]);
 
   // The database matches raw text (including markdown syntax such as URLs); keep only
-  // objects with a visible match: in the title or in at least one excerpt.
+  // items with a visible match: in the title or in at least one excerpt.
   // (Excerpts parse markdown: computed once per result set, not on every render.)
   const hits = useMemo(
     () =>
-      (results?.objects ?? []).flatMap((object) => {
-        const type = types.find((t) => t.id === object.typeId);
-        if (!type) return [];
-        const matches = excerpts(type, object, query);
-        const titleMatches = objectLabel(type, object).toLowerCase().includes(query.trim().toLowerCase());
-        return titleMatches || matches.length > 0 ? [{ object, type, matches }] : [];
+      (results?.items ?? []).flatMap((item) => {
+        const collection = collections.find((t) => t.id === item.collectionId);
+        if (!collection) return [];
+        const matches = excerpts(collection, item, query);
+        const titleMatches = itemLabel(collection, item).toLowerCase().includes(query.trim().toLowerCase());
+        return titleMatches || matches.length > 0 ? [{ item, collection: collection, matches }] : [];
       }),
-    [results, types, query],
+    [results, collections, query],
   );
 
-  // Objects (types) match on their names and description; they are all in memory.
+  // Items (collections) match on their names and description; they are all in memory.
   const q = query.trim().toLowerCase();
-  const typeHits = q
-    ? types.filter((t) => [t.name, t.pluralName, t.description].some((text) => text.toLowerCase().includes(q)))
+  const collectionHits = q
+    ? collections.filter((t) => [t.name, t.pluralName, t.description].some((text) => text.toLowerCase().includes(q)))
     : [];
-  const nothingFound = query && results !== null && hits.length === 0 && typeHits.length === 0;
+  const nothingFound = query && results !== null && hits.length === 0 && collectionHits.length === 0;
 
   return (
     <>
-      <PageHeader title="Search" subtitle={typed ? `Results for “${typed}”` : "Type in the search box to find types and objects."} />
+      <PageHeader title="Search" subtitle={typed ? `Results for “${typed}”` : "Type in the search box to find collections and items."} />
       {error && <InlineNotification kind="error" title="Search failed" subtitle={error} onClose={() => setError(undefined)} />}
       {nothingFound && <p className="helper">Nothing found.</p>}
-      {typeHits.length > 0 && (
-        <ContainedList label={`${typeHits.length} ${typeHits.length === 1 ? "type" : "types"}`} kind="on-page">
-          {typeHits.map((t) => (
-            <ContainedListItem key={t.id} onClick={() => navigate(`/types/${t.id}/objects`)}>
+      {collectionHits.length > 0 && (
+        <ContainedList label={`${collectionHits.length} ${collectionHits.length === 1 ? "collection" : "collections"}`} kind="on-page">
+          {collectionHits.map((t) => (
+            <ContainedListItem key={t.id} onClick={() => navigate(`/collections/${t.id}/items`)}>
               <div className="search-hit">
                 <div className="search-hit__title">
-                  <TypeIcon name={t.icon} />
+                  <CollectionIcon name={t.icon} />
                   <span>
                     <Highlight text={t.pluralName} query={query} />
                   </span>
@@ -142,17 +142,17 @@ export function SearchPage() {
         </ContainedList>
       )}
       {hits.length > 0 && (
-        <ContainedList label={`${hits.length}${results?.objects.length === 50 ? "+" : ""} objects`} kind="on-page">
-          {hits.map(({ object, type, matches }) => {
+        <ContainedList label={`${hits.length}${results?.items.length === 50 ? "+" : ""} items`} kind="on-page">
+          {hits.map(({ item, collection: collection, matches }) => {
             return (
-              <ContainedListItem key={object.id} onClick={() => navigate(`/types/${type.id}/objects/${object.id}`)}>
+              <ContainedListItem key={item.id} onClick={() => navigate(`/collections/${collection.id}/items/${item.id}`)}>
                 <div className="search-hit">
                   <div className="search-hit__title">
                     <span>
-                      <Highlight text={objectLabel(type, object)} query={query} />
+                      <Highlight text={itemLabel(collection, item)} query={query} />
                     </span>
                     <Tag size="sm" type="cool-gray">
-                      {type.name}
+                      {collection.name}
                     </Tag>
                   </div>
                   {matches.map((ex) => (

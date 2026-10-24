@@ -3,22 +3,22 @@ import { Accordion, AccordionItem, Checkbox, ClickableTile, Select, SelectItem, 
 import { Grid as GridIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { fileIdFromSrc } from "../domain/files";
-import { objectLabel, labelField, fieldValue, pickableFields, type FieldDef, type ObjectInstance, type ObjectType } from "../domain/model";
-import { outputOf, type Template } from "../domain/templates";
-import { HtmlFrame } from "../ui/TemplateValue";
+import { itemLabel, labelField, fieldValue, pickableFields, type FieldDef, type Item, type Collection } from "../domain/model";
+import { outputOf, type Component } from "../domain/components";
+import { HtmlFrame } from "../ui/ComponentValue";
 import { Highlight } from "../ui/Highlight";
 import { orderFields } from "../domain/fieldLayout";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { MarkdownView } from "../ui/MarkdownView";
 import { useFileUrl } from "../ui/images";
 import { isEmptyValue, isGrouped } from "../domain/query";
-import { objectLinkProps, FieldCell } from "./cells";
+import { itemLinkProps, FieldCell } from "./cells";
 import type { RefOptions } from "../ui/useReferenceOptions";
-import { defineViewType, type ObjectActions, type ViewProps } from "./registry";
+import { defineViewType, type ItemActions, type ViewProps } from "./registry";
 
 /** Card view options: which fields show on a card, and which image field is its cover. */
 export interface CardOptions {
-  /** Field ids shown on the card (in the type's field order); null = all fields. */
+  /** Field ids shown on the card (in the collection's field order); null = all fields. */
   fields: string[] | null;
   /** Field shown as the card's cover: an image, or a markdown field rendered in its place; null = none. */
   coverFieldId: string | null;
@@ -29,7 +29,7 @@ export interface CardOptions {
    * "auto" = the average ratio of the collection's cover images, filled (cropping what differs).
    */
   coverRatio: CoverRatio;
-  /** Show the object's title on the card. With no title and no fields a card is just its cover. */
+  /** Show the item's title on the card. With no title and no fields a card is just its cover. */
   showTitle: boolean;
   /** Fields shown without their name. */
   hiddenLabels: string[];
@@ -62,19 +62,19 @@ const ratioOf = (r: Exclude<CoverRatio, "auto">) => {
 /** Card width slider range, in rem. */
 const CARD_WIDTH = { min: 8, max: 32, step: 1, initial: 16 };
 
-const imageFields = (type: ObjectType) => type.fields.filter((f) => f.kind === "image");
+const imageFields = (collection: Collection) => collection.fields.filter((f) => f.kind === "image");
 /** What a cover shows, by its field: an image, rendered Markdown or HTML; null = can't be a cover. */
-function coverKind(field: FieldDef | undefined, templates: Template[]): "image" | "url" | "markdown" | "html" | null {
+function coverKind(field: FieldDef | undefined, components: Component[]): "image" | "url" | "markdown" | "html" | null {
   if (!field) return null;
   if (field.kind === "image") return "image";
   if (field.kind === "markdown") return "markdown";
   if (field.kind === "html") return "html";
-  if (field.kind !== "template") return null;
-  const output = outputOf(field, templates);
+  if (field.kind !== "component") return null;
+  const output = outputOf(field, components);
   return output === "image" ? "url" : output === "markdown" || output === "html" ? output : null;
 }
-/** Fields that can be a card's cover: images, Markdown and HTML (rendered as the cover), and templates giving any of them. */
-const coverFields = (type: ObjectType, templates: Template[]) => type.fields.filter((f) => coverKind(f, templates) !== null);
+/** Fields that can be a card's cover: images, Markdown and HTML (rendered as the cover), and components giving any of them. */
+const coverFields = (collection: Collection, components: Component[]) => collection.fields.filter((f) => coverKind(f, components) !== null);
 
 /** Shape and average colour of each cover image, per file id, for the session. */
 const measured = new Map<string, { ratio: number; tint: string | null }>();
@@ -120,11 +120,11 @@ function averageColor(img: HTMLImageElement): string | null {
  * the theme's layer colour: a light tint in light themes, a dark one in dark themes.
  */
 function CardCover({ fileId: ownFileId, src: srcProp, onRatio }: { fileId?: string; src?: string; onRatio(key: string, ratio: number): void }) {
-  // A template's result may name a stored file (`files/<sha256>`): then it is that file.
+  // A component's result may name a stored file (`files/<sha256>`): then it is that file.
   const fileId = ownFileId ?? (srcProp ? fileIdFromSrc(srcProp) ?? undefined : undefined);
   const src = fileId ? undefined : srcProp;
   const fileUrl = useFileUrl(fileId ?? null);
-  // A stored image, or one by URL (a template's result); measured under its id or URL.
+  // A stored image, or one by URL (a component's result); measured under its id or URL.
   const url = src ?? fileUrl;
   const key = fileId ?? src ?? "";
   const [failed, setFailed] = useState(false);
@@ -140,7 +140,7 @@ function CardCover({ fileId: ownFileId, src: srcProp, onRatio }: { fileId?: stri
     }
   }, [key, onRatio]);
   return (
-    <div className="object-card__cover" style={tint ? ({ "--cover-tint": tint } as CSSProperties) : undefined}>
+    <div className="item-card__cover" style={tint ? ({ "--cover-tint": tint } as CSSProperties) : undefined}>
       {url && src !== undefined && failed ? (
         <span className="image-missing">Image not found</span>
       ) : (
@@ -167,46 +167,46 @@ function CardCover({ fileId: ownFileId, src: srcProp, onRatio }: { fileId?: stri
   );
 }
 
-interface ObjectCardProps {
-  type: ObjectType;
-  object: ObjectInstance;
+interface ItemCardProps {
+  collection: Collection;
+  item: Item;
   options: CardOptions;
   /** The fields shown on every card (but the cover). */
   shown: FieldDef[];
   kind: ReturnType<typeof coverKind>;
   refs: RefOptions;
   search: string;
-  actions: ObjectActions;
+  actions: ItemActions;
   onRatio(key: string, ratio: number): void;
 }
 
-/** One object's card. Memoized: it isn't rendered again unless its object or the view's settings changed. */
-const ObjectCard = memo(function ObjectCard({ type, object, options, shown, kind, refs, search, actions, onRatio }: ObjectCardProps) {
-  const title = labelField(type, object);
-  const cover = options.coverFieldId ? object.values[options.coverFieldId] : null;
+/** One item's card. Memoized: it isn't rendered again unless its item or the view's settings changed. */
+const ItemCard = memo(function ItemCard({ collection, item, options, shown, kind, refs, search, actions, onRatio }: ItemCardProps) {
+  const title = labelField(collection, item);
+  const cover = options.coverFieldId ? item.values[options.coverFieldId] : null;
   // A hidden title can still be chosen as an ordinary field.
   const titled = options.showTitle ? shown.filter((f) => f.id !== title?.id) : shown;
-  const fields = options.hideEmpty ? titled.filter((f) => !isEmptyValue(fieldValue(object, f))) : titled;
+  const fields = options.hideEmpty ? titled.filter((f) => !isEmptyValue(fieldValue(item, f))) : titled;
   const hasText = options.showTitle || fields.length > 0;
   const hasCover = typeof cover === "string" && !!cover;
   return (
     <ClickableTile
-      href={`#/types/${type.id}/objects/${object.id}`}
-      {...objectLinkProps(object, actions)}
+      href={`#/collections/${collection.id}/items/${item.id}`}
+      {...itemLinkProps(item, actions)}
       className={
-        !hasText ? "object-card object-card--image-only" : hasCover && options.coverPosition === "left" ? "object-card object-card--cover-left" : "object-card"
+        !hasText ? "item-card item-card--image-only" : hasCover && options.coverPosition === "left" ? "item-card item-card--cover-left" : "item-card"
       }
-      aria-label={hasText ? undefined : objectLabel(type, object)}
+      aria-label={hasText ? undefined : itemLabel(collection, item)}
     >
       {typeof cover === "string" &&
         cover &&
         (kind === "markdown" ? (
           // Same area and shape as an image cover; what doesn't fit is cut off.
-          <div className="object-card__cover object-card__cover--markdown">
+          <div className="item-card__cover item-card__cover--markdown">
             <MarkdownView source={cover} highlight={search} variant="excerpt" />
           </div>
         ) : kind === "html" ? (
-          <div className="object-card__cover object-card__cover--html">
+          <div className="item-card__cover item-card__cover--html">
             <HtmlFrame html={cover} fill />
           </div>
         ) : kind === "url" ? (
@@ -215,19 +215,19 @@ const ObjectCard = memo(function ObjectCard({ type, object, options, shown, kind
           <CardCover fileId={cover} onRatio={onRatio} />
         ))}
       {hasText && (
-        <div className="object-card__body">
+        <div className="item-card__body">
       {options.showTitle && (
-        <div className="object-card__title">
-          <Highlight text={objectLabel(type, object)} query={search} />
+        <div className="item-card__title">
+          <Highlight text={itemLabel(collection, item)} query={search} />
         </div>
       )}
       {fields.length > 0 && (
-        <dl className="object-card__fields">
+        <dl className="item-card__fields">
           {fields.map((f) => (
-            <div key={f.id} className="object-card__field">
+            <div key={f.id} className="item-card__field">
               {!options.hiddenLabels.includes(f.id) && <dt className="cds--label">{f.name}</dt>}
               <dd>
-                <FieldCell field={f} object={object} refs={refs} search={search} actions={actions} />
+                <FieldCell field={f} item={item} refs={refs} search={search} actions={actions} />
               </dd>
             </div>
           ))}
@@ -239,14 +239,14 @@ const ObjectCard = memo(function ObjectCard({ type, object, options, shown, kind
   );
 });
 
-export function CardsView({ type, result, options, refs, search, actions }: ViewProps<CardOptions>) {
-  const { templates } = useStore();
+export function CardsView({ collection, result, options, refs, search, actions }: ViewProps<CardOptions>) {
+  const { components } = useStore();
   // The same for every card: the fields shown (but the cover), and what the cover shows.
   const shown = useMemo(
-    () => orderFields(pickableFields(type), options.fields).filter((f) => f.id !== options.coverFieldId),
-    [type, options.fields, options.coverFieldId],
+    () => orderFields(pickableFields(collection), options.fields).filter((f) => f.id !== options.coverFieldId),
+    [collection, options.fields, options.coverFieldId],
   );
-  const kind = coverKind(type.fields.find((f) => f.id === options.coverFieldId), templates);
+  const kind = coverKind(collection.fields.find((f) => f.id === options.coverFieldId), components);
   const grouped = isGrouped(result);
   // "auto": every cover area takes the average ratio of the shown cards' images loaded so far
   // (not of covers seen before: filtered out, deleted, or of another cover field).
@@ -258,8 +258,8 @@ export function CardsView({ type, result, options, refs, search, actions }: View
     if (!options.coverFieldId || (kind !== "image" && kind !== "url")) return [];
     const keys = new Set<string>();
     for (const group of result.groups) {
-      for (const object of group.objects) {
-        const v = object.values[options.coverFieldId];
+      for (const item of group.items) {
+        const v = item.values[options.coverFieldId];
         // Keyed as CardCover reports it: the file id, else the URL.
         if (typeof v === "string" && v) keys.add(kind === "url" ? (fileIdFromSrc(v) ?? v) : v);
       }
@@ -277,17 +277,17 @@ export function CardsView({ type, result, options, refs, search, actions }: View
   const grid = useRef<HTMLDivElement>(null);
   const columns = useCardColumns(grid, options.cardWidth, result.total > 0);
 
-  if (result.total === 0) return <p className="helper view-empty">No {type.pluralName} match.</p>;
+  if (result.total === 0) return <p className="helper view-empty">No {collection.pluralName} match.</p>;
   const cards = (group: (typeof result.groups)[number]) => (
             <div
-              className={options.coverRatio === "auto" ? "object-cards object-cards--auto-ratio" : "object-cards"}
+              className={options.coverRatio === "auto" ? "item-cards item-cards--auto-ratio" : "item-cards"}
               style={{ "--card-columns": columns, "--cover-ratio": coverRatio } as CSSProperties}
             >
-              {group.objects.map((object) => (
-                <ObjectCard
-                  key={object.id}
-                  type={type}
-                  object={object}
+              {group.items.map((item) => (
+                <ItemCard
+                  key={item.id}
+                  collection={collection}
+                  item={item}
                   options={options}
                   shown={shown}
                   kind={kind}
@@ -311,7 +311,7 @@ export function CardsView({ type, result, options, refs, search, actions }: View
               open
               title={
                 <span className="table-group__title">
-                  {group.label} <span className="view-group__count">{group.objects.length}</span>
+                  {group.label} <span className="view-group__count">{group.items.length}</span>
                 </span>
               }
             >
@@ -349,30 +349,32 @@ function useCardColumns(container: RefObject<HTMLDivElement | null>, targetRem: 
   return columns;
 }
 
-function CardOptionsEditor({ type, options, onChange }: { type: ObjectType; options: CardOptions; onChange(o: CardOptions): void }) {
+function CardOptionsEditor({ collection, options, onChange }: { collection: Collection; options: CardOptions; onChange(o: CardOptions): void }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { templates } = useStore();
-  const fieldItems = pickableFields(type).filter((f) => f.kind !== "image");
+  const { components } = useStore();
+  const fieldItems = pickableFields(collection).filter((f) => f.kind !== "image");
   return (
     <div className="view-options">
-      <Checkbox
-        id={`${uid}-cards-show-title`}
-        labelText="Show title"
-        checked={options.showTitle}
-        onChange={(_, { checked }) => onChange({ ...options, showTitle: checked })}
-      />
-      <Checkbox
-        id={`${uid}-cards-hide-empty`}
-        labelText="Hide empty fields"
-        checked={options.hideEmpty}
-        onChange={(_, { checked }) => onChange({ ...options, hideEmpty: checked })}
-      />
+      <div className="view-options__checks">
+        <Checkbox
+          id={`${uid}-cards-show-title`}
+          labelText="Show title"
+          checked={options.showTitle}
+          onChange={(_, { checked }) => onChange({ ...options, showTitle: checked })}
+        />
+        <Checkbox
+          id={`${uid}-cards-hide-empty`}
+          labelText="Hide empty fields"
+          checked={options.hideEmpty}
+          onChange={(_, { checked }) => onChange({ ...options, hideEmpty: checked })}
+        />
+      </div>
       <FieldOrderEditor
         id={`${uid}-cards-fields`}
         label="Fields on cards"
         fields={fieldItems}
-        type={type}
+        collection={collection}
         value={options.fields}
         onChange={(fields) => onChange({ ...options, fields })}
         hiddenLabels={options.hiddenLabels}
@@ -396,7 +398,7 @@ function CardOptionsEditor({ type, options, onChange }: { type: ObjectType; opti
         onChange={(e) => onChange({ ...options, coverFieldId: e.target.value || null })}
       >
         <SelectItem value="" text="None" />
-        {coverFields(type, templates).map((f) => (
+        {coverFields(collection, components).map((f) => (
           <SelectItem key={f.id} value={f.id} text={f.name} />
         ))}
       </Select>
@@ -430,12 +432,12 @@ export const cardsView = defineViewType<CardOptions>({
   kind: "cards",
   label: "Cards",
   icon: GridIcon,
-  defaultOptions: (type) => ({ fields: null, coverFieldId: imageFields(type)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, hiddenLabels: [], hideEmpty: false, coverPosition: "top" }),
+  defaultOptions: (collection) => ({ fields: null, coverFieldId: imageFields(collection)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, hiddenLabels: [], hideEmpty: false, coverPosition: "top" }),
   fieldsOf: (o) => o.fields,
   withFields: (o, fields) => ({ ...o, fields }),
-  normalizeOptions(raw, type) {
+  normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<CardOptions>;
-    const ids = new Set(pickableFields(type).map((f) => f.id));
+    const ids = new Set(pickableFields(collection).map((f) => f.id));
     return {
       fields: Array.isArray(o.fields) ? o.fields.filter((id) => ids.has(id)) : null,
       coverFieldId: (() => {

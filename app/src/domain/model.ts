@@ -1,9 +1,9 @@
 // Storage-agnostic domain model. Nothing in here knows about SQLite or Tauri.
 //
-// Terminology: in the UI an ObjectType is called a "type" (e.g. Book) and an
-// ObjectInstance an "object" (a particular book).
+// Terminology: in the UI an Collection is called a "collection" (e.g. Book) and an
+// Item an "item" (a particular book).
 
-import type { ObjectView } from "./fieldLayout";
+import type { ItemView } from "./fieldLayout";
 import type { FilterRule } from "./query";
 
 export type FieldKind =
@@ -15,54 +15,54 @@ export type FieldKind =
   | "datetime"
   | "checkbox"
   | "image"
-  | "object"
+  | "item"
   | "string_list"
   | "checklist"
-  | "object_list"
-  | "template";
+  | "item_list"
+  | "component";
 
 /**
  * string → string, markdown → GitHub Flavored Markdown source, html → HTML source (shown in a
- * sandboxed frame, like a template's HTML output), number → number,
+ * sandboxed frame, like a component's HTML output), number → number,
  * date → "YYYY-MM-DD", datetime → ISO 8601 UTC string, checkbox → boolean,
- * image → file id (see Repository.putFile), object → id of the referenced object,
+ * image → file id (see Repository.putFile), item → id of the referenced item,
  * string_list → string[], checklist → string[] of "[x] text" / "[ ] text" items (domain/checklist.ts),
- * object_list → object ids (string[])
+ * item_list → item ids (string[])
  */
 export type FieldValue = string | number | boolean | string[] | null;
 
-/** Kinds that reference objects of `FieldDef.targetTypeId`. */
-export const isReferenceKind = (kind: FieldKind) => kind === "object" || kind === "object_list";
+/** Kinds that reference items of `FieldDef.targetCollectionId`. */
+export const isReferenceKind = (kind: FieldKind) => kind === "item" || kind === "item_list";
 
 export function valuesEqual(a: FieldValue | undefined, b: FieldValue | undefined): boolean {
   if (Array.isArray(a) || Array.isArray(b)) return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   return (a ?? null) === (b ?? null);
 }
 
-/** What feeds a template field's variable: a field of the object, or a fixed text / number. */
-export type TemplateArg = { field: string } | { value: string };
+/** What feeds a component field's variable: a field of the item, or a fixed text / number. */
+export type ComponentArg = { field: string } | { value: string };
 
 export interface FieldDef {
   id: string;
-  typeId: string;
+  collectionId: string;
   name: string;
   kind: FieldKind;
-  /** For reference kinds: the type whose objects can be referenced. */
-  targetTypeId: string | null;
-  /** For template fields: the template whose result is shown (computed, never stored). */
-  templateId: string | null;
-  /** For template fields: what feeds each of the template's variables (a field, or a fixed value). */
-  templateArgs: Record<string, TemplateArg>;
-  /** For reference kinds: filters over the target's objects limiting what can be chosen ([] = any). */
+  /** For reference kinds: the collection whose items can be referenced. */
+  targetCollectionId: string | null;
+  /** For component fields: the component whose result is shown (computed, never stored). */
+  componentId: string | null;
+  /** For component fields: what feeds each of the component's variables (a field, or a fixed value). */
+  componentArgs: Record<string, ComponentArg>;
+  /** For reference kinds: filters over the target's items limiting what can be chosen ([] = any). */
   choiceFilter: FilterRule[];
   /** For checkbox and checklist fields: an icon (outlined off, filled on) shown instead of the box; null = the box. */
   toggleIcon: string | null;
   position: number;
 }
 
-export interface ObjectType {
+export interface Collection {
   id: string;
-  /** Singular, e.g. "Author" (one object). */
+  /** Singular, e.g. "Author" (one item). */
   name: string;
   /** Plural, e.g. "Authors" (lists, navigation). */
   pluralName: string;
@@ -70,30 +70,30 @@ export interface ObjectType {
   icon: string | null;
   description: string;
   fields: FieldDef[];
-  /** Object page layouts (the starred one is used unless an object is pinned to another). */
-  objectViews: ObjectView[];
+  /** Item page layouts (the starred one is used unless an item is pinned to another). */
+  itemViews: ItemView[];
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ObjectInstance {
+export interface Item {
   id: string;
-  typeId: string;
+  collectionId: string;
   /** Keyed by field id. Missing key = no value. */
   values: Record<string, FieldValue>;
-  /** The object view this object is pinned to, instead of its type's default. */
-  objectViewId?: string | null;
+  /** The item view this item is pinned to, instead of its collection's default. */
+  itemViewId?: string | null;
   /** Values rendered from their own {{ }} sections (withComputed): the typed source, for editing. */
   sources?: Record<string, FieldValue>;
   createdAt: string;
   updatedAt: string;
 }
 
-/** A field as edited and saved: the field without what the repository fills in (its type, its place). */
-export type FieldDraft = Omit<FieldDef, "typeId" | "position">;
+/** A field as edited and saved: the field without what the repository fills in (its collection, its place). */
+export type FieldDraft = Omit<FieldDef, "collectionId" | "position">;
 
-/** Whole-type edit: the repository diffs `fields` against what is stored. */
-export interface ObjectTypeDraft {
+/** Whole-collection edit: the repository diffs `fields` against what is stored. */
+export interface CollectionDraft {
   id: string;
   name: string;
   pluralName: string;
@@ -103,21 +103,21 @@ export interface ObjectTypeDraft {
   fields: FieldDraft[];
 }
 
-/** An object as a draft for saving, its fields as they are. */
-export const typeDraft = ({ id, name, pluralName, icon, description, fields }: ObjectType): ObjectTypeDraft => ({
+/** An item as a draft for saving, its fields as they are. */
+export const collectionDraft = ({ id, name, pluralName, icon, description, fields }: Collection): CollectionDraft => ({
   id,
   name,
   pluralName,
   icon,
   description,
-  fields: fields.map(({ typeId: _typeId, position: _position, ...field }) => field),
+  fields: fields.map(({ collectionId: _typeId, position: _position, ...field }) => field),
 });
 
-/** A template field's stored variable mapping (JSON): field ids (older form) or TemplateArgs. */
-export function parseTemplateArgs(json: string | null): Record<string, TemplateArg> {
+/** A component field's stored variable mapping (JSON): field ids (older form) or ComponentArgs. */
+export function parseComponentArgs(json: string | null): Record<string, ComponentArg> {
   if (!json) return {};
   try {
-    const out: Record<string, TemplateArg> = {};
+    const out: Record<string, ComponentArg> = {};
     for (const [k, v] of Object.entries(JSON.parse(json) as Record<string, unknown>)) {
       if (typeof v === "string") out[k] = { field: v };
       else if (v && typeof v === "object" && "field" in v && typeof v.field === "string") out[k] = { field: v.field };
@@ -150,7 +150,7 @@ export function newName(taken: Iterable<string>): string {
 }
 
 /** "1 Author", "3 Authors". */
-export const countLabel = (type: ObjectType, n: number) => `${n} ${n === 1 ? type.name : type.pluralName}`;
+export const countLabel = (collection: Collection, n: number) => `${n} ${n === 1 ? collection.name : collection.pluralName}`;
 
 /** Naive English plural, only used to prefill the plural name field. */
 export function suggestPlural(singular: string): string {
@@ -174,43 +174,43 @@ export const observeStamp = (iso: string) => {
 };
 
 const metaField = (id: string, name: string): FieldDef => ({
-  id, typeId: "", name, kind: "datetime", targetTypeId: null, templateId: null, templateArgs: {}, choiceFilter: [], toggleIcon: null, position: 0,
+  id, collectionId: "", name, kind: "datetime", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, position: 0,
 });
 /**
- * Created and updated: every object has them (ids are the query's pseudo fields). They aren't
+ * Created and updated: every item has them (ids are the query's pseudo fields). They aren't
  * stored as fields, but can be picked like one (columns, card and page fields, filters, grouping);
- * read-only, their value comes from the object itself.
+ * read-only, their value comes from the item itself.
  */
 export const META_FIELDS: FieldDef[] = [metaField("$created", "Created"), metaField("$updated", "Updated")];
 export const isMetaField = (f: { id: string }) => f.id.startsWith("$");
-/** The type's fields plus created / updated: what pickers offer. */
-export const pickableFields = (type: ObjectType): FieldDef[] => [...type.fields, ...META_FIELDS];
-/** A field's value on an object (created / updated included). */
-export function fieldValue(object: ObjectInstance, field: FieldDef): FieldValue {
-  if (field.id === "$created") return object.createdAt;
-  if (field.id === "$updated") return object.updatedAt;
-  return object.values[field.id] ?? null;
+/** The collection's fields plus created / updated: what pickers offer. */
+export const pickableFields = (collection: Collection): FieldDef[] => [...collection.fields, ...META_FIELDS];
+/** A field's value on an item (created / updated included). */
+export function fieldValue(item: Item, field: FieldDef): FieldValue {
+  if (field.id === "$created") return item.createdAt;
+  if (field.id === "$updated") return item.updatedAt;
+  return item.values[field.id] ?? null;
 }
 
-/** The field that provides an object's label: its first non-empty string field. */
-export function labelField(type: ObjectType, object: ObjectInstance): FieldDef | undefined {
-  return type.fields.find((f) => {
-    const v = object.values[f.id];
+/** The field that provides an item's label: its first non-empty string field. */
+export function labelField(collection: Collection, item: Item): FieldDef | undefined {
+  return collection.fields.find((f) => {
+    const v = item.values[f.id];
     return f.kind === "string" && typeof v === "string" && v.trim() !== "";
   });
 }
 
-/** The label of an object without a label field value. */
-export const untitledLabel = (type: ObjectType): string => type.name;
+/** The label of an item without a label field value. */
+export const untitledLabel = (collection: Collection): string => collection.name;
 
-/** Human label for an object, e.g. in reference pickers and headings. */
-export function objectLabel(type: ObjectType, object: ObjectInstance): string {
-  const field = labelField(type, object);
-  return field ? String(object.values[field.id]) : untitledLabel(type);
+/** Human label for an item, e.g. in reference pickers and headings. */
+export function itemLabel(collection: Collection, item: Item): string {
+  const field = labelField(collection, item);
+  return field ? String(item.values[field.id]) : untitledLabel(collection);
 }
 
-/** An object's label as stored (see Repository.listLabels): null when it has no label field value. */
-export interface ObjectLabel {
+/** An item's label as stored (see Repository.listLabels): null when it has no label field value. */
+export interface ItemLabel {
   id: string;
   label: string | null;
 }

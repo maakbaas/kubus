@@ -11,25 +11,26 @@ let db: DatabaseSync;
 const outbox = () => db.prepare("SELECT tbl, pk FROM sync_outbox ORDER BY id").all() as { tbl: string; pk: string }[];
 const apply = (table: string, row: WireRow) => {
   const s = applyStatement(SYNC_TABLES.find((t) => t.name === table)!, row);
-  db.prepare(s.sql).run(...(s.bind as never[]));
+  // node:sqlite binds numbered parameters (?1, ?2) only by name.
+  db.prepare(s.sql).run(Object.fromEntries((s.bind ?? []).map((v, i) => [`?${i + 1}`, v])) as never);
 };
 
 beforeEach(() => {
   db = new DatabaseSync(":memory:");
   db.exec(schema);
   db.exec("PRAGMA foreign_keys = ON");
-  db.exec(`INSERT INTO object_types (id, name, plural_name, created_at, updated_at) VALUES ('t1', 'Note', 'Notes', '${T1}', '${T1}')`);
+  db.exec(`INSERT INTO collections (id, name, plural_name, created_at, updated_at) VALUES ('t1', 'Note', 'Notes', '${T1}', '${T1}')`);
   db.exec("DELETE FROM sync_outbox");
 });
 
 describe("outbox triggers", () => {
   it("queue inserted and updated rows, with the key columns of field values", () => {
-    db.exec(`INSERT INTO objects (id, type_id, created_at, updated_at) VALUES ('o1', 't1', '${T1}', '${T1}')`);
-    db.exec(`INSERT INTO fields (id, type_id, name, kind, created_at, updated_at) VALUES ('f1', 't1', 'Title', 'string', '${T1}', '${T1}')`);
-    db.exec(`INSERT INTO field_values (object_id, field_id, value_text, updated_at) VALUES ('o1', 'f1', 'a', '${T1}')`);
-    db.exec(`UPDATE field_values SET value_text = 'b' WHERE object_id = 'o1'`);
+    db.exec(`INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES ('o1', 't1', 'default', '${T1}', '${T1}')`);
+    db.exec(`INSERT INTO fields (id, collection_id, name, kind, created_at, updated_at) VALUES ('f1', 't1', 'Title', 'string', '${T1}', '${T1}')`);
+    db.exec(`INSERT INTO field_values (item_id, field_id, value_text, updated_at) VALUES ('o1', 'f1', 'a', '${T1}')`);
+    db.exec(`UPDATE field_values SET value_text = 'b' WHERE item_id = 'o1'`);
     expect(outbox()).toEqual([
-      { tbl: "objects", pk: "o1" },
+      { tbl: "items", pk: "o1" },
       { tbl: "fields", pk: "f1" },
       { tbl: "field_values", pk: '["o1","f1"]' },
       { tbl: "field_values", pk: '["o1","f1"]' },
@@ -41,24 +42,24 @@ describe("outbox triggers", () => {
 });
 
 describe("applying rows from the server", () => {
-  const object = (updated_at: string, deleted_at: string | null = null): WireRow => ({
-    id: "o1", type_id: "t1", object_view_id: null, created_at: T1, updated_at, deleted_at,
+  const item = (updated_at: string, deleted_at: string | null = null): WireRow => ({
+    id: "o1", collection_id: "t1", space_id: "default", item_view_id: null, created_at: T1, updated_at, deleted_at,
   });
 
   it("does not queue them while sync_applying is set", () => {
     db.exec("INSERT INTO meta (key, value) VALUES ('sync_applying', '1')");
-    apply("objects", object(T1));
+    apply("items", item(T1));
     db.exec("DELETE FROM meta WHERE key = 'sync_applying'");
     expect(outbox()).toEqual([]);
-    expect(db.prepare("SELECT count(*) AS n FROM objects").get()).toEqual({ n: 1 });
+    expect(db.prepare("SELECT count(*) AS n FROM items").get()).toEqual({ n: 1 });
   });
 
   it("replaces a row only with a newer one", () => {
-    apply("objects", object(T1));
-    apply("objects", object(T2, T2));
-    expect(db.prepare("SELECT deleted_at FROM objects").get()).toEqual({ deleted_at: T2 });
-    apply("objects", object(T1, null)); // older: ignored
-    expect(db.prepare("SELECT deleted_at FROM objects").get()).toEqual({ deleted_at: T2 });
+    apply("items", item(T1));
+    apply("items", item(T2, T2));
+    expect(db.prepare("SELECT deleted_at FROM items").get()).toEqual({ deleted_at: T2 });
+    apply("items", item(T1, null)); // older: ignored
+    expect(db.prepare("SELECT deleted_at FROM items").get()).toEqual({ deleted_at: T2 });
   });
 
   it("keeps files as they are and stores their bytes", () => {

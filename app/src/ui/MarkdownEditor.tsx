@@ -305,7 +305,7 @@ interface Props {
   label: ReactNode;
   value: string;
   onChange(markdown: string): void;
-  /** Called for every stored image, so the object editor can release unsaved ones. */
+  /** Called for every stored image, so the item editor can release unsaved ones. */
   onFileStored?(fileId: string): void;
   /** Where the read-only view was clicked / what was selected: start editing with the caret or selection there. */
   start?: EditStart;

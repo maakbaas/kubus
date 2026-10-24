@@ -5,7 +5,7 @@ export function NotFound() {
   return (
     <>
       <PageHeader title="Not found" subtitle="This page or item does not exist (anymore)." />
-      <Button size="sm" href="#/types">Back to types</Button>
+      <Button size="sm" href="#/collections">Back to collections</Button>
     </>
   );
 }

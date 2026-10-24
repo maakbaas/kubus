@@ -6,30 +6,51 @@
 
 CREATE SEQUENCE IF NOT EXISTS sync_seq;
 
-CREATE TABLE IF NOT EXISTS object_types (
+CREATE TABLE IF NOT EXISTS spaces (
   id             text NOT NULL,
   name           text,
-  plural_name    text,
   icon           text,
-  description    text,
-  object_views   jsonb,
+  position       integer,
   created_at     timestamptz,
   updated_at     timestamptz,
   deleted_at     timestamptz,
   seq            bigint NOT NULL DEFAULT 0,
   PRIMARY KEY (id)
 );
-ALTER TABLE object_types ADD COLUMN IF NOT EXISTS name text;
-ALTER TABLE object_types ADD COLUMN IF NOT EXISTS plural_name text;
-ALTER TABLE object_types ADD COLUMN IF NOT EXISTS icon text;
-ALTER TABLE object_types ADD COLUMN IF NOT EXISTS description text;
-ALTER TABLE object_types ADD COLUMN IF NOT EXISTS object_views jsonb;
-ALTER TABLE object_types ADD COLUMN IF NOT EXISTS created_at timestamptz;
-ALTER TABLE object_types ADD COLUMN IF NOT EXISTS updated_at timestamptz;
-ALTER TABLE object_types ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
-CREATE INDEX IF NOT EXISTS idx_object_types_seq ON object_types(seq);
+ALTER TABLE spaces ADD COLUMN IF NOT EXISTS name text;
+ALTER TABLE spaces ADD COLUMN IF NOT EXISTS icon text;
+ALTER TABLE spaces ADD COLUMN IF NOT EXISTS position integer;
+ALTER TABLE spaces ADD COLUMN IF NOT EXISTS created_at timestamptz;
+ALTER TABLE spaces ADD COLUMN IF NOT EXISTS updated_at timestamptz;
+ALTER TABLE spaces ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_spaces_seq ON spaces(seq);
 
-CREATE TABLE IF NOT EXISTS templates (
+CREATE TABLE IF NOT EXISTS collections (
+  id             text NOT NULL,
+  name           text,
+  plural_name    text,
+  icon           text,
+  description    text,
+  item_views     jsonb,
+  space_ids      jsonb,
+  created_at     timestamptz,
+  updated_at     timestamptz,
+  deleted_at     timestamptz,
+  seq            bigint NOT NULL DEFAULT 0,
+  PRIMARY KEY (id)
+);
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS name text;
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS plural_name text;
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS icon text;
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS item_views jsonb;
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS space_ids jsonb;
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS created_at timestamptz;
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS updated_at timestamptz;
+ALTER TABLE collections ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_collections_seq ON collections(seq);
+
+CREATE TABLE IF NOT EXISTS components (
   id             text NOT NULL,
   name           text,
   params         jsonb,
@@ -42,24 +63,24 @@ CREATE TABLE IF NOT EXISTS templates (
   seq            bigint NOT NULL DEFAULT 0,
   PRIMARY KEY (id)
 );
-ALTER TABLE templates ADD COLUMN IF NOT EXISTS name text;
-ALTER TABLE templates ADD COLUMN IF NOT EXISTS params jsonb;
-ALTER TABLE templates ADD COLUMN IF NOT EXISTS code text;
-ALTER TABLE templates ADD COLUMN IF NOT EXISTS output text;
-ALTER TABLE templates ADD COLUMN IF NOT EXISTS frame_ratio text;
-ALTER TABLE templates ADD COLUMN IF NOT EXISTS created_at timestamptz;
-ALTER TABLE templates ADD COLUMN IF NOT EXISTS updated_at timestamptz;
-ALTER TABLE templates ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
-CREATE INDEX IF NOT EXISTS idx_templates_seq ON templates(seq);
+ALTER TABLE components ADD COLUMN IF NOT EXISTS name text;
+ALTER TABLE components ADD COLUMN IF NOT EXISTS params jsonb;
+ALTER TABLE components ADD COLUMN IF NOT EXISTS code text;
+ALTER TABLE components ADD COLUMN IF NOT EXISTS output text;
+ALTER TABLE components ADD COLUMN IF NOT EXISTS frame_ratio text;
+ALTER TABLE components ADD COLUMN IF NOT EXISTS created_at timestamptz;
+ALTER TABLE components ADD COLUMN IF NOT EXISTS updated_at timestamptz;
+ALTER TABLE components ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_components_seq ON components(seq);
 
 CREATE TABLE IF NOT EXISTS fields (
   id             text NOT NULL,
-  type_id        text,
+  collection_id  text,
   name           text,
   kind           text,
-  target_type_id text,
-  template_id    text,
-  template_args  jsonb,
+  target_collection_id text,
+  component_id   text,
+  component_args jsonb,
   choice_filter  jsonb,
   toggle_icon    text,
   position       integer,
@@ -69,12 +90,12 @@ CREATE TABLE IF NOT EXISTS fields (
   seq            bigint NOT NULL DEFAULT 0,
   PRIMARY KEY (id)
 );
-ALTER TABLE fields ADD COLUMN IF NOT EXISTS type_id text;
+ALTER TABLE fields ADD COLUMN IF NOT EXISTS collection_id text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS name text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS kind text;
-ALTER TABLE fields ADD COLUMN IF NOT EXISTS target_type_id text;
-ALTER TABLE fields ADD COLUMN IF NOT EXISTS template_id text;
-ALTER TABLE fields ADD COLUMN IF NOT EXISTS template_args jsonb;
+ALTER TABLE fields ADD COLUMN IF NOT EXISTS target_collection_id text;
+ALTER TABLE fields ADD COLUMN IF NOT EXISTS component_id text;
+ALTER TABLE fields ADD COLUMN IF NOT EXISTS component_args jsonb;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS choice_filter jsonb;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS toggle_icon text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS position integer;
@@ -85,7 +106,7 @@ CREATE INDEX IF NOT EXISTS idx_fields_seq ON fields(seq);
 
 CREATE TABLE IF NOT EXISTS views (
   id             text NOT NULL,
-  type_id        text,
+  collection_id  text,
   name           text,
   kind           text,
   config         jsonb,
@@ -97,7 +118,7 @@ CREATE TABLE IF NOT EXISTS views (
   seq            bigint NOT NULL DEFAULT 0,
   PRIMARY KEY (id)
 );
-ALTER TABLE views ADD COLUMN IF NOT EXISTS type_id text;
+ALTER TABLE views ADD COLUMN IF NOT EXISTS collection_id text;
 ALTER TABLE views ADD COLUMN IF NOT EXISTS name text;
 ALTER TABLE views ADD COLUMN IF NOT EXISTS kind text;
 ALTER TABLE views ADD COLUMN IF NOT EXISTS config jsonb;
@@ -108,22 +129,24 @@ ALTER TABLE views ADD COLUMN IF NOT EXISTS updated_at timestamptz;
 ALTER TABLE views ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
 CREATE INDEX IF NOT EXISTS idx_views_seq ON views(seq);
 
-CREATE TABLE IF NOT EXISTS objects (
+CREATE TABLE IF NOT EXISTS items (
   id             text NOT NULL,
-  type_id        text,
-  object_view_id text,
+  collection_id  text,
+  space_id       text,
+  item_view_id   text,
   created_at     timestamptz,
   updated_at     timestamptz,
   deleted_at     timestamptz,
   seq            bigint NOT NULL DEFAULT 0,
   PRIMARY KEY (id)
 );
-ALTER TABLE objects ADD COLUMN IF NOT EXISTS type_id text;
-ALTER TABLE objects ADD COLUMN IF NOT EXISTS object_view_id text;
-ALTER TABLE objects ADD COLUMN IF NOT EXISTS created_at timestamptz;
-ALTER TABLE objects ADD COLUMN IF NOT EXISTS updated_at timestamptz;
-ALTER TABLE objects ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
-CREATE INDEX IF NOT EXISTS idx_objects_seq ON objects(seq);
+ALTER TABLE items ADD COLUMN IF NOT EXISTS collection_id text;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS space_id text;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS item_view_id text;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS created_at timestamptz;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS updated_at timestamptz;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_items_seq ON items(seq);
 
 CREATE TABLE IF NOT EXISTS files (
   id             text NOT NULL,
@@ -141,7 +164,7 @@ ALTER TABLE files ADD COLUMN IF NOT EXISTS created_at timestamptz;
 CREATE INDEX IF NOT EXISTS idx_files_seq ON files(seq);
 
 CREATE TABLE IF NOT EXISTS field_values (
-  object_id      text NOT NULL,
+  item_id        text NOT NULL,
   field_id       text NOT NULL,
   value_text     text,
   value_number   double precision,
@@ -153,7 +176,7 @@ CREATE TABLE IF NOT EXISTS field_values (
   value_json     jsonb,
   updated_at     timestamptz,
   seq            bigint NOT NULL DEFAULT 0,
-  PRIMARY KEY (object_id, field_id)
+  PRIMARY KEY (item_id, field_id)
 );
 ALTER TABLE field_values ADD COLUMN IF NOT EXISTS value_text text;
 ALTER TABLE field_values ADD COLUMN IF NOT EXISTS value_number double precision;
@@ -169,7 +192,8 @@ CREATE INDEX IF NOT EXISTS idx_field_values_seq ON field_values(seq);
 CREATE TABLE IF NOT EXISTS bookmarks (
   id             text NOT NULL,
   kind           text,
-  type_id        text,
+  collection_id  text,
+  space_id       text,
   target_id      text,
   label          text,
   position       integer,
@@ -180,7 +204,8 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   PRIMARY KEY (id)
 );
 ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS kind text;
-ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS type_id text;
+ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS collection_id text;
+ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS space_id text;
 ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS target_id text;
 ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS label text;
 ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS position integer;

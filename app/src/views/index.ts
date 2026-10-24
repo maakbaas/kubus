@@ -8,4 +8,4 @@ export const VIEW_TYPES: ViewTypeDefinition[] = [tableView, cardsView];
 /** The view type for a kind; falls back to the table for unknown (e.g. removed) kinds. */
 export const viewType = (kind: string): ViewTypeDefinition => VIEW_TYPES.find((v) => v.kind === kind) ?? tableView;
 
-export type { ObjectActions, ViewProps, ViewTypeDefinition } from "./registry";
+export type { ItemActions, ViewProps, ViewTypeDefinition } from "./registry";

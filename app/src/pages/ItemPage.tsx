@@ -3,11 +3,11 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
 import { Add, Checkmark, Edit, Information, Pin, PinFilled, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
-import { useStore, useType } from "../app/store";
+import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { formatDate, formatTime } from "../domain/fieldKinds";
 import {
-  objectLabel,
+  itemLabel,
   labelField,
   newName,
   fieldValue,
@@ -15,55 +15,55 @@ import {
   pickableFields,
   type FieldDef,
   type FieldValue,
-  type ObjectInstance,
-  type ObjectType,
+  type Item,
+  type Collection,
 } from "../domain/model";
 import { captureEditStart, type EditStart } from "../ui/editStart";
 import { FieldEditor } from "../ui/FieldEditor";
-import { TemplateFieldEditor } from "../ui/TemplateFieldEditor";
+import { ComponentFieldEditor } from "../ui/ComponentFieldEditor";
 import { ListField } from "../ui/ListField";
 import { Highlight } from "../ui/Highlight";
-import { ObjectLink } from "../ui/ObjectLink";
+import { ItemLink } from "../ui/ItemLink";
 import { ToggleInput } from "../ui/ToggleInput";
 import { ImageInput, useFileUrl } from "../ui/images";
 import { MarkdownView } from "../ui/MarkdownView";
 import { NotFound } from "../ui/NotFound";
 import { formatDateTime } from "../domain/fieldKinds";
-import { ERROR_PREFIX, outputOf, withComputed } from "../domain/templates";
-import { HtmlFrame, TemplateValue } from "../ui/TemplateValue";
+import { ERROR_PREFIX, outputOf, withComputed } from "../domain/components";
+import { HtmlFrame, ComponentValue } from "../ui/ComponentValue";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import {
-  objectPageFields,
-  objectViewOf,
+  itemPageFields,
+  itemViewOf,
   FULL_LAYOUT,
   isRestricted,
-  newObjectViewId,
+  newItemViewId,
   sameLayout,
-  type ObjectLayout,
-  type ObjectView,
+  type ItemLayout,
+  type ItemView,
 } from "../domain/fieldLayout";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { FieldLabel } from "../ui/fieldKindIcons";
-import { TypeIcon } from "../ui/typeIcons";
+import { CollectionIcon } from "../ui/collectionIcons";
 import { PageHeader } from "../ui/PageHeader";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { refLabelOf, useReferenceOptions, type RefOptions } from "../ui/useReferenceOptions";
 
-// An object's page: every field in the user's order, each read-only until clicked,
-// then edited in place (one at a time). The full form is only for new objects.
+// An item's page: every field in the user's order, each read-only until clicked,
+// then edited in place (one at a time). The full form is only for new items.
 
-export function ObjectViewPage() {
-  const { typeId, objectId } = useParams();
-  const type = useType(typeId);
-  if (!type || !objectId) return <NotFound />;
-  return <ObjectPage key={objectId} type={type} objectId={objectId} />;
+export function ItemPage() {
+  const { collectionId, itemId } = useParams();
+  const collection = useCollection(collectionId);
+  if (!collection || !itemId) return <NotFound />;
+  return <ItemContent key={itemId} collection={collection} itemId={itemId} />;
 }
 
 
 function ImageValue({ fileId, alt }: { fileId: string; alt: string }) {
   const url = useFileUrl(fileId);
-  return url ? <img className="object-view__image" src={url} alt={alt} data-lightbox /> : null;
+  return url ? <img className="item-view__image" src={url} alt={alt} data-lightbox /> : null;
 }
 
 function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; value: FieldValue; refs: RefOptions; /** HTML: a click on its plain content. */ onFrameClick?(): void }): ReactNode {
@@ -88,24 +88,24 @@ function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; 
         </>
       );
     }
-    case "object":
-      return <ObjectLink field={field} id={String(value)} refs={refs} />;
-    case "object_list":
+    case "item":
+      return <ItemLink field={field} id={String(value)} refs={refs} />;
+    case "item_list":
       return (
-        <span className="object-view__links">
+        <span className="item-view__links">
           {(value as string[]).map((id) => (
-            <ObjectLink key={id} field={field} id={id} refs={refs} />
+            <ItemLink key={id} field={field} id={id} refs={refs} />
           ))}
         </span>
       );
     case "markdown":
       return <MarkdownView source={String(value)} />;
     case "html":
-      // In a sandboxed frame, sized like a template's HTML result.
+      // In a sandboxed frame, sized like a component's HTML result.
       return <HtmlFrame html={String(value)} onContentClick={onFrameClick} />;
     case "image":
       return <ImageValue fileId={String(value)} alt={field.name} />;
-    case "template":
+    case "component":
       return value == null ? null : <MarkdownView source={String(value)} />;
     case "checkbox":
     case "string_list":
@@ -114,15 +114,15 @@ function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; 
   }
 }
 
-function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) {
-  const { repo, templates, cache } = useStore();
+function ItemContent({ collection, itemId }: { collection: Collection; itemId: string }) {
+  const { repo, components, cache } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
-  const refs = useReferenceOptions(type);
-  // undefined = loading, null = not found. Opened from a list, the object is in memory already:
+  const refs = useReferenceOptions(collection);
+  // undefined = loading, null = not found. Opened from a list, the item is in memory already:
   // shown at once (and read again below, as always).
-  const [object, setObject] = useState<ObjectInstance | null | undefined>(() =>
-    cache.objects.snapshot(type.id).items?.find((o) => o.id === objectId),
+  const [item, setItem] = useState<Item | null | undefined>(() =>
+    cache.items.snapshot(collection.id).items?.find((o) => o.id === itemId),
   );
   /** The field being edited, and where its value was clicked (markdown starts editing there). */
   const [editing, setEditing] = useState<{ fieldId: string; start?: EditStart } | null>(null);
@@ -130,46 +130,46 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
   // A table row's edit icon opens the page standard (?edit=1).
   const [params] = useSearchParams();
   const [standard, setStandard] = useState(params.get("edit") === "1");
-  /** The chosen tab: "object" (this object's own layout) or an object view's id; null = the default. */
+  /** The chosen tab: "item" (this item's own layout) or an item view's id; null = the default. */
   const [tab, setTab] = useState<string | null>(null);
-  /** Unsaved changes to the shown view's layout (like the objects page's views: saved explicitly). */
-  const [draft, setDraft] = useState<ObjectLayout | null>(null);
+  /** Unsaved changes to the shown view's layout (like the items page's views: saved explicitly). */
+  const [draft, setDraft] = useState<ItemLayout | null>(null);
   /** Set after "+": opens the layout popover with the new view's name selected, to rename it. */
   const [renameRequest, setRenameRequest] = useState(0);
   const panels = usePanelsOpen();
 
   useEffect(() => {
-    repo.getObject(type, objectId).then(setObject, (e) => setError(errorMessage(e)));
-  }, [repo, type, objectId]);
-  // Edits elsewhere (a table cell in another pane, a checkbox) refresh this object.
-  // While this page saves a field it reads the object itself afterwards: the change that save
+    repo.getItem(collection, itemId).then(setItem, (e) => setError(errorMessage(e)));
+  }, [repo, collection, itemId]);
+  // Edits elsewhere (a table cell in another pane, a checkbox) refresh this item.
+  // While this page saves a field it reads the item itself afterwards: the change that save
   // announces needn't fetch it a second time.
   const saving = useRef(false);
   useDataChanges((change) => {
-    if (change.scope === "objects" && change.objectId === objectId && !saving.current) {
-      repo.getObject(type, objectId).then(setObject, (e) => setError(errorMessage(e)));
+    if (change.scope === "items" && change.itemId === itemId && !saving.current) {
+      repo.getItem(collection, itemId).then(setItem, (e) => setError(errorMessage(e)));
     }
   });
 
-  const listPath = `/types/${type.id}/objects`;
+  const listPath = `/collections/${collection.id}/items`;
   // Nothing until it is in (a fraction of a second): a spinner would only flash.
-  if (object === undefined && !error) return null;
-  if (object === null) return <NotFound />;
+  if (item === undefined && !error) return null;
+  if (item === null) return <NotFound />;
 
-  // Template fields show their computed results.
+  // Component fields show their computed results.
   const refLabel = refLabelOf(refs);
-  const shown = object ? withComputed(type, [object], templates, refLabel)[0] : null;
+  const shown = item ? withComputed(collection, [item], components, refLabel)[0] : null;
   // The title as shown (its {{ }} sections rendered, like in tables); editing it edits the source.
-  const title = shown ? objectLabel(type, shown) : "";
+  const title = shown ? itemLabel(collection, shown) : "";
   // The field shown as the page title is edited there, not repeated among the fields.
-  const titleField = shown ? labelField(type, shown) : undefined;
-  const titleSource = titleField && object ? String(object.values[titleField.id] ?? "") : title;
-  // The page's layout: the chosen tab's object view, else the one this object is pinned to, else its
-  // type's default (starred, else the first), else the standard one (all fields, editable, with
+  const titleField = shown ? labelField(collection, shown) : undefined;
+  const titleSource = titleField && item ? String(item.values[titleField.id] ?? "") : title;
+  // The page's layout: the chosen tab's item view, else the one this item is pinned to, else its
+  // collection's default (starred, else the first), else the standard one (all fields, editable, with
   // names), which the edit icon also switches to for the time being (`standard`, above).
-  const objectViews = type.objectViews;
-  const activeView = objectViews.find((v) => v.id === tab) ?? (object ? objectViewOf(type, object) : null);
-  const pinned = !!activeView && activeView.id === object?.objectViewId;
+  const itemViews = collection.itemViews;
+  const activeView = itemViews.find((v) => v.id === tab) ?? (item ? itemViewOf(collection, item) : null);
+  const pinned = !!activeView && activeView.id === item?.itemViewId;
   const saved = activeView?.layout ?? FULL_LAYOUT;
   const current = draft ?? saved;
   const changed = draft !== null && !sameLayout(draft, saved);
@@ -179,20 +179,20 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
     setDraft(null);
     setStandard(false);
   };
-  const saveViews = (views: ObjectView[]) => repo.saveObjectViews(type.id, views).catch((e) => setError(errorMessage(e)));
+  const saveViews = (views: ItemView[]) => repo.saveItemViews(collection.id, views).catch((e) => setError(errorMessage(e)));
 
   /**
-   * "+": a new object view from what is shown, named "New" (then "New 2", …): the shown layout
+   * "+": a new item view from what is shown, named "New" (then "New 2", …): the shown layout
    * with its unsaved changes (the shown view itself stays as saved; this is also "save as new
    * view"). It opens with the layout popover open and its name selected, ready to rename.
    */
   function addView() {
-    const name = newName(objectViews.map((v) => v.name));
-    const id = newObjectViewId();
+    const name = newName(itemViews.map((v) => v.name));
+    const id = newItemViewId();
     const layout = current;
     showTab(id);
     setRenameRequest((r) => r + 1);
-    return saveViews([...objectViews, { id, name, layout, isDefault: false }]);
+    return saveViews([...itemViews, { id, name, layout, isDefault: false }]);
   }
   const addButton = (align: "bottom" | "bottom-end") => (
     <IconButton autoAlign kind="ghost" size="sm" align={align} label="Add view" onClick={addView}>
@@ -201,31 +201,31 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
   );
   /** With one view and nothing unsaved there is nothing to choose or save: no tab bar ("+" then sits in the header). */
   // Held while a header panel is open: "+" leaving the header would move the panel's button.
-  const showBar = panels.hold("bar", !!object && (objectViews.length > 1 || changed));
+  const showBar = panels.hold("bar", !!item && (itemViews.length > 1 || changed));
 
-  /** Pin the shown view to this object (it then opens with it, whatever the default), or unpin it. */
-  const togglePin = (view: ObjectView) =>
-    object && repo.pinObjectView(object.id, pinned ? null : view.id).catch((e) => setError(errorMessage(e)));
+  /** Pin the shown view to this item (it then opens with it, whatever the default), or unpin it. */
+  const togglePin = (view: ItemView) =>
+    item && repo.pinItemView(item.id, pinned ? null : view.id).catch((e) => setError(errorMessage(e)));
 
-  /** Star the shown view as the default for the type's objects, or unstar it (then the first is). */
-  const toggleDefault = (view: ObjectView) => saveViews(objectViews.map((v) => ({ ...v, isDefault: v.id === view.id && !view.isDefault })));
+  /** Star the shown view as the default for the collection's items, or unstar it (then the first is). */
+  const toggleDefault = (view: ItemView) => saveViews(itemViews.map((v) => ({ ...v, isDefault: v.id === view.id && !view.isDefault })));
 
-  async function deleteView(view: ObjectView) {
-    if (!(await confirm({ title: `Delete view “${view.name}”?`, body: "Objects are not affected." }))) return;
+  async function deleteView(view: ItemView) {
+    if (!(await confirm({ title: `Delete view “${view.name}”?`, body: "Items are not affected." }))) return;
     showTab(null);
-    await saveViews(objectViews.filter((v) => v.id !== view.id));
+    await saveViews(itemViews.filter((v) => v.id !== view.id));
   }
-  const fields = objectPageFields(pickableFields(type), layout, titleField?.id).filter(
+  const fields = itemPageFields(pickableFields(collection), layout, titleField?.id).filter(
     (f) => !layout.hideEmpty || editing?.fieldId === f.id || !isEmpty(shown ? fieldValue(shown, f) : null),
   );
-  const restricted = !!object && isRestricted(type, object, layout);
+  const restricted = !!item && isRestricted(collection, item, layout);
 
   async function saveField(field: FieldDef, value: FieldValue) {
-    if (!object) return;
+    if (!item) return;
     saving.current = true;
     try {
-      await repo.updateObject(type, object.id, { [field.id]: value });
-      setObject(await repo.getObject(type, object.id));
+      await repo.updateItem(collection, item.id, { [field.id]: value });
+      setItem(await repo.getItem(collection, item.id));
     } finally {
       saving.current = false;
     }
@@ -234,9 +234,9 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
   }
 
   async function remove() {
-    if (!object || !(await confirm({ title: `Delete ${type.name}?`, body: `“${title}” will be removed.` }))) return;
+    if (!item || !(await confirm({ title: `Delete ${collection.name}?`, body: `“${title}” will be removed.` }))) return;
     try {
-      await repo.deleteObject(object.id);
+      await repo.deleteItem(item.id);
       navigate(listPath, { replace: true });
     } catch (e) {
       setError(errorMessage(e));
@@ -244,7 +244,7 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
   }
 
   return (
-    <div className="form-page object-view">
+    <div className="form-page item-view">
       <PageHeader
         title={
           // The title edits in place, unless the layout makes the page read-only.
@@ -260,11 +260,11 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
         }
         current={title}
         breadcrumbs={[
-          { label: "Types", href: "#/types" },
-          { label: type.pluralName, href: `#${listPath}` },
+          { label: "Collections", href: "#/collections" },
+          { label: collection.pluralName, href: `#${listPath}` },
         ]}
         actions={
-          object && (
+          item && (
             <>
               {(restricted || standard) && (
                 <IconButton
@@ -279,31 +279,31 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
                   {standard ? <Checkmark /> : <Edit />}
                 </IconButton>
               )}
-              <BookmarkButton kind="object" typeId={type.id} targetId={object.id} label={title} onError={(e) => setError(errorMessage(e))} />
-              {/* Metadata lives in a popover; more facts about the object can be added to its list. */}
+              <BookmarkButton kind="item" collectionId={collection.id} targetId={item.id} label={title} onError={(e) => setError(errorMessage(e))} />
+              {/* Metadata lives in a popover; more facts about the item can be added to its list. */}
               <ToolbarPopover label="Details" icon={Information} fit onOpenChange={panels.onOpenChange}>
-                <dl className="object-info">
-                  <dt>Type</dt>
+                <dl className="item-info">
+                  <dt>Collection</dt>
                   <dd>
                     <span className="icon-label">
-                      <TypeIcon name={type.icon} />
-                      {type.name}
+                      <CollectionIcon name={collection.icon} />
+                      {collection.name}
                     </span>
                   </dd>
                   <dt>Created</dt>
-                  <dd>{formatDateTime(object.createdAt)}</dd>
+                  <dd>{formatDateTime(item.createdAt)}</dd>
                   <dt>Updated</dt>
-                  <dd>{formatDateTime(object.updatedAt)}</dd>
+                  <dd>{formatDateTime(item.updatedAt)}</dd>
                 </dl>
               </ToolbarPopover>
               {/* Subtle: a ghost icon button; the confirmation dialog carries the danger styling. */}
-              <IconButton autoAlign size="sm" kind="ghost" align="bottom" label={`Delete ${type.name}`} onClick={remove}>
+              <IconButton autoAlign size="sm" kind="ghost" align="bottom" label={`Delete ${collection.name}`} onClick={remove}>
                 <TrashCan />
               </IconButton>
               {/* The page's layout last: its settings, and "+" for a new layout while there is no tab bar. */}
               <ToolbarPopover label="Page layout" icon={SettingsAdjust} fit openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
-                <ObjectLayoutSettings
-                  type={type}
+                <ItemLayoutSettings
+                  collection={collection}
                   renameRequest={renameRequest}
                   view={activeView}
                   layout={current}
@@ -319,19 +319,19 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
 
-      {/* Once the type has object views: one tab each, like the views of the objects page. The
-          star makes the shown one the default for all objects, the pin this object's own choice.
+      {/* Once the collection has item views: one tab each, like the views of the items page. The
+          star makes the shown one the default for all items, the pin this item's own choice.
           Layout changes stay unsaved until saved with the icon buttons beside the tabs. */}
       {/* With one view and nothing unsaved there is nothing to choose or save: no tab bar. */}
       {showBar && (
         <div className="views-bar">
           <Tabs
-            selectedIndex={activeView ? objectViews.indexOf(activeView) : -1}
-            onChange={({ selectedIndex }) => showTab(objectViews[selectedIndex].id)}
+            selectedIndex={activeView ? itemViews.indexOf(activeView) : -1}
+            onChange={({ selectedIndex }) => showTab(itemViews[selectedIndex].id)}
           >
             <TabList aria-label="Page layouts" className="views-tabs">
               {/* "*" marks unsaved layout changes to the shown view (switching views discards them). */}
-              {objectViews.map((t) => (
+              {itemViews.map((t) => (
                 <Tab key={t.id}>
                   {t.name}
                   {changed && t.id === activeView?.id ? " *" : ""}
@@ -354,7 +354,7 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
                 size="sm"
                 align="bottom"
                 label="Save changes to view"
-                onClick={() => saveViews(objectViews.map((v) => (v.id === activeView.id ? { ...v, layout: current } : v)))}
+                onClick={() => saveViews(itemViews.map((v) => (v.id === activeView.id ? { ...v, layout: current } : v)))}
               >
                 <Save />
               </IconButton>
@@ -362,21 +362,21 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
           )}
           {activeView && (
             <>
-              {/* The last view can't be deleted: a type always keeps one (like its objects views). */}
-              {objectViews.length > 1 && (
+              {/* The last view can't be deleted: a collection always keeps one (like its items views). */}
+              {itemViews.length > 1 && (
                 <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Delete view" onClick={() => deleteView(activeView)}>
                   <TrashCan />
                 </IconButton>
               )}
               {/* Pin and star choose between views: with one view it opens anyway. */}
-              {objectViews.length > 1 && (
+              {itemViews.length > 1 && (
                 <>
               <IconButton
                 autoAlign
                 kind="ghost"
                 size="sm"
                 align="bottom"
-                label={pinned ? `Unpin from this ${type.name}` : `Always show this ${type.name} with this view`}
+                label={pinned ? `Unpin from this ${collection.name}` : `Always show this ${collection.name} with this view`}
                 aria-pressed={pinned}
                 onClick={() => togglePin(activeView)}
               >
@@ -387,7 +387,7 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
                 kind="ghost"
                 size="sm"
                 align="bottom-end"
-                label={activeView.isDefault ? "Revert default view" : `Star as default view for all ${type.pluralName}`}
+                label={activeView.isDefault ? "Revert default view" : `Star as default view for all ${collection.pluralName}`}
                 aria-pressed={activeView.isDefault}
                 onClick={() => toggleDefault(activeView)}
               >
@@ -400,19 +400,19 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
         </div>
       )}
 
-      {object && (
-        <Stack gap={7} className="object-fields">
+      {item && (
+        <Stack gap={7} className="item-fields">
           {fields.map((f) => {
-            const template = f.kind === "template" ? templates.find((t) => t.id === f.templateId) : undefined;
+            const component = f.kind === "component" ? components.find((t) => t.id === f.componentId) : undefined;
             const field =
-            editing?.fieldId === f.id && template ? (
-              // A template field edits its template (shared: saving asks first).
-              <TemplateFieldEditor key={f.id} field={f} template={template} onDone={() => setEditing(null)} />
+            editing?.fieldId === f.id && component ? (
+              // A component field edits its component (shared: saving asks first).
+              <ComponentFieldEditor key={f.id} field={f} component={component} onDone={() => setEditing(null)} />
             ) : editing?.fieldId === f.id ? (
               <FieldEditor
                 key={f.id}
                 field={f}
-                value={object.values[f.id] ?? null}
+                value={item.values[f.id] ?? null}
                 refs={refs}
                 start={editing.start}
                 onSave={(v) => saveField(f, v)}
@@ -433,7 +433,7 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
             );
             // A field shown without its name (the layout's choice); the wrapper adds no box.
             return layout.hiddenLabels.includes(f.id) ? (
-              <div key={f.id} className="object-field--no-label">
+              <div key={f.id} className="item-field--no-label">
                 {field}
               </div>
             ) : (
@@ -482,7 +482,7 @@ function EditableTitle({ value, source, onSave }: { value: string; source: strin
   if (!editing) {
     return (
       <Heading
-        className="page-header__title object-title"
+        className="page-header__title item-title"
         role="button"
         tabIndex={0}
         aria-label={`Edit title: ${value}`}
@@ -500,7 +500,7 @@ function EditableTitle({ value, source, onSave }: { value: string; source: strin
       aria-label="Title"
       contentEditable="plaintext-only"
       suppressContentEditableWarning
-      className="page-header__title object-title object-title--editing"
+      className="page-header__title item-title item-title--editing"
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -522,12 +522,12 @@ function EditableTitle({ value, source, onSave }: { value: string; source: strin
 }
 
 /**
- * The page layout popover: the shown object view's name, and its layout: whether fields are
+ * The page layout popover: the shown item view's name, and its layout: whether fields are
  * editable and show their names, and which fields in which order. Layout changes stay unsaved
- * until saved from the tab bar; a rename is saved right away (like the objects page's views).
+ * until saved from the tab bar; a rename is saved right away (like the items page's views).
  */
-function ObjectLayoutSettings({
-  type,
+function ItemLayoutSettings({
+  collection,
   renameRequest,
   view,
   layout,
@@ -535,16 +535,16 @@ function ObjectLayoutSettings({
   onChange,
   onError,
 }: {
-  type: ObjectType;
+  collection: Collection;
   /** Changes after "+": the new view's name gets focus, selected, to rename it. */
   renameRequest: number;
-  /** The shown object view; null when the type has none yet. */
-  view: ObjectView | null;
+  /** The shown item view; null when the collection has none yet. */
+  view: ItemView | null;
   /** The shown layout, with unsaved changes. */
-  layout: ObjectLayout;
+  layout: ItemLayout;
   /** The field shown as the page title: left out unless chosen. */
   titleFieldId: string | undefined;
-  onChange(patch: Partial<ObjectLayout>): void;
+  onChange(patch: Partial<ItemLayout>): void;
   onError(e: unknown): void;
 }) {
   const { repo } = useStore();
@@ -561,17 +561,17 @@ function ObjectLayoutSettings({
   }, [renameRequest, view?.id]);
   const rename = (name: string) => {
     if (view && name && name !== view.name) {
-      repo.saveObjectViews(type.id, type.objectViews.map((v) => (v.id === view.id ? { ...v, name } : v))).catch(onError);
+      repo.saveItemViews(collection.id, collection.itemViews.map((v) => (v.id === view.id ? { ...v, name } : v))).catch(onError);
     }
   };
 
   return (
-    <div className="object-layout">
+    <div className="item-layout">
       {view && (
         <TextInput
           size="sm"
           key={view.id + view.name}
-          id={`${uid}-object-layout-name`}
+          id={`${uid}-item-layout-name`}
           ref={nameInput}
           labelText="View name"
           defaultValue={view.name}
@@ -579,13 +579,13 @@ function ObjectLayoutSettings({
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
         />
       )}
-      <Checkbox id={`${uid}-object-layout-editable`} labelText="Fields are editable" checked={layout.editable} onChange={(_, { checked }) => onChange({ editable: checked })} />
-      <Checkbox id={`${uid}-object-layout-hide-empty`} labelText="Hide empty fields" checked={layout.hideEmpty} onChange={(_, { checked }) => onChange({ hideEmpty: checked })} />
+      <Checkbox id={`${uid}-item-layout-editable`} labelText="Fields are editable" checked={layout.editable} onChange={(_, { checked }) => onChange({ editable: checked })} />
+      <Checkbox id={`${uid}-item-layout-hide-empty`} labelText="Hide empty fields" checked={layout.hideEmpty} onChange={(_, { checked }) => onChange({ hideEmpty: checked })} />
       <FieldOrderEditor
-        id={`${uid}-object-layout-fields`}
+        id={`${uid}-item-layout-fields`}
         label="Fields"
-        fields={pickableFields(type)}
-        type={type}
+        fields={pickableFields(collection)}
+        collection={collection}
         value={layout.fields}
         onChange={(fields) => onChange({ fields })}
         hiddenByDefault={titleFieldId ? [titleFieldId] : []}
@@ -611,15 +611,15 @@ interface ViewFieldProps {
 
 /** One field, laid out like its input in the form: label on top, value in a read-only box. Click to edit. */
 function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed }: ViewFieldProps) {
-  const { templates } = useStore();
+  const { components } = useStore();
   const uid = useId();
-  if (field.kind === "template") {
+  if (field.kind === "component") {
     // Computed from the other fields: read-only, laid out like any field, shown by its
-    // template's output type (Markdown, text, number, image, HTML in the same width).
+    // component's output type (Markdown, text, number, image, HTML in the same width).
     const text = value == null ? "" : String(value);
-    // Clicking it edits its template (shared by every object showing it; saving asks first).
-    const template = templates.find((t) => t.id === field.templateId);
-    const editable = !readOnly && !!template;
+    // Clicking it edits its component (shared by every item showing it; saving asks first).
+    const component = components.find((t) => t.id === field.componentId);
+    const editable = !readOnly && !!component;
     const edit = (e: MouseEvent | KeyboardEvent) => {
       // Links in the result keep working.
       if ((e.target as HTMLElement).closest("a")) return;
@@ -631,12 +631,12 @@ function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed }: V
           <FieldLabel field={field} />
         </div>
         <div
-          className={`view-field__value view-field__value--template${editable ? " view-field__editable" : ""}${text.startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}${text ? "" : " view-field__value--empty"}`}
-          title={editable ? `Rendered from the template “${template.name}”: click to edit it` : "Rendered from a template"}
+          className={`view-field__value view-field__value--component${editable ? " view-field__editable" : ""}${text.startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}${text ? "" : " view-field__value--empty"}`}
+          title={editable ? `Rendered from the component “${component.name}”: click to edit it` : "Rendered from a component"}
           {...(editable && {
             role: "button",
             tabIndex: 0,
-            "aria-label": `Edit template ${template.name}`,
+            "aria-label": `Edit component ${component.name}`,
             onClick: edit,
             onKeyDown: (e: KeyboardEvent) => {
               if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
@@ -646,10 +646,10 @@ function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed }: V
             },
           })}
         >
-          <TemplateValue
+          <ComponentValue
             value={value}
-            output={outputOf(field, templates)}
-            frameRatio={template?.frameRatio}
+            output={outputOf(field, components)}
+            frameRatio={component?.frameRatio}
             variant="page"
             onContentClick={editable ? () => onEdit() : undefined}
           />
@@ -701,7 +701,7 @@ function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed }: V
 
   const empty = isEmpty(value);
   const startEdit = (e: MouseEvent | KeyboardEvent) => {
-    // Links inside the value (object references, markdown links) and task checkboxes keep working.
+    // Links inside the value (item references, markdown links) and task checkboxes keep working.
     if ((e.target as HTMLElement).closest("a, .md-view__task--toggle")) return;
     // Keep a click position or a drag-selection, so editing starts right there.
     onEdit("clientX" in e ? captureEditStart(e.currentTarget as HTMLElement, e) : undefined);
@@ -721,7 +721,7 @@ function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed }: V
   };
 
   // Lists edit one item at a time, in place (ListField saves each change itself).
-  if (field.kind === "checklist" || field.kind === "string_list" || field.kind === "object_list") {
+  if (field.kind === "checklist" || field.kind === "string_list" || field.kind === "item_list") {
     return <ListField field={field} value={value} readOnly={readOnly} refs={refs} onSave={onSave} />;
   }
 

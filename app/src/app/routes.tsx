@@ -1,33 +1,33 @@
 import { Navigate, Route, Routes } from "react-router";
 import { BookmarksPage } from "../pages/BookmarksPage";
-import { ObjectViewPage } from "../pages/ObjectViewPage";
-import { TemplateEditorPage } from "../pages/TemplateEditorPage";
-import { TemplatesPage } from "../pages/TemplatesPage";
-import { NewObjectPage } from "../pages/NewObjectPage";
-import { ObjectListPage } from "../pages/ObjectListPage";
+import { ItemPage } from "../pages/ItemPage";
+import { ComponentEditorPage } from "../pages/ComponentEditorPage";
+import { ComponentsPage } from "../pages/ComponentsPage";
+import { NewItemPage } from "../pages/NewItemPage";
+import { CollectionPage } from "../pages/CollectionPage";
 import { SearchPage } from "../pages/SearchPage";
 import { SyncPage } from "../pages/SyncPage";
-import { TypeEditorPage } from "../pages/TypeEditorPage";
-import { TypesPage } from "../pages/TypesPage";
+import { CollectionEditorPage } from "../pages/CollectionEditorPage";
+import { CollectionsPage } from "../pages/CollectionsPage";
 import { NotFound } from "../ui/NotFound";
 
 /** The app's pages. Rendered inside every workspace tab (each tab has its own router). */
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/types" replace />} />
+      <Route path="/" element={<Navigate to="/collections" replace />} />
       <Route path="/search" element={<SearchPage />} />
-      <Route path="/types" element={<TypesPage />} />
+      <Route path="/collections" element={<CollectionsPage />} />
       <Route path="/bookmarks" element={<BookmarksPage />} />
       <Route path="/sync" element={<SyncPage />} />
-      <Route path="/templates" element={<TemplatesPage />} />
-      <Route path="/templates/new" element={<TemplateEditorPage />} />
-      <Route path="/templates/:templateId" element={<TemplateEditorPage key="edit" />} />
-      <Route path="/types/new" element={<TypeEditorPage />} />
-      <Route path="/types/:typeId/edit" element={<TypeEditorPage />} />
-      <Route path="/types/:typeId/objects" element={<ObjectListPage />} />
-      <Route path="/types/:typeId/objects/new" element={<NewObjectPage />} />
-      <Route path="/types/:typeId/objects/:objectId" element={<ObjectViewPage />} />
+      <Route path="/components" element={<ComponentsPage />} />
+      <Route path="/components/new" element={<ComponentEditorPage />} />
+      <Route path="/components/:componentId" element={<ComponentEditorPage key="edit" />} />
+      <Route path="/collections/new" element={<CollectionEditorPage />} />
+      <Route path="/collections/:collectionId/edit" element={<CollectionEditorPage />} />
+      <Route path="/collections/:collectionId/items" element={<CollectionPage />} />
+      <Route path="/collections/:collectionId/items/new" element={<NewItemPage />} />
+      <Route path="/collections/:collectionId/items/:itemId" element={<ItemPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

@@ -1,13 +1,13 @@
-// Filtering, sorting and grouping of objects: the "query" part of a view. Storage-free and
+// Filtering, sorting and grouping of items: the "query" part of a view. Storage-free and
 // UI-free. Everything kind-specific lives in KIND_RULES, so a new field kind (or operator)
 // is added in one place.
 
 import { checklistItems } from "./checklist";
 import { formatDate, htmlPlainText } from "./fieldKinds";
 import { markdownPlainText } from "./markdownExcerpt";
-import { fieldValue, objectLabel, pickableFields, type FieldDef, type FieldKind, type FieldValue, type ObjectInstance, type ObjectType } from "./model";
+import { fieldValue, itemLabel, pickableFields, type FieldDef, type FieldKind, type FieldValue, type Item, type Collection } from "./model";
 
-/** Pseudo fields that every object has, usable for sorting (and the default sort). */
+/** Pseudo fields that every item has, usable for sorting (and the default sort). */
 export const TITLE = "$title";
 export const UPDATED = "$updated";
 export const CREATED = "$created";
@@ -30,7 +30,7 @@ export interface FilterRule {
   id: string;
   fieldId: string;
   operator: FilterOperator;
-  /** The comparison value as entered (text, number, yyyy-mm-dd or an object id). */
+  /** The comparison value as entered (text, number, yyyy-mm-dd or an item id). */
   value: string;
 }
 
@@ -50,21 +50,21 @@ export interface ViewQuery {
 
 export type GroupOrder = "asc" | "desc" | "count";
 
-/** Resolves things the query needs but doesn't own (e.g. labels of referenced objects). */
+/** Resolves things the query needs but doesn't own (e.g. labels of referenced items). */
 export interface QueryContext {
-  /** Label of a referenced object, by the reference field and the object id. */
-  refLabel(field: FieldDef, objectId: string): string;
+  /** Label of a referenced item, by the reference field and the item id. */
+  refLabel(field: FieldDef, itemId: string): string;
 }
 
-export interface ObjectGroup {
+export interface ItemGroup {
   key: string;
   label: string;
-  objects: ObjectInstance[];
+  items: Item[];
 }
 
 export interface QueryResult {
-  groups: ObjectGroup[];
-  /** Objects after filtering (an object in several groups counts once). */
+  groups: ItemGroup[];
+  /** Items after filtering (an item in several groups counts once). */
   total: number;
 }
 
@@ -83,9 +83,9 @@ interface KindRules {
   text(field: FieldDef, value: FieldValue, ctx: QueryContext): string;
   /** Comparable key for sorting; null sorts last. */
   sortKey(field: FieldDef, value: FieldValue, ctx: QueryContext): string | number | null;
-  /** Group keys (an object may fall in several groups, e.g. lists); omit for "not groupable". */
+  /** Group keys (an item may fall in several groups, e.g. lists); omit for "not groupable". */
   groupKeys?(field: FieldDef, value: FieldValue, ctx: QueryContext): { key: string; label: string }[];
-  /** The value a new object gets to land in the group with this (non-empty) key; omit when none does. */
+  /** The value a new item gets to land in the group with this (non-empty) key; omit when none does. */
   groupValue?(key: string): FieldValue;
 }
 
@@ -154,7 +154,7 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     text: (_, v) => str(v),
     sortKey: (_, v) => (v ? 1 : 0),
   },
-  object: {
+  item: {
     operators: [op("is", "is"), op("isNot", "is not"), ...EMPTY_OPS],
     text: (f, v, ctx) => (typeof v === "string" && v ? ctx.refLabel(f, v) : ""),
     sortKey: (f, v, ctx) => (typeof v === "string" && v ? ctx.refLabel(f, v).toLowerCase() : null),
@@ -177,7 +177,7 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
       return items.length ? items.filter((i) => i.done).length / items.length : null;
     },
   },
-  object_list: {
+  item_list: {
     operators: [op("is", "includes"), op("isNot", "does not include"), ...EMPTY_OPS],
     text: (f, v, ctx) => list(v).map((id) => ctx.refLabel(f, id)).join(", "),
     sortKey: (f, v, ctx) => list(v).map((id) => ctx.refLabel(f, id)).join(", ").toLowerCase() || null,
@@ -185,7 +185,7 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     groupValue: (key) => [key],
   },
   // Values are the computed results (filled in before the query runs): numbers sort as numbers.
-  template: {
+  component: {
     operators: TEXT_OPS,
     text: (_f, v) => (v == null ? "" : String(v)),
     sortKey: (_f, v) => (typeof v === "number" ? v : v == null || v === "" ? null : String(v).toLowerCase()),
@@ -200,29 +200,29 @@ export const isGrouped = (result: QueryResult) => result.groups.length > 1 || re
 export const operatorsFor = (kind: FieldKind) => KIND_RULES[kind].operators;
 
 /**
- * The values a new object needs to land in a group (the grouped-by field set to the group's
+ * The values a new item needs to land in a group (the grouped-by field set to the group's
  * value); empty for the "(empty)" group or a field whose groups can't be targeted (date & time).
  */
-export function groupPreset(type: ObjectType, query: ViewQuery, groupKey: string): Record<string, FieldValue> {
-  const field = query.groupBy ? type.fields.find((f) => f.id === query.groupBy) : undefined;
+export function groupPreset(collection: Collection, query: ViewQuery, groupKey: string): Record<string, FieldValue> {
+  const field = query.groupBy ? collection.fields.find((f) => f.id === query.groupBy) : undefined;
   const toValue = field && KIND_RULES[field.kind].groupValue;
   return field && toValue && groupKey !== "" ? { [field.id]: toValue(groupKey) } : {};
 }
 
-/** Whether objects can be grouped by fields of this kind. */
+/** Whether items can be grouped by fields of this kind. */
 export const isGroupable = (kind: FieldKind) => !!KIND_RULES[kind].groupKeys;
 
 /** Fields usable for sorting, including the pseudo fields. */
-export function sortableFields(type: ObjectType): { id: string; name: string }[] {
+export function sortableFields(collection: Collection): { id: string; name: string }[] {
   return [
     { id: TITLE, name: "Title" },
-    ...type.fields.map((f) => ({ id: f.id, name: f.name })),
+    ...collection.fields.map((f) => ({ id: f.id, name: f.name })),
     { id: UPDATED, name: "Last updated" },
     { id: CREATED, name: "Created" },
   ];
 }
 
-/** Every object list starts here: no filters, sorted by title, not grouped. */
+/** Every item list starts here: no filters, sorted by title, not grouped. */
 export function defaultQuery(): ViewQuery {
   return { filters: [], sort: [{ fieldId: TITLE, direction: "asc" }], groupBy: null };
 }
@@ -256,8 +256,8 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
     case "isNot": {
       let equal: boolean;
       if (field.kind === "number") equal = typeof value === "number" && value === Number(arg);
-      else if (field.kind === "object") equal = value === arg;
-      else if (field.kind === "object_list") equal = list(value).includes(arg);
+      else if (field.kind === "item") equal = value === arg;
+      else if (field.kind === "item_list") equal = list(value).includes(arg);
       else if (field.kind === "datetime") equal = dayOf(field, value) === arg;
       else equal = text() === arg.toLowerCase();
       return rule.operator === "is" ? equal : !equal;
@@ -273,11 +273,11 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
   }
 }
 
-function sortKey(type: ObjectType, object: ObjectInstance, field: FieldDef | string | undefined, ctx: QueryContext): string | number | null {
-  if (field === TITLE) return objectLabel(type, object).toLowerCase();
-  if (field === UPDATED) return object.updatedAt;
-  if (field === CREATED) return object.createdAt;
-  return typeof field === "object" ? KIND_RULES[field.kind].sortKey(field, object.values[field.id] ?? null, ctx) : null;
+function sortKey(collection: Collection, item: Item, field: FieldDef | string | undefined, ctx: QueryContext): string | number | null {
+  if (field === TITLE) return itemLabel(collection, item).toLowerCase();
+  if (field === UPDATED) return item.updatedAt;
+  if (field === CREATED) return item.createdAt;
+  return typeof field === "object" ? KIND_RULES[field.kind].sortKey(field, item.values[field.id] ?? null, ctx) : null;
 }
 
 function compareKeys(a: string | number | null, b: string | number | null): number {
@@ -289,42 +289,42 @@ function compareKeys(a: string | number | null, b: string | number | null): numb
 }
 
 /**
- * Whether an object passes every filter, as a test for many objects: rules are paired with their
+ * Whether an item passes every filter, as a test for many items: rules are paired with their
  * fields once (rules on fields that no longer exist are ignored).
  */
-export function filterOf(type: ObjectType, filters: FilterRule[], ctx: QueryContext): (object: ObjectInstance) => boolean {
-  const byId = new Map(pickableFields(type).map((f) => [f.id, f]));
+export function filterOf(collection: Collection, filters: FilterRule[], ctx: QueryContext): (item: Item) => boolean {
+  const byId = new Map(pickableFields(collection).map((f) => [f.id, f]));
   const rules = filters.flatMap((rule) => {
     const field = byId.get(rule.fieldId);
     return field ? [{ rule, field }] : [];
   });
-  return (object) => rules.every(({ rule, field }) => matches(field, fieldValue(object, field), rule, ctx));
+  return (item) => rules.every(({ rule, field }) => matches(field, fieldValue(item, field), rule, ctx));
 }
 
-/** Applies a query (plus an optional free-text search) to a type's objects. */
+/** Applies a query (plus an optional free-text search) to a collection's items. */
 export function applyQuery(
-  type: ObjectType,
-  objects: ObjectInstance[],
+  collection: Collection,
+  items: Item[],
   query: ViewQuery,
   ctx: QueryContext,
   search = "",
 ): QueryResult {
-  const fieldsById = new Map(pickableFields(type).map((f) => [f.id, f]));
+  const fieldsById = new Map(pickableFields(collection).map((f) => [f.id, f]));
   const needle = search.trim().toLowerCase();
 
-  const passes = filterOf(type, query.filters, ctx);
-  const filtered = objects.filter((object) => {
-    if (!passes(object)) return false;
+  const passes = filterOf(collection, query.filters, ctx);
+  const filtered = items.filter((item) => {
+    if (!passes(item)) return false;
     if (!needle) return true;
-    return type.fields.some((f) => KIND_RULES[f.kind].text(f, object.values[f.id] ?? null, ctx).toLowerCase().includes(needle));
+    return collection.fields.some((f) => KIND_RULES[f.kind].text(f, item.values[f.id] ?? null, ctx).toLowerCase().includes(needle));
   });
 
-  // Keys are computed once per object, not in every comparison.
+  // Keys are computed once per item, not in every comparison.
   const sortBy = query.sort.map((rule) => ({
     field: rule.fieldId.startsWith("$") ? rule.fieldId : fieldsById.get(rule.fieldId),
     desc: rule.direction === "desc",
   }));
-  const keyed = filtered.map((object) => ({ object, keys: sortBy.map((s) => sortKey(type, object, s.field, ctx)) }));
+  const keyed = filtered.map((item) => ({ item, keys: sortBy.map((s) => sortKey(collection, item, s.field, ctx)) }));
   keyed.sort((a, b) => {
     for (let i = 0; i < sortBy.length; i++) {
       const ka = a.keys[i];
@@ -335,17 +335,17 @@ export function applyQuery(
     }
     return 0;
   });
-  const sorted = keyed.map((k) => k.object);
+  const sorted = keyed.map((k) => k.item);
 
   const groupField = query.groupBy ? fieldsById.get(query.groupBy) : undefined;
   const groupKeys = groupField && KIND_RULES[groupField.kind].groupKeys;
-  if (!groupField || !groupKeys) return { groups: [{ key: "", label: "", objects: sorted }], total: sorted.length };
+  if (!groupField || !groupKeys) return { groups: [{ key: "", label: "", items: sorted }], total: sorted.length };
 
-  const groups = new Map<string, ObjectGroup>();
-  for (const object of sorted) {
-    for (const { key, label } of groupKeys(groupField, fieldValue(object, groupField), ctx)) {
-      const group = groups.get(key) ?? { key, label: label || "(empty)", objects: [] };
-      group.objects.push(object);
+  const groups = new Map<string, ItemGroup>();
+  for (const item of sorted) {
+    for (const { key, label } of groupKeys(groupField, fieldValue(item, groupField), ctx)) {
+      const group = groups.get(key) ?? { key, label: label || "(empty)", items: [] };
+      group.items.push(item);
       groups.set(key, group);
     }
   }
@@ -353,7 +353,7 @@ export function applyQuery(
   const order = query.groupOrder ?? "asc";
   const ordered = [...groups.values()].sort((a, b) => {
     if (a.key === "" || b.key === "") return a.key === "" ? 1 : -1;
-    if (order === "count" && a.objects.length !== b.objects.length) return b.objects.length - a.objects.length;
+    if (order === "count" && a.items.length !== b.items.length) return b.items.length - a.items.length;
     return compareKeys(a.label, b.label) * (order === "desc" ? -1 : 1);
   });
   return { groups: ordered, total: sorted.length };

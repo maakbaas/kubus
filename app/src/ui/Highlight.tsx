@@ -1,6 +1,6 @@
 import { Fragment } from "react";
-import { splitWarnings } from "../domain/templates";
-import { TemplateWarning } from "./TemplateWarning";
+import { splitWarnings } from "../domain/components";
+import { ComponentWarning } from "./ComponentWarning";
 
 export const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -24,7 +24,7 @@ export function splitMatches(text: string, re: RegExp): string[] {
 
 /**
  * Renders `text` with every case-insensitive occurrence of `query` marked, and the warnings of
- * failing template sections in it shown as warnings.
+ * failing component sections in it shown as warnings.
  */
 export function Highlight({ text, query }: { text: string; query: string }) {
   const parts = splitWarnings(text);
@@ -32,7 +32,7 @@ export function Highlight({ text, query }: { text: string; query: string }) {
     return (
       <span>
         {parts.map((part, i) =>
-          i % 2 === 1 ? <TemplateWarning key={i}>{part}</TemplateWarning> : <Highlight key={i} text={part} query={query} />,
+          i % 2 === 1 ? <ComponentWarning key={i}>{part}</ComponentWarning> : <Highlight key={i} text={part} query={query} />,
         )}
       </span>
     );

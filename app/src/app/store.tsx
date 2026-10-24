@@ -1,27 +1,27 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { openRepository, type Repository } from "../data";
 import type { Bookmark } from "../domain/bookmarks";
-import type { Template } from "../domain/templates";
-import type { ObjectType } from "../domain/model";
-import { ObjectCache } from "./objectCache";
+import type { Component } from "../domain/components";
+import type { Collection } from "../domain/model";
+import { ItemCache } from "./itemCache";
 
 interface Store {
   repo: Repository;
-  /** All types; reloaded whenever they change (the repository announces it). */
-  types: ObjectType[];
-  /** Reloads them now: for a page that opens a just-saved type right away. */
-  reloadTypes(): Promise<void>;
-  /** All templates (kept up to date like the types). */
-  templates: Template[];
-  /** Side-nav bookmarks (kept up to date like the types). */
+  /** All collections; reloaded whenever they change (the repository announces it). */
+  collections: Collection[];
+  /** Reloads them now: for a page that opens a just-saved collection right away. */
+  reloadCollections(): Promise<void>;
+  /** All components (kept up to date like the collections). */
+  components: Component[];
+  /** Side-nav bookmarks (kept up to date like the collections). */
   bookmarks: Bookmark[];
-  /** The objects (and labels) of the types being shown, loaded once and shared (see useObjects). */
-  cache: ObjectCache;
+  /** The items (and labels) of the collections being shown, loaded once and shared (see useItems). */
+  cache: ItemCache;
 }
 
 const StoreContext = createContext<Store | null>(null);
 
-type State = { status: "loading" } | { status: "error"; error: string } | { status: "ready"; repo: Repository; cache: ObjectCache };
+type State = { status: "loading" } | { status: "error"; error: string } | { status: "ready"; repo: Repository; cache: ItemCache };
 
 export function StoreProvider({
   children,
@@ -31,15 +31,15 @@ export function StoreProvider({
   fallback: (state: { loading: boolean; error?: string }) => ReactNode;
 }) {
   const [state, setState] = useState<State>({ status: "loading" });
-  const [types, setTypes] = useState<ObjectType[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [components, setComponents] = useState<Component[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
-  // The latest types for the object cache, which reads them outside of rendering.
-  const typesRef = useRef<ObjectType[]>([]);
-  const applyTypes = useCallback((list: ObjectType[], cache?: ObjectCache) => {
-    typesRef.current = list;
-    setTypes(list);
-    cache?.typesChanged();
+  // The latest collections for the item cache, which reads them outside of rendering.
+  const collectionsRef = useRef<Collection[]>([]);
+  const applyCollections = useCallback((list: Collection[], cache?: ItemCache) => {
+    collectionsRef.current = list;
+    setCollections(list);
+    cache?.collectionsChanged();
   }, []);
 
   useEffect(() => {
@@ -47,13 +47,13 @@ export function StoreProvider({
     let stopped = false;
     openRepository()
       .then(async (repo) => {
-        const [types, templates, bookmarks] = await Promise.all([repo.listTypes(), repo.listTemplates(), repo.listBookmarks()]);
+        const [collections, components, bookmarks] = await Promise.all([repo.listCollections(), repo.listComponents(), repo.listBookmarks()]);
         if (stopped) return;
-        const cache = new ObjectCache(repo, (typeId) => typesRef.current.find((t) => t.id === typeId));
-        applyTypes(types);
-        setTemplates(templates);
+        const cache = new ItemCache(repo, (collectionId) => collectionsRef.current.find((t) => t.id === collectionId));
+        applyCollections(collections);
+        setComponents(components);
         setBookmarks(bookmarks);
-        // Type definitions changed anywhere: refresh them for every view (side nav, pages).
+        // Collection definitions changed anywhere: refresh them for every view (side nav, pages).
         let bookmarked = new Set(bookmarks.map((b) => b.targetId));
         const reloadBookmarks = () =>
           repo.listBookmarks().then((list) => {
@@ -61,12 +61,12 @@ export function StoreProvider({
             setBookmarks(list);
           }, (e) => console.error("Reloading bookmarks failed", e));
         const unsubscribe = repo.subscribe((change) => {
-          if (change.scope === "types") repo.listTypes().then((list) => applyTypes(list, cache), (e) => console.error("Reloading types failed", e));
-          if (change.scope === "templates") repo.listTemplates().then(setTemplates, (e) => console.error("Reloading templates failed", e));
-          // Bookmarks of deleted views / objects disappear too. Object edits only matter
-          // for a bookmarked object (it may have been deleted), not on every cell edit.
-          const objectChange = change.scope === "objects" && (!change.objectId || bookmarked.has(change.objectId));
-          if (change.scope === "bookmarks" || change.scope === "views" || change.scope === "types" || objectChange) reloadBookmarks();
+          if (change.scope === "collections") repo.listCollections().then((list) => applyCollections(list, cache), (e) => console.error("Reloading collections failed", e));
+          if (change.scope === "components") repo.listComponents().then(setComponents, (e) => console.error("Reloading components failed", e));
+          // Bookmarks of deleted views / items disappear too. Item edits only matter
+          // for a bookmarked item (it may have been deleted), not on every cell edit.
+          const itemChange = change.scope === "items" && (!change.itemId || bookmarked.has(change.itemId));
+          if (change.scope === "bookmarks" || change.scope === "views" || change.scope === "collections" || itemChange) reloadBookmarks();
         });
         cleanup = () => {
           unsubscribe();
@@ -81,17 +81,17 @@ export function StoreProvider({
       stopped = true;
       cleanup?.();
     };
-  }, [applyTypes]);
+  }, [applyCollections]);
 
   const ready = state.status === "ready" ? state : null;
   const repo = ready?.repo ?? null;
   const cache = ready?.cache ?? null;
-  const reloadTypes = useCallback(async () => {
-    if (repo) applyTypes(await repo.listTypes(), cache ?? undefined);
-  }, [repo, cache, applyTypes]);
+  const reloadCollections = useCallback(async () => {
+    if (repo) applyCollections(await repo.listCollections(), cache ?? undefined);
+  }, [repo, cache, applyCollections]);
   const value = useMemo(
-    () => (repo && cache ? { repo, types, reloadTypes, templates, bookmarks, cache } : null),
-    [repo, cache, types, reloadTypes, templates, bookmarks],
+    () => (repo && cache ? { repo, collections, reloadCollections, components, bookmarks, cache } : null),
+    [repo, cache, collections, reloadCollections, components, bookmarks],
   );
   if (!value) {
     return <>{fallback({ loading: state.status === "loading", error: state.status === "error" ? state.error : undefined })}</>;
@@ -105,6 +105,6 @@ export function useStore(): Store {
   return store;
 }
 
-export function useType(typeId: string | undefined): ObjectType | undefined {
-  return useStore().types.find((t) => t.id === typeId);
+export function useCollection(collectionId: string | undefined): Collection | undefined {
+  return useStore().collections.find((t) => t.id === collectionId);
 }

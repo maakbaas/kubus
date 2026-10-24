@@ -2,21 +2,21 @@ import { useEffect, useId, useRef, useState } from "react";
 import { InlineNotification, Modal } from "@carbon/react";
 import { useStore } from "../app/store";
 import { now, type FieldDef } from "../domain/model";
-import { parseParams, type Template } from "../domain/templates";
+import { parseParams, type Component } from "../domain/components";
 import { FieldLabel } from "./fieldKindIcons";
-import { TemplateCodeEditor } from "./TemplateCodeEditor";
+import { ComponentCodeEditor } from "./ComponentCodeEditor";
 import { errorMessage } from "./useConfirm";
 
-/** What to do with a changed template: save it, throw the edit away, or go back to it. */
+/** What to do with a changed component: save it, throw the edit away, or go back to it. */
 type Choice = "save" | "discard" | "edit";
 
 /**
- * A template field edited in place on an object page: it edits the field's template itself
+ * A component field edited in place on an item page: it edits the field's component itself
  * (its code; name, output and the field's variable mapping stay as they are). Like every
- * field editor: Ctrl/Cmd+Enter or a click outside saves, Escape cancels. The template is shared,
+ * field editor: Ctrl/Cmd+Enter or a click outside saves, Escape cancels. The component is shared,
  * so a change is saved only after a confirmation that it applies everywhere; there the edit can also be discarded (reverted) or taken up again.
  */
-export function TemplateFieldEditor({ field, template, onDone }: { field: FieldDef; template: Template; onDone(): void }) {
+export function ComponentFieldEditor({ field, component, onDone }: { field: FieldDef; component: Component; onDone(): void }) {
   const { repo } = useStore();
   const uid = useId();
   // The open confirmation's answer (null: none open).
@@ -26,7 +26,7 @@ export function TemplateFieldEditor({ field, template, onDone }: { field: FieldD
     answer?.(choice);
     setAnswer(null);
   };
-  const [code, setCode] = useState(template.code);
+  const [code, setCode] = useState(component.code);
   const [error, setError] = useState<string>();
   const latest = useRef(code);
   latest.current = code;
@@ -37,13 +37,13 @@ export function TemplateFieldEditor({ field, template, onDone }: { field: FieldD
   async function save() {
     if (busy.current) return;
     const next = latest.current;
-    if (next === template.code) return onDone();
+    if (next === component.code) return onDone();
     busy.current = true;
     try {
       const choice = await ask();
       if (choice === "edit") return;
       if (choice === "discard") return onDone();
-      await repo.saveTemplate({ ...template, code: next, params: parseParams(next), updatedAt: now() });
+      await repo.saveComponent({ ...component, code: next, params: parseParams(next), updatedAt: now() });
       onDone();
     } catch (e) {
       setError(errorMessage(e));
@@ -90,19 +90,19 @@ export function TemplateFieldEditor({ field, template, onDone }: { field: FieldD
 
   return (
     <div ref={box} className="field-editor" title="Ctrl+Enter or click outside to save, Esc to cancel">
-      <TemplateCodeEditor
-        id={`${uid}-template-${field.id}`}
+      <ComponentCodeEditor
+        id={`${uid}-component-${field.id}`}
         labelText={<FieldLabel field={field} />}
         value={code}
-        html={template.output === "html"}
+        html={component.output === "html"}
         onChange={setCode}
       />
       {error && <InlineNotification kind="error" lowContrast hideCloseButton title={error} />}
       <Modal
         open={answer !== null}
         size="sm"
-        modalHeading={`Change template “${template.name}”?`}
-        primaryButtonText="Change template"
+        modalHeading={`Change component “${component.name}”?`}
+        primaryButtonText="Change component"
         // Closing the dialog (×, Escape) goes back to editing; nothing is lost.
         secondaryButtons={[
           { buttonText: "Keep editing", onClick: () => choose("edit") },
@@ -111,7 +111,7 @@ export function TemplateFieldEditor({ field, template, onDone }: { field: FieldD
         onRequestSubmit={() => choose("save")}
         onRequestClose={() => choose("edit")}
       >
-        <p>This changes it everywhere it is used, for every object.</p>
+        <p>This changes it everywhere it is used, for every item.</p>
       </Modal>
     </div>
   );

@@ -3,86 +3,86 @@ import { createPortal } from "react-dom";
 import { Button, Dropdown, InlineNotification, Modal, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
 import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
-import { isReferenceKind, newId, typeDraft, type FieldDef, type FieldKind, type ObjectType, type TemplateArg } from "../domain/model";
-import type { Template } from "../domain/templates";
+import { isReferenceKind, newId, collectionDraft, type FieldDef, type FieldKind, type Collection, type ComponentArg } from "../domain/model";
+import type { Component } from "../domain/components";
 import { FieldKindLabel } from "./fieldKindIcons";
 import { TOGGLE_CHOICES, TOGGLE_ICONS, ToggleIconLabel } from "./ToggleInput";
-import { ObjectTypeLabel } from "./typeIcons";
+import { CollectionLabel } from "./collectionIcons";
 import { ChoiceFilterEditor } from "./ChoiceFilterEditor";
-import { TemplateArgInput } from "./TemplateArgInput";
-import { NewTemplateModal } from "./NewTemplateModal";
+import { ComponentArgInput } from "./ComponentArgInput";
+import { NewComponentModal } from "./NewComponentModal";
 import type { FilterRule } from "../domain/query";
 import { errorMessage, useConfirm } from "./useConfirm";
 
 /**
- * Adds a field to a type, or edits a template field, from a view's field picker (table
- * columns, card fields, object page layout): name and type, plus the referenced type or the
- * template and its variables (a field or a fixed value each). It is an ordinary field of the
- * type, shown everywhere like fields added in the type editor, and the picker shows it in
+ * Adds a field to a collection, or edits a component field, from a view's field picker (table
+ * columns, card fields, item page layout): name and type, plus the referenced collection or the
+ * component and its variables (a field or a fixed value each). It is an ordinary field of the
+ * collection, shown everywhere like fields added in the collection editor, and the picker shows it in
  * its own view. Type and reference target can't change once created.
  */
 export function FieldModal({
-  type,
+  collection,
   field,
   onClose,
   onSaved,
 }: {
-  type: ObjectType;
+  collection: Collection;
   /** The field to edit; null to add one. */
   field: FieldDef | null;
   onClose(): void;
   /** After saving: the field's id (a new one is then shown in the view it was added from). */
   onSaved(fieldId: string): void;
 }) {
-  const { repo, templates, types } = useStore();
+  const { repo, components, collections } = useStore();
   const { confirm, dialog } = useConfirm();
   const [name, setName] = useState(field?.name ?? "");
   const [kind, setKind] = useState<FieldKind>(field?.kind ?? "string");
-  const [targetTypeId, setTargetTypeId] = useState<string | null>(field?.targetTypeId ?? null);
-  const [templateId, setTemplateId] = useState<string | null>(field?.templateId ?? null);
-  const [args, setArgs] = useState<Record<string, TemplateArg>>(field?.templateArgs ?? {});
+  const [targetCollectionId, setTargetCollectionId] = useState<string | null>(field?.targetCollectionId ?? null);
+  const [componentId, setComponentId] = useState<string | null>(field?.componentId ?? null);
+  const [args, setArgs] = useState<Record<string, ComponentArg>>(field?.componentArgs ?? {});
   const [choiceFilter, setChoiceFilter] = useState<FilterRule[]>(field?.choiceFilter ?? []);
   const [toggleIcon, setToggleIcon] = useState<string | null>(field?.toggleIcon ?? null);
-  const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [creatingComponent, setCreatingComponent] = useState(false);
   // Just created: the store may not list it yet.
-  const [created, setCreated] = useState<Template>();
+  const [created, setCreated] = useState<Component>();
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
-  const template = templates.find((t) => t.id === templateId) ?? (created?.id === templateId ? created : undefined);
-  const target = types.find((t) => t.id === targetTypeId);
-  const taken = type.fields.some((f) => f.id !== field?.id && f.name.trim().toLowerCase() === name.trim().toLowerCase());
+  const component = components.find((t) => t.id === componentId) ?? (created?.id === componentId ? created : undefined);
+  const target = collections.find((t) => t.id === targetCollectionId);
+  const taken = collection.fields.some((f) => f.id !== field?.id && f.name.trim().toLowerCase() === name.trim().toLowerCase());
   const nameError = !name.trim() ? "Name is required" : taken ? "Another field has this name" : undefined;
   const choiceError =
-    kind === "template" && !templateId ? "Choose a template" : isReferenceKind(kind) && !targetTypeId ? "Choose a type" : undefined;
-  const sources = type.fields.filter((f) => f.id !== field?.id);
+    kind === "component" && !componentId ? "Choose a component" : isReferenceKind(kind) && !targetCollectionId ? "Choose a collection" : undefined;
+  const sources = collection.fields.filter((f) => f.id !== field?.id);
 
   async function save() {
     if (nameError || choiceError) {
       setSubmitted(true);
       return;
     }
-    // The field belongs to the type, not to the view this was opened from.
+    // The field belongs to the collection, not to the view this was opened from.
     if (!field) {
       const ok = await confirm({
-        title: `Add “${name.trim()}” to ${type.pluralName}?`,
-        body: `This adds a field to the type ${type.name}, so it exists for all its objects and views, not just this one.`,
+        title: `Add “${name.trim()}” to ${collection.pluralName}?`,
+        body: `This adds a field to the collection ${collection.name}, so it exists for all its items and views, not just this one.`,
         confirmLabel: "Add field",
         danger: false,
       });
       if (!ok) return;
     }
     setSaving(true);
-    const draft = typeDraft(type);
+    const draft = collectionDraft(collection);
     const id = field?.id ?? newId();
     const own = {
       id,
       name: name.trim(),
       kind,
-      targetTypeId: isReferenceKind(kind) ? targetTypeId : null,
-      templateId: kind === "template" ? templateId : null,
-      templateArgs: kind === "template" ? args : {},
+      targetCollectionId: isReferenceKind(kind) ? targetCollectionId : null,
+      componentId: kind === "component" ? componentId : null,
+      componentArgs: kind === "component" ? args : {},
       choiceFilter: isReferenceKind(kind) ? choiceFilter : [],
       toggleIcon: kind === "checkbox" || kind === "checklist" ? toggleIcon : null,
     };
@@ -90,7 +90,7 @@ export function FieldModal({
       ? draft.fields.map((f) => (f.id === id ? { ...f, ...own } : f))
       : [...draft.fields, own];
     try {
-      await repo.saveType(draft);
+      await repo.saveCollection(draft);
       onSaved(id);
     } catch (e) {
       setError(errorMessage(e));
@@ -119,7 +119,7 @@ export function FieldModal({
           size="sm"
           id="field-modal-name"
           labelText="Name"
-          placeholder={kind === "template" ? "e.g. Reading time" : "e.g. Published"}
+          placeholder={kind === "component" ? "e.g. Reading time" : "e.g. Published"}
           value={name}
           onChange={(e) => setName(e.target.value)}
           invalid={submitted && !!nameError}
@@ -140,26 +140,26 @@ export function FieldModal({
           onChange={({ selectedItem: k }) => {
             if (!k) return;
             setKind(k);
-            // The dropdowns the new type brings along start without errors.
+            // The dropdowns the new collection brings along start without errors.
             setSubmitted(false);
           }}
         />
         {isReferenceKind(kind) && (
-          <Dropdown<ObjectType>
+          <Dropdown<Collection>
             autoAlign
             size="sm"
             id="field-modal-target"
             titleText="Refers to"
             label="Choose…"
-            items={types}
+            items={collections}
             // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
-            selectedItem={(target ?? null) as ObjectType}
+            selectedItem={(target ?? null) as Collection}
             disabled={!!field}
             itemToString={(t) => t?.pluralName ?? ""}
-            itemToElement={(t) => <ObjectTypeLabel type={{ name: t.pluralName, icon: t.icon }} />}
-            renderSelectedItem={(t) => <ObjectTypeLabel type={{ name: t.pluralName, icon: t.icon }} />}
+            itemToElement={(t) => <CollectionLabel collection={{ name: t.pluralName, icon: t.icon }} />}
+            renderSelectedItem={(t) => <CollectionLabel collection={{ name: t.pluralName, icon: t.icon }} />}
             onChange={({ selectedItem: t }) => {
-              setTargetTypeId(t?.id ?? null);
+              setTargetCollectionId(t?.id ?? null);
               setChoiceFilter([]);
             }}
             invalid={submitted && !!choiceError}
@@ -182,34 +182,34 @@ export function FieldModal({
             onChange={({ selectedItem: i }) => i && setToggleIcon(i === "checkbox" ? null : i)}
           />
         )}
-        {kind === "template" && (
-          <Dropdown<Template>
+        {kind === "component" && (
+          <Dropdown<Component>
             autoAlign
             size="sm"
-            id="field-modal-template"
-            titleText="Template"
-            label={templates.length ? "Choose…" : "No templates yet"}
-            items={templates}
+            id="field-modal-component"
+            titleText="Component"
+            label={components.length ? "Choose…" : "No components yet"}
+            items={components}
             // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
-            selectedItem={(template ?? null) as Template}
+            selectedItem={(component ?? null) as Component}
             itemToString={(t) => t?.name ?? ""}
             onChange={({ selectedItem: t }) => {
-              setTemplateId(t?.id ?? null);
+              setComponentId(t?.id ?? null);
               setArgs({});
             }}
             invalid={submitted && !!choiceError}
             invalidText={choiceError}
           />
         )}
-        {kind === "template" && (
-          <Button size="sm" kind="tertiary" onClick={() => setCreatingTemplate(true)}>
-            New template
+        {kind === "component" && (
+          <Button size="sm" kind="tertiary" onClick={() => setCreatingComponent(true)}>
+            New component
           </Button>
         )}
-        {kind === "template" &&
-          template?.params.map((p) => (
-            <TemplateArgInput
-              key={`${template.id}-${p}`}
+        {kind === "component" &&
+          component?.params.map((p) => (
+            <ComponentArgInput
+              key={`${component.id}-${p}`}
               id={`field-modal-arg-${p}`}
               param={p}
               fields={sources}
@@ -225,19 +225,19 @@ export function FieldModal({
             />
           ))}
         <p className="helper">
-          A field of the type: it can be shown in other views too, sorted and filtered on, and read by templates as $object["
+          A field of the collection: it can be shown in other views too, sorted and filtered on, and read by components as $item["
           {name.trim() || "Name"}"].
         </p>
       </Stack>
     </Modal>
-    {creatingTemplate && (
-      <NewTemplateModal
-        onClose={() => setCreatingTemplate(false)}
+    {creatingComponent && (
+      <NewComponentModal
+        onClose={() => setCreatingComponent(false)}
         onCreated={(t) => {
           setCreated(t);
-          setTemplateId(t.id);
+          setComponentId(t.id);
           setArgs({});
-          setCreatingTemplate(false);
+          setCreatingComponent(false);
         }}
       />
     )}

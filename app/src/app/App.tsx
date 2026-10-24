@@ -85,7 +85,7 @@ function Shell() {
   };
   const [pathname, queryString = ""] = ws.activePath.split("?");
 
-  // A link opened from outside (e.g. "#/types/…" in the address bar) goes to the active tab.
+  // A link opened from outside (e.g. "#/collections/…" in the address bar) goes to the active tab.
   useEffect(() => {
     const hash = window.location.hash;
     if (hash.startsWith("#/")) {
@@ -137,7 +137,7 @@ function Shell() {
             {navShown && navToggle}
             <Search
               size="sm"
-              labelText="Search all objects"
+              labelText="Search all items"
               placeholder="Search"
               value={query}
               onChange={(e) => search(e.target.value)}

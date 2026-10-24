@@ -12,13 +12,13 @@ import {
 import { Add, ArrowDown, ArrowUp, TrashCan } from "@carbon/icons-react";
 import { itemString, parseItem, type ChecklistItem } from "../domain/checklist";
 import { formatDate, formatTime } from "../domain/fieldKinds";
-import { hasSections } from "../domain/templates";
-import type { FieldDef, FieldKind, FieldValue, ObjectType } from "../domain/model";
+import { hasSections } from "../domain/components";
+import type { FieldDef, FieldKind, FieldValue, Collection } from "../domain/model";
 import type { EditStart } from "./editStart";
 import { FieldLabel } from "./fieldKindIcons";
 import { ImageInput } from "./images";
 import { MarkdownEditor } from "./MarkdownEditor";
-import { TemplateCodeEditor } from "./TemplateCodeEditor";
+import { ComponentCodeEditor } from "./ComponentCodeEditor";
 import { RefCombo } from "./RefCombo";
 import { ToggleInput } from "./ToggleInput";
 import { choicesFor, type RefOption } from "./useReferenceOptions";
@@ -31,7 +31,7 @@ export type InputValue = string | boolean | string[];
 
 export function toInputValue(kind: FieldKind, value: FieldValue | undefined): InputValue {
   switch (kind) {
-    case "template":
+    case "component":
       return ""; // computed, never entered
     case "checkbox":
       return value === true;
@@ -44,14 +44,14 @@ export function toInputValue(kind: FieldKind, value: FieldValue | undefined): In
     }
     case "string_list":
     case "checklist":
-    case "object_list":
+    case "item_list":
       return Array.isArray(value) ? value : [];
     case "string":
     case "markdown":
     case "html":
     case "date":
     case "image":
-    case "object":
+    case "item":
       return typeof value === "string" ? value : "";
   }
 }
@@ -59,7 +59,7 @@ export function toInputValue(kind: FieldKind, value: FieldValue | undefined): In
 export function parseInputValue(kind: FieldKind, raw: InputValue): { value: FieldValue } | { error: string } {
   const s = typeof raw === "string" ? raw.trim() : "";
   switch (kind) {
-    case "template":
+    case "component":
       return { value: null };
     case "checkbox":
       return { value: raw === true };
@@ -68,7 +68,7 @@ export function parseInputValue(kind: FieldKind, raw: InputValue): { value: Fiel
     case "html":
       return { value: s === "" ? null : String(raw) };
     case "image":
-    case "object":
+    case "item":
       return { value: s || null };
     case "string_list": {
       const items = withoutTrailingEmpty((raw as string[]).map((x) => x.trim()), (x) => x === "");
@@ -79,7 +79,7 @@ export function parseInputValue(kind: FieldKind, raw: InputValue): { value: Fiel
       const items = withoutTrailingEmpty((raw as string[]).map(parseItem).map((i) => ({ ...i, text: i.text.trim() })), (i) => i.text === "");
       return { value: items.length > 0 ? items.map(itemString) : null };
     }
-    case "object_list": {
+    case "item_list": {
       const ids = (raw as string[]).filter(Boolean);
       return { value: ids.length > 0 ? ids : null };
     }
@@ -121,15 +121,15 @@ interface Props {
   field: FieldDef;
   value: InputValue;
   error?: string;
-  /** Selectable objects and their type, for reference kinds. */
+  /** Selectable items and their collection, for reference kinds. */
   options?: RefOption[];
-  target?: ObjectType;
+  target?: Collection;
   onChange(value: InputValue): void;
   /** Called for every file stored while editing (images), so unsaved ones can be released. */
   onFileStored?(fileId: string): void;
   /** Markdown only: where editing should start (caret / selection placed there). */
   start?: EditStart;
-  /** Table cells: small inputs with hidden labels (string, number, date(time), object, checkbox). */
+  /** Table cells: small inputs with hidden labels (string, number, date(time), item, checkbox). */
   compact?: boolean;
   /** Prefix for element ids, so one field can be rendered twice (e.g. a cell and the add row). */
   idPrefix?: string;
@@ -162,7 +162,7 @@ export function FieldInput({
   switch (field.kind) {
     case "checkbox": {
       // In a table cell just the box; in a form the box with the field's name to its right,
-      // laid out like a checklist item (as on the object page).
+      // laid out like a checklist item (as on the item page).
       const box = (
         <ToggleInput icon={field.toggleIcon} id={id} label={field.name} checked={value === true} onChange={onChange} />
       );
@@ -243,13 +243,13 @@ export function FieldInput({
       );
     }
 
-    case "object":
+    case "item":
       return (
         <ComboBox<RefOption> autoAlign size="sm"
           id={id}
           titleText={compact ? undefined : <FieldLabel field={field} />}
           aria-label={field.name}
-          placeholder={`Choose ${target?.name ?? "an object"}`}
+          placeholder={`Choose ${target?.name ?? "an item"}`}
           items={choicesFor(field, options, value ? [value as string] : [])}
           itemToString={(o) => o?.label ?? ""}
           selectedItem={options.find((o) => o.id === value) ?? null}
@@ -258,7 +258,7 @@ export function FieldInput({
         />
       );
 
-    case "object_list": {
+    case "item_list": {
       const ids = value as string[];
       return (
         <ListInput<string>
@@ -276,7 +276,7 @@ export function FieldInput({
               options={options}
               chosen={ids}
               value={item}
-              placeholder={`Choose ${target?.name ?? "an object"}`}
+              placeholder={`Choose ${target?.name ?? "an item"}`}
               onChange={set}
             />
           )}
@@ -321,7 +321,7 @@ export function FieldInput({
         />
       );
 
-    case "template":
+    case "component":
       return null; // computed, never entered
 
     case "markdown":
@@ -336,8 +336,8 @@ export function FieldInput({
       );
 
     case "html":
-      // The source, highlighted (with {{ }} sections, as in the template editor).
-      return <TemplateCodeEditor id={id} labelText={<FieldLabel field={field} />} value={String(value)} html onChange={onChange} />;
+      // The source, highlighted (with {{ }} sections, as in the component editor).
+      return <ComponentCodeEditor id={id} labelText={<FieldLabel field={field} />} value={String(value)} html onChange={onChange} />;
 
     case "image":
       return (

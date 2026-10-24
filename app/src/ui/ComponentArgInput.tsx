@@ -1,11 +1,11 @@
 import { ComboBox } from "@carbon/react";
-import type { FieldDef, TemplateArg } from "../domain/model";
+import type { FieldDef, ComponentArg } from "../domain/model";
 
 /**
- * What feeds one of a template's variables: pick a field from the list, or type a fixed text or
+ * What feeds one of a component's variables: pick a field from the list, or type a fixed text or
  * number into the same box instead.
  */
-export function TemplateArgInput({
+export function ComponentArgInput({
   id,
   param,
   fields,
@@ -16,8 +16,8 @@ export function TemplateArgInput({
   param: string;
   /** The fields that can feed it. */
   fields: { id: string; name: string }[];
-  value: TemplateArg | undefined;
-  onChange(arg: TemplateArg | null): void;
+  value: ComponentArg | undefined;
+  onChange(arg: ComponentArg | null): void;
 }) {
   // A typed value is the combo box's custom selection (a string).
   const initial = value ? ("field" in value ? fields.find((f) => f.id === value.field) ?? null : value.value) : null;

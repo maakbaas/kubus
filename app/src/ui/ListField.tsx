@@ -18,13 +18,13 @@ function storedValue(items: ChecklistItem[], checklist: boolean): FieldValue {
 }
 
 /**
- * A list field on an object page (list of strings, checklist, list of objects), edited one item at a time like a
+ * A list field on an item page (list of strings, checklist, list of items), edited one item at a time like a
  * table cell: clicking an item's text turns just that item into an input, the caret where it was
  * clicked. Tab moves in the usual order (checkbox, text, remove icon, next item…): leaving the
  * input saves it, tabbing onto an item's text edits it. Enter saves and adds a new item below,
  * Escape stops editing (an empty item goes), clicking elsewhere saves. Each item has its remove icon; "+" below adds one; a
  * checklist's boxes toggle right away. Every change is saved at once; an item just added and
- * left empty is dropped again, other empty items are kept. Items move up and down with arrow icons. A list of objects keeps each object's id as
+ * left empty is dropped again, other empty items are kept. Items move up and down with arrow icons. A list of items keeps each item's id as
  * the item's text and shows a ComboBox per item (always, so nothing to click first).
  */
 export function ListField({
@@ -37,16 +37,16 @@ export function ListField({
   field: FieldDef;
   value: FieldValue;
   readOnly?: boolean;
-  /** Selectable objects, for a list of objects. */
+  /** Selectable items, for a list of items. */
   refs?: RefOptions;
   onSave(value: FieldValue): void;
 }) {
   const checklist = field.kind === "checklist";
-  const objects = field.kind === "object_list";
-  const { types } = useStore();
-  const target = types.find((t) => t.id === field.targetTypeId);
-  const options = refs?.[field.targetTypeId ?? ""] ?? [];
-  // Unique per instance (an object can be open in two tabs): its inputs are looked up by id.
+  const itemList = field.kind === "item_list";
+  const { collections } = useStore();
+  const target = collections.find((t) => t.id === field.targetCollectionId);
+  const options = refs?.[field.targetCollectionId ?? ""] ?? [];
+  // Unique per instance (an item can be open in two tabs): its inputs are looked up by id.
   const uid = useId();
   const fromValue = (v: FieldValue) => (checklist ? checklistItems(v) : (Array.isArray(v) ? v : []).map((text) => ({ text, done: false })));
   const [items, setItems] = useState<ChecklistItem[]>(() => fromValue(value));
@@ -142,7 +142,7 @@ export function ListField({
                 />
               </span>
             )}
-            {objects && editing?.index === i ? (
+            {itemList && editing?.index === i ? (
               <RefCombo
                 id={inputId(i)}
                 field={field}
@@ -150,7 +150,7 @@ export function ListField({
                 options={options}
                 chosen={items.map((x) => x.text)}
                 value={item.text}
-                placeholder={`Choose ${target?.name ?? "an object"}`}
+                placeholder={`Choose ${target?.name ?? "an item"}`}
                 onChange={(id) => {
                   freshRef.current = null;
                   setEditing(null);
@@ -184,7 +184,7 @@ export function ListField({
               />
             ) : (
               <div
-                className={`view-field__value${readOnly ? "" : " view-field__editable"}${checklist && item.done ? " checklist-row__done" : ""}${(objects ? labelOf(options, item.text) : item.text) ? "" : " view-field__value--empty"}`}
+                className={`view-field__value${readOnly ? "" : " view-field__editable"}${checklist && item.done ? " checklist-row__done" : ""}${(itemList ? labelOf(options, item.text) : item.text) ? "" : " view-field__value--empty"}`}
                 {...(readOnly
                   ? {}
                   : {
@@ -198,9 +198,9 @@ export function ListField({
                       onFocus: () => edit(i),
                     })}
               >
-                {objects ? (
+                {itemList ? (
                   labelOf(options, item.text) !== undefined && (
-                    <RelatedLink path={`/types/${field.targetTypeId}/objects/${item.text}`}>{labelOf(options, item.text)}</RelatedLink>
+                    <RelatedLink path={`/collections/${field.targetCollectionId}/items/${item.text}`}>{labelOf(options, item.text)}</RelatedLink>
                   )
                 ) : (
                   item.text

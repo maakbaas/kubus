@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { Button, Heading, IconButton, Select, SelectItem, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
-import { newId, pickableFields, type FieldDef, type ObjectType } from "../domain/model";
+import { newId, pickableFields, type FieldDef, type Collection } from "../domain/model";
 import {
   isGroupable,
   operatorsFor,
@@ -14,7 +14,7 @@ import {
 import type { RefOptions } from "../ui/useReferenceOptions";
 
 interface Props {
-  type: ObjectType;
+  collection: Collection;
   query: ViewQuery;
   refs: RefOptions;
   part: "filter" | "sortGroup";
@@ -24,13 +24,13 @@ interface Props {
   onChange(query: ViewQuery): void;
 }
 
-/** Value input for a filter rule, by field kind (a date input, an object picker, plain text…). */
+/** Value input for a filter rule, by field kind (a date input, an item picker, plain text…). */
 function RuleValue({ id, field, rule, refs, onChange }: { id: string; field: FieldDef; rule: FilterRule; refs: RefOptions; onChange(value: string): void }) {
-  if (field.kind === "object" || field.kind === "object_list") {
+  if (field.kind === "item" || field.kind === "item_list") {
     return (
       <Select id={id} labelText="Value" hideLabel size="sm" value={rule.value} onChange={(e) => onChange(e.target.value)}>
         <SelectItem value="" text="Choose…" disabled hidden />
-        {(refs[field.targetTypeId ?? ""] ?? []).map((o) => (
+        {(refs[field.targetCollectionId ?? ""] ?? []).map((o) => (
           <SelectItem key={o.id} value={o.id} text={o.label} />
         ))}
       </Select>
@@ -55,21 +55,21 @@ function RuleValue({ id, field, rule, refs, onChange }: { id: string; field: Fie
  * Edits part of a view's query: its filters, or its sort and grouping (each shown in its own
  * toolbar popover). Built only on the query registry (domain/query.ts).
  */
-export function QueryEditor({ type, query, refs, part, title = "Filter", emptyText = "Showing all objects.", onChange }: Props) {
-  // Element ids unique per editor: several object lists (tabs, panes) can be open at once.
+export function QueryEditor({ collection, query, refs, part, title = "Filter", emptyText = "Showing all items.", onChange }: Props) {
+  // Element ids unique per editor: several item lists (tabs, panes) can be open at once.
   const uid = useId();
-  const fieldsById = new Map(pickableFields(type).map((f) => [f.id, f]));
+  const fieldsById = new Map(pickableFields(collection).map((f) => [f.id, f]));
   const setFilter = (id: string, patch: Partial<FilterRule>) =>
     onChange({ ...query, filters: query.filters.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
 
   const addFilter = () => {
-    const field = type.fields[0];
+    const field = collection.fields[0];
     if (!field) return;
     onChange({ ...query, filters: [...query.filters, { id: newId(), fieldId: field.id, operator: operatorsFor(field.kind)[0].id, value: "" }] });
   };
 
   const sort = query.sort[0];
-  const groupable = pickableFields(type).filter((f) => isGroupable(f.kind));
+  const groupable = pickableFields(collection).filter((f) => isGroupable(f.kind));
 
   return (
     <div className="query-editor">
@@ -94,7 +94,7 @@ export function QueryEditor({ type, query, refs, part, title = "Filter", emptyTe
                   setFilter(rule.id, { fieldId: next.id, operator: operatorsFor(next.kind)[0].id, value: "" });
                 }}
               >
-                {pickableFields(type).map((f) => (
+                {pickableFields(collection).map((f) => (
                   <SelectItem key={f.id} value={f.id} text={f.name} />
                 ))}
               </Select>
@@ -127,7 +127,7 @@ export function QueryEditor({ type, query, refs, part, title = "Filter", emptyTe
             </div>
           );
         })}
-        {type.fields.length > 0 && (
+        {collection.fields.length > 0 && (
           <Button kind="tertiary" size="sm" renderIcon={Add} iconDescription="Add filter" onClick={addFilter} className="query-editor__add">
             Add filter
           </Button>
@@ -150,7 +150,7 @@ export function QueryEditor({ type, query, refs, part, title = "Filter", emptyTe
             }
           >
             <SelectItem value="" text="No sorting" />
-            {sortableFields(type).map((f) => (
+            {sortableFields(collection).map((f) => (
               <SelectItem key={f.id} value={f.id} text={f.name} />
             ))}
           </Select>
@@ -198,7 +198,7 @@ export function QueryEditor({ type, query, refs, part, title = "Filter", emptyTe
           >
             <SelectItem value="asc" text="Ascending" />
             <SelectItem value="desc" text="Descending" />
-            <SelectItem value="count" text="Most objects first" />
+            <SelectItem value="count" text="Most items first" />
           </Select>
         </div>
       </section>

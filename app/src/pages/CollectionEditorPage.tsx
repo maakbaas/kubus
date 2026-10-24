@@ -2,57 +2,57 @@ import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Button, Dropdown, Form, FormGroup, InlineNotification, Stack, TextArea, TextInput } from "@carbon/react";
 import { Add, ArrowDown, ArrowUp, TrashCan } from "@carbon/icons-react";
-import { useStore, useType } from "../app/store";
+import { useStore, useCollection } from "../app/store";
 import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
 import {
   isReferenceKind,
   newId,
   suggestPlural,
-  typeDraft,
+  collectionDraft,
   type FieldKind,
-  type ObjectType,
-  type ObjectTypeDraft,
+  type Collection,
+  type CollectionDraft,
 } from "../domain/model";
 import { FieldKindLabel } from "../ui/fieldKindIcons";
 import { TOGGLE_CHOICES, TOGGLE_ICONS, ToggleIconLabel } from "../ui/ToggleInput";
 import { ChoiceFilterEditor } from "../ui/ChoiceFilterEditor";
-import { TemplateArgInput } from "../ui/TemplateArgInput";
-import type { Template } from "../domain/templates";
+import { ComponentArgInput } from "../ui/ComponentArgInput";
+import type { Component } from "../domain/components";
 import { IconPicker } from "../ui/IconPicker";
-import { ObjectTypeLabel as TypeLabel } from "../ui/typeIcons";
+import { CollectionLabel as CollectionLabel } from "../ui/collectionIcons";
 import { NotFound } from "../ui/NotFound";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 
-/** A type a reference field can point at (including the one being created). */
+/** A collection a reference field can point at (including the one being created). */
 interface Target {
   id: string;
   name: string;
   icon: string | null;
 }
 
-export function TypeEditorPage() {
-  const { typeId } = useParams();
-  const existing = useType(typeId);
-  if (typeId && !existing) return <NotFound />;
-  return <TypeEditor key={typeId ?? "new"} existing={existing} />;
+export function CollectionEditorPage() {
+  const { collectionId } = useParams();
+  const existing = useCollection(collectionId);
+  if (collectionId && !existing) return <NotFound />;
+  return <CollectionEditor key={collectionId ?? "new"} existing={existing} />;
 }
 
-type DraftField = ObjectTypeDraft["fields"][number];
+type DraftField = CollectionDraft["fields"][number];
 
-function initialDraft(existing?: ObjectType): ObjectTypeDraft {
-  if (existing) return typeDraft(existing);
+function initialDraft(existing?: Collection): CollectionDraft {
+  if (existing) return collectionDraft(existing);
   return {
     id: newId(),
     name: "",
     pluralName: "",
     icon: null,
     description: "",
-    fields: [{ id: newId(), name: "Name", kind: "string", targetTypeId: null, templateId: null, templateArgs: {}, choiceFilter: [], toggleIcon: null }],
+    fields: [{ id: newId(), name: "Name", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null }],
   };
 }
 
-function validate(draft: ObjectTypeDraft) {
+function validate(draft: CollectionDraft) {
   const fieldErrors: Record<string, string> = {};
   const targetErrors: Record<string, string> = {};
   const seen = new Set<string>();
@@ -61,12 +61,12 @@ function validate(draft: ObjectTypeDraft) {
     if (!key) fieldErrors[f.id] = "Name is required";
     else if (seen.has(key)) fieldErrors[f.id] = "Duplicate field name";
     seen.add(key);
-    if (isReferenceKind(f.kind) && !f.targetTypeId) targetErrors[f.id] = "Choose a type";
-    if (f.kind === "template" && !f.templateId) targetErrors[f.id] = "Choose a template";
+    if (isReferenceKind(f.kind) && !f.targetCollectionId) targetErrors[f.id] = "Choose a collection";
+    if (f.kind === "component" && !f.componentId) targetErrors[f.id] = "Choose a component";
   }
   const nameError = draft.name.trim() ? undefined : "Name is required";
   const pluralError = draft.pluralName.trim() ? undefined : "Plural name is required";
-  // A type always has a field (the last one can't be removed).
+  // A collection always has a field (the last one can't be removed).
   const valid =
     !nameError &&
     !pluralError &&
@@ -76,10 +76,10 @@ function validate(draft: ObjectTypeDraft) {
   return { nameError, pluralError, fieldErrors, targetErrors, valid };
 }
 
-function TypeEditor({ existing }: { existing?: ObjectType }) {
+function CollectionEditor({ existing }: { existing?: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { repo, types, reloadTypes, templates } = useStore();
+  const { repo, collections, reloadCollections, components } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
   const [draft, setDraft] = useState(() => initialDraft(existing));
@@ -89,20 +89,20 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
   // The plural follows the singular until the user edits it themselves.
   const [pluralTouched, setPluralTouched] = useState(!!existing);
 
-  // A new type starts by naming it.
+  // A new collection starts by naming it.
   useEffect(() => {
-    if (!existing) document.getElementById(`${uid}-type-name`)?.focus();
+    if (!existing) document.getElementById(`${uid}-collection-name`)?.focus();
   }, [existing, uid]);
 
   const persisted = useMemo(() => new Set(existing?.fields.map((f) => f.id)), [existing]);
   const { nameError, pluralError, fieldErrors, targetErrors, valid } = validate(draft);
 
-  // Reference targets: all types, plus this one itself while it is being created.
+  // Reference targets: all collections, plus this one itself while it is being created.
   const targets: Target[] = existing
-    ? types.map((t) => ({ id: t.id, name: t.pluralName, icon: t.icon }))
+    ? collections.map((t) => ({ id: t.id, name: t.pluralName, icon: t.icon }))
     : [
-        ...types.map((t) => ({ id: t.id, name: t.pluralName, icon: t.icon })),
-        { id: draft.id, name: `${draft.pluralName || "This type"} (itself)`, icon: draft.icon },
+        ...collections.map((t) => ({ id: t.id, name: t.pluralName, icon: t.icon })),
+        { id: draft.id, name: `${draft.pluralName || "This collection"} (itself)`, icon: draft.icon },
       ];
 
   const updateField = (id: string, patch: Partial<DraftField>) =>
@@ -119,7 +119,7 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
   const removeField = (id: string) => setDraft((d) => ({ ...d, fields: d.fields.filter((f) => f.id !== id) }));
 
   const addField = () =>
-    setDraft((d) => ({ ...d, fields: [...d.fields, { id: newId(), name: "", kind: "string", targetTypeId: null, templateId: null, templateArgs: {}, choiceFilter: [], toggleIcon: null }] }));
+    setDraft((d) => ({ ...d, fields: [...d.fields, { id: newId(), name: "", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null }] }));
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -130,7 +130,7 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
     if (removed.length > 0) {
       const ok = await confirm({
         title: "Remove fields?",
-        body: `The values of ${removed.map((f) => `“${f.name}”`).join(", ")} will no longer be shown on any object.`,
+        body: `The values of ${removed.map((f) => `“${f.name}”`).join(", ")} will no longer be shown on any item.`,
         confirmLabel: "Remove and save",
       });
       if (!ok) return;
@@ -138,7 +138,7 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
 
     setSaving(true);
     try {
-      await repo.saveType({
+      await repo.saveCollection({
         ...draft,
         name: draft.name.trim(),
         pluralName: draft.pluralName.trim(),
@@ -146,11 +146,11 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
         fields: draft.fields.map((f) => ({
           ...f,
           name: f.name.trim(),
-          targetTypeId: isReferenceKind(f.kind) ? f.targetTypeId : null,
+          targetCollectionId: isReferenceKind(f.kind) ? f.targetCollectionId : null,
         })),
       });
-      await reloadTypes();
-      navigate(`/types/${draft.id}/objects`);
+      await reloadCollections();
+      navigate(`/collections/${draft.id}/items`);
     } catch (e) {
       setError(errorMessage(e));
       setSaving(false);
@@ -160,13 +160,13 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
   return (
     <div className="form-page">
       <PageHeader
-        current={existing ? `Edit ${existing.pluralName}` : "New type"}
+        current={existing ? `Edit ${existing.pluralName}` : "New collection"}
         title={
-          // The header is the editor for the type's icon and name.
+          // The header is the editor for the collection's icon and name.
           <div className="title-edit">
-            <IconPicker id={`${uid}-type-icon`} value={draft.icon} onChange={(icon) => setDraft((d) => ({ ...d, icon }))} />
+            <IconPicker id={`${uid}-collection-icon`} value={draft.icon} onChange={(icon) => setDraft((d) => ({ ...d, icon }))} />
             <TextInput size="sm"
-              id={`${uid}-type-name`}
+              id={`${uid}-collection-name`}
               className="title-edit__name"
               labelText="Name"
               hideLabel
@@ -181,13 +181,13 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
             />
           </div>
         }
-        breadcrumbs={[{ label: "Types", href: "#/types" }]}
+        breadcrumbs={[{ label: "Collections", href: "#/collections" }]}
       />
       {error && <InlineNotification kind="error" title="Could not save" subtitle={error} onClose={() => setError(undefined)} />}
       <Form onSubmit={save} noValidate>
         <Stack gap={6}>
           <TextInput size="sm"
-            id={`${uid}-type-plural-name`}
+            id={`${uid}-collection-plural-name`}
             labelText="Plural name"
             placeholder="e.g. Authors"
             value={draft.pluralName}
@@ -199,7 +199,7 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
             invalidText={pluralError}
           />
           <TextArea
-            id={`${uid}-type-description`}
+            id={`${uid}-collection-description`}
             labelText="Description (optional)"
             rows={2}
             value={draft.description}
@@ -209,7 +209,7 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
           <FormGroup legendText="Fields">
             <p className="helper">A field's type cannot change once saved.</p>
             {draft.fields.map((f, i) => (
-              <div className={isReferenceKind(f.kind) || f.kind === "template" || f.kind === "checkbox" || f.kind === "checklist" ? "field-row field-row--reference" : "field-row"} key={f.id}>
+              <div className={isReferenceKind(f.kind) || f.kind === "component" || f.kind === "checkbox" || f.kind === "checklist" ? "field-row field-row--reference" : "field-row"} key={f.id}>
                 <TextInput size="sm"
                   id={`${uid}-field-name-${f.id}`}
                   labelText="Field name"
@@ -239,12 +239,12 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
                     label="Choose…"
                     items={targets}
                     // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
-                    selectedItem={(targets.find((t) => t.id === f.targetTypeId) ?? null) as Target}
+                    selectedItem={(targets.find((t) => t.id === f.targetCollectionId) ?? null) as Target}
                     disabled={persisted.has(f.id)}
                     itemToString={(t) => t?.name ?? ""}
-                    itemToElement={(t) => <TypeLabel type={t} />}
-                    renderSelectedItem={(t) => <TypeLabel type={t} />}
-                    onChange={({ selectedItem: t }) => updateField(f.id, { targetTypeId: t?.id ?? null })}
+                    itemToElement={(t) => <CollectionLabel collection={t} />}
+                    renderSelectedItem={(t) => <CollectionLabel collection={t} />}
+                    onChange={({ selectedItem: t }) => updateField(f.id, { targetCollectionId: t?.id ?? null })}
                     invalid={submitted && !!targetErrors[f.id]}
                     invalidText={targetErrors[f.id]}
                   />
@@ -263,17 +263,17 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
                     onChange={({ selectedItem: i }) => i && updateField(f.id, { toggleIcon: i === "checkbox" ? null : i })}
                   />
                 )}
-                {f.kind === "template" && (
-                  <Dropdown<Template> autoAlign
+                {f.kind === "component" && (
+                  <Dropdown<Component> autoAlign
                     size="sm"
-                    id={`${uid}-field-template-${f.id}`}
-                    titleText="Template"
-                    label={templates.length ? "Choose…" : "No templates yet"}
-                    items={templates}
+                    id={`${uid}-field-component-${f.id}`}
+                    titleText="Component"
+                    label={components.length ? "Choose…" : "No components yet"}
+                    items={components}
                     // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
-                    selectedItem={(templates.find((x) => x.id === f.templateId) ?? null) as Template}
+                    selectedItem={(components.find((x) => x.id === f.componentId) ?? null) as Component}
                     itemToString={(x) => x?.name ?? ""}
-                    onChange={({ selectedItem: x }) => updateField(f.id, { templateId: x?.id ?? null, templateArgs: {} })}
+                    onChange={({ selectedItem: x }) => updateField(f.id, { componentId: x?.id ?? null, componentArgs: {} })}
                     invalid={submitted && !!targetErrors[f.id]}
                     invalidText={targetErrors[f.id]}
                   />
@@ -293,39 +293,39 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
                     kind="ghost"
                     hasIconOnly
                     renderIcon={TrashCan}
-                    iconDescription={draft.fields.length === 1 ? "A type needs at least one field" : "Remove field"}
+                    iconDescription={draft.fields.length === 1 ? "A collection needs at least one field" : "Remove field"}
                     disabled={draft.fields.length === 1}
                     onClick={() => removeField(f.id)}
                   />
                 </div>
-                {/* A reference field can limit which objects it offers (filters over the target). */}
+                {/* A reference field can limit which items it offers (filters over the target). */}
                 {isReferenceKind(f.kind) && (() => {
-                  const target = types.find((t) => t.id === f.targetTypeId);
+                  const target = collections.find((t) => t.id === f.targetCollectionId);
                   return target ? (
                     <div className="field-row__mapping">
                       <ChoiceFilterEditor target={target} filters={f.choiceFilter} onChange={(choiceFilter) => updateField(f.id, { choiceFilter })} />
                     </div>
                   ) : null;
                 })()}
-                {/* Each of the template's variables takes the value of a field of this type, or a fixed value. */}
-                {f.kind === "template" && (() => {
-                  const x = templates.find((e) => e.id === f.templateId);
+                {/* Each of the component's variables takes the value of a field of this collection, or a fixed value. */}
+                {f.kind === "component" && (() => {
+                  const x = components.find((e) => e.id === f.componentId);
                   if (!x) return null;
                   const sources = draft.fields.filter((o) => o.id !== f.id && o.name.trim());
                   return (
                     <div className="field-row__mapping">
                       {x.params.map((p) => (
-                        <TemplateArgInput
+                        <ComponentArgInput
                           key={`${x.id}-${p}`}
                           id={`${uid}-field-arg-${f.id}-${p}`}
                           param={p}
                           fields={sources}
-                          value={f.templateArgs[p]}
+                          value={f.componentArgs[p]}
                           onChange={(arg) => {
-                            const next = { ...f.templateArgs };
+                            const next = { ...f.componentArgs };
                             if (arg) next[p] = arg;
                             else delete next[p];
-                            updateField(f.id, { templateArgs: next });
+                            updateField(f.id, { componentArgs: next });
                           }}
                         />
                       ))}
@@ -340,11 +340,11 @@ function TypeEditor({ existing }: { existing?: ObjectType }) {
           </FormGroup>
 
           <div className="form-actions">
-            <Button size="sm" kind="secondary" onClick={() => navigate(existing ? `/types/${existing.id}/objects` : "/types")}>
+            <Button size="sm" kind="secondary" onClick={() => navigate(existing ? `/collections/${existing.id}/items` : "/collections")}>
               Cancel
             </Button>
             <Button size="sm" type="submit" disabled={saving}>
-              {existing ? "Save changes" : "Create type"}
+              {existing ? "Save changes" : "Create collection"}
             </Button>
           </div>
         </Stack>

@@ -16,7 +16,7 @@ export async function storeImageFile(repo: Repository, file: File): Promise<stri
   return repo.putFile(new Uint8Array(await file.arrayBuffer()), file.type);
 }
 
-// Object URLs per file id, shared by every component and the markdown editor for the
+// Item URLs per file id, shared by every component and the markdown editor for the
 // whole session. Files are immutable (content-addressed), so a URL never goes stale,
 // and reusing it means switching between view and edit never makes an image blink.
 const loadedUrls = new Map<string, string>();
@@ -25,7 +25,7 @@ const pendingUrls = new Map<string, Promise<string | null>>();
 /** Synchronous lookup: the URL if this file was already loaded. */
 export const cachedFileUrl = (fileId: string) => loadedUrls.get(fileId);
 
-/** Loads a stored file once per session and returns its object URL. */
+/** Loads a stored file once per session and returns its item URL. */
 export function fileUrl(repo: Repository, fileId: string): Promise<string | null> {
   const loaded = loadedUrls.get(fileId);
   if (loaded) return Promise.resolve(loaded);
@@ -44,7 +44,7 @@ export function fileUrl(repo: Repository, fileId: string): Promise<string | null
 }
 
 // Data URLs per file id, for HTML frames: a sandboxed frame (its own, opaque origin) can't load
-// the app's object URLs, so the images it refers to are embedded.
+// the app's item URLs, so the images it refers to are embedded.
 const dataUrls = new Map<string, Promise<string | null>>();
 
 /** A stored file as a data URL (once per session). */
@@ -68,7 +68,7 @@ export function fileDataUrl(repo: Repository, fileId: string): Promise<string | 
   return pending;
 }
 
-/** Object URL for a stored file (from the session cache when possible). */
+/** Item URL for a stored file (from the session cache when possible). */
 export function useFileUrl(fileId: string | null): string | undefined {
   const { repo } = useStore();
   const [url, setUrl] = useState<string | undefined>(() => (fileId ? cachedFileUrl(fileId) : undefined));
@@ -172,13 +172,13 @@ export function ImageInput({ id, label, value, error, onChange, onFileStored }: 
 }
 
 /**
- * An image from a URL (a template's result). One that can't be loaded shows a placeholder the
+ * An image from a URL (a component's result). One that can't be loaded shows a placeholder the
  * size of the image upload box saying so (`compact`: a short note, for table cells and cards).
  */
 export function UrlImage({ url, className, compact = false }: { url: string; className?: string; compact?: boolean }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [url]);
-  // A stored image (`files/<sha256>`, e.g. an image field passed through a template).
+  // A stored image (`files/<sha256>`, e.g. an image field passed through a component).
   const fileId = fileIdFromSrc(url);
   const stored = useFileUrl(fileId);
   if (fileId && !stored) return null;

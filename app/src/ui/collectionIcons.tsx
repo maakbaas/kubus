@@ -1,11 +1,11 @@
-import type { ObjectType } from "../domain/model";
+import type { Collection } from "../domain/model";
 import { useEffect, useState } from "react";
 import { Cube, type CarbonIconType } from "@carbon/icons-react";
 
 // (The glob is relative to this file: Vite's root is app/, while node_modules is at the repo root.)
 // Every Carbon icon is its own module (`@carbon/icons-react/es/<Name>.js`), loaded on demand
 // and cached, so only the icons actually shown are fetched. Until one is there (or when unset or
-// unknown) types show the default Cube icon.
+// unknown) collections show the default Cube icon.
 
 const loaders = import.meta.glob<{ default: CarbonIconType }>("../../../node_modules/@carbon/icons-react/es/[A-Z0-9]*.js");
 
@@ -47,8 +47,8 @@ export function iconNames(): string[] {
   return sortedNames;
 }
 
-/** Component for a type's icon; Cube while loading or when unset/unknown. */
-export function useTypeIcon(name: string | null | undefined): CarbonIconType {
+/** Component for a collection's icon; Cube while loading or when unset/unknown. */
+export function useCollectionIcon(name: string | null | undefined): CarbonIconType {
   const [, setLoadedName] = useState<string | null>(null);
   useEffect(() => {
     if (name && !loaded.has(name)) {
@@ -62,18 +62,18 @@ export function useTypeIcon(name: string | null | undefined): CarbonIconType {
   return (name && loaded.get(name)) || Cube;
 }
 
-/** Renders a type's icon. */
-export function TypeIcon({ name, size = 16 }: { name: string | null | undefined; size?: 16 | 20 | 24 | 32 }) {
-  const Icon = useTypeIcon(name);
+/** Renders a collection's icon. */
+export function CollectionIcon({ name, size = 16 }: { name: string | null | undefined; size?: 16 | 20 | 24 | 32 }) {
+  const Icon = useCollectionIcon(name);
   return <Icon size={size} aria-hidden="true" />;
 }
 
-/** A type with its icon, e.g. in dropdowns that pick a type. */
-export function ObjectTypeLabel({ type }: { type: Pick<ObjectType, "name" | "icon"> }) {
+/** A collection with its icon, e.g. in dropdowns that pick a collection. */
+export function CollectionLabel({ collection }: { collection: Pick<Collection, "name" | "icon"> }) {
   return (
     <span className="icon-label">
-      <TypeIcon name={type.icon} />
-      {type.name}
+      <CollectionIcon name={collection.icon} />
+      {collection.name}
     </span>
   );
 }

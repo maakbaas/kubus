@@ -2,30 +2,30 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Dropdown, Heading, IconButton, InlineNotification, Search, Tab, TabList, Tabs, TextInput } from "@carbon/react";
 import { Add, ArrowsVertical, Filter, Save, SettingsAdjust, Star, StarFilled, TrashCan, Undo } from "@carbon/icons-react";
-import { useStore, useType } from "../app/store";
+import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
-import { useObjects } from "../app/useObjects";
-import { nextName, newName, now, labelField, objectLabel, newId, isReferenceKind, type FieldValue, type ObjectInstance, type ObjectType } from "../domain/model";
-import { withComputed } from "../domain/templates";
+import { useItems } from "../app/useItems";
+import { nextName, newName, now, labelField, itemLabel, newId, isReferenceKind, type FieldValue, type Item, type Collection } from "../domain/model";
+import { withComputed } from "../domain/components";
 import { applyQuery, groupPreset, type QueryContext, type ViewQuery } from "../domain/query";
-import { defaultViewState, sameView, type SavedView, type ViewState } from "../domain/views";
+import { defaultViewState, sameView, type CollectionView, type ViewState } from "../domain/views";
 import { NotFound } from "../ui/NotFound";
-import { TypeIcon } from "../ui/typeIcons";
+import { CollectionIcon } from "../ui/collectionIcons";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import { NewButton } from "../ui/NewButton";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { refLabelOf, useReferenceOptions } from "../ui/useReferenceOptions";
-import { VIEW_TYPES, viewType, type ObjectActions, type ViewTypeDefinition } from "../views";
+import { VIEW_TYPES, viewType, type ItemActions, type ViewTypeDefinition } from "../views";
 import { QueryEditor } from "../views/QueryEditor";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { useOpenRelated } from "../workspace/Workspace";
 
-export function ObjectListPage() {
-  const { typeId } = useParams();
-  const type = useType(typeId);
-  if (!type) return <NotFound />;
-  return <ObjectsPage key={type.id} type={type} />;
+export function CollectionPage() {
+  const { collectionId } = useParams();
+  const collection = useCollection(collectionId);
+  if (!collection) return <NotFound />;
+  return <CollectionContent key={collection.id} collection={collection} />;
 }
 
 /** A view type with its icon, as shown in the view dropdown. */
@@ -38,27 +38,27 @@ function ViewKindLabel({ kind }: { kind: ViewTypeDefinition }) {
   );
 }
 
-/** A view state with options validated for this type (stored options may be outdated). */
-function normalized(type: ObjectType, state: ViewState): ViewState {
-  return { ...state, options: viewType(state.kind).normalizeOptions(state.options, type) };
+/** A view state with options validated for this collection (stored options may be outdated). */
+function normalized(collection: Collection, state: ViewState): ViewState {
+  return { ...state, options: viewType(state.kind).normalizeOptions(state.options, collection) };
 }
 
-function ObjectsPage({ type }: { type: ObjectType }) {
+function CollectionContent({ collection }: { collection: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { repo, templates, cache } = useStore();
+  const { repo, components, cache } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
-  const refs = useReferenceOptions(type);
+  const refs = useReferenceOptions(collection);
   const openRelated = useOpenRelated();
-  // The type's objects, shared with every other pane showing them and current from the change feed.
-  const { items: objects, error: loadError } = useObjects(type);
-  const [savedViews, setSavedViews] = useState<SavedView[] | null>(null); // null = loading
+  // The collection's items, shared with every other pane showing them and current from the change feed.
+  const { items: items, error: loadError } = useItems(collection);
+  const [savedViews, setSavedViews] = useState<CollectionView[] | null>(null); // null = loading
   const [error, setError] = useState<string>();
 
   // The view currently shown. Changes are ephemeral until saved as / into a saved view. Every
-  // type starts with an ordinary saved "All" view; `base` is only shown once all are deleted.
-  const base = useMemo(() => normalized(type, defaultViewState(viewType("table").defaultOptions(type))), [type]);
+  // collection starts with an ordinary saved "All" view; `base` is only shown once all are deleted.
+  const base = useMemo(() => normalized(collection, defaultViewState(viewType("table").defaultOptions(collection))), [collection]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>(base);
   const [search, setSearch] = useState("");
@@ -80,59 +80,59 @@ function ObjectsPage({ type }: { type: ObjectType }) {
   const shown = useRef<{ activeId: string | null; view: ViewState; reference: ViewState } | undefined>(undefined);
   const loadViews = useCallback(
     () =>
-      repo.listViews(type.id).then((list) => {
+      repo.listViews(collection.id).then((list) => {
         setSavedViews(list);
         // A shown view without unsaved changes follows its stored settings when they change
         // elsewhere, instead of turning into "changed".
         const cur = shown.current;
         const next = cur?.activeId ? list.find((v) => v.id === cur.activeId) : undefined;
-        if (cur && next && sameView(cur.view, cur.reference)) setView(normalized(type, next));
+        if (cur && next && sameView(cur.view, cur.reference)) setView(normalized(collection, next));
       }, (e) => setError(errorMessage(e))),
-    [repo, type],
+    [repo, collection],
   );
   useEffect(() => {
     loadViews();
   }, [loadViews]);
   // Opening the page shows the starred view, else the first — once, when the views have loaded.
   const openedDefault = useRef(false);
-  // Views changed elsewhere (another pane) show up here too; objects arrive through useObjects.
+  // Views changed elsewhere (another pane) show up here too; items arrive through useItems.
   useDataChanges((change) => {
-    if (change.scope === "views" && change.typeId === type.id) loadViews();
+    if (change.scope === "views" && change.collectionId === collection.id) loadViews();
   });
 
   const views = savedViews ?? [];
   const active = views.find((v) => v.id === activeId) ?? null;
-  const reference = active ? normalized(type, active) : base;
+  const reference = active ? normalized(collection, active) : base;
   const changed = !sameView(view, reference);
   shown.current = { activeId, view, reference };
 
-  // Until the referenced objects' labels are in, a reference would read as "(deleted)" (in
+  // Until the referenced items' labels are in, a reference would read as "(deleted)" (in
   // groups, sorting, filters): the list waits for them.
-  const refsLoading = type.fields.some((f) => isReferenceKind(f.kind) && f.targetTypeId && !refs[f.targetTypeId]);
+  const refsLoading = collection.fields.some((f) => isReferenceKind(f.kind) && f.targetCollectionId && !refs[f.targetCollectionId]);
   const ctx: QueryContext = useMemo(
     () => ({ refLabel: refLabelOf(refs, "(deleted)") }),
     [refs],
   );
-  // Template fields are computed here, so views, filters, sorting and grouping see their results.
-  // Each object is computed once: only objects that changed are computed again.
-  const computedMemo = useMemo(() => new WeakMap<ObjectInstance, ObjectInstance>(), [type, templates, ctx]);
+  // Component fields are computed here, so views, filters, sorting and grouping see their results.
+  // Each item is computed once: only items that changed are computed again.
+  const computedMemo = useMemo(() => new WeakMap<Item, Item>(), [collection, components, ctx]);
   const computed = useMemo(
-    () => withComputed(type, objects ?? [], templates, ctx.refLabel, computedMemo),
-    [type, objects, templates, ctx, computedMemo],
+    () => withComputed(collection, items ?? [], components, ctx.refLabel, computedMemo),
+    [collection, items, components, ctx, computedMemo],
   );
-  const result = useMemo(() => applyQuery(type, computed, view.query, ctx, search), [type, computed, view.query, ctx, search]);
+  const result = useMemo(() => applyQuery(collection, computed, view.query, ctx, search), [collection, computed, view.query, ctx, search]);
 
   const setQuery = (query: ViewQuery) => setView((v) => ({ ...v, query }));
   const selectView = useCallback(
-    (id: string | null, list: SavedView[] = savedViews ?? []) => {
+    (id: string | null, list: CollectionView[] = savedViews ?? []) => {
       const next = list.find((v) => v.id === id);
       setActiveId(next ? next.id : null);
-      setView(next ? normalized(type, next) : base);
+      setView(next ? normalized(collection, next) : base);
     },
-    [savedViews, type, base],
+    [savedViews, collection, base],
   );
-  /** The view a type opens with: the starred one, else the first, else none (unsaved). */
-  const defaultViewOf = (list: SavedView[]) => (list.find((v) => v.isDefault) ?? list[0])?.id ?? null;
+  /** The view a collection opens with: the starred one, else the first, else none (unsaved). */
+  const defaultViewOf = (list: CollectionView[]) => (list.find((v) => v.isDefault) ?? list[0])?.id ?? null;
   // Before paint, so the first view never flashes ahead of the starred one.
   // A bookmark opens a particular view (?view=…), also when this page is already showing.
   const [params] = useSearchParams();
@@ -151,8 +151,8 @@ function ObjectsPage({ type }: { type: ObjectType }) {
   async function saveAsNew(name: string, state: ViewState = view) {
     const id = newId();
     const ts = now();
-    await repo.saveView({ ...state, id, typeId: type.id, name, position: views.length, isDefault: false, createdAt: ts, updatedAt: ts });
-    const list = await repo.listViews(type.id);
+    await repo.saveView({ ...state, id, collectionId: collection.id, name, position: views.length, isDefault: false, createdAt: ts, updatedAt: ts });
+    const list = await repo.listViews(collection.id);
     setSavedViews(list);
     selectView(id, list);
   }
@@ -185,7 +185,7 @@ function ObjectsPage({ type }: { type: ObjectType }) {
   /** Star the active view as the default, or unstar it (then the first view opens by default). */
   async function toggleDefault() {
     if (!active) return;
-    await repo.setDefaultView(type.id, active.isDefault ? null : active.id);
+    await repo.setDefaultView(collection.id, active.isDefault ? null : active.id);
     await loadViews();
   }
 
@@ -196,58 +196,58 @@ function ObjectsPage({ type }: { type: ObjectType }) {
   }
 
   async function deleteActive() {
-    if (!active || !(await confirm({ title: `Delete view “${active.name}”?`, body: "Objects are not affected." }))) return;
+    if (!active || !(await confirm({ title: `Delete view “${active.name}”?`, body: "Items are not affected." }))) return;
     await repo.deleteView(active.id);
-    const rest = await repo.listViews(type.id);
+    const rest = await repo.listViews(collection.id);
     setSavedViews(rest);
     selectView(defaultViewOf(rest), rest);
   }
 
-  const current: ObjectActions = {
-    open: (object, mode, o) => openRelated(`/types/${type.id}/objects/${object.id}${o?.edit ? "?edit=1" : ""}`, mode),
-    async remove(object) {
-      if (!(await confirm({ title: `Delete ${type.name}?`, body: `This ${type.name} will be removed.` }))) return;
+  const current: ItemActions = {
+    open: (item, mode, o) => openRelated(`/collections/${collection.id}/items/${item.id}${o?.edit ? "?edit=1" : ""}`, mode),
+    async remove(item) {
+      if (!(await confirm({ title: `Delete ${collection.name}?`, body: `This ${collection.name} will be removed.` }))) return;
       try {
-        await repo.deleteObject(object.id); // the list hears the change and drops it
+        await repo.deleteItem(item.id); // the list hears the change and drops it
       } catch (e) {
         setError(errorMessage(e));
       }
     },
     /**
-     * A copy with the object's stored values (not computed ones: template fields, rendered {{ }}
+     * A copy with the item's stored values (not computed ones: component fields, rendered {{ }}
      * sections keep their source); its title numbered. Images are shared (files are immutable).
      */
-    async duplicate(object) {
-      const stored = objects?.find((e) => e.id === object.id) ?? object;
+    async duplicate(item) {
+      const stored = items?.find((e) => e.id === item.id) ?? item;
       const values: Record<string, FieldValue> = {};
-      for (const f of type.fields) {
+      for (const f of collection.fields) {
         const v = stored.values[f.id];
-        if (f.kind !== "template" && v != null) values[f.id] = v;
+        if (f.kind !== "component" && v != null) values[f.id] = v;
       }
-      const title = labelField(type, stored);
-      if (title) values[title.id] = nextName(String(stored.values[title.id]), (objects ?? []).map((e) => objectLabel(type, e)));
+      const title = labelField(collection, stored);
+      if (title) values[title.id] = nextName(String(stored.values[title.id]), (items ?? []).map((e) => itemLabel(collection, e)));
       try {
-        await repo.createObject(type, values); // the list hears the change and adds it
+        await repo.createItem(collection, values); // the list hears the change and adds it
       } catch (e) {
         setError(errorMessage(e));
       }
     },
     /** Optimistic update, then save (reload on failure). */
-    async setValue(object, field, value: FieldValue) {
-      cache.objects.patch(type.id, object.id, (o) => ({ ...o, values: { ...o.values, [field.id]: value } }));
+    async setValue(item, field, value: FieldValue) {
+      cache.items.patch(collection.id, item.id, (o) => ({ ...o, values: { ...o.values, [field.id]: value } }));
       try {
-        await repo.updateObject(type, object.id, { [field.id]: value });
+        await repo.updateItem(collection, item.id, { [field.id]: value });
       } catch (e) {
         setError(errorMessage(e));
-        cache.objects.reload(type.id);
+        cache.items.reload(collection.id);
       }
     },
     async create(values) {
       // Shown before the add row closes (waits for the reload the change event started, else reloads).
-      const id = await repo.createObject(type, values);
-      await cache.objects.settled(type.id, id);
+      const id = await repo.createItem(collection, values);
+      await cache.items.settled(collection.id, id);
     },
-    groupPreset: (key) => groupPreset(type, view.query, key),
+    groupPreset: (key) => groupPreset(collection, view.query, key),
     groupBy: view.query.groupBy,
     sort: view.query.sort[0],
     sortBy(fieldId) {
@@ -263,12 +263,12 @@ function ObjectsPage({ type }: { type: ObjectType }) {
   latest.current = current;
   const sort = view.query.sort[0];
   const groupBy = view.query.groupBy;
-  const actions = useMemo<ObjectActions>(
+  const actions = useMemo<ItemActions>(
     () => ({
-      open: (object, mode, options) => latest.current.open(object, mode, options),
-      remove: (object) => latest.current.remove(object),
-      duplicate: (object) => latest.current.duplicate?.(object),
-      setValue: (object, field, value) => latest.current.setValue(object, field, value),
+      open: (item, mode, options) => latest.current.open(item, mode, options),
+      remove: (item) => latest.current.remove(item),
+      duplicate: (item) => latest.current.duplicate?.(item),
+      setValue: (item, field, value) => latest.current.setValue(item, field, value),
       create: (values) => latest.current.create!(values),
       groupPreset: (key) => latest.current.groupPreset!(key),
       groupBy,
@@ -283,23 +283,23 @@ function ObjectsPage({ type }: { type: ObjectType }) {
   return (
     <>
       <PageHeader
-        current={type.pluralName}
+        current={collection.pluralName}
         title={
           <Heading className="page-header__title title-with-icon">
-            <TypeIcon name={type.icon} size={32} />
-            {type.pluralName}
+            <CollectionIcon name={collection.icon} size={32} />
+            {collection.pluralName}
           </Heading>
         }
-        subtitle={type.description || undefined}
-        breadcrumbs={[{ label: "Types", href: "#/types" }]}
+        subtitle={collection.description || undefined}
+        breadcrumbs={[{ label: "Collections", href: "#/collections" }]}
         actions={
-          // Like "New type" and "New template": the page's main action, in its header.
-          <NewButton label={`New ${type.name}`} onClick={() => navigate(`/types/${type.id}/objects/new`)} />
+          // Like "New collection" and "New component": the page's main action, in its header.
+          <NewButton label={`New ${collection.name}`} onClick={() => navigate(`/collections/${collection.id}/items/new`)} />
         }
       />
       {(error ?? loadError) && <InlineNotification kind="error" title="Error" subtitle={error ?? loadError} onClose={() => setError(undefined)} />}
 
-      {/* Saved views (a new type gets "All"); the starred one, else the first, opens by default.
+      {/* Saved views (a new collection gets "All"); the starred one, else the first, opens by default.
           Unsaved changes to the shown view surface as icon buttons beside its star. */}
       {/* With one view and nothing unsaved there is nothing to choose or save: no tab bar. */}
       {showBar && (
@@ -329,7 +329,7 @@ function ObjectsPage({ type }: { type: ObjectType }) {
               </IconButton>
             </>
           )}
-          {/* The last view can't be deleted: a type always keeps one. */}
+          {/* The last view can't be deleted: a collection always keeps one. */}
           {active && views.length > 1 && (
             <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Delete view" onClick={() => deleteActive().catch((e) => setError(errorMessage(e)))}>
               <TrashCan />
@@ -338,9 +338,9 @@ function ObjectsPage({ type }: { type: ObjectType }) {
           {active && (
             <BookmarkButton
               kind="view"
-              typeId={type.id}
+              collectionId={collection.id}
               targetId={active.id}
-              label={`${type.pluralName} / ${active.name}`}
+              label={`${collection.pluralName} / ${active.name}`}
               onError={(e) => setError(errorMessage(e))}
             />
           )}
@@ -360,11 +360,11 @@ function ObjectsPage({ type }: { type: ObjectType }) {
         </div>
       )}
 
-      <div className="objects-toolbar">
+      <div className="items-toolbar">
         <Search
-          id={`${uid}-objects-search`}
+          id={`${uid}-items-search`}
           size="sm"
-          labelText={`Search ${type.pluralName}`}
+          labelText={`Search ${collection.pluralName}`}
           placeholder="Search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -376,10 +376,10 @@ function ObjectsPage({ type }: { type: ObjectType }) {
           active={view.query.filters.length > 0}
           onOpenChange={panels.onOpenChange}
         >
-          <QueryEditor type={type} query={view.query} refs={refs} part="filter" onChange={setQuery} />
+          <QueryEditor collection={collection} query={view.query} refs={refs} part="filter" onChange={setQuery} />
         </ToolbarPopover>
         <ToolbarPopover label="Sort and group" icon={ArrowsVertical} active={view.query.groupBy !== null} onOpenChange={panels.onOpenChange}>
-          <QueryEditor type={type} query={view.query} refs={refs} part="sortGroup" onChange={setQuery} />
+          <QueryEditor collection={collection} query={view.query} refs={refs} part="sortGroup" onChange={setQuery} />
         </ToolbarPopover>
         <ToolbarPopover label="View settings" icon={SettingsAdjust} openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
           <div className="view-settings">
@@ -410,11 +410,11 @@ function ObjectsPage({ type }: { type: ObjectType }) {
                 if (next) setView((v) => {
                   // The field selection and order carry over to the other view type.
                   const fields = viewType(v.kind).fieldsOf(v.options);
-                  return { ...v, kind: next.kind, options: next.withFields(next.defaultOptions(type), fields) };
+                  return { ...v, kind: next.kind, options: next.withFields(next.defaultOptions(collection), fields) };
                 });
               }}
             />
-            {vt.OptionsEditor && <vt.OptionsEditor type={type} options={view.options} onChange={(options) => setView((v) => ({ ...v, options }))} />}
+            {vt.OptionsEditor && <vt.OptionsEditor collection={collection} options={view.options} onChange={(options) => setView((v) => ({ ...v, options }))} />}
           </div>
         </ToolbarPopover>
         {!showBar && savedViews !== null && addButton}
@@ -423,9 +423,9 @@ function ObjectsPage({ type }: { type: ObjectType }) {
 
       {/* Nothing until everything is in (a fraction of a second): a placeholder table would only
           flash, shaped unlike the real one. */}
-      {objects !== null && savedViews !== null && !refsLoading && (
+      {items !== null && savedViews !== null && !refsLoading && (
         // Keyed by the shown view so group collapse state isn't carried over to another view.
-        <vt.View key={activeId ?? ""} type={type} result={result} options={view.options} refs={refs} search={search} actions={actions} />
+        <vt.View key={activeId ?? ""} collection={collection} result={result} options={view.options} refs={refs} search={search} actions={actions} />
       )}
 
       {dialog}

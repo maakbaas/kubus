@@ -11,7 +11,7 @@ export function fileIdFromSrc(src: string): string | null {
   return FILE_SRC.exec(src)?.[1] ?? null;
 }
 
-/** File ids referenced anywhere in a text (a markdown document, a template's HTML). */
+/** File ids referenced anywhere in a text (a markdown document, a component's HTML). */
 export function fileIdsIn(markdown: string): string[] {
   return [...new Set([...markdown.matchAll(FILE_SRC_IN_TEXT)].map((m) => m[1]))];
 }

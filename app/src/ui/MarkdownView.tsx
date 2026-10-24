@@ -7,14 +7,14 @@ import type { Nodes as MdNodes, Root as MdRoot } from "mdast";
 import { Link } from "@carbon/react";
 import { fileIdFromSrc } from "../domain/files";
 import { openExternal, safeUrl } from "../platform/openExternal";
-import { splitWarnings } from "../domain/templates";
+import { splitWarnings } from "../domain/components";
 import { matcher, splitMatches } from "./Highlight";
-import { TemplateWarning } from "./TemplateWarning";
+import { ComponentWarning } from "./ComponentWarning";
 import { UrlImage, useFileUrl } from "./images";
 
 // Read-only GFM rendering (remark-gfm, the same parser family Milkdown uses).
 // Raw HTML is skipped, so stored content can't inject markup.
-//  - "full": the object view; links are clickable (system browser).
+//  - "full": the item view; links are clickable (system browser).
 //  - "excerpt": search results, rendered inside clickable list items, so it has no
 //    interactive elements (links are styled text) and is clipped in height.
 
@@ -93,7 +93,7 @@ function rehypeSoftBreaks() {
   };
 }
 
-/** rehype plugin: the warnings of failing template sections in text become warning spans. */
+/** rehype plugin: the warnings of failing component sections in text become warning spans. */
 function rehypeWarnings() {
   return (tree: Root) => {
     const walk = (children: RootContent[]): RootContent[] =>
@@ -103,7 +103,7 @@ function rehypeWarnings() {
           if (parts.length === 1) return [child];
           return parts.map((part, i) =>
             i % 2 === 1
-              ? { type: "element", tagName: "span", properties: { className: ["template-warning-text"] }, children: [{ type: "text", value: part }] }
+              ? { type: "element", tagName: "span", properties: { className: ["component-warning-text"] }, children: [{ type: "text", value: part }] }
               : { type: "text", value: part },
           );
         }
@@ -139,7 +139,7 @@ function StoredImage({ src, alt }: { src?: string; alt?: string }) {
   const fileId = fileIdFromSrc(src ?? "");
   const url = useFileUrl(fileId);
   if (fileId) return url ? <img src={url} alt={alt ?? ""} data-lightbox /> : null;
-  // An image from elsewhere (e.g. a template's URL) may be missing: then a placeholder says so.
+  // An image from elsewhere (e.g. a component's URL) may be missing: then a placeholder says so.
   return src ? <UrlImage url={src} /> : null;
 }
 
@@ -179,8 +179,8 @@ function TaskOffset({ offset, children }: { offset: number; children: ReactNode 
 
 const common: Components = {
   span: ({ node: _node, className, children, ...props }) =>
-    className === "template-warning-text" ? (
-      <TemplateWarning>{children}</TemplateWarning>
+    className === "component-warning-text" ? (
+      <ComponentWarning>{children}</ComponentWarning>
     ) : (
       <span className={className} {...props}>
         {children}

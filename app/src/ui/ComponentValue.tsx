@@ -3,7 +3,7 @@ import { Html as HtmlIcon } from "@carbon/icons-react";
 import type { FieldValue } from "../domain/model";
 import { useStore } from "../app/store";
 import { fileSrc, fileIdsIn } from "../domain/files";
-import { isTemplateError, ratioValue, type TemplateOutput } from "../domain/templates";
+import { isComponentError, ratioValue, type ComponentOutput } from "../domain/components";
 import { Highlight } from "./Highlight";
 import { useMediaQuery } from "./useMediaQuery";
 import { fileDataUrl, UrlImage } from "./images";
@@ -25,7 +25,7 @@ const FRAME_TOKENS = [
 /**
  * The frame's base styles: Carbon's look, the same as rendered Markdown (body-01 text, heading
  * sizes, block spacing, links, lists, code, quotes, tables, rules). All at zero specificity
- * (:where), so any CSS in the template overrides them. Spacing goes only between text blocks:
+ * (:where), so any CSS in the component overrides them. Spacing goes only between text blocks:
  * the divs a map or chart library creates (often absolutely placed) are left alone.
  */
 function frameBaseStyles(dark: boolean): string {
@@ -37,7 +37,7 @@ html{overflow:hidden;}
 html.measuring,html.measuring body{height:auto;}
 :where(body){font-family:var(--font-sans);font-size:0.875rem;line-height:1.42857;letter-spacing:0.16px;color:var(--cds-text-primary);overflow-wrap:anywhere;font-variant-ligatures:none;}
 :where(p,h1,h2,h3,h4,h5,h6,ul,ol,dl,blockquote,pre,table,figure,hr){margin:0;}
-:where(:not(style,script,meta,link,title,template)) + :where(p,h1,h2,h3,h4,h5,h6,ul,ol,dl,blockquote,pre,table,figure,hr){margin-top:0.75rem;}
+:where(:not(style,script,meta,link,title,component)) + :where(p,h1,h2,h3,h4,h5,h6,ul,ol,dl,blockquote,pre,table,figure,hr){margin-top:0.75rem;}
 :where(h1){font-size:1.75rem;line-height:1.3;font-weight:400;}
 :where(h2){font-size:1.5rem;line-height:1.3;font-weight:400;}
 :where(h3){font-size:1.25rem;line-height:1.4;font-weight:400;}
@@ -114,7 +114,7 @@ ${frameBaseStyles(dark)}
   // or svg, elements with handlers), as do clicks a script stopped or that end a selection.
   addEventListener("click", (e) => {
     if (e.defaultPrevented || e.button !== 0 || String(getSelection() || "")) return;
-    const interactive = "a,button,input,select,textarea,label,summary,details,option,video,audio,canvas,svg,iframe,embed,object,[onclick],[contenteditable],[tabindex],[role=button],[role=link],[role=checkbox],[role=tab],[role=slider]";
+    const interactive = "a,button,input,select,textarea,label,summary,details,option,video,audio,canvas,svg,iframe,embed,item,[onclick],[contenteditable],[tabindex],[role=button],[role=link],[role=checkbox],[role=tab],[role=slider]";
     if (e.target instanceof Element && e.target.closest(interactive)) return;
     parent.postMessage({ kubusFrameClick: true }, "*");
   });
@@ -161,19 +161,19 @@ function useEmbeddedFiles(html: string): string | undefined {
 }
 
 /**
- * The page a template's HTML is shown in: a sandboxed frame (scripts run, but in an opaque
+ * The page a component's HTML is shown in: a sandboxed frame (scripts run, but in an opaque
  * origin: no access to the app, its storage or the database). The app's font and text colour
  * are passed in.
  *
- * It looks like rendered Markdown by default (frameBaseStyles); the template's CSS overrides that.
+ * It looks like rendered Markdown by default (frameBaseStyles); the component's CSS overrides that.
  *
- * Its size, one template for every place: html and body are always 100% of the frame, so
+ * Its size, one component for every place: html and body are always 100% of the frame, so
  * content can fill it (`#map { height: 100% }`). On a card cover (`fill`) the frame is the
  * cover. On a page the frame measures the content's own height (body sized to its content):
  *  - flow: it has one (text, tables, a fixed-size chart), and the frame is exactly that tall;
  *  - fill: it has none (a map or chart at 100%), and the frame gets a box of a fixed shape
  *    (16:9 by default).
- * The template's own ratio setting (`ratio`) replaces that default; `<meta name="frame"
+ * The component's own ratio setting (`ratio`) replaces that default; `<meta name="frame"
  * content="ratio=4/3">` or `content="height=300"` in the HTML wins over both. <html> has the
  * class in-card or in-page, and --frame-width / --frame-height, for content that adapts to where
  * it is shown.
@@ -187,7 +187,7 @@ export function HtmlFrame({
 }: {
   html: string;
   fill?: boolean;
-  /** The box's shape when the content fills it (the template's setting); null = 16:9. */
+  /** The box's shape when the content fills it (the component's setting); null = 16:9. */
   ratio?: number | null;
   /** Told whether the content turned out to fill its box (it has no height of its own). */
   onFill?(fills: boolean): void;
@@ -241,11 +241,11 @@ export function HtmlFrame({
 }
 
 /**
- * A template field's result, shown by its template's output type: rendered Markdown, text, a
+ * A component field's result, shown by its component's output type: rendered Markdown, text, a
  * number, an image or HTML. `cell` is the compact form for table cells and card lines (Markdown
  * as plain text, a thumbnail, HTML as a note); errors show as their message.
  */
-export function TemplateValue({
+export function ComponentValue({
   value,
   output,
   variant,
@@ -255,27 +255,27 @@ export function TemplateValue({
   onContentClick,
 }: {
   value: FieldValue;
-  output: TemplateOutput;
+  output: ComponentOutput;
   variant: "page" | "cell";
   search?: string;
-  /** HTML that fills its box: the box's shape (the template's setting). */
+  /** HTML that fills its box: the box's shape (the component's setting). */
   frameRatio?: string | null;
-  /** HTML: told whether it fills its box (the template editor then offers the ratio). */
+  /** HTML: told whether it fills its box (the component editor then offers the ratio). */
   onFill?(fills: boolean): void;
   /** HTML: a click on its plain content (see HtmlFrame). */
   onContentClick?(): void;
 }) {
   if (value == null || value === "") return null;
   const text = String(value);
-  // A failing template shows its warning; plain results (text, numbers) read exactly like a
+  // A failing component shows its warning; plain results (text, numbers) read exactly like a
   // string or number field's value, rendered ones (Markdown, images, HTML) as such.
-  if (isTemplateError(value)) return <Highlight text={text} query={search} />;
+  if (isComponentError(value)) return <Highlight text={text} query={search} />;
   switch (output) {
     case "image":
-      return <UrlImage url={text} className={variant === "cell" ? "image-thumb" : "object-view__image"} compact={variant === "cell"} />;
+      return <UrlImage url={text} className={variant === "cell" ? "image-thumb" : "item-view__image"} compact={variant === "cell"} />;
     case "html":
       return variant === "cell" ? (
-        <span className="icon-label template-html-note">
+        <span className="icon-label component-html-note">
           <HtmlIcon />
           HTML
         </span>

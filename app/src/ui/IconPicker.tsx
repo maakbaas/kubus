@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, IconButton, Popover, PopoverContent, Search } from "@carbon/react";
-import { iconNames, TypeIcon } from "./typeIcons";
+import { iconNames, CollectionIcon } from "./collectionIcons";
 
 const MAX_SHOWN = 60;
 
@@ -49,7 +49,7 @@ export function IconPicker({ id, value, onChange }: Props) {
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        <TypeIcon name={value} size={24} />
+        <CollectionIcon name={value} size={24} />
       </IconButton>
       <PopoverContent>
         {/* Escape closes (Carbon's Search would only clear its text) and returns focus to the button. */}
@@ -85,7 +85,7 @@ export function IconPicker({ id, value, onChange }: Props) {
                 aria-selected={name === value}
                 onClick={() => choose(name)}
               >
-                <TypeIcon name={name} size={20} />
+                <CollectionIcon name={name} size={20} />
               </IconButton>
             ))}
           </div>

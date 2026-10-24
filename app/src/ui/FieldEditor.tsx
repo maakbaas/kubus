@@ -6,7 +6,7 @@ import { FieldInput, parseInputValue, toInputValue, type InputValue } from "./Fi
 import { errorMessage } from "./useConfirm";
 import type { RefOptions } from "./useReferenceOptions";
 
-// Edits one field in place, wherever its read-only value is shown (object page, table cell).
+// Edits one field in place, wherever its read-only value is shown (item page, table cell).
 // No buttons: Enter / Ctrl+Enter or clicking outside saves, Escape cancels.
 
 interface FieldEditorProps {
@@ -27,7 +27,7 @@ interface FieldEditorProps {
  * clicking outside saves; Escape cancels.
  */
 export function FieldEditor({ field, value, refs, start, compact, idPrefix, onSave, onCancel }: FieldEditorProps) {
-  const { repo, types } = useStore();
+  const { repo, collections } = useStore();
   const [raw, setRaw] = useState<InputValue>(() => toInputValue(field.kind, value));
   const [error, setError] = useState<string>();
   const box = useRef<HTMLDivElement>(null);
@@ -147,7 +147,7 @@ export function FieldEditor({ field, value, refs, start, compact, idPrefix, onSa
           e.preventDefault();
           e.stopPropagation();
         }
-        const plainEnterSaves = !multiline && field.kind !== "object_list";
+        const plainEnterSaves = !multiline && field.kind !== "item_list";
         if (modified || plainEnterSaves) window.setTimeout(() => saveRef.current(), 0);
       }
     };
@@ -166,8 +166,8 @@ export function FieldEditor({ field, value, refs, start, compact, idPrefix, onSa
         field={field}
         value={raw}
         error={error}
-        options={field.targetTypeId ? refs[field.targetTypeId] : undefined}
-        target={types.find((t) => t.id === field.targetTypeId)}
+        options={field.targetCollectionId ? refs[field.targetCollectionId] : undefined}
+        target={collections.find((t) => t.id === field.targetCollectionId)}
         onChange={(v) => {
           latest.current = v;
           setRaw(v);

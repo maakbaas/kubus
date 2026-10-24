@@ -5,7 +5,7 @@ import { newId } from "../domain/model";
 
 export interface WorkspaceTab {
   id: string;
-  /** App route shown in the tab, e.g. "/types/<id>/objects". */
+  /** App route shown in the tab, e.g. "/collections/<id>/items". */
   path: string;
   /** Bumped when the tab is navigated from outside (side nav, search), to reload its router. */
   nav: number;
@@ -39,14 +39,14 @@ export interface Workspace {
 /** Where a dragged tab is dropped on a pane. */
 export type DropZone = "center" | "left" | "right" | "top" | "bottom";
 
-export const HOME = "/types";
+export const HOME = "/collections";
 
 export const newTab = (path = HOME): WorkspaceTab => ({ id: newId(), path, nav: 0 });
 
 /** A pane with no tabs: what remains when every tab is closed. */
 const emptyPane = (): PaneNode => ({ kind: "pane", id: newId(), tabs: [], activeTabId: "" });
 
-/** First launch: one tab with the types overview. */
+/** First launch: one tab with the collections overview. */
 export function initialWorkspace(path = HOME): Workspace {
   const tab = newTab(path);
   const pane: PaneNode = { kind: "pane", id: newId(), tabs: [tab], activeTabId: tab.id };

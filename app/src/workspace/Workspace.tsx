@@ -118,7 +118,7 @@ export function openModeOf(e: { ctrlKey: boolean; metaKey: boolean; button: numb
 }
 
 /**
- * Opens a related item (an object from a list, a referenced object) in this tab, beside the
+ * Opens a related item (an item from a list, a referenced item) in this tab, beside the
  * current pane (narrow windows have no room: a new tab instead), or in a new tab.
  */
 export function useOpenRelated(): (path: string, mode?: OpenMode) => void {
@@ -275,7 +275,7 @@ function TabRouterBridge({ tab }: { tab: WorkspaceTab }) {
   tabPath.current = tab.path;
 
   // Navigation from outside the tab (side nav, search): push it onto this tab's history
-  // (search typing replaces, so each keystroke isn't a history object).
+  // (search typing replaces, so each keystroke isn't a history item).
   const seenNav = useRef(tab.nav);
   useEffect(() => {
     if (tab.nav === seenNav.current) return;
@@ -292,14 +292,14 @@ function TabRouterBridge({ tab }: { tab: WorkspaceTab }) {
 
   // Back / forward (mouse buttons, Alt+arrows) act on the active tab's history.
   // Which entries the tab's history holds is tracked by location key (a memory history can't be asked).
-  const navType = useNavigationType();
+  const navCollection = useNavigationType();
   const keys = useRef({ list: [location.key], at: 0 });
   const k = keys.current;
   if (k.list[k.at] !== location.key) {
-    if (navType === "PUSH") {
+    if (navCollection === "PUSH") {
       k.list.splice(k.at + 1, Infinity, location.key);
       k.at += 1;
-    } else if (navType === "REPLACE") {
+    } else if (navCollection === "REPLACE") {
       k.list[k.at] = location.key;
     } else if (k.list.includes(location.key)) {
       k.at = k.list.indexOf(location.key);
@@ -502,7 +502,7 @@ function PaneView({ pane }: { pane: PaneNode }) {
           {end}
         </div>
         <div className="ws-pane__body ws-empty">
-          <p className="helper">Pick a type in the menu or{" "}
+          <p className="helper">Pick a collection in the menu or{" "}
             <Link
               href="#"
               onClick={(e: React.MouseEvent) => {
