@@ -17,12 +17,13 @@ import {
 } from "@carbon/react";
 import { TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
-import { bookmarkPath, type BookmarkKind } from "../domain/bookmarks";
+import { bookmarkPath, type Bookmark, type BookmarkKind } from "../domain/bookmarks";
 import { untitledLabel, type Collection } from "../domain/model";
 import { NewButton } from "../ui/NewButton";
 import { CollectionIcon, CollectionLabel } from "../ui/collectionIcons";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage } from "../ui/useConfirm";
+import { useTableSort } from "../ui/useTableSort";
 import { RowActions, rowButtonProps } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
 
@@ -45,6 +46,13 @@ export function BookmarksPage() {
   const [error, setError] = useState<string>();
   const [adding, setAdding] = useState(false);
   const fail = (e: unknown) => setError(errorMessage(e));
+  const { sort, header } = useTableSort<Bookmark, "name" | "kind">({
+    name: (b) => b.label,
+    kind: (b) => {
+      const t = collections.find((c) => c.id === b.collectionId);
+      return t ? (b.kind === "view" ? `View of ${t.pluralName}` : t.name) : "";
+    },
+  });
 
   return (
     <>
@@ -63,13 +71,13 @@ export function BookmarksPage() {
           <Table size="sm">
             <TableHead>
               <TableRow>
-                <TableHeader>Name</TableHeader>
-                <TableHeader>Collection</TableHeader>
+                <TableHeader {...header("name")}>Name</TableHeader>
+                <TableHeader {...header("kind")}>Collection</TableHeader>
                 <TableHeader aria-label="Actions" />
               </TableRow>
             </TableHead>
             <TableBody>
-              {bookmarks.map((b) => {
+              {sort(bookmarks).map((b) => {
                 const collection = collections.find((t) => t.id === b.collectionId);
                 return (
                   <TableRow key={b.id}>

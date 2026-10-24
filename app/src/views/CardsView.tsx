@@ -368,7 +368,7 @@ function CardOptionsEditor({ collection, options, onChange }: { collection: Coll
         />
         <Checkbox
           id={`${uid}-cards-list-narrow`}
-          labelText="Show as a list when narrow, images beside"
+          labelText="Show as a list when narrow"
           checked={options.listNarrow}
           onChange={(_, { checked }) => onChange({ ...options, listNarrow: checked })}
         />

@@ -73,11 +73,13 @@ interface AddRowProps {
   preset: Record<string, FieldValue>;
   /** The grouped-by field: not an input, the new item keeps its group's value. */
   groupBy?: string | null;
+  /** The table has no rows: the inputs take their own room instead of being laid over narrow columns. */
+  bare?: boolean;
   create(values: Record<string, FieldValue>): Promise<void>;
   onClose(): void;
 }
 
-function AddRow({ collection, columns, refs, preset, groupBy, create, onClose }: AddRowProps) {
+function AddRow({ collection, columns, refs, preset, groupBy, bare, create, onClose }: AddRowProps) {
   const { collections } = useStore();
   const fields = columns.filter((f) => addable(f) && f.id !== groupBy);
   const blank = () => Object.fromEntries(fields.map((f) => [f.id, toInputValue(f.kind, preset[f.id] ?? null)])) as Record<string, InputValue>;
@@ -151,7 +153,7 @@ function AddRow({ collection, columns, refs, preset, groupBy, create, onClose }:
   };
 
   return (
-    <TableRow ref={row} className="table-add-row" onKeyDown={onKeyDown}>
+    <TableRow ref={row} className={bare ? "table-add-row table-add-row--bare" : "table-add-row"} onKeyDown={onKeyDown}>
       {columns.map((f) => (
         <TableCell key={f.id} data-title-cell={f.id === title?.id || undefined} data-label={f.name}>
           {/* The grouped-by field shows the group's value (it decides where the item lands). */}
@@ -159,7 +161,7 @@ function AddRow({ collection, columns, refs, preset, groupBy, create, onClose }:
           {/* Inputs are laid over the cell, so they never change the column widths; a checkbox
               is small enough to stay in the flow. */}
           {addable(f) && f.id !== groupBy && (
-            <div className={f.kind === "checkbox" ? undefined : "add-cell"}>
+            <div className={f.kind === "checkbox" ? "add-check" : "add-cell"}>
               <FieldInput
                 field={f}
                 value={raw[f.id]}
@@ -369,7 +371,7 @@ export function FillTable({ children, stack: stackable = true }: { children: Rea
  * Collapsed groups don't count until opened.
  */
 /** `active`: the grouped tables are shown (their box exists); set up again when that changes. */
-function useSharedColumns(box: RefObject<HTMLDivElement | null>, active: boolean) {
+export function useSharedColumns(box: RefObject<HTMLDivElement | null>, active: boolean) {
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -526,7 +528,6 @@ export function TableView(props: ViewProps<TableOptions>) {
   const groupsBox = useRef<HTMLDivElement>(null);
   const grouped = isGrouped(result);
   useSharedColumns(groupsBox, grouped && result.total > 0);
-  const columns = shown.length + 1; // + actions
 
   const head = (
     <TableHead>
@@ -572,7 +573,7 @@ export function TableView(props: ViewProps<TableOptions>) {
   // The last row is empty but for a "+" in the title column (else the first); it turns into the
   // add row. Grouped, each group has one, and what it adds gets the group's value.
   const plusColumn = (shown.some((f) => f.id === titleColumn(collection)?.id) ? titleColumn(collection)?.id : undefined) ?? shown[0]?.id;
-  const addRows = (groupKey: string) =>
+  const addRows = (groupKey: string, bare = false) =>
     actions.create &&
     (adding === groupKey ? (
       <AddRow
@@ -581,6 +582,7 @@ export function TableView(props: ViewProps<TableOptions>) {
         refs={refs}
         preset={actions.groupPreset?.(groupKey) ?? {}}
         groupBy={grouped ? actions.groupBy : null}
+        bare={bare}
         create={actions.create}
         onClose={() => setAdding(null)}
       />
@@ -599,23 +601,14 @@ export function TableView(props: ViewProps<TableOptions>) {
       </TableRow>
     ));
 
-  const empty = result.total === 0 && (
-    <TableRow>
-      <TableCell colSpan={columns} className="table-empty">
-        No {collection.pluralName} match.
-      </TableCell>
-    </TableRow>
-  );
-
   if (!grouped || result.total === 0) {
     return (
       <FillTable stack={options.stackNarrow}>
         <Table size="sm">
           {head}
           <TableBody>
-            {empty}
             {rows(result.groups[0]?.items ?? [], "")}
-            {addRows("")}
+            {addRows("", result.total === 0)}
           </TableBody>
         </Table>
       </FillTable>

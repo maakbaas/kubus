@@ -8,6 +8,7 @@ import type { Component } from "../domain/components";
 import { NewButton } from "../ui/NewButton";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage } from "../ui/useConfirm";
+import { useTableSort } from "../ui/useTableSort";
 import { RowActions, rowButtonProps } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
 
@@ -18,6 +19,7 @@ import { FillTable } from "../views/TableView";
 export function ComponentsPage() {
   const { repo, collections, components } = useStore();
   const navigate = useNavigate();
+  const { sort, header } = useTableSort<Component, "name" | "code">({ name: (x) => x.name, code: (x) => x.code.split("\n")[0] });
   const [error, setError] = useState<string>();
   // The component being deleted, and whether the fields using it go too.
   const [deleting, setDeleting] = useState<Component | null>(null);
@@ -54,13 +56,13 @@ export function ComponentsPage() {
           <Table size="sm">
             <TableHead>
               <TableRow>
-                <TableHeader>Name</TableHeader>
-                <TableHeader>Component</TableHeader>
+                <TableHeader {...header("name")}>Name</TableHeader>
+                <TableHeader {...header("code")}>Component</TableHeader>
                 <TableHeader aria-label="Actions" />
               </TableRow>
             </TableHead>
             <TableBody>
-              {components.map((x) => (
+              {sort(components).map((x) => (
                 <TableRow key={x.id}>
                   <TableCell data-label="Name">
                     <Link href={`#/components/${x.id}`}>{x.name}</Link>

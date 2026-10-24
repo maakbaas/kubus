@@ -850,10 +850,12 @@ body {
   padding-block: 0;
   padding-inline-end: 0;
 }
-/* The icon in the primary icon colour (black on white, white on g100), not the link blue. */
-td.space-icon .cds--btn svg,
-td.space-icon .cds--btn svg path {
-  fill: var(--cds-icon-primary);
+/* The trigger's icon in the link blue, which shows it can be clicked (not the picker's grid). */
+td.space-icon .icon-picker > :is(.cds--btn, .cds--popover-container > .cds--btn) svg,
+td.space-icon .icon-picker > :is(.cds--btn, .cds--popover-container > .cds--btn) svg path,
+td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg,
+td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
+  fill: var(--cds-link-primary);
 }
 /* The space switcher beside the menu toggle, filling the rest of the row. */
 .side-nav-space {
@@ -2017,6 +2019,28 @@ img[data-lightbox] {
 .cell-overlay :is(.cds--date-picker, .cds--date-picker-container, .cds--date-picker-input__wrapper, .cds--date-picker__input, .cds--time-picker, .cds--number, .cds--number input[type="number"], .cds--list-box__wrapper, .cds--list-box, .cds--text-input-wrapper) {
   inline-size: 100%;
 }
+/* An empty table has no content to size its columns, so a laid-over input would be a sliver:
+   there the add row's inputs stay in the flow and give the columns their width. */
+.items-table .table-add-row--bare td {
+  padding-inline: var(--cds-spacing-02);
+}
+.items-table .table-add-row--bare td.row-actions {
+  padding-inline: var(--cds-spacing-02) var(--cds-spacing-05);
+}
+/* A checkbox stays in the flow in every add row; bare cells have less padding, so it makes up the rest. */
+.table-add-row--bare .add-check {
+  padding-inline: calc(1rem - var(--cds-spacing-02));
+}
+.table-add-row--bare .add-cell,
+.table-add-row--bare .add-cell--actions {
+  position: static;
+  min-inline-size: 10rem;
+}
+.table-add-row--bare .add-cell--actions {
+  min-inline-size: 0;
+  flex-direction: row;
+  justify-content: flex-end;
+}
 .items-table .table-add-row :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box__field, .cds--text-input--empty) {
   padding-inline-start: calc(1rem - var(--cds-spacing-02));
 }
@@ -2042,6 +2066,16 @@ img[data-lightbox] {
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+/* The last data column is often a sliver (its values are short or empty): its editors (cell
+   editor, add row) may reach over the actions column beside it, up to a usable width. */
+.items-table td.cell--editing:nth-last-child(2) .cell-overlay {
+  inset-inline-end: auto;
+  inline-size: max(100%, 12rem);
+}
+.items-table .table-add-row:not(.table-add-row--bare) td:nth-last-child(2) .add-cell {
+  inset-inline-end: auto;
+  inline-size: max(calc(100% - 2 * var(--cds-spacing-02)), 12rem);
 }
 /* The cell's text sits 1px lower than an input's (its bottom border lifts the input's text). */
 .items-table td.cell--editing :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box) {
@@ -2083,11 +2117,13 @@ img[data-lightbox] {
   width: 1%; /* shrink to the buttons */
   text-align: right;
 }
+/* Carbon draws the header sort arrows at 20px; every other icon in the app is 16px. */
+.cds--table-sort :is(.cds--table-sort__icon, .cds--table-sort__icon-unsorted) {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
 .clickable-row {
   cursor: pointer;
-}
-.table-empty {
-  color: var(--cds-text-secondary);
 }
 
 /* View tabs with the default-view star at their right. */

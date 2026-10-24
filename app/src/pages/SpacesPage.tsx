@@ -10,6 +10,7 @@ import { FieldEditor } from "../ui/FieldEditor";
 import { IconPicker } from "../ui/IconPicker";
 import { NewButton } from "../ui/NewButton";
 import { PageHeader } from "../ui/PageHeader";
+import { useTableSort } from "../ui/useTableSort";
 import { RowActions, rowButtonProps } from "../ui/RowActions";
 import { SPACE_ICON } from "../ui/SpaceSwitcher";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
@@ -41,6 +42,7 @@ export function SpacesPage() {
   const [error, setError] = useState<string>();
   const [editing, setEditing] = useState<{ id: string; start?: EditStart } | null>(null);
   const fail = (e: unknown) => setError(errorMessage(e));
+  const { sort, header } = useTableSort<Space, "name">({ name: (s) => s.name });
 
   const loadCounts = () =>
     Promise.all(spaces.map((s) => repo.countItemsByCollection(s.id).then((n) => [s.id, Object.values(n).reduce((a, b) => a + b, 0)] as const)))
@@ -95,12 +97,12 @@ export function SpacesPage() {
             <TableRow>
               <TableHeader>Icon</TableHeader>
               {/* As wide as the row allows, so the name's input opens at a usable width. */}
-              <TableHeader style={{ inlineSize: "100%" }}>Name</TableHeader>
+              <TableHeader style={{ inlineSize: "100%" }} {...header("name")}>Name</TableHeader>
               <TableHeader aria-label="Actions" />
             </TableRow>
           </TableHead>
           <TableBody>
-            {spaces.map((s) => (
+            {sort(spaces).map((s) => (
               <TableRow key={s.id}>
                 <TableCell className="space-icon">
                   <IconPicker id={`space-icon-${s.id}`} value={s.icon ?? SPACE_ICON} size={16} onChange={(icon) => save(s, { icon })} />
