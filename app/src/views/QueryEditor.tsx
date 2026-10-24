@@ -5,6 +5,8 @@ import { newId, pickableFields, type FieldDef, type Collection } from "../domain
 import {
   isGroupable,
   operatorsFor,
+  PAGE_ITEM,
+  pageItemField,
   sortableFields,
   type FilterOperator,
   type FilterRule,
@@ -18,6 +20,8 @@ interface Props {
   query: ViewQuery;
   refs: RefOptions;
   part: "filter" | "sortGroup";
+  /** On an item page: its collection, so reference rules can compare with the page's item. */
+  page?: Collection;
   /** Filter part: its heading and what an empty filter means (defaults: a view's). */
   title?: string;
   emptyText?: string;
@@ -25,18 +29,25 @@ interface Props {
 }
 
 /** Value input for a filter rule, by field kind (a date input, an item picker, plain text…). */
-function RuleValue({ id, field, rule, refs, onChange }: { id: string; field: FieldDef; rule: FilterRule; refs: RefOptions; onChange(value: string): void }) {
+function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; field: FieldDef; rule: FilterRule; refs: RefOptions; page?: Collection; onChange(value: string): void }) {
   if (field.kind === "item" || field.kind === "item_list") {
+    // On an item page: the page's item itself, or what one of its reference fields points to.
+    const pageFields = page ? page.fields.filter((f) => f.kind === "item" && f.targetCollectionId === field.targetCollectionId) : [];
     return (
       <Select id={id} labelText="Value" hideLabel size="sm" value={rule.value} onChange={(e) => onChange(e.target.value)}>
         <SelectItem value="" text="Choose…" disabled hidden />
+        {page && field.targetCollectionId === page.id && <SelectItem value={PAGE_ITEM} text={`This ${page.name}`} />}
+        {pageFields.map((f) => (
+          <SelectItem key={f.id} value={pageItemField(f.id)} text={`This ${page!.name}’s ${f.name}`} />
+        ))}
         {(refs[field.targetCollectionId ?? ""] ?? []).filter((o) => !o.elsewhere || o.id === rule.value).map((o) => (
           <SelectItem key={o.id} value={o.id} text={o.label} />
         ))}
       </Select>
     );
   }
-  const type = field.kind === "number" ? "number" : field.kind === "date" || field.kind === "datetime" ? "date" : "text";
+  // On an item page a value may hold {{ $item.Name }}, which number and date inputs would refuse.
+  const type = page ? "text" : field.kind === "number" ? "number" : field.kind === "date" || field.kind === "datetime" ? "date" : "text";
   return (
     <TextInput
       id={id}
@@ -44,7 +55,7 @@ function RuleValue({ id, field, rule, refs, onChange }: { id: string; field: Fie
       hideLabel
       size="sm"
       type={type}
-      placeholder={type === "date" ? "yyyy-mm-dd" : "Value"}
+      placeholder={page ? "Value or {{ $item.Name }}" : type === "date" ? "yyyy-mm-dd" : "Value"}
       value={rule.value}
       onChange={(e) => onChange(e.target.value)}
     />
@@ -55,7 +66,7 @@ function RuleValue({ id, field, rule, refs, onChange }: { id: string; field: Fie
  * Edits part of a view's query: its filters, or its sort and grouping (each shown in its own
  * toolbar popover). Built only on the query registry (domain/query.ts).
  */
-export function QueryEditor({ collection, query, refs, part, title = "Filter", emptyText = "Showing all items.", onChange }: Props) {
+export function QueryEditor({ collection, query, refs, part, page, title = "Filter", emptyText = "Showing all items.", onChange }: Props) {
   // Element ids unique per editor: several item lists (tabs, panes) can be open at once.
   const uid = useId();
   const fieldsById = new Map(pickableFields(collection).map((f) => [f.id, f]));
@@ -111,7 +122,7 @@ export function QueryEditor({ collection, query, refs, part, title = "Filter", e
                 ))}
               </Select>
               {operator.needsValue ? (
-                <RuleValue id={`${uid}-filter-value-${rule.id}`} field={field} rule={rule} refs={refs} onChange={(value) => setFilter(rule.id, { value })} />
+                <RuleValue id={`${uid}-filter-value-${rule.id}`} field={field} rule={rule} refs={refs} page={page} onChange={(value) => setFilter(rule.id, { value })} />
               ) : (
                 <span />
               )}

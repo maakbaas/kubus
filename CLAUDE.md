@@ -14,7 +14,7 @@ is what this split avoids. Keep them current when behaviour changes.
   in-place item editing, collection icons and app icon, components, blocks, field order and item
   views, spaces, bookmarks, link schemes, global search, schema-change policy.
 - `docs/views-and-workspace.md`: query (`applyQuery`, `KIND_RULES`), block types (table, cards,
-  component), saved views; workspace tabs, tiling, side nav, tab history, tab width.
+  component, markdown), saved views; workspace tabs, tiling, side nav, tab history, tab width.
 - `docs/data-model.md`: tables, EAV `field_values`, files, references, soft deletes, UUIDs;
   scale limits, SAH-pool VFS danger, storage location, iOS eviction.
 - `docs/sync.md`: server, sync engine (outbox triggers, merge, first connection), iOS home-screen app,

@@ -22,7 +22,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   clipboard, upload, prism). Don't add syntax plugins (math, emoji, diagrams, frontmatter, Crepe, …),
   and any future renderer must also be GFM-only. Behaviour-only additions are fine: clickable task
   checkboxes, typed `[text](url)` links, link hover popover (open/edit/remove), code coloring
-  (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs.
+  (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs. `{{ }}` sections (JavaScript, see Components) are kept out of the editor: swapped for tokens before loading, shown as chips (an inline atom node) edited from a code dialog, written back raw (`ui/markdownSections.ts`; typed or pasted `{{ … }}` become chips), so Markdown never reads or escapes the code.
 - **Collections have a singular and plural name** ("Author" / "Authors"): singular for one item
   ("New Author"), plural for lists, navigation and counts (`countLabel`).
 - **Items are edited in place**: `#/collections/<id>/items/<itemId>` shows every field in the

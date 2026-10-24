@@ -2,8 +2,21 @@ import { useId, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Button, Form, Select, SelectItem, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
-import { ERROR_PREFIX, FRAME_RATIOS, parseParams, render, COMPONENT_OUTPUTS, type ComponentOutput } from "../domain/components";
-import { newId, now } from "../domain/model";
+import { useItems } from "../app/useItems";
+import {
+  ERROR_PREFIX,
+  FRAME_RATIOS,
+  parseParams,
+  render,
+  withComputed,
+  fieldLookup,
+  itemsInput,
+  COMPONENT_OUTPUTS,
+  type BlockInputs,
+  type ComponentOutput,
+} from "../domain/components";
+import { itemLabel, newId, now, type Collection } from "../domain/model";
+import { refLabelOf, useReferenceOptions } from "../ui/useReferenceOptions";
 import { ComponentCodeEditor } from "../ui/ComponentCodeEditor";
 import { ComponentValue } from "../ui/ComponentValue";
 import { NotFound } from "../ui/NotFound";
@@ -22,7 +35,7 @@ export function ComponentEditorPage() {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
   const { componentId } = useParams();
-  const { repo, components } = useStore();
+  const { repo, components, collections } = useStore();
   const navigate = useNavigate();
   const existing = components.find((x) => x.id === componentId);
   const [name, setName] = useState(existing?.name ?? "");
@@ -33,15 +46,15 @@ export function ComponentEditorPage() {
   /** The preview's HTML fills its box (no height of its own): then its shape can be chosen. */
   const [fills, setFills] = useState(false);
   const [tests, setTests] = useState<Record<string, string>>({});
+  /** The collection (and one of its items) the preview is rendered with: what $item and $items read. */
+  const [previewCollectionId, setPreviewCollectionId] = useState("");
+  const [previewItemId, setPreviewItemId] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
   const params = useMemo(() => parseParams(code), [code]);
-  const result = useMemo(
-    () => render({ params, code, output }, params.map((p) => testValue(tests[p] ?? ""))),
-    [params, code, output, tests],
-  );
+  const previewCollection = collections.find((c) => c.id === previewCollectionId);
   const nameError = name.trim() ? undefined : "Give the component a name";
 
   if (componentId && !existing) return <NotFound />;
@@ -132,6 +145,23 @@ export function ComponentEditorPage() {
               ))}
             </Select>
           )}
+          {/* The collection whose items $item and $items read in the preview (none: they are empty). */}
+          <Select
+            size="sm"
+            id={`${uid}-component-preview-collection`}
+            labelText="Preview with collection"
+            helperText="Renders the result with one of its items as $item, and all of them as $items."
+            value={previewCollectionId}
+            onChange={(e) => {
+              setPreviewCollectionId(e.target.value);
+              setPreviewItemId("");
+            }}
+          >
+            <SelectItem value="" text="None" />
+            {collections.map((c) => (
+              <SelectItem key={c.id} value={c.id} text={c.name} />
+            ))}
+          </Select>
           {/* Try the formula: a value per $variable, the result right away. */}
           <div className="component-test">
             {params.map((p) => (
@@ -146,17 +176,27 @@ export function ComponentEditorPage() {
                 onChange={(e) => setTests((t) => ({ ...t, [p]: e.target.value }))}
               />
             ))}
-            <div className="component-test__result">
-              <div className="cds--label">Result</div>
-              {/* The same markup as a component field on an item page, so it renders identically. */}
-              <div className="item-fields item-fields--form component-test__preview">
-                <div className="view-field">
-                  <div className={`view-field__value view-field__value--component${String(result ?? "").startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}`}>
-                    <ComponentValue value={result} output={output} frameRatio={frameRatio} onFill={setFills} variant="page" />
-                  </div>
-                </div>
-              </div>
-            </div>
+            {previewCollection ? (
+              <CollectionPreview
+                key={previewCollection.id}
+                collection={previewCollection}
+                itemId={previewItemId}
+                onItem={setPreviewItemId}
+                params={params}
+                code={code}
+                output={output}
+                tests={tests}
+                frameRatio={frameRatio}
+                onFill={setFills}
+              />
+            ) : (
+              <PreviewResult
+                result={render({ params, code, output }, params.map((p) => testValue(tests[p] ?? "")))}
+                output={output}
+                frameRatio={frameRatio}
+                onFill={setFills}
+              />
+            )}
           </div>
           {error && <p className="cds--form-requirement">{error}</p>}
           <div className="form-actions">
@@ -170,5 +210,74 @@ export function ComponentEditorPage() {
         </Stack>
       </Form>
     </div>
+  );
+}
+
+/** The rendered result, in the same markup as a component field on an item page, so it renders identically. */
+function PreviewResult({ result, output, frameRatio, onFill }: { result: unknown; output: ComponentOutput; frameRatio: string | null; onFill(fills: boolean): void }) {
+  return (
+    <div className="component-test__result">
+      <div className="cds--label">Result</div>
+      <div className="item-fields item-fields--form component-test__preview">
+        <div className="view-field">
+          <div className={`view-field__value view-field__value--component${String(result ?? "").startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}`}>
+            <ComponentValue value={result as never} output={output} frameRatio={frameRatio} onFill={onFill} variant="page" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The preview with a collection's items: an item picker, $item = the picked one (else the first), $items / $all = all. */
+function CollectionPreview({
+  collection,
+  itemId,
+  onItem,
+  params,
+  code,
+  output,
+  tests,
+  frameRatio,
+  onFill,
+}: {
+  collection: Collection;
+  itemId: string;
+  onItem(id: string): void;
+  params: string[];
+  code: string;
+  output: ComponentOutput;
+  tests: Record<string, string>;
+  frameRatio: string | null;
+  onFill(fills: boolean): void;
+}) {
+  const uid = useId();
+  const { components } = useStore();
+  const refs = useReferenceOptions(collection);
+  const { items: stored } = useItems(collection);
+  const items = useMemo(() => (stored ? withComputed(collection, stored, components, refLabelOf(refs)) : []), [stored, collection, components, refs]);
+  const item = items.find((i) => i.id === itemId) ?? items[0];
+  const result = useMemo(() => {
+    const refLabel = refLabelOf(refs);
+    const input = itemsInput(collection, refLabel);
+    const all = items.map(input);
+    const block: BlockInputs = {
+      items: all,
+      groups: [{ key: "", label: "All", items: all }],
+      fields: collection.fields.map((f) => ({ id: f.id, name: f.name, kind: f.kind })),
+      all,
+    };
+    return render({ params, code, output }, params.map((p) => testValue(tests[p] ?? "")), item, item && fieldLookup(collection, item, refLabel), block);
+  }, [collection, items, item, refs, params, code, output, tests]);
+  return (
+    <>
+      <Select size="sm" id={`${uid}-preview-item`} labelText={`Preview ${collection.name}`} value={item?.id ?? ""} onChange={(e) => onItem(e.target.value)} disabled={items.length === 0}>
+        {items.length === 0 && <SelectItem value="" text={`No ${collection.pluralName}`} />}
+        {items.map((i) => (
+          <SelectItem key={i.id} value={i.id} text={itemLabel(collection, i)} />
+        ))}
+      </Select>
+      <PreviewResult result={result} output={output} frameRatio={frameRatio} onFill={onFill} />
+    </>
   );
 }

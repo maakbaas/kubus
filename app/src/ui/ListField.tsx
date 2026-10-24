@@ -216,13 +216,12 @@ export function ListField({
               </div>
             )}
             {!readOnly && (
-              reorder.handle(i)
-            )}
-            {!readOnly && (
               <IconButton autoAlign kind="ghost" size="sm" align="top" label="Remove item" onMouseDown={(e) => e.preventDefault()} onClick={() => remove(i)}>
                 <TrashCan />
               </IconButton>
             )}
+            {/* The drag handle is always a row's last icon. */}
+            {!readOnly && reorder.handle(i)}
           </div>
         ))}
         {!readOnly && (

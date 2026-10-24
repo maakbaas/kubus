@@ -13,12 +13,15 @@ export function BookmarkButton({
   collectionId,
   targetId,
   label,
+  prepare,
   onError,
 }: {
   kind: BookmarkKind;
   collectionId: string;
   targetId: string;
   label: string;
+  /** Makes the target real before it is bookmarked (a virtual view is stored); returns its id. */
+  prepare?(): Promise<string | undefined>;
   onError(e: unknown): void;
 }) {
   const { repo, bookmarks, space } = useStore();
@@ -34,7 +37,12 @@ export function BookmarkButton({
       align="bottom"
       label={marked ? "Remove bookmark" : "Bookmark"}
       aria-pressed={marked}
-      onClick={() => (marked ? repo.removeBookmark(targetId, space.id) : repo.addBookmark(kind, collectionId, targetId, label, space.id)).catch(onError)}
+      onClick={() =>
+        (marked
+          ? repo.removeBookmark(targetId, space.id)
+          : (prepare?.() ?? Promise.resolve(undefined)).then((id) => repo.addBookmark(kind, collectionId, id ?? targetId, label, space.id))
+        ).catch(onError)
+      }
     >
       {marked ? <BookmarkFilled /> : <Bookmark />}
     </IconButton>

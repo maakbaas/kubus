@@ -3,7 +3,6 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type Dispatch,
@@ -29,29 +28,27 @@ import {
 import { Add, ArrowRight, Close, Copy, DataTable as TableIcon, Edit, Save, TrashCan } from "@carbon/icons-react";
 import { RowActions, rowButtonProps } from "../ui/RowActions";
 import { useStore } from "../app/store";
-import { itemLabel, pickableFields, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
+import { itemLabel, labelField, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
 import { cellEditStart, type EditStart } from "../ui/editStart";
-import { itemViewOf, FULL_LAYOUT, isRestricted, orderFields } from "../domain/fieldLayout";
+import { itemViewOf, FULL_LAYOUT, isRestricted } from "../domain/fieldLayout";
 import { isGrouped } from "../domain/query";
 import { FieldEditor } from "../ui/FieldEditor";
-import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { FieldInput, parseInputValue, toInputValue, type InputValue } from "../ui/FieldInput";
 import { Highlight } from "../ui/Highlight";
 import { formatValue, type RefOptions } from "../ui/useReferenceOptions";
 import { errorMessage } from "../ui/useConfirm";
 import { itemLinkProps, FieldCell, isInlineEditable, isMetaField } from "./cells";
 import { openModeOf } from "../workspace/Workspace";
-import { defineViewType, type ItemActions, type ViewProps } from "./registry";
+import { defineBlockType, type BlockOptionsProps, type BlockProps, type ItemActions } from "./registry";
 
-/** Table view options. */
+/** Table options (its columns are the block's fields; without the title column, rows get an open button). */
 export interface TableOptions {
-  /** Field ids shown as columns, in this order; null = all, in the collection's order. Without the
-   *  title column, rows get an open button. */
-  columns: string[] | null;
   /** The title column links to the item (else it is an ordinary, editable column and rows get an open button). */
   titleLink: boolean;
   /** In a narrow pane the rows restack as cards (else the table scrolls sideways). */
   stackNarrow: boolean;
+  /** Values edit in place and rows can be added (checkboxes toggle either way). */
+  editable: boolean;
 }
 
 /** The column that names an item and opens it (the collection's first text field). */
@@ -202,6 +199,8 @@ interface CellProps {
   refs: RefOptions;
   search: string;
   actions: ItemActions;
+  /** Values can be edited in place (the table's option). */
+  editable: boolean;
   /** Where the click that started editing was (the caret goes there), if it was a click. */
   editing: { start?: EditStart } | null;
   onEdit(start?: EditStart): void;
@@ -209,7 +208,7 @@ interface CellProps {
 }
 
 /** A table cell: the title opens the item, inline-editable values edit in place. */
-function Cell({ collection, isTitle, field, item, refs, search, actions, editing, onEdit, onDone }: CellProps) {
+function Cell({ collection, isTitle, field, item, refs, search, actions, editable, editing, onEdit, onDone }: CellProps) {
   if (isTitle) {
     return (
       <Link href={`#/collections/${collection.id}/items/${item.id}`} {...itemLinkProps(item, actions)}>
@@ -217,7 +216,7 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editing
       </Link>
     );
   }
-  if (!isInlineEditable(field.kind) || isMetaField(field)) {
+  if (!editable || !isInlineEditable(field.kind) || isMetaField(field)) {
     // Wrapped so the column-width rules (one line where possible) apply to plain text too.
     return (
       <div>
@@ -449,6 +448,7 @@ interface ItemRowProps {
   refs: RefOptions;
   search: string;
   actions: ItemActions;
+  editable: boolean;
   /** The edited cell when it is in this row, else null. */
   editing: EditingCell | null;
   setEditing: Dispatch<SetStateAction<EditingCell | null>>;
@@ -459,7 +459,11 @@ interface ItemRowProps {
  * actions) a row isn't rendered again when another row is edited, or something else on the page
  * changes.
  */
-const ItemRow = memo(function ItemRow({ collection, item, shown, titleId, titleShown, refs, search, actions, editing, setEditing }: ItemRowProps) {
+const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstTitleId, titleShown: firstTitleShown, refs, search, actions, editable, editing, setEditing }: ItemRowProps) {
+  // The link sits in the column of the field that actually names this item (its first non-empty
+  // text field), so an empty text field before it doesn't repeat the label.
+  const titleId = firstTitleId && (labelField(collection, item)?.id ?? firstTitleId);
+  const titleShown = titleId === firstTitleId ? firstTitleShown : shown.some((f) => f.id === titleId);
   // Its page's layout holds something back (read-only, fields left out): like the page's
   // own edit icon, an edit button opens it with every field, editable.
   const restricted = isRestricted(collection, item, itemViewOf(collection, item)?.layout ?? FULL_LAYOUT);
@@ -503,6 +507,7 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId, titleS
               refs={refs}
               search={search}
               actions={actions}
+              editable={editable}
               editing={isEditing ? { start: editing.start } : null}
               onEdit={(start) => setEditing({ itemId: item.id, fieldId: f.id, start })}
               // Clicking another cell saves this one; don't close the editor that click opened.
@@ -516,9 +521,9 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId, titleS
   );
 });
 
-export function TableView(props: ViewProps<TableOptions>) {
-  const { collection, result, options, refs, search, actions } = props;
-  const shown = useMemo(() => orderFields(pickableFields(collection), options.columns), [collection, options.columns]);
+export function TableView(props: BlockProps<TableOptions>) {
+  const { collection, result, fields: shown, options, refs, search, actions, collapsedGroups, onGroupCollapse } = props;
+  const editable = options.editable;
   // Without the title link the title is an ordinary column (and rows get an open button).
   const titleId = options.titleLink ? titleColumn(collection)?.id : undefined;
   const titleShown = shown.some((f) => f.id === titleId);
@@ -564,6 +569,7 @@ export function TableView(props: ViewProps<TableOptions>) {
         refs={refs}
         search={search}
         actions={actions}
+        editable={editable}
         // Only the row being edited gets the editing state, so the other rows keep their props.
         editing={editing?.itemId === item.id ? editing : null}
         setEditing={setEditing}
@@ -573,9 +579,13 @@ export function TableView(props: ViewProps<TableOptions>) {
   // The last row is empty but for a "+" in the title column (else the first); it turns into the
   // add row. Grouped, each group has one, and what it adds gets the group's value.
   const plusColumn = (shown.some((f) => f.id === titleColumn(collection)?.id) ? titleColumn(collection)?.id : undefined) ?? shown[0]?.id;
+  // Without a column to type into, "+" opens the new item form instead.
+  const groupField = grouped ? actions.groupBy : null;
+  const inlineAdd = shown.some((f) => addable(f) && f.id !== groupField);
   const addRows = (groupKey: string, bare = false) =>
     actions.create &&
-    (adding === groupKey ? (
+    editable &&
+    (adding === groupKey && inlineAdd ? (
       <AddRow
         collection={collection}
         columns={shown}
@@ -591,7 +601,7 @@ export function TableView(props: ViewProps<TableOptions>) {
         {shown.map((f) => (
           <TableCell key={f.id} className={f.id === plusColumn ? "table-add-row__plus" : undefined} data-label={f.name}>
             {f.id === plusColumn && (
-              <IconButton autoAlign label={`Add ${collection.name}`} kind="ghost" size="sm" align="top-start" onClick={() => setAdding(groupKey)}>
+              <IconButton autoAlign label={`Add ${collection.name}`} kind="ghost" size="sm" align="top-start" onClick={(e) => (inlineAdd ? setAdding(groupKey) : actions.openNew?.(openModeOf(e)))}>
                 <Add />
               </IconButton>
             )}
@@ -616,17 +626,18 @@ export function TableView(props: ViewProps<TableOptions>) {
   }
 
   // Grouped: one table per group in a collapsible section (open by default; collapsing is
-  // not saved), each with its own add row.
+  // stored with the view), each with its own add row.
   return (
     <div ref={groupsBox} className="table-groups">
       <Accordion size="sm" align="start">
         {result.groups.map((group) => (
           <AccordionItem
             key={group.key}
-            open
+            open={!collapsedGroups.includes(group.key)}
+            onHeadingClick={({ isOpen }) => onGroupCollapse(group.key, !isOpen)}
             title={
               <span className="table-group__title">
-                {group.label} <span className="view-group__count">{group.items.length}</span>
+                {group.label}
               </span>
             }
           >
@@ -646,7 +657,7 @@ export function TableView(props: ViewProps<TableOptions>) {
   );
 }
 
-function TableOptionsEditor({ collection, options, onChange }: { collection: Collection; options: TableOptions; onChange(o: TableOptions): void }) {
+function TableOptionsEditor({ options, onChange }: BlockOptionsProps<TableOptions>) {
   const uid = useId();
   return (
     <div className="view-options">
@@ -658,40 +669,33 @@ function TableOptionsEditor({ collection, options, onChange }: { collection: Col
           onChange={(_, { checked }) => onChange({ ...options, titleLink: checked })}
         />
         <Checkbox
+          id={`${uid}-table-editable`}
+          labelText="Edit values in place"
+          checked={options.editable}
+          onChange={(_, { checked }) => onChange({ ...options, editable: checked })}
+        />
+        <Checkbox
           id={`${uid}-table-stack`}
           labelText="Show rows as cards when narrow"
           checked={options.stackNarrow}
           onChange={(_, { checked }) => onChange({ ...options, stackNarrow: checked })}
         />
       </div>
-      <FieldOrderEditor
-        id={`${uid}-table-columns`}
-        label="Columns"
-        fields={pickableFields(collection)}
-        collection={collection}
-        value={options.columns}
-        onChange={(columns) => onChange({ ...options, columns })}
-      />
     </div>
   );
 }
 
-export const tableView = defineViewType<TableOptions>({
+export const tableView = defineBlockType<TableOptions>({
   kind: "table",
   label: "Table",
   icon: TableIcon,
-  defaultOptions: () => ({ columns: null, titleLink: true, stackNarrow: true }),
-  normalizeOptions(raw, collection) {
+  defaultOptions: () => ({ titleLink: true, stackNarrow: true, editable: true }),
+  normalizeOptions(raw) {
     const o = (raw ?? {}) as Partial<TableOptions>;
-    const ids = new Set(pickableFields(collection).map((f) => f.id));
-    return {
-      columns: Array.isArray(o.columns) ? o.columns.filter((id) => ids.has(id)) : null,
-      titleLink: o.titleLink !== false,
-      stackNarrow: o.stackNarrow !== false,
-    };
+    return { titleLink: o.titleLink !== false, stackNarrow: o.stackNarrow !== false, editable: o.editable !== false };
   },
-  fieldsOf: (o) => o.columns,
-  withFields: (o, columns) => ({ ...o, columns }),
+  // Columns are its fields.
+  uses: () => ({ query: true, fields: { labels: false, hideEmpty: false } }),
   View: TableView,
   OptionsEditor: TableOptionsEditor,
 });

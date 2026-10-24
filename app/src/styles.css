@@ -87,8 +87,11 @@ body {
   padding: 4.5rem 1rem 3rem;
   box-sizing: border-box;
 }
-.app-content--bare {
-  padding-top: 0;
+/* Before the workspace exists (opening the database, or an error such as "open in another tab"):
+   the message sits at the very top, one page padding in (clear of the status bar on iOS). Two
+   classes, so the wider screens' .app-content padding below doesn't push it down again. */
+.app-content.app-content--bare {
+  padding: calc(env(safe-area-inset-top) + var(--cds-spacing-05)) var(--cds-spacing-05) var(--cds-spacing-05);
 }
 .app-content--bare .cds--inline-notification {
   margin-top: 0;
@@ -925,8 +928,13 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   grid-template-columns: minmax(0, 1fr) 13rem auto; /* room for "List of items" with its icon */
   gap: 1rem;
   align-items: start;
-  padding: 1rem 0;
+  /* Room beside the inputs, so a selected row's grey block reaches past them on both sides. */
+  padding: 1rem 0.5rem;
+  margin-inline: -0.5rem;
   border-bottom: 1px solid var(--cds-border-subtle);
+}
+.field-row[data-selected] {
+  box-shadow: none;
 }
 /* Reference fields get an extra "Refers to" column. */
 .field-row--reference {
@@ -1181,7 +1189,8 @@ img[data-lightbox] {
 }
 /* Height follows the content: it grows, never scrolls inside. */
 .md-editor__content {
-  padding: var(--block-pad-top) 1rem 0.75rem;
+  /* The same space under the text as above it (a line of text then fills a 2rem input's height). */
+  padding: var(--block-pad-top) 1rem var(--block-pad-top);
   outline: none;
   /* Never wider than the field: long words, links and code wrap instead of scrolling. */
   overflow-wrap: anywhere;
@@ -1505,8 +1514,21 @@ img[data-lightbox] {
 
 /* Space above a multi-line value (markdown, HTML): the same as above one line of text in a
    2rem box, so the gap under a label is the same for every field. */
+/* Blocks on an item page (tables, cards) read as on a collection page: Carbon's own type scale. */
+.item-fields > .block {
+  --cds-body-compact-01-font-size: 0.875rem;
+  --cds-body-compact-01-line-height: 1.28572;
+  --cds-body-compact-01-letter-spacing: 0.16px;
+  --cds-body-01-font-size: 0.875rem;
+  --cds-body-01-line-height: 1.42857;
+  --cds-body-01-letter-spacing: 0.16px;
+  --cds-label-01-font-size: 0.75rem;
+  --cds-label-01-line-height: 1.33333;
+  --cds-label-01-letter-spacing: 0.32px;
+}
 :root,
-.item-fields {
+.item-fields,
+.item-fields > .block {
   --block-pad-top: calc((2rem - 1px - var(--cds-body-compact-01-font-size) * var(--cds-body-compact-01-line-height)) / 2);
 }
 
@@ -1551,18 +1573,18 @@ img[data-lightbox] {
 /* Markdown: same padding as the editor's content area; height follows the content. */
 .view-field__value--markdown {
   display: block;
-  padding: var(--block-pad-top) 1rem 0.75rem;
+  padding: var(--block-pad-top) 1rem var(--block-pad-top);
 }
 /* A component's rendered result (HTML, Markdown) is a block like a markdown field: the same
    space above and below, before the line under the field. */
 .view-field__value--component:has(> :is(.html-frame, .md-view)) {
   display: block;
-  padding-block: var(--block-pad-top) 0.75rem;
+  padding-block: var(--block-pad-top);
 }
 /* HTML: its frame as a block like a component's. */
 .view-field__value--html:not(.view-field__value--empty) {
   display: block;
-  padding-block: var(--block-pad-top) 0.75rem;
+  padding-block: var(--block-pad-top);
 }
 .view-field__value--image {
   display: block;
@@ -1773,26 +1795,10 @@ img[data-lightbox] {
   }
 }
 
-/* Collection page: view tabs, toolbar, view settings panel */
-/* Icon buttons sit flush, as everywhere (tab strip, page header): only the search box keeps a
-   gap before them. */
-.items-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: 0;
-  row-gap: var(--cds-spacing-03);
+/* Collection page: view tabs (with the view's own tools at their right), the search bar the
+   search icon opens below them, view settings panel */
+.items-search {
   margin-bottom: var(--cds-spacing-05);
-}
-/* The search box takes whatever the buttons leave, so extra buttons (save, reset, …) shrink it
-   instead of wrapping the row; it only wraps once it would get narrower than spacing-13. */
-.items-toolbar > .cds--search {
-  flex: 1 1 0;
-  min-inline-size: var(--cds-spacing-13);
-  margin-inline-end: var(--cds-spacing-03);
-}
-.items-toolbar > :not(.cds--search) {
-  flex: none;
 }
 .view-kind {
   display: inline-flex;
@@ -1821,6 +1827,12 @@ img[data-lightbox] {
 }
 .toolbar-popover__panel--fit {
   inline-size: max-content;
+}
+.toolbar-popover__panel--narrow {
+  inline-size: min(20rem, var(--popover-width, calc(100vw - 2 * var(--cds-spacing-05))));
+}
+.toolbar-popover__panel--wide {
+  inline-size: min(40rem, var(--popover-width, calc(100vw - 2 * var(--cds-spacing-05))));
 }
 .view-settings {
   display: flex;
@@ -1875,10 +1887,36 @@ img[data-lightbox] {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* Group headings (table rows / card sections) */
+/* Group headings (table rows / card sections): a step smaller than a block's name, and lined up
+   with it exactly (chevron and text at the block header's offsets: 0.5rem, 2.25rem), without
+   Carbon's lines between groups. */
 .table-group__title {
-  font-size: var(--cds-body-compact-01-font-size);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
   font-weight: 600;
+}
+.table-groups .cds--accordion__item,
+.view-groups .cds--accordion__item {
+  border: 0;
+}
+.table-groups .cds--accordion--start .cds--accordion__heading,
+.view-groups .cds--accordion--start .cds--accordion__heading {
+  padding-inline: 0.5rem 0;
+}
+.table-groups .cds--accordion--start .cds--accordion__heading .cds--accordion__arrow,
+.view-groups .cds--accordion--start .cds--accordion__heading .cds--accordion__arrow {
+  margin-inline: 0;
+  /* Pointing like a block's chevron: right when closed, down when open (Carbon: down / up). */
+  transform: none;
+}
+.table-groups .cds--accordion__item--active > .cds--accordion__heading > .cds--accordion__arrow,
+.view-groups .cds--accordion__item--active > .cds--accordion__heading > .cds--accordion__arrow {
+  transform: rotate(90deg);
+}
+.table-groups .cds--accordion--start .cds--accordion__title,
+.view-groups .cds--accordion--start .cds--accordion__title {
+  margin-inline: 0.75rem 0;
+  padding-inline: 0;
 }
 /* Grouped tables / cards: Carbon's accordion indents and pads its content; it uses the full width. */
 .table-groups .cds--accordion__content,
@@ -1892,6 +1930,11 @@ img[data-lightbox] {
 .view-groups .cds--accordion__item--active > .cds--accordion__wrapper {
   padding-block: 0;
 }
+/* Cards start a little below their group's heading (a table's own header row sets it apart). */
+.view-groups .cds--accordion__content,
+.view-groups .cds--accordion--start .cds--accordion__content {
+  padding-block-start: var(--cds-spacing-03);
+}
 /* Groups show open at once: Carbon fades an open item in from closed when it appears
    (@starting-style), so every group flashed closed and its table appeared after. Opening and
    closing a group is instant too. */
@@ -1903,11 +1946,6 @@ img[data-lightbox] {
 .table-groups .cds--accordion--start .cds--accordion__arrow,
 .view-groups .cds--accordion--start .cds--accordion__arrow {
   margin-block-start: 0;
-}
-/* Carbon's group lines stay; a group's last row doesn't add another beside them. */
-.table-groups tbody tr:last-child td,
-.table-groups tbody tr:last-child th {
-  border-block-end: 0;
 }
 .table-groups > .cds--data-table-container {
   margin-top: var(--cds-spacing-05);
@@ -2144,6 +2182,63 @@ img[data-lightbox] {
 .views-bar__spacer {
   flex: 1;
 }
+/* Blocks of a view (and of an item page): with several, each has a header line with its title,
+   count and menus (icon buttons flush, like the toolbar's), and room above the next one. */
+.block + .block {
+  margin-block-start: var(--cds-spacing-07);
+}
+.block__header {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-02);
+  min-block-size: 2rem;
+  margin-block-end: var(--cds-spacing-03);
+  border-block-end: 1px solid var(--cds-border-subtle);
+}
+.block__title {
+  cursor: pointer;
+  user-select: none;
+  font-size: 1.125rem;
+  line-height: 1.5rem;
+  font-weight: 400; /* at this size the name needs no bold */
+  overflow-wrap: anywhere;
+}
+/* On an item page a block's name is a field heading: a label, with no line under it. */
+/* The block's heading is a field label, so it uses the field type scale; only the content under it
+   (tables, cards) keeps the smaller collection page scale that .item-fields > .block sets. */
+.item-fields > .block > .block__header {
+  --cds-label-01-font-size: 0.875rem;
+  --cds-label-01-line-height: 1.28572;
+  --cds-label-01-letter-spacing: 0.16px;
+}
+.block--field > .block__header {
+  border-block-end: 0;
+  /* As tall as a field label, the 2rem menu buttons centred on it (they overhang a little), so
+     the heading sits where a field's label does and the gap to the content is a field's. */
+  block-size: 1rem;
+  min-block-size: 0;
+  margin-block-end: var(--cds-spacing-03);
+}
+/* Blocks in a row are spaced by the page's own gap, as fields are (not also by their top margin). */
+.item-fields > .block + .block {
+  margin-block-start: 0;
+}
+.block--field .block__title {
+  cursor: default;
+  margin: 0;
+  flex: none;
+  inline-size: auto;
+  font-size: var(--cds-label-01-font-size);
+  line-height: 1rem;
+  letter-spacing: var(--cds-label-01-letter-spacing);
+}
+.block-settings__remove {
+  align-self: flex-start;
+}
+.block-list__name {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
 /* Item pages: a little more room between the item view tabs and the first field. */
 .item-view .views-bar {
   margin-bottom: var(--cds-spacing-06);
@@ -2157,9 +2252,9 @@ img[data-lightbox] {
   margin-inline: auto;
 }
 /* An empty markdown field is as tall as the empty editor it turns into (one body-01 line plus
-   the editor's 0.75rem padding and the field's bottom border). */
+   the editor's padding above and below and the field's bottom border). */
 .view-field__value--markdown.view-field__value--empty {
-  min-block-size: calc(2 * 0.75rem + var(--cds-body-01-font-size) * var(--cds-body-01-line-height) + 1px);
+  min-block-size: calc(2 * var(--block-pad-top) + var(--cds-body-01-font-size) * var(--cds-body-01-line-height) + 1px);
 }
 /* The idle add row's "+" icon starts where the column's text starts: the 2rem icon button
    centres a 1rem icon, so the cell's 1rem inset shrinks by that 0.5rem. */
@@ -2203,11 +2298,11 @@ img[data-lightbox] {
    pulled 1rem left so its box's own 1rem inset puts the text at the edge (the box border sits
    1rem further left; its right edge stays); labels and checkboxes, without an inset, get the
    1rem back as padding. */
-.item-fields > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label),
+.item-fields > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label, .block),
 .item-field--no-label > :not(.image-input, .view-field--image) {
   margin-inline-start: calc(-1 * var(--cds-spacing-05));
 }
-.item-fields > :not(.form-actions, .image-input, .view-field--image) .cds--label,
+.item-fields > :not(.form-actions, .image-input, .view-field--image, .block) .cds--label,
 .item-fields .checkbox-field,
 .item-fields .checklist-box {
   padding-inline-start: var(--cds-spacing-05);
@@ -2415,6 +2510,18 @@ img[data-lightbox] {
 .cds--modal.modal--menus .cds--modal-container,
 .cds--modal.modal--menus .cds--modal-content {
   overflow: visible;
+}
+/* Carbon caps the dialog's height and scrolls its content; without that clipping, content that
+   grows (a field type's extra inputs) would spill out of the capped box. The dialog grows with its
+   content instead. */
+@media (min-width: 42rem) {
+  .cds--modal.modal--menus .cds--modal-container {
+    block-size: auto;
+    max-block-size: none;
+  }
+  .cds--modal.modal--menus .cds--modal-content {
+    max-block-size: none;
+  }
 }
 
 /* Narrow panes: every table restacks as cards. Each row is a card; each cell a line with its
@@ -2638,6 +2745,14 @@ img[data-lightbox] {
 .field-order__add {
   margin-block-start: var(--cds-spacing-05);
 }
+/* "Add field" / "Add block" under a list span its width (the menu button's trigger too). */
+.field-order__add,
+.item-layout__add,
+.field-order__add .cds--btn,
+.item-layout__add .cds--btn {
+  inline-size: 100%;
+  max-inline-size: none;
+}
 /* Item page layout popover. */
 .item-layout {
   display: flex;
@@ -2844,6 +2959,12 @@ img[data-lightbox] {
   min-inline-size: 0;
 }
 
+/* A toolbar popover whose settings are in effect (a filter, a sort other than the default): its
+   icon is blue, not the grey "selected" background, which is kept for the open panel. */
+.cds--btn--ghost[data-active] svg {
+  fill: var(--cds-icon-interactive);
+}
+
 /* Reordering: the grab handle (pointer events, so no browser panning on touch) and the row being dragged. */
 .reorder-handle {
   cursor: grab;
@@ -2882,4 +3003,64 @@ body[data-reordering] [data-reorder-row] {
 }
 [data-drop-after]::after {
   inset-block-end: -1px;
+}
+/* Edited in place: the editor needs no visible label, the block's text is the content. */
+.markdown-block--editing .md-field > .cds--label {
+  display: none;
+}
+/* A {{ }} section in the Markdown editor: a chip, its code edited from a dialog. */
+.md-editor .md-section {
+  display: inline-block;
+  padding: 0 0.25rem;
+  border-radius: 2px;
+  background: var(--cds-layer-accent);
+  font-family: var(--cds-code-02-font-family, monospace);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.md-editor .md-section.ProseMirror-selectednode {
+  outline: 2px solid var(--cds-focus);
+}
+/* A Markdown block reads like a Markdown field (the field type scale) wherever it is, not like
+   the tables and cards around it, which keep the smaller collection page scale. */
+.markdown-block {
+  --cds-body-compact-01-font-size: 1rem;
+  --cds-body-compact-01-line-height: 1.375;
+  --cds-body-01-font-size: 1rem;
+  --cds-body-01-line-height: 1.5;
+  --cds-body-01-letter-spacing: 0;
+  --cds-label-01-font-size: 0.875rem;
+  --cds-label-01-line-height: 1.28572;
+  --cds-label-01-letter-spacing: 0.16px;
+  /* The space above a line of text in a 2rem box, from this scale: outside item pages the page
+     level value is not defined (the box's whole padding would then be dropped). */
+  --block-pad-top: calc((2rem - 1px - var(--cds-body-compact-01-font-size) * var(--cds-body-compact-01-line-height)) / 2);
+  /* Its box (read-only and editing alike, so nothing moves) is pulled into the page margin, as an
+     item page field's is: the box's own 1rem padding puts the text at the page edge, in line with
+     tables and the block headings, and the editor has room around its text. (Blocks are left out
+     of the item page rule that does this for fields.) */
+  margin-inline-start: calc(-1 * var(--cds-spacing-05));
+}
+@media (max-width: 42rem) {
+  .markdown-block {
+    margin-inline: calc(-0.5 * var(--cds-spacing-05));
+  }
+}
+/* The code dialog (opened from a section chip): its label sits at the left, Carbon's room under the
+   content (for a scroll fade) is not needed. It sits inside the item page's fields, whose labels are
+   inset to line up with their inputs' text, so that inset is cancelled (specific enough to beat
+   those rules, also the phone ones). */
+.section-dialog .cds--label {
+  text-align: start;
+  align-self: flex-start;
+}
+.cds--modal.section-dialog.section-dialog .cds--label {
+  padding-inline-start: 0;
+}
+.section-dialog .cds--modal-content {
+  padding-block-end: var(--cds-spacing-05);
+  margin-block-end: 0;
+}
+.section-dialog .cds--modal-content > .cds--form-item {
+  margin-block-end: 0;
 }
