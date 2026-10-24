@@ -8,6 +8,8 @@ interface Props {
   active?: boolean;
   /** Size the panel to its content (e.g. a short list) instead of the settings width. */
   fit?: boolean;
+  /** A panel narrower (settings with short inputs) or wider (rows of several inputs) than the usual width. */
+  width?: "narrow" | "wide";
   /** Opens the panel whenever this changes to a new truthy value (e.g. after adding a view). */
   openRequest?: number;
   /** Told when the panel opens and closes (see usePanelsOpen). */
@@ -38,7 +40,7 @@ export function usePanelsOpen() {
  * closes a popover when its focused control loses focus without a new one, which happens when a
  * change re-renders the panel (a field row moving, a button turning disabled); that isn't closing.
  */
-export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, onOpenChange, children }: Props) {
+export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequest, onOpenChange, children }: Props) {
   const [open, setOpen] = useState(false);
   const openChange = useRef(onOpenChange);
   openChange.current = onOpenChange;
@@ -61,7 +63,7 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, on
   const root = useRef<HTMLSpanElement>(null);
   const pressedOutside = useRef(false);
   // A dialog opened from the panel (rendered at the window level) counts as part of it.
-  const inside = (n: Node | null) => !!n && (!!root.current?.contains(n) || (n instanceof Element && !!n.closest(".cds--modal")));
+  const inside = (n: Node | null) => !!n && (!!root.current?.contains(n) || (n instanceof Element && !!n.closest(".cds--modal, .cds--menu")));
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
@@ -143,7 +145,7 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, on
       </IconButton>
       <PopoverContent>
         <div
-          className={fit ? "toolbar-popover__panel toolbar-popover__panel--fit" : "toolbar-popover__panel"}
+          className={`toolbar-popover__panel${fit ? " toolbar-popover__panel--fit" : ""}${width ? ` toolbar-popover__panel--${width}` : ""}`}
           style={
             {
               ...(room !== undefined && { "--popover-room": `${Math.max(room, 0)}px` }),

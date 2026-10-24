@@ -67,6 +67,7 @@ export function useItemActions({ collection, stored, query, preset, onSort, conf
         cache.items.reload(collection.id);
       }
     },
+    openNew: (mode) => openRelated(`/collections/${collection.id}/items/new`, mode),
     async create(values) {
       // Shown before the add row closes (waits for the reload the change event started, else reloads).
       const id = await repo.createItem(collection, values, space.id);
@@ -91,6 +92,7 @@ export function useItemActions({ collection, stored, query, preset, onSort, conf
       remove: (item) => latest.current.remove(item),
       duplicate: (item) => latest.current.duplicate?.(item),
       setValue: (item, field, value) => latest.current.setValue(item, field, value),
+      openNew: (mode) => latest.current.openNew!(mode),
       create: (values) => latest.current.create!(values),
       groupPreset: (key) => latest.current.groupPreset!(key),
       groupBy,

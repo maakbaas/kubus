@@ -51,6 +51,7 @@ export function ComponentCodeEditor({
   placeholder,
   value,
   html = false,
+  language,
   onChange,
 }: {
   id: string;
@@ -60,10 +61,12 @@ export function ComponentCodeEditor({
   value: string;
   /** The text around the sections is HTML (else Markdown). */
   html?: boolean;
+  /** The whole text is code in this language (no {{ }} sections around it). */
+  language?: string;
   onChange(value: string): void;
 }) {
   const lines = value.split("\n").length;
-  const highlighted = useMemo(() => highlightComponent(value, html ? "markup" : "markdown"), [value, html]);
+  const highlighted = useMemo(() => (language ? highlight(value, language) : highlightComponent(value, html ? "markup" : "markdown")), [value, html, language]);
   const pre = useRef<HTMLPreElement>(null);
   /** Where each line starts (px from the top), wrapped lines taking several rows. */
   const [tops, setTops] = useState<number[]>([]);

@@ -28,7 +28,7 @@ import {
 import { Add, ArrowRight, Close, Copy, DataTable as TableIcon, Edit, Save, TrashCan } from "@carbon/icons-react";
 import { RowActions, rowButtonProps } from "../ui/RowActions";
 import { useStore } from "../app/store";
-import { itemLabel, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
+import { itemLabel, labelField, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
 import { cellEditStart, type EditStart } from "../ui/editStart";
 import { itemViewOf, FULL_LAYOUT, isRestricted } from "../domain/fieldLayout";
 import { isGrouped } from "../domain/query";
@@ -459,7 +459,11 @@ interface ItemRowProps {
  * actions) a row isn't rendered again when another row is edited, or something else on the page
  * changes.
  */
-const ItemRow = memo(function ItemRow({ collection, item, shown, titleId, titleShown, refs, search, actions, editable, editing, setEditing }: ItemRowProps) {
+const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstTitleId, titleShown: firstTitleShown, refs, search, actions, editable, editing, setEditing }: ItemRowProps) {
+  // The link sits in the column of the field that actually names this item (its first non-empty
+  // text field), so an empty text field before it doesn't repeat the label.
+  const titleId = firstTitleId && (labelField(collection, item)?.id ?? firstTitleId);
+  const titleShown = titleId === firstTitleId ? firstTitleShown : shown.some((f) => f.id === titleId);
   // Its page's layout holds something back (read-only, fields left out): like the page's
   // own edit icon, an edit button opens it with every field, editable.
   const restricted = isRestricted(collection, item, itemViewOf(collection, item)?.layout ?? FULL_LAYOUT);
@@ -575,10 +579,13 @@ export function TableView(props: BlockProps<TableOptions>) {
   // The last row is empty but for a "+" in the title column (else the first); it turns into the
   // add row. Grouped, each group has one, and what it adds gets the group's value.
   const plusColumn = (shown.some((f) => f.id === titleColumn(collection)?.id) ? titleColumn(collection)?.id : undefined) ?? shown[0]?.id;
+  // Without a column to type into, "+" opens the new item form instead.
+  const groupField = grouped ? actions.groupBy : null;
+  const inlineAdd = shown.some((f) => addable(f) && f.id !== groupField);
   const addRows = (groupKey: string, bare = false) =>
     actions.create &&
     editable &&
-    (adding === groupKey ? (
+    (adding === groupKey && inlineAdd ? (
       <AddRow
         collection={collection}
         columns={shown}
@@ -594,7 +601,7 @@ export function TableView(props: BlockProps<TableOptions>) {
         {shown.map((f) => (
           <TableCell key={f.id} className={f.id === plusColumn ? "table-add-row__plus" : undefined} data-label={f.name}>
             {f.id === plusColumn && (
-              <IconButton autoAlign label={`Add ${collection.name}`} kind="ghost" size="sm" align="top-start" onClick={() => setAdding(groupKey)}>
+              <IconButton autoAlign label={`Add ${collection.name}`} kind="ghost" size="sm" align="top-start" onClick={(e) => (inlineAdd ? setAdding(groupKey) : actions.openNew?.(openModeOf(e)))}>
                 <Add />
               </IconButton>
             )}

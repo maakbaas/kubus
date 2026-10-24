@@ -23,7 +23,7 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   clipboard, upload, prism). Don't add syntax plugins (math, emoji, diagrams, frontmatter, Crepe, …),
   and any future renderer must also be GFM-only. Behaviour-only additions are fine: clickable task
   checkboxes, typed `[text](url)` links, link hover popover (open/edit/remove), code coloring
-  (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs.
+  (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs. `{{ }}` sections (JavaScript, see Components) are kept out of the editor: swapped for tokens before loading, shown as chips (an inline atom node) edited from a code dialog, written back raw (`ui/markdownSections.ts`; typed or pasted `{{ … }}` become chips), so Markdown never reads or escapes the code.
 - **Collections have a singular and plural name** ("Author" / "Authors"): singular for one item
   ("New Author"), plural for lists, navigation and counts (`countLabel`).
 - **Items are edited in place**: `#/collections/<id>/items/<itemId>` shows every field in the
@@ -292,7 +292,7 @@ Extension points are registries, not special cases in pages:
   every table restacks as cards, column names as row labels: `.table-wrap` container query) and `cards` (show title, fields, cover = an image or a markdown field rendered in its place, card width (slider: the column count whose width comes closest), cover shape:
   a fixed ratio (image shown whole, the rest filled with its average colour) or the images'
   average ratio (filled, cropped); with no title and no fields a card is just its cover) and
-  `component` (`views/ComponentBlock.tsx`). A block type only
+  `component` (`views/ComponentBlock.tsx`). `markdown` (`views/MarkdownBlock.tsx`) is a block with its own Markdown text, stored in the block's options (not a reusable component), with `{{ }}` sections over `$item` / `$items`; it is shown and edited exactly like a Markdown field (same read-only box, `FieldEditor`). "Add block" is a menu (`views/AddBlockButton.tsx`): a block of each type and one per usable component. A block type only
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
 - **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + JSON config

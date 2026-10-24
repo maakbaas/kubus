@@ -3,7 +3,7 @@ import { Accordion, AccordionItem, Checkbox, ClickableTile, Select, SelectItem, 
 import { Grid as GridIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { fileIdFromSrc } from "../domain/files";
-import { itemLabel, labelField, fieldValue, pickableFields, type FieldDef, type Item, type Collection } from "../domain/model";
+import { itemLabel, fieldValue, pickableFields, type FieldDef, type Item, type Collection } from "../domain/model";
 import type { FieldLayout } from "../domain/fieldLayout";
 import { outputOf, type Component } from "../domain/components";
 import { HtmlFrame } from "../ui/ComponentValue";
@@ -173,11 +173,9 @@ interface ItemCardProps {
 
 /** One item's card. Memoized: it isn't rendered again unless its item or the view's settings changed. */
 const ItemCard = memo(function ItemCard({ collection, item, options, layout, shown, kind, refs, search, actions, onRatio, listed }: ItemCardProps) {
-  const title = labelField(collection, item);
   const cover = options.coverFieldId ? item.values[options.coverFieldId] : null;
-  // A hidden title can still be chosen as an ordinary field.
-  const titled = options.showTitle ? shown.filter((f) => f.id !== title?.id) : shown;
-  const fields = layout.hideEmpty ? titled.filter((f) => !isEmptyValue(fieldValue(item, f))) : titled;
+  // A selected title field shows as a field too, even beside the card title.
+  const fields = layout.hideEmpty ? shown.filter((f) => !isEmptyValue(fieldValue(item, f))) : shown;
   const hasText = options.showTitle || fields.length > 0;
   const hasCover = typeof cover === "string" && !!cover;
   return (

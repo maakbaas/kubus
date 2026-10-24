@@ -1,12 +1,13 @@
 import { isEmptyValue as isEmpty } from "../domain/query";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { Button, Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
+import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
 import { Add, Checkmark, Edit, Information, Pin, PinFilled, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
 import { NOTHING_COLLAPSED, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
 import { useBlockName } from "../views/BlockListEditor";
+import { AddBlockButton, type NewBlockSpec } from "../views/AddBlockButton";
 import { useCollectionData } from "../views/useCollectionData";
 import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
@@ -705,9 +706,9 @@ function ItemLayoutSettings({
    * "Add block": a table of the items linked to this one (of the first collection with a
    * reference to this one), else of this collection; at the end of the page.
    */
-  const addBlock = () => {
+  const addBlock = (spec: NewBlockSpec) => {
     const linked = collections.find((c) => c.id !== collection.id && c.fields.some((f) => (f.kind === "item" || f.kind === "item_list") && f.targetCollectionId === collection.id));
-    onAddBlock(newPageBlock(linked ?? collection, collection));
+    onAddBlock(newPageBlock(linked ?? collection, collection, spec));
   };
   const blockLabel = (b: ViewBlock) => {
     const Icon = blockType(b.kind).icon;
@@ -762,9 +763,7 @@ function ItemLayoutSettings({
         onHiddenLabelsChange={(hiddenLabels) => onChange({ hiddenLabels })}
         extra={layout.blocks.map((b) => ({ id: b.id, label: blockLabel(b) }))}
       />
-      <Button kind="tertiary" size="sm" renderIcon={Add} className="item-layout__add" onClick={addBlock}>
-        Add block
-      </Button>
+      <AddBlockButton place="item" className="item-layout__add" onAdd={addBlock} />
     </div>
   );
 }

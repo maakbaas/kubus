@@ -5,7 +5,7 @@ import { Add, Filter, Save, Search as SearchIcon, SettingsAdjust, Star, StarFill
 import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { newName, now, newId, type Collection } from "../domain/model";
-import { defaultViewState, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
+import { defaultViewState, newBlock, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
 import { NotFound } from "../ui/NotFound";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { BookmarkButton } from "../ui/BookmarkButton";
@@ -14,6 +14,7 @@ import { PageHeader } from "../ui/PageHeader";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { blockType, normalizeBlock, normalizeView } from "../views";
 import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
+import type { NewBlockSpec } from "../views/AddBlockButton";
 import { BlockView } from "../views/BlockView";
 import { QueryEditor } from "../views/QueryEditor";
 import { useCollectionData } from "../views/useCollectionData";
@@ -206,10 +207,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
     arrange(change, stored).catch((e) => setError(errorMessage(e)));
   /** A block's type, options or name (where the block is: shown, saved or both). */
   const setBlockNow = (id: string, patch: Partial<ViewBlock>) => arrangeNow((blocks) => blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)));
-  /** "Add block": a copy of the last block as saved (its type, settings and fields), with the view's filter. */
-  const addBlock = () => {
-    const last = view.blocks[view.blocks.length - 1];
-    const block = normalizeBlock(collection, { ...(active?.blocks.find((b) => b.id === last.id) ?? last), id: newId(), title: "", filters: null });
+  /** "Add block": a new one of a type / component, with the view's filter. */
+  const addBlock = (spec: NewBlockSpec) => {
+    const block = normalizeBlock(collection, newBlock(spec.kind, spec.options ?? blockType(spec.kind).defaultOptions(collection)));
     arrangeNow((blocks) => [...blocks, block]);
   };
   /** Reordered blocks; the saved view's blocks follow the same order. */
@@ -351,6 +351,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
           <ToolbarPopover
             label={view.filters.length > 0 ? `Filter (${view.filters.length})` : "Filter"}
             icon={Filter}
+            width="wide"
             active={view.filters.length > 0}
             onOpenChange={panels.onOpenChange}
           >
@@ -362,7 +363,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
               onChange={(q) => setView((v) => ({ ...v, filters: q.filters }))}
             />
           </ToolbarPopover>
-          <ToolbarPopover label="View settings" icon={SettingsAdjust} openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
+          <ToolbarPopover label="View settings" icon={SettingsAdjust} width="narrow" openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
             <div className="view-settings">
               {active && (
                 <TextInput

@@ -52,7 +52,8 @@ export function IconPicker({ id, value, onChange, size = 24 }: Props) {
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        <CollectionIcon name={value} size={size} />
+        {/* No icon chosen: an empty button, not the default Cube. */}
+        {value ? <CollectionIcon name={value} size={size} /> : <span style={{ inlineSize: size, blockSize: size }} aria-hidden="true" />}
       </IconButton>
       <PopoverContent>
         {/* Only while open: PopoverContent keeps its children mounted when closed, which would
