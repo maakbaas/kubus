@@ -2,7 +2,7 @@
 //
 // Terminology (UI and code alike): a Collection defines fields (e.g. Books), an Item is one of its
 // entries (a particular book), a Space is a separate environment (e.g. Work, Private) whose items
-// are kept apart while collections, views and components are shared (domain/spaces.ts).
+// (and collection views) are kept apart while collections and components are shared (domain/spaces.ts).
 
 import type { ItemView } from "./fieldLayout";
 import type { FilterRule } from "./query";

@@ -60,7 +60,8 @@ export const SYNC_TABLES: SyncTable[] = [
     key: ["id"],
     version: "updated_at",
     columns: {
-      id: "text", collection_id: "text", name: "text", kind: "text", config: "json", position: "int", is_default: "int", ...stamps,
+      id: "text", collection_id: "text", space_id: "text", name: "text", kind: "text", config: "json", position: "int",
+      is_default: "int", ...stamps,
     },
   },
   {

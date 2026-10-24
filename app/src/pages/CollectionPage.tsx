@@ -57,7 +57,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const [error, setError] = useState<string>();
 
   // The view currently shown. Changes are ephemeral until saved as / into a saved view. Every
-  // collection starts with an ordinary saved "All" view; `base` is only shown once all are deleted.
+  // collection starts with an ordinary saved "All" view (in the space it was made in); `base` is
+  // shown while the space has none.
   const base = useMemo(() => normalized(collection, defaultViewState(viewType("table").defaultOptions(collection))), [collection]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>(base);
@@ -80,7 +81,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const shown = useRef<{ activeId: string | null; view: ViewState; reference: ViewState } | undefined>(undefined);
   const loadViews = useCallback(
     () =>
-      repo.listViews(collection.id).then((list) => {
+      repo.listViews(collection.id, space.id).then((list) => {
         setSavedViews(list);
         // A shown view without unsaved changes follows its stored settings when they change
         // elsewhere, instead of turning into "changed".
@@ -88,7 +89,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
         const next = cur?.activeId ? list.find((v) => v.id === cur.activeId) : undefined;
         if (cur && next && sameView(cur.view, cur.reference)) setView(normalized(collection, next));
       }, (e) => setError(errorMessage(e))),
-    [repo, collection],
+    [repo, collection, space.id],
   );
   useEffect(() => {
     loadViews();
@@ -151,8 +152,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
   async function saveAsNew(name: string, state: ViewState = view) {
     const id = newId();
     const ts = now();
-    await repo.saveView({ ...state, id, collectionId: collection.id, name, position: views.length, isDefault: false, createdAt: ts, updatedAt: ts });
-    const list = await repo.listViews(collection.id);
+    await repo.saveView({ ...state, id, collectionId: collection.id, spaceId: space.id, name, position: views.length, isDefault: false, createdAt: ts, updatedAt: ts });
+    const list = await repo.listViews(collection.id, space.id);
     setSavedViews(list);
     selectView(id, list);
   }
@@ -185,7 +186,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
   /** Star the active view as the default, or unstar it (then the first view opens by default). */
   async function toggleDefault() {
     if (!active) return;
-    await repo.setDefaultView(collection.id, active.isDefault ? null : active.id);
+    await repo.setDefaultView(collection.id, space.id, active.isDefault ? null : active.id);
     await loadViews();
   }
 
@@ -198,7 +199,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
   async function deleteActive() {
     if (!active || !(await confirm({ title: `Delete view “${active.name}”?`, body: "Items are not affected." }))) return;
     await repo.deleteView(active.id);
-    const rest = await repo.listViews(collection.id);
+    const rest = await repo.listViews(collection.id, space.id);
     setSavedViews(rest);
     selectView(defaultViewOf(rest), rest);
   }

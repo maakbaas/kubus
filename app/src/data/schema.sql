@@ -17,8 +17,8 @@ CREATE TABLE meta (
   value TEXT NOT NULL
 );
 
--- Separate environments (e.g. Work and Private) sharing collections, components and views: an
--- item belongs to one space and shows only there (src/domain/spaces.ts). The default space
+-- Separate environments (e.g. Work and Private) sharing collections and components: items,
+-- collection views and bookmarks belong to one space and show only there (src/domain/spaces.ts). The default space
 -- ('default') has a row only once it is renamed, like a collection's default item view.
 CREATE TABLE spaces (
   id         TEXT PRIMARY KEY,
@@ -43,15 +43,16 @@ CREATE TABLE collections (
   deleted_at  TEXT
 );
 
--- Saved views of a collection's items (see src/domain/views.ts and src/views/registry.ts).
+-- Saved views of a collection's items (see src/domain/views.ts and src/views/registry.ts), per space.
 CREATE TABLE views (
   id         TEXT PRIMARY KEY,
   collection_id TEXT NOT NULL REFERENCES collections(id),
+  space_id   TEXT NOT NULL,            -- the space it is listed in (spaces.id; 'default' needs no row)
   name       TEXT NOT NULL,
   kind       TEXT NOT NULL,            -- view type, e.g. 'table', 'cards'
   config     TEXT NOT NULL,            -- JSON { query, options }; options validated by the view type
   position   INTEGER NOT NULL DEFAULT 0,
-  is_default INTEGER NOT NULL DEFAULT 0,  -- the starred view, opened instead of "All" (at most one per collection)
+  is_default INTEGER NOT NULL DEFAULT 0,  -- the starred view, opened instead of "All" (at most one per collection and space)
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   deleted_at TEXT
@@ -145,7 +146,7 @@ CREATE TABLE bookmarks (
   id         TEXT PRIMARY KEY,
   kind       TEXT NOT NULL CHECK (kind IN ('view', 'item')),
   collection_id TEXT NOT NULL REFERENCES collections(id),
-  space_id   TEXT NOT NULL,            -- the space it is listed in (a view is in every space; its bookmark isn't)
+  space_id   TEXT NOT NULL,            -- the space it is listed in
   target_id  TEXT NOT NULL,            -- views.id or items.id
   label      TEXT NOT NULL,
   position   INTEGER NOT NULL DEFAULT 0,

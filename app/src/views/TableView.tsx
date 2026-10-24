@@ -331,6 +331,26 @@ export function FillTable({ children, stack: stackable = true }: { children: Rea
       observer.disconnect();
     };
   }, [stackable]);
+  // A table that scrolls sideways shows where more of it is: a fade at that edge (styles.css).
+  // Touch screens hide scrollbars until scrolling, and they can't be made to stay.
+  useEffect(() => {
+    const el = box.current;
+    const scroller = el?.querySelector<HTMLElement>(".cds--data-table-content");
+    if (stackable || !el || !scroller) return;
+    const update = () => {
+      el.toggleAttribute("data-more-start", scroller.scrollLeft > 1);
+      el.toggleAttribute("data-more-end", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
+    };
+    update();
+    scroller.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(scroller);
+    if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
+    return () => {
+      scroller.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, [stackable]);
   return (
     // A size container: in a narrow pane the table restacks as cards (see .table-wrap in styles.css),
     // unless the view keeps it a table, which then scrolls sideways.

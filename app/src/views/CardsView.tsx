@@ -35,15 +35,9 @@ export interface CardOptions {
   hiddenLabels: string[];
   /** Leave out fields without a value (per card). */
   hideEmpty: boolean;
-  /** Where the cover sits: above the title and fields, or beside them on the left. */
-  coverPosition: CoverPosition;
+  /** In a narrow pane (one card per row): a list, each card's cover beside its title and fields. */
+  listNarrow: boolean;
 }
-
-type CoverPosition = "top" | "left";
-const COVER_POSITIONS: { value: CoverPosition; text: string }[] = [
-  { value: "top", text: "Top" },
-  { value: "left", text: "Left" },
-];
 
 type CoverRatio = "auto" | "1:1" | "3:2" | "2:3" | "16:9";
 const COVER_RATIOS: { value: CoverRatio; text: string }[] = [
@@ -178,10 +172,12 @@ interface ItemCardProps {
   search: string;
   actions: ItemActions;
   onRatio(key: string, ratio: number): void;
+  /** Shown as a list row: the cover beside the text (listNarrow, in a one-column pane). */
+  listed: boolean;
 }
 
 /** One item's card. Memoized: it isn't rendered again unless its item or the view's settings changed. */
-const ItemCard = memo(function ItemCard({ collection, item, options, shown, kind, refs, search, actions, onRatio }: ItemCardProps) {
+const ItemCard = memo(function ItemCard({ collection, item, options, shown, kind, refs, search, actions, onRatio, listed }: ItemCardProps) {
   const title = labelField(collection, item);
   const cover = options.coverFieldId ? item.values[options.coverFieldId] : null;
   // A hidden title can still be chosen as an ordinary field.
@@ -194,7 +190,7 @@ const ItemCard = memo(function ItemCard({ collection, item, options, shown, kind
       href={`#/collections/${collection.id}/items/${item.id}`}
       {...itemLinkProps(item, actions)}
       className={
-        !hasText ? "item-card item-card--image-only" : hasCover && options.coverPosition === "left" ? "item-card item-card--cover-left" : "item-card"
+        !hasText ? "item-card item-card--image-only" : hasCover && listed ? "item-card item-card--cover-left" : "item-card"
       }
       aria-label={hasText ? undefined : itemLabel(collection, item)}
     >
@@ -295,6 +291,7 @@ export function CardsView({ collection, result, options, refs, search, actions }
                   search={search}
                   actions={actions}
                   onRatio={onRatio}
+                  listed={options.listNarrow && columns === 1}
                 />
               ))}
             </div>
@@ -369,6 +366,12 @@ function CardOptionsEditor({ collection, options, onChange }: { collection: Coll
           checked={options.hideEmpty}
           onChange={(_, { checked }) => onChange({ ...options, hideEmpty: checked })}
         />
+        <Checkbox
+          id={`${uid}-cards-list-narrow`}
+          labelText="Show as a list when narrow, images beside"
+          checked={options.listNarrow}
+          onChange={(_, { checked }) => onChange({ ...options, listNarrow: checked })}
+        />
       </div>
       <FieldOrderEditor
         id={`${uid}-cards-fields`}
@@ -413,17 +416,6 @@ function CardOptionsEditor({ collection, options, onChange }: { collection: Coll
           <SelectItem key={r.value} value={r.value} text={r.text} />
         ))}
       </Select>
-      <Select size="sm"
-        id={`${uid}-cards-cover-position`}
-        labelText="Cover position"
-        disabled={!options.coverFieldId}
-        value={options.coverPosition}
-        onChange={(e) => onChange({ ...options, coverPosition: e.target.value as CoverPosition })}
-      >
-        {COVER_POSITIONS.map((p) => (
-          <SelectItem key={p.value} value={p.value} text={p.text} />
-        ))}
-      </Select>
     </div>
   );
 }
@@ -432,7 +424,7 @@ export const cardsView = defineViewType<CardOptions>({
   kind: "cards",
   label: "Cards",
   icon: GridIcon,
-  defaultOptions: (collection) => ({ fields: null, coverFieldId: imageFields(collection)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, hiddenLabels: [], hideEmpty: false, coverPosition: "top" }),
+  defaultOptions: (collection) => ({ fields: null, coverFieldId: imageFields(collection)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, hiddenLabels: [], hideEmpty: false, listNarrow: false }),
   fieldsOf: (o) => o.fields,
   withFields: (o, fields) => ({ ...o, fields }),
   normalizeOptions(raw, collection) {
@@ -453,7 +445,7 @@ export const cardsView = defineViewType<CardOptions>({
       showTitle: o.showTitle !== false,
       hiddenLabels: Array.isArray(o.hiddenLabels) ? o.hiddenLabels.filter((id) => ids.has(id)) : [],
       hideEmpty: o.hideEmpty === true,
-      coverPosition: o.coverPosition === "left" ? "left" : "top",
+      listNarrow: o.listNarrow === true,
     };
   },
   View: CardsView,

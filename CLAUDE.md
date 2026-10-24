@@ -91,14 +91,16 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   for the time being.
 - **Spaces** (`app/src/domain/spaces.ts`, table `spaces`, `#/spaces`): separate environments (e.g.
   Work / Private) in one database. Every item belongs to one space (`items.space_id`) and shows only
-  there; collections, their fields and views, and components are shared. A collection can be
+  there; collections (fields, item views) and components are shared. A collection can be
   limited to some spaces (`collections.space_ids`, JSON; null = all; picked in the collection editor).
-  Bookmarks (`bookmarks.space_id`) and the open tabs (`kubus.workspace.<spaceId>`) are per space;
+  Collection views (`views.space_id`; starred per space; a new collection's "All" view goes into
+  the space it was made in, other spaces show the unsaved table until one is saved), bookmarks
+  (`bookmarks.space_id`) and the open tabs (`kubus.workspace.<spaceId>`) are per space;
   the shown space is per device (`kubus.space`), switched from a dropdown atop the side nav (only
   shown with 2+ spaces). The default space (id `default`, "Personal") has no row until renamed,
-  like the virtual default item view, and can't be deleted; deleting another deletes its items and
+  like the virtual default item view, and can't be deleted; deleting another deletes its items, views and
   bookmarks. Repository methods that list items take the space explicitly (`listItems`,
-  `createItem`, `search`, `countItemsByCollection`, bookmarks); `getItem` and `listLabels` read every
+  `createItem`, `search`, `countItemsByCollection`, views, bookmarks); `getItem` and `listLabels` read every
   space (a reference may point into another space: labelled, but pickers offer only the shown
   space's items, `RefOption.elsewhere`). An item moves on its page's (i) panel (`moveItem`).
 - **Bookmarks** (`app/src/domain/bookmarks.ts`, table `bookmarks`): a bookmark icon on a view (tab strip,
@@ -259,14 +261,14 @@ Extension points are registries, not special cases in pages:
   a fixed ratio (image shown whole, the rest filled with its average colour) or the images'
   average ratio (filled, cropped); with no title and no fields a card is just its cover). A view type only
   renders a `QueryResult`; it never filters or sorts itself. Shared cell rendering: `views/cells.tsx`.
-- **Saved views** (`app/src/domain/views.ts`, table `views`): name + kind + JSON config `{ query, options }`.
-  Every new collection gets an ordinary "All" view (table, all items, sorted by title), created
+- **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + kind + JSON config `{ query, options }`.
+  Every new collection gets an ordinary "All" view (table, all items, sorted by title) in the space it is made in, created
   with the collection in `saveCollection`; it can be renamed (view settings), edited, starred or deleted like
   any other; "+" adds one ("New", then "New 2", …) as a copy of what is shown, unsaved changes
   included (so it is also "save as new view"), and opens View settings with its name selected.
   "+" sits after the last tab, or in the toolbar while the tab bar is hidden. The
   toolbar has three icon buttons with popovers: Filter, Sort and group, View settings (name, view
-  collection, its options, delete). The collection page opens the starred view (`views.is_default`, at most one per collection,
+  collection, its options, delete). The collection page opens the starred view (`views.is_default`, at most one per collection and space,
   set via `setDefaultView`), else the first; with no views left it shows an unsaved table that can
   be saved. Changes are ephemeral: while the shown view differs from
   its saved version, icon buttons beside the star offer Discard changes and Save changes to view

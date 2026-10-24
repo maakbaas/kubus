@@ -82,7 +82,7 @@ function validate(draft: CollectionDraft) {
 function CollectionEditor({ existing }: { existing?: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { repo, collections, reloadCollections, components, spaces } = useStore();
+  const { repo, collections, reloadCollections, components, spaces, space } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
   const [draft, setDraft] = useState(() => initialDraft(existing));
@@ -151,7 +151,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
           name: f.name.trim(),
           targetCollectionId: isReferenceKind(f.kind) ? f.targetCollectionId : null,
         })),
-      });
+      }, space.id);
       await reloadCollections();
       navigate(`/collections/${draft.id}/items`);
     } catch (e) {

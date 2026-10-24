@@ -39,7 +39,7 @@ const descriptionField = (t: Collection): FieldDef => ({
 const draftOf = collectionDraft;
 
 export function CollectionsPage() {
-  const { repo, collections, spaces } = useStore();
+  const { repo, collections, spaces, space } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
   const spaceNames = (t: Collection) =>
@@ -96,7 +96,7 @@ export function CollectionsPage() {
           ),
           choiceFilter: self(f.targetCollectionId) ? f.choiceFilter.map((r) => ({ ...r, id: newId(), fieldId: mapId(r.fieldId) })) : f.choiceFilter,
         })),
-      });
+      }, space.id);
       // Stored item views only (without, the copy shows the standard "Default" too).
       const views = t.itemViews.filter((v) => v.id !== "default");
       if (views.length) {
@@ -163,7 +163,7 @@ export function CollectionsPage() {
                             idPrefix={`description-${t.id}`}
                             onSave={async (v) => {
                               const description = typeof v === "string" ? v.replace(/[\r\n]+/g, " ").trim() : "";
-                              if (description !== t.description) await repo.saveCollection({ ...draftOf(t), description });
+                              if (description !== t.description) await repo.saveCollection({ ...draftOf(t), description }, space.id);
                               setEditing((cur) => (cur?.id === t.id ? null : cur));
                             }}
                             onCancel={() => setEditing(null)}

@@ -18,9 +18,11 @@ export interface ViewState {
 export interface CollectionView extends ViewState {
   id: string;
   collectionId: string;
+  /** Views belong to a space, like items (a view for work topics doesn't clutter another space). */
+  spaceId: string;
   name: string;
   position: number;
-  /** Starred: the collection's default view, shown when its items are opened. */
+  /** Starred: the collection's default view in its space, shown when its items are opened. */
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;

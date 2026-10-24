@@ -1,8 +1,8 @@
 // Spaces: separate environments (e.g. Work and Private) in one database. Every item belongs to
-// one space and shows only there; collections, their fields and views, and components are shared,
-// so one Book collection serves both. A collection can be limited to some spaces (spaceIds); null
-// shows it in all. Bookmarks and the open tabs are per space too. Which space is shown is
-// remembered per device.
+// one space and shows only there; collections (their fields and item views) and components are
+// shared, so one Book collection serves both. A collection can be limited to some spaces
+// (spaceIds); null shows it in all. Collection views, bookmarks and the open tabs are per space
+// too: a view of work topics doesn't clutter Private. Which space is shown is remembered per device.
 
 import type { Collection } from "./model";
 

@@ -120,7 +120,7 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
     setTarget(null);
     if (!collection) return setTargets([]);
     let cancelled = false;
-    Promise.all([repo.listViews(collection.id), repo.listLabels(collection)]).then(([views, labels]) => {
+    Promise.all([repo.listViews(collection.id, space.id), repo.listLabels(collection)]).then(([views, labels]) => {
       if (cancelled) return;
       const taken = new Set(bookmarks.map((b) => b.targetId));
       setTargets(
@@ -137,7 +137,7 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repo, collection]);
+  }, [repo, collection, space.id]);
 
   return (
     <Modal

@@ -821,16 +821,10 @@ body {
   flex: 1;
   min-inline-size: 0;
 }
-/* Spaces page: icon picker, the name (edited in place) and the "Shown" tag on one line. */
-.space-name {
-  display: flex;
-  align-items: center;
-  gap: var(--cds-spacing-03);
-}
-.space-name__text,
-.space-name__editor {
-  flex: 1;
-  min-inline-size: 0;
+/* Spaces page: the icon picker in its own narrow cell, a 2rem button filling the 2rem row. */
+.items-table td.space-icon {
+  padding-block: 0;
+  padding-inline-end: 0;
 }
 /* The space switcher under the search, with the same side insets. */
 .side-nav-space {
@@ -1648,28 +1642,22 @@ img[data-lightbox] {
 .item-card--image-only .item-card__cover {
   margin-block-end: calc(-1 * var(--cds-spacing-05));
 }
-/* Cover on the left: the cover takes two fifths of the card, from its top to its bottom edge
-   (the image centred in it at the view's shape), the title and fields beside it. */
+/* A list row ("Show as a list when narrow", one card per row): the cover takes two fifths of the
+   card, from its top to its bottom edge (the image centred in it at the view's shape), the title
+   and fields beside it. */
 .item-card--cover-left {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   align-items: start;
 }
+/* The cover box has the view's shape itself (a square is square) and sits flush against the
+   card's top, left and bottom edges (the card is at least as tall as the cover); the image fills
+   it like a top cover's: whole, against one pair of edges, in a fixed shape; cropped in "automatic". */
 .item-card--cover-left .item-card__cover {
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  aspect-ratio: var(--cover-ratio, 4 / 3);
   margin: calc(-1 * var(--cds-spacing-05)) var(--cds-spacing-05) calc(-1 * var(--cds-spacing-05)) calc(-1 * var(--cds-spacing-05));
 }
-/* "Automatic" shape: the image fills the whole column, cropped like the top covers. */
-.item-cards--auto-ratio .item-card--cover-left .item-card__cover:has(> img) {
-  position: relative;
-  min-block-size: 6rem;
-}
-.item-cards--auto-ratio .item-card--cover-left .item-card__cover > img {
-  position: absolute;
-  inset: 0;
+.item-card--cover-left .item-card__cover > img {
   block-size: 100%;
   aspect-ratio: auto;
 }
@@ -2373,6 +2361,34 @@ img[data-lightbox] {
 }
 .table-wrap--scroll .items-table td {
   overflow-wrap: break-word;
+}
+/* Where more of a sideways-scrolling table is, its edge fades (set by FillTable): touch screens
+   show no scrollbar until scrolling. Drawn on the non-scrolling container, over the rows. */
+.table-wrap--scroll .items-table {
+  position: relative;
+}
+.table-wrap--scroll .items-table::before,
+.table-wrap--scroll .items-table::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inline-size: var(--cds-spacing-07);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 110ms;
+  z-index: 1;
+}
+.table-wrap--scroll .items-table::before {
+  inset-inline-start: 0;
+  background: linear-gradient(to right, var(--cds-background), transparent);
+}
+.table-wrap--scroll .items-table::after {
+  inset-inline-end: 0;
+  background: linear-gradient(to left, var(--cds-background), transparent);
+}
+.table-wrap--scroll[data-more-start] .items-table::before,
+.table-wrap--scroll[data-more-end] .items-table::after {
+  opacity: 1;
 }
 /* Set by FillTable (views/TableView.tsx): the pane is narrow, or the columns don't fit it. */
 .table-wrap[data-stacked] .cds--data-table-content {

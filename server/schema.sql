@@ -107,6 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_fields_seq ON fields(seq);
 CREATE TABLE IF NOT EXISTS views (
   id             text NOT NULL,
   collection_id  text,
+  space_id       text,
   name           text,
   kind           text,
   config         jsonb,
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS views (
   PRIMARY KEY (id)
 );
 ALTER TABLE views ADD COLUMN IF NOT EXISTS collection_id text;
+ALTER TABLE views ADD COLUMN IF NOT EXISTS space_id text;
 ALTER TABLE views ADD COLUMN IF NOT EXISTS name text;
 ALTER TABLE views ADD COLUMN IF NOT EXISTS kind text;
 ALTER TABLE views ADD COLUMN IF NOT EXISTS config jsonb;

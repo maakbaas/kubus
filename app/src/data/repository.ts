@@ -65,12 +65,15 @@ export interface Repository {
   listSpaces(): Promise<Space[]>;
   /** Creates (at the end) or renames / re-icons a space. */
   saveSpace(space: Pick<Space, "id" | "name" | "icon">): Promise<void>;
-  /** Deletes a space with its items and bookmarks. The default space can't be deleted. */
+  /** Deletes a space with its items, views and bookmarks. The default space can't be deleted. */
   deleteSpace(spaceId: string): Promise<void>;
 
   listCollections(): Promise<Collection[]>;
-  /** Creates or updates a collection, including adding/renaming/removing fields. */
-  saveCollection(draft: CollectionDraft): Promise<void>;
+  /**
+   * Creates or updates a collection, including adding/renaming/removing fields. A new one gets
+   * an "All" view in `spaceId` (views belong to a space).
+   */
+  saveCollection(draft: CollectionDraft, spaceId: string): Promise<void>;
   deleteCollection(collectionId: string): Promise<void>;
   /** Item counts per collection, of one space, or of all when null. */
   countItemsByCollection(spaceId: string | null): Promise<Record<string, number>>;
@@ -96,13 +99,13 @@ export interface Repository {
    */
   search(query: string, collections: Collection[], spaceId: string, limit?: number): Promise<Item[]>;
 
-  /** Saved views of a collection's items, in their display order. */
-  listViews(collectionId: string): Promise<CollectionView[]>;
+  /** Saved views of a collection's items in one space, in their display order. */
+  listViews(collectionId: string, spaceId: string): Promise<CollectionView[]>;
   /** Creates or updates a view (by id). */
   saveView(view: CollectionView): Promise<void>;
   deleteView(viewId: string): Promise<void>;
-  /** Stars a view as the collection's default (unstarring any other), or clears it with null. */
-  setDefaultView(collectionId: string, viewId: string | null): Promise<void>;
+  /** Stars a view as the collection's default in a space (unstarring any other there), or clears it with null. */
+  setDefaultView(collectionId: string, spaceId: string, viewId: string | null): Promise<void>;
 
   /** Replaces a collection's item page layouts. */
   saveItemViews(collectionId: string, views: ItemView[]): Promise<void>;

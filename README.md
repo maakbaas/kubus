@@ -17,8 +17,8 @@ want, and fill them with items that link to each other.
 - **Markdown (GFM) editor**: type your formatting, paste or drop images.
 - **Components.** `{{ … }}` sections of JavaScript compute values, render Markdown or HTML, and are
   reusable across collections.
-- **Spaces.** Keep work and private apart: each space has its own items, bookmarks and tabs, while
-  collections, views and components are shared.
+- **Spaces.** Keep work and private apart: each space has its own items, views, bookmarks and tabs,
+  while collections and components are shared.
 - **Global search** across all items of a space.
 - **Workspace.** Tabs and tiled panes, side by side, like an editor.
 - **Local first.** Everything runs offline on a SQLite database in the app itself.

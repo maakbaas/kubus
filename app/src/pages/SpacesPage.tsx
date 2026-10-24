@@ -31,8 +31,8 @@ const nameField = (s: Space): FieldDef => ({
 
 /**
  * The spaces as a table: icon (picker), name (edits in place), item count, and per row a switch
- * (show that space) and a delete icon. Collections, views and components are shared by every
- * space; items, bookmarks and open tabs belong to one. The first space can't be deleted.
+ * (show that space) and a delete icon. Collections and components are shared by every space;
+ * items, collection views, bookmarks and open tabs belong to one. The first space can't be deleted.
  */
 export function SpacesPage() {
   const { repo, spaces, space: shown, setSpace } = useStore();
@@ -68,7 +68,7 @@ export function SpacesPage() {
     const n = counts[s.id] ?? 0;
     const ok = await confirm({
       title: `Delete space “${s.name}”?`,
-      body: `This removes the space, its bookmarks and its ${n} ${n === 1 ? "item" : "items"}. Collections, views and components stay (they belong to every space).`,
+      body: `This removes the space, its views, its bookmarks and its ${n} ${n === 1 ? "item" : "items"}. Collections and components stay (they belong to every space).`,
     });
     if (!ok) return;
     try {
@@ -83,7 +83,7 @@ export function SpacesPage() {
     <>
       <PageHeader
         title="Spaces"
-        subtitle="Separate environments, e.g. Work and Private: each has its own items, bookmarks and tabs, while collections, views and components are shared."
+        subtitle="Separate environments, e.g. Work and Private: each has its own items, views, bookmarks and tabs, while collections and components are shared."
         actions={<NewButton label="New space" onClick={add} />}
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
@@ -91,7 +91,9 @@ export function SpacesPage() {
         <Table size="sm">
           <TableHead>
             <TableRow>
+              <TableHeader aria-label="Icon" />
               <TableHeader>Name</TableHeader>
+              <TableHeader aria-label="Shown" />
               <TableHeader>Items</TableHeader>
               <TableHeader aria-label="Actions" />
             </TableRow>
@@ -99,11 +101,14 @@ export function SpacesPage() {
           <TableBody>
             {spaces.map((s) => (
               <TableRow key={s.id}>
+                <TableCell className="space-icon">
+                  <IconPicker id={`space-icon-${s.id}`} value={s.icon ?? SPACE_ICON} onChange={(icon) => save(s, { icon })} />
+                </TableCell>
+                {/* Edits in place like the Collections page's descriptions: the input covers the cell, text unmoved. */}
                 <TableCell data-label="Name" className={`cell--string${editing?.id === s.id ? " cell--editing" : ""}`}>
-                  <div className="space-name">
-                    <IconPicker id={`space-icon-${s.id}`} value={s.icon ?? SPACE_ICON} onChange={(icon) => save(s, { icon })} />
-                    {editing?.id === s.id ? (
-                      <div className="space-name__editor">
+                  {editing?.id === s.id ? (
+                    (() => {
+                      const editor = (
                         <FieldEditor
                           field={nameField(s)}
                           value={s.name}
@@ -112,36 +117,47 @@ export function SpacesPage() {
                           start={editing.start}
                           idPrefix={`space-name-${s.id}`}
                           onSave={async (v) => {
-                            const name = typeof v === "string" ? v.trim() : "";
+                            const name = typeof v === "string" ? v.replace(/[\r\n]+/g, " ").trim() : "";
                             if (name && name !== s.name) await save(s, { name });
                             setEditing((cur) => (cur?.id === s.id ? null : cur));
                           }}
                           onCancel={() => setEditing(null)}
                         />
-                      </div>
-                    ) : (
-                      <div
-                        className="cell-editable space-name__text"
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`Rename ${s.name}`}
-                        onClick={(e) => setEditing({ id: s.id, start: cellEditStart(e.currentTarget, e) })}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setEditing({ id: s.id });
-                          }
-                        }}
-                      >
-                        {s.name}
-                      </div>
-                    )}
-                    {s.id === shown.id && (
-                      <Tag size="sm" type="blue">
-                        Shown
-                      </Tag>
-                    )}
-                  </div>
+                      );
+                      if (editing.start?.wrapped) return <div className="cell-inline-editor">{editor}</div>;
+                      return (
+                        <div className="cell-edit-box">
+                          <div className="cell-editable cell-sizer" aria-hidden>
+                            {s.name}
+                          </div>
+                          <div className="cell-overlay">{editor}</div>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <div
+                      className="cell-editable"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Rename ${s.name}`}
+                      onClick={(e) => setEditing({ id: s.id, start: cellEditStart(e.currentTarget, e) })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setEditing({ id: s.id });
+                        }
+                      }}
+                    >
+                      {s.name}
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {s.id === shown.id && (
+                    <Tag size="sm" type="blue">
+                      Shown
+                    </Tag>
+                  )}
                 </TableCell>
                 <TableCell data-label="Items">{counts[s.id] ?? ""}</TableCell>
                 <RowActions>

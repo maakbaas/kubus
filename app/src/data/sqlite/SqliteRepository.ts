@@ -60,6 +60,7 @@ interface ComponentRow {
 interface ViewRow {
   id: string;
   collection_id: string;
+  space_id: string;
   name: string;
   kind: string;
   config: string;
@@ -183,16 +184,21 @@ export class SqliteRepository implements Repository {
     if (spaceId === DEFAULT_SPACE_ID) throw new Error("The first space can't be deleted.");
     const ts = now();
     const collections = await this.db.select<{ collection_id: string }>(
-      "SELECT DISTINCT collection_id FROM items WHERE space_id = ?1 AND deleted_at IS NULL",
+      `SELECT collection_id FROM items WHERE space_id = ?1 AND deleted_at IS NULL
+        UNION SELECT collection_id FROM views WHERE space_id = ?1 AND deleted_at IS NULL`,
       [spaceId],
     );
     await this.db.write([
       ...(await this.releaseFilesWhere("item_id IN (SELECT id FROM items WHERE space_id = ?1 AND deleted_at IS NULL)", [spaceId])),
       { sql: "UPDATE items SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
       { sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
+      { sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
       { sql: "UPDATE spaces SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, spaceId] },
     ]);
-    this.emit({ scope: "spaces" }, { scope: "bookmarks" }, ...collections.map((c) => ({ scope: "items", collectionId: c.collection_id }) as const));
+    this.emit({ scope: "spaces" }, { scope: "bookmarks" }, ...collections.flatMap((c) => [
+      { scope: "items", collectionId: c.collection_id } as const,
+      { scope: "views", collectionId: c.collection_id } as const,
+    ]));
   }
 
   async listCollections(): Promise<Collection[]> {
@@ -216,7 +222,7 @@ export class SqliteRepository implements Repository {
     }));
   }
 
-  async saveCollection(draft: CollectionDraft): Promise<void> {
+  async saveCollection(draft: CollectionDraft, spaceId: string): Promise<void> {
     const ts = now();
     const writes: Statement[] = [];
     const existing = await this.db.select<{ id: string }>("SELECT id FROM collections WHERE id = ?1", [draft.id]);
@@ -225,12 +231,13 @@ export class SqliteRepository implements Repository {
         sql: "INSERT INTO collections (id, name, plural_name, icon, description, space_ids, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?7, ?6, ?6)",
         bind: [draft.id, draft.name, draft.pluralName, draft.icon, draft.description, ts, spaceIdsJson(draft.spaceIds)],
       });
-      // Every collection starts with an ordinary (renamable, deletable) "All" view: a table of all
-      // items sorted by title; its options are filled in by the view type's normalizeOptions.
+      // Every collection starts with an ordinary (renamable, deletable) "All" view in the space it
+      // was made in: a table of all items sorted by title; its options are filled in by the view
+      // type's normalizeOptions. Other spaces show that unsaved table until a view is saved there.
       writes.push({
-        sql: `INSERT INTO views (id, collection_id, name, kind, config, position, is_default, created_at, updated_at)
-              VALUES (?1, ?2, 'All', 'table', ?3, 0, 0, ?4, ?4)`,
-        bind: [newId(), draft.id, JSON.stringify({ query: defaultQuery(), options: null }), ts],
+        sql: `INSERT INTO views (id, collection_id, space_id, name, kind, config, position, is_default, created_at, updated_at)
+              VALUES (?1, ?2, ?5, 'All', 'table', ?3, 0, 0, ?4, ?4)`,
+        bind: [newId(), draft.id, JSON.stringify({ query: defaultQuery(), options: null }), ts, spaceId],
       });
     }
 
@@ -421,16 +428,17 @@ export class SqliteRepository implements Repository {
     if (collectionId) this.emit({ scope: "items", collectionId, itemId }, { scope: "bookmarks" });
   }
 
-  async listViews(collectionId: string): Promise<CollectionView[]> {
+  async listViews(collectionId: string, spaceId: string): Promise<CollectionView[]> {
     const rows = await this.db.select<ViewRow>(
-      "SELECT * FROM views WHERE collection_id = ?1 AND deleted_at IS NULL ORDER BY position, created_at",
-      [collectionId],
+      "SELECT * FROM views WHERE collection_id = ?1 AND space_id = ?2 AND deleted_at IS NULL ORDER BY position, created_at",
+      [collectionId, spaceId],
     );
     return rows.map((r) => {
       const config = JSON.parse(r.config) as Pick<CollectionView, "query" | "options">;
       return {
         id: r.id,
         collectionId: r.collection_id,
+        spaceId: r.space_id,
         name: r.name,
         kind: r.kind,
         query: config.query,
@@ -448,23 +456,23 @@ export class SqliteRepository implements Repository {
     const config = JSON.stringify({ query: view.query, options: view.options });
     await this.db.write([
       {
-        sql: `INSERT INTO views (id, collection_id, name, kind, config, position, created_at, updated_at)
-              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+        sql: `INSERT INTO views (id, collection_id, space_id, name, kind, config, position, created_at, updated_at)
+              VALUES (?1, ?2, ?8, ?3, ?4, ?5, ?6, ?7, ?7)
               ON CONFLICT (id) DO UPDATE SET
                 name = excluded.name, kind = excluded.kind, config = excluded.config,
                 position = excluded.position, updated_at = excluded.updated_at`,
-        bind: [view.id, view.collectionId, view.name, view.kind, config, view.position, ts],
+        bind: [view.id, view.collectionId, view.name, view.kind, config, view.position, ts, view.spaceId],
       },
     ]);
     this.emit({ scope: "views", collectionId: view.collectionId });
   }
 
-  async setDefaultView(collectionId: string, viewId: string | null): Promise<void> {
+  async setDefaultView(collectionId: string, spaceId: string, viewId: string | null): Promise<void> {
     await this.db.write([
       {
         sql: `UPDATE views SET is_default = (id IS ?2), updated_at = ?3
-               WHERE collection_id = ?1 AND deleted_at IS NULL AND is_default IS NOT (id IS ?2)`,
-        bind: [collectionId, viewId, now()],
+               WHERE collection_id = ?1 AND space_id = ?4 AND deleted_at IS NULL AND is_default IS NOT (id IS ?2)`,
+        bind: [collectionId, viewId, now(), spaceId],
       },
     ]);
     this.emit({ scope: "views", collectionId });

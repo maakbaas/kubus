@@ -34,7 +34,7 @@ export function FieldModal({
   /** After saving: the field's id (a new one is then shown in the view it was added from). */
   onSaved(fieldId: string): void;
 }) {
-  const { repo, components, collections } = useStore();
+  const { repo, components, collections, space } = useStore();
   const { confirm, dialog } = useConfirm();
   const [name, setName] = useState(field?.name ?? "");
   const [kind, setKind] = useState<FieldKind>(field?.kind ?? "string");
@@ -90,7 +90,7 @@ export function FieldModal({
       ? draft.fields.map((f) => (f.id === id ? { ...f, ...own } : f))
       : [...draft.fields, own];
     try {
-      await repo.saveCollection(draft);
+      await repo.saveCollection(draft, space.id);
       onSaved(id);
     } catch (e) {
       setError(errorMessage(e));
