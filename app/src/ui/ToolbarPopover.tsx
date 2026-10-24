@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { IconButton, Popover, PopoverContent } from "@carbon/react";
 
 interface Props {
@@ -10,7 +10,26 @@ interface Props {
   fit?: boolean;
   /** Opens the panel whenever this changes to a new truthy value (e.g. after adding a view). */
   openRequest?: number;
+  /** Told when the panel opens and closes (see usePanelsOpen). */
+  onOpenChange?(open: boolean): void;
   children: ReactNode;
+}
+
+/**
+ * Whether any of a page's toolbar panels is open (pass `onOpenChange` to each), and `hold`:
+ * a value kept as it was while one is. A page holds what would move the panels' buttons (a bar
+ * appearing above them, a button leaving the row), so an open panel never jumps; the change
+ * shows once it closes.
+ */
+export function usePanelsOpen() {
+  const [count, setCount] = useState(0);
+  const onOpenChange = useCallback((open: boolean) => setCount((n) => Math.max(0, n + (open ? 1 : -1))), []);
+  const held = useRef(new Map<string, unknown>());
+  const hold = <T,>(key: string, value: T): T => {
+    if (count === 0 || !held.current.has(key)) held.current.set(key, value);
+    return held.current.get(key) as T;
+  };
+  return { open: count > 0, onOpenChange, hold };
 }
 
 /**
@@ -19,8 +38,15 @@ interface Props {
  * closes a popover when its focused control loses focus without a new one, which happens when a
  * change re-renders the panel (a field row moving, a button turning disabled); that isn't closing.
  */
-export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, children }: Props) {
+export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, onOpenChange, children }: Props) {
   const [open, setOpen] = useState(false);
+  const openChange = useRef(onOpenChange);
+  openChange.current = onOpenChange;
+  useEffect(() => {
+    if (!open) return;
+    openChange.current?.(true);
+    return () => openChange.current?.(false);
+  }, [open]);
   // Opened in the same render as the request, so what the panel focuses (a name to rename) is there.
   const [seenRequest, setSeenRequest] = useState<number>();
   if (openRequest !== seenRequest) {

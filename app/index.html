@@ -15,6 +15,9 @@
          styles.css), as Safari does. black-translucent instead gets a fade over the top that the
          page can't turn off (iOS 26.1+). iOS reads this at install: re-add the app after changing it.
          theme-color is for other browsers. -->
+    <!-- Light and dark (the theme follows the OS): iOS then paints what it shows outside the page
+         (behind the keyboard) in the page's scheme instead of white. -->
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#e0e0e0" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#393939" media="(prefers-color-scheme: dark)" />
     <title>Kubus</title>

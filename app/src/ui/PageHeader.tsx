@@ -27,11 +27,11 @@ export function PageHeader({ title, current, subtitle, breadcrumbs = [], actions
       {/* A top-level page (no parents) shows itself as a link with a trailing slash ("Types /");
           deeper pages show their parents as links, ending in the current page as plain text. */}
       {breadcrumbs.length === 0 ? (
-        <Breadcrumb size="sm">
+        <Breadcrumb>
           <BreadcrumbItem href={`#${pathname}`}>{currentLabel}</BreadcrumbItem>
         </Breadcrumb>
       ) : (
-        <Breadcrumb size="sm" noTrailingSlash>
+        <Breadcrumb noTrailingSlash>
           {breadcrumbs.map((b) => (
             <BreadcrumbItem key={b.href} href={b.href}>
               {b.label}

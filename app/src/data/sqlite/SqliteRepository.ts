@@ -347,7 +347,7 @@ export class SqliteRepository implements Repository {
       if (valuesEqual(next, prev)) continue;
       writes.push(valueStatement(objectId, field, next, ts));
       if (field.kind === "image" && typeof prev === "string") replacedFiles.push(prev);
-      if (field.kind === "markdown" && typeof prev === "string") {
+      if ((field.kind === "markdown" || field.kind === "html") && typeof prev === "string") {
         const kept = new Set(typeof next === "string" ? fileIdsIn(next) : []);
         replacedFiles.push(...fileIdsIn(prev).filter((id) => !kept.has(id)));
       }
@@ -563,7 +563,7 @@ export class SqliteRepository implements Repository {
          JOIN objects o ON o.id = fv.object_id
          JOIN fields f ON f.id = fv.field_id
         WHERE o.deleted_at IS NULL AND f.deleted_at IS NULL
-          AND f.kind IN ('string', 'markdown', 'string_list', 'checklist')
+          AND f.kind IN ('string', 'markdown', 'html', 'string_list', 'checklist')
           AND instr(lower(CASE WHEN f.kind = 'markdown' THEN replace(fv.value_text, '\\', '') ELSE coalesce(fv.value_text, fv.value_json) END), lower(?1)) > 0
         GROUP BY o.id
         ORDER BY max(o.updated_at) DESC
@@ -594,9 +594,9 @@ export class SqliteRepository implements Repository {
   /** Release statements for every file referenced by the field_values matching `where`. */
   private async releaseFilesWhere(where: string, bind: string[]): Promise<Statement[]> {
     const rows = await this.db.select<{ value_file: string | null; markdown: string | null }>(
-      `SELECT fv.value_file, CASE WHEN f.kind = 'markdown' THEN fv.value_text END AS markdown
+      `SELECT fv.value_file, CASE WHEN f.kind IN ('markdown', 'html') THEN fv.value_text END AS markdown
          FROM field_values fv JOIN fields f ON f.id = fv.field_id
-        WHERE (fv.value_file IS NOT NULL OR f.kind = 'markdown') AND ${where}`,
+        WHERE (fv.value_file IS NOT NULL OR f.kind IN ('markdown', 'html')) AND ${where}`,
       bind,
     );
     const ids = new Set<string>();
@@ -656,13 +656,13 @@ export class SqliteRepository implements Repository {
  * are cleared first — only when no live reference remains.
  */
 function releaseFile(fileId: string): Statement[] {
-  // A live use is an image field value, or a markdown value mentioning `files/<id>`.
+  // A live use is an image field value, or a markdown or HTML value mentioning `files/<id>`.
   const liveUse = `EXISTS (
       SELECT 1 FROM field_values fv
         JOIN objects o ON o.id = fv.object_id
         JOIN fields f ON f.id = fv.field_id
        WHERE o.deleted_at IS NULL AND f.deleted_at IS NULL
-         AND (fv.value_file = ?1 OR (f.kind = 'markdown' AND instr(fv.value_text, 'files/' || ?1) > 0)))`;
+         AND (fv.value_file = ?1 OR (f.kind IN ('markdown', 'html') AND instr(fv.value_text, 'files/' || ?1) > 0)))`;
   return [
     {
       sql: `UPDATE field_values SET value_file = NULL WHERE value_file = ?1 AND NOT ${liveUse}`,

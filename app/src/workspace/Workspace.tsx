@@ -136,6 +136,10 @@ export function useOpenRelated(): (path: string, mode?: OpenMode) => void {
   };
 }
 
+/** A back / forward swipe starts this close to the screen's edge (px) and travels at least this far. */
+const SWIPE_EDGE = 24;
+const SWIPE_DISTANCE = 64;
+
 const load = (): Workspace => restoreWorkspace(readPref<unknown>(STORAGE_KEY, null));
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
@@ -148,7 +152,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const update = useCallback((fn: (ws: Workspace) => Workspace) => setWorkspace(fn), []);
 
   // Back / forward for the active tab: mouse back/forward buttons, Alt+←/→, the browser-back key,
-  // and, on touch devices, the OS swipe gestures.
+  // and, on touch screens, swipes in from the edges.
   const histories = useRef(new Map<string, TabHistory>());
   const registerHistory = useCallback((tabId: string, history: TabHistory) => {
     histories.current.set(tabId, history);
@@ -177,53 +181,37 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       e.preventDefault();
       go(back ? "back" : "forward");
     };
-    // The OS back / forward gestures (edge swipes, the browser's back button) only know the
-    // browser's history, while every tab keeps its own in memory. So on touch devices (home-screen app or not) the
-    // browser history is three sentinel entries with the page on the middle one. A pop onto the first is a back:
-    // the active tab goes back as far as it can, and only when it can't does the browser go on
-    // back to what was open before the app. A pop onto the last is a forward, as far as the tab
-    // has one. The middle entry is restored after each.
-    const touch = matchMedia("(pointer: coarse)").matches;
-    // A tab back takes over from whatever lies ahead in the browser (a page navigated to from
-    // the app): once the middle entry is back, a fresh forward entry replaces it, so a forward
-    // swipe leads to the tab's own next page.
-    let renewForward = false;
-    const onPopState = (e: PopStateEvent) => {
-      const at = e.state?.kubus;
-      const tab = activeHistory();
-      if (at === "middle" && renewForward) {
-        renewForward = false;
-        history.pushState({ kubus: "forward" }, "");
-        history.back();
-      } else if (at === "back") {
-        if (tab?.canGoBack()) {
-          tab.back();
-          renewForward = true;
-          history.forward();
-        } else {
-          history.back();
-        }
-      } else if (at === "forward") {
-        if (tab?.canGoForward()) tab.forward();
-        history.back();
-      }
+    // Touch screens: a swipe in from the left edge is back, from the right edge forward (the
+    // tab's own history, like the mouse buttons). Only from the edge: elsewhere horizontal swipes
+    // scroll (tab strips, wide tables).
+    let swipe: { x: number; y: number; direction: "back" | "forward" } | null = null;
+    const onTouchStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      swipe = null;
+      if (e.touches.length !== 1) return;
+      const direction = t.clientX <= SWIPE_EDGE ? "back" : t.clientX >= window.innerWidth - SWIPE_EDGE ? "forward" : null;
+      if (direction) swipe = { x: t.clientX, y: t.clientY, direction };
     };
-    if (touch) {
-      const at = history.state?.kubus;
-      if (at === "back") history.forward();
-      else if (at === "forward") history.back();
-      else if (at !== "middle") {
-        history.replaceState({ ...history.state, kubus: "back" }, "");
-        history.pushState({ kubus: "middle" }, "");
-        history.pushState({ kubus: "forward" }, "");
-        history.back();
-      }
-      window.addEventListener("popstate", onPopState);
-    }
+    const onTouchEnd = (e: TouchEvent) => {
+      const t = e.changedTouches[0];
+      if (!swipe || !t) return;
+      const dx = (t.clientX - swipe.x) * (swipe.direction === "back" ? 1 : -1);
+      const dy = Math.abs(t.clientY - swipe.y);
+      if (dx >= SWIPE_DISTANCE && dy < dx / 2) go(swipe.direction);
+      swipe = null;
+    };
+    const onTouchCancel = () => {
+      swipe = null;
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", onTouchCancel, { passive: true });
     window.addEventListener("mouseup", onMouseUp);
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchCancel);
       window.removeEventListener("mouseup", onMouseUp);
       window.removeEventListener("keydown", onKeyDown);
     };

@@ -72,6 +72,8 @@ export function StoreProvider({
           unsubscribe();
           cache.dispose();
         };
+        // Dev builds only: the repository on `window.kubus`, for debugging from the console.
+        if (import.meta.env.DEV) (window as unknown as { kubus: unknown }).kubus = { repo, cache };
         setState({ status: "ready", repo, cache });
       })
       .catch((e) => !stopped && setState({ status: "error", error: String(e?.message ?? e) }));

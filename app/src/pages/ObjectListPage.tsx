@@ -18,7 +18,7 @@ import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { refLabelOf, useReferenceOptions } from "../ui/useReferenceOptions";
 import { VIEW_TYPES, viewType, type ObjectActions, type ViewTypeDefinition } from "../views";
 import { QueryEditor } from "../views/QueryEditor";
-import { ToolbarPopover } from "../ui/ToolbarPopover";
+import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { useOpenRelated } from "../workspace/Workspace";
 
 export function ObjectListPage() {
@@ -172,7 +172,9 @@ function ObjectsPage({ type }: { type: ObjectType }) {
     </IconButton>
   );
   /** With one view and nothing unsaved there is nothing to choose or save: no tab bar ("+" then sits in the toolbar). */
-  const showBar = savedViews !== null && (views.length > 1 || changed);
+  // Held while a toolbar panel is open: the bar appearing would move the panel's button.
+  const panels = usePanelsOpen();
+  const showBar = panels.hold("bar", savedViews !== null && (views.length > 1 || changed));
 
   async function updateActive() {
     if (!active) return;
@@ -372,13 +374,14 @@ function ObjectsPage({ type }: { type: ObjectType }) {
           label={view.query.filters.length > 0 ? `Filter (${view.query.filters.length})` : "Filter"}
           icon={Filter}
           active={view.query.filters.length > 0}
+          onOpenChange={panels.onOpenChange}
         >
           <QueryEditor type={type} query={view.query} refs={refs} part="filter" onChange={setQuery} />
         </ToolbarPopover>
-        <ToolbarPopover label="Sort and group" icon={ArrowsVertical} active={view.query.groupBy !== null}>
+        <ToolbarPopover label="Sort and group" icon={ArrowsVertical} active={view.query.groupBy !== null} onOpenChange={panels.onOpenChange}>
           <QueryEditor type={type} query={view.query} refs={refs} part="sortGroup" onChange={setQuery} />
         </ToolbarPopover>
-        <ToolbarPopover label="View settings" icon={SettingsAdjust} openRequest={renameRequest}>
+        <ToolbarPopover label="View settings" icon={SettingsAdjust} openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
           <div className="view-settings">
             {active && (
               <TextInput

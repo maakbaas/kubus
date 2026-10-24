@@ -1,4 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from "react";
+import { Link } from "@carbon/react";
+import { htmlPreview, markdownPreviewParts } from "../domain/fieldKinds";
+import { isOpenableUrl, openExternal } from "../platform/openExternal";
 import { ToggleInput } from "../ui/ToggleInput";
 import { openModeOf } from "../workspace/Workspace";
 import { useStore } from "../app/store";
@@ -44,15 +47,54 @@ const INLINE_KINDS: ReadonlySet<FieldKind> = new Set<FieldKind>(["string", "numb
 export const isInlineEditable = (kind: FieldKind) => INLINE_KINDS.has(kind);
 export { isMetaField };
 
+/**
+ * Markdown as a one-line preview (syntax stripped, see markdownPreviewParts) whose links stay
+ * links: they open in the browser, without also opening the object or editing the cell.
+ */
+function MarkdownPreview({ source, search }: { source: string; search: string }) {
+  return (
+    <span>
+      {markdownPreviewParts(source).map((part, i) =>
+        typeof part === "string" || !isOpenableUrl(part.href) ? (
+          <Highlight key={i} text={typeof part === "string" ? part : part.text} query={search} />
+        ) : (
+          <Link
+            key={i}
+            href={part.href}
+            data-own-click
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openExternal(part.href);
+            }}
+          >
+            <Highlight text={part.text} query={search} />
+          </Link>
+        ),
+      )}
+    </span>
+  );
+}
+
 /** One field value inside a view (table cell, card line), shared by every view type. */
 export function FieldCell({ field, object, refs, search, actions }: Props) {
   const { templates } = useStore();
   const value: FieldValue = fieldValue(object, field);
-  // Template images and HTML show as such (a thumbnail, a note); other results as text.
+  // HTML (a field, or a template's result) shows its text; without any (a chart, a map) a note.
+  const html = field.kind === "html" || (field.kind === "template" && outputOf(field, templates) === "html");
+  if (html && typeof value === "string" && value) {
+    const text = htmlPreview(value);
+    return text ? <Highlight text={text} query={search} /> : <TemplateValue value={value} output="html" variant="cell" search={search} />;
+  }
+  // Template images show as a thumbnail; other results as text.
   if (field.kind === "template") {
     const output = outputOf(field, templates);
-    if (output === "image" || output === "html") return <TemplateValue value={value} output={output} variant="cell" search={search} />;
+    if (output === "image") return <TemplateValue value={value} output={output} variant="cell" search={search} />;
+    // Text and number results read exactly like a string or number field (no Markdown preview,
+    // which would strip characters such as `*`).
+    if (output !== "markdown") return <Highlight text={value == null ? "" : String(value)} query={search} />;
   }
+  if ((field.kind === "markdown" || field.kind === "template") && typeof value === "string") return <MarkdownPreview source={value} search={search} />;
   if (field.kind === "checkbox") {
     return (
       // Toggling must not also open the object (row click / card link).

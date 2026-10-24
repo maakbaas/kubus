@@ -35,7 +35,15 @@ export interface CardOptions {
   hiddenLabels: string[];
   /** Leave out fields without a value (per card). */
   hideEmpty: boolean;
+  /** Where the cover sits: above the title and fields, or beside them on the left. */
+  coverPosition: CoverPosition;
 }
+
+type CoverPosition = "top" | "left";
+const COVER_POSITIONS: { value: CoverPosition; text: string }[] = [
+  { value: "top", text: "Top" },
+  { value: "left", text: "Left" },
+];
 
 type CoverRatio = "auto" | "1:1" | "3:2" | "2:3" | "16:9";
 const COVER_RATIOS: { value: CoverRatio; text: string }[] = [
@@ -60,11 +68,12 @@ function coverKind(field: FieldDef | undefined, templates: Template[]): "image" 
   if (!field) return null;
   if (field.kind === "image") return "image";
   if (field.kind === "markdown") return "markdown";
+  if (field.kind === "html") return "html";
   if (field.kind !== "template") return null;
   const output = outputOf(field, templates);
   return output === "image" ? "url" : output === "markdown" || output === "html" ? output : null;
 }
-/** Fields that can be a card's cover: images, Markdown (rendered as the cover), and templates giving either or HTML. */
+/** Fields that can be a card's cover: images, Markdown and HTML (rendered as the cover), and templates giving any of them. */
 const coverFields = (type: ObjectType, templates: Template[]) => type.fields.filter((f) => coverKind(f, templates) !== null);
 
 /** Shape and average colour of each cover image, per file id, for the session. */
@@ -142,7 +151,10 @@ function CardCover({ fileId: ownFileId, src: srcProp, onRatio }: { fileId?: stri
             onError={() => setFailed(true)}
             onLoad={(e) => {
               const img = e.currentTarget;
-              if (measured.has(key) || img.naturalWidth === 0 || img.naturalHeight === 0) return;
+              // Measured already (the same image on another card): just take its tint.
+              const known = measured.get(key);
+              if (known) return setTint(known.tint);
+              if (img.naturalWidth === 0 || img.naturalHeight === 0) return;
               const m = { ratio: img.naturalWidth / img.naturalHeight, tint: averageColor(img) };
               measured.set(key, m);
               onRatio(key, m.ratio);
@@ -176,11 +188,14 @@ const ObjectCard = memo(function ObjectCard({ type, object, options, shown, kind
   const titled = options.showTitle ? shown.filter((f) => f.id !== title?.id) : shown;
   const fields = options.hideEmpty ? titled.filter((f) => !isEmptyValue(fieldValue(object, f))) : titled;
   const hasText = options.showTitle || fields.length > 0;
+  const hasCover = typeof cover === "string" && !!cover;
   return (
     <ClickableTile
       href={`#/types/${type.id}/objects/${object.id}`}
       {...objectLinkProps(object, actions)}
-      className={hasText ? "object-card" : "object-card object-card--image-only"}
+      className={
+        !hasText ? "object-card object-card--image-only" : hasCover && options.coverPosition === "left" ? "object-card object-card--cover-left" : "object-card"
+      }
       aria-label={hasText ? undefined : objectLabel(type, object)}
     >
       {typeof cover === "string" &&
@@ -199,6 +214,8 @@ const ObjectCard = memo(function ObjectCard({ type, object, options, shown, kind
         ) : (
           <CardCover fileId={cover} onRatio={onRatio} />
         ))}
+      {hasText && (
+        <div className="object-card__body">
       {options.showTitle && (
         <div className="object-card__title">
           <Highlight text={objectLabel(type, object)} query={search} />
@@ -215,6 +232,8 @@ const ObjectCard = memo(function ObjectCard({ type, object, options, shown, kind
             </div>
           ))}
         </dl>
+      )}
+        </div>
       )}
     </ClickableTile>
   );
@@ -392,6 +411,17 @@ function CardOptionsEditor({ type, options, onChange }: { type: ObjectType; opti
           <SelectItem key={r.value} value={r.value} text={r.text} />
         ))}
       </Select>
+      <Select size="sm"
+        id={`${uid}-cards-cover-position`}
+        labelText="Cover position"
+        disabled={!options.coverFieldId}
+        value={options.coverPosition}
+        onChange={(e) => onChange({ ...options, coverPosition: e.target.value as CoverPosition })}
+      >
+        {COVER_POSITIONS.map((p) => (
+          <SelectItem key={p.value} value={p.value} text={p.text} />
+        ))}
+      </Select>
     </div>
   );
 }
@@ -400,7 +430,7 @@ export const cardsView = defineViewType<CardOptions>({
   kind: "cards",
   label: "Cards",
   icon: GridIcon,
-  defaultOptions: (type) => ({ fields: null, coverFieldId: imageFields(type)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, hiddenLabels: [], hideEmpty: false }),
+  defaultOptions: (type) => ({ fields: null, coverFieldId: imageFields(type)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, hiddenLabels: [], hideEmpty: false, coverPosition: "top" }),
   fieldsOf: (o) => o.fields,
   withFields: (o, fields) => ({ ...o, fields }),
   normalizeOptions(raw, type) {
@@ -421,6 +451,7 @@ export const cardsView = defineViewType<CardOptions>({
       showTitle: o.showTitle !== false,
       hiddenLabels: Array.isArray(o.hiddenLabels) ? o.hiddenLabels.filter((id) => ids.has(id)) : [],
       hideEmpty: o.hideEmpty === true,
+      coverPosition: o.coverPosition === "left" ? "left" : "top",
     };
   },
   View: CardsView,

@@ -9,6 +9,7 @@ import type { FilterRule } from "./query";
 export type FieldKind =
   | "string"
   | "markdown"
+  | "html"
   | "number"
   | "date"
   | "datetime"
@@ -21,7 +22,8 @@ export type FieldKind =
   | "template";
 
 /**
- * string → string, markdown → GitHub Flavored Markdown source, number → number,
+ * string → string, markdown → GitHub Flavored Markdown source, html → HTML source (shown in a
+ * sandboxed frame, like a template's HTML output), number → number,
  * date → "YYYY-MM-DD", datetime → ISO 8601 UTC string, checkbox → boolean,
  * image → file id (see Repository.putFile), object → id of the referenced object,
  * string_list → string[], checklist → string[] of "[x] text" / "[ ] text" items (domain/checklist.ts),

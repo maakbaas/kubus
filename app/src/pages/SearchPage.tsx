@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { checklistItems } from "../domain/checklist";
+import { htmlPlainText } from "../domain/fieldKinds";
 import { useNavigate, useSearchParams } from "react-router";
 import { ContainedList, ContainedListItem, InlineNotification, Tag } from "@carbon/react";
 import { useStore } from "../app/store";
@@ -38,6 +39,11 @@ function excerpts(type: ObjectType, object: ObjectInstance, query: string): Exce
     }
     if (field.kind === "string" && typeof v === "string" && v.toLowerCase().includes(q)) {
       return [{ field, text: textExcerpt(v, query) }];
+    }
+    // HTML: its text around the match (a match only in markup has no text to show).
+    if (field.kind === "html" && typeof v === "string") {
+      const text = htmlPlainText(v);
+      return text.toLowerCase().includes(q) ? [{ field, text: textExcerpt(text, query) }] : [];
     }
     if (field.kind === "checklist") {
       const items = checklistItems(v).filter((i) => i.text.toLowerCase().includes(q));

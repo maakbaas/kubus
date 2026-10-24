@@ -18,6 +18,7 @@ import type { EditStart } from "./editStart";
 import { FieldLabel } from "./fieldKindIcons";
 import { ImageInput } from "./images";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { TemplateCodeEditor } from "./TemplateCodeEditor";
 import { RefCombo } from "./RefCombo";
 import { ToggleInput } from "./ToggleInput";
 import { choicesFor, type RefOption } from "./useReferenceOptions";
@@ -47,6 +48,7 @@ export function toInputValue(kind: FieldKind, value: FieldValue | undefined): In
       return Array.isArray(value) ? value : [];
     case "string":
     case "markdown":
+    case "html":
     case "date":
     case "image":
     case "object":
@@ -63,6 +65,7 @@ export function parseInputValue(kind: FieldKind, raw: InputValue): { value: Fiel
       return { value: raw === true };
     case "string":
     case "markdown":
+    case "html":
       return { value: s === "" ? null : String(raw) };
     case "image":
     case "object":
@@ -331,6 +334,10 @@ export function FieldInput({
           start={start}
         />
       );
+
+    case "html":
+      // The source, highlighted (with {{ }} sections, as in the template editor).
+      return <TemplateCodeEditor id={id} labelText={<FieldLabel field={field} />} value={String(value)} html onChange={onChange} />;
 
     case "image":
       return (

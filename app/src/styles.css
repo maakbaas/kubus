@@ -9,16 +9,24 @@ body,
 
 /* App-like behaviour (home-screen app): the document itself never scrolls, bounces or zooms;
    only the panes' bodies scroll. */
+/* The page's colours, also where iOS shows no page (behind and around the on-screen keyboard,
+   while it slides): without a color-scheme the browser takes the page as light-only and paints
+   those areas white, even in dark mode. Body has the same background, so nothing shows through. */
+html,
+body {
+  background: #fff; /* Carbon white's --cds-background (the theme's tokens live on .app-root) */
+}
 html {
-  background: var(--cds-background, #fff);
+  color-scheme: light dark;
   overscroll-behavior: none;
   touch-action: manipulation; /* no double-tap zoom */
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
 @media (prefers-color-scheme: dark) {
-  html {
-    background: #161616;
+  html,
+  body {
+    background: #161616; /* g100's --cds-background */
   }
 }
 /* No iOS long-press menu / share sheet on links and images (it is inherited, but Safari applies
@@ -468,8 +476,8 @@ body {
   }
   .page-header__main > :first-child {
     grid-area: crumb;
-    /* Its first line (label-01, 1rem high) centred on the 2rem buttons beside it. */
-    padding-block-start: var(--cds-spacing-03);
+    /* Its first line (body-compact-01) centred on the 2rem buttons beside it. */
+    padding-block-start: calc((2rem - var(--cds-body-compact-01-font-size) * var(--cds-body-compact-01-line-height)) / 2);
   }
   .page-header__main > :first-child .cds--breadcrumb {
     flex-direction: column;
@@ -913,6 +921,15 @@ body {
   flex: 1;
   min-inline-size: 0;
 }
+/* On pages the date input is only as wide as a date (plus its calendar icon), so the time
+   follows the date instead of sitting at the far right; the read-only view matches it. */
+:root {
+  --datetime-date-width: 9.5rem;
+}
+.form-page .datetime-input > .cds--form-item:first-child {
+  flex: none;
+  inline-size: var(--datetime-date-width);
+}
 .datetime-input > :last-child {
   flex: 0 0 auto; /* Carbon form items grow by default */
 }
@@ -1040,7 +1057,7 @@ body {
   top: var(--cds-spacing-03);
   right: var(--cds-spacing-03);
   display: flex;
-  gap: 1px;
+  gap: var(--cds-spacing-03); /* as far apart as they are from the image's edges */
   opacity: 0;
   transition: opacity 70ms;
 }
@@ -1053,6 +1070,40 @@ body {
   .image-input__actions {
     opacity: 1;
   }
+}
+
+/* Images that open the lightbox (ui/Lightbox.tsx) on click; not card covers (they open the object). */
+img[data-lightbox] {
+  cursor: zoom-in;
+}
+.object-card__cover img[data-lightbox],
+.md-view--excerpt img[data-lightbox] {
+  cursor: inherit;
+}
+/* The lightbox: as wide as the image (up to the window), the image whole inside it. */
+.lightbox .cds--modal-container {
+  inline-size: fit-content;
+  max-inline-size: calc(100vw - 2 * var(--cds-spacing-05));
+}
+.lightbox .cds--modal-content {
+  display: flex;
+  justify-content: center;
+  margin-block-end: 0;
+  /* Below the close button (3rem, at the top right), not under it. */
+  padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
+}
+.lightbox .cds--modal-header {
+  min-block-size: 3rem;
+  margin: 0;
+  padding: 0;
+}
+.lightbox__image {
+  display: block;
+  max-inline-size: 100%;
+  max-block-size: calc(100dvh - 8rem);
+  object-fit: contain;
+  cursor: auto;
+  outline: none; /* focused only so Escape reaches the dialog */
 }
 
 /* Markdown editor (Milkdown is headless; styled with Carbon tokens) */
@@ -1438,13 +1489,10 @@ body {
   padding-block: calc((2rem - 1px - 1lh) / 2 + 1px) calc((2rem - 1px - 1lh) / 2 - 1px);
 }
 /* Date & time: the date where the date input's text is, the time where the time input's is
-   (the time input is 4.875rem wide with 1rem inner padding; this box has 1rem padding). */
+   (right after the date input, see .datetime-input; both inputs have 1rem inner padding). */
 .view-datetime__date {
-  flex: 1;
-}
-.view-datetime__time {
   flex: none;
-  inline-size: 2.875rem;
+  inline-size: var(--datetime-date-width);
 }
 /* Markdown: same padding as the editor's content area; height follows the content. */
 .view-field__value--markdown {
@@ -1454,6 +1502,11 @@ body {
 /* A template's rendered result (HTML, Markdown) is a block like a markdown field: the same
    space above and below, before the line under the field. */
 .view-field__value--template:has(> :is(.html-frame, .md-view)) {
+  display: block;
+  padding-block: var(--block-pad-top) 0.75rem;
+}
+/* HTML: its frame as a block like a template's. */
+.view-field__value--html:not(.view-field__value--empty) {
   display: block;
   padding-block: var(--block-pad-top) 0.75rem;
 }
@@ -1579,6 +1632,35 @@ body {
 /* A card without any text is just its cover, edge to edge. */
 .object-card--image-only .object-card__cover {
   margin-block-end: calc(-1 * var(--cds-spacing-05));
+}
+/* Cover on the left: the cover takes two fifths of the card, from its top to its bottom edge
+   (the image centred in it at the view's shape), the title and fields beside it. */
+.object-card--cover-left {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  align-items: start;
+}
+.object-card--cover-left .object-card__cover {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin: calc(-1 * var(--cds-spacing-05)) var(--cds-spacing-05) calc(-1 * var(--cds-spacing-05)) calc(-1 * var(--cds-spacing-05));
+}
+/* "Automatic" shape: the image fills the whole column, cropped like the top covers. */
+.object-cards--auto-ratio .object-card--cover-left .object-card__cover:has(> img) {
+  position: relative;
+  min-block-size: 6rem;
+}
+.object-cards--auto-ratio .object-card--cover-left .object-card__cover > img {
+  position: absolute;
+  inset: 0;
+  block-size: 100%;
+  aspect-ratio: auto;
+}
+.object-card--cover-left .object-card__cover--markdown {
+  border-block-end: 0;
+  border-inline-end: 1px solid var(--cds-border-subtle);
 }
 /* In view settings the checkbox spans the options grid. */
 .view-options > .cds--form-item.cds--checkbox-wrapper {
@@ -2093,8 +2175,7 @@ body {
 .template-code :is(input, textarea),
 .template-test code,
 .template-test__value,
-.field-row__param,
-.template-text {
+.field-row__param {
   font-family: var(--cds-code-02-font-family);
   letter-spacing: var(--cds-code-02-letter-spacing);
 }
@@ -2260,6 +2341,14 @@ body {
      widths shrink, stacked cards), so a scrollbar could only come from sub-pixel rounding or an
      overlaid editor: clip instead, which never shows one. */
   overflow: clip;
+}
+/* A view that keeps its table a table in a narrow pane: it scrolls sideways instead, and words
+   are never split (the columns get as narrow as their longest word, then the table scrolls). */
+.table-wrap--scroll .cds--data-table-content {
+  overflow-x: auto;
+}
+.table-wrap--scroll .objects-table td {
+  overflow-wrap: break-word;
 }
 /* Set by FillTable (views/TableView.tsx): the pane is narrow, or the columns don't fit it. */
 .table-wrap[data-stacked] .cds--data-table-content {
@@ -2504,6 +2593,11 @@ body {
   min-block-size: calc(6lh + 2 * var(--cds-spacing-03));
   color: var(--cds-text-primary);
   pointer-events: none;
+}
+/* Editing a field in place (HTML, a template field on an object page): as tall as the code, so a
+   one-line value stays one line high. */
+.field-editor .code-editor__highlight {
+  min-block-size: 0;
 }
 .code-editor__input {
   block-size: 100%;

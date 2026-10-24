@@ -6,7 +6,7 @@ import type { ElementContent, Root, RootContent } from "hast";
 import type { Nodes as MdNodes, Root as MdRoot } from "mdast";
 import { Link } from "@carbon/react";
 import { fileIdFromSrc } from "../domain/files";
-import { openExternal } from "../platform/openExternal";
+import { openExternal, safeUrl } from "../platform/openExternal";
 import { splitWarnings } from "../domain/templates";
 import { matcher, splitMatches } from "./Highlight";
 import { TemplateWarning } from "./TemplateWarning";
@@ -138,7 +138,7 @@ function rehypeMark(query: string) {
 function StoredImage({ src, alt }: { src?: string; alt?: string }) {
   const fileId = fileIdFromSrc(src ?? "");
   const url = useFileUrl(fileId);
-  if (fileId) return url ? <img src={url} alt={alt ?? ""} /> : null;
+  if (fileId) return url ? <img src={url} alt={alt ?? ""} data-lightbox /> : null;
   // An image from elsewhere (e.g. a template's URL) may be missing: then a placeholder says so.
   return src ? <UrlImage url={src} /> : null;
 }
@@ -247,6 +247,8 @@ export const MarkdownView = memo(function MarkdownView({ source, highlight = "",
           remarkPlugins={[remarkGfm, remarkEditorBreaks]}
           rehypePlugins={[rehypeSoftBreaks, rehypeWarnings, rehypeCodeColor, rehypeMark(highlight)]}
           components={variant === "full" ? fullComponents : excerptComponents}
+          // Links to other apps (spotify:, obsidian:, …) are kept; react-markdown's default drops them.
+          urlTransform={safeUrl}
           skipHtml
         >
           {source}

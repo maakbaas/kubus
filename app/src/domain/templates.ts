@@ -272,7 +272,7 @@ function argValue(arg: TemplateArg | undefined, fieldsById: Map<string, FieldDef
 }
 
 /** Field kinds whose values may hold {{ }} sections themselves, and what those render as. */
-const INLINE_OUTPUT: Partial<Record<FieldKind, TemplateOutput>> = { string: "string", markdown: "markdown", number: "number" };
+const INLINE_OUTPUT: Partial<Record<FieldKind, TemplateOutput>> = { string: "string", markdown: "markdown", html: "html", number: "number" };
 
 /** Whether a value holds a {{ }} section (and is then rendered when shown). */
 export const hasSections = (v: unknown): v is string => typeof v === "string" && /\{\{[\s\S]*?\}\}/.test(v);

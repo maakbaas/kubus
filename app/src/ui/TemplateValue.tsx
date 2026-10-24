@@ -109,6 +109,15 @@ ${frameBaseStyles(dark)}
   addEventListener("load", watch);
   addEventListener("resize", report);
   watch();
+  // A click on plain content (text, an empty area) is the page's: it starts editing the field.
+  // Clicks on what is interactive stay here (links, controls, maps and charts drawn in a canvas
+  // or svg, elements with handlers), as do clicks a script stopped or that end a selection.
+  addEventListener("click", (e) => {
+    if (e.defaultPrevented || e.button !== 0 || String(getSelection() || "")) return;
+    const interactive = "a,button,input,select,textarea,label,summary,details,option,video,audio,canvas,svg,iframe,embed,object,[onclick],[contenteditable],[tabindex],[role=button],[role=link],[role=checkbox],[role=tab],[role=slider]";
+    if (e.target instanceof Element && e.target.closest(interactive)) return;
+    parent.postMessage({ kubusFrameClick: true }, "*");
+  });
 })();
 </script></body></html>`;
 }
@@ -174,6 +183,7 @@ export function HtmlFrame({
   fill = false,
   ratio = null,
   onFill,
+  onContentClick,
 }: {
   html: string;
   fill?: boolean;
@@ -181,15 +191,21 @@ export function HtmlFrame({
   ratio?: number | null;
   /** Told whether the content turned out to fill its box (it has no height of its own). */
   onFill?(fills: boolean): void;
+  /** A click on the frame's plain content (not a link, control, map, …): e.g. to start editing. */
+  onContentClick?(): void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [size, setSize] = useState<FrameSize>();
   const html = useEmbeddedFiles(source);
+  const contentClick = useRef(onContentClick);
+  contentClick.current = onContentClick;
   useEffect(() => {
-    if (fill) return;
     const onMessage = (e: MessageEvent) => {
-      const s = (e.data as { kubusFrame?: FrameSize } | null)?.kubusFrame;
-      if (e.source === frame.current?.contentWindow && s && typeof s.natural === "number") setSize(s);
+      if (e.source !== frame.current?.contentWindow) return;
+      const data = e.data as { kubusFrame?: FrameSize; kubusFrameClick?: boolean } | null;
+      if (data?.kubusFrameClick) contentClick.current?.();
+      const s = data?.kubusFrame;
+      if (!fill && s && typeof s.natural === "number") setSize(s);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -236,6 +252,7 @@ export function TemplateValue({
   search = "",
   frameRatio = null,
   onFill,
+  onContentClick,
 }: {
   value: FieldValue;
   output: TemplateOutput;
@@ -245,11 +262,13 @@ export function TemplateValue({
   frameRatio?: string | null;
   /** HTML: told whether it fills its box (the template editor then offers the ratio). */
   onFill?(fills: boolean): void;
+  /** HTML: a click on its plain content (see HtmlFrame). */
+  onContentClick?(): void;
 }) {
   if (value == null || value === "") return null;
   const text = String(value);
-  // A failing template shows its warning; plain results (text, numbers) read in the code font
-  // on pages, rendered ones (Markdown, images, HTML) as such.
+  // A failing template shows its warning; plain results (text, numbers) read exactly like a
+  // string or number field's value, rendered ones (Markdown, images, HTML) as such.
   if (isTemplateError(value)) return <Highlight text={text} query={search} />;
   switch (output) {
     case "image":
@@ -261,17 +280,11 @@ export function TemplateValue({
           HTML
         </span>
       ) : (
-        <HtmlFrame html={text} ratio={ratioValue(frameRatio)} onFill={onFill} />
+        <HtmlFrame html={text} ratio={ratioValue(frameRatio)} onFill={onFill} onContentClick={onContentClick} />
       );
     case "markdown":
       if (variant === "page" && typeof value === "string") return <MarkdownView source={text} />;
       break;
   }
-  return variant === "cell" ? (
-    <Highlight text={text} query={search} />
-  ) : (
-    <span className="template-text">
-      <Highlight text={text} query={search} />
-    </span>
-  );
+  return <Highlight text={text} query={search} />;
 }

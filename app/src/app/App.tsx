@@ -2,6 +2,7 @@ import { useEffect, useState, type PointerEvent } from "react";
 import { IconButton, InlineNotification, Layer, Loading, Search, SideNav } from "@carbon/react";
 import { OpenPanelFilledLeft, OpenPanelLeft } from "@carbon/icons-react";
 import { SyncStatusButton } from "../ui/SyncStatusButton";
+import { Lightbox } from "../ui/Lightbox";
 import { GlobalLinks, useWorkspace, WorkspaceProvider, WorkspaceView } from "../workspace/Workspace";
 import { readPref, writePref } from "../ui/localPrefs";
 import { useMediaQuery } from "../ui/useMediaQuery";
@@ -25,6 +26,7 @@ export function App() {
       <WorkspaceProvider>
         <Shell />
       </WorkspaceProvider>
+      <Lightbox />
     </StoreProvider>
   );
 }

@@ -140,12 +140,14 @@ export function FieldEditor({ field, value, refs, start, compact, idPrefix, onSa
         cancelRef.current();
       } else if (e.key === "Enter") {
         const modified = e.ctrlKey || e.metaKey;
-        if (modified && field.kind === "markdown") {
+        // Multi-line sources (markdown, HTML): Enter is a new line, Ctrl/Cmd+Enter saves.
+        const multiline = field.kind === "markdown" || field.kind === "html";
+        if (modified && multiline) {
           // Don't let the editor also handle it (new line / hard break).
           e.preventDefault();
           e.stopPropagation();
         }
-        const plainEnterSaves = field.kind !== "markdown" && field.kind !== "object_list";
+        const plainEnterSaves = !multiline && field.kind !== "object_list";
         if (modified || plainEnterSaves) window.setTimeout(() => saveRef.current(), 0);
       }
     };
@@ -158,7 +160,7 @@ export function FieldEditor({ field, value, refs, start, compact, idPrefix, onSa
       ref={box}
       className={compact ? "field-editor field-editor--compact" : "field-editor"}
       style={holdHeight ? { minHeight: holdHeight } : undefined}
-      title={field.kind === "markdown" ? "Ctrl+Enter or click outside to save, Esc to cancel" : "Enter to save, Esc to cancel"}
+      title={field.kind === "markdown" || field.kind === "html" ? "Ctrl+Enter or click outside to save, Esc to cancel" : "Enter to save, Esc to cancel"}
     >
       <FieldInput
         field={field}

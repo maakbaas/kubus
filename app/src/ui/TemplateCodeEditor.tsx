@@ -38,7 +38,7 @@ function highlightTemplate(code: string, textLanguage: string): ReactNode[] {
 }
 
 /**
- * The template editor: a plain text area (so typing, undo, selection and IME behave natively)
+ * The template editor (also HTML fields' editor): a plain text area (so typing, undo, selection and IME behave natively)
  * over an identically laid out, highlighted copy of its text, with line numbers beside it. Long
  * lines wrap to the width there is; each number sits at the first row of its line (measured in
  * the highlighted copy). It grows with its content. Looks like a Carbon text area (field background, bottom border, label,
@@ -54,7 +54,7 @@ export function TemplateCodeEditor({
   onChange,
 }: {
   id: string;
-  labelText: string;
+  labelText: ReactNode;
   helperText?: ReactNode;
   placeholder?: string;
   value: string;

@@ -20,6 +20,7 @@ import {
 } from "../domain/model";
 import { captureEditStart, type EditStart } from "../ui/editStart";
 import { FieldEditor } from "../ui/FieldEditor";
+import { TemplateFieldEditor } from "../ui/TemplateFieldEditor";
 import { ListField } from "../ui/ListField";
 import { Highlight } from "../ui/Highlight";
 import { ObjectLink } from "../ui/ObjectLink";
@@ -29,7 +30,7 @@ import { MarkdownView } from "../ui/MarkdownView";
 import { NotFound } from "../ui/NotFound";
 import { formatDateTime } from "../domain/fieldKinds";
 import { ERROR_PREFIX, outputOf, withComputed } from "../domain/templates";
-import { TemplateValue } from "../ui/TemplateValue";
+import { HtmlFrame, TemplateValue } from "../ui/TemplateValue";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import {
   objectPageFields,
@@ -45,7 +46,7 @@ import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { FieldLabel } from "../ui/fieldKindIcons";
 import { TypeIcon } from "../ui/typeIcons";
 import { PageHeader } from "../ui/PageHeader";
-import { ToolbarPopover } from "../ui/ToolbarPopover";
+import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { refLabelOf, useReferenceOptions, type RefOptions } from "../ui/useReferenceOptions";
 
@@ -62,10 +63,10 @@ export function ObjectViewPage() {
 
 function ImageValue({ fileId, alt }: { fileId: string; alt: string }) {
   const url = useFileUrl(fileId);
-  return url ? <img className="object-view__image" src={url} alt={alt} /> : null;
+  return url ? <img className="object-view__image" src={url} alt={alt} data-lightbox /> : null;
 }
 
-function PropertyValue({ field, value, refs }: { field: FieldDef; value: FieldValue; refs: RefOptions }): ReactNode {
+function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; value: FieldValue; refs: RefOptions; /** HTML: a click on its plain content. */ onFrameClick?(): void }): ReactNode {
   switch (field.kind) {
     case "string":
       // Through Highlight: a {{ }} section's warning in it shows as a warning.
@@ -99,6 +100,9 @@ function PropertyValue({ field, value, refs }: { field: FieldDef; value: FieldVa
       );
     case "markdown":
       return <MarkdownView source={String(value)} />;
+    case "html":
+      // In a sandboxed frame, sized like a template's HTML result.
+      return <HtmlFrame html={String(value)} onContentClick={onFrameClick} />;
     case "image":
       return <ImageValue fileId={String(value)} alt={field.name} />;
     case "template":
@@ -132,6 +136,7 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
   const [draft, setDraft] = useState<ObjectLayout | null>(null);
   /** Set after "+": opens the layout popover with the new view's name selected, to rename it. */
   const [renameRequest, setRenameRequest] = useState(0);
+  const panels = usePanelsOpen();
 
   useEffect(() => {
     repo.getObject(type, objectId).then(setObject, (e) => setError(errorMessage(e)));
@@ -195,7 +200,8 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
     </IconButton>
   );
   /** With one view and nothing unsaved there is nothing to choose or save: no tab bar ("+" then sits in the header). */
-  const showBar = !!object && (objectViews.length > 1 || changed);
+  // Held while a header panel is open: "+" leaving the header would move the panel's button.
+  const showBar = panels.hold("bar", !!object && (objectViews.length > 1 || changed));
 
   /** Pin the shown view to this object (it then opens with it, whatever the default), or unpin it. */
   const togglePin = (view: ObjectView) =>
@@ -275,7 +281,7 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
               )}
               <BookmarkButton kind="object" typeId={type.id} targetId={object.id} label={title} onError={(e) => setError(errorMessage(e))} />
               {/* Metadata lives in a popover; more facts about the object can be added to its list. */}
-              <ToolbarPopover label="Details" icon={Information} fit>
+              <ToolbarPopover label="Details" icon={Information} fit onOpenChange={panels.onOpenChange}>
                 <dl className="object-info">
                   <dt>Type</dt>
                   <dd>
@@ -295,7 +301,7 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
                 <TrashCan />
               </IconButton>
               {/* The page's layout last: its settings, and "+" for a new layout while there is no tab bar. */}
-              <ToolbarPopover label="Page layout" icon={SettingsAdjust} fit openRequest={renameRequest}>
+              <ToolbarPopover label="Page layout" icon={SettingsAdjust} fit openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
                 <ObjectLayoutSettings
                   type={type}
                   renameRequest={renameRequest}
@@ -397,8 +403,12 @@ function ObjectPage({ type, objectId }: { type: ObjectType; objectId: string }) 
       {object && (
         <Stack gap={7} className="object-fields">
           {fields.map((f) => {
+            const template = f.kind === "template" ? templates.find((t) => t.id === f.templateId) : undefined;
             const field =
-            editing?.fieldId === f.id ? (
+            editing?.fieldId === f.id && template ? (
+              // A template field edits its template (shared: saving asks first).
+              <TemplateFieldEditor key={f.id} field={f} template={template} onDone={() => setEditing(null)} />
+            ) : editing?.fieldId === f.id ? (
               <FieldEditor
                 key={f.id}
                 field={f}
@@ -607,20 +617,41 @@ function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed }: V
     // Computed from the other fields: read-only, laid out like any field, shown by its
     // template's output type (Markdown, text, number, image, HTML in the same width).
     const text = value == null ? "" : String(value);
+    // Clicking it edits its template (shared by every object showing it; saving asks first).
+    const template = templates.find((t) => t.id === field.templateId);
+    const editable = !readOnly && !!template;
+    const edit = (e: MouseEvent | KeyboardEvent) => {
+      // Links in the result keep working.
+      if ((e.target as HTMLElement).closest("a")) return;
+      onEdit();
+    };
     return (
       <div className="view-field">
         <div className="cds--label">
           <FieldLabel field={field} />
         </div>
         <div
-          className={`view-field__value view-field__value--template${text.startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}${text ? "" : " view-field__value--empty"}`}
-          title="Rendered from a template"
+          className={`view-field__value view-field__value--template${editable ? " view-field__editable" : ""}${text.startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}${text ? "" : " view-field__value--empty"}`}
+          title={editable ? `Rendered from the template “${template.name}”: click to edit it` : "Rendered from a template"}
+          {...(editable && {
+            role: "button",
+            tabIndex: 0,
+            "aria-label": `Edit template ${template.name}`,
+            onClick: edit,
+            onKeyDown: (e: KeyboardEvent) => {
+              if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                edit(e);
+              }
+            },
+          })}
         >
           <TemplateValue
             value={value}
             output={outputOf(field, templates)}
-            frameRatio={templates.find((t) => t.id === field.templateId)?.frameRatio}
+            frameRatio={template?.frameRatio}
             variant="page"
+            onContentClick={editable ? () => onEdit() : undefined}
           />
         </div>
       </div>
@@ -708,7 +739,8 @@ function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed }: V
             // Task checkboxes toggle right here, saving at once.
             <MarkdownView source={String(value)} onChange={onSave} />
           ) : (
-            <PropertyValue field={field} value={value} refs={refs} />
+            // HTML: a click on its plain content edits it (the frame reports it; links and controls in it keep working).
+            <PropertyValue field={field} value={value} refs={refs} onFrameClick={readOnly ? undefined : () => onEdit()} />
           ))}
       </div>
     </div>

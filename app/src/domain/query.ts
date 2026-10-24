@@ -3,7 +3,7 @@
 // is added in one place.
 
 import { checklistItems } from "./checklist";
-import { formatDate } from "./fieldKinds";
+import { formatDate, htmlPlainText } from "./fieldKinds";
 import { markdownPlainText } from "./markdownExcerpt";
 import { fieldValue, objectLabel, pickableFields, type FieldDef, type FieldKind, type FieldValue, type ObjectInstance, type ObjectType } from "./model";
 
@@ -116,6 +116,11 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     operators: [op("contains", "contains"), op("notContains", "does not contain"), ...EMPTY_OPS],
     text: (_, v) => (typeof v === "string" ? markdownPlainText(v) : ""),
     sortKey: (_, v) => (typeof v === "string" ? markdownPlainText(v).toLowerCase() : null),
+  },
+  html: {
+    operators: [op("contains", "contains"), op("notContains", "does not contain"), ...EMPTY_OPS],
+    text: (_, v) => (typeof v === "string" ? htmlPlainText(v) : ""),
+    sortKey: (_, v) => (typeof v === "string" ? htmlPlainText(v).toLowerCase() || null : null),
   },
   number: {
     operators: [op("is", "="), op("isNot", "≠"), op("gt", ">"), op("lt", "<"), ...EMPTY_OPS],

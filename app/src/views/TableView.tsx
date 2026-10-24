@@ -15,6 +15,7 @@ import {
 import {
   Accordion,
   AccordionItem,
+  Checkbox,
   IconButton,
   Link,
   Table,
@@ -47,6 +48,10 @@ export interface TableOptions {
   /** Field ids shown as columns, in this order; null = all, in the type's order. Without the
    *  title column, rows get an open button. */
   columns: string[] | null;
+  /** The title column links to the object (else it is an ordinary, editable column and rows get an open button). */
+  titleLink: boolean;
+  /** In a narrow pane the rows restack as cards (else the table scrolls sideways). */
+  stackNarrow: boolean;
 }
 
 /** The column that names an object and opens it (the type's first text field). */
@@ -278,9 +283,9 @@ const fills = new WeakMap<Element, (fromSibling?: boolean) => void>();
  * An objects table. Columns are as wide as their content (see styles.css), so the table can end
  * before the pane does; then its last (actions) column is widened to fill the rest of the row.
  */
-export function FillTable({ children }: { children: ReactNode }) {
+export function FillTable({ children, stack: stackable = true }: { children: ReactNode; /** Restack as cards when narrow (else scroll sideways). */ stack?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
-  // Set up once: the observer refills whenever the box or the table changes size.
+  // Set up once (per stacking choice): the observer refills whenever the box or the table changes size.
   useLayoutEffect(() => {
     const el = box.current;
     const table = el?.querySelector("table");
@@ -299,7 +304,7 @@ export function FillTable({ children }: { children: ReactNode }) {
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
       // Stacked as cards (styles.css) when the pane is narrow, and also when the columns can't fit
       // it however they wrap (unbreakable content): a table never sticks out of its pane.
-      if (width <= STACK_BELOW_REM * rem || table.getBoundingClientRect().width > width + 0.5) el.dataset.wantsStack = "";
+      if (stackable && (width <= STACK_BELOW_REM * rem || table.getBoundingClientRect().width > width + 0.5)) el.dataset.wantsStack = "";
       else delete el.dataset.wantsStack;
       // Grouped tables stack together: as soon as one needs it, all do.
       const group = el.closest<HTMLElement>(".table-groups");
@@ -325,10 +330,11 @@ export function FillTable({ children }: { children: ReactNode }) {
       fills.delete(el);
       observer.disconnect();
     };
-  }, []);
+  }, [stackable]);
   return (
-    // A size container: in a narrow pane the table restacks as cards (see .table-wrap in styles.css).
-    <div ref={box} className="table-wrap">
+    // A size container: in a narrow pane the table restacks as cards (see .table-wrap in styles.css),
+    // unless the view keeps it a table, which then scrolls sideways.
+    <div ref={box} className={stackable ? "table-wrap" : "table-wrap table-wrap--scroll"}>
       <TableContainer className="objects-table">{children}</TableContainer>
     </div>
   );
@@ -491,7 +497,8 @@ const ObjectRow = memo(function ObjectRow({ type, object, shown, titleId, titleS
 export function TableView(props: ViewProps<TableOptions>) {
   const { type, result, options, refs, search, actions } = props;
   const shown = useMemo(() => orderFields(pickableFields(type), options.columns), [type, options.columns]);
-  const titleId = titleColumn(type)?.id;
+  // Without the title link the title is an ordinary column (and rows get an open button).
+  const titleId = options.titleLink ? titleColumn(type)?.id : undefined;
   const titleShown = shown.some((f) => f.id === titleId);
   const [editing, setEditing] = useState<EditingCell | null>(null);
   /** The group whose add row is open ("" when not grouped), or null. */
@@ -544,7 +551,7 @@ export function TableView(props: ViewProps<TableOptions>) {
 
   // The last row is empty but for a "+" in the title column (else the first); it turns into the
   // add row. Grouped, each group has one, and what it adds gets the group's value.
-  const plusColumn = (titleShown ? titleColumn(type)?.id : undefined) ?? shown[0]?.id;
+  const plusColumn = (shown.some((f) => f.id === titleColumn(type)?.id) ? titleColumn(type)?.id : undefined) ?? shown[0]?.id;
   const addRows = (groupKey: string) =>
     actions.create &&
     (adding === groupKey ? (
@@ -582,7 +589,7 @@ export function TableView(props: ViewProps<TableOptions>) {
 
   if (!grouped || result.total === 0) {
     return (
-      <FillTable>
+      <FillTable stack={options.stackNarrow}>
         <Table size="sm">
           {head}
           <TableBody>
@@ -610,7 +617,7 @@ export function TableView(props: ViewProps<TableOptions>) {
               </span>
             }
           >
-            <FillTable>
+            <FillTable stack={options.stackNarrow}>
               <Table size="sm">
                 {head}
                 <TableBody>
@@ -630,7 +637,26 @@ function TableOptionsEditor({ type, options, onChange }: { type: ObjectType; opt
   const uid = useId();
   return (
     <div className="view-options">
-      <FieldOrderEditor id={`${uid}-table-columns`} label="Columns" fields={pickableFields(type)} type={type} value={options.columns} onChange={(columns) => onChange({ columns })} />
+      <Checkbox
+        id={`${uid}-table-title-link`}
+        labelText="Title links to the object"
+        checked={options.titleLink}
+        onChange={(_, { checked }) => onChange({ ...options, titleLink: checked })}
+      />
+      <Checkbox
+        id={`${uid}-table-stack`}
+        labelText="Show rows as cards when narrow"
+        checked={options.stackNarrow}
+        onChange={(_, { checked }) => onChange({ ...options, stackNarrow: checked })}
+      />
+      <FieldOrderEditor
+        id={`${uid}-table-columns`}
+        label="Columns"
+        fields={pickableFields(type)}
+        type={type}
+        value={options.columns}
+        onChange={(columns) => onChange({ ...options, columns })}
+      />
     </div>
   );
 }
@@ -639,11 +665,15 @@ export const tableView = defineViewType<TableOptions>({
   kind: "table",
   label: "Table",
   icon: TableIcon,
-  defaultOptions: () => ({ columns: null }),
+  defaultOptions: () => ({ columns: null, titleLink: true, stackNarrow: true }),
   normalizeOptions(raw, type) {
     const o = (raw ?? {}) as Partial<TableOptions>;
     const ids = new Set(pickableFields(type).map((f) => f.id));
-    return { columns: Array.isArray(o.columns) ? o.columns.filter((id) => ids.has(id)) : null };
+    return {
+      columns: Array.isArray(o.columns) ? o.columns.filter((id) => ids.has(id)) : null,
+      titleLink: o.titleLink !== false,
+      stackNarrow: o.stackNarrow !== false,
+    };
   },
   fieldsOf: (o) => o.columns,
   withFields: (o, columns) => ({ ...o, columns }),

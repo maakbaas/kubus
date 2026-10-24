@@ -4,6 +4,7 @@ import {
   CheckboxChecked,
   DataReference,
   EventSchedule,
+  Html,
   Image,
   Link,
   ListBulleted,
@@ -22,6 +23,7 @@ type Icon = ComponentType<{ size?: number; "aria-hidden"?: boolean | "true" }>;
 export const FIELD_KIND_ICONS: Record<FieldKind, Icon> = {
   string: StringText,
   markdown: Markdown,
+  html: Html,
   number: StringInteger,
   date: Calendar,
   datetime: EventSchedule,

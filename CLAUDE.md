@@ -7,7 +7,10 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
 
 - **User-defined schema.** Users create types (e.g. Book, Person, Meeting) with arbitrary
   fields, and CRUD both the types and their objects.
-- **Field types:** String, Markdown, Number, Date, Date & time, Checkbox, Image, Object (reference
+- **Field types:** String, Markdown, HTML (source edited in the template code editor, shown in the
+  sandboxed `HtmlFrame` like a template's HTML output; its text in tables, cards and search; the
+  frame reports clicks on plain content, which start editing, while links, controls, canvas/svg
+  and elements with handlers keep their clicks), Number, Date, Date & time, Checkbox, Image, Object (reference
   to an object of another type, e.g. Book → Author), List of strings, Checklist (items with a
   checkbox, stored as GFM task lines "[x] text", `domain/checklist.ts`; tables show "2/5"),
   List of objects, Template (computed from a template).
@@ -54,7 +57,7 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   templates will later render whole objects and query results. The code runs in the app with the
   user's rights (`new Function`); it must move to a sandbox once templates can come from others
   (sync, sharing).
-  - `{{ }}` sections also work inside an object's own string, markdown and number values
+  - `{{ }}` sections also work inside an object's own string, markdown, HTML and number values
     (`withComputed` renders them when shown and keeps the typed source in `object.sources`, which
     editors use). A number field holding sections stores that text in `value_text`, so its input
     is a Carbon TextInput with a decimal keyboard (NumberInput takes no braces).
@@ -63,6 +66,10 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
     `<meta name="frame">` override and the zero-specificity base styles).
   - Templates see an image field as its src, `files/<sha256>`: Markdown and image outputs (and
     card covers) resolve it to the stored file; HTML frames get each file embedded as a data URL.
+  - A template field on an object page is edited in place like any field: clicking it edits its
+    template's code (`ui/TemplateFieldEditor.tsx`); saving asks first, as the change applies
+    everywhere the template is used (Change template /
+    Discard changes, which reverts / Keep editing, also on × or Escape).
   - Fields can also be added from every field picker ("Add field": table columns, card fields,
     object page layout; `ui/FieldModal.tsx`, which also edits template fields). They are ordinary
     fields of the type, shown in the picker's own view; adding asks for confirmation (the field
@@ -86,7 +93,11 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   next to the star) and on an object (page header, next to (i)) toggles a link in the side nav's
   Bookmarks branch. A view bookmark opens `…/objects?view=<id>`. Labels are snapshots, refreshed
   while the bookmarked page is shown; bookmarks of deleted views / objects aren't listed.
-- **Global search** in the side nav (`/search?q=`): substring match over string, markdown and
+- **Links open any scheme** (https, mailto, tel, spotify:, obsidian:, … open the app registered
+  for it) except blocked ones (javascript:, data:, file:, …): `isOpenableUrl` / `safeUrl` in
+  `platform/openExternal.ts`, used by Markdown (react-markdown's `urlTransform`), cells and the
+  editor; the Tauri opener scope (`desktop/capabilities/default.json`) denies the same schemes.
+- **Global search** in the side nav (`/search?q=`): substring match over string, markdown, HTML and
   list-of-strings values (ASCII case-insensitive; an FTS index can come later).
 - **Local first.** The app works fully offline on the device's own SQLite database.
 - **Future:** the same templates render whole objects and query results (see Templates).
@@ -262,10 +273,9 @@ Extension points are registries, not special cases in pages:
   remembered per device). Docked, it is resizable by dragging the gutter at its edge
   (`--nav-width`, 12–32rem, remembered per device).
 - Each tab keeps its own history for its lifetime (outside navigation is pushed into it); mouse
-  back/forward buttons, Alt+←/→ and the browser-back key act on the active tab. On touch devices (home-screen
-  app or not) the OS swipe gestures do too: the browser history is three sentinel entries (back /
-  middle / forward); a pop onto the first is a tab back, as far as the tab's own history goes and
-  only then on to what was open before the app; onto the last a tab forward; the middle is restored.
+  back/forward buttons, Alt+←/→, the browser-back key and, on touch screens, a swipe in from the
+  left / right screen edge (the app's own touch listeners in `Workspace.tsx`) act on the active
+  tab. The browser's own history isn't used for this (no iOS-specific history handling).
 - Closing every tab leaves an empty workspace (no tab is reopened automatically); middle click
   on a tab closes it.
 - Phones show only the active pane.
@@ -421,8 +431,8 @@ stale peer range.
 - TypeScript strict, React function components, Carbon components and theme tokens
   (`var(--cds-…)`) instead of custom colors. Theme follows the OS (white / g100).
 - **Compact UI: screen space goes to content.** Every Carbon component that comes in sizes uses
-  its smallest (`size="sm"` for buttons, inputs, selects, dropdowns, search, accordion,
-  breadcrumb; `xs` for modals). Tables use `sm` (2rem rows), not `xs`, because inline editors
+  its smallest (`size="sm"` for buttons, inputs, selects, dropdowns, search, accordion;
+  `xs` for modals). The page header's breadcrumb is the exception: the normal size, body text. Tables use `sm` (2rem rows), not `xs`, because inline editors
   are small (2rem) inputs and must fit the row. Read-only field geometry is tuned to these 2rem
   inputs. Page padding is one `spacing-05`; page titles are heading-04.
 - **Popovers never make the page scroll**: toolbar popover panels are capped to the room beside their button (`--popover-room`, set by `ToolbarPopover`) and scroll inside; the icon picker is capped likewise.

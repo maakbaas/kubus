@@ -64,7 +64,7 @@ CREATE TABLE fields (
   type_id        TEXT NOT NULL REFERENCES object_types(id),
   name           TEXT NOT NULL,
   kind           TEXT NOT NULL CHECK (kind IN (
-                   'string', 'markdown', 'number', 'date', 'datetime', 'checkbox', 'image',
+                   'string', 'markdown', 'html', 'number', 'date', 'datetime', 'checkbox', 'image',
                    'object', 'string_list', 'checklist', 'object_list', 'template')),
   -- for reference kinds: the type whose objects can be referenced
   target_type_id TEXT REFERENCES object_types(id),

@@ -92,7 +92,7 @@ export function useFileUrl(fileId: string | null): string | undefined {
 
 export function ImageThumb({ fileId, alt }: { fileId: string; alt: string }) {
   const url = useFileUrl(fileId);
-  return url ? <img className="image-thumb" src={url} alt={alt} /> : null;
+  return url ? <img className="image-thumb" src={url} alt={alt} data-lightbox /> : null;
 }
 
 interface Props {
@@ -133,7 +133,7 @@ export function ImageInput({ id, label, value, error, onChange, onFileStored }: 
         // Replace / remove appear on the image's corner on hover (always on touch screens),
         // so they add no height and act in a single step.
         <div className="image-input__preview">
-          {url && <img src={url} alt={typeof label === "string" ? label : ""} />}
+          {url && <img src={url} alt={typeof label === "string" ? label : ""} data-lightbox />}
           <div className="image-input__actions">
             <IconButton autoAlign kind="secondary" size="sm" align="bottom" label="Replace image" onClick={() => replaceInput.current?.click()}>
               <Renew />
@@ -193,5 +193,5 @@ export function UrlImage({ url, className, compact = false }: { url: string; cla
       </span>
     );
   }
-  return <img className={className} src={stored ?? url} alt="" onError={() => setFailed(true)} />;
+  return <img className={className} src={stored ?? url} alt="" onError={() => setFailed(true)} data-lightbox />;
 }
