@@ -1,8 +1,13 @@
 import { isEmptyValue as isEmpty } from "../domain/query";
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
+import { Button, Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
 import { Add, Checkmark, Edit, Information, Pin, PinFilled, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
+import { NOTHING_COLLAPSED, type Collapsed, type ViewBlock } from "../domain/views";
+import { blockType, normalizeBlock, type PageItem } from "../views";
+import { BlockView, newPageBlock } from "../views/BlockView";
+import { useBlockName } from "../views/BlockListEditor";
+import { useCollectionData } from "../views/useCollectionData";
 import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { formatDate, formatTime } from "../domain/fieldKinds";
@@ -139,10 +144,24 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   /** Set after "+": opens the layout popover with the new view's name selected, to rename it. */
   const [renameRequest, setRenameRequest] = useState(0);
   const panels = usePanelsOpen();
+  const blockName = useBlockName();
+  /**
+   * What is stored right away (collapsed blocks and groups, arranged blocks), by item view, shown
+   * until the stored views come back with it.
+   */
+  const [local, setLocal] = useState<Record<string, { collapsed?: Collapsed; layout?: ItemLayout }>>({});
+  useEffect(() => setLocal({}), [collection.itemViews]);
 
   useEffect(() => {
     repo.getItem(collection, itemId).then(setItem, (e) => setError(errorMessage(e)));
   }, [repo, collection, itemId]);
+  // Component fields show their computed results.
+  const shown = useMemo(
+    () => (item ? withComputed(collection, [item], components, refLabelOf(refs))[0] : null),
+    [collection, item, components, refs],
+  );
+  /** The page's item, for its blocks ($item, filter values "this item"). */
+  const page = useMemo<PageItem | null>(() => (shown ? { collection, item: shown, refLabel: refLabelOf(refs) } : null), [collection, shown, refs]);
   // Edits elsewhere (a table cell in another pane, a checkbox) refresh this item.
   // While this page saves a field it reads the item itself afterwards: the change that save
   // announces needn't fetch it a second time.
@@ -158,9 +177,6 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   if (item === undefined && !error) return null;
   if (item === null) return <NotFound />;
 
-  // Component fields show their computed results.
-  const refLabel = refLabelOf(refs);
-  const shown = item ? withComputed(collection, [item], components, refLabel)[0] : null;
   // The title as shown (its {{ }} sections rendered, like in tables); editing it edits the source.
   const title = shown ? itemLabel(collection, shown) : "";
   // The field shown as the page title is edited there, not repeated among the fields.
@@ -172,16 +188,44 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const itemViews = collection.itemViews;
   const activeView = itemViews.find((v) => v.id === tab) ?? (item ? itemViewOf(collection, item) : null);
   const pinned = !!activeView && activeView.id === item?.itemViewId;
-  const saved = activeView?.layout ?? FULL_LAYOUT;
+  const saved = (activeView && local[activeView.id]?.layout) ?? activeView?.layout ?? FULL_LAYOUT;
   const current = draft ?? saved;
   const changed = draft !== null && !sameLayout(draft, saved);
-  const layout = standard ? FULL_LAYOUT : current;
+  // The standard page keeps the blocks: they aren't fields.
+  const layout = standard ? { ...FULL_LAYOUT, blocks: current.blocks } : current;
+  /** A change to what a block shows (filter, sort, grouping, fields): unsaved, like the page's fields. */
+  const setBlock = (block: ViewBlock) => setDraft({ ...current, blocks: current.blocks.map((b) => (b.id === block.id ? block : b)) });
   const showTab = (id: string | null) => {
     setTab(id);
     setDraft(null);
     setStandard(false);
   };
   const saveViews = (views: ItemView[]) => repo.saveItemViews(collection.id, views).catch((e) => setError(errorMessage(e)));
+  const collapsed = activeView ? (local[activeView.id]?.collapsed ?? activeView.collapsed) : NOTHING_COLLAPSED;
+  /** Stores the shown item view with these (the virtual "Default" view is stored then), shown at once. */
+  const storeNow = (patch: { collapsed?: Collapsed; layout?: ItemLayout }) => {
+    if (!activeView) return;
+    setLocal((m) => ({ ...m, [activeView.id]: { ...m[activeView.id], ...patch } }));
+    saveViews(itemViews.map((v) => (v.id === activeView.id ? { ...v, layout: saved, collapsed, ...patch } : v)));
+  };
+  /** Collapsing or expanding a block or a group: stored right away. */
+  const setCollapsed = (next: Collapsed) => storeNow({ collapsed: next });
+  /**
+   * Arranging the page's blocks (adding, removing; a block's type, options, name, collection) is
+   * stored right away, in the shown and the saved layout alike, so it is no change to save. Where
+   * blocks sit among the fields is field order: saved with Save changes, like the fields.
+   */
+  const arrange = (change: (layout: ItemLayout) => ItemLayout) => {
+    if (draft) setDraft(change(draft));
+    storeNow({ layout: change(saved) });
+  };
+  const setBlockNow = (id: string, patch: Partial<ViewBlock>) =>
+    arrange((l) => ({ ...l, blocks: l.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) }));
+  const addBlock = (block: ViewBlock) => arrange((l) => ({ ...l, blocks: [...l.blocks, block], fields: l.fields && [...l.fields, block.id] }));
+  async function removeBlock(block: ViewBlock) {
+    if (!(await confirm({ title: `Remove block “${blockName(block)}”?`, body: "Items are not affected." }))) return;
+    arrange((l) => ({ ...l, blocks: l.blocks.filter((b) => b.id !== block.id), fields: l.fields && l.fields.filter((f) => f !== block.id) }));
+  }
 
   /**
    * "+": a new item view from what is shown, named "New" (then "New 2", …): the shown layout
@@ -194,16 +238,13 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
     const layout = current;
     showTab(id);
     setRenameRequest((r) => r + 1);
-    return saveViews([...itemViews, { id, name, layout, isDefault: false }]);
+    return saveViews([...itemViews, { id, name, layout, isDefault: false, collapsed }]);
   }
-  const addButton = (align: "bottom" | "bottom-end") => (
-    <IconButton autoAlign kind="ghost" size="sm" align={align} label="Add view" onClick={addView}>
+  const addButton = (
+    <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Add view" onClick={addView}>
       <Add />
     </IconButton>
   );
-  /** With one view and nothing unsaved there is nothing to choose or save: no tab bar ("+" then sits in the header). */
-  // Held while a header panel is open: "+" leaving the header would move the panel's button.
-  const showBar = panels.hold("bar", !!item && (itemViews.length > 1 || changed));
 
   /** Pin the shown view to this item (it then opens with it, whatever the default), or unpin it. */
   const togglePin = (view: ItemView) =>
@@ -217,8 +258,10 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
     showTab(null);
     await saveViews(itemViews.filter((v) => v.id !== view.id));
   }
-  const fields = itemPageFields(pickableFields(collection), layout, titleField?.id).filter(
-    (f) => !layout.hideEmpty || editing?.fieldId === f.id || !isEmpty(shown ? fieldValue(shown, f) : null),
+  // Fields and blocks, in the layout's order.
+  const blocksById = new Map(layout.blocks.map((b) => [b.id, b]));
+  const entries = itemPageFields<FieldDef | ViewBlock>([...pickableFields(collection), ...layout.blocks], layout, titleField?.id).filter(
+    (f) => blocksById.has(f.id) || !layout.hideEmpty || editing?.fieldId === f.id || !isEmpty(shown ? fieldValue(shown, f as FieldDef) : null),
   );
   const restricted = !!item && isRestricted(collection, item, layout);
 
@@ -326,7 +369,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
               <IconButton autoAlign size="sm" kind="ghost" align="bottom" label={`Delete ${collection.name}`} onClick={remove}>
                 <TrashCan />
               </IconButton>
-              {/* The page's layout last: its settings, and "+" for a new layout while there is no tab bar. */}
+              {/* The page's layout last. */}
               <ToolbarPopover label="Page layout" icon={SettingsAdjust} fit openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
                 <ItemLayoutSettings
                   collection={collection}
@@ -335,10 +378,10 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   layout={current}
                   titleFieldId={titleField?.id}
                   onChange={(patch) => setDraft({ ...current, ...patch })}
+                  onAddBlock={addBlock}
                   onError={(e) => setError(errorMessage(e))}
                 />
               </ToolbarPopover>
-              {!showBar && addButton("bottom-end")}
             </>
           )
         }
@@ -348,8 +391,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
       {/* Once the collection has item views: one tab each, like the views of the collection page. The
           star makes the shown one the default for all items, the pin this item's own choice.
           Layout changes stay unsaved until saved with the icon buttons beside the tabs. */}
-      {/* With one view and nothing unsaved there is nothing to choose or save: no tab bar. */}
-      {showBar && (
+      {/* Always shown, also for a single view: its name, "+" and saving stay in one place. */}
+      {item && (
         <div className="views-bar">
           <Tabs
             selectedIndex={activeView ? itemViews.indexOf(activeView) : -1}
@@ -365,7 +408,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
               ))}
             </TabList>
           </Tabs>
-          {addButton("bottom")}
+          {addButton}
           <span className="views-bar__spacer" />
           {changed && (
             <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Discard changes" onClick={() => setDraft(null)}>
@@ -428,7 +471,25 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
 
       {item && (
         <Stack gap={7} className="item-fields">
-          {fields.map((f) => {
+          {entries.map((entry) => {
+            const block = blocksById.get(entry.id);
+            if (block) {
+              return page && (
+                <ItemPageBlock
+                  key={block.id}
+                  block={block}
+                  page={page}
+                  collapsed={collapsed}
+                  onCollapse={setCollapsed}
+                  onChange={setBlock}
+                  onSet={(patch) => setBlockNow(block.id, patch)}
+                  onRemove={() => removeBlock(block)}
+                  onError={setError}
+                  onOpenChange={panels.onOpenChange}
+                />
+              );
+            }
+            const f = entry as FieldDef;
             const component = f.kind === "component" ? components.find((t) => t.id === f.componentId) : undefined;
             const field =
             editing?.fieldId === f.id && component ? (
@@ -548,9 +609,69 @@ function EditableTitle({ value, source, onSave }: { value: string; source: strin
 }
 
 /**
+ * A block on an item page: items of a collection (this one or another), typically those linked to
+ * the page's item ("Books by this Author"), or a component. Edited from its header like a
+ * collection view's block; changes are layout changes (unsaved until saved from the tab bar).
+ */
+function ItemPageBlock({
+  block,
+  page,
+  collapsed,
+  onCollapse,
+  onChange,
+  onSet,
+  onRemove,
+  onError,
+  onOpenChange,
+}: {
+  block: ViewBlock;
+  page: PageItem;
+  collapsed: Collapsed;
+  onCollapse(collapsed: Collapsed): void;
+  onChange(block: ViewBlock): void;
+  onSet(patch: Partial<ViewBlock>): void;
+  onRemove(): void;
+  onError(message: string): void;
+  onOpenChange(open: boolean): void;
+}) {
+  const collection = useCollection(block.collectionId ?? page.collection.id);
+  if (!collection) {
+    return (
+      <InlineNotification kind="warning" title="Block without collection" subtitle="The collection this block listed was deleted." onClose={onRemove} />
+    );
+  }
+  return (
+    <ItemPageBlockContent
+      key={collection.id}
+      collection={collection}
+      block={block}
+      page={page}
+      collapsed={collapsed}
+      onCollapse={onCollapse}
+      onChange={onChange}
+      onSet={onSet}
+      onRemove={onRemove}
+      onError={onError}
+      onOpenChange={onOpenChange}
+    />
+  );
+}
+
+function ItemPageBlockContent({
+  collection,
+  block,
+  ...rest
+}: Parameters<typeof ItemPageBlock>[0] & { collection: Collection }) {
+  // Its items, shared with every pane showing that collection.
+  const data = useCollectionData(collection);
+  const normalized = useMemo(() => normalizeBlock(collection, block), [collection, block]);
+  return <BlockView collection={collection} data={data} block={normalized} viewFilters={null} search="" place="item" {...rest} />;
+}
+
+/**
  * The page layout popover: the shown item view's name, and its layout: whether fields are
- * editable and show their names, and which fields in which order. Layout changes stay unsaved
- * until saved from the tab bar; a rename is saved right away (like a collection page's views).
+ * editable and show their names, and which fields and blocks in which order. Layout changes stay
+ * unsaved until saved from the tab bar; a rename is saved right away (like a collection page's views).
  */
 function ItemLayoutSettings({
   collection,
@@ -559,6 +680,7 @@ function ItemLayoutSettings({
   layout,
   titleFieldId,
   onChange,
+  onAddBlock,
   onError,
 }: {
   collection: Collection;
@@ -571,11 +693,32 @@ function ItemLayoutSettings({
   /** The field shown as the page title: left out unless chosen. */
   titleFieldId: string | undefined;
   onChange(patch: Partial<ItemLayout>): void;
+  /** A new block: stored right away (not a layout change to save). */
+  onAddBlock(block: ViewBlock): void;
   onError(e: unknown): void;
 }) {
-  const { repo } = useStore();
+  const { repo, collections } = useStore();
+  const blockName = useBlockName();
   const uid = useId();
   const nameInput = useRef<HTMLInputElement>(null);
+  /**
+   * "Add block": a table of the items linked to this one (of the first collection with a
+   * reference to this one), else of this collection; at the end of the page.
+   */
+  const addBlock = () => {
+    const linked = collections.find((c) => c.id !== collection.id && c.fields.some((f) => (f.kind === "item" || f.kind === "item_list") && f.targetCollectionId === collection.id));
+    onAddBlock(newPageBlock(linked ?? collection, collection));
+  };
+  const blockLabel = (b: ViewBlock) => {
+    const Icon = blockType(b.kind).icon;
+    const name = blockName(b);
+    return (
+      <span className="view-kind">
+        <Icon />
+        {name}
+      </span>
+    );
+  };
   useEffect(() => {
     if (!renameRequest) return;
     // Once the popover has opened and shows the new view's name.
@@ -617,7 +760,11 @@ function ItemLayoutSettings({
         hiddenByDefault={titleFieldId ? [titleFieldId] : []}
         hiddenLabels={layout.hiddenLabels}
         onHiddenLabelsChange={(hiddenLabels) => onChange({ hiddenLabels })}
+        extra={layout.blocks.map((b) => ({ id: b.id, label: blockLabel(b) }))}
       />
+      <Button kind="tertiary" size="sm" renderIcon={Add} className="item-layout__add" onClick={addBlock}>
+        Add block
+      </Button>
     </div>
   );
 }

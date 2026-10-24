@@ -87,8 +87,11 @@ body {
   padding: 4.5rem 1rem 3rem;
   box-sizing: border-box;
 }
-.app-content--bare {
-  padding-top: 0;
+/* Before the workspace exists (opening the database, or an error such as "open in another tab"):
+   the message sits at the very top, one page padding in (clear of the status bar on iOS). Two
+   classes, so the wider screens' .app-content padding below doesn't push it down again. */
+.app-content.app-content--bare {
+  padding: calc(env(safe-area-inset-top) + var(--cds-spacing-05)) var(--cds-spacing-05) var(--cds-spacing-05);
 }
 .app-content--bare .cds--inline-notification {
   margin-top: 0;
@@ -1505,8 +1508,21 @@ img[data-lightbox] {
 
 /* Space above a multi-line value (markdown, HTML): the same as above one line of text in a
    2rem box, so the gap under a label is the same for every field. */
+/* Blocks on an item page (tables, cards) read as on a collection page: Carbon's own type scale. */
+.item-fields > .block {
+  --cds-body-compact-01-font-size: 0.875rem;
+  --cds-body-compact-01-line-height: 1.28572;
+  --cds-body-compact-01-letter-spacing: 0.16px;
+  --cds-body-01-font-size: 0.875rem;
+  --cds-body-01-line-height: 1.42857;
+  --cds-body-01-letter-spacing: 0.16px;
+  --cds-label-01-font-size: 0.75rem;
+  --cds-label-01-line-height: 1.33333;
+  --cds-label-01-letter-spacing: 0.32px;
+}
 :root,
-.item-fields {
+.item-fields,
+.item-fields > .block {
   --block-pad-top: calc((2rem - 1px - var(--cds-body-compact-01-font-size) * var(--cds-body-compact-01-line-height)) / 2);
 }
 
@@ -1773,26 +1789,10 @@ img[data-lightbox] {
   }
 }
 
-/* Collection page: view tabs, toolbar, view settings panel */
-/* Icon buttons sit flush, as everywhere (tab strip, page header): only the search box keeps a
-   gap before them. */
-.items-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: 0;
-  row-gap: var(--cds-spacing-03);
+/* Collection page: view tabs (with the view's own tools at their right), the search bar the
+   search icon opens below them, view settings panel */
+.items-search {
   margin-bottom: var(--cds-spacing-05);
-}
-/* The search box takes whatever the buttons leave, so extra buttons (save, reset, …) shrink it
-   instead of wrapping the row; it only wraps once it would get narrower than spacing-13. */
-.items-toolbar > .cds--search {
-  flex: 1 1 0;
-  min-inline-size: var(--cds-spacing-13);
-  margin-inline-end: var(--cds-spacing-03);
-}
-.items-toolbar > :not(.cds--search) {
-  flex: none;
 }
 .view-kind {
   display: inline-flex;
@@ -1875,10 +1875,36 @@ img[data-lightbox] {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* Group headings (table rows / card sections) */
+/* Group headings (table rows / card sections): a step smaller than a block's name, and lined up
+   with it exactly (chevron and text at the block header's offsets: 0.5rem, 2.25rem), without
+   Carbon's lines between groups. */
 .table-group__title {
-  font-size: var(--cds-body-compact-01-font-size);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
   font-weight: 600;
+}
+.table-groups .cds--accordion__item,
+.view-groups .cds--accordion__item {
+  border: 0;
+}
+.table-groups .cds--accordion--start .cds--accordion__heading,
+.view-groups .cds--accordion--start .cds--accordion__heading {
+  padding-inline: 0.5rem 0;
+}
+.table-groups .cds--accordion--start .cds--accordion__heading .cds--accordion__arrow,
+.view-groups .cds--accordion--start .cds--accordion__heading .cds--accordion__arrow {
+  margin-inline: 0;
+  /* Pointing like a block's chevron: right when closed, down when open (Carbon: down / up). */
+  transform: none;
+}
+.table-groups .cds--accordion__item--active > .cds--accordion__heading > .cds--accordion__arrow,
+.view-groups .cds--accordion__item--active > .cds--accordion__heading > .cds--accordion__arrow {
+  transform: rotate(90deg);
+}
+.table-groups .cds--accordion--start .cds--accordion__title,
+.view-groups .cds--accordion--start .cds--accordion__title {
+  margin-inline: 0.75rem 0;
+  padding-inline: 0;
 }
 /* Grouped tables / cards: Carbon's accordion indents and pads its content; it uses the full width. */
 .table-groups .cds--accordion__content,
@@ -1892,6 +1918,11 @@ img[data-lightbox] {
 .view-groups .cds--accordion__item--active > .cds--accordion__wrapper {
   padding-block: 0;
 }
+/* Cards start a little below their group's heading (a table's own header row sets it apart). */
+.view-groups .cds--accordion__content,
+.view-groups .cds--accordion--start .cds--accordion__content {
+  padding-block-start: var(--cds-spacing-03);
+}
 /* Groups show open at once: Carbon fades an open item in from closed when it appears
    (@starting-style), so every group flashed closed and its table appeared after. Opening and
    closing a group is instant too. */
@@ -1903,11 +1934,6 @@ img[data-lightbox] {
 .table-groups .cds--accordion--start .cds--accordion__arrow,
 .view-groups .cds--accordion--start .cds--accordion__arrow {
   margin-block-start: 0;
-}
-/* Carbon's group lines stay; a group's last row doesn't add another beside them. */
-.table-groups tbody tr:last-child td,
-.table-groups tbody tr:last-child th {
-  border-block-end: 0;
 }
 .table-groups > .cds--data-table-container {
   margin-top: var(--cds-spacing-05);
@@ -2144,6 +2170,35 @@ img[data-lightbox] {
 .views-bar__spacer {
   flex: 1;
 }
+/* Blocks of a view (and of an item page): with several, each has a header line with its title,
+   count and menus (icon buttons flush, like the toolbar's), and room above the next one. */
+.block + .block {
+  margin-block-start: var(--cds-spacing-07);
+}
+.block__header {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-02);
+  min-block-size: 2rem;
+  margin-block-end: var(--cds-spacing-03);
+  border-block-end: 1px solid var(--cds-border-subtle);
+}
+.block__title {
+  cursor: pointer;
+  user-select: none;
+  font-size: 1.125rem;
+  line-height: 1.5rem;
+  font-weight: 400; /* at this size the name needs no bold */
+  overflow-wrap: anywhere;
+}
+.block-settings__remove,
+.item-layout__add {
+  align-self: flex-start;
+}
+.block-list__name {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
 /* Item pages: a little more room between the item view tabs and the first field. */
 .item-view .views-bar {
   margin-bottom: var(--cds-spacing-06);
@@ -2203,11 +2258,11 @@ img[data-lightbox] {
    pulled 1rem left so its box's own 1rem inset puts the text at the edge (the box border sits
    1rem further left; its right edge stays); labels and checkboxes, without an inset, get the
    1rem back as padding. */
-.item-fields > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label),
+.item-fields > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label, .block),
 .item-field--no-label > :not(.image-input, .view-field--image) {
   margin-inline-start: calc(-1 * var(--cds-spacing-05));
 }
-.item-fields > :not(.form-actions, .image-input, .view-field--image) .cds--label,
+.item-fields > :not(.form-actions, .image-input, .view-field--image, .block) .cds--label,
 .item-fields .checkbox-field,
 .item-fields .checklist-box {
   padding-inline-start: var(--cds-spacing-05);
@@ -2842,6 +2897,12 @@ img[data-lightbox] {
 .nav-tree .cds--tree-node__label__details :is(.cds--tooltip-trigger__wrapper, .cds--tree-node__label__text-button) {
   max-inline-size: 100%;
   min-inline-size: 0;
+}
+
+/* A toolbar popover whose settings are in effect (a filter, a sort other than the default): its
+   icon is blue, not the grey "selected" background, which is kept for the open panel. */
+.cds--btn--ghost[data-active] svg {
+  fill: var(--cds-icon-interactive);
 }
 
 /* Reordering: the grab handle (pointer events, so no browser panning on touch) and the row being dragged. */

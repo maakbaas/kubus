@@ -4,22 +4,19 @@ import { Grid as GridIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { fileIdFromSrc } from "../domain/files";
 import { itemLabel, labelField, fieldValue, pickableFields, type FieldDef, type Item, type Collection } from "../domain/model";
+import type { FieldLayout } from "../domain/fieldLayout";
 import { outputOf, type Component } from "../domain/components";
 import { HtmlFrame } from "../ui/ComponentValue";
 import { Highlight } from "../ui/Highlight";
-import { orderFields } from "../domain/fieldLayout";
-import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { MarkdownView } from "../ui/MarkdownView";
 import { useFileUrl } from "../ui/images";
 import { isEmptyValue, isGrouped } from "../domain/query";
 import { itemLinkProps, FieldCell } from "./cells";
 import type { RefOptions } from "../ui/useReferenceOptions";
-import { defineViewType, type ItemActions, type ViewProps } from "./registry";
+import { defineBlockType, type BlockOptionsProps, type BlockProps, type ItemActions } from "./registry";
 
-/** Card view options: which fields show on a card, and which image field is its cover. */
+/** Card options: which field is the cover, and the cards' shape (the fields on a card are the block's). */
 export interface CardOptions {
-  /** Field ids shown on the card (in the collection's field order); null = all fields. */
-  fields: string[] | null;
   /** Field shown as the card's cover: an image, or a markdown field rendered in its place; null = none. */
   coverFieldId: string | null;
   /** Target card width in rem (CARD_WIDTH range): rows get the column count that comes closest. */
@@ -31,10 +28,6 @@ export interface CardOptions {
   coverRatio: CoverRatio;
   /** Show the item's title on the card. With no title and no fields a card is just its cover. */
   showTitle: boolean;
-  /** Fields shown without their name. */
-  hiddenLabels: string[];
-  /** Leave out fields without a value (per card). */
-  hideEmpty: boolean;
   /** In a narrow pane (one card per row): a list, each card's cover beside its title and fields. */
   listNarrow: boolean;
 }
@@ -165,6 +158,8 @@ interface ItemCardProps {
   collection: Collection;
   item: Item;
   options: CardOptions;
+  /** Labels and empty fields (the block's layout); a card hides its empty fields itself. */
+  layout: FieldLayout;
   /** The fields shown on every card (but the cover). */
   shown: FieldDef[];
   kind: ReturnType<typeof coverKind>;
@@ -177,12 +172,12 @@ interface ItemCardProps {
 }
 
 /** One item's card. Memoized: it isn't rendered again unless its item or the view's settings changed. */
-const ItemCard = memo(function ItemCard({ collection, item, options, shown, kind, refs, search, actions, onRatio, listed }: ItemCardProps) {
+const ItemCard = memo(function ItemCard({ collection, item, options, layout, shown, kind, refs, search, actions, onRatio, listed }: ItemCardProps) {
   const title = labelField(collection, item);
   const cover = options.coverFieldId ? item.values[options.coverFieldId] : null;
   // A hidden title can still be chosen as an ordinary field.
   const titled = options.showTitle ? shown.filter((f) => f.id !== title?.id) : shown;
-  const fields = options.hideEmpty ? titled.filter((f) => !isEmptyValue(fieldValue(item, f))) : titled;
+  const fields = layout.hideEmpty ? titled.filter((f) => !isEmptyValue(fieldValue(item, f))) : titled;
   const hasText = options.showTitle || fields.length > 0;
   const hasCover = typeof cover === "string" && !!cover;
   return (
@@ -221,7 +216,7 @@ const ItemCard = memo(function ItemCard({ collection, item, options, shown, kind
         <dl className="item-card__fields">
           {fields.map((f) => (
             <div key={f.id} className="item-card__field">
-              {!options.hiddenLabels.includes(f.id) && <dt className="cds--label">{f.name}</dt>}
+              {!layout.hiddenLabels.includes(f.id) && <dt className="cds--label">{f.name}</dt>}
               <dd>
                 <FieldCell field={f} item={item} refs={refs} search={search} actions={actions} />
               </dd>
@@ -235,13 +230,10 @@ const ItemCard = memo(function ItemCard({ collection, item, options, shown, kind
   );
 });
 
-export function CardsView({ collection, result, options, refs, search, actions }: ViewProps<CardOptions>) {
+export function CardsView({ collection, result, fields, layout, options, refs, search, actions, collapsedGroups, onGroupCollapse }: BlockProps<CardOptions>) {
   const { components } = useStore();
   // The same for every card: the fields shown (but the cover), and what the cover shows.
-  const shown = useMemo(
-    () => orderFields(pickableFields(collection), options.fields).filter((f) => f.id !== options.coverFieldId),
-    [collection, options.fields, options.coverFieldId],
-  );
+  const shown = useMemo(() => fields.filter((f) => f.id !== options.coverFieldId), [fields, options.coverFieldId]);
   const kind = coverKind(collection.fields.find((f) => f.id === options.coverFieldId), components);
   const grouped = isGrouped(result);
   // "auto": every cover area takes the average ratio of the shown cards' images loaded so far
@@ -285,6 +277,7 @@ export function CardsView({ collection, result, options, refs, search, actions }
                   collection={collection}
                   item={item}
                   options={options}
+                  layout={layout}
                   shown={shown}
                   kind={kind}
                   refs={refs}
@@ -298,17 +291,20 @@ export function CardsView({ collection, result, options, refs, search, actions }
   );
 
   return (
-    <div ref={grid}>
+    // Grouped: around the accordion, like grouped tables' .table-groups (the group heading styles
+    // apply to what is inside it).
+    <div ref={grid} className={grouped ? "view-groups" : undefined}>
       {grouped ? (
-        // Same collapsible group lines as grouped tables (open by default, collapsing isn't saved).
-        <Accordion size="sm" align="start" className="view-groups">
+        // Same collapsible group lines as grouped tables (open by default, collapsing is stored with the view).
+        <Accordion size="sm" align="start">
           {result.groups.map((group) => (
             <AccordionItem
               key={group.key}
-              open
+              open={!collapsedGroups.includes(group.key)}
+              onHeadingClick={({ isOpen }) => onGroupCollapse(group.key, !isOpen)}
               title={
                 <span className="table-group__title">
-                  {group.label} <span className="view-group__count">{group.items.length}</span>
+                  {group.label}
                 </span>
               }
             >
@@ -346,11 +342,10 @@ function useCardColumns(container: RefObject<HTMLDivElement | null>, targetRem: 
   return columns;
 }
 
-function CardOptionsEditor({ collection, options, onChange }: { collection: Collection; options: CardOptions; onChange(o: CardOptions): void }) {
+function CardOptionsEditor({ collection, options, onChange }: BlockOptionsProps<CardOptions>) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
   const { components } = useStore();
-  const fieldItems = pickableFields(collection).filter((f) => f.kind !== "image");
   return (
     <div className="view-options">
       <div className="view-options__checks">
@@ -361,28 +356,12 @@ function CardOptionsEditor({ collection, options, onChange }: { collection: Coll
           onChange={(_, { checked }) => onChange({ ...options, showTitle: checked })}
         />
         <Checkbox
-          id={`${uid}-cards-hide-empty`}
-          labelText="Hide empty fields"
-          checked={options.hideEmpty}
-          onChange={(_, { checked }) => onChange({ ...options, hideEmpty: checked })}
-        />
-        <Checkbox
           id={`${uid}-cards-list-narrow`}
           labelText="Show as a list when narrow"
           checked={options.listNarrow}
           onChange={(_, { checked }) => onChange({ ...options, listNarrow: checked })}
         />
       </div>
-      <FieldOrderEditor
-        id={`${uid}-cards-fields`}
-        label="Fields on cards"
-        fields={fieldItems}
-        collection={collection}
-        value={options.fields}
-        onChange={(fields) => onChange({ ...options, fields })}
-        hiddenLabels={options.hiddenLabels}
-        onHiddenLabelsChange={(hiddenLabels) => onChange({ ...options, hiddenLabels })}
-      />
       <Slider
         id={`${uid}-cards-width`}
         labelText="Card width"
@@ -420,18 +399,16 @@ function CardOptionsEditor({ collection, options, onChange }: { collection: Coll
   );
 }
 
-export const cardsView = defineViewType<CardOptions>({
+export const cardsView = defineBlockType<CardOptions>({
   kind: "cards",
   label: "Cards",
   icon: GridIcon,
-  defaultOptions: (collection) => ({ fields: null, coverFieldId: imageFields(collection)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, hiddenLabels: [], hideEmpty: false, listNarrow: false }),
-  fieldsOf: (o) => o.fields,
-  withFields: (o, fields) => ({ ...o, fields }),
+  defaultOptions: (collection) => ({ coverFieldId: imageFields(collection)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, listNarrow: false }),
+  uses: () => ({ query: true, fields: { labels: true, hideEmpty: true } }),
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<CardOptions>;
     const ids = new Set(pickableFields(collection).map((f) => f.id));
     return {
-      fields: Array.isArray(o.fields) ? o.fields.filter((id) => ids.has(id)) : null,
       coverFieldId: (() => {
         // Stored views from before the rename call it imageFieldId.
         const id = o.coverFieldId ?? (o as { imageFieldId?: string | null }).imageFieldId;
@@ -443,8 +420,6 @@ export const cardsView = defineViewType<CardOptions>({
           : CARD_WIDTH.initial,
       coverRatio: COVER_RATIOS.some((r) => r.value === o.coverRatio) ? o.coverRatio! : "auto",
       showTitle: o.showTitle !== false,
-      hiddenLabels: Array.isArray(o.hiddenLabels) ? o.hiddenLabels.filter((id) => ids.has(id)) : [],
-      hideEmpty: o.hideEmpty === true,
       listNarrow: o.listNarrow === true,
     };
   },

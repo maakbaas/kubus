@@ -447,7 +447,6 @@ function ListInput<T>({
                   }}
                 />
               )}
-              {reorder.handle(i)}
               <IconButton
                 autoAlign
                 kind="ghost"
@@ -459,6 +458,8 @@ function ListInput<T>({
               >
                 <TrashCan />
               </IconButton>
+              {/* The drag handle is always a row's last icon. */}
+              {reorder.handle(i)}
             </div>
           );
         })}

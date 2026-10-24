@@ -1,25 +1,23 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { Dropdown, Heading, IconButton, InlineNotification, Search, Tab, TabList, Tabs, TextInput } from "@carbon/react";
-import { Add, ArrowsVertical, Filter, Save, SettingsAdjust, Star, StarFilled, TrashCan, Undo } from "@carbon/icons-react";
+import { Heading, IconButton, InlineNotification, Search, Tab, TabList, Tabs, TextInput } from "@carbon/react";
+import { Add, Filter, Save, Search as SearchIcon, SettingsAdjust, Star, StarFilled, TrashCan, Undo } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
-import { useItems } from "../app/useItems";
-import { nextName, newName, now, labelField, itemLabel, newId, isReferenceKind, type FieldValue, type Item, type Collection } from "../domain/model";
-import { withComputed } from "../domain/components";
-import { applyQuery, groupPreset, type QueryContext, type ViewQuery } from "../domain/query";
-import { defaultViewState, sameView, type CollectionView, type ViewState } from "../domain/views";
+import { newName, now, newId, type Collection } from "../domain/model";
+import { defaultViewState, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
 import { NotFound } from "../ui/NotFound";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import { NewButton } from "../ui/NewButton";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
-import { refLabelOf, useReferenceOptions } from "../ui/useReferenceOptions";
-import { VIEW_TYPES, viewType, type ItemActions, type ViewTypeDefinition } from "../views";
+import { blockType, normalizeBlock, normalizeView } from "../views";
+import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
+import { BlockView } from "../views/BlockView";
 import { QueryEditor } from "../views/QueryEditor";
+import { useCollectionData } from "../views/useCollectionData";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
-import { useOpenRelated } from "../workspace/Workspace";
 
 export function CollectionPage() {
   const { collectionId } = useParams();
@@ -28,20 +26,8 @@ export function CollectionPage() {
   return <CollectionContent key={collection.id} collection={collection} />;
 }
 
-/** A view type with its icon, as shown in the view dropdown. */
-function ViewKindLabel({ kind }: { kind: ViewTypeDefinition }) {
-  return (
-    <span className="view-kind">
-      <kind.icon />
-      {kind.label}
-    </span>
-  );
-}
-
-/** A view state with options validated for this collection (stored options may be outdated). */
-function normalized(collection: Collection, state: ViewState): ViewState {
-  return { ...state, options: viewType(state.kind).normalizeOptions(state.options, collection) };
-}
+/** A view state valid for this collection (stored blocks may be outdated). */
+const normalized = (collection: Collection, state: ViewState): ViewState => normalizeView(collection, { filters: state.filters, blocks: state.blocks });
 
 /** Id of the virtual "All" view of a space that has no stored view of the collection. */
 const VIRTUAL_VIEW = "default";
@@ -49,13 +35,12 @@ const VIRTUAL_VIEW = "default";
 function CollectionContent({ collection }: { collection: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { repo, components, cache, space } = useStore();
+  const { repo, space } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
-  const refs = useReferenceOptions(collection);
-  const openRelated = useOpenRelated();
-  // The collection's items, shared with every other pane showing them and current from the change feed.
-  const { items: items, error: loadError } = useItems(collection);
+  // The collection's items (component fields computed), shared with every other pane showing them
+  // and current from the change feed; every block of the view lists them.
+  const data = useCollectionData(collection);
   const [savedViews, setSavedViews] = useState<CollectionView[] | null>(null); // null = loading
   const [error, setError] = useState<string>();
 
@@ -63,15 +48,17 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // collection starts with an ordinary saved "All" view (in the space it was made in). A space
   // without one (the collection is shared from another space) shows `base` as a virtual "All"
   // view, stored once it is changed, renamed or joined by another view; a collection always has a view.
-  const base = useMemo(() => normalized(collection, defaultViewState(viewType("table").defaultOptions(collection))), [collection]);
+  const base = useMemo(() => normalized(collection, defaultViewState(blockType("table").defaultOptions(collection))), [collection]);
   const virtualView = useMemo<CollectionView>(
-    () => ({ ...base, id: VIRTUAL_VIEW, collectionId: collection.id, spaceId: space.id, name: "All", position: 0, isDefault: false, createdAt: "", updatedAt: "" }),
+    () => ({ ...base, id: VIRTUAL_VIEW, collectionId: collection.id, spaceId: space.id, name: "All", position: 0, isDefault: false, collapsed: NOTHING_COLLAPSED, createdAt: "", updatedAt: "" }),
     [base, collection.id, space.id],
   );
   const withVirtual = (list: CollectionView[]) => (list.length > 0 ? list : [virtualView]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>(base);
   const [search, setSearch] = useState("");
+  /** The search bar below the tab bar is shown (opened from its icon). */
+  const [searchOpen, setSearchOpen] = useState(false);
   /** Set after "+": opens View settings with the new view's name selected, to rename it. */
   const [renameRequest, setRenameRequest] = useState(0);
   const nameInput = useRef<HTMLInputElement>(null);
@@ -116,23 +103,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const changed = !sameView(view, reference);
   shown.current = { activeId, view, reference };
 
-  // Until the referenced items' labels are in, a reference would read as "(deleted)" (in
-  // groups, sorting, filters): the list waits for them.
-  const refsLoading = collection.fields.some((f) => isReferenceKind(f.kind) && f.targetCollectionId && !refs[f.targetCollectionId]);
-  const ctx: QueryContext = useMemo(
-    () => ({ refLabel: refLabelOf(refs, "(deleted)") }),
-    [refs],
-  );
-  // Component fields are computed here, so views, filters, sorting and grouping see their results.
-  // Each item is computed once: only items that changed are computed again.
-  const computedMemo = useMemo(() => new WeakMap<Item, Item>(), [collection, components, ctx]);
-  const computed = useMemo(
-    () => withComputed(collection, items ?? [], components, ctx.refLabel, computedMemo),
-    [collection, items, components, ctx, computedMemo],
-  );
-  const result = useMemo(() => applyQuery(collection, computed, view.query, ctx, search), [collection, computed, view.query, ctx, search]);
-
-  const setQuery = (query: ViewQuery) => setView((v) => ({ ...v, query }));
+  /** A change to what a block shows (filter, sort, grouping, fields): unsaved until Save changes. */
+  const setBlock = (block: ViewBlock) => setView((v) => ({ ...v, blocks: v.blocks.map((b) => (b.id === block.id ? block : b)) }));
   const selectView = useCallback(
     (id: string | null, list: CollectionView[] = savedViews ?? []) => {
       const next = withVirtual(list).find((v) => v.id === id);
@@ -164,7 +136,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
     if (savedViews === null || savedViews.length > 0) return;
     const id = newId();
     const ts = now();
-    await repo.saveView({ ...base, id, collectionId: collection.id, spaceId: space.id, name: "All", position: 0, isDefault: false, createdAt: ts, updatedAt: ts });
+    await repo.saveView({ ...base, id, collectionId: collection.id, spaceId: space.id, name: "All", position: 0, isDefault: false, collapsed: NOTHING_COLLAPSED, createdAt: ts, updatedAt: ts });
     setSavedViews(await repo.listViews(collection.id, space.id));
     if (activeId === VIRTUAL_VIEW) setActiveId(id);
     return id;
@@ -174,7 +146,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
     await storeVirtual();
     const id = newId();
     const ts = now();
-    await repo.saveView({ ...state, id, collectionId: collection.id, spaceId: space.id, name, position: Math.max(views.length, 1), isDefault: false, createdAt: ts, updatedAt: ts });
+    await repo.saveView({ ...state, id, collectionId: collection.id, spaceId: space.id, name, position: Math.max(views.length, 1), isDefault: false, collapsed: active?.collapsed ?? NOTHING_COLLAPSED, createdAt: ts, updatedAt: ts });
     const list = await repo.listViews(collection.id, space.id);
     setSavedViews(list);
     selectView(id, list);
@@ -194,16 +166,65 @@ function CollectionContent({ collection }: { collection: Collection }) {
       <Add />
     </IconButton>
   );
-  /** With one view and nothing unsaved there is nothing to choose or save: no tab bar ("+" then sits in the toolbar). */
-  // Held while a toolbar panel is open: the bar appearing would move the panel's button.
   const panels = usePanelsOpen();
-  const showBar = panels.hold("bar", savedViews !== null && (views.length > 1 || changed));
 
   async function updateActive() {
     if (!active) return;
     const id = (await storeVirtual()) ?? active.id;
-    await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), kind: view.kind, query: view.query, options: view.options });
+    await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), filters: view.filters, blocks: view.blocks });
     await loadViews();
+  }
+
+  /**
+   * Collapsing or expanding a block or a group: stored with the shown view right away (as saved,
+   * its unsaved changes left alone), shown at once; not a change to save.
+   */
+  async function setCollapsed(next: Collapsed) {
+    if (!active) return;
+    setSavedViews((list) => list && list.map((v) => (v.id === active.id ? { ...v, collapsed: next } : v)));
+    const id = (await storeVirtual()) ?? active.id;
+    await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), collapsed: next });
+    await loadViews();
+  }
+
+  /**
+   * Arranging the view (adding, removing and reordering blocks; a block's type, options and
+   * name) is stored right away, applied to the shown and the saved view alike, so it is no change
+   * to save; what changes the shown items (filters, sort, grouping, fields) waits for Save changes.
+   */
+  async function arrange(change: (blocks: ViewBlock[]) => ViewBlock[], stored: (blocks: ViewBlock[]) => ViewBlock[] = change) {
+    setView((v) => ({ ...v, blocks: change(v.blocks) }));
+    if (!active) return;
+    const blocks = stored(active.blocks);
+    if (JSON.stringify(blocks) === JSON.stringify(active.blocks)) return;
+    setSavedViews((list) => list && list.map((v) => (v.id === active.id ? { ...v, blocks } : v)));
+    const id = (await storeVirtual()) ?? active.id;
+    await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), blocks });
+    await loadViews();
+  }
+  const arrangeNow = (change: (blocks: ViewBlock[]) => ViewBlock[], stored?: (blocks: ViewBlock[]) => ViewBlock[]) =>
+    arrange(change, stored).catch((e) => setError(errorMessage(e)));
+  /** A block's type, options or name (where the block is: shown, saved or both). */
+  const setBlockNow = (id: string, patch: Partial<ViewBlock>) => arrangeNow((blocks) => blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+  /** "Add block": a copy of the last block as saved (its type, settings and fields), with the view's filter. */
+  const addBlock = () => {
+    const last = view.blocks[view.blocks.length - 1];
+    const block = normalizeBlock(collection, { ...(active?.blocks.find((b) => b.id === last.id) ?? last), id: newId(), title: "", filters: null });
+    arrangeNow((blocks) => [...blocks, block]);
+  };
+  /** Reordered blocks; the saved view's blocks follow the same order. */
+  const moveBlocks = (order: ViewBlock[]) => {
+    const at = (b: ViewBlock) => order.findIndex((o) => o.id === b.id) >>> 0; // not shown: last
+    arrangeNow(() => order, (blocks) => [...blocks].sort((a, b) => at(a) - at(b)));
+  };
+  const blockName = useBlockName();
+  /** Removing blocks (a view keeps one): asked first, unless asked already. */
+  async function removeBlocks(ids: string[], asked = false) {
+    const gone = view.blocks.filter((b) => ids.includes(b.id));
+    if (gone.length === 0 || gone.length >= view.blocks.length) return;
+    const title = gone.length === 1 ? `Remove block “${blockName(gone[0])}”?` : `Remove ${gone.length} blocks?`;
+    if (!asked && !(await confirm({ title, body: "Items are not affected." }))) return;
+    await arrange((blocks) => blocks.filter((b) => !ids.includes(b.id)));
   }
 
   /** Star the active view as the default, or unstar it (then the first view opens by default). */
@@ -229,82 +250,6 @@ function CollectionContent({ collection }: { collection: Collection }) {
     selectView(defaultViewOf(rest), rest);
   }
 
-  const current: ItemActions = {
-    open: (item, mode, o) => openRelated(`/collections/${collection.id}/items/${item.id}${o?.edit ? "?edit=1" : ""}`, mode),
-    async remove(item) {
-      if (!(await confirm({ title: `Delete ${collection.name}?`, body: `This ${collection.name} will be removed.` }))) return;
-      try {
-        await repo.deleteItem(item.id); // the list hears the change and drops it
-      } catch (e) {
-        setError(errorMessage(e));
-      }
-    },
-    /**
-     * A copy with the item's stored values (not computed ones: component fields, rendered {{ }}
-     * sections keep their source); its title numbered. Images are shared (files are immutable).
-     */
-    async duplicate(item) {
-      const stored = items?.find((e) => e.id === item.id) ?? item;
-      const values: Record<string, FieldValue> = {};
-      for (const f of collection.fields) {
-        const v = stored.values[f.id];
-        if (f.kind !== "component" && v != null) values[f.id] = v;
-      }
-      const title = labelField(collection, stored);
-      if (title) values[title.id] = nextName(String(stored.values[title.id]), (items ?? []).map((e) => itemLabel(collection, e)));
-      try {
-        await repo.createItem(collection, values, space.id); // the list hears the change and adds it
-      } catch (e) {
-        setError(errorMessage(e));
-      }
-    },
-    /** Optimistic update, then save (reload on failure). */
-    async setValue(item, field, value: FieldValue) {
-      cache.items.patch(collection.id, item.id, (o) => ({ ...o, values: { ...o.values, [field.id]: value } }));
-      try {
-        await repo.updateItem(collection, item.id, { [field.id]: value });
-      } catch (e) {
-        setError(errorMessage(e));
-        cache.items.reload(collection.id);
-      }
-    },
-    async create(values) {
-      // Shown before the add row closes (waits for the reload the change event started, else reloads).
-      const id = await repo.createItem(collection, values, space.id);
-      await cache.items.settled(collection.id, id);
-    },
-    groupPreset: (key) => groupPreset(collection, view.query, key),
-    groupBy: view.query.groupBy,
-    sort: view.query.sort[0],
-    sortBy(fieldId) {
-      const current = view.query.sort[0];
-      const direction = current?.fieldId === fieldId && current.direction === "asc" ? "desc" : "asc";
-      setQuery({ ...view.query, sort: [{ fieldId, direction }] });
-    },
-  };
-  // What the views get keeps its identity (each call goes to the latest `current`), so rows that
-  // didn't change aren't rendered again; it changes only with the sort, which reorders them anyway,
-  // and the grouping, which regroups them.
-  const latest = useRef(current);
-  latest.current = current;
-  const sort = view.query.sort[0];
-  const groupBy = view.query.groupBy;
-  const actions = useMemo<ItemActions>(
-    () => ({
-      open: (item, mode, options) => latest.current.open(item, mode, options),
-      remove: (item) => latest.current.remove(item),
-      duplicate: (item) => latest.current.duplicate?.(item),
-      setValue: (item, field, value) => latest.current.setValue(item, field, value),
-      create: (values) => latest.current.create!(values),
-      groupPreset: (key) => latest.current.groupPreset!(key),
-      groupBy,
-      sort,
-      sortBy: (fieldId) => latest.current.sortBy!(fieldId),
-    }),
-    [sort, groupBy],
-  );
-
-  const vt = viewType(view.kind);
 
   return (
     <>
@@ -323,12 +268,12 @@ function CollectionContent({ collection }: { collection: Collection }) {
           <NewButton label={`New ${collection.name}`} onClick={() => navigate(`/collections/${collection.id}/items/new`)} />
         }
       />
-      {(error ?? loadError) && <InlineNotification kind="error" title="Error" subtitle={error ?? loadError} onClose={() => setError(undefined)} />}
+      {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
 
       {/* Saved views (a new collection gets "All"); the starred one, else the first, opens by default.
           Unsaved changes to the shown view surface as icon buttons beside its star. */}
-      {/* With one view and nothing unsaved there is nothing to choose or save: no tab bar. */}
-      {showBar && (
+      {/* Always shown, also for a single view: its name, "+", bookmark and saving stay in one place. */}
+      {savedViews !== null && (
         <div className="views-bar">
           {views.length > 0 && (
             <Tabs selectedIndex={active ? views.indexOf(active) : -1} onChange={({ selectedIndex }) => selectView(views[selectedIndex].id)}>
@@ -361,21 +306,12 @@ function CollectionContent({ collection }: { collection: Collection }) {
               <TrashCan />
             </IconButton>
           )}
-          {active && active.id !== VIRTUAL_VIEW && (
-            <BookmarkButton
-              kind="view"
-              collectionId={collection.id}
-              targetId={active.id}
-              label={`${collection.pluralName} / ${active.name}`}
-              onError={(e) => setError(errorMessage(e))}
-            />
-          )}
           {/* With one view there's nothing to choose: it opens anyway. */}
           {active && views.length > 1 && (
             <IconButton autoAlign
               kind="ghost"
               size="sm"
-              align="bottom-end"
+              align="bottom"
               label={active.isDefault ? "Revert default view" : "Star as default view"}
               aria-pressed={active.isDefault}
               onClick={() => toggleDefault().catch((e) => setError(errorMessage(e)))}
@@ -383,76 +319,114 @@ function CollectionContent({ collection }: { collection: Collection }) {
               {active.isDefault ? <StarFilled /> : <Star />}
             </IconButton>
           )}
+          {active && (
+            <BookmarkButton
+              kind="view"
+              collectionId={collection.id}
+              targetId={active.id}
+              // The virtual "All" view is stored first: a bookmark needs a real view.
+              prepare={active.id === VIRTUAL_VIEW ? storeVirtual : undefined}
+              label={`${collection.pluralName} / ${active.name}`}
+              onError={(e) => setError(errorMessage(e))}
+            />
+          )}
+          {/* The view's own tools: search in it (a bar below), its filter (every block uses it
+              unless it has its own) and its settings. A blue icon = in effect. */}
+          <IconButton
+            autoAlign
+            kind="ghost"
+            size="sm"
+            align="bottom"
+            label={searchOpen ? "Close search" : `Search ${collection.pluralName}`}
+            isSelected={searchOpen}
+            data-active={search ? true : undefined}
+            aria-expanded={searchOpen}
+            onClick={() => {
+              if (searchOpen) setSearch("");
+              setSearchOpen(!searchOpen);
+            }}
+          >
+            <SearchIcon />
+          </IconButton>
+          <ToolbarPopover
+            label={view.filters.length > 0 ? `Filter (${view.filters.length})` : "Filter"}
+            icon={Filter}
+            active={view.filters.length > 0}
+            onOpenChange={panels.onOpenChange}
+          >
+            <QueryEditor
+              collection={collection}
+              query={{ filters: view.filters, sort: [], groupBy: null }}
+              refs={data.refs}
+              part="filter"
+              onChange={(q) => setView((v) => ({ ...v, filters: q.filters }))}
+            />
+          </ToolbarPopover>
+          <ToolbarPopover label="View settings" icon={SettingsAdjust} openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
+            <div className="view-settings">
+              {active && (
+                <TextInput
+                  size="sm"
+                  key={active.id + active.name}
+                  id={`${uid}-view-rename`}
+                  ref={nameInput}
+                  labelText="View name"
+                  defaultValue={active.name}
+                  onBlur={(e) => renameActive(e.target.value.trim()).catch((err) => setError(errorMessage(err)))}
+                  onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                />
+              )}
+              <BlockListEditor
+                blocks={view.blocks}
+                onMove={moveBlocks}
+                onRemove={(ids, asked) => removeBlocks(ids, asked).catch((e) => setError(errorMessage(e)))}
+                onAdd={addBlock}
+              />
+            </div>
+          </ToolbarPopover>
         </div>
       )}
 
-      <div className="items-toolbar">
-        <Search
-          id={`${uid}-items-search`}
-          size="sm"
-          labelText={`Search ${collection.pluralName}`}
-          placeholder="Search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        {/* Each opens its settings in a popover; selected = in use. */}
-        <ToolbarPopover
-          label={view.query.filters.length > 0 ? `Filter (${view.query.filters.length})` : "Filter"}
-          icon={Filter}
-          active={view.query.filters.length > 0}
-          onOpenChange={panels.onOpenChange}
-        >
-          <QueryEditor collection={collection} query={view.query} refs={refs} part="filter" onChange={setQuery} />
-        </ToolbarPopover>
-        <ToolbarPopover label="Sort and group" icon={ArrowsVertical} active={view.query.groupBy !== null} onOpenChange={panels.onOpenChange}>
-          <QueryEditor collection={collection} query={view.query} refs={refs} part="sortGroup" onChange={setQuery} />
-        </ToolbarPopover>
-        <ToolbarPopover label="View settings" icon={SettingsAdjust} openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
-          <div className="view-settings">
-            {active && (
-              <TextInput
-                size="sm"
-                key={active.id + active.name}
-                id={`${uid}-view-rename`}
-                ref={nameInput}
-                labelText="View name"
-                defaultValue={active.name}
-                onBlur={(e) => renameActive(e.target.value.trim()).catch((err) => setError(errorMessage(err)))}
-                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-              />
-            )}
-            {/* A dropdown, not a switch: it lists every registered view type, however many there are. */}
-            <Dropdown<ViewTypeDefinition> autoAlign
-              size="sm"
-              id={`${uid}-view-kind`}
-              titleText="View type"
-              label="View"
-              items={VIEW_TYPES}
-              selectedItem={vt}
-              itemToString={(t) => t?.label ?? ""}
-              itemToElement={(t) => <ViewKindLabel kind={t} />}
-              renderSelectedItem={(t) => <ViewKindLabel kind={t} />}
-              onChange={({ selectedItem: next }) => {
-                if (next) setView((v) => {
-                  // The field selection and order carry over to the other view type.
-                  const fields = viewType(v.kind).fieldsOf(v.options);
-                  return { ...v, kind: next.kind, options: next.withFields(next.defaultOptions(collection), fields) };
-                });
-              }}
-            />
-            {vt.OptionsEditor && <vt.OptionsEditor collection={collection} options={view.options} onChange={(options) => setView((v) => ({ ...v, options }))} />}
-          </div>
-        </ToolbarPopover>
-        {!showBar && savedViews !== null && addButton}
-      </div>
-
-
-      {/* Nothing until everything is in (a fraction of a second): a placeholder table would only
-          flash, shaped unlike the real one. */}
-      {items !== null && savedViews !== null && !refsLoading && (
-        // Keyed by the shown view so group collapse state isn't carried over to another view.
-        <vt.View key={activeId ?? ""} collection={collection} result={result} options={view.options} refs={refs} search={search} actions={actions} />
+      {/* Search in the view (all its blocks), opened from its icon; never saved. Escape on an
+          empty box, or leaving it empty, closes it. */}
+      {searchOpen && (
+        <div className="items-search">
+          <Search
+            id={`${uid}-items-search`}
+            size="sm"
+            autoFocus
+            labelText={`Search ${collection.pluralName}`}
+            placeholder={`Search ${collection.pluralName}`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && !search && setSearchOpen(false)}
+            onBlur={() => !search && setSearchOpen(false)}
+          />
+        </div>
       )}
+
+      {savedViews !== null &&
+        view.blocks.map((block) => (
+          <BlockView
+            // Keyed by the shown view too, so group collapse state isn't carried over to another view.
+            key={`${activeId ?? ""}-${block.id}`}
+            collection={collection}
+            data={data}
+            block={block}
+            viewFilters={view.filters}
+            search={search}
+            place="collection"
+            page={null}
+            collapsed={active?.collapsed ?? NOTHING_COLLAPSED}
+            onCollapse={(next) => setCollapsed(next).catch((e) => setError(errorMessage(e)))}
+            onChange={setBlock}
+            onSet={(patch) => setBlockNow(block.id, patch)}
+            // A view keeps at least one block.
+            onRemove={view.blocks.length > 1 ? () => removeBlocks([block.id]).catch((e) => setError(errorMessage(e))) : undefined}
+            onError={setError}
+            onOpenChange={panels.onOpenChange}
+          />
+        ))}
 
       {dialog}
     </>

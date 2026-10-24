@@ -47,14 +47,14 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   debounced listener plugin, which lost text typed right before saving.
 - **Components** (`#/components`, `app/src/domain/components.ts`, table `components`, field kind
   `component`): Markdown with `{{ … }}` sections of JavaScript over `$variables` (stored as
-  `params`), plus the built-ins `$now` / `$item` (the item itself, n8n style; details in the
-  header of `components.ts`). A Component field picks one (`fields.component_id`) and maps each
+  `params`), plus the built-ins `$now` / `$item` (the item itself, n8n style) and, in a block,
+  `$items` / `$groups` / `$fields` / `$all` (details in the header of `components.ts`). A Component field picks one (`fields.component_id`) and maps each
   variable to a field of its collection or a fixed text/number (`fields.component_args`, `ComponentArg`),
   so one component serves any collection. A component that is only `{{ … }}` yields that raw value
   (numbers sort as numbers); otherwise rendered Markdown (rendered on item pages, plain text in
   tables/cards). Results are computed whenever items are shown (`withComputed`, before queries
   run) and never stored; failing sections show `⚠ message`. One concept on purpose: the same
-  components will later render whole items and query results. The code runs in the app with the
+  components are fields and blocks (see Blocks). The code runs in the app with the
   user's rights (`new Function`); it must move to a sandbox once components can come from others
   (sync, sharing).
   - `{{ }}` sections also work inside an item's own string, markdown, HTML and number values
@@ -70,23 +70,50 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
     component's code (`ui/ComponentFieldEditor.tsx`); saving asks first, as the change applies
     everywhere the component is used (Change component /
     Discard changes, which reverts / Keep editing, also on × or Escape).
+  - What a component uses decides where it can go (`componentUses`): `$item` = needs an item
+    (a field, a block on an item page; never offered on a collection view); `$items` / `$groups` /
+    `$fields` = lists a block's items (its block then offers filter, sort, fields); neither = static
+    content. A block's variables take a fixed value or a field of the block's collection, passed
+    as the field's name (which field to use), not a value.
   - Fields can also be added from every field picker ("Add field": table columns, card fields,
     item page layout; `ui/FieldModal.tsx`, which also edits component fields). They are ordinary
     fields of the collection, shown in the picker's own view; adding asks for confirmation (the field
     belongs to the collection, not the view).
+- **Blocks** (`app/src/domain/views.ts` `ViewBlock`, `app/src/views/BlockView.tsx`): a collection
+  view is a filter plus a list of blocks; each block shows items one way (table, cards, a
+  component) with its own sort and grouping, fields (`FieldLayout`) and
+  type options. Its filter is the view's unless it has its own, which replaces it (not stacked;
+  "Same as the view's filter" in its Filter menu; its own starts as a copy). Every block, also a
+  view's only one, has a header: collapse chevron, name (its title, else its component's name or
+  "Table" / "Cards"; set under Block settings; clicking it collapses too) and its menus. What
+  arranges a view is stored right away, applied to the shown and the saved view alike, so it never
+  marks the view changed: adding, removing (asks first) and reordering blocks, a block's type
+  ("Show as"), its type options (incl. the component and its variables), name and, on item
+  pages, its collection; collapsed blocks and groups (`Collapsed`, in the view's config / the item
+  view; groups per grouped-by field). What changes which items show, and how, waits for Save
+  changes: filters, sort, grouping and fields (`onChange` vs `onSet` in `BlockView`; `arrange` in
+  the pages). The toolbar holds only the view's
+  search, filter and settings (at the right of its tab bar). View settings lists the blocks (reorder, remove, "Add block" = a
+  copy of the last; a view keeps one). Item pages hold blocks too, among the
+  fields (`ItemLayout.blocks`, their ids in `fields`): a block there may list another collection
+  (`ViewBlock.collectionId`) and filter on the page's item (rule values `$item` = this item,
+  `$item.<fieldId>` = what one of its reference fields points to; `resolvePageValues`), so
+  "Books by this Author" is a table on the Author's pages; a new item added there gets the
+  filter's references (`filterPreset`). On item pages the same split holds; where blocks sit
+  among the fields is field order, saved with Save changes like the fields.
 - **Field order and layouts** (`app/src/domain/fieldLayout.ts`, `ui/FieldOrderEditor.tsx`): one
-  approach for which fields show in which order: table columns, card fields and item pages
-  (`orderFields`; null = all in the collection's order). Item pages show an item view
-  (`collections.item_views`, JSON: name + layout = editable, field names shown, fields + order):
+  approach for which fields show in which order: a block's fields (table columns, card fields)
+  and item pages (`orderFields`; null = all in the collection's order). Item pages show an item view
+  (`collections.item_views`, JSON: name + layout = editable, field names shown, fields and blocks + order):
   the one the item is pinned to (`items.item_view_id`), else the starred one, else the first.
   Once a collection has item views its item pages show them as tabs with "+", delete, pin (this
   item always opens with it) and star (default for all items). The layout popover edits the
   shown view's layout as unsaved changes, saved like a collection page's views (Discard / Save
-  changes beside the tabs; "+" makes a new view of what is shown, in the header while the tab
-  bar is hidden). A collection always has at least one item view:
+  changes beside the tabs; "+" after the tabs makes a new view of what is shown). A collection always has at least one item view:
   without stored ones it is a virtual "Default" (`withDefaultItemView`, id `default`), stored once
-  changed; the last view can't be deleted. Both tab bars (collection page, item pages) are hidden while
-  there is one view without unsaved changes; a changed view's tab shows " *". When a layout hides
+  changed; the last view can't be deleted. Both tab bars (collection page, item pages) are always
+  shown, also for a single view (hiding them was confusing and hid the bookmark button); a changed
+  view's tab shows " *"; bookmarking or starring the virtual "All" view stores it first. When a layout hides
   fields or isn't editable, an edit icon switches to the standard page (all fields, editable)
   for the time being.
 - **Spaces** (`app/src/domain/spaces.ts`, table `spaces`, `#/spaces`): separate environments (e.g.
@@ -113,7 +140,8 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
 - **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's items, substring match over string, markdown, HTML and
   list-of-strings values (ASCII case-insensitive; an FTS index can come later).
 - **Local first.** The app works fully offline on the device's own SQLite database.
-- **Future:** the same components render whole items and query results (see Components).
+- **Future:** a block's own unnamed component code ("Save as component"), chart block types,
+  blocks side by side (a grid), embedding one item's field elsewhere (deliberately left out for now).
 - **Sync.** The local SQLite is an offline-first replica of a Postgres-backed server (see "Sync with Postgres").
 - **One codebase, many shells.** Desktop runs in Tauri; iOS (and anything else) runs the same web
   build as a home-screen web app (PWA). No native-only features in the core app.
@@ -182,14 +210,16 @@ declaring everything, and make the UI respect it.
 | Item       | `Item` / `items`                            |
 | Field      | `FieldDef` / `fields`                       |
 | View       | collection view: `CollectionView` / `views`; item view: `ItemView` / `collections.item_views` |
-| Layout     | `ItemLayout` (the fields of an item view)   |
+| Block      | `ViewBlock` (in a view's config, an item view's layout); its kind: "Show as" / `BlockTypeDefinition` |
+| Layout     | `FieldLayout` (a block's fields), `ItemLayout` (the fields and blocks of an item view) |
 | Component  | `Component` / `components`                  |
 | Space      | `Space` / `spaces`                          |
 
 A Collection defines fields and holds its items (Books); an Item is one of them (a particular
-book). "View" is both how a collection's items are listed (collection view: table, cards) and how
-one item's page looks (item view, whose layout is its fields); say "collection view" / "item view"
-only where both could be meant. A Component is reusable rendering ({{ }} code over $variables).
+book). "View" is both how a collection's items are listed (collection view: its blocks) and how
+one item's page looks (item view, whose layout is its fields and blocks); say "collection view" /
+"item view" only where both could be meant. A Block shows items one way (table, cards, a
+component) inside a view. A Component is reusable rendering ({{ }} code over $variables).
 A Space keeps items apart while sharing collections. Code and UI use the same words (no "type",
 "object", "template", "entry"); a field's own kind is called "Field type" in the UI.
 
@@ -247,10 +277,13 @@ Extension points are registries, not special cases in pages:
   `applyQuery()`. Everything field-kind specific (filter operators, sort key, group keys, text for
   search) is in one `KIND_RULES` table: a new field kind or operator is added there. Pseudo fields
   `$title`, `$updated`, `$created` can be sorted on; the default query sorts by `$title`.
-- **View types** (`app/src/views/`): a `ViewTypeDefinition` (kind, label, icon, default options,
-  `normalizeOptions` for stored configs, the `View` component, optional `OptionsEditor`) registered
-  in `VIEW_TYPES` (`app/src/views/index.ts`). Today: `table` (title column links to the item; string,
-  number, date(time) and item cells edit in place via the shared `ui/FieldEditor`; the last row is empty but for a "+" in the title column, which turns it into an add row
+- **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
+  `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,
+  fields with labels / hide empty), the `View` component, optional `OptionsEditor` in
+  the block's "Block settings" menu (gear icon), below "Show as") registered in `BLOCK_TYPES` (`app/src/views/index.ts`). What
+  every type shares (filter, sort and group, fields) is the block's, never in options, so
+  it carries over when the type is switched. Today: `table` (title column links to the item; string,
+  number, date(time) and item cells edit in place via the shared `ui/FieldEditor` (option "Edit values in place", which also gives the add row; checkboxes toggle either way, in every block type); the last row is empty but for a "+" in the title column, which turns it into an add row
   with inputs per editable column (text aligned with the column); header sorting; grouping = one table per
   group in a collapsible Carbon Accordion; columns as wide as their content on one line while
   there's room, the actions column widened by `FillTable` so the table spans the pane; an editing
@@ -258,16 +291,21 @@ Extension points are registries, not special cases in pages:
   selectable per view, the title column too (rows then get an open button); in a narrow pane
   every table restacks as cards, column names as row labels: `.table-wrap` container query) and `cards` (show title, fields, cover = an image or a markdown field rendered in its place, card width (slider: the column count whose width comes closest), cover shape:
   a fixed ratio (image shown whole, the rest filled with its average colour) or the images'
-  average ratio (filled, cropped); with no title and no fields a card is just its cover). A view type only
-  renders a `QueryResult`; it never filters or sorts itself. Shared cell rendering: `views/cells.tsx`.
-- **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + kind + JSON config `{ query, options }`.
+  average ratio (filled, cropped); with no title and no fields a card is just its cover) and
+  `component` (`views/ComponentBlock.tsx`). A block type only
+  renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
+  cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
+- **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + JSON config
+  `{ filters, blocks }` (`views.kind` = the first block's; views stored before blocks, as
+  `{ query, options }`, are read as one block by `parseViewConfig`).
   Every new collection gets an ordinary "All" view (table, all items, sorted by title) in the space it is made in, created
   with the collection in `saveCollection`; it can be renamed (view settings), edited, starred or deleted like
   any other; "+" adds one ("New", then "New 2", …) as a copy of what is shown, unsaved changes
   included (so it is also "save as new view"), and opens View settings with its name selected.
-  "+" sits after the last tab, or in the toolbar while the tab bar is hidden. The
-  toolbar has three icon buttons with popovers: Filter, Sort and group, View settings (name, view
-  collection, its options, delete). The collection page opens the starred view (`views.is_default`, at most one per collection and space,
+  "+" sits after the last tab. The tab bar's right end holds the view's tools after Discard /
+  Save, delete, star and bookmark: Search (opens a search bar below the tabs; closes when emptied
+  or with Escape on an empty box), Filter (the view's) and View settings (name, blocks);
+  each block's own menus (Filter, Sort and group, Fields, Block settings: name, show as, type options) are in its header. The collection page opens the starred view (`views.is_default`, at most one per collection and space,
   set via `setDefaultView`), else the first; a space without stored views shows a virtual "All" table (id `default`; stored when
   changed, renamed or joined by another view), so a collection always has a view and the last can't be
   deleted. Changes are ephemeral: while the shown view differs from
@@ -462,6 +500,9 @@ stale peer range.
   `xs` for modals). The page header's breadcrumb is the exception: the normal size, body text. Tables use `sm` (2rem rows), not `xs`, because inline editors
   are small (2rem) inputs and must fit the row. Read-only field geometry is tuned to these 2rem
   inputs. Page padding is one `spacing-05`; page titles are heading-04.
+- **Toolbar popover buttons** show their panel's state: grey (selected) only while open; a blue
+  icon while its settings are in effect (a filter, a sort other than by title / grouping); Fields
+  and settings menus are never marked.
 - **Popovers never make the page scroll**: toolbar popover panels are capped to the room beside their button (`--popover-room`, set by `ToolbarPopover`) and scroll inside; the icon picker is capped likewise.
 - **Safari / iOS rules** (each has its reason in a comment in `styles.css`):
   - No `filter` on an ancestor of a floating panel; shadows around popovers are box-shadows

@@ -5,12 +5,20 @@
 // computed value. Later the same components render whole items or query results. Results are
 // computed whenever items are shown and never stored.
 //
-// Two $ names are built in rather than variables:
+// These $ names are built in rather than variables:
 //   $now    the current Date
-//   $item  the item itself (like n8n's $json): its fields by name, $item.Pages or
+//   $item   the item itself (like n8n's $json): its fields by name, $item.Pages or
 //           $item["Read at"] (case-insensitive), plus $item.id / createdAt / updatedAt.
+//           In a block on an item page: the page's item.
+//   $items  a block's items (filtered, sorted), each like $item
+//   $groups a block's groups: [{ key, label, items }] (one with key "" when not grouped)
+//   $fields a block's shown fields: [{ id, name, kind }]
+//   $all    every item of the block's collection (in the shown space), unfiltered
 // $item needs no mapping, so it also works in {{ }} sections typed into an item's own text,
 // markdown or number values (rendered when shown, the typed source kept for editing).
+// What a component uses decides where it can go (componentUses): with $item it needs an item
+// (a field, a block on an item page); with $items / $groups / $fields it lists items (a block,
+// whose filter, sort and fields then apply); with neither it is static content (a block).
 //
 // The code runs in the app itself (new Function), with the user's own rights. That's fine for a
 // personal, local app; once components can come from someone else (sync, sharing) they must run
@@ -68,19 +76,42 @@ export function splitWarnings(text: string): string[] {
   return text.split(new RegExp(`${WARNING_MARK}(?:${ERROR_PREFIX})?`));
 }
 
-const BUILT_IN = new Set(["now", "item"]);
+const BUILT_IN = new Set(["now", "item", "items", "groups", "fields", "all"]);
+
+/** The variables of a formula, in order of first use: every $name except the built-ins ($now, $item, $items, …). */
+export const parseParams = (component: string): string[] => dollarNames(component).filter((n) => !BUILT_IN.has(n));
 
 /**
- * The variables of a formula, in order of first use: every $name except the built-ins $now and
- * $item. Quoted strings are skipped, so "costs $5" or '$x' don't count.
+ * Where a component can go, by the built-ins it uses: "item" ($item) needs an item (a component
+ * field, a block on an item page); "items" ($items / $groups / $fields) lists a block's items;
+ * "static" (neither) is content that shows the same wherever it is.
  */
-export function parseParams(component: string): string[] {
+export type ComponentScope = "item" | "items" | "static";
+
+/** What a component's code uses of a block: its items (filter, sort, grouping apply) and its fields. */
+export function componentUses(code: string): { scope: ComponentScope; items: boolean; fields: boolean } {
+  const names = new Set(dollarNames(code));
+  const items = names.has("items") || names.has("groups");
+  const fields = names.has("fields");
+  return { scope: names.has("item") ? "item" : items || fields ? "items" : "static", items, fields };
+}
+
+/** What a block gives its component: the built-ins beyond $item and $now. */
+export interface BlockInputs {
+  items: unknown[];
+  groups: { key: string; label: string; items: unknown[] }[];
+  fields: { id: string; name: string; kind: FieldKind }[];
+  all: unknown[];
+}
+
+/** Every $name the sections use, in order of first use. Quoted strings are skipped, so "costs $5" or '$x' don't count. */
+function dollarNames(component: string): string[] {
   const names = sections(component).flatMap((code) => {
     // Text in quotes doesn't count, but the ${…} parts of a `template literal` are code.
     const unquoted = code
       .replace(/`(?:\\.|[^`\\])*`/g, (literal) => [...literal.matchAll(/\$\{([^}]*)\}/g)].map((m) => ` ${m[1]} `).join(""))
       .replace(/(["'])(?:\\.|(?!\1)[^\\])*\1/g, "");
-    return [...unquoted.matchAll(/\$([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]).filter((n) => !BUILT_IN.has(n));
+    return [...unquoted.matchAll(/\$([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]);
   });
   return [...new Set(names)];
 }
@@ -100,16 +131,17 @@ export function render(
   args: unknown[],
   item?: Item,
   fields?: FieldLookup,
+  block?: BlockInputs,
 ): FieldValue {
-  return asOutput(component.output ?? "markdown", renderRaw(component, args, item, fields));
+  return asOutput(component.output ?? "markdown", renderRaw(component, args, item, fields, block));
 }
 
-function renderRaw(component: Pick<Component, "params" | "code">, args: unknown[], item?: Item, fields?: FieldLookup): FieldValue {
+function renderRaw(component: Pick<Component, "params" | "code">, args: unknown[], item?: Item, fields?: FieldLookup, block?: BlockInputs): FieldValue {
   const whole = /^\s*\{\{([\s\S]*?)\}\}\s*$/.exec(component.code);
-  if (whole && !whole[1].includes("}}")) return evaluate({ params: component.params, code: whole[1] }, args, item, fields);
+  if (whole && !whole[1].includes("}}")) return evaluate({ params: component.params, code: whole[1] }, args, item, fields, block);
   if (!component.code.trim()) return null;
   return component.code.replace(SECTION, (_, code: string) => {
-    const v = evaluate({ params: component.params, code }, args, item, fields);
+    const v = evaluate({ params: component.params, code }, args, item, fields, block);
     return v == null ? "" : isComponentError(v) ? `${WARNING_MARK}${v}${WARNING_MARK}` : String(v);
   });
 }
@@ -198,7 +230,7 @@ function compile(params: string[], code: string): Compiled | Error {
   let fn = compiled.get(key);
   if (!fn) {
     try {
-      fn = new Function(...params.map((p) => `$${p}`), "$item", "$now", `"use strict"; return (${code});`) as Compiled;
+      fn = new Function(...params.map((p) => `$${p}`), "$item", "$now", "$items", "$groups", "$fields", "$all", `"use strict"; return (${code});`) as Compiled;
     } catch (e) {
       fn = e instanceof Error ? e : new Error(String(e));
     }
@@ -225,12 +257,20 @@ function toValue(result: unknown): FieldValue {
  * Runs a section with values for its variables (in `params` order); $item is the item with its
  * fields (from `fields`). Errors become an error text.
  */
-export function evaluate(component: Pick<Component, "params" | "code">, args: unknown[], item?: Item, fields?: FieldLookup): FieldValue {
+export function evaluate(
+  component: Pick<Component, "params" | "code">,
+  args: unknown[],
+  item?: Item,
+  fields?: FieldLookup,
+  block?: BlockInputs,
+): FieldValue {
   if (!component.code.trim()) return null;
   const fn = compile(component.params, component.code);
   if (fn instanceof Error) return ERROR_PREFIX + fn.message;
   try {
-    return toValue(fn(...args, itemValue(item, fields), new Date()));
+    // Outside a block its built-ins are empty, not undefined: `$items.length` reads 0.
+    const b = block ?? NO_BLOCK;
+    return toValue(fn(...args, itemValue(item, fields), new Date(), b.items, b.groups, b.fields, b.all));
   } catch (e) {
     return ERROR_PREFIX + (e instanceof Error ? e.message : String(e));
   }
@@ -263,6 +303,32 @@ function lookupIn(collection: Collection, values: Record<string, FieldValue>, re
       return f ? inputOf(f, values[f.id], refLabel) : undefined;
     },
   };
+}
+
+const NO_BLOCK: BlockInputs = { items: [], groups: [], fields: [], all: [] };
+
+/**
+ * Items as a block's component sees them, each like $item (fields by name, computed results
+ * included): made once per item, so an item in $items, a group and $all is the same object.
+ */
+export function itemsInput(collection: Collection, refLabel: RefLabel): (item: Item) => unknown {
+  const made = new Map<Item, unknown>();
+  return (item) => {
+    let v = made.get(item);
+    if (v === undefined) made.set(item, (v = itemValue(item, lookupIn(collection, item.values, refLabel))));
+    return v;
+  };
+}
+
+/** The item's fields by name, as $item shows them (for a page's item, given to its blocks). */
+export const fieldLookup = (collection: Collection, item: Item, refLabel: RefLabel): FieldLookup => lookupIn(collection, item.values, refLabel);
+
+/** A block component's variable: a fixed value (a number when it reads as one), or a field's name (which field to use). */
+export function blockArgValue(arg: ComponentArg | undefined, fieldsById: Map<string, { name: string }>): unknown {
+  if (!arg) return null;
+  if ("field" in arg) return fieldsById.get(arg.field)?.name ?? null;
+  const s = arg.value.trim();
+  return s === "" ? null : Number.isFinite(Number(s)) ? Number(s) : arg.value;
 }
 
 /** A variable's value: its field's (as a component sees it), or its fixed value (a number when it reads as one). */

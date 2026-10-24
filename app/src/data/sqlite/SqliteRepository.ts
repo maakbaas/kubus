@@ -13,12 +13,12 @@ import {
   valuesEqual,
   parseComponentArgs,
 } from "../../domain/model";
-import { defaultQuery, type FilterRule } from "../../domain/query";
+import type { FilterRule } from "../../domain/query";
 import type { Bookmark, BookmarkKind } from "../../domain/bookmarks";
 import { parseItemViews, withDefaultItemView, type ItemView } from "../../domain/fieldLayout";
 import { hasSections, isComponentOutput, type Component } from "../../domain/components";
 import { DEFAULT_SPACE_ID, withDefaultSpace, type Space } from "../../domain/spaces";
-import type { CollectionView } from "../../domain/views";
+import { defaultViewState, parseViewConfig, type CollectionView } from "../../domain/views";
 import type { DataChange, Repository } from "../repository";
 import { SyncEngine } from "../sync/SyncEngine";
 import { SqlClient } from "./client";
@@ -239,12 +239,12 @@ export class SqliteRepository implements Repository {
         bind: [draft.id, draft.name, draft.pluralName, draft.icon, draft.description, ts, spaceIdsJson(draft.spaceIds)],
       });
       // Every collection starts with an ordinary (renamable, deletable) "All" view in the space it
-      // was made in: a table of all items sorted by title; its options are filled in by the view
+      // was made in: a table of all items sorted by title; its options are filled in by the block
       // type's normalizeOptions. Other spaces show that unsaved table until a view is saved there.
       writes.push({
         sql: `INSERT INTO views (id, collection_id, space_id, name, kind, config, position, is_default, created_at, updated_at)
               VALUES (?1, ?2, ?5, 'All', 'table', ?3, 0, 0, ?4, ?4)`,
-        bind: [newId(), draft.id, JSON.stringify({ query: defaultQuery(), options: null }), ts, spaceId],
+        bind: [newId(), draft.id, JSON.stringify(defaultViewState(null)), ts, spaceId],
       });
     }
 
@@ -441,15 +441,15 @@ export class SqliteRepository implements Repository {
       [collectionId, spaceId],
     );
     return rows.map((r) => {
-      const config = JSON.parse(r.config) as Pick<CollectionView, "query" | "options">;
+      const { filters, blocks, collapsed } = parseViewConfig(r.config, r.kind);
       return {
         id: r.id,
         collectionId: r.collection_id,
         spaceId: r.space_id,
         name: r.name,
-        kind: r.kind,
-        query: config.query,
-        options: config.options,
+        filters,
+        blocks,
+        collapsed,
         position: r.position,
         isDefault: r.is_default === 1,
         createdAt: r.created_at,
@@ -460,7 +460,7 @@ export class SqliteRepository implements Repository {
 
   async saveView(view: CollectionView): Promise<void> {
     const ts = now();
-    const config = JSON.stringify({ query: view.query, options: view.options });
+    const config = JSON.stringify({ filters: view.filters, blocks: view.blocks, collapsed: view.collapsed });
     await this.db.write([
       {
         sql: `INSERT INTO views (id, collection_id, space_id, name, kind, config, position, created_at, updated_at)
@@ -468,7 +468,8 @@ export class SqliteRepository implements Repository {
               ON CONFLICT (id) DO UPDATE SET
                 name = excluded.name, kind = excluded.kind, config = excluded.config,
                 position = excluded.position, updated_at = excluded.updated_at`,
-        bind: [view.id, view.collectionId, view.name, view.kind, config, view.position, ts, view.spaceId],
+        // `kind` is the first block's (views stored before blocks are read by it).
+        bind: [view.id, view.collectionId, view.name, view.blocks[0]?.kind ?? "table", config, view.position, ts, view.spaceId],
       },
     ]);
     this.emit({ scope: "views", collectionId: view.collectionId });

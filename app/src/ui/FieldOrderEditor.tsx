@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { Button, Checkbox, FormGroup, IconButton } from "@carbon/react";
 import { Add, Tag, TagNone } from "@carbon/icons-react";
 import { isMetaField, type FieldDef, type Collection } from "../domain/model";
@@ -13,7 +13,8 @@ import { moveBlock, useReorder } from "./useReorder";
  * `hiddenByDefault` (e.g. an item page's title field, already shown as its title), which still
  * show when ticked. With `hiddenLabels`, each shown
  * field also gets a toggle for its name. With `collection`, fields can be added here (a field of the
- * collection, shown in this view; components too).
+ * collection, shown in this view; components too). `extra` rows (an item page's blocks) are
+ * ordered and shown / hidden among the fields, as if they were fields.
  */
 export function FieldOrderEditor({
   id,
@@ -25,6 +26,7 @@ export function FieldOrderEditor({
   hiddenLabels,
   onHiddenLabelsChange,
   collection,
+  extra = [],
 }: {
   id: string;
   label: string;
@@ -37,19 +39,26 @@ export function FieldOrderEditor({
   onHiddenLabelsChange?(ids: string[]): void;
   /** The collection: enables adding fields from here. */
   collection?: Collection;
+  /** Rows that aren't fields (ids and labels), listed after them by default. */
+  extra?: { id: string; label: ReactElement }[];
 }) {
   /** Whether the add-field dialog is open. */
   const [adding, setAdding] = useState(false);
-  const base = fields.filter((f) => !hiddenByDefault.includes(f.id) && !isMetaField(f)).map((f) => f.id);
-  const shown = (value ?? base).filter((fid) => fields.some((f) => f.id === fid));
+  const entries = [
+    ...fields.map((f) => ({ id: f.id, label: <FieldLabel field={f} /> as ReactElement, isField: true, meta: isMetaField(f) })),
+    ...extra.map((e) => ({ ...e, isField: false, meta: false })),
+  ];
+  const all = entries.map((e) => e.id);
+  const base = entries.filter((e) => !hiddenByDefault.includes(e.id) && !e.meta).map((e) => e.id);
+  const shown = (value ?? base).filter((fid) => all.includes(fid));
   // Every field has a fixed row (the shown ones first, as stored, when this opens); ticking or
   // unticking one doesn't move it. Rows follow the stored order again if that changes elsewhere.
   const [order, setOrder] = useState<string[]>([]);
-  const known = order.filter((fid) => fields.some((f) => f.id === fid));
-  const fresh = fields.map((f) => f.id).filter((fid) => !known.includes(fid));
+  const known = order.filter((fid) => all.includes(fid));
+  const fresh = all.filter((fid) => !known.includes(fid));
   const sameShown = known.filter((fid) => shown.includes(fid)).join() === shown.join();
-  const ids = sameShown && known.length > 0 ? [...known, ...fresh] : [...shown, ...fields.map((f) => f.id).filter((fid) => !shown.includes(fid))];
-  const rows = ids.map((fid) => fields.find((f) => f.id === fid)!);
+  const ids = sameShown && known.length > 0 ? [...known, ...fresh] : [...shown, ...all.filter((fid) => !shown.includes(fid))];
+  const rows = ids.map((fid) => entries.find((e) => e.id === fid)!);
   // Stored as null while it is just the default.
   const commit = (rowIds: string[], on: Set<string>) => {
     setOrder(rowIds);
@@ -78,12 +87,12 @@ export function FieldOrderEditor({
           <div key={f.id} className="field-order__row" {...reorder.row(i)}>
             <Checkbox
               id={`${id}-${f.id}`}
-              labelText={<FieldLabel field={f} />}
+              labelText={f.label}
               checked={isShown}
               onChange={(_, { checked }) => commit(ids, new Set(checked ? [...shown, f.id] : shown.filter((s) => s !== f.id)))}
             />
             <span className="field-order__moves">
-              {isShown && hiddenLabels && onHiddenLabelsChange && (
+              {isShown && f.isField && hiddenLabels && onHiddenLabelsChange && (
                 <IconButton
                   autoAlign
                   kind="ghost"

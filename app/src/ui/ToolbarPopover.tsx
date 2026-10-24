@@ -4,7 +4,7 @@ import { IconButton, Popover, PopoverContent } from "@carbon/react";
 interface Props {
   label: string;
   icon: ComponentType;
-  /** Shows the button as selected, e.g. when filters are active. */
+  /** In effect (e.g. a filter or a sort other than the default): the icon turns blue. */
   active?: boolean;
   /** Size the panel to its content (e.g. a short list) instead of the settings width. */
   fit?: boolean;
@@ -138,7 +138,7 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, openRequest, on
     }, 0);
   return (
     <Popover ref={root} autoAlign open={open} align="bottom-end" dropShadow onRequestClose={requestClose} className="toolbar-popover">
-      <IconButton autoAlign id={id} label={label} kind="ghost" size="sm" align="bottom" isSelected={active || open} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <IconButton autoAlign id={id} label={label} kind="ghost" size="sm" align="bottom" isSelected={open} data-active={active || undefined} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Icon />
       </IconButton>
       <PopoverContent>

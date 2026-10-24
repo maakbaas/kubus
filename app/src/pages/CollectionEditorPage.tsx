@@ -301,7 +301,6 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                   />
                 )}
                 <div className="field-row__actions">
-                  {reorder.handle(i)}
                   <Button
                     size="sm"
                     kind="ghost"
@@ -311,6 +310,8 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                     disabled={draft.fields.length === 1}
                     onClick={() => removeField(f.id)}
                   />
+                  {/* The drag handle is always a row's last icon. */}
+                  {reorder.handle(i)}
                 </div>
                 {/* A reference field can limit which items it offers (filters over the target). */}
                 {isReferenceKind(f.kind) && (() => {

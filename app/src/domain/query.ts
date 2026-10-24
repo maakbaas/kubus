@@ -209,6 +209,39 @@ export function groupPreset(collection: Collection, query: ViewQuery, groupKey: 
   return field && toValue && groupKey !== "" ? { [field.id]: toValue(groupKey) } : {};
 }
 
+/**
+ * Filter values taken from the page's item, for blocks on item pages ("Author is this item"):
+ * the item itself, or the item another of its reference fields points to ("Genre is this item's Genre").
+ */
+export const PAGE_ITEM = "$item";
+export const pageItemField = (fieldId: string) => `${PAGE_ITEM}.${fieldId}`;
+
+/** Filters with page-item values filled in from the page's item (no page: they match nothing). */
+export function resolvePageValues(filters: FilterRule[], page: Item | null): FilterRule[] {
+  if (!filters.some((r) => r.value.startsWith(PAGE_ITEM))) return filters;
+  return filters.map((r) => {
+    if (r.value === PAGE_ITEM) return { ...r, value: page?.id ?? "" };
+    if (!r.value.startsWith(`${PAGE_ITEM}.`)) return r;
+    const v = page?.values[r.value.slice(PAGE_ITEM.length + 1)];
+    return { ...r, value: typeof v === "string" ? v : "" };
+  });
+}
+
+/**
+ * The values a new item needs to pass the reference rules of a filter ("Author is X" sets X), so
+ * an item added to a filtered list shows up in it.
+ */
+export function filterPreset(collection: Collection, filters: FilterRule[]): Record<string, FieldValue> {
+  const preset: Record<string, FieldValue> = {};
+  for (const rule of filters) {
+    const field = collection.fields.find((f) => f.id === rule.fieldId);
+    if (!field || rule.operator !== "is" || !rule.value || rule.value.startsWith(PAGE_ITEM)) continue;
+    if (field.kind === "item") preset[field.id] = rule.value;
+    if (field.kind === "item_list") preset[field.id] = [...((preset[field.id] as string[] | undefined) ?? []), rule.value];
+  }
+  return preset;
+}
+
 /** Whether items can be grouped by fields of this kind. */
 export const isGroupable = (kind: FieldKind) => !!KIND_RULES[kind].groupKeys;
 
