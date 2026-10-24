@@ -8,6 +8,8 @@ describe("spaces", () => {
     expect(withDefaultSpace([work]).map((s) => s.id)).toEqual([DEFAULT_SPACE_ID, "w"]);
     const renamed = { id: DEFAULT_SPACE_ID, name: "Private", icon: null, position: -1 };
     expect(withDefaultSpace([renamed, work])).toEqual([renamed, work]);
+    // Once the default is deleted (a tombstone row) it isn't added again.
+    expect(withDefaultSpace([work], true)).toEqual([work]);
   });
 
   it("show a collection everywhere unless it names its spaces", () => {

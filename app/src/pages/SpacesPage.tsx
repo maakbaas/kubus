@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { IconButton, InlineNotification, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Tag } from "@carbon/react";
+import { IconButton, InlineNotification, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@carbon/react";
 import { ArrowRight, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { newId, nextName, type FieldDef } from "../domain/model";
-import { DEFAULT_SPACE_ID, type Space } from "../domain/spaces";
+import type { Space } from "../domain/spaces";
 import { cellEditStart, type EditStart } from "../ui/editStart";
 import { FieldEditor } from "../ui/FieldEditor";
 import { IconPicker } from "../ui/IconPicker";
@@ -30,9 +30,9 @@ const nameField = (s: Space): FieldDef => ({
 });
 
 /**
- * The spaces as a table: icon (picker), name (edits in place), item count, and per row a switch
- * (show that space) and a delete icon. Collections and components are shared by every space;
- * items, collection views, bookmarks and open tabs belong to one. The first space can't be deleted.
+ * The spaces as a table: icon (picker), name (edits in place, taking the row's spare width), and per row a switch
+ * (show that space) and a delete icon. The counts only feed the delete confirmation. Collections and components are shared by every space;
+ * items, collection views, bookmarks and open tabs belong to one. Any space can be deleted while another remains (deleting the shown one opens the next).
  */
 export function SpacesPage() {
   const { repo, spaces, space: shown, setSpace } = useStore();
@@ -72,7 +72,9 @@ export function SpacesPage() {
     });
     if (!ok) return;
     try {
-      if (s.id === shown.id) setSpace(DEFAULT_SPACE_ID);
+      // Deleting the shown space opens the next one (the previous, for the last).
+      const i = spaces.indexOf(s);
+      if (s.id === shown.id) setSpace((spaces[i + 1] ?? spaces[i - 1]).id);
       await repo.deleteSpace(s.id);
     } catch (e) {
       fail(e);
@@ -91,10 +93,9 @@ export function SpacesPage() {
         <Table size="sm">
           <TableHead>
             <TableRow>
-              <TableHeader aria-label="Icon" />
-              <TableHeader>Name</TableHeader>
-              <TableHeader aria-label="Shown" />
-              <TableHeader>Items</TableHeader>
+              <TableHeader>Icon</TableHeader>
+              {/* As wide as the row allows, so the name's input opens at a usable width. */}
+              <TableHeader style={{ inlineSize: "100%" }}>Name</TableHeader>
               <TableHeader aria-label="Actions" />
             </TableRow>
           </TableHead>
@@ -102,7 +103,7 @@ export function SpacesPage() {
             {spaces.map((s) => (
               <TableRow key={s.id}>
                 <TableCell className="space-icon">
-                  <IconPicker id={`space-icon-${s.id}`} value={s.icon ?? SPACE_ICON} onChange={(icon) => save(s, { icon })} />
+                  <IconPicker id={`space-icon-${s.id}`} value={s.icon ?? SPACE_ICON} size={16} onChange={(icon) => save(s, { icon })} />
                 </TableCell>
                 {/* Edits in place like the Collections page's descriptions: the input covers the cell, text unmoved. */}
                 <TableCell data-label="Name" className={`cell--string${editing?.id === s.id ? " cell--editing" : ""}`}>
@@ -152,14 +153,6 @@ export function SpacesPage() {
                     </div>
                   )}
                 </TableCell>
-                <TableCell>
-                  {s.id === shown.id && (
-                    <Tag size="sm" type="blue">
-                      Shown
-                    </Tag>
-                  )}
-                </TableCell>
-                <TableCell data-label="Items">{counts[s.id] ?? ""}</TableCell>
                 <RowActions>
                   {(inMenu) => {
                     const btn = rowButtonProps(inMenu);
@@ -170,8 +163,8 @@ export function SpacesPage() {
                         </IconButton>
                         <IconButton
                           {...btn}
-                          label={s.id === DEFAULT_SPACE_ID ? "The first space can't be deleted" : `Delete ${s.name}`}
-                          disabled={s.id === DEFAULT_SPACE_ID}
+                          label={spaces.length < 2 ? "The only space can't be deleted" : `Delete ${s.name}`}
+                          disabled={spaces.length < 2}
                           onClick={() => remove(s)}
                         >
                           <TrashCan />

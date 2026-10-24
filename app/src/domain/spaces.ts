@@ -19,9 +19,12 @@ export const DEFAULT_SPACE_ID = "default";
 
 const DEFAULT_SPACE: Space = { id: DEFAULT_SPACE_ID, name: "Personal", icon: null, position: -1 };
 
-/** The stored spaces plus the default one while it has no row; the default can't be deleted. */
-export const withDefaultSpace = (spaces: Space[]): Space[] =>
-  spaces.some((s) => s.id === DEFAULT_SPACE_ID) ? spaces : [DEFAULT_SPACE, ...spaces];
+/**
+ * The stored spaces plus the default one while it has no row. Deleting the default leaves a
+ * tombstone row, which `deleted` reports so it isn't added again.
+ */
+export const withDefaultSpace = (spaces: Space[], deleted = false): Space[] =>
+  deleted || spaces.some((s) => s.id === DEFAULT_SPACE_ID) ? spaces : [DEFAULT_SPACE, ...spaces];
 
 /** Whether a collection is shown in a space. */
 export const inSpace = (collection: Pick<Collection, "spaceIds">, spaceId: string) =>

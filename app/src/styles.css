@@ -850,6 +850,11 @@ body {
   padding-block: 0;
   padding-inline-end: 0;
 }
+/* The icon in the primary icon colour (black on white, white on g100), not the link blue. */
+td.space-icon .cds--btn svg,
+td.space-icon .cds--btn svg path {
+  fill: var(--cds-icon-primary);
+}
 /* The space switcher beside the menu toggle, filling the rest of the row. */
 .side-nav-space {
   flex: 1;

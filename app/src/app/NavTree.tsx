@@ -91,7 +91,8 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
         openTab(path);
       }}
     >
-      <TreeView label="Navigation" hideLabel size="xs" selected={selected ? [selected] : []} active={selected} className="nav-tree">
+      {/* Carbon ignores an empty `selected` and keeps the last node lit (e.g. on the Spaces page, which has no node), so the tree is remounted when there is none. */}
+      <TreeView key={selected ? "tree" : "tree-none"} label="Navigation" hideLabel size="xs" selected={selected ? [selected] : []} active={selected} className="nav-tree">
         <TreeNode autoAlign
             id="bookmarks"
             label="Bookmarks"

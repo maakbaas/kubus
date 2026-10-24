@@ -8,6 +8,8 @@ interface Props {
   id: string;
   value: string | null;
   onChange(icon: string | null): void;
+  /** The button's icon size: 24 beside a page title (default), 16 in a table row like its other icons. */
+  size?: 16 | 24;
 }
 
 /**
@@ -15,7 +17,7 @@ interface Props {
  * opens a popover with a search box over a grid of matches (first MAX_SHOWN drawn, so it
  * stays fast). Choosing an icon, Escape or clicking outside closes it.
  */
-export function IconPicker({ id, value, onChange }: Props) {
+export function IconPicker({ id, value, onChange, size = 24 }: Props) {
   const names = iconNames();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -45,11 +47,12 @@ export function IconPicker({ id, value, onChange }: Props) {
         // Borderless, like the page title next to it; the tooltip and hover show it's clickable.
         kind="ghost"
         size="sm"
-        align="bottom"
+        // Starts at the button and runs right: centred, it would slide under the side nav in the Spaces table.
+        align="bottom-start"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        <CollectionIcon name={value} size={24} />
+        <CollectionIcon name={value} size={size} />
       </IconButton>
       <PopoverContent>
         {/* Only while open: PopoverContent keeps its children mounted when closed, which would

@@ -163,7 +163,8 @@ export class SqliteRepository implements Repository {
     const rows = await this.db.select<Space>(
       "SELECT id, name, icon, position FROM spaces WHERE deleted_at IS NULL ORDER BY position, created_at",
     );
-    return withDefaultSpace(rows);
+    const defaultDeleted = (await this.db.select("SELECT 1 FROM spaces WHERE id = ?1 AND deleted_at IS NOT NULL", [DEFAULT_SPACE_ID])).length > 0;
+    return withDefaultSpace(rows, defaultDeleted);
   }
 
   async saveSpace(space: Pick<Space, "id" | "name" | "icon">): Promise<void> {
@@ -181,7 +182,7 @@ export class SqliteRepository implements Repository {
   }
 
   async deleteSpace(spaceId: string): Promise<void> {
-    if (spaceId === DEFAULT_SPACE_ID) throw new Error("The first space can't be deleted.");
+    if ((await this.listSpaces()).length < 2) throw new Error("The only space can't be deleted.");
     const ts = now();
     const collections = await this.db.select<{ collection_id: string }>(
       `SELECT collection_id FROM items WHERE space_id = ?1 AND deleted_at IS NULL
@@ -193,7 +194,12 @@ export class SqliteRepository implements Repository {
       { sql: "UPDATE items SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
       { sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
       { sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
-      { sql: "UPDATE spaces SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, spaceId] },
+      // The default space has no row until renamed: its tombstone is made here.
+      {
+        sql: `INSERT INTO spaces (id, name, icon, position, created_at, updated_at, deleted_at) VALUES (?2, 'Personal', NULL, -1, ?1, ?1, ?1)
+              ON CONFLICT (id) DO UPDATE SET deleted_at = excluded.deleted_at, updated_at = excluded.updated_at`,
+        bind: [ts, spaceId],
+      },
     ]);
     this.emit({ scope: "spaces" }, { scope: "bookmarks" }, ...collections.flatMap((c) => [
       { scope: "items", collectionId: c.collection_id } as const,

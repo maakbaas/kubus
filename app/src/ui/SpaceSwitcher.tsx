@@ -6,7 +6,7 @@ import type { Space } from "../domain/spaces";
 import { CollectionLabel } from "./collectionIcons";
 
 /** A space's icon when it has none of its own. */
-export const SPACE_ICON = "Workspace";
+export const SPACE_ICON = "Home";
 
 /** A space with its icon (switcher, Spaces page). */
 export const SpaceLabel = ({ space }: { space: Space }) => <CollectionLabel collection={{ name: space.name, icon: space.icon ?? SPACE_ICON }} />;
