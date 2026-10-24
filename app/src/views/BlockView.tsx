@@ -266,13 +266,15 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   });
   const blockName = useBlockName();
   // On an item page a block is headed like a field (its name as a label) and never collapses.
-  const collapsed = !page && state.blocks.includes(block.id);
+  // A block without a header (collection views only) can't be collapsed either; its menus show on hover.
+  const headless = !page && !!block.hideHeader;
+  const collapsed = !page && !headless && state.blocks.includes(block.id);
   const toggleCollapsed = () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
   return (
-    <section className={page ? "block block--field" : "block"}>
+    <section className={page ? "block block--field" : headless ? "block block--headless" : "block"}>
       <div className="block__header">
-        {page ? (
+        {headless ? null : page ? (
           // A Markdown block without a name is just its text, with no heading.
           (block.title || type.kind !== "markdown") && (
             <h2 className="block__title cds--label">

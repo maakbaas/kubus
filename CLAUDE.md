@@ -85,7 +85,10 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   type options. Its filter is the view's unless it has its own, which replaces it (not stacked;
   "Same as the view's filter" in its Filter menu; its own starts as a copy). Every block, also a
   view's only one, has a header: collapse chevron, name (its title, else its component's name or
-  "Table" / "Cards"; set under Block settings; clicking it collapses too) and its menus. What
+  "Table" / "Cards"; set under Block settings; clicking it collapses too) and its menus. In a
+  collection view the header can be hidden (tag icon in View settings' block list,
+  `ViewBlock.hideHeader`, stored right away): the block then can't collapse and its menus float
+  over its top right corner on hover (always shown on touch screens). What
   arranges a view is stored right away, applied to the shown and the saved view alike, so it never
   marks the view changed: adding, removing (asks first) and reordering blocks, a block's type
   ("Show as"), its type options (incl. the component and its variables), name and, on item

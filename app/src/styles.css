@@ -1015,9 +1015,12 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
 .list-input__row.list-input__add:first-child {
   margin-block-start: 0;
 }
-/* An empty list: a line above the "+", like the line under an item. */
+/* The "+" glyph starts where the items' text (or, in an empty list, the field's name) does: the
+   2rem button's 0.5rem inset around its 1rem icon is taken from the value box's 1rem inset
+   (after the checkboxes, if any). */
+.list-input__add--rows,
 .list-input__add--empty {
-  border-block-start: 1px solid var(--cds-border-subtle);
+  padding-inline-start: var(--cds-spacing-03);
 }
 .ref-combo {
   flex: 1;
@@ -2235,6 +2238,30 @@ img[data-lightbox] {
 .block-settings__remove {
   align-self: flex-start;
 }
+/* A block without its header (View settings): only its menus remain, floating over its top right
+   corner while the block is hovered or a menu has focus (always on touch screens, without hover). */
+.block--headless {
+  position: relative;
+}
+.block--headless > .block__header {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  z-index: 2;
+  margin: 0;
+  border: 0;
+  background: var(--cds-background);
+  opacity: 0;
+}
+.block--headless:hover > .block__header,
+.block--headless > .block__header:focus-within {
+  opacity: 1;
+}
+@media (hover: none) {
+  .block--headless > .block__header {
+    opacity: 1;
+  }
+}
 .block-list__name {
   min-inline-size: 0;
   overflow-wrap: anywhere;
@@ -2306,6 +2333,27 @@ img[data-lightbox] {
 .item-fields .checkbox-field,
 .item-fields .checklist-box {
   padding-inline-start: var(--cds-spacing-05);
+}
+/* A line between fields (and blocks) on item pages, centred in the stack's gap. It runs from the
+   page edge (where the text starts) to the right edge, also for fields pulled left by their inset. */
+.item-fields:not(.item-fields--form) > * + * {
+  position: relative;
+}
+.item-fields:not(.item-fields--form) > * + *::before {
+  content: "";
+  position: absolute;
+  inset-block-start: calc(var(--cds-stack-gap, 2rem) / -2);
+  inset-inline: 0;
+  border-block-start: 1px solid var(--cds-border-subtle);
+  pointer-events: none;
+}
+.item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label, .block)::before {
+  inset-inline-start: var(--cds-spacing-05);
+}
+@media (max-width: 42rem) {
+  .item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label)::before {
+    inset-inline: calc(0.5 * var(--cds-spacing-05));
+  }
 }
 /* An image has no inner inset: its edge itself lines up with the text. */
 /* The form for a new item is an ordinary form: its boxes (not their text) line up with the

@@ -36,6 +36,7 @@ export function normalizeBlock(collection: Collection, block: ViewBlock): ViewBl
     collectionId: block.collectionId,
     options: type.normalizeOptions(block.options, collection),
   };
+  if (block.hideHeader) normalized.hideHeader = true;
   return block.groupOrder ? { ...normalized, groupOrder: block.groupOrder } : normalized;
 }
 

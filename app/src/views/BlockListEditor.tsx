@@ -1,5 +1,5 @@
 import { FormGroup, IconButton } from "@carbon/react";
-import { TrashCan } from "@carbon/icons-react";
+import { Tag, TagNone, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import type { ViewBlock } from "../domain/views";
 import { moveBlock, useReorder } from "../ui/useReorder";
@@ -19,7 +19,7 @@ export function useBlockName() {
 }
 
 /**
- * A view's blocks: reorder (drag, or arrows on a handle), remove (a view keeps one), add.
+ * A view's blocks: reorder (drag, or arrows on a handle), show or hide their header, remove (a view keeps one), add.
  * `onRemove` asks first unless `asked` (the list's own Delete key confirmation asked already).
  */
 export function BlockListEditor({
@@ -27,9 +27,12 @@ export function BlockListEditor({
   onMove,
   onRemove,
   onAdd,
+  onHeader,
 }: {
   blocks: ViewBlock[];
   onMove(blocks: ViewBlock[]): void;
+  /** Shows or hides a block's header (a block without one can't be collapsed). */
+  onHeader(id: string, shown: boolean): void;
   onRemove(ids: string[], asked: boolean): void;
   onAdd(spec: NewBlockSpec): void;
 }) {
@@ -52,6 +55,16 @@ export function BlockListEditor({
               {name(b)}
             </span>
             <span className="field-order__moves">
+              <IconButton
+                autoAlign
+                kind="ghost"
+                size="sm"
+                label={b.hideHeader ? "Show block header" : "Hide block header"}
+                isSelected={!!b.hideHeader}
+                onClick={() => onHeader(b.id, !!b.hideHeader)}
+              >
+                {b.hideHeader ? <TagNone /> : <Tag />}
+              </IconButton>
               {blocks.length > 1 && (
                 <IconButton autoAlign kind="ghost" size="sm" label="Remove block" onClick={() => onRemove([b.id], false)}>
                   <TrashCan />

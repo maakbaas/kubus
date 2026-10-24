@@ -225,7 +225,7 @@ export function ListField({
           </div>
         ))}
         {!readOnly && (
-          <div className={`list-input__row list-input__add${rows.length === 0 ? " list-input__add--empty" : ""}`}>
+          <div className={`list-input__row list-input__add ${rows.length === 0 ? "list-input__add--empty" : "list-input__add--rows"}`}>
             {/* Under the checkboxes when there are any; else at the left. */}
             {checklist && rows.length > 0 && <span className="checklist-box" />}
             <IconButton autoAlign kind="ghost" size="sm" align="right" label="Add item" onMouseDown={(e) => e.preventDefault()} onClick={() => insert(items.length)}>

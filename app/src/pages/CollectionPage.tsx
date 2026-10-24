@@ -382,6 +382,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
                 onMove={moveBlocks}
                 onRemove={(ids, asked) => removeBlocks(ids, asked).catch((e) => setError(errorMessage(e)))}
                 onAdd={addBlock}
+                onHeader={(id, shown) => setBlockNow(id, { hideHeader: shown ? undefined : true })}
               />
             </div>
           </ToolbarPopover>

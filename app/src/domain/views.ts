@@ -29,6 +29,8 @@ export interface ViewBlock {
   collectionId: string | null;
   /** Block-type specific options, validated by that block type. */
   options: unknown;
+  /** Shown without its header (name, collapse, menus on hover); only in collection views. Absent = shown. */
+  hideHeader?: true;
 }
 
 /** What is shown right now; may or may not match a saved view. */
@@ -153,6 +155,7 @@ export function parseBlock(raw: unknown): ViewBlock | null {
     collectionId: typeof o.collectionId === "string" ? o.collectionId : null,
     options: o.options ?? null,
   };
+  if (o.hideHeader === true) block.hideHeader = true;
   return o.groupOrder === "desc" || o.groupOrder === "count" ? { ...block, groupOrder: o.groupOrder } : block;
 }
 
