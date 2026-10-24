@@ -38,6 +38,8 @@ export const isComponentOutput = (v: unknown): v is ComponentOutput => COMPONENT
 export interface Component {
   id: string;
   name: string;
+  /** What it is for, shown in the components list; empty when unset. */
+  description: string;
   /** The variables the code uses, without their $ (found from the code: parseParams). */
   params: string[];
   /** The component: Markdown with {{ … }} JavaScript sections. */

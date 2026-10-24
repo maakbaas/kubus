@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Button, Dropdown, Form, FormGroup, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
-import { Add, ArrowDown, ArrowUp, TrashCan } from "@carbon/icons-react";
+import { Add, TrashCan } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
 import {
@@ -25,6 +25,7 @@ import type { Space } from "../domain/spaces";
 import { NotFound } from "../ui/NotFound";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
+import { moveBlock, useReorder } from "../ui/useReorder";
 
 /** A collection a reference field can point at (including the one being created). */
 interface Target {
@@ -111,13 +112,13 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
   const updateField = (id: string, patch: Partial<DraftField>) =>
     setDraft((d) => ({ ...d, fields: d.fields.map((f) => (f.id === id ? { ...f, ...patch } : f)) }));
 
-  const moveField = (index: number, delta: number) =>
-    setDraft((d) => {
-      const fields = [...d.fields];
-      const [f] = fields.splice(index, 1);
-      fields.splice(index + delta, 0, f);
-      return { ...d, fields };
-    });
+  const reorder = useReorder({
+    count: draft.fields.length,
+    onMove: (start, end, to) => setDraft((d) => ({ ...d, fields: moveBlock(d.fields, start, end, to) })),
+    onDelete: (indices) => setDraft((d) => ({ ...d, fields: d.fields.filter((_, i) => !indices.includes(i)) })),
+    canDelete: (indices) => indices.length < draft.fields.length, // a collection needs a field
+    noun: ["field", "fields"],
+  });
 
   const removeField = (id: string) => setDraft((d) => ({ ...d, fields: d.fields.filter((f) => f.id !== id) }));
 
@@ -230,7 +231,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
           <FormGroup legendText="Fields">
             <p className="helper">A field's type cannot change once saved.</p>
             {draft.fields.map((f, i) => (
-              <div className={isReferenceKind(f.kind) || f.kind === "component" || f.kind === "checkbox" || f.kind === "checklist" ? "field-row field-row--reference" : "field-row"} key={f.id}>
+              <div className={isReferenceKind(f.kind) || f.kind === "component" || f.kind === "checkbox" || f.kind === "checklist" ? "field-row field-row--reference" : "field-row"} key={f.id} {...reorder.row(i)}>
                 <TextInput size="sm"
                   id={`${uid}-field-name-${f.id}`}
                   labelText="Field name"
@@ -300,15 +301,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                   />
                 )}
                 <div className="field-row__actions">
-                  <Button size="sm" kind="ghost" hasIconOnly renderIcon={ArrowUp} iconDescription="Move up" disabled={i === 0} onClick={() => moveField(i, -1)} />
-                  <Button size="sm"
-                    kind="ghost"
-                    hasIconOnly
-                    renderIcon={ArrowDown}
-                    iconDescription="Move down"
-                    disabled={i === draft.fields.length - 1}
-                    onClick={() => moveField(i, 1)}
-                  />
+                  {reorder.handle(i)}
                   <Button
                     size="sm"
                     kind="ghost"
@@ -358,6 +351,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
             <Button kind="tertiary" size="sm" renderIcon={Add} iconDescription="Add field" onClick={addField} className="add-field">
               Add field
             </Button>
+            {reorder.dialog}
           </FormGroup>
 
           <div className="form-actions">

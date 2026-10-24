@@ -9,7 +9,7 @@ import {
   TextInput,
   TimePicker,
 } from "@carbon/react";
-import { Add, ArrowDown, ArrowUp, TrashCan } from "@carbon/icons-react";
+import { Add, TrashCan } from "@carbon/icons-react";
 import { itemString, parseItem, type ChecklistItem } from "../domain/checklist";
 import { formatDate, formatTime } from "../domain/fieldKinds";
 import { hasSections } from "../domain/components";
@@ -22,6 +22,7 @@ import { ComponentCodeEditor } from "./ComponentCodeEditor";
 import { RefCombo } from "./RefCombo";
 import { ToggleInput } from "./ToggleInput";
 import { choicesFor, type RefOption } from "./useReferenceOptions";
+import { moveBlock, useReorder } from "./useReorder";
 
 /**
  * Raw editor state: strings for text-like inputs, boolean for checkboxes,
@@ -400,11 +401,13 @@ function ListInput<T>({
 }) {
   const rows = items.length > 0 ? items : [empty];
   const set = (i: number, item: T) => onChange(rows.map((x, j) => (j === i ? item : x)));
-  const move = (i: number, by: -1 | 1) => {
-    const next = [...rows];
-    [next[i], next[i + by]] = [next[i + by], next[i]];
-    onChange(next);
-  };
+  const reorder = useReorder({
+    count: rows.length,
+    onMove: (start, end, to) => onChange(moveBlock(rows, start, end, to)),
+    onDelete: (indices) => onChange(rows.filter((_, i) => !indices.includes(i))),
+    canDelete: (indices) => indices.length < rows.length,
+    noun: ["entry", "entries"],
+  });
   const insert = (at: number) => {
     onChange([...rows.slice(0, at), empty, ...rows.slice(at)]);
     focusRow(`${id}-${at}`);
@@ -421,7 +424,7 @@ function ListInput<T>({
           const removable = rows.length > 1 && textOf(item) === "";
           return (
             // Marked for the field editor: Enter here adds an item, Escape in a removable one removes it.
-            <div className="list-input__row" key={i} data-list-row="" data-list-row-removable={removable ? "" : undefined}>
+            <div className="list-input__row" key={i} {...reorder.row(i)} data-list-row="" data-list-row-removable={removable ? "" : undefined}>
               {leadSlot(lead?.(item, i, (next) => set(i, next)))}
               {control ? (
                 control(item, i, (text) => set(i, withText(item, text)))
@@ -444,17 +447,12 @@ function ListInput<T>({
                   }}
                 />
               )}
-              <IconButton autoAlign kind="ghost" size="sm" align="left" label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
-                <ArrowUp />
-              </IconButton>
-              <IconButton autoAlign kind="ghost" size="sm" align="left" label="Move down" disabled={i === rows.length - 1} onClick={() => move(i, 1)}>
-                <ArrowDown />
-              </IconButton>
+              {reorder.handle(i)}
               <IconButton
                 autoAlign
                 kind="ghost"
                 size="sm"
-                align="left"
+                align="top"
                 label="Remove item"
                 disabled={rows.length === 1 && textOf(item) === ""}
                 onClick={() => remove(i)}
@@ -471,6 +469,7 @@ function ListInput<T>({
           </IconButton>
         </div>
       </Stack>
+      {reorder.dialog}
     </FormGroup>
   );
 }

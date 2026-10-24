@@ -65,6 +65,7 @@ CREATE INDEX idx_views_collection ON views(collection_id);
 CREATE TABLE components (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
   params      TEXT NOT NULL DEFAULT '[]',  -- JSON array of variable names the code uses
   code        TEXT NOT NULL DEFAULT '',        -- Markdown with {{ JavaScript }} sections; $item is the current item
   output      TEXT NOT NULL DEFAULT 'markdown',  -- markdown | string | number | image | html (ComponentOutput)

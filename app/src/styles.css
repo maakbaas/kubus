@@ -88,7 +88,10 @@ body {
   box-sizing: border-box;
 }
 .app-content--bare {
-  padding-top: 2rem;
+  padding-top: 0;
+}
+.app-content--bare .cds--inline-notification {
+  margin-top: 0;
 }
 
 /* Workspace: fills the window (there is no header bar); panes scroll on their own. The page
@@ -2839,4 +2842,44 @@ img[data-lightbox] {
 .nav-tree .cds--tree-node__label__details :is(.cds--tooltip-trigger__wrapper, .cds--tree-node__label__text-button) {
   max-inline-size: 100%;
   min-inline-size: 0;
+}
+
+/* Reordering: the grab handle (pointer events, so no browser panning on touch) and the row being dragged. */
+.reorder-handle {
+  cursor: grab;
+  touch-action: none;
+}
+[data-reorder-row] {
+  position: relative;
+}
+[data-selected] {
+  background: var(--cds-layer-selected);
+  box-shadow: inset 2px 0 0 var(--cds-border-interactive);
+}
+/* The rows being dragged follow the pointer (inline transform), lifted above the others. */
+[data-dragging] {
+  z-index: 2;
+  background: var(--cds-layer-hover);
+  box-shadow: 0 0.125rem 0.5rem rgb(0 0 0 / 0.3);
+  opacity: 0.9;
+  pointer-events: none;
+}
+/* While dragging, the rows passed over show no hover effects (or tooltips). */
+body[data-reordering] [data-reorder-row] {
+  pointer-events: none;
+}
+/* Where they would land: a line in the gap before / after a row. */
+:is([data-drop-before], [data-drop-after])::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  block-size: 2px;
+  background: var(--cds-border-interactive);
+  pointer-events: none;
+}
+[data-drop-before]::after {
+  inset-block-start: -1px;
+}
+[data-drop-after]::after {
+  inset-block-end: -1px;
 }

@@ -43,6 +43,9 @@ function normalized(collection: Collection, state: ViewState): ViewState {
   return { ...state, options: viewType(state.kind).normalizeOptions(state.options, collection) };
 }
 
+/** Id of the virtual "All" view of a space that has no stored view of the collection. */
+const VIRTUAL_VIEW = "default";
+
 function CollectionContent({ collection }: { collection: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
@@ -57,9 +60,15 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const [error, setError] = useState<string>();
 
   // The view currently shown. Changes are ephemeral until saved as / into a saved view. Every
-  // collection starts with an ordinary saved "All" view (in the space it was made in); `base` is
-  // shown while the space has none.
+  // collection starts with an ordinary saved "All" view (in the space it was made in). A space
+  // without one (the collection is shared from another space) shows `base` as a virtual "All"
+  // view, stored once it is changed, renamed or joined by another view; a collection always has a view.
   const base = useMemo(() => normalized(collection, defaultViewState(viewType("table").defaultOptions(collection))), [collection]);
+  const virtualView = useMemo<CollectionView>(
+    () => ({ ...base, id: VIRTUAL_VIEW, collectionId: collection.id, spaceId: space.id, name: "All", position: 0, isDefault: false, createdAt: "", updatedAt: "" }),
+    [base, collection.id, space.id],
+  );
+  const withVirtual = (list: CollectionView[]) => (list.length > 0 ? list : [virtualView]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>(base);
   const [search, setSearch] = useState("");
@@ -101,7 +110,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
     if (change.scope === "views" && change.collectionId === collection.id) loadViews();
   });
 
-  const views = savedViews ?? [];
+  const views = savedViews === null ? [] : withVirtual(savedViews);
   const active = views.find((v) => v.id === activeId) ?? null;
   const reference = active ? normalized(collection, active) : base;
   const changed = !sameView(view, reference);
@@ -126,14 +135,15 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const setQuery = (query: ViewQuery) => setView((v) => ({ ...v, query }));
   const selectView = useCallback(
     (id: string | null, list: CollectionView[] = savedViews ?? []) => {
-      const next = list.find((v) => v.id === id);
+      const next = withVirtual(list).find((v) => v.id === id);
       setActiveId(next ? next.id : null);
       setView(next ? normalized(collection, next) : base);
     },
-    [savedViews, collection, base],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [savedViews, collection, base, virtualView],
   );
-  /** The view a collection opens with: the starred one, else the first, else none (unsaved). */
-  const defaultViewOf = (list: CollectionView[]) => (list.find((v) => v.isDefault) ?? list[0])?.id ?? null;
+  /** The view a collection opens with: the starred one, else the first. */
+  const defaultViewOf = (list: CollectionView[]) => (list.find((v) => v.isDefault) ?? withVirtual(list)[0]).id;
   // Before paint, so the first view never flashes ahead of the starred one.
   // A bookmark opens a particular view (?view=…), also when this page is already showing.
   const [params] = useSearchParams();
@@ -149,10 +159,22 @@ function CollectionContent({ collection }: { collection: Collection }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wanted]);
 
-  async function saveAsNew(name: string, state: ViewState = view) {
+  /** Stores the virtual "All" view (as shown without changes) before something else needs a real one. */
+  async function storeVirtual() {
+    if (savedViews === null || savedViews.length > 0) return;
     const id = newId();
     const ts = now();
-    await repo.saveView({ ...state, id, collectionId: collection.id, spaceId: space.id, name, position: views.length, isDefault: false, createdAt: ts, updatedAt: ts });
+    await repo.saveView({ ...base, id, collectionId: collection.id, spaceId: space.id, name: "All", position: 0, isDefault: false, createdAt: ts, updatedAt: ts });
+    setSavedViews(await repo.listViews(collection.id, space.id));
+    if (activeId === VIRTUAL_VIEW) setActiveId(id);
+    return id;
+  }
+
+  async function saveAsNew(name: string, state: ViewState = view) {
+    await storeVirtual();
+    const id = newId();
+    const ts = now();
+    await repo.saveView({ ...state, id, collectionId: collection.id, spaceId: space.id, name, position: Math.max(views.length, 1), isDefault: false, createdAt: ts, updatedAt: ts });
     const list = await repo.listViews(collection.id, space.id);
     setSavedViews(list);
     selectView(id, list);
@@ -179,20 +201,23 @@ function CollectionContent({ collection }: { collection: Collection }) {
 
   async function updateActive() {
     if (!active) return;
-    await repo.saveView({ ...active, kind: view.kind, query: view.query, options: view.options });
+    const id = (await storeVirtual()) ?? active.id;
+    await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), kind: view.kind, query: view.query, options: view.options });
     await loadViews();
   }
 
   /** Star the active view as the default, or unstar it (then the first view opens by default). */
   async function toggleDefault() {
     if (!active) return;
-    await repo.setDefaultView(collection.id, space.id, active.isDefault ? null : active.id);
+    const id = (await storeVirtual()) ?? active.id;
+    await repo.setDefaultView(collection.id, space.id, active.isDefault ? null : id);
     await loadViews();
   }
 
   async function renameActive(name: string) {
     if (!active || !name || name === active.name) return;
-    await repo.saveView({ ...active, name });
+    const id = (await storeVirtual()) ?? active.id;
+    await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), name });
     await loadViews();
   }
 
@@ -336,7 +361,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
               <TrashCan />
             </IconButton>
           )}
-          {active && (
+          {active && active.id !== VIRTUAL_VIEW && (
             <BookmarkButton
               kind="view"
               collectionId={collection.id}

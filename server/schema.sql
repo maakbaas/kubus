@@ -53,6 +53,7 @@ CREATE INDEX IF NOT EXISTS idx_collections_seq ON collections(seq);
 CREATE TABLE IF NOT EXISTS components (
   id             text NOT NULL,
   name           text,
+  description    text,
   params         jsonb,
   code           text,
   output         text,
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS components (
   PRIMARY KEY (id)
 );
 ALTER TABLE components ADD COLUMN IF NOT EXISTS name text;
+ALTER TABLE components ADD COLUMN IF NOT EXISTS description text;
 ALTER TABLE components ADD COLUMN IF NOT EXISTS params jsonb;
 ALTER TABLE components ADD COLUMN IF NOT EXISTS code text;
 ALTER TABLE components ADD COLUMN IF NOT EXISTS output text;

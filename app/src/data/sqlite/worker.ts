@@ -17,23 +17,59 @@ let db: Db | null = null;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const OTHER_TAB = "Kubus is open in another tab or window. Close it there and reload.";
+
+/**
+ * Whether another live Kubus worker holds the lock: the holder answers a ping. A reloading page's
+ * previous worker is gone by then and doesn't answer, so that case keeps waiting for the lock.
+ */
+function holderAnswers(timeoutMs = 400): Promise<boolean> {
+  if (typeof BroadcastChannel === "undefined") return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const channel = new BroadcastChannel("kubus-db");
+    const done = (answered: boolean) => {
+      clearTimeout(timer);
+      channel.close();
+      resolve(answered);
+    };
+    const timer = setTimeout(() => done(false), timeoutMs);
+    channel.onmessage = (e) => e.data === "pong" && done(true);
+    channel.postMessage("ping");
+  });
+}
+
 /**
  * Exclusive lock on the database for this worker's whole lifetime. A reloading
  * page's previous worker may still hold it for a moment; we wait for it. A
- * second tab waits up to `timeoutMs`, then gives up without touching the files.
+ * second tab is told at once (the holder answers); should it not answer, it waits up to
+ * `timeoutMs`, then gives up without touching the files.
  */
 function acquireDbLock(timeoutMs = 10_000): Promise<void> {
   if (!("locks" in navigator)) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const held = () => {
+      clearTimeout(timer);
+      resolve();
+      // Answer other tabs' pings for as long as the lock is held.
+      if (typeof BroadcastChannel !== "undefined") {
+        const channel = new BroadcastChannel("kubus-db");
+        channel.onmessage = (e) => e.data === "ping" && channel.postMessage("pong");
+      }
+      return new Promise<void>(() => {}); // held until the worker terminates
+    };
     navigator.locks
-      .request("kubus-db", { signal: controller.signal }, () => {
-        clearTimeout(timer);
-        resolve();
-        return new Promise<void>(() => {}); // held until the worker terminates
+      .request("kubus-db", { ifAvailable: true }, (lock) => {
+        if (lock) return held();
+        // Taken: by another tab (say so now) or by a page that is reloading (wait for it).
+        return holderAnswers().then((answered) => {
+          if (answered) throw new Error(OTHER_TAB);
+          timer = setTimeout(() => controller.abort(), timeoutMs);
+          return navigator.locks.request("kubus-db", { signal: controller.signal }, held);
+        });
       })
-      .catch(() => reject(new Error("Kubus is open in another tab or window. Close it there and reload.")));
+      .catch((e) => reject(e instanceof Error && e.message === OTHER_TAB ? e : new Error(OTHER_TAB)));
   });
 }
 

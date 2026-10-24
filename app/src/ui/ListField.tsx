@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { IconButton, TextInput } from "@carbon/react";
-import { Add, ArrowDown, ArrowUp, TrashCan } from "@carbon/icons-react";
+import { Add, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { checklistItems, itemString, type ChecklistItem } from "../domain/checklist";
 import type { FieldDef, FieldValue } from "../domain/model";
@@ -10,6 +10,7 @@ import { RefCombo } from "./RefCombo";
 import { RelatedLink } from "./RelatedLink";
 import { ToggleInput } from "./ToggleInput";
 import { labelOf, type RefOptions } from "./useReferenceOptions";
+import { moveBlock, useReorder } from "./useReorder";
 
 /** The items as stored (an item's text trimmed; empty items are kept). */
 function storedValue(items: ChecklistItem[], checklist: boolean): FieldValue {
@@ -95,13 +96,20 @@ export function ListField({
     freshRef.current = at;
     setEditing({ index: at });
   };
-  const move = (index: number, by: -1 | 1) => {
-    const next = [...items];
-    [next[index], next[index + by]] = [next[index + by], next[index]];
-    freshRef.current = null;
-    setEditing(null);
-    save(next);
-  };
+  const reorder = useReorder({
+    count: items.length,
+    onMove: (start, end, to) => {
+      freshRef.current = null;
+      setEditing(null);
+      save(moveBlock(items, start, end, to));
+    },
+    onDelete: (indices) => {
+      freshRef.current = null;
+      setEditing(null);
+      save(items.filter((_, i) => !indices.includes(i)));
+    },
+    noun: ["entry", "entries"],
+  });
   const remove = (index: number) => {
     freshRef.current = null;
     setEditing(null);
@@ -130,7 +138,7 @@ export function ListField({
       <div className="view-field__rows">
         {rows.length === 0 && readOnly && <div className="view-field__value view-field__value--empty" />}
         {rows.map((item, i) => (
-          <div key={i} className="checklist-row">
+          <div key={i} className="checklist-row" {...(readOnly ? {} : reorder.row(i))}>
             {checklist && (
               <span className="checklist-box">
                 <ToggleInput
@@ -208,17 +216,10 @@ export function ListField({
               </div>
             )}
             {!readOnly && (
-              <>
-                <IconButton autoAlign kind="ghost" size="sm" align="left" label="Move up" disabled={i === 0} onMouseDown={(e) => e.preventDefault()} onClick={() => move(i, -1)}>
-                  <ArrowUp />
-                </IconButton>
-                <IconButton autoAlign kind="ghost" size="sm" align="left" label="Move down" disabled={i === rows.length - 1} onMouseDown={(e) => e.preventDefault()} onClick={() => move(i, 1)}>
-                  <ArrowDown />
-                </IconButton>
-              </>
+              reorder.handle(i)
             )}
             {!readOnly && (
-              <IconButton autoAlign kind="ghost" size="sm" align="left" label="Remove item" onMouseDown={(e) => e.preventDefault()} onClick={() => remove(i)}>
+              <IconButton autoAlign kind="ghost" size="sm" align="top" label="Remove item" onMouseDown={(e) => e.preventDefault()} onClick={() => remove(i)}>
                 <TrashCan />
               </IconButton>
             )}
@@ -234,6 +235,7 @@ export function ListField({
           </div>
         )}
       </div>
+      {reorder.dialog}
     </div>
   );
 }

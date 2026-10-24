@@ -43,7 +43,7 @@ export const SYNC_TABLES: SyncTable[] = [
     key: ["id"],
     version: "updated_at",
     columns: {
-      id: "text", name: "text", params: "json", code: "text", output: "text", frame_ratio: "text", ...stamps,
+      id: "text", name: "text", description: "text", params: "json", code: "text", output: "text", frame_ratio: "text", ...stamps,
     },
   },
   {

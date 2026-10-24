@@ -26,6 +26,7 @@ export function ComponentEditorPage() {
   const navigate = useNavigate();
   const existing = components.find((x) => x.id === componentId);
   const [name, setName] = useState(existing?.name ?? "");
+  const [description, setDescription] = useState(existing?.description ?? "");
   const [code, setCode] = useState(existing?.code ?? "");
   const [output, setOutput] = useState<ComponentOutput>(existing?.output ?? "markdown");
   const [frameRatio, setFrameRatio] = useState<string | null>(existing?.frameRatio ?? null);
@@ -55,6 +56,7 @@ export function ComponentEditorPage() {
       await repo.saveComponent({
         id: existing?.id ?? newId(),
         name: name.trim(),
+        description: description.trim(),
         params,
         code,
         output,
@@ -87,6 +89,14 @@ export function ComponentEditorPage() {
             onChange={(e) => setName(e.target.value)}
             invalid={submitted && !!nameError}
             invalidText={nameError}
+          />
+          <TextInput
+            size="sm"
+            id={`${uid}-component-description`}
+            labelText="Description"
+            placeholder="What it is for"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
           />
           {/* A plain (monospace) text area: the Markdown editor would escape characters like * and
               break the JavaScript in {{ }}. */}

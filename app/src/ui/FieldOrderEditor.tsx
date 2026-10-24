@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { Button, Checkbox, FormGroup, IconButton } from "@carbon/react";
-import { Add, ArrowDown, ArrowUp, Tag, TagNone } from "@carbon/icons-react";
+import { Add, Tag, TagNone } from "@carbon/icons-react";
 import { isMetaField, type FieldDef, type Collection } from "../domain/model";
 import { FieldLabel } from "./fieldKindIcons";
 import { FieldModal } from "./FieldModal";
+import { moveBlock, useReorder } from "./useReorder";
 
 /**
  * Picks which fields are shown and in which order (table columns, card fields, item pages):
- * every field with a checkbox, the shown ones first in their order with up / down arrows, the
- * hidden ones after them. `value` null = the default: all fields in the collection's order, except
+ * every field with a checkbox and a drag handle; rows keep their place when ticked or unticked
+ * (Space shows / hides the selected rows). `value` null = the default: all fields in the collection's order, except
  * `hiddenByDefault` (e.g. an item page's title field, already shown as its title), which still
  * show when ticked. With `hiddenLabels`, each shown
  * field also gets a toggle for its name. With `collection`, fields can be added here (a field of the
@@ -41,51 +42,61 @@ export function FieldOrderEditor({
   const [adding, setAdding] = useState(false);
   const base = fields.filter((f) => !hiddenByDefault.includes(f.id) && !isMetaField(f)).map((f) => f.id);
   const shown = (value ?? base).filter((fid) => fields.some((f) => f.id === fid));
-  const hidden = fields.filter((f) => !shown.includes(f.id));
-  const rows = [...shown.map((fid) => fields.find((f) => f.id === fid)!), ...hidden];
+  // Every field has a fixed row (the shown ones first, as stored, when this opens); ticking or
+  // unticking one doesn't move it. Rows follow the stored order again if that changes elsewhere.
+  const [order, setOrder] = useState<string[]>([]);
+  const known = order.filter((fid) => fields.some((f) => f.id === fid));
+  const fresh = fields.map((f) => f.id).filter((fid) => !known.includes(fid));
+  const sameShown = known.filter((fid) => shown.includes(fid)).join() === shown.join();
+  const ids = sameShown && known.length > 0 ? [...known, ...fresh] : [...shown, ...fields.map((f) => f.id).filter((fid) => !shown.includes(fid))];
+  const rows = ids.map((fid) => fields.find((f) => f.id === fid)!);
   // Stored as null while it is just the default.
-  const commit = (next: string[]) => onChange(next.length === base.length && next.every((fid, i) => fid === base[i]) ? null : next);
-  const move = (index: number, delta: number) => {
-    const next = [...shown];
-    [next[index], next[index + delta]] = [next[index + delta], next[index]];
-    commit(next);
+  const commit = (rowIds: string[], on: Set<string>) => {
+    setOrder(rowIds);
+    const next = rowIds.filter((fid) => on.has(fid));
+    onChange(next.length === base.length && next.every((fid, i) => fid === base[i]) ? null : next);
   };
+  const reorder = useReorder({
+    count: rows.length,
+    onMove: (start, end, to) => commit(moveBlock(ids, start, end, to), new Set(shown)),
+    // Space: show the selected fields, or hide them when all are shown.
+    onSpace: (indices) => {
+      const picked = indices.map((i) => ids[i]);
+      const on = new Set(shown);
+      const hide = picked.every((fid) => on.has(fid));
+      for (const fid of picked) hide ? on.delete(fid) : on.add(fid);
+      commit(ids, on);
+    },
+  });
 
   return (
     <FormGroup legendText={label} className="field-order">
       {rows.map((f, i) => {
-        const isShown = i < shown.length;
+        const isShown = shown.includes(f.id);
         const nameHidden = hiddenLabels?.includes(f.id) ?? false;
         return (
-          <div key={f.id} className="field-order__row">
+          <div key={f.id} className="field-order__row" {...reorder.row(i)}>
             <Checkbox
               id={`${id}-${f.id}`}
               labelText={<FieldLabel field={f} />}
               checked={isShown}
-              onChange={(_, { checked }) => commit(checked ? [...shown, f.id] : shown.filter((s) => s !== f.id))}
+              onChange={(_, { checked }) => commit(ids, new Set(checked ? [...shown, f.id] : shown.filter((s) => s !== f.id)))}
             />
-            {isShown && (
-              <span className="field-order__moves">
-                {hiddenLabels && onHiddenLabelsChange && (
-                  <IconButton
-                    autoAlign
-                    kind="ghost"
-                    size="sm"
-                    label={nameHidden ? "Show field name" : "Hide field name"}
-                    isSelected={nameHidden}
-                    onClick={() => onHiddenLabelsChange(nameHidden ? hiddenLabels.filter((h) => h !== f.id) : [...hiddenLabels, f.id])}
-                  >
-                    {nameHidden ? <TagNone /> : <Tag />}
-                  </IconButton>
-                )}
-                <IconButton autoAlign kind="ghost" size="sm" label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
-                  <ArrowUp />
+            <span className="field-order__moves">
+              {isShown && hiddenLabels && onHiddenLabelsChange && (
+                <IconButton
+                  autoAlign
+                  kind="ghost"
+                  size="sm"
+                  label={nameHidden ? "Show field name" : "Hide field name"}
+                  isSelected={nameHidden}
+                  onClick={() => onHiddenLabelsChange(nameHidden ? hiddenLabels.filter((h) => h !== f.id) : [...hiddenLabels, f.id])}
+                >
+                  {nameHidden ? <TagNone /> : <Tag />}
                 </IconButton>
-                <IconButton autoAlign kind="ghost" size="sm" label="Move down" disabled={i === shown.length - 1} onClick={() => move(i, 1)}>
-                  <ArrowDown />
-                </IconButton>
-              </span>
-            )}
+              )}
+              {reorder.handle(i)}
+            </span>
           </div>
         );
       })}

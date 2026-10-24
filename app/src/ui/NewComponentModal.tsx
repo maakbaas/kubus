@@ -28,7 +28,7 @@ export function NewComponentModal({ onClose, onCreated }: { onClose(): void; onC
     if (nameError) return;
     setSaving(true);
     const ts = now();
-    const component: Component = { id: newId(), name: name.trim(), params, code, output, frameRatio: null, createdAt: ts, updatedAt: ts };
+    const component: Component = { id: newId(), name: name.trim(), description: "", params, code, output, frameRatio: null, createdAt: ts, updatedAt: ts };
     try {
       await repo.saveComponent(component);
       onCreated(component);

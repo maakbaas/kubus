@@ -17,7 +17,7 @@ export interface Space {
 /** The space every database starts with. It has no row until it is renamed. */
 export const DEFAULT_SPACE_ID = "default";
 
-const DEFAULT_SPACE: Space = { id: DEFAULT_SPACE_ID, name: "Personal", icon: null, position: -1 };
+const DEFAULT_SPACE: Space = { id: DEFAULT_SPACE_ID, name: "Space", icon: null, position: -1 };
 
 /**
  * The stored spaces plus the default one while it has no row. Deleting the default leaves a

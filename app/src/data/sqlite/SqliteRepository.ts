@@ -50,6 +50,7 @@ interface FieldRow {
 interface ComponentRow {
   id: string;
   name: string;
+  description: string;
   params: string;
   code: string;
   output: string;
@@ -196,7 +197,7 @@ export class SqliteRepository implements Repository {
       { sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
       // The default space has no row until renamed: its tombstone is made here.
       {
-        sql: `INSERT INTO spaces (id, name, icon, position, created_at, updated_at, deleted_at) VALUES (?2, 'Personal', NULL, -1, ?1, ?1, ?1)
+        sql: `INSERT INTO spaces (id, name, icon, position, created_at, updated_at, deleted_at) VALUES (?2, 'Space', NULL, -1, ?1, ?1, ?1)
               ON CONFLICT (id) DO UPDATE SET deleted_at = excluded.deleted_at, updated_at = excluded.updated_at`,
         bind: [ts, spaceId],
       },
@@ -567,6 +568,7 @@ export class SqliteRepository implements Repository {
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
+      description: r.description,
       params: parseJson<string[]>(r.params, []),
       code: r.code,
       output: isComponentOutput(r.output) ? r.output : "markdown",
@@ -579,10 +581,10 @@ export class SqliteRepository implements Repository {
   async saveComponent(x: Component): Promise<void> {
     await this.db.write([
       {
-        sql: `INSERT INTO components (id, name, params, code, output, frame_ratio, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?6, ?7, ?5, ?5)
-              ON CONFLICT (id) DO UPDATE SET name = excluded.name, params = excluded.params, code = excluded.code,
+        sql: `INSERT INTO components (id, name, description, params, code, output, frame_ratio, created_at, updated_at) VALUES (?1, ?2, ?8, ?3, ?4, ?6, ?7, ?5, ?5)
+              ON CONFLICT (id) DO UPDATE SET name = excluded.name, description = excluded.description, params = excluded.params, code = excluded.code,
                 output = excluded.output, frame_ratio = excluded.frame_ratio, updated_at = excluded.updated_at`,
-        bind: [x.id, x.name, JSON.stringify(x.params), x.code, now(), x.output, x.frameRatio],
+        bind: [x.id, x.name, JSON.stringify(x.params), x.code, now(), x.output, x.frameRatio, x.description],
       },
     ]);
     this.emit({ scope: "components" });

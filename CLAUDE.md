@@ -94,9 +94,9 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   there; collections (fields, item views) and components are shared. A collection can be
   limited to some spaces (`collections.space_ids`, JSON; null = all; picked in the collection editor).
   Collection views (`views.space_id`; starred per space; a new collection's "All" view goes into
-  the space it was made in, other spaces show the unsaved table until one is saved), bookmarks
+  the space it was made in, other spaces show a virtual "All" view until one is stored), bookmarks
   (`bookmarks.space_id`) and the open tabs (`kubus.workspace.<spaceId>`) are per space;
-  the shown space is per device (`kubus.space`), switched from a dropdown atop the side nav. The default space (id `default`, "Personal") has no row until renamed,
+  the shown space is per device (`kubus.space`), switched from a dropdown atop the side nav. The default space (id `default`, "Space") has no row until renamed,
   like the virtual default item view, and can't be deleted; deleting another deletes its items, views and
   bookmarks. Repository methods that list items take the space explicitly (`listItems`,
   `createItem`, `search`, `countItemsByCollection`, views, bookmarks); `getItem` and `listLabels` read every
@@ -268,8 +268,9 @@ Extension points are registries, not special cases in pages:
   "+" sits after the last tab, or in the toolbar while the tab bar is hidden. The
   toolbar has three icon buttons with popovers: Filter, Sort and group, View settings (name, view
   collection, its options, delete). The collection page opens the starred view (`views.is_default`, at most one per collection and space,
-  set via `setDefaultView`), else the first; with no views left it shows an unsaved table that can
-  be saved. Changes are ephemeral: while the shown view differs from
+  set via `setDefaultView`), else the first; a space without stored views shows a virtual "All" table (id `default`; stored when
+  changed, renamed or joined by another view), so a collection always has a view and the last can't be
+  deleted. Changes are ephemeral: while the shown view differs from
   its saved version, icon buttons beside the star offer Discard changes and Save changes to view
   ("+" saves them as a new view instead). Search is never saved. A shown view without unsaved changes follows its stored settings when they change elsewhere (sync, another pane) instead of turning into "changed".
 
