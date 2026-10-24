@@ -611,8 +611,18 @@ body {
   gap: 0.5rem;
   inline-size: min(24rem, 80vw);
   padding: 0.75rem;
-  max-block-size: calc(100dvh - 4rem);
+  /* At most the room beside its button (--popover-room, set by IconPicker): the grid shrinks
+     (and scrolls) first, the panel itself only scrolls when even the search box doesn't fit. */
+  max-block-size: calc(var(--popover-room, calc(100dvh - 4rem)) - env(safe-area-inset-bottom));
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.icon-picker__panel > * {
+  flex: none;
+}
+.icon-picker__panel > .icon-grid {
+  flex: 0 1 auto;
+  min-block-size: 6rem; /* two rows at least */
 }
 .icon-grid {
   display: grid;

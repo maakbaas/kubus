@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Button, IconButton, Popover, PopoverContent, Search } from "@carbon/react";
 import { iconNames, CollectionIcon } from "./collectionIcons";
 
@@ -22,6 +22,20 @@ export function IconPicker({ id, value, onChange, size = 24 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const searchBox = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  // Never taller than the room on the roomier side of the button (autoAlign flips to it), so the
+  // page doesn't scroll; the grid gives up rows first.
+  const [room, setRoom] = useState<number>();
+  useEffect(() => {
+    if (!open) return;
+    const measure = () => {
+      const r = root.current?.getBoundingClientRect();
+      if (r) setRoom(Math.max(r.top, window.innerHeight - r.bottom) - 16);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open]);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -40,7 +54,7 @@ export function IconPicker({ id, value, onChange, size = 24 }: Props) {
   };
 
   return (
-    <Popover autoAlign open={open} align="bottom-start" dropShadow onRequestClose={() => setOpen(false)} className="icon-picker">
+    <Popover autoAlign open={open} align="bottom-start" dropShadow onRequestClose={() => setOpen(false)} className="icon-picker" ref={root}>
       <IconButton autoAlign
         id={id}
         label={value ? `Icon: ${value}. Click to change` : "Choose an icon"}
@@ -52,8 +66,8 @@ export function IconPicker({ id, value, onChange, size = 24 }: Props) {
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        {/* No icon chosen: an empty button, not the default Cube. */}
-        {value ? <CollectionIcon name={value} size={size} /> : <span style={{ inlineSize: size, blockSize: size }} aria-hidden="true" />}
+        {/* No icon chosen (or not loaded yet): an empty button, not the default Cube. */}
+        <CollectionIcon name={value} size={size} fallback={false} />
       </IconButton>
       <PopoverContent>
         {/* Only while open: PopoverContent keeps its children mounted when closed, which would
@@ -62,6 +76,7 @@ export function IconPicker({ id, value, onChange, size = 24 }: Props) {
           // Escape closes (Carbon's Search would only clear its text) and returns focus to the button.
           <div
             className="icon-picker__panel"
+            style={room !== undefined ? ({ "--popover-room": `${Math.max(room, 0)}px` } as CSSProperties) : undefined}
             onKeyDownCapture={(e) => {
               if (e.key !== "Escape") return;
               e.stopPropagation();
@@ -92,7 +107,7 @@ export function IconPicker({ id, value, onChange, size = 24 }: Props) {
                   aria-selected={name === value}
                   onClick={() => choose(name)}
                 >
-                  <CollectionIcon name={name} size={20} />
+                  <CollectionIcon name={name} size={20} fallback={false} />
                 </IconButton>
               ))}
             </div>

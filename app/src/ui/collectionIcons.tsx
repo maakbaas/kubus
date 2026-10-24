@@ -47,8 +47,10 @@ export function iconNames(): string[] {
   return sortedNames;
 }
 
-/** Component for a collection's icon; Cube while loading or when unset/unknown. */
-export function useCollectionIcon(name: string | null | undefined): CarbonIconType {
+/** Component for a collection's icon; Cube while loading or when unset/unknown (null with `fallback` false). */
+export function useCollectionIcon(name: string | null | undefined, fallback?: true): CarbonIconType;
+export function useCollectionIcon(name: string | null | undefined, fallback: boolean): CarbonIconType | null;
+export function useCollectionIcon(name: string | null | undefined, fallback = true): CarbonIconType | null {
   const [, setLoadedName] = useState<string | null>(null);
   useEffect(() => {
     if (name && !loaded.has(name)) {
@@ -59,13 +61,16 @@ export function useCollectionIcon(name: string | null | undefined): CarbonIconTy
       };
     }
   }, [name]);
-  return (name && loaded.get(name)) || Cube;
+  return (name && loaded.get(name)) || (fallback ? Cube : null);
 }
 
-/** Renders a collection's icon. */
-export function CollectionIcon({ name, size = 16 }: { name: string | null | undefined; size?: 16 | 20 | 24 | 32 }) {
-  const Icon = useCollectionIcon(name);
-  return <Icon size={size} aria-hidden="true" />;
+/**
+ * Renders a collection's icon. Without `fallback` (the icon picker) nothing stands in for an
+ * icon still loading or unset: an empty space of its size, never the Cube.
+ */
+export function CollectionIcon({ name, size = 16, fallback = true }: { name: string | null | undefined; size?: 16 | 20 | 24 | 32; fallback?: boolean }) {
+  const Icon = useCollectionIcon(name, fallback);
+  return Icon ? <Icon size={size} aria-hidden="true" /> : <span style={{ display: "inline-block", inlineSize: size, blockSize: size }} aria-hidden="true" />;
 }
 
 /** A collection with its icon, e.g. in dropdowns that pick a collection. */
