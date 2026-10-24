@@ -83,7 +83,7 @@ export function SpacesPage() {
     <>
       <PageHeader
         title="Spaces"
-        subtitle="Separate environments, e.g. Work and Private: each has its own items, views, bookmarks and tabs, while collections and components are shared."
+        subtitle="Separate environments like Work and Private, each with its own items. Collections and components are shared."
         actions={<NewButton label="New space" onClick={add} />}
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}

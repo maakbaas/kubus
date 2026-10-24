@@ -52,58 +52,62 @@ export function IconPicker({ id, value, onChange }: Props) {
         <CollectionIcon name={value} size={24} />
       </IconButton>
       <PopoverContent>
-        {/* Escape closes (Carbon's Search would only clear its text) and returns focus to the button. */}
-        <div
-          className="icon-picker__panel"
-          onKeyDownCapture={(e) => {
-            if (e.key !== "Escape") return;
-            e.stopPropagation();
-            setOpen(false);
-            document.getElementById(id)?.focus();
-          }}
-        >
-          <div ref={searchBox}>
-            <Search
-              id={`${id}-search`}
-              size="sm"
-              labelText="Search icons"
-              placeholder={`Search ${names.length} icons`}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-          <div className="icon-grid" role="listbox" aria-label="Icons">
-            {shown.map((name) => (
-              <IconButton autoAlign
-                key={name}
-                label={name}
-                kind="ghost"
+        {/* Only while open: PopoverContent keeps its children mounted when closed, which would
+            load every icon of the grid on any page with a picker. */}
+        {open && (
+          // Escape closes (Carbon's Search would only clear its text) and returns focus to the button.
+          <div
+            className="icon-picker__panel"
+            onKeyDownCapture={(e) => {
+              if (e.key !== "Escape") return;
+              e.stopPropagation();
+              setOpen(false);
+              document.getElementById(id)?.focus();
+            }}
+          >
+            <div ref={searchBox}>
+              <Search
+                id={`${id}-search`}
                 size="sm"
-                align="top"
-                isSelected={name === value}
-                role="option"
-                aria-selected={name === value}
-                onClick={() => choose(name)}
-              >
-                <CollectionIcon name={name} size={20} />
-              </IconButton>
-            ))}
+                labelText="Search icons"
+                placeholder={`Search ${names.length} icons`}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <div className="icon-grid" role="listbox" aria-label="Icons">
+              {shown.map((name) => (
+                <IconButton autoAlign
+                  key={name}
+                  label={name}
+                  kind="ghost"
+                  size="sm"
+                  align="top"
+                  isSelected={name === value}
+                  role="option"
+                  aria-selected={name === value}
+                  onClick={() => choose(name)}
+                >
+                  <CollectionIcon name={name} size={20} />
+                </IconButton>
+              ))}
+            </div>
+            <div className="icon-grid__footer">
+              <span className="helper">
+                {matches.length === 0
+                  ? "No icons match."
+                  : matches.length > MAX_SHOWN
+                    ? `Showing ${MAX_SHOWN} of ${matches.length}, type to narrow down`
+                    : `${matches.length} icon${matches.length === 1 ? "" : "s"}`}
+              </span>
+              {value && (
+                <Button kind="tertiary" size="sm" onClick={() => choose(null)}>
+                  Remove icon
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="icon-grid__footer">
-            <span className="helper">
-              {matches.length === 0
-                ? "No icons match."
-                : matches.length > MAX_SHOWN
-                  ? `Showing ${MAX_SHOWN} of ${matches.length}, type to narrow down`
-                  : `${matches.length} icon${matches.length === 1 ? "" : "s"}`}
-            </span>
-            {value && (
-              <Button kind="tertiary" size="sm" onClick={() => choose(null)}>
-                Remove icon
-              </Button>
-            )}
-          </div>
-        </div>
+        )}
       </PopoverContent>
     </Popover>
   );

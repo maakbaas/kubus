@@ -96,8 +96,7 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   Collection views (`views.space_id`; starred per space; a new collection's "All" view goes into
   the space it was made in, other spaces show the unsaved table until one is saved), bookmarks
   (`bookmarks.space_id`) and the open tabs (`kubus.workspace.<spaceId>`) are per space;
-  the shown space is per device (`kubus.space`), switched from a dropdown atop the side nav (only
-  shown with 2+ spaces). The default space (id `default`, "Personal") has no row until renamed,
+  the shown space is per device (`kubus.space`), switched from a dropdown atop the side nav. The default space (id `default`, "Personal") has no row until renamed,
   like the virtual default item view, and can't be deleted; deleting another deletes its items, views and
   bookmarks. Repository methods that list items take the space explicitly (`listItems`,
   `createItem`, `search`, `countItemsByCollection`, views, bookmarks); `getItem` and `listLabels` read every
@@ -111,7 +110,7 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   for it) except blocked ones (javascript:, data:, file:, …): `isOpenableUrl` / `safeUrl` in
   `platform/openExternal.ts`, used by Markdown (react-markdown's `urlTransform`), cells and the
   editor; the Tauri opener scope (`desktop/capabilities/default.json`) denies the same schemes.
-- **Global search** in the side nav (`/search?q=`): the shown space's items, substring match over string, markdown, HTML and
+- **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's items, substring match over string, markdown, HTML and
   list-of-strings values (ASCII case-insensitive; an FTS index can come later).
 - **Local first.** The app works fully offline on the device's own SQLite database.
 - **Future:** the same components render whole items and query results (see Components).
@@ -290,10 +289,11 @@ Extension points are registries, not special cases in pages:
   beside (the pane to the right, reused or split off; a new tab on windows < 72rem); middle click =
   new tab. Such links carry `data-own-click`.
 - The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Collections (with the
-  shown space's collections below it), Components and Spaces; branches remember being open per
-  device. With two or more spaces a space switcher (`ui/SpaceSwitcher.tsx`) sits under the search.
-- There is no header bar. The side nav toggle (filled/outlined panel icon) sits left of the side
-  nav's search while the nav is shown; while it is hidden it leads the top-left pane's tab strip,
+  shown space's collections below it) and Components; branches remember being open per
+  device. The space switcher (`ui/SpaceSwitcher.tsx`, always shown) sits in the nav's top row beside the
+  menu toggle; its last entry "Manage spaces" opens `#/spaces` (no nav entry).
+- There is no header bar. The side nav toggle (filled/outlined panel icon) sits left of the space
+  switcher while the nav is shown; while it is hidden it leads the top-left pane's tab strip,
   like "+" ends each strip (on phones: the active pane's). The side nav can be
   collapsed on desktop too (that toggle;
   remembered per device). Docked, it is resizable by dragging the gutter at its edge

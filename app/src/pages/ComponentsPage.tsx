@@ -41,7 +41,7 @@ export function ComponentsPage() {
     <>
       <PageHeader
         title="Components"
-        subtitle="Markdown with {{ JavaScript }} sections over $variables. Add a field of type “Component” to a collection and map each variable to one of its fields."
+        subtitle="Reusable code that computes content and values for your items. Use one in any collection through a Component field."
         actions={<NewButton label="New component" onClick={() => navigate("/components/new")} />}
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}

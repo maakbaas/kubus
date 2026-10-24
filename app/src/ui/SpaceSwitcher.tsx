@@ -1,5 +1,7 @@
-import { Dropdown, Layer } from "@carbon/react";
+import { Dropdown } from "@carbon/react";
+import { Settings } from "@carbon/icons-react";
 import { useStore } from "../app/store";
+import { useWorkspace } from "../workspace/Workspace";
 import type { Space } from "../domain/spaces";
 import { CollectionLabel } from "./collectionIcons";
 
@@ -9,29 +11,45 @@ export const SPACE_ICON = "Workspace";
 /** A space with its icon (switcher, Spaces page). */
 export const SpaceLabel = ({ space }: { space: Space }) => <CollectionLabel collection={{ name: space.name, icon: space.icon ?? SPACE_ICON }} />;
 
+/** The dropdown's last entry: opens the Spaces page (there is no nav entry for it). */
+const MANAGE = "manage" as const;
+
 /**
- * Switches the shown space (its items, bookmarks and tabs), at the top of the side nav. Only
- * there once a second space exists; spaces are made on the Spaces page.
+ * Switches the shown space (its items, bookmarks and tabs), in the side nav's top row, beside the
+ * menu toggle. Its last entry, "Manage spaces", opens the Spaces page, where spaces are made,
+ * renamed and deleted.
  */
 export function SpaceSwitcher() {
   const { spaces, space, setSpace } = useStore();
-  if (spaces.length < 2) return null;
+  const ws = useWorkspace();
   return (
-    <Layer className="side-nav-space">
-      <Dropdown<Space>
+    <div className="side-nav-space">
+      <Dropdown<Space | typeof MANAGE>
         autoAlign
         id="space-switcher"
         size="sm"
         titleText="Space"
         hideLabel
         label="Space"
-        items={spaces}
-        itemToString={(s) => s?.name ?? ""}
-        itemToElement={(s) => <SpaceLabel space={s} />}
-        renderSelectedItem={(s) => <SpaceLabel space={s} />}
+        items={[...spaces, MANAGE]}
+        itemToString={(s) => (s === MANAGE ? "Manage spaces" : (s?.name ?? ""))}
+        itemToElement={(s) =>
+          s === MANAGE ? (
+            <span className="icon-label space-manage">
+              <Settings size={16} aria-hidden="true" />
+              Manage spaces
+            </span>
+          ) : (
+            <SpaceLabel space={s} />
+          )
+        }
+        renderSelectedItem={(s) => (s === MANAGE ? null : <SpaceLabel space={s} />)}
         selectedItem={space}
-        onChange={({ selectedItem }) => selectedItem && setSpace(selectedItem.id)}
+        onChange={({ selectedItem }) => {
+          if (selectedItem === MANAGE) ws.navigate("/spaces");
+          else if (selectedItem) setSpace(selectedItem.id);
+        }}
       />
-    </Layer>
+    </div>
   );
 }

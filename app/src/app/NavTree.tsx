@@ -1,6 +1,6 @@
 import { useState, type ElementType, type MouseEvent } from "react";
 import { TreeNode, TreeView } from "@carbon/react";
-import { Bookmark as BookmarkIcon, Cube, Code as ComponentIcon, Workspace as SpaceIcon } from "@carbon/icons-react";
+import { Bookmark as BookmarkIcon, Cube, Code as ComponentIcon } from "@carbon/icons-react";
 import { bookmarkPath } from "../domain/bookmarks";
 import { readPref, writePref } from "../ui/localPrefs";
 import { CollectionIcon } from "../ui/collectionIcons";
@@ -30,7 +30,7 @@ function collectionIcon(name: string | null): ElementType {
 
 /**
  * The side nav as a Carbon tree: Bookmarks (the space's bookmarked views and items), Collections
- * (its page, with the space's collections below it), Components and Spaces. Choosing a node opens its page in the active tab
+ * (its page, with the space's collections below it), and Components. Choosing a node opens its page in the active tab
  * (through `navigate`: Carbon's tree stops clicks, so plain links wouldn't reach the workspace).
  * The selected node follows the active tab's page (a bookmark of it wins). Middle click opens a
  * node's page in a new tab.
@@ -63,16 +63,13 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
           ? "bookmarks"
           : pathname.startsWith("/components")
             ? "components"
-            : pathname === "/spaces"
-              ? "spaces"
-              : undefined;
+            : undefined;
 
   // Every node's page, by node id (Carbon renders the id on the node's <li>), for middle clicks.
   const paths: Record<string, string> = {
     bookmarks: "/bookmarks",
     collections: "/collections",
     components: "/components",
-    spaces: "/spaces",
     ...Object.fromEntries(bookmarks.map((b) => [`bookmark-${b.id}`, bookmarkPath(b)])),
     ...Object.fromEntries(collections.map((t) => [`collection-${t.id}`, `/collections/${t.id}/items`])),
   };
@@ -126,7 +123,6 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
           ))}
         </TreeNode>
         <TreeNode autoAlign id="components" label="Components" onSelect={() => navigate("/components")} renderIcon={ComponentIcon} />
-        <TreeNode autoAlign id="spaces" label="Spaces" onSelect={() => navigate("/spaces")} renderIcon={SpaceIcon} />
       </TreeView>
     </div>
   );

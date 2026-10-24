@@ -1,6 +1,7 @@
 import { useEffect, useState, type PointerEvent } from "react";
-import { IconButton, InlineNotification, Layer, Loading, Search, SideNav } from "@carbon/react";
-import { OpenPanelFilledLeft, OpenPanelLeft } from "@carbon/icons-react";
+import { IconButton, InlineNotification, Layer, Loading, SideNav } from "@carbon/react";
+import { OpenPanelFilledLeft, OpenPanelLeft, Search as SearchIcon } from "@carbon/icons-react";
+import { SearchBar } from "../ui/SearchBar";
 import { SpaceSwitcher } from "../ui/SpaceSwitcher";
 import { SyncStatusButton } from "../ui/SyncStatusButton";
 import { Lightbox } from "../ui/Lightbox";
@@ -54,6 +55,7 @@ function Shell() {
   const { repo } = useStore();
   const ws = useWorkspace();
   const [navOpen, setNavOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   // Desktop: the side nav is docked unless the user collapsed it (remembered per device).
   const desktop = useMediaQuery("(min-width: 66rem)");
   const [docked, setDocked] = useState(() => readPref(NAV_DOCKED_KEY, true) === true);
@@ -144,16 +146,8 @@ function Shell() {
         >
           <Layer className="side-nav-search">
             {navShown && navToggle}
-            <Search
-              size="sm"
-              labelText="Search all items"
-              placeholder="Search"
-              value={query}
-              onChange={(e) => search(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && setNavOpen(false)}
-            />
+            <SpaceSwitcher />
           </Layer>
-          <SpaceSwitcher />
           <NavTree activePath={ws.activePath} navigate={(path) => ws.navigate(path)} openTab={(path) => ws.openTab(path)} />
         </SideNav>
       </GlobalLinks>
@@ -177,8 +171,29 @@ function Shell() {
             hideCloseButton
           />
         )}
-        <WorkspaceView tabStripStart={navShown ? null : navToggle} tabStripEnd={<SyncStatusButton onOpen={() => ws.navigate("/sync")} />} />
+        <WorkspaceView
+          tabStripStart={navShown ? null : navToggle}
+          tabStripEnd={
+            <>
+              <IconButton autoAlign label="Search" kind="ghost" size="sm" align="bottom-end" onClick={() => setSearchOpen(true)}>
+                <SearchIcon />
+              </IconButton>
+              <SyncStatusButton onOpen={() => ws.navigate("/sync")} />
+            </>
+          }
+        />
       </main>
+      {searchOpen && (
+        <SearchBar
+          value={query}
+          onChange={(q) => {
+            search(q);
+            setNavOpen(false);
+          }}
+          onClose={() => setSearchOpen(false)}
+          docked={desktop && docked}
+        />
+      )}
     </>
   );
 }
