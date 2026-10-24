@@ -1,6 +1,7 @@
 import { useEffect, useState, type PointerEvent } from "react";
 import { IconButton, InlineNotification, Layer, Loading, Search, SideNav } from "@carbon/react";
 import { OpenPanelFilledLeft, OpenPanelLeft } from "@carbon/icons-react";
+import { SpaceSwitcher } from "../ui/SpaceSwitcher";
 import { SyncStatusButton } from "../ui/SyncStatusButton";
 import { Lightbox } from "../ui/Lightbox";
 import { GlobalLinks, useWorkspace, WorkspaceProvider, WorkspaceView } from "../workspace/Workspace";
@@ -23,11 +24,19 @@ export function App() {
         </main>
       )}
     >
-      <WorkspaceProvider>
-        <Shell />
-      </WorkspaceProvider>
+      <SpaceWorkspace />
       <Lightbox />
     </StoreProvider>
+  );
+}
+
+/** The workspace (tabs and panes) of the shown space: switching spaces switches the tabs too. */
+function SpaceWorkspace() {
+  const { space } = useStore();
+  return (
+    <WorkspaceProvider key={space.id} spaceId={space.id}>
+      <Shell />
+    </WorkspaceProvider>
   );
 }
 
@@ -144,6 +153,7 @@ function Shell() {
               onKeyDown={(e) => e.key === "Enter" && setNavOpen(false)}
             />
           </Layer>
+          <SpaceSwitcher />
           <NavTree activePath={ws.activePath} navigate={(path) => ws.navigate(path)} openTab={(path) => ws.openTab(path)} />
         </SideNav>
       </GlobalLinks>

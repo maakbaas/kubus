@@ -58,7 +58,7 @@ function excerpts(collection: Collection, item: Item, query: string): Excerpt[] 
 }
 
 export function SearchPage() {
-  const { repo, collections } = useStore();
+  const { repo, collections, spaceCollections, space } = useStore();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const typed = params.get("q") ?? "";
@@ -76,7 +76,7 @@ export function SearchPage() {
     let cancelled = false;
     const timer = window.setTimeout(
       () =>
-        repo.search(typed, collectionsRef.current).then(
+        repo.search(typed, collectionsRef.current, space.id).then(
           (items) => !cancelled && setResults({ query: typed, items }),
           (e) => !cancelled && setError(errorMessage(e)),
         ),
@@ -86,7 +86,7 @@ export function SearchPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [repo, typed]);
+  }, [repo, typed, space.id]);
 
   // The database matches raw text (including markdown syntax such as URLs); keep only
   // items with a visible match: in the title or in at least one excerpt.
@@ -98,15 +98,15 @@ export function SearchPage() {
         if (!collection) return [];
         const matches = excerpts(collection, item, query);
         const titleMatches = itemLabel(collection, item).toLowerCase().includes(query.trim().toLowerCase());
-        return titleMatches || matches.length > 0 ? [{ item, collection: collection, matches }] : [];
+        return titleMatches || matches.length > 0 ? [{ item, collection, matches }] : [];
       }),
     [results, collections, query],
   );
 
-  // Items (collections) match on their names and description; they are all in memory.
+  // Collections (of this space) match on their names and description; they are all in memory.
   const q = query.trim().toLowerCase();
   const collectionHits = q
-    ? collections.filter((t) => [t.name, t.pluralName, t.description].some((text) => text.toLowerCase().includes(q)))
+    ? spaceCollections.filter((t) => [t.name, t.pluralName, t.description].some((text) => text.toLowerCase().includes(q)))
     : [];
   const nothingFound = query && results !== null && hits.length === 0 && collectionHits.length === 0;
 
@@ -143,7 +143,7 @@ export function SearchPage() {
       )}
       {hits.length > 0 && (
         <ContainedList label={`${hits.length}${results?.items.length === 50 ? "+" : ""} items`} kind="on-page">
-          {hits.map(({ item, collection: collection, matches }) => {
+          {hits.map(({ item, collection, matches }) => {
             return (
               <ContainedListItem key={item.id} onClick={() => navigate(`/collections/${collection.id}/items/${item.id}`)}>
                 <div className="search-hit">

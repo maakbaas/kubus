@@ -17,6 +17,7 @@ import { defaultQuery, type FilterRule } from "../../domain/query";
 import type { Bookmark, BookmarkKind } from "../../domain/bookmarks";
 import { parseItemViews, withDefaultItemView, type ItemView } from "../../domain/fieldLayout";
 import { hasSections, isComponentOutput, type Component } from "../../domain/components";
+import { DEFAULT_SPACE_ID, withDefaultSpace, type Space } from "../../domain/spaces";
 import type { CollectionView } from "../../domain/views";
 import type { DataChange, Repository } from "../repository";
 import { SyncEngine } from "../sync/SyncEngine";
@@ -30,6 +31,7 @@ interface CollectionRow {
   icon: string | null;
   description: string;
   item_views: string | null;
+  space_ids: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -69,6 +71,7 @@ interface ViewRow {
 interface ItemRow {
   id: string;
   collection_id: string;
+  space_id: string;
   item_view_id: string | null;
   created_at: string;
   updated_at: string;
@@ -98,6 +101,13 @@ const toField = (r: FieldRow): FieldDef => ({
   toggleIcon: r.toggle_icon,
   position: r.position,
 });
+
+/** Stored space_ids: null (every space) or a list of space ids. */
+const spaceIdsOf = (json: string | null): string[] | null => {
+  const ids = parseJson<unknown>(json, null);
+  return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : null;
+};
+const spaceIdsJson = (ids: string[] | null) => (ids === null ? null : JSON.stringify(ids));
 
 function parseJson<T>(text: string | null, fallback: T): T {
   if (!text) return fallback;
@@ -148,6 +158,43 @@ export class SqliteRepository implements Repository {
     return { persistent: this.db.info.persistent };
   }
 
+  async listSpaces(): Promise<Space[]> {
+    const rows = await this.db.select<Space>(
+      "SELECT id, name, icon, position FROM spaces WHERE deleted_at IS NULL ORDER BY position, created_at",
+    );
+    return withDefaultSpace(rows);
+  }
+
+  async saveSpace(space: Pick<Space, "id" | "name" | "icon">): Promise<void> {
+    const ts = now();
+    await this.db.write([
+      {
+        // A new space goes last; the default one (no row yet) stays first.
+        sql: `INSERT INTO spaces (id, name, icon, position, created_at, updated_at)
+              SELECT ?1, ?2, ?3, CASE WHEN ?1 = ?5 THEN -1 ELSE COALESCE(MAX(position), -1) + 1 END, ?4, ?4 FROM spaces WHERE deleted_at IS NULL
+              ON CONFLICT (id) DO UPDATE SET name = excluded.name, icon = excluded.icon, updated_at = excluded.updated_at`,
+        bind: [space.id, space.name, space.icon, ts, DEFAULT_SPACE_ID],
+      },
+    ]);
+    this.emit({ scope: "spaces" });
+  }
+
+  async deleteSpace(spaceId: string): Promise<void> {
+    if (spaceId === DEFAULT_SPACE_ID) throw new Error("The first space can't be deleted.");
+    const ts = now();
+    const collections = await this.db.select<{ collection_id: string }>(
+      "SELECT DISTINCT collection_id FROM items WHERE space_id = ?1 AND deleted_at IS NULL",
+      [spaceId],
+    );
+    await this.db.write([
+      ...(await this.releaseFilesWhere("item_id IN (SELECT id FROM items WHERE space_id = ?1 AND deleted_at IS NULL)", [spaceId])),
+      { sql: "UPDATE items SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
+      { sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
+      { sql: "UPDATE spaces SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, spaceId] },
+    ]);
+    this.emit({ scope: "spaces" }, { scope: "bookmarks" }, ...collections.map((c) => ({ scope: "items", collectionId: c.collection_id }) as const));
+  }
+
   async listCollections(): Promise<Collection[]> {
     const collections = await this.db.select<CollectionRow>(
       "SELECT * FROM collections WHERE deleted_at IS NULL ORDER BY plural_name COLLATE NOCASE",
@@ -163,6 +210,7 @@ export class SqliteRepository implements Repository {
       description: t.description,
       fields: fields.filter((f) => f.collection_id === t.id).map(toField),
       itemViews: withDefaultItemView(parseItemViews(t.item_views)),
+      spaceIds: spaceIdsOf(t.space_ids),
       createdAt: t.created_at,
       updatedAt: t.updated_at,
     }));
@@ -174,8 +222,8 @@ export class SqliteRepository implements Repository {
     const existing = await this.db.select<{ id: string }>("SELECT id FROM collections WHERE id = ?1", [draft.id]);
     if (existing.length === 0) {
       writes.push({
-        sql: "INSERT INTO collections (id, name, plural_name, icon, description, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
-        bind: [draft.id, draft.name, draft.pluralName, draft.icon, draft.description, ts],
+        sql: "INSERT INTO collections (id, name, plural_name, icon, description, space_ids, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?7, ?6, ?6)",
+        bind: [draft.id, draft.name, draft.pluralName, draft.icon, draft.description, ts, spaceIdsJson(draft.spaceIds)],
       });
       // Every collection starts with an ordinary (renamable, deletable) "All" view: a table of all
       // items sorted by title; its options are filled in by the view type's normalizeOptions.
@@ -230,8 +278,8 @@ export class SqliteRepository implements Repository {
     }
 
     writes.push({
-      sql: "UPDATE collections SET name = ?1, plural_name = ?2, icon = ?3, description = ?4, updated_at = ?5 WHERE id = ?6",
-      bind: [draft.name, draft.pluralName, draft.icon, draft.description, ts, draft.id],
+      sql: "UPDATE collections SET name = ?1, plural_name = ?2, icon = ?3, description = ?4, space_ids = ?7, updated_at = ?5 WHERE id = ?6",
+      bind: [draft.name, draft.pluralName, draft.icon, draft.description, ts, draft.id, spaceIdsJson(draft.spaceIds)],
     });
     for (const old of removed) {
       writes.push(...(await this.releaseFilesWhere("field_id = ?1", [old.id])));
@@ -270,23 +318,24 @@ export class SqliteRepository implements Repository {
     this.emit({ scope: "collections" }, { scope: "items", collectionId }, { scope: "views", collectionId });
   }
 
-  async countItemsByCollection(): Promise<Record<string, number>> {
+  async countItemsByCollection(spaceId: string | null): Promise<Record<string, number>> {
     const rows = await this.db.select<{ collection_id: string; n: number }>(
-      "SELECT collection_id, COUNT(*) AS n FROM items WHERE deleted_at IS NULL GROUP BY collection_id",
+      "SELECT collection_id, COUNT(*) AS n FROM items WHERE deleted_at IS NULL AND (?1 IS NULL OR space_id = ?1) GROUP BY collection_id",
+      [spaceId],
     );
     return Object.fromEntries(rows.map((r) => [r.collection_id, r.n]));
   }
 
-  async listItems(collection: Collection): Promise<Item[]> {
+  async listItems(collection: Collection, spaceId: string): Promise<Item[]> {
     const items = await this.db.select<ItemRow>(
-      "SELECT * FROM items WHERE collection_id = ?1 AND deleted_at IS NULL ORDER BY updated_at DESC",
-      [collection.id],
+      "SELECT * FROM items WHERE collection_id = ?1 AND space_id = ?2 AND deleted_at IS NULL ORDER BY updated_at DESC",
+      [collection.id, spaceId],
     );
     const values = await this.db.select<ValueRow>(
       `SELECT fv.* FROM field_values fv
          JOIN items o ON o.id = fv.item_id
-        WHERE o.collection_id = ?1 AND o.deleted_at IS NULL`,
-      [collection.id],
+        WHERE o.collection_id = ?1 AND o.space_id = ?2 AND o.deleted_at IS NULL`,
+      [collection.id, spaceId],
     );
     return this.assemble(collection, items, values);
   }
@@ -305,7 +354,7 @@ export class SqliteRepository implements Repository {
     // Same rule as labelField: the first string field (in the collection's field order) whose value
     // isn't blank.
     return this.db.select<ItemLabel>(
-      `SELECT o.id AS id,
+      `SELECT o.id AS id, o.space_id AS spaceId,
               (SELECT fv.value_text FROM field_values fv JOIN fields f ON f.id = fv.field_id
                 WHERE fv.item_id = o.id AND f.kind = 'string' AND f.deleted_at IS NULL
                   AND trim(fv.value_text, ' ' || char(9, 10, 13)) <> ''
@@ -317,11 +366,14 @@ export class SqliteRepository implements Repository {
     );
   }
 
-  async createItem(collection: Collection, values: Record<string, FieldValue>): Promise<string> {
+  async createItem(collection: Collection, values: Record<string, FieldValue>, spaceId: string): Promise<string> {
     const id = newId();
     const ts = now();
     const writes: Statement[] = [
-      { sql: "INSERT INTO items (id, collection_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)", bind: [id, collection.id, ts] },
+      {
+        sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES (?1, ?2, ?4, ?3, ?3)",
+        bind: [id, collection.id, ts, spaceId],
+      },
     ];
     // Only actual values: an empty field has no row, and component fields are computed, never stored.
     for (const field of collection.fields) {
@@ -357,6 +409,16 @@ export class SqliteRepository implements Repository {
     writes.push(...replacedFiles.flatMap(releaseFile));
     await this.db.write(writes);
     this.emit({ scope: "items", collectionId: collection.id, itemId });
+  }
+
+  async moveItem(itemId: string, spaceId: string): Promise<void> {
+    await this.db.write([
+      { sql: "UPDATE items SET space_id = ?1, updated_at = ?2 WHERE id = ?3 AND space_id <> ?1", bind: [spaceId, now(), itemId] },
+      // Its bookmarks stay behind in the old space's list: they would lead nowhere there.
+      { sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE target_id = ?2 AND space_id <> ?3 AND deleted_at IS NULL", bind: [now(), itemId, spaceId] },
+    ]);
+    const collectionId = await this.collectionOfItem(itemId);
+    if (collectionId) this.emit({ scope: "items", collectionId, itemId }, { scope: "bookmarks" });
   }
 
   async listViews(collectionId: string): Promise<CollectionView[]> {
@@ -423,7 +485,7 @@ export class SqliteRepository implements Repository {
     if (collectionId) this.emit({ scope: "items", collectionId, itemId });
   }
 
-  async listBookmarks(): Promise<Bookmark[]> {
+  async listBookmarks(spaceId: string): Promise<Bookmark[]> {
     const rows = await this.db.select<{
       id: string;
       kind: BookmarkKind;
@@ -435,10 +497,11 @@ export class SqliteRepository implements Repository {
     }>(
       // Bookmarks of deleted views and items aren't shown.
       `SELECT b.* FROM bookmarks b JOIN collections t ON t.id = b.collection_id AND t.deleted_at IS NULL
-        WHERE b.deleted_at IS NULL
+        WHERE b.deleted_at IS NULL AND b.space_id = ?1
           AND (b.kind <> 'view' OR EXISTS (SELECT 1 FROM views v WHERE v.id = b.target_id AND v.deleted_at IS NULL))
           AND (b.kind <> 'item' OR EXISTS (SELECT 1 FROM items o WHERE o.id = b.target_id AND o.deleted_at IS NULL))
         ORDER BY b.position, b.created_at`,
+      [spaceId],
     );
     return rows.map((r) => ({
       id: r.id,
@@ -451,21 +514,24 @@ export class SqliteRepository implements Repository {
     }));
   }
 
-  async addBookmark(kind: BookmarkKind, collectionId: string, targetId: string, label: string): Promise<void> {
+  async addBookmark(kind: BookmarkKind, collectionId: string, targetId: string, label: string, spaceId: string): Promise<void> {
     const ts = now();
     await this.db.write([
       {
-        sql: `INSERT INTO bookmarks (id, kind, collection_id, target_id, label, position, created_at, updated_at)
-              SELECT ?1, ?2, ?3, ?4, ?5, COALESCE(MAX(position), -1) + 1, ?6, ?6 FROM bookmarks WHERE deleted_at IS NULL`,
-        bind: [newId(), kind, collectionId, targetId, label, ts],
+        sql: `INSERT INTO bookmarks (id, kind, collection_id, space_id, target_id, label, position, created_at, updated_at)
+              SELECT ?1, ?2, ?3, ?7, ?4, ?5, COALESCE(MAX(position), -1) + 1, ?6, ?6 FROM bookmarks WHERE deleted_at IS NULL AND space_id = ?7`,
+        bind: [newId(), kind, collectionId, targetId, label, ts, spaceId],
       },
     ]);
     this.emit({ scope: "bookmarks" });
   }
 
-  async removeBookmark(targetId: string): Promise<void> {
+  async removeBookmark(targetId: string, spaceId: string): Promise<void> {
     await this.db.write([
-      { sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE target_id = ?2 AND deleted_at IS NULL", bind: [now(), targetId] },
+      {
+        sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE target_id = ?2 AND space_id = ?3 AND deleted_at IS NULL",
+        bind: [now(), targetId, spaceId],
+      },
     ]);
     this.emit({ scope: "bookmarks" });
   }
@@ -552,7 +618,7 @@ export class SqliteRepository implements Repository {
     if (collectionId) this.emit({ scope: "items", collectionId, itemId });
   }
 
-  async search(query: string, collections: Collection[], limit = 50): Promise<Item[]> {
+  async search(query: string, collections: Collection[], spaceId: string, limit = 50): Promise<Item[]> {
     const q = query.trim();
     if (!q) return [];
     // Case-insensitive for ASCII only (SQLite's lower()); fine until there is an FTS index.
@@ -562,13 +628,13 @@ export class SqliteRepository implements Repository {
       `SELECT o.id FROM field_values fv
          JOIN items o ON o.id = fv.item_id
          JOIN fields f ON f.id = fv.field_id
-        WHERE o.deleted_at IS NULL AND f.deleted_at IS NULL
+        WHERE o.deleted_at IS NULL AND o.space_id = ?3 AND f.deleted_at IS NULL
           AND f.kind IN ('string', 'markdown', 'html', 'string_list', 'checklist')
           AND instr(lower(CASE WHEN f.kind = 'markdown' THEN replace(fv.value_text, '\\', '') ELSE coalesce(fv.value_text, fv.value_json) END), lower(?1)) > 0
         GROUP BY o.id
         ORDER BY max(o.updated_at) DESC
         LIMIT ?2`,
-      [q, limit],
+      [q, limit, spaceId],
     );
     if (hits.length === 0) return [];
     const ids = JSON.stringify(hits.map((h) => h.id));
@@ -641,6 +707,7 @@ export class SqliteRepository implements Repository {
     return items.map((o) => ({
       id: o.id,
       collectionId: o.collection_id,
+      spaceId: o.space_id,
       values: byItem.get(o.id) ?? {},
       itemViewId: o.item_view_id,
       createdAt: o.created_at,

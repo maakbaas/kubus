@@ -46,7 +46,7 @@ function normalized(collection: Collection, state: ViewState): ViewState {
 function CollectionContent({ collection }: { collection: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { repo, components, cache } = useStore();
+  const { repo, components, cache, space } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
   const refs = useReferenceOptions(collection);
@@ -227,7 +227,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
       const title = labelField(collection, stored);
       if (title) values[title.id] = nextName(String(stored.values[title.id]), (items ?? []).map((e) => itemLabel(collection, e)));
       try {
-        await repo.createItem(collection, values); // the list hears the change and adds it
+        await repo.createItem(collection, values, space.id); // the list hears the change and adds it
       } catch (e) {
         setError(errorMessage(e));
       }
@@ -244,7 +244,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
     },
     async create(values) {
       // Shown before the add row closes (waits for the reload the change event started, else reloads).
-      const id = await repo.createItem(collection, values);
+      const id = await repo.createItem(collection, values, space.id);
       await cache.items.settled(collection.id, id);
     },
     groupPreset: (key) => groupPreset(collection, view.query, key),

@@ -30,7 +30,7 @@ function RuleValue({ id, field, rule, refs, onChange }: { id: string; field: Fie
     return (
       <Select id={id} labelText="Value" hideLabel size="sm" value={rule.value} onChange={(e) => onChange(e.target.value)}>
         <SelectItem value="" text="Choose…" disabled hidden />
-        {(refs[field.targetCollectionId ?? ""] ?? []).map((o) => (
+        {(refs[field.targetCollectionId ?? ""] ?? []).filter((o) => !o.elsewhere || o.id === rule.value).map((o) => (
           <SelectItem key={o.id} value={o.id} text={o.label} />
         ))}
       </Select>

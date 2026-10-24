@@ -21,7 +21,7 @@ export function BookmarkButton({
   label: string;
   onError(e: unknown): void;
 }) {
-  const { repo, bookmarks } = useStore();
+  const { repo, bookmarks, space } = useStore();
   const marked = bookmarks.some((b) => b.targetId === targetId);
   useEffect(() => {
     if (marked) repo.relabelBookmark(targetId, label).catch(onError);
@@ -34,7 +34,7 @@ export function BookmarkButton({
       align="bottom"
       label={marked ? "Remove bookmark" : "Bookmark"}
       aria-pressed={marked}
-      onClick={() => (marked ? repo.removeBookmark(targetId) : repo.addBookmark(kind, collectionId, targetId, label)).catch(onError)}
+      onClick={() => (marked ? repo.removeBookmark(targetId, space.id) : repo.addBookmark(kind, collectionId, targetId, label, space.id)).catch(onError)}
     >
       {marked ? <BookmarkFilled /> : <Bookmark />}
     </IconButton>

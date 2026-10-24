@@ -19,14 +19,17 @@ export interface RefOption {
   label: string;
   /** Reference fields (ids) whose choice filter leaves this item out. */
   excludedBy?: string[];
+  /** In another space than the one shown: labelled, but not offered. */
+  elsewhere?: boolean;
 }
 
 /**
- * The items a reference field offers: those its choice filter lets through, plus the ones
- * already chosen (a value that no longer matches stays, shown as usual).
+ * The items a reference field offers: those of the shown space its choice filter lets through,
+ * plus the ones already chosen (a value that no longer matches, or was moved to another space,
+ * stays, shown as usual).
  */
 export const choicesFor = (field: FieldDef, options: RefOption[], chosen: string[]): RefOption[] =>
-  options.filter((o) => !o.excludedBy?.includes(field.id) || chosen.includes(o.id));
+  options.filter((o) => (!o.excludedBy?.includes(field.id) && !o.elsewhere) || chosen.includes(o.id));
 
 /** Labels by item id, per options list (built once; lists are replaced, never changed). */
 const labelMaps = new WeakMap<RefOption[], Map<string, string>>();
@@ -87,7 +90,7 @@ interface Need {
  * isn't invalidated by edits elsewhere.
  */
 export function useReferenceOptions(collection: Collection): RefOptions {
-  const { cache, collections, components } = useStore();
+  const { cache, collections, components, space } = useStore();
   const targets = referenceTargets(collection);
   const cacheOf = (kind: Need["kind"]) => (kind === "o" ? cache.items : cache.labels);
   /** Whether a target's options are built from its items rather than its labels. */
@@ -129,7 +132,7 @@ export function useReferenceOptions(collection: Collection): RefOptions {
       // The labels of what the target's items refer to (shown in their rendered labels).
       const nested = full && target ? referenceTargets(target).map((n) => cache.labels.snapshot(n.id).items) : [];
       // Labels need the collection only for the name of an unlabelled item; filters need its fields.
-      const deps = full ? [items, target, components, ...t.limited.map((f) => f.choiceFilter), ...nested] : [items, target?.name];
+      const deps = full ? [items, target, components, ...t.limited.map((f) => f.choiceFilter), ...nested] : [items, target?.name, space.id];
       const old = previous.byTarget[t.id];
       if (old && sameDeps(old.deps, deps)) {
         byTarget[t.id] = old;
@@ -159,7 +162,11 @@ export function useReferenceOptions(collection: Collection): RefOptions {
           return { id: e.id, label: itemLabel(target, e), ...(excludedBy.length ? { excludedBy } : {}) };
         });
       } else if (target) {
-        options = (items as ItemLabel[]).map((l) => ({ id: l.id, label: l.label ?? untitledLabel(target) }));
+        options = (items as ItemLabel[]).map((l) => ({
+          id: l.id,
+          label: l.label ?? untitledLabel(target),
+          ...(l.spaceId !== space.id ? { elsewhere: true } : {}),
+        }));
       }
       byTarget[t.id] = { deps, options };
     }
@@ -170,7 +177,7 @@ export function useReferenceOptions(collection: Collection): RefOptions {
     built.current = { byTarget, options };
     return options;
     // `version` stands for the collections' contents; `targets` is described by `key`.
-  }, [cache, collections, components, key, version]);
+  }, [cache, collections, components, space.id, key, version]);
 }
 
 /** Plain-text rendering of any field value, resolving references to item labels. */

@@ -1,26 +1,28 @@
-// One loaded copy of each collection's items (and of their labels), shared by every pane and page.
+// One loaded copy of each collection's items in the current space (and of their labels, in every
+// space), shared by every pane and page.
 //
 // Pages used to load a collection's items themselves, so the same items could be in memory several
-// times and every pane re-read them on its own. Here a collection is loaded once while anything
-// shows it, kept up to date from the repository's change feed (one changed item is re-read, not
-// the whole collection), and dropped shortly after the last viewer leaves. Items that didn't change
-// keep their identity, so what is derived from them (computed values, memoized rows) stays valid.
+// times and every pane re-read them on its own. Here a collection's list is loaded once while
+// anything shows it, kept up to date from the repository's change feed (one changed item is
+// re-read, not the whole list), and dropped shortly after the last viewer leaves. Items that didn't
+// change keep their identity, so what is derived from them (computed values, memoized rows) stays
+// valid. Switching spaces loads every shown list again.
 
 import type { DataChange, Repository } from "../data/repository";
 import type { Item, ItemLabel, Collection } from "../domain/model";
 
-/** What a viewer sees of a collection; replaced (never changed) whenever the collection changes. */
+/** What a viewer sees of a collection's list; replaced (never changed) whenever the list changes. */
 export interface Snapshot<T> {
   /** null until loaded. */
   items: T[] | null;
   error?: string;
-  /** Counts the changes, for viewers that combine several collections. */
+  /** Counts the changes, for viewers that combine several lists. */
   version: number;
 }
 
 const EMPTY: Snapshot<never> = { items: null, version: 0 };
 
-/** How long a collection stays (and stays current) after its last viewer left, e.g. switching tabs back. */
+/** How long a list stays (and stays current) after its last viewer left, e.g. switching tabs back. */
 const GRACE_MS = 10_000;
 
 interface Source<T> {
@@ -143,7 +145,19 @@ export class SharedCache<T extends { id: string }> {
     else void this.reload(change.collectionId);
   }
 
-  /** The collections were reloaded: collections whose collection got other fields are loaded again. */
+  /** Everything shown is loaded again, from scratch (another space); what nothing shows is dropped. */
+  reloadAll() {
+    for (const [collectionId, entry] of this.entries) {
+      if (entry.listeners.size === 0) {
+        this.entries.delete(collectionId);
+        continue;
+      }
+      this.set(entry, null);
+      void this.reload(collectionId);
+    }
+  }
+
+  /** The collections were reloaded: the lists of those with other fields are loaded again. */
   collectionsChanged() {
     for (const [collectionId, entry] of this.entries) {
       const key = fieldKeyOf(this.collectionOf(collectionId));
@@ -159,14 +173,24 @@ export class SharedCache<T extends { id: string }> {
   }
 }
 
-/** The shared collections: items, and their labels alone (what references and pickers need). */
+/** The shared lists: items of the current space, and labels alone (what references and pickers need). */
 export class ItemCache {
   readonly items: SharedCache<Item>;
   readonly labels: SharedCache<ItemLabel>;
   private unsubscribe: () => void;
 
-  constructor(repo: Repository, collectionOf: (collectionId: string) => Collection | undefined) {
-    this.items = new SharedCache({ list: (t) => repo.listItems(t), one: (t, id) => repo.getItem(t, id) }, collectionOf);
+  constructor(repo: Repository, collectionOf: (collectionId: string) => Collection | undefined, space: () => string) {
+    this.items = new SharedCache(
+      {
+        list: (c) => repo.listItems(c, space()),
+        // An item of another space (e.g. just moved there) isn't in this space's list.
+        one: async (c, id) => {
+          const item = await repo.getItem(c, id);
+          return item && item.spaceId === space() ? item : null;
+        },
+      },
+      collectionOf,
+    );
     this.labels = new SharedCache(
       { list: (t) => repo.listLabels(t), one: async (t, id) => (await repo.listLabels(t, [id]))[0] ?? null },
       collectionOf,
@@ -180,6 +204,11 @@ export class ItemCache {
   collectionsChanged() {
     this.items.collectionsChanged();
     this.labels.collectionsChanged();
+  }
+
+  /** The shown space changed: items are another space's now (labels cover every space). */
+  spaceChanged() {
+    this.items.reloadAll();
   }
 
   dispose() {

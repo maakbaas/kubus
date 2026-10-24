@@ -2,6 +2,7 @@ import type { FieldValue, Item, ItemLabel, Collection, CollectionDraft } from ".
 import type { Bookmark, BookmarkKind } from "../domain/bookmarks";
 import type { ItemView } from "../domain/fieldLayout";
 import type { Component } from "../domain/components";
+import type { Space } from "../domain/spaces";
 import type { CollectionView } from "../domain/views";
 
 /**
@@ -9,6 +10,7 @@ import type { CollectionView } from "../domain/views";
  * reference label). A future sync layer reports incoming changes the same way.
  */
 export type DataChange =
+  | { scope: "spaces" }
   | { scope: "collections" }
   | { scope: "items"; collectionId: string; itemId?: string }
   | { scope: "views"; collectionId: string }
@@ -59,28 +61,40 @@ export interface Repository {
   /** Notified after every successful write; returns an unsubscribe function. */
   subscribe(listener: (change: DataChange) => void): () => void;
 
+  /** All spaces, the default one included, in their order. */
+  listSpaces(): Promise<Space[]>;
+  /** Creates (at the end) or renames / re-icons a space. */
+  saveSpace(space: Pick<Space, "id" | "name" | "icon">): Promise<void>;
+  /** Deletes a space with its items and bookmarks. The default space can't be deleted. */
+  deleteSpace(spaceId: string): Promise<void>;
+
   listCollections(): Promise<Collection[]>;
   /** Creates or updates a collection, including adding/renaming/removing fields. */
   saveCollection(draft: CollectionDraft): Promise<void>;
   deleteCollection(collectionId: string): Promise<void>;
-  countItemsByCollection(): Promise<Record<string, number>>;
+  /** Item counts per collection, of one space, or of all when null. */
+  countItemsByCollection(spaceId: string | null): Promise<Record<string, number>>;
 
-  listItems(collection: Collection): Promise<Item[]>;
+  /** A collection's items in one space. */
+  listItems(collection: Collection, spaceId: string): Promise<Item[]>;
+  /** One item, whichever space it is in. */
   getItem(collection: Collection, itemId: string): Promise<Item | null>;
   /**
    * Just the labels (`labelField`: the first non-empty string value, as stored) of a collection's
-   * items, or of the given ones: what pickers and links need, without loading every value.
+   * items in every space, or of the given ones: what pickers and links need, without loading every value.
    */
   listLabels(collection: Collection, itemIds?: string[]): Promise<ItemLabel[]>;
   /** Returns the id of the created item. */
-  createItem(collection: Collection, values: Record<string, FieldValue>): Promise<string>;
+  createItem(collection: Collection, values: Record<string, FieldValue>, spaceId: string): Promise<string>;
   updateItem(collection: Collection, itemId: string, values: Record<string, FieldValue>): Promise<void>;
+  /** Moves an item to another space (its references and files stay as they are). */
+  moveItem(itemId: string, spaceId: string): Promise<void>;
   deleteItem(itemId: string): Promise<void>;
   /**
-   * Items of any of `collections` (the caller's current list of all collections) whose text (string, markdown,
-   * list of strings) contains `query`. Most recent first.
+   * Items in `spaceId` of any of `collections` (the caller's current list of all collections) whose text
+   * (string, markdown, list of strings) contains `query`. Most recent first.
    */
-  search(query: string, collections: Collection[], limit?: number): Promise<Item[]>;
+  search(query: string, collections: Collection[], spaceId: string, limit?: number): Promise<Item[]>;
 
   /** Saved views of a collection's items, in their display order. */
   listViews(collectionId: string): Promise<CollectionView[]>;
@@ -95,12 +109,12 @@ export interface Repository {
   /** Pins an item to one of its collection's item views, or back to the collection's default with null. */
   pinItemView(itemId: string, viewId: string | null): Promise<void>;
 
-  /** Side-nav bookmarks, in their order. */
-  listBookmarks(): Promise<Bookmark[]>;
-  /** Bookmarks the view or item (at the end of the list). */
-  addBookmark(kind: BookmarkKind, collectionId: string, targetId: string, label: string): Promise<void>;
-  /** Removes the bookmark of this view or item, if any. */
-  removeBookmark(targetId: string): Promise<void>;
+  /** A space's side-nav bookmarks, in their order. */
+  listBookmarks(spaceId: string): Promise<Bookmark[]>;
+  /** Bookmarks the view or item in a space (at the end of its list). */
+  addBookmark(kind: BookmarkKind, collectionId: string, targetId: string, label: string, spaceId: string): Promise<void>;
+  /** Removes the space's bookmark of this view or item, if any. */
+  removeBookmark(targetId: string, spaceId: string): Promise<void>;
   /** Updates the label snapshot of a bookmarked view or item (no-op when unchanged). */
   relabelBookmark(targetId: string, label: string): Promise<void>;
 

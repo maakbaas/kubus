@@ -313,12 +313,13 @@ export class SyncEngine implements SyncControl {
       );
       for (const r of rows) items.set(r.id, r.collection_id);
     }
+    if (changes.spaces?.length) out.push({ scope: "spaces" });
     if (changes.collections?.length || changes.fields?.length) out.push({ scope: "collections" });
     if (changes.components?.length) out.push({ scope: "components" });
     if (changes.bookmarks?.length) out.push({ scope: "bookmarks" });
     // Everything was replaced: whatever the old data showed is gone or different now.
     if (replacedCollections.length > 0) {
-      out.push({ scope: "collections" }, { scope: "components" }, { scope: "bookmarks" });
+      out.push({ scope: "spaces" }, { scope: "collections" }, { scope: "components" }, { scope: "bookmarks" });
       for (const collectionId of replacedCollections) out.push({ scope: "items", collectionId }, { scope: "views", collectionId });
     }
     for (const collectionId of new Set((changes.views ?? []).map((r) => String(r.collection_id)))) out.push({ scope: "views", collectionId });

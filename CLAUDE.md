@@ -5,15 +5,15 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
 
 ## Goals
 
-- **User-defined schema.** Users create types (e.g. Book, Person, Meeting) with arbitrary
-  fields, and CRUD both the types and their objects.
-- **Field types:** String, Markdown, HTML (source edited in the template code editor, shown in the
-  sandboxed `HtmlFrame` like a template's HTML output; its text in tables, cards and search; the
+- **User-defined schema.** Users create collections (e.g. Book, Person, Meeting) with arbitrary
+  fields, and CRUD both the collections and their items.
+- **Field types:** String, Markdown, HTML (source edited in the component code editor, shown in the
+  sandboxed `HtmlFrame` like a component's HTML output; its text in tables, cards and search; the
   frame reports clicks on plain content, which start editing, while links, controls, canvas/svg
-  and elements with handlers keep their clicks), Number, Date, Date & time, Checkbox, Image, Object (reference
-  to an object of another type, e.g. Book → Author), List of strings, Checklist (items with a
+  and elements with handlers keep their clicks), Number, Date, Date & time, Checkbox, Image, Item (reference
+  to an item of another collection, e.g. Book → Author), List of strings, Checklist (items with a
   checkbox, stored as GFM task lines "[x] text", `domain/checklist.ts`; tables show "2/5"),
-  List of objects, Template (computed from a template).
+  List of items, Component (computed from a component).
 - **Checkbox and Checklist fields can show an icon instead of the box** (`fields.toggle_icon`, a
   key of `TOGGLE_ICONS` in `ui/ToggleInput.tsx`: heart, star, flag, bookmark, checkmark, thumbs up,
   faces; outlined when off, filled when on; null = Carbon's checkbox). Every place that toggles
@@ -24,83 +24,95 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   and any future renderer must also be GFM-only. Behaviour-only additions are fine: clickable task
   checkboxes, typed `[text](url)` links, link hover popover (open/edit/remove), code coloring
   (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs.
-- **Types have a singular and plural name** ("Author" / "Authors"): singular for one object
+- **Collections have a singular and plural name** ("Author" / "Authors"): singular for one item
   ("New Author"), plural for lists, navigation and counts (`countLabel`).
-- **Objects are edited in place**: `#/types/<id>/objects/<objectId>` shows every field in the
+- **Items are edited in place**: `#/collections/<id>/items/<itemId>` shows every field in the
   user's order; clicking a field turns it into its form input, with no buttons (they would push the
   content down). Enter saves (Ctrl/Cmd+Enter in markdown), clicking outside saves, Escape cancels;
   checkboxes save on toggle; markdown starts editing where it was clicked. View and edit mode must
   keep the same geometry (label spacing, box height, text position) so nothing jumps. The field
-  that is the object's title (`labelField`) isn't repeated among the fields: the page title itself
+  that is the item's title (`labelField`) isn't repeated among the fields: the page title itself
   is its editor (click to edit in place). The full form
-  (`…/objects/new`) is only for creating. Narrow screens show the objects list as cards.
+  (`…/items/new`) is only for creating. Narrow screens show the items list as cards.
 - **Markdown editor has no toolbar**: formatting is typed, images pasted/dropped, links edited from
   their hover popover. Its height follows the content (no inner scrolling, no resize handle).
-- **Type editor header is the editor** for the type's icon (button + popover picker) and name
+- **Collection editor header is the editor** for the collection's icon (button + popover picker) and name
   (heading-sized input).
-- **Types have an icon** from the full Carbon set (`object_types.icon`, an `@carbon/icons-react`
-  export name). The icon module is lazy-loaded (`app/src/ui/objectIcons.tsx`); the picker is a search
+- **Collections have an icon** from the full Carbon set (`collections.icon`, an `@carbon/icons-react`
+  export name). The icon module is lazy-loaded (`app/src/ui/collectionIcons.tsx`); the picker is a search
   box over a grid of matches. App icon: `app/public/favicon.svg` (isometric cube, three shades of Carbon blue, transparent background),
   rendered to `desktop/icons` with `tauri icon` (`--ios-color '#d0e2ff'`); the PWA's icon-1024, the apple-touch-icon (iOS home screen) and the Tauri iOS icons are the cube at 70% on #d0e2ff (a blue lighter than the cube's lightest), rendered from `favicon.svg`. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
   names, the lock or the `kubus.*` storage keys, orphans existing data).
 - The Milkdown editor reports changes synchronously (`changes` plugin); don't switch back to the
   debounced listener plugin, which lost text typed right before saving.
-- **Templates** (`#/templates`, `app/src/domain/templates.ts`, table `templates`, field kind
-  `template`): Markdown with `{{ … }}` sections of JavaScript over `$variables` (stored as
-  `params`), plus the built-ins `$now` / `$object` (the object itself, n8n style; details in the
-  header of `templates.ts`). A Template field picks one (`fields.template_id`) and maps each
-  variable to a field of its type or a fixed text/number (`fields.template_args`, `TemplateArg`),
-  so one template serves any type. A template that is only `{{ … }}` yields that raw value
-  (numbers sort as numbers); otherwise rendered Markdown (rendered on object pages, plain text in
-  tables/cards). Results are computed whenever objects are shown (`withComputed`, before queries
+- **Components** (`#/components`, `app/src/domain/components.ts`, table `components`, field kind
+  `component`): Markdown with `{{ … }}` sections of JavaScript over `$variables` (stored as
+  `params`), plus the built-ins `$now` / `$item` (the item itself, n8n style; details in the
+  header of `components.ts`). A Component field picks one (`fields.component_id`) and maps each
+  variable to a field of its collection or a fixed text/number (`fields.component_args`, `ComponentArg`),
+  so one component serves any collection. A component that is only `{{ … }}` yields that raw value
+  (numbers sort as numbers); otherwise rendered Markdown (rendered on item pages, plain text in
+  tables/cards). Results are computed whenever items are shown (`withComputed`, before queries
   run) and never stored; failing sections show `⚠ message`. One concept on purpose: the same
-  templates will later render whole objects and query results. The code runs in the app with the
-  user's rights (`new Function`); it must move to a sandbox once templates can come from others
+  components will later render whole items and query results. The code runs in the app with the
+  user's rights (`new Function`); it must move to a sandbox once components can come from others
   (sync, sharing).
-  - `{{ }}` sections also work inside an object's own string, markdown, HTML and number values
-    (`withComputed` renders them when shown and keeps the typed source in `object.sources`, which
+  - `{{ }}` sections also work inside an item's own string, markdown, HTML and number values
+    (`withComputed` renders them when shown and keeps the typed source in `item.sources`, which
     editors use). A number field holding sections stores that text in `value_text`, so its input
     is a Carbon TextInput with a decimal keyboard (NumberInput takes no braces).
-  - HTML output renders in a sandboxed frame that sizes itself, one template for every place
-    (`HtmlFrame` in `ui/TemplateValue.tsx`, which documents flow/fill sizing, `frame_ratio`, the
+  - HTML output renders in a sandboxed frame that sizes itself, one component for every place
+    (`HtmlFrame` in `ui/ComponentValue.tsx`, which documents flow/fill sizing, `frame_ratio`, the
     `<meta name="frame">` override and the zero-specificity base styles).
-  - Templates see an image field as its src, `files/<sha256>`: Markdown and image outputs (and
+  - Components see an image field as its src, `files/<sha256>`: Markdown and image outputs (and
     card covers) resolve it to the stored file; HTML frames get each file embedded as a data URL.
-  - A template field on an object page is edited in place like any field: clicking it edits its
-    template's code (`ui/TemplateFieldEditor.tsx`); saving asks first, as the change applies
-    everywhere the template is used (Change template /
+  - A component field on an item page is edited in place like any field: clicking it edits its
+    component's code (`ui/ComponentFieldEditor.tsx`); saving asks first, as the change applies
+    everywhere the component is used (Change component /
     Discard changes, which reverts / Keep editing, also on × or Escape).
   - Fields can also be added from every field picker ("Add field": table columns, card fields,
-    object page layout; `ui/FieldModal.tsx`, which also edits template fields). They are ordinary
-    fields of the type, shown in the picker's own view; adding asks for confirmation (the field
-    belongs to the type, not the view).
+    item page layout; `ui/FieldModal.tsx`, which also edits component fields). They are ordinary
+    fields of the collection, shown in the picker's own view; adding asks for confirmation (the field
+    belongs to the collection, not the view).
 - **Field order and layouts** (`app/src/domain/fieldLayout.ts`, `ui/FieldOrderEditor.tsx`): one
-  approach for which fields show in which order: table columns, card fields and object pages
-  (`orderFields`; null = all in the type's order). Object pages show an object view
-  (`object_types.object_views`, JSON: name + layout = editable, field names shown, fields + order):
-  the one the object is pinned to (`objects.object_view_id`), else the starred one, else the first.
-  Once a type has object views its object pages show them as tabs with "+", delete, pin (this
-  object always opens with it) and star (default for all objects). The layout popover edits the
-  shown view's layout as unsaved changes, saved like the objects page's views (Discard / Save
+  approach for which fields show in which order: table columns, card fields and item pages
+  (`orderFields`; null = all in the collection's order). Item pages show an item view
+  (`collections.item_views`, JSON: name + layout = editable, field names shown, fields + order):
+  the one the item is pinned to (`items.item_view_id`), else the starred one, else the first.
+  Once a collection has item views its item pages show them as tabs with "+", delete, pin (this
+  item always opens with it) and star (default for all items). The layout popover edits the
+  shown view's layout as unsaved changes, saved like a collection page's views (Discard / Save
   changes beside the tabs; "+" makes a new view of what is shown, in the header while the tab
-  bar is hidden). A type always has at least one object view:
-  without stored ones it is a virtual "Default" (`withDefaultObjectView`, id `default`), stored once
-  changed; the last view can't be deleted. Both tab bars (objects page, object pages) are hidden while
+  bar is hidden). A collection always has at least one item view:
+  without stored ones it is a virtual "Default" (`withDefaultItemView`, id `default`), stored once
+  changed; the last view can't be deleted. Both tab bars (collection page, item pages) are hidden while
   there is one view without unsaved changes; a changed view's tab shows " *". When a layout hides
   fields or isn't editable, an edit icon switches to the standard page (all fields, editable)
   for the time being.
+- **Spaces** (`app/src/domain/spaces.ts`, table `spaces`, `#/spaces`): separate environments (e.g.
+  Work / Private) in one database. Every item belongs to one space (`items.space_id`) and shows only
+  there; collections, their fields and views, and components are shared. A collection can be
+  limited to some spaces (`collections.space_ids`, JSON; null = all; picked in the collection editor).
+  Bookmarks (`bookmarks.space_id`) and the open tabs (`kubus.workspace.<spaceId>`) are per space;
+  the shown space is per device (`kubus.space`), switched from a dropdown atop the side nav (only
+  shown with 2+ spaces). The default space (id `default`, "Personal") has no row until renamed,
+  like the virtual default item view, and can't be deleted; deleting another deletes its items and
+  bookmarks. Repository methods that list items take the space explicitly (`listItems`,
+  `createItem`, `search`, `countItemsByCollection`, bookmarks); `getItem` and `listLabels` read every
+  space (a reference may point into another space: labelled, but pickers offer only the shown
+  space's items, `RefOption.elsewhere`). An item moves on its page's (i) panel (`moveItem`).
 - **Bookmarks** (`app/src/domain/bookmarks.ts`, table `bookmarks`): a bookmark icon on a view (tab strip,
-  next to the star) and on an object (page header, next to (i)) toggles a link in the side nav's
-  Bookmarks branch. A view bookmark opens `…/objects?view=<id>`. Labels are snapshots, refreshed
-  while the bookmarked page is shown; bookmarks of deleted views / objects aren't listed.
+  next to the star) and on an item (page header, next to (i)) toggles a link in the side nav's
+  Bookmarks branch (of the shown space). A view bookmark opens `…/items?view=<id>`. Labels are snapshots, refreshed
+  while the bookmarked page is shown; bookmarks of deleted views / items aren't listed.
 - **Links open any scheme** (https, mailto, tel, spotify:, obsidian:, … open the app registered
   for it) except blocked ones (javascript:, data:, file:, …): `isOpenableUrl` / `safeUrl` in
   `platform/openExternal.ts`, used by Markdown (react-markdown's `urlTransform`), cells and the
   editor; the Tauri opener scope (`desktop/capabilities/default.json`) denies the same schemes.
-- **Global search** in the side nav (`/search?q=`): substring match over string, markdown, HTML and
+- **Global search** in the side nav (`/search?q=`): the shown space's items, substring match over string, markdown, HTML and
   list-of-strings values (ASCII case-insensitive; an FTS index can come later).
 - **Local first.** The app works fully offline on the device's own SQLite database.
-- **Future:** the same templates render whole objects and query results (see Templates).
+- **Future:** the same components render whole items and query results (see Components).
 - **Sync.** The local SQLite is an offline-first replica of a Postgres-backed server (see "Sync with Postgres").
 - **One codebase, many shells.** Desktop runs in Tauri; iOS (and anything else) runs the same web
   build as a home-screen web app (PWA). No native-only features in the core app.
@@ -111,8 +123,9 @@ relational (CRUD/SQL) store instead of Markdown files. Other names considered: R
   changes, simple changes (new tables, indexes, nullable or defaulted columns; removed plain
   columns; changed CHECKs, e.g. a new field kind: the table is rebuilt with its rows) are applied
   in place and the data is kept; anything else (retyped columns, new NOT NULL columns without
-  default) still wipes the local database. Prefer such
-  simple schema changes.
+  default) still wipes the local database; tables schema.sql no longer has are dropped. Prefer such
+  simple schema changes. For big breaking changes the user starts from a fresh database (no
+  compatibility code; the 2026-10 rename to collections / items / components was done that way).
 
 ## Vision: one hub for all data
 
@@ -123,13 +136,13 @@ a project page showing a query over production data next to your own notes).
 
 Rules that keep this from becoming three products glued together:
 
-- **Everything is a source with capabilities.** Native Kubus types and remote data (external
+- **Everything is a source with capabilities.** Native Kubus collections and remote data (external
   tables, SQL queries) are both "typed collections" behind one data-source interface. Each source
   declares what it supports, and the UI shows or hides features by those flags, never by source
   kind. Sketch:
   `{ edit, create, delete, editSchema, offline, serverQuery }`; the native source declares all.
-- **Views and templates are source-agnostic.** Table, cards, future per-record / query templates
-  and chart/dashboard view types render "objects of a type", wherever they come from. If remote
+- **Views and components are source-agnostic.** Table, cards, future per-record / query components
+  and chart/dashboard view types render "items of a collection", wherever they come from. If remote
   data ever needs its own pages or its own query editor, the design has gone wrong.
 - **Native vs remote:**
 
@@ -142,34 +155,42 @@ Rules that keep this from becoming three products glued together:
   | Filter / sort / group | in memory (`applyQuery`) | pushed down to the server |
   | Links | both directions, backlinks | native → remote only |
 
-- Links from native objects to remote rows store source + table + key **plus a label snapshot**,
+- Links from native items to remote rows store source + table + key **plus a label snapshot**,
   so they read sensibly offline or after the row is gone.
 - Settings for remote collections (column choices, labels, icons, views) are stored natively and
   synced; the remote data itself is never copied unless explicitly imported.
-- Import (copy a CSV / query result into a new native type) is the simple alternative to a live
+- Import (copy a CSV / query result into a new native collection) is the simple alternative to a live
   source and keeps the data editable and syncable.
-- For SQL over the user's own data, generate a normal-looking SQL view per type (pivoting
-  the EAV `field_values`), so queries and query templates don't have to deal with EAV.
+- For SQL over the user's own data, generate a normal-looking SQL view per collection (pivoting
+  the EAV `field_values`), so queries and query components don't have to deal with EAV.
 - Remote sources make the server essential and change the security story: auth, secret storage
   for credentials, read-only database users by default.
 
-Roadmap, in order: (1) native Kubus core: object links + backlinks, per-record and query templates;
+Roadmap, in order: (1) native Kubus core: item links + backlinks, per-record and query components;
 (2) the server + sync; (3) remote sources, read-only (tables and SQL queries through the server,
-same views/templates, links to remote rows); (4) editing remote data (Directus side), only where
+same views/components, links to remote rows); (4) editing remote data (Directus side), only where
 the source allows it; (5) chart / dashboard view types (Metabase side), any time after (3).
 Cheap step that can be done any time: introduce the capabilities type with the native source
 declaring everything, and make the UI respect it.
 
 ## Terminology
 
-| UI       | Code / DB                          |
-|----------|------------------------------------|
-| Type     | `ObjectType` / `object_types`      |
-| Object   | `ObjectInstance` / `objects`       |
-| Field    | `FieldDef` / `fields`              |
+| UI         | Code / DB                                   |
+|------------|---------------------------------------------|
+| Collection | `Collection` / `collections`                |
+| Item       | `Item` / `items`                            |
+| Field      | `FieldDef` / `fields`                       |
+| View       | collection view: `CollectionView` / `views`; item view: `ItemView` / `collections.item_views` |
+| Layout     | `ItemLayout` (the fields of an item view)   |
+| Component  | `Component` / `components`                  |
+| Space      | `Space` / `spaces`                          |
 
-A Type defines fields (Book); an Object is one instance of it (a particular book). The UI never
-says "entry"; a field's own kind is called "Field type" in the UI to keep "Type" for the schema.
+A Collection defines fields and holds its items (Books); an Item is one of them (a particular
+book). "View" is both how a collection's items are listed (collection view: table, cards) and how
+one item's page looks (item view, whose layout is its fields); say "collection view" / "item view"
+only where both could be meant. A Component is reusable rendering ({{ }} code over $variables).
+A Space keeps items apart while sharing collections. Code and UI use the same words (no "type",
+"object", "template", "entry"); a field's own kind is called "Field type" in the UI.
 
 ## Architecture
 
@@ -190,32 +211,34 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 - **Repository boundary.** The UI only talks to `Repository` (`app/src/data/repository.ts`). A
   sync-aware implementation slots in here later without touching the UI.
 - **Change feed.** After every committed write the repository emits a `DataChange`
-  (`types`, `objects` of a type / object, `views` of a type) via `repo.subscribe`. Anything that
+  (`spaces`, `collections`, `items` of a collection / item, `views` of a collection, `components`,
+  `bookmarks`) via `repo.subscribe`. Anything that
   shows data refreshes through `useDataChanges` (app/src/app/useDataChanges.ts) rather than relying
-  on whoever made the edit: object lists, object pages, reference labels, counts and the store's
-  types all do. A sync layer must emit the same changes for data arriving from the server.
+  on whoever made the edit: item lists, item pages, reference labels, counts and the store's
+  collections all do. A sync layer must emit the same changes for data arriving from the server.
 - **Writes are change sets.** Each mutating repository method collects its statements and commits
   them in one transaction (`SqlClient.write`). This is the natural unit for a future sync outbox.
-- **Objects are loaded once and shared** (`app/src/app/objectCache.ts`, hook `useObjects`): while any
-  pane shows a type, its objects live in one cache, kept current from the change feed (a changed
-  object is re-read alone; a type whose fields changed is reloaded) and dropped 10 s after the
-  last viewer leaves. Unchanged objects keep their identity, which memoized rows
-  (`ObjectRow` / `ObjectCard`) and `withComputed`'s per-object memo rely on: don't copy or
-  rebuild objects needlessly. Reference pickers and links need only labels: `useReferenceOptions`
+- **Items are loaded once and shared** (`app/src/app/itemCache.ts`, hook `useItems`): while any
+  pane shows a collection, its items (of the shown space) live in one cache, kept current from the change feed (a changed
+  item is re-read alone; a collection whose fields changed is reloaded; switching spaces reloads
+  all) and dropped 10 s after the last viewer leaves. Unchanged items keep their identity, which memoized rows
+  (`ItemRow` / `ItemCard`) and `withComputed`'s per-item memo rely on: don't copy or
+  rebuild items needlessly. Reference pickers and links need only labels: `useReferenceOptions`
   uses `Repository.listLabels` (ids + labels, no values) unless a field's choice filter needs the
-  target's objects. Stable `ObjectActions` (delegating to the latest handlers) keep rows from
+  target's items. Stable `ItemActions` (delegating to the latest handlers) keep rows from
   re-rendering; keep new actions delegating the same way.
 - **Domain model** (`app/src/domain`) is storage-agnostic. `fieldKinds.ts` is the registry of field
   kinds (DB column, codec, formatting); `ui/FieldInput.tsx` holds the matching editors.
 - **Renames** of tables, columns or stored values go in `RENAMES` / `RENAMED_VALUES` in
   `worker.ts`: applied before the upgrade (with CHECKs ignored until the rebuild), so renaming
-  keeps the data. (Expressions → templates was done this way.)
+  keeps the data. (Expressions → templates was done this way; the later rename to
+  collections / items / components wasn't: the user started fresh.)
 - **Schema** is one file, `app/src/data/schema.sql`. The worker stores a hash of it in
   `PRAGMA user_version`; on mismatch it builds the new schema in an in-memory database, compares,
   adds missing tables/columns/indexes and drops removed columns in place (`upgradeAdditively`
   in `worker.ts`). Only an incompatible change drops and recreates everything.
 
-### Views (how a type's objects are listed)
+### Views (how a collection's items are listed)
 
 Extension points are registries, not special cases in pages:
 
@@ -225,8 +248,8 @@ Extension points are registries, not special cases in pages:
   `$title`, `$updated`, `$created` can be sorted on; the default query sorts by `$title`.
 - **View types** (`app/src/views/`): a `ViewTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, the `View` component, optional `OptionsEditor`) registered
-  in `VIEW_TYPES` (`app/src/views/index.ts`). Today: `table` (title column links to the object; string,
-  number, date(time) and object cells edit in place via the shared `ui/FieldEditor`; the last row is empty but for a "+" in the title column, which turns it into an add row
+  in `VIEW_TYPES` (`app/src/views/index.ts`). Today: `table` (title column links to the item; string,
+  number, date(time) and item cells edit in place via the shared `ui/FieldEditor`; the last row is empty but for a "+" in the title column, which turns it into an add row
   with inputs per editable column (text aligned with the column); header sorting; grouping = one table per
   group in a collapsible Carbon Accordion; columns as wide as their content on one line while
   there's room, the actions column widened by `FillTable` so the table spans the pane; an editing
@@ -237,13 +260,13 @@ Extension points are registries, not special cases in pages:
   average ratio (filled, cropped); with no title and no fields a card is just its cover). A view type only
   renders a `QueryResult`; it never filters or sorts itself. Shared cell rendering: `views/cells.tsx`.
 - **Saved views** (`app/src/domain/views.ts`, table `views`): name + kind + JSON config `{ query, options }`.
-  Every new type gets an ordinary "All" view (table, all objects, sorted by title), created
-  with the type in `saveType`; it can be renamed (view settings), edited, starred or deleted like
+  Every new collection gets an ordinary "All" view (table, all items, sorted by title), created
+  with the collection in `saveCollection`; it can be renamed (view settings), edited, starred or deleted like
   any other; "+" adds one ("New", then "New 2", …) as a copy of what is shown, unsaved changes
   included (so it is also "save as new view"), and opens View settings with its name selected.
   "+" sits after the last tab, or in the toolbar while the tab bar is hidden. The
   toolbar has three icon buttons with popovers: Filter, Sort and group, View settings (name, view
-  type, its options, delete). The objects page opens the starred view (`views.is_default`, at most one per type,
+  collection, its options, delete). The collection page opens the starred view (`views.is_default`, at most one per collection,
   set via `setDefaultView`), else the first; with no views left it shows an unsaved table that can
   be saved. Changes are ephemeral: while the shown view differs from
   its saved version, icon buttons beside the star offer Discard changes and Save changes to view
@@ -260,12 +283,13 @@ Extension points are registries, not special cases in pages:
   Ctrl/Cmd/middle click = new tab); links in the side nav go to the active tab. Code that
   navigates uses `useNavigate()` (this tab) or `useOpenRelated()` (beside / new tab).
 - Pages name their tab through `PageHeader` (its breadcrumb's current item).
-- Opening a related item (object from a list/cards, referenced object) goes through
+- Opening a related item (item from a list/cards, referenced item) goes through
   `useOpenRelated(path, mode)` with `openModeOf(event)`: plain click = this tab; Ctrl/Cmd click =
   beside (the pane to the right, reused or split off; a new tab on windows < 72rem); middle click =
   new tab. Such links carry `data-own-click`.
-- The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Types (with every
-  type below it) and Templates; branches remember being open per device.
+- The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Collections (with the
+  shown space's collections below it), Components and Spaces; branches remember being open per
+  device. With two or more spaces a space switcher (`ui/SpaceSwitcher.tsx`) sits under the search.
 - There is no header bar. The side nav toggle (filled/outlined panel icon) sits left of the side
   nav's search while the nav is shown; while it is hidden it leads the top-left pane's tab strip,
   like "+" ends each strip (on phones: the active pane's). The side nav can be
@@ -292,24 +316,24 @@ Extension points are registries, not special cases in pages:
 
 ### Data model (sync-ready conventions)
 
-- Tables: `object_types`, `fields`, `objects`, `field_values` (EAV with typed columns
+- Tables: `spaces`, `collections`, `fields`, `items`, `field_values` (EAV with typed columns
   `value_text | value_number | value_date | value_datetime | value_bool | value_ref | value_json`),
   `meta` (holds `replica_id`).
 - Images live in `files` (content-addressed: id = SHA-256, immutable, BLOB in SQLite) and are
   referenced from `field_values.value_file` or from markdown as `files/<sha256>`. Files are stored as soon as they're picked and
   released (`releaseFile` in `SqliteRepository.ts`) in the same transaction as any write that drops
-  a reference (changed/removed image, deleted object/field); the object editor releases
-  unsaved uploads when it closes. A file is only deleted when no live object uses it. For sync,
+  a reference (changed/removed image, deleted item/field); the item editor releases
+  unsaved uploads when it closes. A file is only deleted when no live item uses it. For sync,
   files should move to object storage (or `bytea`) and transfer separately from the row data.
-- Reference fields (`object`, `object_list`) carry `fields.target_type_id`, and optionally
+- Reference fields (`item`, `item_list`) carry `fields.target_collection_id`, and optionally
   `fields.choice_filter` (JSON filter rules over the target, edited with the views' filter editor:
-  `ui/ChoiceFilterEditor.tsx`): pickers offer only matching objects (`choicesFor`); a value
+  `ui/ChoiceFilterEditor.tsx`): pickers offer only matching items (`choicesFor`); a value
   already chosen that no longer matches stays. Single references live
-  in `value_ref`; lists (`string_list`, `object_list`) are JSON arrays in `value_json`, which means a
+  in `value_ref`; lists (`string_list`, `item_list`) are JSON arrays in `value_json`, which means a
   list merges as one value during sync.
-- Objects have no title field; their label (e.g. in reference pickers) is the first non-empty
-  String field (`objectLabel`).
-- A type can't be deleted while another type has a reference field pointing at it.
+- Items have no title field; their label (e.g. in reference pickers) is the first non-empty
+  String field (`itemLabel`).
+- A collection can't be deleted while another collection has a reference field pointing at it.
 - Primary keys are client-generated UUIDs (no autoincrement), so replicas can create rows offline.
 - Every row has `updated_at` (ISO 8601 UTC); `field_values` rows have their own, enabling
   field-level last-writer-wins merges. Updates only touch fields that actually changed.
@@ -389,12 +413,12 @@ tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 
 ### Known constraints / risks
 
-- **Scale: native types are meant for under ~10,000 objects.** A type's objects are loaded into
+- **Scale: native collections are meant for under ~10,000 items.** A collection's items are loaded into
   memory and filtered, sorted and grouped there (`applyQuery`); that is fast at this size, so
   there is deliberately no SQL-side querying of native data. Larger data (time series, logs) is
   meant for remote tables (roadmap step 3), where the query is pushed down to the server
   (`serverQuery`); only then does a query engine beyond `applyQuery` pay off. Rendering is not
-  virtualized: rows and cards are memoized only. If a 5,000-object type feels slow, first try
+  virtualized: rows and cards are memoized only. If a 5,000-item collection feels slow, first try
   rendering rows in steps ("show more"), not virtualization (which clashes with `FillTable` /
   `useSharedColumns` measuring every row).
 - **Never install the SAH-pool VFS while another worker may hold its files.** If

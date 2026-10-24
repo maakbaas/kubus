@@ -1,7 +1,8 @@
 // Storage-agnostic domain model. Nothing in here knows about SQLite or Tauri.
 //
-// Terminology: in the UI an Collection is called a "collection" (e.g. Book) and an
-// Item an "item" (a particular book).
+// Terminology (UI and code alike): a Collection defines fields (e.g. Books), an Item is one of its
+// entries (a particular book), a Space is a separate environment (e.g. Work, Private) whose items
+// are kept apart while collections, views and components are shared (domain/spaces.ts).
 
 import type { ItemView } from "./fieldLayout";
 import type { FilterRule } from "./query";
@@ -72,6 +73,8 @@ export interface Collection {
   fields: FieldDef[];
   /** Item page layouts (the starred one is used unless an item is pinned to another). */
   itemViews: ItemView[];
+  /** The spaces it is shown in; null = every space. */
+  spaceIds: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -79,6 +82,8 @@ export interface Collection {
 export interface Item {
   id: string;
   collectionId: string;
+  /** The space it belongs to (and is shown in). */
+  spaceId: string;
   /** Keyed by field id. Missing key = no value. */
   values: Record<string, FieldValue>;
   /** The item view this item is pinned to, instead of its collection's default. */
@@ -99,18 +104,20 @@ export interface CollectionDraft {
   pluralName: string;
   icon: string | null;
   description: string;
+  spaceIds: string[] | null;
   /** Order in the array is the field order. Ids are client-generated. */
   fields: FieldDraft[];
 }
 
-/** An item as a draft for saving, its fields as they are. */
-export const collectionDraft = ({ id, name, pluralName, icon, description, fields }: Collection): CollectionDraft => ({
+/** A collection as a draft for saving, its fields as they are. */
+export const collectionDraft = ({ id, name, pluralName, icon, description, spaceIds, fields }: Collection): CollectionDraft => ({
   id,
   name,
   pluralName,
   icon,
   description,
-  fields: fields.map(({ collectionId: _typeId, position: _position, ...field }) => field),
+  spaceIds,
+  fields: fields.map(({ collectionId: _collectionId, position: _position, ...field }) => field),
 });
 
 /** A component field's stored variable mapping (JSON): field ids (older form) or ComponentArgs. */
@@ -213,4 +220,6 @@ export function itemLabel(collection: Collection, item: Item): string {
 export interface ItemLabel {
   id: string;
   label: string | null;
+  /** Labels are read across spaces (a reference may point into another one); pickers offer their own space's. */
+  spaceId: string;
 }

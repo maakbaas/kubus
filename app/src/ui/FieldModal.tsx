@@ -16,7 +16,7 @@ import { errorMessage, useConfirm } from "./useConfirm";
 
 /**
  * Adds a field to a collection, or edits a component field, from a view's field picker (table
- * columns, card fields, item page layout): name and type, plus the referenced collection or the
+ * columns, card fields, item page layout): name and field type, plus the referenced collection or the
  * component and its variables (a field or a fixed value each). It is an ordinary field of the
  * collection, shown everywhere like fields added in the collection editor, and the picker shows it in
  * its own view. Type and reference target can't change once created.

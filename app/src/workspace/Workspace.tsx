@@ -49,7 +49,8 @@ import {
 // In-app links (href="#/...") are intercepted: plain click = this tab, Ctrl/Cmd/middle click =
 // new tab. Links outside tabs (side nav, header) go to the active tab.
 
-const STORAGE_KEY = "kubus.workspace";
+/** Each space remembers its own tabs (per device). */
+const storageKey = (spaceId: string) => `kubus.workspace.${spaceId}`;
 const TAB_MIME = "application/x-kubus-tab";
 
 /** What changes the workspace: stable for its lifetime, so using it re-renders nothing. */
@@ -140,14 +141,13 @@ export function useOpenRelated(): (path: string, mode?: OpenMode) => void {
 const SWIPE_EDGE = 24;
 const SWIPE_DISTANCE = 64;
 
-const load = (): Workspace => restoreWorkspace(readPref<unknown>(STORAGE_KEY, null));
-
-export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const [workspace, setWorkspace] = useState<Workspace>(load);
+/** The tabs of one space; remount it (key) for another space. */
+export function WorkspaceProvider({ spaceId, children }: { spaceId: string; children: ReactNode }) {
+  const [workspace, setWorkspace] = useState<Workspace>(() => restoreWorkspace(readPref<unknown>(storageKey(spaceId), null)));
   const [titles, setTitles] = useState<Record<string, string>>({});
 
   // Per-device convenience: remember the layout (best effort).
-  useEffect(() => writePref(STORAGE_KEY, workspace), [workspace]);
+  useEffect(() => writePref(storageKey(spaceId), workspace), [spaceId, workspace]);
 
   const update = useCallback((fn: (ws: Workspace) => Workspace) => setWorkspace(fn), []);
 

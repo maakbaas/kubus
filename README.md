@@ -1,22 +1,25 @@
 # Kubus
 
 Kubus is a personal knowledge manager like Obsidian, but backed by a relational store instead of
-Markdown files. You define your own types (Book, Person, Meeting, …) with the fields you want,
-and fill them with objects that link to each other.
+Markdown files. You define your own collections (Books, People, Meetings, …) with the fields you
+want, and fill them with items that link to each other.
 
-![Kubus showing a Books type as cards](docs/screenshot.png)
+![Kubus showing a Books collection as cards](docs/screenshot.png)
 
 ## Highlights
 
-- **Your own schema.** Create types with any fields: text, Markdown, numbers, dates, checkboxes,
-  images, links to other objects, lists, checklists and computed template fields.
-- **Views.** Show a type as a table or as cards, with filters, sorting and grouping. Save as many
-  views per type as you like, star a default, bookmark the ones you use most.
+- **Your own schema.** Create collections with any fields: text, Markdown, numbers, dates, checkboxes,
+  images, links to other items, lists, checklists and computed component fields.
+- **Views.** Show a collection as a table or as cards, with filters, sorting and grouping. Save as many
+  views per collection as you like, star a default, bookmark the ones you use most. Item pages
+  get views too: which fields show, in which order.
 - **Edit in place.** Click any field to edit it, no forms or save buttons.
 - **Markdown (GFM) editor**: type your formatting, paste or drop images.
-- **Templates.** `{{ … }}` sections of JavaScript compute values, render Markdown or HTML, and are
-  reusable across types.
-- **Global search** across all your objects.
+- **Components.** `{{ … }}` sections of JavaScript compute values, render Markdown or HTML, and are
+  reusable across collections.
+- **Spaces.** Keep work and private apart: each space has its own items, bookmarks and tabs, while
+  collections, views and components are shared.
+- **Global search** across all items of a space.
 - **Workspace.** Tabs and tiled panes, side by side, like an editor.
 - **Local first.** Everything runs offline on a SQLite database in the app itself.
 - **Sync.** Optionally sync every device with your own server backed by Postgres.

@@ -20,7 +20,7 @@ export function NewItemPage() {
 }
 
 function NewItemForm({ collection }: { collection: Collection }) {
-  const { repo, collections } = useStore();
+  const { repo, collections, space } = useStore();
   const navigate = useNavigate();
   const [form, setForm] = useState<Record<string, InputValue>>(() =>
     Object.fromEntries(collection.fields.map((f) => [f.id, toInputValue(f.kind, undefined)])),
@@ -56,7 +56,7 @@ function NewItemForm({ collection }: { collection: Collection }) {
 
     setSaving(true);
     try {
-      await repo.createItem(collection, values);
+      await repo.createItem(collection, values, space.id);
       navigate(listPath, { replace: true });
     } catch (e) {
       setError(errorMessage(e));

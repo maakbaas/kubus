@@ -1,7 +1,7 @@
 // View types: the ways a collection's items can be shown (table, cards, …).
 //
 // To add a view type: implement ViewTypeDefinition in its own file and add it to VIEW_TYPES.
-// Nothing else needs to change: the items page, the view switcher and saved views all
+// Nothing else needs to change: the collection page, the view switcher and saved views all
 // work from this registry. A view type gets the already filtered / sorted / grouped
 // items (QueryResult) and only decides how to present them, plus its own options.
 
@@ -12,7 +12,7 @@ import type { QueryResult, SortRule } from "../domain/query";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import type { OpenMode } from "../workspace/Workspace";
 
-/** What a view can do with items; provided by the items page. */
+/** What a view can do with items; provided by the collection page. */
 export interface ItemActions {
   /**
    * Opens an item: here (plain click), beside (Ctrl/Cmd click) or in a new tab (middle click);

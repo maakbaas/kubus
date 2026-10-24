@@ -6,6 +6,7 @@ import { ComponentsPage } from "../pages/ComponentsPage";
 import { NewItemPage } from "../pages/NewItemPage";
 import { CollectionPage } from "../pages/CollectionPage";
 import { SearchPage } from "../pages/SearchPage";
+import { SpacesPage } from "../pages/SpacesPage";
 import { SyncPage } from "../pages/SyncPage";
 import { CollectionEditorPage } from "../pages/CollectionEditorPage";
 import { CollectionsPage } from "../pages/CollectionsPage";
@@ -20,6 +21,7 @@ export function AppRoutes() {
       <Route path="/collections" element={<CollectionsPage />} />
       <Route path="/bookmarks" element={<BookmarksPage />} />
       <Route path="/sync" element={<SyncPage />} />
+      <Route path="/spaces" element={<SpacesPage />} />
       <Route path="/components" element={<ComponentsPage />} />
       <Route path="/components/new" element={<ComponentEditorPage />} />
       <Route path="/components/:componentId" element={<ComponentEditorPage key="edit" />} />

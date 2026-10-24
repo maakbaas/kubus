@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Button, Dropdown, Form, FormGroup, InlineNotification, Stack, TextArea, TextInput } from "@carbon/react";
+import { Button, Dropdown, Form, FormGroup, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
 import { Add, ArrowDown, ArrowUp, TrashCan } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
@@ -19,7 +19,9 @@ import { ChoiceFilterEditor } from "../ui/ChoiceFilterEditor";
 import { ComponentArgInput } from "../ui/ComponentArgInput";
 import type { Component } from "../domain/components";
 import { IconPicker } from "../ui/IconPicker";
-import { CollectionLabel as CollectionLabel } from "../ui/collectionIcons";
+import { CollectionLabel } from "../ui/collectionIcons";
+import { SpaceLabel } from "../ui/SpaceSwitcher";
+import type { Space } from "../domain/spaces";
 import { NotFound } from "../ui/NotFound";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
@@ -48,6 +50,7 @@ function initialDraft(existing?: Collection): CollectionDraft {
     pluralName: "",
     icon: null,
     description: "",
+    spaceIds: null,
     fields: [{ id: newId(), name: "Name", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null }],
   };
 }
@@ -79,7 +82,7 @@ function validate(draft: CollectionDraft) {
 function CollectionEditor({ existing }: { existing?: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { repo, collections, reloadCollections, components } = useStore();
+  const { repo, collections, reloadCollections, components, spaces } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
   const [draft, setDraft] = useState(() => initialDraft(existing));
@@ -205,6 +208,24 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
             value={draft.description}
             onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
           />
+          {/* Where it shows: every space unless some are chosen (its items stay in their own space). */}
+          {spaces.length > 1 && (
+            <MultiSelect<Space>
+              autoAlign
+              id={`${uid}-collection-spaces`}
+              size="sm"
+              titleText="Spaces"
+              label={draft.spaceIds === null ? "All spaces" : spaces.filter((s) => draft.spaceIds!.includes(s.id)).map((s) => s.name).join(", ")}
+              helperText="Shown in every space while none is chosen."
+              items={spaces}
+              itemToString={(s) => s?.name ?? ""}
+              itemToElement={(s) => <SpaceLabel space={s} />}
+              selectedItems={spaces.filter((s) => draft.spaceIds?.includes(s.id))}
+              onChange={({ selectedItems }) =>
+                setDraft((d) => ({ ...d, spaceIds: selectedItems && selectedItems.length > 0 ? selectedItems.map((s) => s.id) : null }))
+              }
+            />
+          )}
 
           <FormGroup legendText="Fields">
             <p className="helper">A field's type cannot change once saved.</p>

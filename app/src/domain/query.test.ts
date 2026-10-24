@@ -7,13 +7,13 @@ const field = (id: string, name: string, kind: FieldDef["kind"], position: numbe
 });
 
 const collection: Collection = {
-  id: "t", name: "Book", pluralName: "Books", icon: null, description: "", itemViews: [],
+  id: "t", name: "Book", pluralName: "Books", icon: null, description: "", itemViews: [], spaceIds: null,
   fields: [field("title", "Title", "string", 0), field("pages", "Pages", "number", 1)],
   createdAt: "", updatedAt: "",
 };
 
 const book = (id: string, title: string, pages: number | null): Item => ({
-  id, collectionId: "t", values: { title, pages }, createdAt: "", updatedAt: "",
+  id, collectionId: "t", spaceId: "default", values: { title, pages }, createdAt: "", updatedAt: "",
 });
 
 const ctx: QueryContext = { refLabel: () => "" };

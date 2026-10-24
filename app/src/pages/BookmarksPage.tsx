@@ -41,7 +41,7 @@ interface Target {
  * pick a collection, then one of its views or items.
  */
 export function BookmarksPage() {
-  const { repo, collections, bookmarks } = useStore();
+  const { repo, collections, bookmarks, space } = useStore();
   const [error, setError] = useState<string>();
   const [adding, setAdding] = useState(false);
   const fail = (e: unknown) => setError(errorMessage(e));
@@ -90,7 +90,7 @@ export function BookmarksPage() {
                         const btn = rowButtonProps(inMenu);
                         return (
                           <>
-                            <IconButton {...btn} label={`Remove bookmark ${b.label}`} onClick={() => repo.removeBookmark(b.targetId).catch(fail)}>
+                            <IconButton {...btn} label={`Remove bookmark ${b.label}`} onClick={() => repo.removeBookmark(b.targetId, space.id).catch(fail)}>
                               <TrashCan />
                             </IconButton>
                           </>
@@ -110,8 +110,8 @@ export function BookmarksPage() {
 }
 
 function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: unknown): void }) {
-  const { repo, collections, bookmarks } = useStore();
-  const [collection, setCollection] = useState<Collection | null>(collections[0] ?? null);
+  const { repo, spaceCollections, bookmarks, space } = useStore();
+  const [collection, setCollection] = useState<Collection | null>(spaceCollections[0] ?? null);
   const [targets, setTargets] = useState<Target[]>([]);
   const [target, setTarget] = useState<Target | null>(null);
 
@@ -126,7 +126,7 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
       setTargets(
         [
           ...views.map((v): Target => ({ kind: "view", id: v.id, text: `View: ${v.name}`, label: `${collection.pluralName} / ${v.name}` })),
-          ...labels.map((e): Target => {
+          ...labels.filter((e) => e.spaceId === space.id).map((e): Target => {
             const label = e.label ?? untitledLabel(collection);
             return { kind: "item", id: e.id, text: label, label };
           }),
@@ -151,7 +151,7 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
       onRequestClose={onClose}
       onRequestSubmit={() => {
         if (!collection || !target) return;
-        repo.addBookmark(target.kind, collection.id, target.id, target.label).then(onClose, onError);
+        repo.addBookmark(target.kind, collection.id, target.id, target.label, space.id).then(onClose, onError);
       }}
     >
       <Stack gap={5}>
@@ -160,7 +160,7 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
           id="bookmark-item"
           titleText="Collection"
           label="Choose a collection"
-          items={collections}
+          items={spaceCollections}
           selectedItem={collection ?? undefined}
           itemToString={(t) => t?.pluralName ?? ""}
           itemToElement={(t) => <CollectionLabel collection={{ ...t, name: t.pluralName }} />}

@@ -1,7 +1,7 @@
 import { isEmptyValue as isEmpty } from "../domain/query";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { Checkbox, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
+import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
 import { Add, Checkmark, Edit, Information, Pin, PinFilled, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
@@ -45,6 +45,8 @@ import {
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { FieldLabel } from "../ui/fieldKindIcons";
 import { CollectionIcon } from "../ui/collectionIcons";
+import { SpaceLabel } from "../ui/SpaceSwitcher";
+import type { Space } from "../domain/spaces";
 import { PageHeader } from "../ui/PageHeader";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
@@ -115,7 +117,7 @@ function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; 
 }
 
 function ItemContent({ collection, itemId }: { collection: Collection; itemId: string }) {
-  const { repo, components, cache } = useStore();
+  const { repo, components, cache, spaces } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
   const refs = useReferenceOptions(collection);
@@ -132,7 +134,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const [standard, setStandard] = useState(params.get("edit") === "1");
   /** The chosen tab: "item" (this item's own layout) or an item view's id; null = the default. */
   const [tab, setTab] = useState<string | null>(null);
-  /** Unsaved changes to the shown view's layout (like the items page's views: saved explicitly). */
+  /** Unsaved changes to the shown view's layout (like a collection page's views: saved explicitly). */
   const [draft, setDraft] = useState<ItemLayout | null>(null);
   /** Set after "+": opens the layout popover with the new view's name selected, to rename it. */
   const [renameRequest, setRenameRequest] = useState(0);
@@ -290,6 +292,30 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                       {collection.name}
                     </span>
                   </dd>
+                  {/* Moving it to another space takes it out of this space's lists (the page stays open). */}
+                  {spaces.length > 1 && (
+                    <>
+                      <dt>Space</dt>
+                      <dd>
+                        <Dropdown<Space>
+                          autoAlign
+                          id={`${item.id}-space`}
+                          size="sm"
+                          titleText="Space"
+                          hideLabel
+                          label="Space"
+                          items={spaces}
+                          itemToString={(s) => s?.name ?? ""}
+                          itemToElement={(s) => <SpaceLabel space={s} />}
+                          renderSelectedItem={(s) => <SpaceLabel space={s} />}
+                          selectedItem={spaces.find((s) => s.id === item.spaceId)}
+                          onChange={({ selectedItem }) =>
+                            selectedItem && repo.moveItem(item.id, selectedItem.id).catch((e) => setError(errorMessage(e)))
+                          }
+                        />
+                      </dd>
+                    </>
+                  )}
                   <dt>Created</dt>
                   <dd>{formatDateTime(item.createdAt)}</dd>
                   <dt>Updated</dt>
@@ -319,7 +345,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
 
-      {/* Once the collection has item views: one tab each, like the views of the items page. The
+      {/* Once the collection has item views: one tab each, like the views of the collection page. The
           star makes the shown one the default for all items, the pin this item's own choice.
           Layout changes stay unsaved until saved with the icon buttons beside the tabs. */}
       {/* With one view and nothing unsaved there is nothing to choose or save: no tab bar. */}
@@ -362,7 +388,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
           )}
           {activeView && (
             <>
-              {/* The last view can't be deleted: a collection always keeps one (like its items views). */}
+              {/* The last view can't be deleted: a collection always keeps one (like its collection views). */}
               {itemViews.length > 1 && (
                 <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Delete view" onClick={() => deleteView(activeView)}>
                   <TrashCan />
@@ -524,7 +550,7 @@ function EditableTitle({ value, source, onSave }: { value: string; source: strin
 /**
  * The page layout popover: the shown item view's name, and its layout: whether fields are
  * editable and show their names, and which fields in which order. Layout changes stay unsaved
- * until saved from the tab bar; a rename is saved right away (like the items page's views).
+ * until saved from the tab bar; a rename is saved right away (like a collection page's views).
  */
 function ItemLayoutSettings({
   collection,

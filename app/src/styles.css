@@ -582,7 +582,7 @@ body {
 .title-edit .cds--text-input::placeholder {
   color: var(--cds-text-placeholder);
 }
-/* Page title with the collection's icon in front (items list). */
+/* Page title with the collection's icon in front (collection page). */
 .title-with-icon {
   display: flex;
   align-items: center;
@@ -820,6 +820,21 @@ body {
 .side-nav-search > .cds--search {
   flex: 1;
   min-inline-size: 0;
+}
+/* Spaces page: icon picker, the name (edited in place) and the "Shown" tag on one line. */
+.space-name {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+}
+.space-name__text,
+.space-name__editor {
+  flex: 1;
+  min-inline-size: 0;
+}
+/* The space switcher under the search, with the same side insets. */
+.side-nav-space {
+  padding: 0 var(--cds-spacing-05) var(--cds-spacing-03) var(--cds-spacing-03);
 }
 .search-hit {
   display: flex;
@@ -1579,7 +1594,7 @@ img[data-lightbox] {
   object-fit: contain;
 }
 
-/* Item cards (items list on narrow screens) */
+/* Item cards (a collection page's items on narrow screens) */
 /* Cards: a responsive grid, the same gap between rows and columns at every width. */
 .item-cards {
   display: grid;
@@ -1725,7 +1740,7 @@ img[data-lightbox] {
   }
 }
 
-/* Items page: view tabs, toolbar, view settings panel */
+/* Collection page: view tabs, toolbar, view settings panel */
 /* Icon buttons sit flush, as everywhere (tab strip, page header): only the search box keeps a
    gap before them. */
 .items-toolbar {
@@ -2088,6 +2103,7 @@ img[data-lightbox] {
 .item-info {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  align-items: center; /* a name beside the Space dropdown sits level with its text */
   gap: var(--cds-spacing-03) var(--cds-spacing-05);
   font-size: var(--cds-body-compact-01-font-size);
   line-height: var(--cds-body-compact-01-line-height);

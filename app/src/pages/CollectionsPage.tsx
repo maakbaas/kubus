@@ -16,8 +16,10 @@ import { RowActions, rowButtonProps } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
 
 /**
- * The collections as a table, like the Components page: name (opens its items) and
- * description (edits in place), and per row an edit (the collection editor) and a delete icon. Item counts are kept for the delete
+ * The collections as a table, like the Components page: name (opens its items), description
+ * (edits in place), the spaces it is shown in (once there are several; all collections are listed,
+ * so one kept out of this space can still be edited), and per row an edit (the collection
+ * editor), duplicate and delete icon. Item counts (of every space) are kept for the delete
  * confirmation.
  */
 /** The description, edited in its cell with the shared field editor as a one-line text field. */
@@ -37,15 +39,17 @@ const descriptionField = (t: Collection): FieldDef => ({
 const draftOf = collectionDraft;
 
 export function CollectionsPage() {
-  const { repo, collections } = useStore();
+  const { repo, collections, spaces } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
+  const spaceNames = (t: Collection) =>
+    t.spaceIds === null ? "All" : spaces.filter((s) => t.spaceIds!.includes(s.id)).map((s) => s.name).join(", ");
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState<string>();
   // The collection whose description is being edited in its cell, and where it was clicked.
   const [editing, setEditing] = useState<{ id: string; start?: EditStart } | null>(null);
 
-  const loadCounts = () => repo.countItemsByCollection().then(setCounts, (e) => setError(errorMessage(e)));
+  const loadCounts = () => repo.countItemsByCollection(null).then(setCounts, (e) => setError(errorMessage(e)));
   useEffect(() => {
     loadCounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,6 +134,7 @@ export function CollectionsPage() {
               <TableRow>
                 <TableHeader>Name</TableHeader>
                 <TableHeader>Description</TableHeader>
+                {spaces.length > 1 && <TableHeader>Spaces</TableHeader>}
                 <TableHeader aria-label="Actions" />
               </TableRow>
             </TableHead>
@@ -192,6 +197,7 @@ export function CollectionsPage() {
                       </div>
                     )}
                   </TableCell>
+                  {spaces.length > 1 && <TableCell data-label="Spaces">{spaceNames(t)}</TableCell>}
                   <RowActions>
                     {(inMenu) => {
                       const btn = rowButtonProps(inMenu);

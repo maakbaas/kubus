@@ -3,17 +3,26 @@ import { openRepository, type Repository } from "../data";
 import type { Bookmark } from "../domain/bookmarks";
 import type { Component } from "../domain/components";
 import type { Collection } from "../domain/model";
+import { DEFAULT_SPACE_ID, inSpace, withDefaultSpace, type Space } from "../domain/spaces";
+import { readPref, writePref } from "../ui/localPrefs";
 import { ItemCache } from "./itemCache";
 
 interface Store {
   repo: Repository;
-  /** All collections; reloaded whenever they change (the repository announces it). */
+  /** All spaces (the default one included); reloaded whenever they change. */
+  spaces: Space[];
+  /** The space shown: its items, bookmarks and tabs (remembered per device). */
+  space: Space;
+  setSpace(spaceId: string): void;
+  /** All collections, of every space; reloaded whenever they change (the repository announces it). */
   collections: Collection[];
+  /** The collections shown in the current space (side nav, pickers of collections). */
+  spaceCollections: Collection[];
   /** Reloads them now: for a page that opens a just-saved collection right away. */
   reloadCollections(): Promise<void>;
   /** All components (kept up to date like the collections). */
   components: Component[];
-  /** Side-nav bookmarks (kept up to date like the collections). */
+  /** The current space's side-nav bookmarks (kept up to date like the collections). */
   bookmarks: Bookmark[];
   /** The items (and labels) of the collections being shown, loaded once and shared (see useItems). */
   cache: ItemCache;
@@ -23,6 +32,8 @@ const StoreContext = createContext<Store | null>(null);
 
 type State = { status: "loading" } | { status: "error"; error: string } | { status: "ready"; repo: Repository; cache: ItemCache };
 
+const SPACE_KEY = "kubus.space";
+
 export function StoreProvider({
   children,
   fallback,
@@ -31,11 +42,17 @@ export function StoreProvider({
   fallback: (state: { loading: boolean; error?: string }) => ReactNode;
 }) {
   const [state, setState] = useState<State>({ status: "loading" });
+  const [spaces, setSpaces] = useState<Space[]>(() => withDefaultSpace([]));
+  const [spaceId, setSpaceId] = useState(() => readPref<string>(SPACE_KEY, DEFAULT_SPACE_ID));
   const [collections, setCollections] = useState<Collection[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
-  // The latest collections for the item cache, which reads them outside of rendering.
+  // A remembered space that is gone (deleted, here or elsewhere) falls back to the first.
+  const space = spaces.find((s) => s.id === spaceId) ?? spaces[0];
+  // The latest collections and space for the item cache, which reads them outside of rendering.
   const collectionsRef = useRef<Collection[]>([]);
+  const spaceRef = useRef(space.id);
+  spaceRef.current = space.id;
   const applyCollections = useCallback((list: Collection[], cache?: ItemCache) => {
     collectionsRef.current = list;
     setCollections(list);
@@ -47,26 +64,17 @@ export function StoreProvider({
     let stopped = false;
     openRepository()
       .then(async (repo) => {
-        const [collections, components, bookmarks] = await Promise.all([repo.listCollections(), repo.listComponents(), repo.listBookmarks()]);
+        const [spaces, collections, components] = await Promise.all([repo.listSpaces(), repo.listCollections(), repo.listComponents()]);
         if (stopped) return;
-        const cache = new ItemCache(repo, (collectionId) => collectionsRef.current.find((t) => t.id === collectionId));
+        const cache = new ItemCache(repo, (collectionId) => collectionsRef.current.find((t) => t.id === collectionId), () => spaceRef.current);
+        setSpaces(spaces);
         applyCollections(collections);
         setComponents(components);
-        setBookmarks(bookmarks);
-        // Collection definitions changed anywhere: refresh them for every view (side nav, pages).
-        let bookmarked = new Set(bookmarks.map((b) => b.targetId));
-        const reloadBookmarks = () =>
-          repo.listBookmarks().then((list) => {
-            bookmarked = new Set(list.map((b) => b.targetId));
-            setBookmarks(list);
-          }, (e) => console.error("Reloading bookmarks failed", e));
         const unsubscribe = repo.subscribe((change) => {
+          if (change.scope === "spaces") repo.listSpaces().then(setSpaces, (e) => console.error("Reloading spaces failed", e));
+          // Collection definitions changed anywhere: refresh them for every view (side nav, pages).
           if (change.scope === "collections") repo.listCollections().then((list) => applyCollections(list, cache), (e) => console.error("Reloading collections failed", e));
           if (change.scope === "components") repo.listComponents().then(setComponents, (e) => console.error("Reloading components failed", e));
-          // Bookmarks of deleted views / items disappear too. Item edits only matter
-          // for a bookmarked item (it may have been deleted), not on every cell edit.
-          const itemChange = change.scope === "items" && (!change.itemId || bookmarked.has(change.itemId));
-          if (change.scope === "bookmarks" || change.scope === "views" || change.scope === "collections" || itemChange) reloadBookmarks();
         });
         cleanup = () => {
           unsubscribe();
@@ -86,12 +94,51 @@ export function StoreProvider({
   const ready = state.status === "ready" ? state : null;
   const repo = ready?.repo ?? null;
   const cache = ready?.cache ?? null;
+
+  // Another space: the cache holds the new one's items; its bookmarks replace the old ones.
+  const shownSpace = useRef(space.id);
+  useEffect(() => {
+    if (shownSpace.current === space.id) return;
+    shownSpace.current = space.id;
+    cache?.spaceChanged();
+  }, [cache, space.id]);
+  useEffect(() => {
+    if (!repo) return;
+    let bookmarked = new Set<string>();
+    let stale = false;
+    const reload = () =>
+      repo.listBookmarks(space.id).then((list) => {
+        if (stale) return;
+        bookmarked = new Set(list.map((b) => b.targetId));
+        setBookmarks(list);
+      }, (e) => console.error("Reloading bookmarks failed", e));
+    void reload();
+    const unsubscribe = repo.subscribe((change) => {
+      // Bookmarks of deleted views / items disappear too. Item edits only matter
+      // for a bookmarked item (it may have been deleted), not on every cell edit.
+      const itemChange = change.scope === "items" && (!change.itemId || bookmarked.has(change.itemId));
+      if (change.scope === "bookmarks" || change.scope === "views" || change.scope === "collections" || itemChange) void reload();
+    });
+    return () => {
+      stale = true;
+      unsubscribe();
+    };
+  }, [repo, space.id]);
+
+  const setSpace = useCallback((id: string) => {
+    writePref(SPACE_KEY, id);
+    setSpaceId(id);
+  }, []);
+  const spaceCollections = useMemo(() => collections.filter((c) => inSpace(c, space.id)), [collections, space.id]);
   const reloadCollections = useCallback(async () => {
     if (repo) applyCollections(await repo.listCollections(), cache ?? undefined);
   }, [repo, cache, applyCollections]);
   const value = useMemo(
-    () => (repo && cache ? { repo, collections, reloadCollections, components, bookmarks, cache } : null),
-    [repo, cache, collections, reloadCollections, components, bookmarks],
+    () =>
+      repo && cache
+        ? { repo, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks, cache }
+        : null,
+    [repo, cache, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks],
   );
   if (!value) {
     return <>{fallback({ loading: state.status === "loading", error: state.status === "error" ? state.error : undefined })}</>;

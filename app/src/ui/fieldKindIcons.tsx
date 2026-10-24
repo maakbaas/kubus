@@ -50,7 +50,7 @@ export function FieldLabel({ field }: { field: FieldDef }) {
   return <IconLabel icon={FIELD_KIND_ICONS[field.kind]}>{field.name}</IconLabel>;
 }
 
-/** A field kind with its icon, e.g. in the item editor's type dropdown. */
+/** A field kind with its icon, e.g. in the collection editor's field type dropdown. */
 export function FieldKindLabel({ kind }: { kind: FieldKind }) {
   return <IconLabel icon={FIELD_KIND_ICONS[kind]}>{fieldKinds[kind].label}</IconLabel>;
 }
