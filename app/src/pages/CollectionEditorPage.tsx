@@ -49,7 +49,8 @@ function initialDraft(existing?: Collection): CollectionDraft {
     id: newId(),
     name: "",
     pluralName: "",
-    icon: null,
+    // New collections start with the cube (the app icon); the picker shows an unset icon as empty.
+    icon: "Cube",
     description: "",
     spaceIds: null,
     fields: [{ id: newId(), name: "Name", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null }],
