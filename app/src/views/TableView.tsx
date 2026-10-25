@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "@carbon/react";
 import { Add, ArrowRight, Close, Copy, DataTable as TableIcon, Edit, Save, TrashCan } from "@carbon/icons-react";
-import { RowActions, rowButtonProps } from "../ui/RowActions";
+import { RowActions, rowButtonProps, TableStacked } from "../ui/RowActions";
 import { useStore } from "../app/store";
 import { itemLabel, labelField, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
 import { cellEditStart, type EditStart } from "../ui/editStart";
@@ -291,6 +291,8 @@ const fills = new WeakMap<Element, (fromSibling?: boolean) => void>();
  */
 export function FillTable({ children, stack: stackable = true }: { children: ReactNode; /** Restack as cards when narrow (else scroll sideways). */ stack?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
+  // Whether it is stacked now, for what renders differently (RowActions); decided below.
+  const [stacked, setStacked] = useState(false);
   // Set up once (per stacking choice): the observer refills whenever the box or the table changes size.
   useLayoutEffect(() => {
     const el = box.current;
@@ -327,6 +329,7 @@ export function FillTable({ children, stack: stackable = true }: { children: Rea
         group.dataset.stacked = String(stack);
         for (const w of wraps) if (w !== el) fills.get(w)?.(true);
       }
+      setStacked(stack);
       if (stack) {
         el.setAttribute("data-stacked", "");
         return;
@@ -368,7 +371,9 @@ export function FillTable({ children, stack: stackable = true }: { children: Rea
     // A size container: in a narrow pane the table restacks as cards (see .table-wrap in styles.css),
     // unless the view keeps it a table, which then scrolls sideways.
     <div ref={box} className={stackable ? "table-wrap" : "table-wrap table-wrap--scroll"}>
-      <TableContainer className="items-table">{children}</TableContainer>
+      <TableContainer className="items-table">
+        <TableStacked.Provider value={stacked}>{children}</TableStacked.Provider>
+      </TableContainer>
     </div>
   );
 }

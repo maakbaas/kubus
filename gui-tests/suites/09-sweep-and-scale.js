@@ -51,20 +51,30 @@ test("height sweep: popovers stay in the window", async (t) => {
 for (const vp of ["desktop", "phone"]) {
   test(`scale: 60 collections, 80 fields, 30 views @ ${vp}`, async (t) => {
     await t.boot();
+    // The same pages of an ordinary collection (15 fields) first: they set the machine's pace.
+    const plain = await t.seed(matrixSpec("typical", { items: 20 }));
     const spec = matrixSpec("typical", { items: 20, fieldsExtra: 66, collectionsExtra: 58 });
     for (let i = 0; i < 26; i++) spec.collections[0].views.push({ name: `View ${i}`, blocks: [{ kind: i % 2 ? "cards" : "table" }] });
     const ids = await t.seed(spec);
-    for (const [label, path] of [
+    const pages = (ids) => [
       ["overview of 60 collections", "/collections"],
       ["collection with 80 fields and 30 views", t.listPath(ids.collections.books)],
       ["item page with 80 fields", t.itemPath(ids.collections.books, ids.items["books/i0"])],
       ["editor with 80 fields", `/collections/${ids.collections.books}/edit`],
       ["new item form with 80 fields", `/collections/${ids.collections.books}/items/new`],
-    ]) {
+    ];
+    const timed = async (path) => {
       const started = Date.now();
       await t.open(path);
-      const ms = Date.now() - started;
-      await t.check(`${label}: opens within 6s (${(ms / 1000).toFixed(1)}s)`, ms < 6000, `${ms}ms`);
+      return Date.now() - started;
+    };
+    const pace = [];
+    for (const [, path] of pages(plain)) pace.push(await timed(path));
+    for (const [i, [label, path]] of pages(ids).entries()) {
+      const ms = await timed(path);
+      // 80 fields are ~5× the 15: at most that much longer, with slack (settling has a floor).
+      const limit = Math.max(pace[i] * 6, 3000);
+      await t.check(`${label}: opens within ${(limit / 1000).toFixed(1)}s, 6× the 15-field page (${(ms / 1000).toFixed(1)}s)`, ms <= limit, `${ms}ms; the 15-field page took ${pace[i]}ms`);
       await t.audit(label);
     }
   }, { viewport: vp, heavy: true });

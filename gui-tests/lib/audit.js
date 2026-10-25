@@ -197,8 +197,13 @@ function __audit(opts) {
       // out of its element (unbreakable text in a box that can't shrink).
       const edge = body.getBoundingClientRect().left + body.clientLeft + body.clientWidth + T;
       let culprit = null;
+      // Inside a box (below the pane) that clips it: cut off there, not what makes the pane wide.
+      const clipped = (n) => {
+        for (let p = n.parentElement; p && p !== body; p = p.parentElement) if (cs(p).overflowX !== "visible" && p.getBoundingClientRect().right <= edge) return true;
+        return false;
+      };
       for (const el of body.querySelectorAll("*")) {
-        if (el.getBoundingClientRect().right > edge && !(el.parentElement && el.parentElement !== body && el.parentElement.getBoundingClientRect().right > edge)) {
+        if (el.getBoundingClientRect().right > edge && !clipped(el) && !(el.parentElement && el.parentElement !== body && el.parentElement.getBoundingClientRect().right > edge)) {
           culprit = describe(el);
           break;
         }
@@ -208,7 +213,7 @@ function __audit(opts) {
         const range = document.createRange();
         for (let n = w.nextNode(); n && !culprit; n = w.nextNode()) {
           range.selectNodeContents(n);
-          if (range.getBoundingClientRect().right > edge) culprit = `text "${n.textContent.trim().slice(0, 30)}" in ${describe(n.parentElement)}`;
+          if (range.getBoundingClientRect().right > edge && !clipped(n)) culprit = `text "${n.textContent.trim().slice(0, 30)}" in ${describe(n.parentElement)}`;
         }
       }
       report("pane-h-overflow", body, `pane scrolls sideways: ${body.scrollWidth} > ${body.clientWidth}${culprit ? `; sticking out: ${culprit}` : ""}`);

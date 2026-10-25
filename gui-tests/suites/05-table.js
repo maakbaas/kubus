@@ -193,18 +193,42 @@ for (const vp of ["wide", "desktop", "laptop", "tablet", "phone"]) {
   }, { viewport: vp });
 }
 
+// Time budgets are relative to the machine: the same page with 20 rows, timed first, sets the
+// pace (a development build on a slow CPU takes seconds for what a fast one does in one). Many
+// rows may take proportionally longer, never more (nothing grows worse than linearly), with
+// some slack; a hard ceiling catches hangs.
+/** Opens a page and waits for its first table row; returns the milliseconds it took. */
+async function timeOpen(t, path) {
+  const started = Date.now();
+  await t.open(path, { settle: false });
+  await t.page.waitForSelector(".items-table tbody tr", { timeout: 120000 });
+  const ms = Date.now() - started;
+  await t.settle();
+  return ms;
+}
+/** Types a search into the view's search box; returns the milliseconds until the page settles. */
+async function timeSearch(t) {
+  const t0 = Date.now();
+  await t.page.getByRole("button", { name: "Search Books" }).first().click();
+  await t.page.keyboard.type("Hyperion", { delay: 30 });
+  await t.settle(200, 60000);
+  const ms = Date.now() - t0;
+  await t.page.getByRole("button", { name: "Close search" }).first().click().catch(() => {});
+  return ms;
+}
+
 for (const n of [200, 1000]) {
   test(`table: ${n} rows load and scroll`, async (t) => {
     await t.boot();
+    const small = await t.seed(profileSpec("typical", { items: 20, authors: 20 }));
     const spec = profileSpec("typical", { items: 0, authors: 20 });
     spec.collections[0].items = allKindItems(n, "typical", { target: "authors", targetCount: 20, image: null });
     const ids = await t.seed(spec);
-    const started = Date.now();
-    await t.open(t.listPath(ids.collections.books));
-    await t.page.waitForSelector(".items-table tbody tr");
-    const ms = Date.now() - started;
-    const limit = n <= 200 ? 4000 : 9000;
-    await t.check(`${n} rows show within ${limit / 1000}s (${(ms / 1000).toFixed(1)}s)`, ms <= limit, `${ms}ms`);
+    const pace = await timeOpen(t, t.listPath(small.collections.books));
+    const paceSearch = await timeSearch(t);
+    const ms = await timeOpen(t, t.listPath(ids.collections.books));
+    const limit = Math.min(pace * (n / 20) * 1.25, 120000);
+    await t.check(`${n} rows show within ${(limit / 1000).toFixed(1)}s, ${n / 20}× the 20-row time and some (${(ms / 1000).toFixed(1)}s)`, ms <= limit, `${ms}ms; 20 rows took ${pace}ms`);
     await t.audit(`${n} rows`);
     const rows = await t.count(".items-table tbody tr");
     await t.check(`all ${n} rows are listed (${rows})`, rows >= n, `${rows} rows`);
@@ -212,13 +236,10 @@ for (const n of [200, 1000]) {
       await t.page.locator(".ws-pane--active .ws-pane__body").evaluate((el, pos) => (el.scrollTop = el.scrollHeight * pos), pos);
       await t.audit(`scrolled to ${pos * 100}%`, { shotOnFail: true });
     }
-    // Typing a search over many rows stays responsive.
-    const t0 = Date.now();
-    await t.page.getByRole("button", { name: "Search Books" }).first().click();
-    await t.page.keyboard.type("Hyperion", { delay: 30 });
-    await t.settle(200);
-    const sms = Date.now() - t0;
-    await t.check(`searching ${n} rows stays responsive (${(sms / 1000).toFixed(1)}s)`, sms <= 5000, `${sms}ms`);
+    // Typing a search over many rows stays responsive: proportional to the rows as well.
+    const sms = await timeSearch(t);
+    const slimit = Math.min(paceSearch * (n / 20) * 1.25, 120000);
+    await t.check(`searching ${n} rows takes at most ${n / 20}× the 20-row search and some (${(sms / 1000).toFixed(1)}s)`, sms <= slimit, `${sms}ms; 20 rows took ${paceSearch}ms`);
   }, { heavy: true });
 }
 

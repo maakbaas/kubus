@@ -2278,6 +2278,14 @@ img[data-lightbox] {
 .row-actions__menu {
   display: none; /* stacked tables only (see .table-wrap[data-stacked]) */
 }
+/* A stacked row's stand-ins for its icons (RowActions): as wide as the icon buttons, so the table
+   measures as wide unstacked as it would be with them. Hidden with the icons in stacked tables. */
+.row-action-icon--placeholder {
+  display: inline-block;
+  inline-size: 2rem;
+  block-size: 2rem;
+  vertical-align: top;
+}
 .row-actions {
   white-space: nowrap;
   width: 1%; /* shrink to the buttons */
@@ -3067,6 +3075,7 @@ img[data-lightbox] {
     font-weight: 600;
     color: var(--cds-text-primary);
     overflow-wrap: anywhere;
+    white-space: normal; /* not the value's (dates and times keep to one line; their label needn't) */
     min-inline-size: 0; /* the column's fit-content cap applies (else its unwrapped width) */
   }
   /* The title link: Carbon's links are inline-flex, whose text (an anonymous flex item) can't
