@@ -1903,6 +1903,11 @@ img[data-lightbox] {
 .item-card:has(> .item-card__link:hover) {
   background: var(--cds-layer-hover);
 }
+/* Links on the hovered card take Carbon's darker link colour: the usual blue on the hover grey is
+   below AA contrast. */
+.item-card:has(> .item-card__link:hover) a.cds--link {
+  color: var(--cds-link-primary-hover);
+}
 .item-card:has(> .item-card__link:focus-visible) {
   outline: 2px solid var(--cds-focus);
   outline-offset: -2px;
