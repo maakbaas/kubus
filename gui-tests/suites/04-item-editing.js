@@ -68,11 +68,13 @@ async function editRoundTrip(t, name, { type = null, height = true, width = true
   // follows it may move then. An empty one is held to the same box as everything else.
   const empty = await value.evaluate((el) => el.classList.contains("view-field__value--empty"));
   const below = source && !empty ? ["[data-under-test] ~ *"] : [];
-  await t.page.evaluate((name) => {
+  // Marks the field (again after the editor replaced its element).
+  const mark = () => t.page.evaluate((name) => {
     for (const el of document.querySelectorAll("[data-under-test]")) el.removeAttribute("data-under-test");
     const f = [...document.querySelectorAll(".item-fields > *")].find((f) => (f.querySelector(".cds--label")?.textContent || "").includes(name));
     f?.setAttribute("data-under-test", "");
   }, name);
+  await mark();
   // Opening: nothing else on the page moves.
   await t.noShift(`${name}: opening the editor moves nothing else`, async () => {
     await value.click({ position: await t.visiblePoint(value) });
@@ -83,6 +85,7 @@ async function editRoundTrip(t, name, { type = null, height = true, width = true
   await t.check(`${name}: editor keeps the label, box and text in place`, diff.length === 0, diff.join("; "));
   await t.audit(`${name}: editing`);
   // Escape cancels: back to exactly the view.
+  await mark();
   await t.noShift(`${name}: Escape restores the view without a jump`, async () => {
     await t.page.keyboard.press("Escape");
     await t.wait(200);

@@ -4,6 +4,18 @@
 // open and give it back to what opened them. Hovering any control moves nothing. Typing and
 // choosing in dialogs moves neither the dialog nor the control in use.
 
+/** Opens a block's Fields popover (through its "⋮" menu on phones). */
+async function openFields(t) {
+  const header = t.page.locator(".ws-pane--active .block .section-header").first();
+  const direct = header.getByRole("button", { name: "Fields", exact: true }).filter({ visible: true });
+  if (!(await direct.count())) {
+    await header.getByRole("button", { name: "More actions" }).first().click();
+    await t.settle(100);
+  }
+  await header.getByRole("button", { name: "Fields", exact: true }).filter({ visible: true }).first().click();
+  await t.settle(150);
+}
+
 const KB_PAGES = [
   ["collections", () => "/collections"],
   ["collection table", (ids) => `/collections/${ids.collections.books}/items`],
@@ -146,8 +158,7 @@ for (const vp of ["desktop", "phone"]) {
     // Add field from a block's Fields popover (a dialog over a popover).
     await t.open(t.listPath(books));
     await dialogKeys(t, "add field over the fields popover", async () => {
-      await t.page.locator(".ws-pane--active .block .section-header").first().getByRole("button", { name: "Fields", exact: true }).click();
-      await t.settle(150);
+      await openFields(t);
       const b = t.page.locator(".toolbar-popover.cds--popover--open").getByRole("button", { name: "Add field" });
       await b.focus();
       await t.page.keyboard.press("Enter");
@@ -205,8 +216,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.boot();
     const ids = await t.seed(matrixSpec("typical", { items: 5 }));
     await t.open(t.listPath(ids.collections.books));
-    await t.page.locator(".ws-pane--active .block .section-header").first().getByRole("button", { name: "Fields", exact: true }).click();
-    await t.settle(150);
+    await openFields(t);
     await t.page.locator(".toolbar-popover.cds--popover--open").getByRole("button", { name: "Add field" }).click();
     await t.settle();
     await t.audit("add field dialog");

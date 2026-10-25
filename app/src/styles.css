@@ -751,6 +751,14 @@ body {
   color: var(--cds-link-primary);
   text-decoration: underline;
 }
+/* Links in the full view are Carbon Links: inline-flex in their own compact type, which made a
+   wrapped link's lines shorter than the paragraph's (the editor's links are plain text in it), so
+   opening the editor moved everything below. Plain inline text here too. */
+.md-view--full a.cds--link {
+  display: inline;
+  font: inherit;
+  letter-spacing: inherit;
+}
 /* Task items: the checkbox in the gutter left of the text, exactly where the editor draws it. */
 .md-view li.task-list-item {
   list-style: none;
@@ -3288,9 +3296,9 @@ img[data-lightbox] {
   border: 0;
   background: transparent;
 }
-/* Tabbing into the frame (its links and controls) shows like any other focus (a frame is
-   :focus, never :focus-visible, while something in it has focus). */
-.html-frame:focus {
+/* Tabbing into the frame (its links and controls) shows like any other focus (while something
+   in it has focus, the frame matches only :focus-within). */
+.html-frame:focus-within {
   outline: 2px solid var(--cds-focus);
   outline-offset: -2px;
 }

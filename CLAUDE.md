@@ -118,6 +118,14 @@ stale peer range.
 - **Toolbar popover buttons** show their panel's state: grey (selected) only while open; a blue
   icon while its settings are in effect (a filter, a sort other than by title / grouping); Fields
   and settings menus are never marked.
+- **Nothing moves under the pointer while a panel or dialog is used** (the GUI suite checks it):
+  what a change in a toolbar panel would add to the bar or header around its button (Save /
+  Discard, a switch) is held with `usePanelsOpen().hold` until the panel closes; dialogs hang from a
+  fixed top edge and grow downwards (styles.css), never re-centred.
+- **Dialogs and focus**: a Modal rendered only while shown gets `open` from `useMountedDialog()`
+  (Carbon moves focus into a dialog only when `open` turns true; it also gives focus back to the
+  opener); Escape closes toolbar popovers from their button too, and an Escape on a closed Carbon
+  dropdown is passed on to its dialog or popover (`escapeThroughDropdowns`, Carbon swallows it).
 - **Popovers never make the page scroll**: toolbar popover panels are capped to the room beside their button (`--popover-room`, set by `ToolbarPopover`) and scroll inside; the icon picker is capped likewise.
 - **Safari / iOS rules** (each has its reason in a comment in `styles.css`):
   - No `filter` on an ancestor of a floating panel; shadows around popovers are box-shadows

@@ -234,7 +234,7 @@ function __makeT(ctx, pg, name, opts) {
      */
     async noShift(label, action, { scope = "body", except = [], tolerance = 1, settle = true, inPage = false } = {}) {
       await t.settle();
-      await pg.evaluate(({ scope, inPage }) => {
+      await pg.evaluate(({ scope, inPage, except }) => {
         const map = new Map();
         const root = document.querySelector(scope) || document.body;
         const pane = document.querySelector(".ws-pane--active .ws-pane__body");
@@ -249,15 +249,19 @@ function __makeT(ctx, pg, name, opts) {
           map.set(el, { x: r.left, y: r.top + off, w: r.width, h: r.height });
         }
         window.__shiftSnap = map;
+        // Exceptions as they are now too: what the action replaces (an editor for a view) loses
+        // the attribute an exception may hang on, while what follows it is still the same element.
+        window.__shiftExcept = except.flatMap((s) => [...document.querySelectorAll(s)]);
         window.__scrollSnap = inPage ? [] : [...document.querySelectorAll(".ws-pane__body, .cds--side-nav__navigation, .side-nav-tree")].map((el) => [el, el.scrollTop, el.scrollLeft]);
-      }, { scope, inPage });
+      }, { scope, inPage, except });
       await action();
       if (settle) await t.settle();
       const moved = await pg.evaluate(({ except, tolerance, inPage }) => {
         const map = window.__shiftSnap;
         const pane = document.querySelector(".ws-pane--active .ws-pane__body");
         const off = inPage && pane ? pane.scrollTop : 0;
-        const exceptEls = except.flatMap((s) => [...document.querySelectorAll(s)]);
+        const exceptEls = [...except.flatMap((s) => [...document.querySelectorAll(s)]), ...(window.__shiftExcept || [])];
+        delete window.__shiftExcept;
         const out = [];
         const movedSet = new Set();
         const describe = (el) => {

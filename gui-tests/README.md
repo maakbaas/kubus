@@ -4,16 +4,24 @@ A browser test suite that clicks through the whole app and checks layout rules o
 many window sizes and with content of every shape. Not part of `npm test` or CI: run it by hand.
 
 ```
-npm run test:gui                                  # everything (~170 tests; browsers in parallel by free memory)
+npm run test:gui                                  # everything (~210 tests; browsers in parallel by free memory)
 npm run test:gui -- --suite 04                    # one suite (regex on the file name)
 npm run test:gui -- --grep "phone"                # tests whose "suite › name" matches
 npm run test:gui -- --workers 3 --shot-all        # fewer browsers, a screenshot of every checkpoint
 npm run test:gui -- --skip theme-color,font-scale # leave audit rules out
 npm run test:gui -- --list                        # list the tests
 npm run test:gui -- --dev                         # against the dev server (port 1420) instead of a build
+npm run test:gui -- --name b --port 1431          # a second run alongside the first (own browsers, build, report-b/)
 ```
 
-It needs `playwright-cli` on the PATH (`npm install -g @playwright/cli`) and Chrome. It tests a
+It needs `playwright-cli` on the PATH (`npm install -g @playwright/cli`) and Chrome. Without Chrome
+(a container with Playwright's Chromium only), point it at another browser with a config file in
+`PLAYWRIGHT_MCP_CONFIG`, e.g. `{ "browser": { "browserName": "chromium", "launchOptions":
+{ "executablePath": "/path/to/chromium", "chromiumSandbox": false } } }` (no sandbox when running as root).
+
+The app loads IBM Plex from IBM's CDN; where that host can't be reached (offline, a locked-down
+container) it falls back to the system fonts, and the suite is meant to pass either way: layout rules
+must not depend on one font's metrics. It tests a
 bundled build of the app in `gui-tests/.build`, made with `NODE_ENV=development` (so the dev-only
 `window.kubus.repo` the tests seed data through stays, and React logs its warnings, which count as
 console errors) and served by `vite preview` on port 1430 (`--port`) for the run. The build is
@@ -57,9 +65,18 @@ those): on a big page that is the difference between a minute and a second per c
     no broken images, no native controls, …
   - `t.noShift(label, action)`: nothing on screen moves or resizes (and no pane scrolls) while the
     action runs: editing in place, hovering, toggling, collapsing.
+  - `t.popoverStep(label, action, { target, scope })`: a step inside an open popover (typing,
+    toggling, picking, adding a row): it stays open, its button stays put, its panel keeps the edge it
+    hangs from and its width (no jump, no flip), the control used stays under the pointer, and nothing
+    in `scope` moves (the bars behind it). `t.dialogStep` is the same for dialogs (their top edge holds;
+    they grow downwards).
+  - `t.escapeCloses(label)`: Escape closes the open popover / menu / dialog, nothing is left floating,
+    and focus returns to the popover's button.
+  - `t.focusInfo()`: where focus is, whether it is in sight and whether it is drawn (a focus ring),
+    for the keyboard walk.
   - `t.check(label, condition, detail)`: a named assertion.
-  - Every test also fails on any console error or uncaught exception, and page loads are checked
-    for layout shift (CLS).
+  - Every test also fails on any console error, uncaught exception or failed request for one of the
+    app's own files, and page loads are checked for layout shift (CLS).
 
 ## Suites
 
@@ -74,6 +91,9 @@ those): on a big page that is the difference between a minute and a second per c
 | `07-forms` | creating a collection with every field type, new item form, editor reorder / remove, icon picker, components (failing and wide HTML), spaces, bookmarks, settings, collections overview |
 | `08-markdown` | typing every GFM construct, no inner scrolling, huge notes, links, chips, task boxes |
 | `09-sweep-and-scale` | live width sweep 320–2560px and height sweep, 60 collections / 80 fields / 30 views, dark theme dialogs, rapid switching |
+| `10-popovers-in-use` | every toolbar popover used like a person would (typing a character at a time, toggling, picking, adding and removing rows, a dialog from it): nothing jumps, it stays open, Escape closes it and returns focus, no leaks; one at a time, click-through, scrolling and resizing with one open, two panes |
+| `11-keyboard-hover-dialogs` | Tab through every page (every stop in sight, with a focus ring, no hidden stops, never stuck), dialogs (focus inside, Tab kept inside, Escape, focus back), hovering any control moves nothing, typing and choosing in dialogs |
+| `12-combinations` | an edit in one pane shows in the other, one click from one field's edit to the next, edits surviving a resize / tab switch / side nav, popovers while the layout changes around them, arrangement kept across a reload |
 
 ## Adding to it
 

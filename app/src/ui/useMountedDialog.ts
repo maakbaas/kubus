@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 
-/** Puts focus back on `launcher` once a dialog has closed, unless something else took it. */
+/**
+ * Puts focus back on `launcher` once a dialog has closed, unless something else took it: focus is
+ * on nothing or still in the closed dialog (one that stays mounted keeps it on its hidden button).
+ */
 export function returnFocus(launcher: Element | null) {
   setTimeout(() => {
     const focus = document.activeElement;
-    if (launcher instanceof HTMLElement && launcher.isConnected && (!focus || focus === document.body)) launcher.focus();
+    const lost = !focus || focus === document.body || !!focus.closest(".cds--modal:not(.is-visible)");
+    if (launcher instanceof HTMLElement && launcher.isConnected && lost) launcher.focus();
   });
 }
 
