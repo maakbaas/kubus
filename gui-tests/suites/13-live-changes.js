@@ -62,7 +62,7 @@ test("a collection is deleted while its pages are open", async (t) => {
   const coll = ids.collections.books;
   await t.seed({ prefs: { "kubus.workspace.default": wsLayout([[t.listPath(coll), t.itemPath(coll, ids.items["books/i0"])], ["/collections"]], { active: 0 }) } });
   await t.open(t.listPath(coll), { keepTabs: true });
-  await t.openPanel(t.page.locator(".ws-pane").first().locator(".block .section-header").first(), "Fields");
+  await t.openPanel(t.page.locator(".ws-pane").first().locator(".ws-tab-slot:not([hidden]) .block .section-header").first(), "Fields");
   await external(t, "await repo.deleteCollection(arg);", coll);
   await t.audit("collection page after its collection was deleted");
   await t.check("no popover is left hanging over a page that is gone", (await t.count(".toolbar-popover.cds--popover--open")) === 0 || (await t.count(".ws-pane .items-table")) > 0);
