@@ -133,11 +133,17 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   component) with its own sort and grouping, fields (`FieldLayout`) and
   type options. Its filter is the view's unless it has its own, which replaces it (not stacked;
   "Same as the view's filter" in its Filter menu; its own starts as a copy). Every block, also a
-  view's only one, has a header: collapse chevron, name (its title, else its component's name or
-  "Table" / "Cards"; set under Block settings; clicking it collapses too) and its menus. In a
+  view's only one, has a header (`ui/SectionHeader.tsx`, shared with item fields' label rows): its
+  name styled as an item field's label with its block type's icon (its title, else its component's
+  name or "Table" / "Cards"; set under Block settings), a collapse caret after it (clicking the name
+  collapses too), and its menus at the right; blocks are separated by a line, like item fields. In a
   collection view the header can be hidden (tag icon in View settings' block list,
-  `ViewBlock.hideHeader`, stored right away): the block then can't collapse and its menus float
-  over its top right corner on hover (always shown on touch screens). What
+  `ViewBlock.hideHeader`, stored right away), as is that of a Markdown block without a name on an
+  item page: the header row goes and its menus become a "⋮" (`OverflowBar` with `menu`, the dark
+  popover phones get; always, even for a single button; a narrow button, 1rem wide) to the right
+  of the block's content; the block can't collapse. A field shown without its name does the same with its
+  label row's buttons ("Generate again"), also while it is edited. The line between fields and
+  blocks stays either way: a hidden header or name never joins two sections. What
   arranges a view is stored right away, applied to the shown and the saved view alike, so it never
   marks the view changed: adding, removing (asks first) and reordering blocks, a block's type
   ("Show as"), its type options (incl. the component and its variables), name and, on item
@@ -151,8 +157,9 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   (`ViewBlock.collectionId`) and filter on the page's item (rule values `$item` = this item,
   `$item.<fieldId>` = what one of its reference fields points to; `resolvePageValues`), so
   "Books by this Author" is a table on the Author's pages; a new item added there gets the
-  filter's references (`filterPreset`). On item pages the same split holds; where blocks sit
-  among the fields is field order, saved with Save changes like the fields.
+  filter's references (`filterPreset`). On item pages the same split holds: arranging the page
+  (its layout: fields and blocks and their order, names shown, editable, hide empty) is stored
+  right away too; only what a block shows waits for Save changes.
 - **Field order and layouts** (`app/src/domain/fieldLayout.ts`, `ui/FieldOrderEditor.tsx`): one
   approach for which fields show in which order: a block's fields (table columns, card fields)
   and item pages (`orderFields`; null = all in the collection's order). Item pages show an item view
@@ -160,14 +167,18 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   the one the item is pinned to (`items.item_view_id`), else the starred one, else the first.
   Once a collection has item views its item pages show them as tabs with "+", delete, pin (this
   item always opens with it) and star (default for all items). The layout popover edits the
-  shown view's layout as unsaved changes, saved like a collection page's views (Discard / Save
-  changes beside the tabs; "+" after the tabs makes a new view of what is shown). A collection always has at least one item view:
+  shown view's layout, stored right away; changes to what its blocks show are unsaved, saved like
+  a collection page's views (Discard / Save changes beside the tabs; "+" after the tabs makes a
+  new view of what is shown, unsaved changes included). A collection always has at least one item view:
   without stored ones it is a virtual "Default" (`withDefaultItemView`, id `default`), stored once
   changed; the last view can't be deleted. Both tab bars (collection page, item pages) are always
   shown, also for a single view (hiding them was confusing and hid the bookmark button); a changed
   view's tab shows " *"; bookmarking or starring the virtual "All" view stores it first. When a layout hides
   fields or isn't editable, an edit icon switches to the standard page (all fields, editable)
-  for the time being.
+  for the time being. Every labelled field collapses like a block: a caret before its label
+  (`FieldCollapse` context, read by `FieldLabel`, so view and edit mode look alike), stored right
+  away with the item view's `Collapsed` (field ids among the block ids). The layout's name toggle
+  (tag icon, `hiddenLabels`) also covers blocks there: it hides the block's header (its menus move to a "⋮" beside it).
 - **Spaces** (`app/src/domain/spaces.ts`, table `spaces`, `#/spaces`): separate environments (e.g.
   Work / Private) in one database. Every item belongs to one space (`items.space_id`) and shows only
   there; collections (fields, item views) and components are shared. A collection can be

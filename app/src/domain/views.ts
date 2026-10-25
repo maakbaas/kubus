@@ -46,7 +46,7 @@ export interface ViewState {
  * last left, not part of what it shows (sameView ignores it).
  */
 export interface Collapsed {
-  /** Collapsed blocks, by id. */
+  /** Collapsed blocks (and, in item views, fields), by id. */
   blocks: string[];
   /** Collapsed groups per block id, as "<grouped-by field id>/<group key>". */
   groups: Record<string, string[]>;
@@ -73,7 +73,7 @@ export function collapsedGroups(collapsed: Collapsed, blockId: string, groupBy: 
   return (collapsed.groups[blockId] ?? []).filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
 }
 
-/** A block collapsed or expanded. */
+/** A block (or an item view's field) collapsed or expanded. */
 export function withBlockCollapsed(collapsed: Collapsed, blockId: string, on: boolean): Collapsed {
   const blocks = collapsed.blocks.filter((id) => id !== blockId);
   return { ...collapsed, blocks: on ? [...blocks, blockId] : blocks };

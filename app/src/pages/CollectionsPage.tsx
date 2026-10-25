@@ -180,6 +180,8 @@ export function CollectionsPage() {
               fields: v.layout.fields?.map(mapId) ?? null,
               hiddenLabels: v.layout.hiddenLabels.map(mapId),
             },
+            // Collapsed fields too (blocks keep their ids).
+            collapsed: { ...v.collapsed, blocks: v.collapsed.blocks.map(mapId) },
           })),
         );
       }

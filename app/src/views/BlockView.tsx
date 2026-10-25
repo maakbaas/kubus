@@ -1,6 +1,6 @@
 import { useId, useMemo } from "react";
-import { Button, Checkbox, Dropdown, IconButton, InlineNotification, TextInput } from "@carbon/react";
-import { ArrowsVertical, ChevronDown, ChevronRight, Filter, ListChecked, Settings, TrashCan } from "@carbon/icons-react";
+import { Button, Checkbox, Dropdown, InlineNotification, TextInput } from "@carbon/react";
+import { ArrowsVertical, Filter, ListChecked, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { orderFields } from "../domain/fieldLayout";
 import { newId, pickableFields, type Collection } from "../domain/model";
@@ -10,7 +10,7 @@ import { blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCol
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { ToolbarPopover } from "../ui/ToolbarPopover";
-import { OverflowBar } from "../ui/OverflowBar";
+import { SectionHeader } from "../ui/SectionHeader";
 import { useConfirm } from "../ui/useConfirm";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { BLOCK_TYPES, blockType, normalizeBlock, type BlockPlace, type BlockTypeDefinition, type PageItem } from ".";
@@ -188,17 +188,21 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
             renderSelectedItem={(t) => <BlockKindLabel kind={t} />}
             // Filter, sort and fields are the block's: they carry over to the other type.
             // A type that shows the item's title by default (cards) takes the title field out of the
-            // fields, so it isn't shown twice.
+            // fields, so it isn't shown twice; leaving one that showed it (for a table) puts the
+            // title field back, first, so the title doesn't vanish.
             onChange={({ selectedItem: next }) => {
               if (!next || next.kind === type.kind) return;
               const options = next.defaultOptions(collection);
-              const title = (options as { showTitle?: boolean }).showTitle ? collection.fields.find((f) => f.kind === "string") : undefined;
-              const shown = title && (block.layout.fields ?? pickableFields(collection).map((f) => f.id));
-              onSet({
-                kind: next.kind,
-                options,
-                ...(shown && title && shown.includes(title.id) && { layout: { ...block.layout, fields: shown.filter((id) => id !== title.id) } }),
-              });
+              const showsTitle = (o: unknown) => !!(o as { showTitle?: boolean } | null)?.showTitle;
+              const title = collection.fields.find((f) => f.kind === "string");
+              const shown = block.layout.fields ?? pickableFields(collection).map((f) => f.id);
+              const fields =
+                title && showsTitle(options) && shown.includes(title.id)
+                  ? shown.filter((id) => id !== title.id)
+                  : title && showsTitle(block.options) && !showsTitle(options) && !shown.includes(title.id)
+                    ? [title.id, ...shown]
+                    : null;
+              onSet({ kind: next.kind, options, ...(fields && { layout: { ...block.layout, fields } }) });
             }}
           />
           {/* Empty: named after its component, or its type ("Table", "Cards"). Stored when left
@@ -235,6 +239,8 @@ interface Props {
   place: BlockPlace;
   /** On an item page: its item. */
   page: PageItem | null;
+  /** On an item page: its header hidden (the layout's hidden labels; collection views use `hideHeader`). */
+  headerHidden?: boolean;
   /** The view's collapsed blocks and groups, and storing a change (right away, not a view change). */
   collapsed: Collapsed;
   onCollapse(collapsed: Collapsed): void;
@@ -247,7 +253,7 @@ interface Props {
   onOpenChange?(open: boolean): void;
 }
 
-export function BlockView({ collection, data, block, viewFilters, search, place, page, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange }: Props) {
+export function BlockView({ collection, data, block, viewFilters, search, place, page, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange }: Props) {
   const { components } = useStore();
   const { confirm, dialog } = useConfirm();
   const type = blockType(block.kind);
@@ -278,39 +284,27 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
     onError,
   });
   const blockName = useBlockName();
-  // On an item page a block is headed like a field (its name as a label) and never collapses.
-  // A block without a header (collection views only) can't be collapsed either; its menus show on hover.
-  const headless = !page && !!block.hideHeader;
-  const collapsed = !page && !headless && state.blocks.includes(block.id);
+  // Headed like a field (its name as a label, with its type's icon), collapsible. A hidden header
+  // (View settings; Page layout on item pages), or a Markdown block on an item page without a name
+  // (just its text), leaves only its menus, as a "⋮" beside the content; such a block can't collapse.
+  const headless = page ? !!headerHidden || (!block.title && type.kind === "markdown") : !!block.hideHeader;
+  const collapsed = !headless && state.blocks.includes(block.id);
   const toggleCollapsed = () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
   return (
-    <section className={page ? "block block--field" : headless ? "block block--headless" : "block"} data-block-id={block.id}>
-      <div className="block__header">
-        {headless ? null : page ? (
-          // A Markdown block without a name is just its text, with no heading.
-          (block.title || type.kind !== "markdown") && (
-            <h2 className="block__title cds--label">
-              {/* The block type's icon, like a field's kind icon in its label. */}
-              <span className="icon-label">
-                <type.icon size={16} aria-hidden="true" />
-                {blockName(block)}
-              </span>
-            </h2>
-          )
-        ) : (
-          <>
-            <IconButton autoAlign kind="ghost" size="sm" align="top-start" label={collapsed ? "Expand" : "Collapse"} aria-expanded={!collapsed} onClick={toggleCollapsed}>
-              {collapsed ? <ChevronRight /> : <ChevronDown />}
-            </IconButton>
-            {/* The name toggles too, like an accordion heading (the icon button is its keyboard control). */}
-            <h2 className="block__title" onClick={toggleCollapsed}>
-              {blockName(block)}
-            </h2>
-          </>
-        )}
-        <span className="views-bar__spacer" />
-        <OverflowBar>
+    <section className="block" data-block-id={block.id}>
+      <SectionHeader
+        heading
+        hidden={headless}
+        collapsed={collapsed}
+        onToggle={toggleCollapsed}
+        label={
+          <span className="icon-label">
+            <type.icon size={16} aria-hidden="true" />
+            {blockName(block)}
+          </span>
+        }
+      >
         <BlockMenus
           collection={collection}
           block={block}
@@ -323,8 +317,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           onRemove={onRemove}
           onOpenChange={onOpenChange}
         />
-        </OverflowBar>
-      </div>
+      </SectionHeader>
       {!collapsed && data.error && <InlineNotification kind="error" title="Error" subtitle={data.error} hideCloseButton />}
       {/* Nothing until everything is in (a fraction of a second): a placeholder table would only
           flash, shaped unlike the real one. */}

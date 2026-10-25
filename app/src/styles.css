@@ -2244,9 +2244,10 @@ img[data-lightbox] {
   flex: none;
   inline-size: 1rem;
 }
-/* OverflowBar: a row of icon buttons; where there is little room (a phone, a narrow page header) a
-   "⋮" button opens them in a dark popover, as the Markdown editor's table menu looks. Wide: the
-   wrapper vanishes and the buttons sit in the row as if they were its own. */
+/* OverflowBar: a row of icon buttons; where there is little room (a phone, a narrow page header) or
+   no header row (a hidden header's buttons) a "⋮" button opens them in a dark popover, as the
+   Markdown editor's table menu looks (`.overflow-bar--menu`, set by OverflowBar for phones too).
+   Wide: the wrapper vanishes and the buttons sit in the row as if they were its own. */
 .overflow-bar,
 .overflow-bar__items {
   display: contents;
@@ -2254,56 +2255,55 @@ img[data-lightbox] {
 .overflow-bar__toggle {
   display: none;
 }
-@media (max-width: 42rem) {
-  .overflow-bar {
-    display: block;
-    position: relative;
-    flex: none;
-  }
-  .overflow-bar__toggle {
-    display: inline-flex;
-  }
-  .overflow-bar__items {
-    display: none;
-    position: absolute;
-    inset-block-start: calc(100% + 0.375rem);
-    inset-inline-end: 0;
-    z-index: 10;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem;
-    inline-size: max-content;
-    max-inline-size: min(20rem, 90vw);
-    background: var(--cds-background-inverse);
-    box-shadow: 0 2px 6px var(--cds-shadow, rgb(0 0 0 / 30%));
-  }
-  .overflow-bar[data-open] > .overflow-bar__items {
-    display: flex;
-  }
-  /* A caret to the "⋮" button, as on the other popovers. */
-  .overflow-bar__items::before {
-    content: "";
-    position: absolute;
-    inset-block-start: -0.375rem;
-    inset-inline-end: calc(1rem - 0.375rem); /* centred on the 2rem button */
-    border: 0.375rem solid transparent;
-    border-block-start: 0;
-    border-block-end-color: var(--cds-background-inverse);
-  }
-  /* Their panels (a filter, the settings) are light popovers of their own: not the inverse icons. */
-  .overflow-bar__items .toolbar-popover__panel {
-    color: var(--cds-text-primary);
-  }
-  .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *) svg {
-    fill: var(--cds-icon-inverse);
-  }
-  .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *)[data-active] svg {
-    fill: var(--cds-support-info-inverse, var(--cds-icon-inverse));
-  }
-  .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *):not(:disabled):hover {
-    background: var(--cds-background-inverse-hover);
-  }
+.overflow-bar--menu {
+  display: block;
+  position: relative;
+  flex: none;
+}
+/* Not a child: Carbon wraps the icon button in its tooltip. */
+.overflow-bar--menu .overflow-bar__toggle {
+  display: inline-flex;
+}
+.overflow-bar--menu > .overflow-bar__items {
+  display: none;
+  position: absolute;
+  inset-block-start: calc(100% + 0.375rem);
+  inset-inline-end: 0;
+  z-index: 10;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  inline-size: max-content;
+  max-inline-size: min(20rem, 90vw);
+  background: var(--cds-background-inverse);
+  box-shadow: 0 2px 6px var(--cds-shadow, rgb(0 0 0 / 30%));
+}
+.overflow-bar--menu[data-open] > .overflow-bar__items {
+  display: flex;
+}
+/* A caret to the "⋮" button, as on the other popovers. */
+.overflow-bar--menu > .overflow-bar__items::before {
+  content: "";
+  position: absolute;
+  inset-block-start: -0.375rem;
+  inset-inline-end: calc(1rem - 0.375rem); /* centred on the 2rem button */
+  border: 0.375rem solid transparent;
+  border-block-start: 0;
+  border-block-end-color: var(--cds-background-inverse);
+}
+/* Their panels (a filter, the settings) are light popovers of their own: not the inverse icons. */
+.overflow-bar--menu > .overflow-bar__items .toolbar-popover__panel {
+  color: var(--cds-text-primary);
+}
+.overflow-bar--menu > .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *) svg {
+  fill: var(--cds-icon-inverse);
+}
+.overflow-bar--menu > .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *)[data-active] svg {
+  fill: var(--cds-support-info-inverse, var(--cds-icon-inverse));
+}
+.overflow-bar--menu > .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *):not(:disabled):hover {
+  background: var(--cds-background-inverse-hover);
 }
 /* The page header's actions follow their header's width instead of the window's. */
 @container (max-width: 36rem) {
@@ -2343,83 +2343,126 @@ img[data-lightbox] {
     border-block-start: 0;
     border-block-end-color: var(--cds-background-inverse);
   }
+  /* The dark popover's inverse icons (only here: wide, the buttons sit on the page's own colour). */
+  .page-header .overflow-bar__items .toolbar-popover__panel {
+    color: var(--cds-text-primary);
+  }
+  .page-header .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *) svg {
+    fill: var(--cds-icon-inverse);
+  }
+  .page-header .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *)[data-active] svg {
+    fill: var(--cds-support-info-inverse, var(--cds-icon-inverse));
+  }
+  .page-header .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *):not(:disabled):hover {
+    background: var(--cds-background-inverse-hover);
+  }
 }
-/* Blocks of a view (and of an item page): with several, each has a header line with its title,
-   count and menus (icon buttons flush, like the toolbar's), and room above the next one. */
-.block + .block {
-  margin-block-start: var(--cds-spacing-07);
-}
-.block__header {
+/* The heading row of a field or a block (ui/SectionHeader.tsx): a collapse caret, the name as an
+   item field's label (small text, its icon), and buttons at the right. The row is as tall as that
+   label, also when the name is hidden; the 2rem buttons are centred on it (overhanging a little,
+   taking no height), so the gap to the content is a field's. */
+.section-header {
   display: flex;
   align-items: center;
-  gap: var(--cds-spacing-02);
-  min-block-size: 2rem;
+  min-inline-size: 0;
+  /* An item field label's size, also on collection pages (whose labels are smaller). */
+  font-size: 0.875rem;
+  line-height: 1.28572;
+  min-block-size: 1lh;
   margin-block-end: var(--cds-spacing-03);
-  border-block-end: 1px solid var(--cds-border-subtle);
 }
-.block__title {
-  cursor: pointer;
-  user-select: none;
-  font-size: 1.125rem;
-  line-height: 1.5rem;
-  font-weight: 400; /* at this size the name needs no bold */
-  overflow-wrap: anywhere;
-}
-/* On an item page a block's name is a field heading: a label, with no line under it. */
-/* The block's heading is a field label, so it uses the field type scale; only the content under it
-   (tables, cards) keeps the smaller collection page scale that .item-fields > .block sets. */
-.item-fields > .block > .block__header {
+.section-header__title.cds--label {
   --cds-label-01-font-size: 0.875rem;
   --cds-label-01-line-height: 1.28572;
   --cds-label-01-letter-spacing: 0.16px;
-}
-.block--field > .block__header {
-  border-block-end: 0;
-  /* As tall as a field label, the 2rem menu buttons centred on it (they overhang a little), so
-     the heading sits where a field's label does and the gap to the content is a field's. */
-  block-size: 1rem;
-  min-block-size: 0;
-  margin-block-end: var(--cds-spacing-03);
-}
-/* Blocks in a row are spaced by the page's own gap, as fields are (not also by their top margin). */
-.item-fields > .block + .block {
-  margin-block-start: 0;
-}
-.block--field .block__title {
-  cursor: default;
   margin: 0;
-  flex: none;
-  inline-size: auto;
-  font-size: var(--cds-label-01-font-size);
-  line-height: 1rem;
-  letter-spacing: var(--cds-label-01-letter-spacing);
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
-.block-settings__remove {
-  align-self: flex-start;
+.section-header__toggle {
+  cursor: pointer;
+  user-select: none;
 }
-/* A block without its header (View settings): only its menus remain, floating over its top right
-   corner while the block is hovered or a menu has focus (always on touch screens, without hover). */
-.block--headless {
+.section-header__actions {
+  display: flex;
+  align-items: center;
+  block-size: 0;
+  margin-inline-start: auto;
+}
+/* A hidden header: no row; its buttons are a "⋮" menu at the top right, beside the content, which
+   leaves room for it (the button and a gap). The "⋮" is a narrow button (1rem, as tall as the
+   others), taking as little of the content's width as it can. */
+:is(.block, .view-field):has(> .section-header--hidden) {
+  position: relative;
+  padding-inline-end: calc(1rem + var(--cds-spacing-02));
+}
+.section-header--hidden .overflow-bar__toggle.cds--btn {
+  inline-size: 1rem;
+  min-inline-size: 1rem;
+  padding: 0;
+  justify-content: center;
+}
+/* The popover's caret on the narrow button's centre. */
+.section-header--hidden .overflow-bar--menu > .overflow-bar__items::before {
+  inset-inline-end: calc(0.5rem - 0.375rem);
+}
+.section-header--hidden {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  z-index: 2;
+  min-block-size: 0;
+  margin: 0;
+}
+/* Only the buttons, at the right of the label row of what follows (a field being edited, whose
+   input brings its own label): the row's height, from the top. */
+.view-field:has(> .section-header--overlay) {
   position: relative;
 }
-.block--headless > .block__header {
+.section-header--overlay {
   position: absolute;
   inset-block-start: 0;
   inset-inline-end: 0;
   z-index: 2;
   margin: 0;
-  border: 0;
-  background: var(--cds-background);
-  opacity: 0;
 }
-.block--headless:hover > .block__header,
-.block--headless > .block__header:focus-within {
-  opacity: 1;
+/* The collapse caret before a label's icon (fields and blocks alike): a label's height, the 2rem
+   button overhanging it; pulled left by the button's inset, so the chevron starts where the label's
+   text would, and the inset on its right is the gap to the icon (an icon label's gap). */
+.collapse-caret {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: top;
+  block-size: 1lh;
+  margin-inline-start: calc(-1 * var(--cds-spacing-03));
 }
-@media (hover: none) {
-  .block--headless > .block__header {
-    opacity: 1;
-  }
+.collapse-caret svg {
+  fill: var(--cds-icon-secondary);
+  transition: transform var(--cds-duration-fast-02, 110ms) var(--cds-easing-standard-productive, ease);
+}
+.collapse-caret__chevron--collapsed {
+  transform: rotate(-90deg);
+}
+/* Blocks of a view: room above the next one, and a line between them centred in it, like the
+   line between the fields of an item page. */
+.block + .block {
+  position: relative;
+  margin-block-start: var(--cds-spacing-07);
+}
+.block + .block::before {
+  content: "";
+  position: absolute;
+  inset-block-start: calc(var(--cds-spacing-07) / -2);
+  inset-inline: 0;
+  border-block-start: 1px solid var(--cds-border-subtle);
+  pointer-events: none;
+}
+/* Blocks in a row are spaced by the page's own gap, as fields are (not also by their top margin). */
+.item-fields > .block + .block {
+  margin-block-start: 0;
+}
+.block-settings__remove {
+  align-self: flex-start;
 }
 .block-list__name {
   min-inline-size: 0;
@@ -2495,10 +2538,13 @@ img[data-lightbox] {
 }
 /* A line between fields (and blocks) on item pages, centred in the stack's gap. It runs from the
    page edge (where the text starts) to the right edge, also for fields pulled left by their inset. */
-.item-fields:not(.item-fields--form) > * + * {
+/* A field without its name has no box of its own (display: contents): the line goes on the field. */
+.item-fields:not(.item-fields--form) > * + :not(.item-field--no-label),
+.item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > * {
   position: relative;
 }
-.item-fields:not(.item-fields--form) > * + *::before {
+.item-fields:not(.item-fields--form) > * + :not(.item-field--no-label)::before,
+.item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > *::before {
   content: "";
   position: absolute;
   inset-block-start: calc(var(--cds-stack-gap, 2rem) / -2);
@@ -2506,11 +2552,13 @@ img[data-lightbox] {
   border-block-start: 1px solid var(--cds-border-subtle);
   pointer-events: none;
 }
-.item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label, .block)::before {
+.item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label, .block)::before,
+.item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > :not(.image-input, .view-field--image)::before {
   inset-inline-start: var(--cds-spacing-05);
 }
 @media (max-width: 42rem) {
-  .item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label)::before {
+  .item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label)::before,
+  .item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > :not(.image-input, .view-field--image)::before {
     inset-inline: calc(0.5 * var(--cds-spacing-05));
   }
 }
@@ -3292,18 +3340,6 @@ body[data-reordering] [data-reorder-row] {
 }
 .ai-status--error {
   color: var(--cds-text-error);
-}
-/* A generated value's label row, with its "Generate again" button at the right: as tall as a label,
-   the 2rem button centred on it (overhanging a little), like the menus of a block on an item page. */
-.view-field__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  block-size: 1rem;
-  margin-block-end: var(--cds-spacing-03);
-}
-.view-field__head > .cds--label {
-  margin: 0;
 }
 /* The sync status popover (ui/SyncStatusButton.tsx). */
 .sync-popover {

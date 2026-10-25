@@ -3,7 +3,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Keyb
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
 import { Add, Checkmark, Edit, Information, Pin, PinFilled, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
-import { NOTHING_COLLAPSED, type Collapsed, type ViewBlock } from "../domain/views";
+import { NOTHING_COLLAPSED, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
 import { useBlockName } from "../views/BlockListEditor";
@@ -60,6 +60,7 @@ import { SpaceLabel } from "../ui/SpaceSwitcher";
 import type { Space } from "../domain/spaces";
 import { PageHeader } from "../ui/PageHeader";
 import { OverflowBar } from "../ui/OverflowBar";
+import { FieldCollapse, SectionHeader } from "../ui/SectionHeader";
 import { TabMenu, useClippedTabs } from "../ui/TabMenu";
 import { findBlock, useLinkTarget } from "../ui/useLinkTarget";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
@@ -237,7 +238,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const changed = draft !== null && !sameLayout(draft, saved);
   // The standard page keeps the blocks: they aren't fields.
   const layout = standard ? { ...FULL_LAYOUT, blocks: current.blocks } : current;
-  /** A change to what a block shows (filter, sort, grouping, fields): unsaved, like the page's fields. */
+  /** A change to what a block shows (filter, sort, grouping, fields): unsaved until Save changes, as on collection pages. */
   const setBlock = (block: ViewBlock) => setDraft({ ...current, blocks: current.blocks.map((b) => (b.id === block.id ? block : b)) });
   const showTab = (id: string | null) => {
     setTab(id);
@@ -255,9 +256,11 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   /** Collapsing or expanding a block or a group: stored right away. */
   const setCollapsed = (next: Collapsed) => storeNow({ collapsed: next });
   /**
-   * Arranging the page's blocks (adding, removing; a block's type, options, name, collection) is
-   * stored right away, in the shown and the saved layout alike, so it is no change to save. Where
-   * blocks sit among the fields is field order: saved with Save changes, like the fields.
+   * Arranging the page is stored right away, in the shown and the saved layout alike, so it is no
+   * change to save: the page layout (fields and blocks and their order, names shown, editable, hide
+   * empty) and its blocks (adding, removing; a block's type, options, name, collection). Only what
+   * changes which items a block shows (filter, sort, grouping, fields) waits for Save changes, as on
+   * collection pages.
    */
   const arrange = (change: (layout: ItemLayout) => ItemLayout) => {
     if (draft) setDraft(change(draft));
@@ -422,7 +425,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   view={activeView}
                   layout={current}
                   titleFieldId={titleField?.id}
-                  onChange={(patch) => setDraft({ ...current, ...patch })}
+                  onChange={(patch) => arrange((l) => ({ ...l, ...patch }))}
                   onAddBlock={addBlock}
                   onError={(e) => setError(errorMessage(e))}
                 />
@@ -435,7 +438,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
 
       {/* Once the collection has item views: one tab each, like the views of the collection page. The
           star makes the shown one the default for all items, the pin this item's own choice.
-          Layout changes stay unsaved until saved with the icon buttons beside the tabs. */}
+          Changes to what a block shows stay unsaved until saved with the icon buttons beside the tabs. */}
       {/* Always shown, also for a single view: its name, "+" and saving stay in one place. */}
       {item && (
         <div className="views-bar" ref={viewsBar}>
@@ -536,6 +539,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   key={block.id}
                   block={block}
                   page={page}
+                  headerHidden={layout.hiddenLabels.includes(block.id)}
                   collapsed={collapsed}
                   onCollapse={setCollapsed}
                   onChange={setBlock}
@@ -548,11 +552,12 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
             }
             const f = entry as FieldDef;
             const component = f.kind === "component" ? components.find((t) => t.id === f.componentId) : undefined;
-            const field =
-            editing?.fieldId === f.id && component ? (
-              // A component field edits its component (shared: saving asks first).
-              <ComponentFieldEditor key={f.id} field={f} component={component} onDone={() => setEditing(null)} />
-            ) : editing?.fieldId === f.id ? (
+            const labelHidden = layout.hiddenLabels.includes(f.id);
+            // An AI field's "Generate again", in its label row (or "⋮"), also while collapsed or edited.
+            const regenerateButton = f.kind === "ai" && (
+              <RegenerateButton generatedAt={item.aiGeneratedAt?.[f.id]} edited={!!item.aiEdited?.[f.id]} onRegenerate={(hint) => regenerate(f, hint)} />
+            );
+            const editor = editing?.fieldId === f.id && (
               <FieldEditor
                 key={f.id}
                 field={f}
@@ -562,6 +567,21 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                 onSave={(v) => saveField(f, v)}
                 onCancel={() => setEditing(null)}
               />
+            );
+            const field =
+            editing?.fieldId === f.id && component ? (
+              // A component field edits its component (shared: saving asks first).
+              <ComponentFieldEditor key={f.id} field={f} component={component} onDone={() => setEditing(null)} />
+            ) : editor && regenerateButton ? (
+              // Its buttons stay where they were while it is edited: over the input's label row, or "⋮" beside it.
+              <div key={f.id} className="view-field">
+                {editor}
+                <SectionHeader label={null} overlay={!labelHidden} hidden={labelHidden}>
+                  {regenerateButton}
+                </SectionHeader>
+              </div>
+            ) : editor ? (
+              editor
             ) : (
               <ViewField
                 key={f.id}
@@ -576,16 +596,37 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                 generatedAt={f.kind === "ai" ? item.aiGeneratedAt?.[f.id] : undefined}
                 edited={f.kind === "ai" ? !!item.aiEdited?.[f.id] : undefined}
                 itemId={item.id}
+                labelHidden={labelHidden}
                 readOnly={!layout.editable || isMetaField(f)}
               />
             );
-            // A field shown without its name (the layout's choice); the wrapper adds no box.
-            return layout.hiddenLabels.includes(f.id) ? (
-              <div key={f.id} className="item-field--no-label">
-                {field}
-              </div>
-            ) : (
-              field
+            // A field shown without its name (the layout's choice); the wrapper adds no box. Without
+            // a label it has no caret, so it can't collapse.
+            if (labelHidden) {
+              return (
+                <div key={f.id} className="item-field--no-label">
+                  {field}
+                </div>
+              );
+            }
+            if (!activeView) return field;
+            // Collapsible like a block (the caret is in its label), stored with the item view right away.
+            const fieldCollapsed = collapsed.blocks.includes(f.id);
+            const toggle = () => {
+              if (editing?.fieldId === f.id) setEditing(null);
+              setCollapsed(withBlockCollapsed(collapsed, f.id, !fieldCollapsed));
+            };
+            return (
+              <FieldCollapse.Provider key={f.id} value={{ collapsed: fieldCollapsed, onToggle: toggle }}>
+                {fieldCollapsed ? (
+                  // Only the label row, its buttons kept (like a collapsed block's menus).
+                  <div className="view-field">
+                    <SectionHeader label={<FieldLabel field={f} />}>{regenerateButton}</SectionHeader>
+                  </div>
+                ) : (
+                  field
+                )}
+              </FieldCollapse.Provider>
             );
           })}
         </Stack>
@@ -672,11 +713,13 @@ function EditableTitle({ value, source, onSave }: { value: string; source: strin
 /**
  * A block on an item page: items of a collection (this one or another), typically those linked to
  * the page's item ("Books by this Author"), or a component. Edited from its header like a
- * collection view's block; changes are layout changes (unsaved until saved from the tab bar).
+ * collection view's block; changes to what it shows are unsaved until saved from the tab bar, the
+ * rest is stored right away (see `arrange`).
  */
 function ItemPageBlock({
   block,
   page,
+  headerHidden,
   collapsed,
   onCollapse,
   onChange,
@@ -687,6 +730,7 @@ function ItemPageBlock({
 }: {
   block: ViewBlock;
   page: PageItem;
+  headerHidden: boolean;
   collapsed: Collapsed;
   onCollapse(collapsed: Collapsed): void;
   onChange(block: ViewBlock): void;
@@ -707,6 +751,7 @@ function ItemPageBlock({
       collection={collection}
       block={block}
       page={page}
+      headerHidden={headerHidden}
       collapsed={collapsed}
       onCollapse={onCollapse}
       onChange={onChange}
@@ -731,8 +776,8 @@ function ItemPageBlockContent({
 
 /**
  * The page layout popover: the shown item view's name, and its layout: whether fields are
- * editable and show their names, and which fields and blocks in which order. Layout changes stay
- * unsaved until saved from the tab bar; a rename is saved right away (like a collection page's views).
+ * editable and show their names, and which fields and blocks in which order. All of it is stored
+ * right away, like a rename (arranging the page, not changing what its blocks show).
  */
 function ItemLayoutSettings({
   collection,
@@ -749,12 +794,13 @@ function ItemLayoutSettings({
   renameRequest: number;
   /** The shown item view; null when the collection has none yet. */
   view: ItemView | null;
-  /** The shown layout, with unsaved changes. */
+  /** The shown layout, with unsaved block changes. */
   layout: ItemLayout;
   /** The field shown as the page title: left out unless chosen. */
   titleFieldId: string | undefined;
+  /** A layout change: stored right away. */
   onChange(patch: Partial<ItemLayout>): void;
-  /** A new block: stored right away (not a layout change to save). */
+  /** A new block: stored right away. */
   onAddBlock(block: ViewBlock): void;
   onError(e: unknown): void;
 }) {
@@ -847,10 +893,30 @@ interface ViewFieldProps {
   edited?: boolean;
   /** AI fields: the item the value belongs to (what it is waiting for shows by it). */
   itemId?: string;
+  /** Shown without its name (the layout's choice): its label row's buttons become a "⋮" beside the value. */
+  labelHidden?: boolean;
+}
+
+/** An AI field's "Generate again" button, in its label row (also while the field is collapsed). */
+function RegenerateButton({ generatedAt, edited, onRegenerate }: { generatedAt?: string; edited?: boolean; onRegenerate(hint: string): void }) {
+  return (
+    <ToolbarPopover label="Generate again" icon={Renew} width="narrow">
+      {(close) => (
+        <AiRegenerate
+          generatedAt={generatedAt}
+          edited={edited}
+          onGenerate={(hint) => {
+            close();
+            onRegenerate(hint);
+          }}
+        />
+      )}
+    </ToolbarPopover>
+  );
 }
 
 /** One field, laid out like its input in the form: label on top, value in a read-only box. Click to edit. (Exported for the help page, which is shown as an item.) */
-export function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed, onRegenerate, generatedAt, edited, itemId }: ViewFieldProps) {
+export function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed, onRegenerate, generatedAt, edited, itemId, labelHidden }: ViewFieldProps) {
   const { components } = useStore();
   const uid = useId();
   if (field.kind === "component") {
@@ -965,25 +1031,9 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, comput
   if (field.kind === "ai") {
     return (
       <div className="view-field">
-        <div className="view-field__head">
-          <div className="cds--label">
-            <FieldLabel field={field} />
-          </div>
-          {onRegenerate && (
-            <ToolbarPopover label="Generate again" icon={Renew} width="narrow">
-              {(close) => (
-                <AiRegenerate
-                  generatedAt={generatedAt}
-                  edited={edited}
-                  onGenerate={(hint) => {
-                    close();
-                    onRegenerate(hint);
-                  }}
-                />
-              )}
-            </ToolbarPopover>
-          )}
-        </div>
+        <SectionHeader label={<FieldLabel field={field} />} hidden={labelHidden}>
+          {onRegenerate && <RegenerateButton generatedAt={generatedAt} edited={edited} onRegenerate={onRegenerate} />}
+        </SectionHeader>
         <div
           className={`view-field__value view-field__value--component view-field__value--ai${readOnly ? "" : " view-field__editable"}${empty ? " view-field__value--empty" : ""}`}
           {...editable}

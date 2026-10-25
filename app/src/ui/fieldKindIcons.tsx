@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import { useContext, type ComponentType } from "react";
 import {
   AiGenerate,
   Calendar,
@@ -17,6 +17,7 @@ import {
 } from "@carbon/icons-react";
 import { fieldKinds } from "../domain/fieldKinds";
 import type { FieldDef, FieldKind } from "../domain/model";
+import { CollapseCaret, FieldCollapse } from "./SectionHeader";
 
 type Icon = ComponentType<{ size?: number; "aria-hidden"?: boolean | "true" }>;
 
@@ -47,10 +48,19 @@ function IconLabel({ icon: Icon, children }: { icon: Icon; children: string }) {
   );
 }
 
-/** A field's label: its kind's icon and its name (form labels, item page labels). */
+/** A field's label: its kind's icon and its name (form labels, item page labels), after a collapse caret on item pages. */
 export function FieldLabel({ field }: { field: FieldDef }) {
+  const collapse = useContext(FieldCollapse);
   // An AI field edited as text (see editableField) keeps its own icon: only AI fields have an output.
-  return <IconLabel icon={FIELD_KIND_ICONS[field.aiOutput ? "ai" : field.kind]}>{field.name}</IconLabel>;
+  const label = <IconLabel icon={FIELD_KIND_ICONS[field.aiOutput ? "ai" : field.kind]}>{field.name}</IconLabel>;
+  return collapse ? (
+    <>
+      <CollapseCaret {...collapse} />
+      {label}
+    </>
+  ) : (
+    label
+  );
 }
 
 /** A field kind with its icon, e.g. in the collection editor's field type dropdown. */

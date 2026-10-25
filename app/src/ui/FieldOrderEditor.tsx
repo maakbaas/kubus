@@ -12,7 +12,7 @@ import { moveBlock, useReorder } from "./useReorder";
  * (Space shows / hides the selected rows). `value` null = the default: all fields in the collection's order, except
  * `hiddenByDefault` (e.g. an item page's title field, already shown as its title), which still
  * show when ticked. With `hiddenLabels`, each shown
- * field also gets a toggle for its name. With `collection`, fields can be added here (a field of the
+ * field (and `extra` row: a block's header) also gets a toggle for its name. With `collection`, fields can be added here (a field of the
  * collection, shown in this view; components too). `extra` rows (an item page's blocks) are
  * ordered and shown / hidden among the fields, as if they were fields.
  */
@@ -92,12 +92,12 @@ export function FieldOrderEditor({
               onChange={(_, { checked }) => commit(ids, new Set(checked ? [...shown, f.id] : shown.filter((s) => s !== f.id)))}
             />
             <span className="field-order__moves">
-              {isShown && f.isField && hiddenLabels && onHiddenLabelsChange && (
+              {isShown && hiddenLabels && onHiddenLabelsChange && (
                 <IconButton
                   autoAlign
                   kind="ghost"
                   size="sm"
-                  label={nameHidden ? "Show field name" : "Hide field name"}
+                  label={f.isField ? (nameHidden ? "Show field name" : "Hide field name") : nameHidden ? "Show block header" : "Hide block header"}
                   isSelected={nameHidden}
                   onClick={() => onHiddenLabelsChange(nameHidden ? hiddenLabels.filter((h) => h !== f.id) : [...hiddenLabels, f.id])}
                 >
