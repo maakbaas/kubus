@@ -147,10 +147,12 @@ for (const vp of ["desktop", "laptop"]) {
     // The view's search filters rows.
     await openTool(t, t.page.locator(".views-bar").first(), "Search Books");
     await t.settle();
-    await t.page.keyboard.type("Neuromancer");
+    // A title found in no other value (titles also appear in other books' tags and references).
+    await t.page.keyboard.type("brand new book");
     await t.settle(300);
     await t.audit("view search");
-    await t.check("search narrows the rows", (await rows.count()) <= 3, `${await rows.count()} rows`);
+    const found = await t.count(".items-table tbody tr:not(.table-add-row)");
+    await t.check("search narrows the rows to the match", found === 1, `${found} rows`);
   }, { viewport: vp });
 }
 

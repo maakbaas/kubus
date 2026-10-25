@@ -20,6 +20,9 @@ interface Props {
   children: ReactNode | ((close: () => void) => ReactNode);
 }
 
+/** Dispatched (bubbling) from a toolbar popover when it opens. */
+export const PANEL_OPENED = "kubus-panel-opened";
+
 /**
  * Whether any of a page's toolbar panels is open (pass `onOpenChange` to each), and `hold`:
  * a value kept as it was while one is. A page holds what would move the panels' buttons (a bar
@@ -50,6 +53,9 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
   useEffect(() => {
     if (!open) return;
     openChange.current?.(true);
+    // A "⋮" menu holding the button opens with it (OverflowBar): a panel opened by a request
+    // (rename a new view) would otherwise be inside a closed menu, not shown.
+    root.current?.dispatchEvent(new CustomEvent(PANEL_OPENED, { bubbles: true }));
     return () => openChange.current?.(false);
   }, [open]);
   // Opened in the same render as the request, so what the panel focuses (a name to rename) is there.

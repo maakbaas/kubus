@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IconButton } from "@carbon/react";
 import { OverflowMenuVertical } from "@carbon/icons-react";
 import { useMediaQuery } from "./useMediaQuery";
+import { PANEL_OPENED } from "./ToolbarPopover";
 
 /**
  * A row of icon buttons. On a phone, in a narrow page header (styles.css, `.overflow-bar`) or with
@@ -15,6 +16,14 @@ export function OverflowBar({ children, menu }: { children: ReactNode; /** The "
   const root = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const asMenu = menu || narrow;
+  // A toolbar popover among the buttons that opens (also by itself, e.g. View settings for a new
+  // view's name) opens the menu, or its panel would be hidden with it.
+  useEffect(() => {
+    const el = root.current;
+    const onOpened = () => setOpen(true);
+    el?.addEventListener(PANEL_OPENED, onOpened);
+    return () => el?.removeEventListener(PANEL_OPENED, onOpened);
+  }, []);
   useEffect(() => {
     if (!open) return;
     // A dialog opened from a button here is rendered at the window level and counts as inside.
@@ -22,17 +31,24 @@ export function OverflowBar({ children, menu }: { children: ReactNode; /** The "
       const t = e.target as Element;
       if (!root.current?.contains(t) && !t.closest(".cds--modal, .cds--menu")) setOpen(false);
     };
+    // Escape closes the menu (and a panel opened from it) with focus in it or dropped to the body
+    // (an input that saved on Enter): focus goes to "⋮", as the button that had it is hidden with
+    // the menu. Not while a dropdown in a panel closes its own menu (Carbon stops that Escape).
+    const onKeyDown = (e: KeyboardEvent) => {
+      const focus = document.activeElement;
+      if (e.key !== "Escape" || (focus && focus !== document.body && !root.current?.contains(focus))) return;
+      setOpen(false);
+      toggle.current?.focus();
+    };
     document.addEventListener("pointerdown", onPointerDown, true);
-    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [open]);
   return (
-    <div ref={root} className={asMenu ? "overflow-bar overflow-bar--menu" : "overflow-bar"} data-open={open || undefined} onKeyDown={(e) => {
-        // Escape closes the menu (and a panel opened from it): focus goes to "⋮", as the button
-        // that had it is hidden with the menu.
-        if (e.key !== "Escape" || !open) return;
-        setOpen(false);
-        toggle.current?.focus();
-      }}>
+    <div ref={root} className={asMenu ? "overflow-bar overflow-bar--menu" : "overflow-bar"} data-open={open || undefined}>
       <IconButton
         autoAlign
         kind="ghost"

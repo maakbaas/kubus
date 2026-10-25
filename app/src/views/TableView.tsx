@@ -244,8 +244,11 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
       />
     );
     // Wrapped text edits in place of the text, in the cell's own flow: its lines stay exactly
-    // where they were (an overlay would be drawn at a rounded position, a pixel off).
-    if (editing.start?.wrapped) return <div className="cell-inline-editor">{editor}</div>;
+    // where they were (an overlay would be drawn at a rounded position, a pixel off). Only text
+    // has such an editor (FieldInput's multiline): another wrapped value (a reference, a date) is
+    // edited in an input over the cell, whose own width would otherwise widen the column.
+    const text = (field.kind === "ai" ? field.aiOutput : field.kind) === "string";
+    if (editing.start?.wrapped && text) return <div className="cell-inline-editor">{editor}</div>;
     // Otherwise the editor overlays the cell; the value stays rendered (invisibly) underneath
     // so the column keeps the width its content gave it.
     return (

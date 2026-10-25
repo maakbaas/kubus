@@ -717,7 +717,9 @@ body {
 /* Search highlighting */
 .search-mark {
   background: var(--cds-highlight);
-  color: inherit;
+  /* The primary text colour, not the surrounding one: a link's blue on the highlight's blue is
+     below AA contrast. */
+  color: var(--cds-text-primary);
   padding: 0;
 }
 
@@ -3220,7 +3222,7 @@ img[data-lightbox] {
   /* Numbers sit at their line's measured top; the gutter is as wide as the longest number. */
   inline-size: calc(max(var(--digits, 1), 2) * 1ch + var(--cds-spacing-05) + var(--cds-spacing-03));
   border-inline-end: 1px solid var(--cds-border-subtle);
-  color: var(--cds-text-placeholder);
+  color: var(--cds-text-helper); /* placeholder grey is below AA contrast for text that stays */
   text-align: end;
   user-select: none;
 }

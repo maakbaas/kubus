@@ -32,6 +32,7 @@
 //   status-bar-meta      the iOS translucent status bar meta tag is present
 //   popover-detached     an open popover's panel doesn't hang at its button
 //   aria-expanded        a popover button's aria-expanded disagrees with its popover being open
+//   contrast             text with less than WCAG AA contrast against what is behind it
 //   focus-hidden         the focused element is out of sight (behind a sticky bar, scrolled away); only
 //                        with { focus: true }, right after focus moved
 // ---------------------------------------------------------------------------------------------
@@ -66,6 +67,7 @@ const CRITERIA = {
   "status-bar-meta": "No black-translucent iOS status bar meta tag.",
   "popover-detached": "An open popover's panel hangs at its button: right above or below it, overlapping it sideways.",
   "aria-expanded": "A popover's button says aria-expanded=true exactly while its popover is open.",
+  contrast: "Text has WCAG AA contrast with what is behind it: 4.5:1, or 3:1 for large text (placeholders, disabled controls and text over images excepted).",
   "focus-hidden": "The focused control is in sight: inside the window and its pane, not under a sticky bar or another layer.",
   "content-jump": "Nothing on screen moves or resizes during an interaction that shouldn't move it (editing in place, hovering, toggling, opening popovers).",
   "scroll-jump": "An interaction doesn't scroll the pane by itself.",
@@ -731,6 +733,77 @@ function __audit(opts) {
     if (!svg || !visible(svg)) continue;
     const r = svg.getBoundingClientRect();
     if (Math.abs(r.width - 16) > 0.5 || Math.abs(r.height - 16) > 0.5) report("icon-size", el, `icon is ${Math.round(r.width)}x${Math.round(r.height)}px, not 16px`);
+  }
+
+  lap();
+  section = "contrast";
+  // ---- contrast -------------------------------------------------------------------------------------
+  {
+    const ctx = document.createElement("canvas").getContext("2d");
+    const rgba = (c) => {
+      ctx.fillStyle = "#000";
+      ctx.fillStyle = c;
+      const f = ctx.fillStyle;
+      if (f.startsWith("#")) return [parseInt(f.slice(1, 3), 16), parseInt(f.slice(3, 5), 16), parseInt(f.slice(5, 7), 16), 1];
+      const m = f.match(/rgba?\(([\d.]+), ([\d.]+), ([\d.]+)(?:, ([\d.]+))?\)/);
+      return m ? [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]] : [0, 0, 0, 1];
+    };
+    const over = (top, under) => {
+      const a = top[3];
+      return [top[0] * a + under[0] * (1 - a), top[1] * a + under[1] * (1 - a), top[2] * a + under[2] * (1 - a), 1];
+    };
+    const lum = (c) => {
+      const ch = c.slice(0, 3).map((v) => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+    };
+    const ratio = (a, b) => {
+      const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+      return (x + 0.05) / (y + 0.05);
+    };
+    const pageBg = rgba(cs(document.body).backgroundColor)[3] > 0 ? rgba(cs(document.body).backgroundColor) : rgba(cs(document.documentElement).backgroundColor);
+    /** The colour behind an element: its own and its ancestors' backgrounds, composited; null when an image or gradient is behind it. */
+    const bgCache = new Map();
+    function behind(el) {
+      if (!el || el === document.documentElement) return pageBg[3] > 0 ? pageBg : [255, 255, 255, 1];
+      if (bgCache.has(el)) return bgCache.get(el);
+      const s = cs(el);
+      let out;
+      if (s.backgroundImage !== "none" || el.matches("img, video, canvas, iframe") || parseFloat(s.opacity) < 1) out = null;
+      else {
+        const under = behind(el.parentElement);
+        const c = rgba(s.backgroundColor);
+        out = under === null ? (c[3] >= 1 ? c : null) : c[3] > 0 ? over(c, under) : under;
+      }
+      bgCache.set(el, out);
+      return out;
+    }
+    const seenPairs = new Set();
+    for (const el of shown) {
+      const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+      if (!hasText || srOnly(el)) continue;
+      if (el.closest("[disabled], [aria-disabled=true], .cds--btn--disabled, .cds--label--disabled, .cds--text-input--disabled, iframe, .cm-editor, .token, .lightbox, .item-card__cover, .image-input, [role=tooltip]")) continue;
+      if (el.matches("input, textarea, select, option")) continue; // their placeholders are exempt; values are checked as text elsewhere
+      const s = cs(el);
+      if (parseFloat(s.opacity) === 0) continue;
+      const bg = behind(el);
+      if (!bg) continue;
+      const fg = rgba(s.color);
+      const color = fg[3] < 1 ? over(fg, bg) : fg;
+      const r = ratio(color, bg);
+      const size = parseFloat(s.fontSize);
+      const bold = parseInt(s.fontWeight, 10) >= 700;
+      const large = size >= 24 || (bold && size >= 18.66);
+      const need = large ? 3 : 4.5;
+      if (r + 0.05 < need) {
+        const key = `${s.color}|${bg.join(",")}`;
+        if (seenPairs.has(key)) continue;
+        seenPairs.add(key);
+        report("contrast", el, `contrast ${r.toFixed(2)}:1 (needs ${need}:1): ${s.color} on rgb(${bg.slice(0, 3).map(Math.round).join(", ")})`);
+      }
+    }
   }
 
   lap();
