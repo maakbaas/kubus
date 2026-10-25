@@ -2632,6 +2632,18 @@ img[data-lightbox] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The label holding it never grows past its field (Carbon's labels are inline-blocks as wide as
+   their content): a long field name is cut with "…" instead of making the page scroll sideways. */
+:is(.cds--label, legend.cds--label):has(> .icon-label) {
+  max-inline-size: 100%;
+}
+:is(.cds--label, legend.cds--label):has(> .icon-label + *, > * + .icon-label) {
+  display: flex;
+  align-items: center;
+}
+:is(.cds--label, legend.cds--label) > .icon-label {
+  min-inline-size: 0;
+}
 /* In a table (collections, bookmarks, rows stacked as cards) a long name wraps instead: the label
    grows with it, the icon stays on its first line. */
 .cds--data-table .icon-label {
@@ -3016,10 +3028,11 @@ img[data-lightbox] {
     gap: var(--cds-spacing-05);
   }
   /* Labels in one column as wide as the longest of the card (subgrid), values beside them; at
-     most 40% of the card: a long field name wraps instead of squeezing the values to a sliver. */
+     most 40% of the card (of the table's size container: a percentage resolves to nothing here):
+     a long field name wraps instead of squeezing the values to a sliver. */
   .items-table tbody tr {
     display: grid;
-    grid-template-columns: fit-content(40%) minmax(0, 1fr);
+    grid-template-columns: fit-content(40cqi) minmax(0, 1fr);
     block-size: auto;
     background: none;
   }
@@ -3054,6 +3067,7 @@ img[data-lightbox] {
     font-weight: 600;
     color: var(--cds-text-primary);
     overflow-wrap: anywhere;
+    min-inline-size: 0; /* the column's fit-content cap applies (else its unwrapped width) */
   }
   /* The title link: Carbon's links are inline-flex, whose text (an anonymous flex item) can't
      shrink below its longest word, so an unbroken title made the pane scroll sideways. */
