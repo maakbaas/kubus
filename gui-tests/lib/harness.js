@@ -589,6 +589,25 @@ function __makeT(ctx, pg, name, opts) {
       }, [dx, dy]);
     },
 
+    /**
+     * Opens a toolbar popover in `scope` by its button's label (string or RegExp), through the
+     * "⋮" menu when the button is folded into one (phones, narrow panes); returns the button.
+     */
+    async openPanel(scope, label) {
+      const find = () => scope.getByRole("button", { name: label, exact: typeof label === "string" }).filter({ visible: true }).first();
+      let btn = find();
+      if (!(await btn.count())) {
+        const more = scope.getByRole("button", { name: "More actions" }).filter({ visible: true }).first();
+        if (!(await more.count())) throw new TestFailure(`no "${label}" button and no "More actions"`);
+        await more.click();
+        await t.settle(100);
+        btn = find();
+      }
+      await btn.click();
+      await t.settle(150);
+      return btn;
+    },
+
     /** Clicks the first visible match of a role + accessible name. */
     async clickRole(role, name, { exact = false, index = 0 } = {}) {
       const loc = pg.getByRole(role, { name, exact }).filter({ visible: true }).nth(index);

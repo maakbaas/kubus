@@ -2092,6 +2092,7 @@ img[data-lightbox] {
   display: block;
   block-size: var(--cds-spacing-06); /* fits Carbon's small table row */
   inline-size: 6rem;
+  max-inline-size: 100%;
   object-fit: contain;
   object-position: left center;
 }
@@ -3014,10 +3015,11 @@ img[data-lightbox] {
     flex-direction: column;
     gap: var(--cds-spacing-05);
   }
-  /* Labels in one column as wide as the longest of the card (subgrid), values beside them. */
+  /* Labels in one column as wide as the longest of the card (subgrid), values beside them; at
+     most 40% of the card: a long field name wraps instead of squeezing the values to a sliver. */
   .items-table tbody tr {
     display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-columns: fit-content(40%) minmax(0, 1fr);
     block-size: auto;
     background: none;
   }
