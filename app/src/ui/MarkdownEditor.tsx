@@ -35,6 +35,7 @@ import { openModeOf, type OpenMode } from "../workspace/Workspace";
 import type { EditStart } from "./editStart";
 import { cachedFileUrl, fileUrl, IMAGE_TYPES, storeImageFile } from "./images";
 import { errorMessage } from "./useConfirm";
+import { useMountedDialog } from "./useMountedDialog";
 import { ComponentCodeEditor } from "./ComponentCodeEditor";
 import { protectSections, restoreSections, sectionClick, sectionInputRule, sectionNode, sectionTokens } from "./markdownSections";
 
@@ -899,11 +900,13 @@ function EditorSurface({
 /** A section's JavaScript, edited from its chip. */
 function SectionDialog({ code, onSave, onClose }: { code: string; onSave(code: string): void; onClose(): void }) {
   const [text, setText] = useState(code.trim());
+  const open = useMountedDialog();
   return (
     <Modal
-      open
+      open={open}
       size="sm"
       className="section-dialog"
+      selectorPrimaryFocus=".code-editor__input"
       modalHeading="Edit code"
       primaryButtonText="Save"
       secondaryButtonText="Cancel"

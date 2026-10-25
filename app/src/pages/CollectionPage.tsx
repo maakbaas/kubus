@@ -308,7 +308,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
           <span className="views-bar__spacer" />
           <OverflowBar>
           {clippedTabs && addButton}
-          {changed && active && (
+          {/* Held while a panel is open: on phones these share the "⋮" menu with the panels'
+              buttons, and appearing there (the first change made in a panel) moved them. */}
+          {panels.hold("changed", changed) && active && (
             <>
               <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Discard changes" onClick={() => selectView(active.id)}>
                 <Undo />

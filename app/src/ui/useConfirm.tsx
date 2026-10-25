@@ -1,5 +1,6 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { Modal } from "@carbon/react";
+import { returnFocus } from "./useMountedDialog";
 
 interface ConfirmOptions {
   title: string;
@@ -13,14 +14,21 @@ interface ConfirmOptions {
 export function useConfirm() {
   const [request, setRequest] = useState<{ options: ConfirmOptions; resolve: (ok: boolean) => void } | null>(null);
 
+  // What had focus when asked (the delete button): it gets it back once the dialog closes.
+  const launcher = useRef<Element | null>(null);
   const confirm = useCallback(
-    (options: ConfirmOptions) => new Promise<boolean>((resolve) => setRequest({ options, resolve })),
+    (options: ConfirmOptions) =>
+      new Promise<boolean>((resolve) => {
+        launcher.current = document.activeElement;
+        setRequest({ options, resolve });
+      }),
     [],
   );
 
   const close = (ok: boolean) => {
     request?.resolve(ok);
     setRequest(null);
+    returnFocus(launcher.current);
   };
 
   const dialog = (

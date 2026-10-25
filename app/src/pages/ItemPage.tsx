@@ -359,7 +359,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
         actions={
           item && (
             <OverflowBar>
-              {(restricted || standard) && (
+              {/* Held while a panel is open: the button appearing (a layout change made in the panel) would move the header. */}
+              {panels.hold("standard-switch", restricted || standard) && (
                 <IconButton
                   autoAlign
                   size="sm"
@@ -469,12 +470,13 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
           <span className="views-bar__spacer" />
           <OverflowBar>
           {clippedTabs && addButton}
-          {changed && (
+          {/* Held while a panel is open, as on collection pages (the "⋮" menu on phones). */}
+          {panels.hold("changed", changed) && (
             <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Discard changes" onClick={() => setDraft(null)}>
               <Undo />
             </IconButton>
           )}
-          {changed && activeView && (
+          {panels.hold("changed", changed) && activeView && (
             <>
               <IconButton
                 autoAlign

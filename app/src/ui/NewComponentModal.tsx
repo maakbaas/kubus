@@ -5,6 +5,7 @@ import { newId, now } from "../domain/model";
 import { parseParams, COMPONENT_OUTPUTS, type Component, type ComponentOutput } from "../domain/components";
 import { ComponentCodeEditor } from "./ComponentCodeEditor";
 import { errorMessage } from "./useConfirm";
+import { useMountedDialog } from "./useMountedDialog";
 
 /**
  * Creates a component without leaving the field modal it is chosen in: name, output and code
@@ -12,6 +13,7 @@ import { errorMessage } from "./useConfirm";
  */
 export function NewComponentModal({ onClose, onCreated }: { onClose(): void; onCreated(component: Component): void }) {
   const uid = useId();
+  const open = useMountedDialog();
   const { repo, components } = useStore();
   const [name, setName] = useState("");
   const [output, setOutput] = useState<ComponentOutput>("markdown");
@@ -40,7 +42,7 @@ export function NewComponentModal({ onClose, onCreated }: { onClose(): void; onC
 
   return (
     <Modal
-      open
+      open={open}
       size="sm"
       className="modal--menus"
       modalHeading="New component"
@@ -55,6 +57,7 @@ export function NewComponentModal({ onClose, onCreated }: { onClose(): void; onC
         <TextInput
           size="sm"
           id={`${uid}-name`}
+          data-modal-primary-focus
           labelText="Name"
           placeholder="e.g. Reading time"
           value={name}

@@ -13,6 +13,7 @@ export function OverflowBar({ children, menu }: { children: ReactNode; /** The "
   const narrow = useMediaQuery("(max-width: 42rem)");
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
   const asMenu = menu || narrow;
   useEffect(() => {
     if (!open) return;
@@ -25,13 +26,20 @@ export function OverflowBar({ children, menu }: { children: ReactNode; /** The "
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
   }, [open]);
   return (
-    <div ref={root} className={asMenu ? "overflow-bar overflow-bar--menu" : "overflow-bar"} data-open={open || undefined} onKeyDown={(e) => e.key === "Escape" && open && setOpen(false)}>
+    <div ref={root} className={asMenu ? "overflow-bar overflow-bar--menu" : "overflow-bar"} data-open={open || undefined} onKeyDown={(e) => {
+        // Escape closes the menu (and a panel opened from it): focus goes to "⋮", as the button
+        // that had it is hidden with the menu.
+        if (e.key !== "Escape" || !open) return;
+        setOpen(false);
+        toggle.current?.focus();
+      }}>
       <IconButton
         autoAlign
         kind="ghost"
         size="sm"
         align="bottom-end"
         label="More actions"
+        ref={toggle}
         className="overflow-bar__toggle"
         isSelected={open}
         aria-expanded={open}

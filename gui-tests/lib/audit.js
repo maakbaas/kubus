@@ -30,6 +30,10 @@
 //   icon-size            an icon in an icon-only button that isn't 16px
 //   empty-page           a pane shows no content at all
 //   status-bar-meta      the iOS translucent status bar meta tag is present
+//   popover-detached     an open popover's panel doesn't hang at its button
+//   aria-expanded        a popover button's aria-expanded disagrees with its popover being open
+//   focus-hidden         the focused element is out of sight (behind a sticky bar, scrolled away); only
+//                        with { focus: true }, right after focus moved
 // ---------------------------------------------------------------------------------------------
 
 /** Every pass/fail criterion of the suite, by id (the report lists them; failures are grouped by them). */
@@ -60,14 +64,20 @@ const CRITERIA = {
   "icon-size": "Icons in icon-only buttons are 16px.",
   "empty-page": "A shown tab never renders blank.",
   "status-bar-meta": "No black-translucent iOS status bar meta tag.",
+  "popover-detached": "An open popover's panel hangs at its button: right above or below it, overlapping it sideways.",
+  "aria-expanded": "A popover's button says aria-expanded=true exactly while its popover is open.",
+  "focus-hidden": "The focused control is in sight: inside the window and its pane, not under a sticky bar or another layer.",
   "content-jump": "Nothing on screen moves or resizes during an interaction that shouldn't move it (editing in place, hovering, toggling, opening popovers).",
   "scroll-jump": "An interaction doesn't scroll the pane by itself.",
   "console-error": "No console error or uncaught exception during the test (React warnings included).",
   "layout-shift": "A page settles without layout shifts once shown (CLS ≤ 0.02).",
+  "popover-closed": "A popover stays open while its own controls are used (typing, toggling, picking).",
+  "popover-jump": "While a popover's controls are used, its button stays put and its panel keeps the edge it hangs from and its width (no jump, no flip).",
+  "target-jump": "The control being used (in a popover, a dialog, an editor) stays under the pointer.",
+  leak: "Opening and closing things repeatedly leaves no elements behind.",
   assertion: "The behaviour checked by the test holds (named per check).",
   "test-error": "The test ran to its end (a control it needed was there and usable).",
 };
-const AUDIT_RULES = Object.keys(CRITERIA).slice(0, 26);
 
 /** Runs in the page. `opts.skip`: rule ids to leave out; `opts.max`: violations kept per rule. */
 function __audit(opts) {
@@ -180,7 +190,27 @@ function __audit(opts) {
   // ---- pane-h-overflow / empty-page -----------------------------------------------------------------
   for (const body of document.querySelectorAll(".ws-pane__body")) {
     if (!visible(body)) continue;
-    if (body.scrollWidth > body.clientWidth + T) report("pane-h-overflow", body, `pane scrolls sideways: ${body.scrollWidth} > ${body.clientWidth}`);
+    if (body.scrollWidth > body.clientWidth + T) {
+      // Name what sticks out: the outermost element past the pane's edge, else a text that runs
+      // out of its element (unbreakable text in a box that can't shrink).
+      const edge = body.getBoundingClientRect().left + body.clientLeft + body.clientWidth + T;
+      let culprit = null;
+      for (const el of body.querySelectorAll("*")) {
+        if (el.getBoundingClientRect().right > edge && !(el.parentElement && el.parentElement !== body && el.parentElement.getBoundingClientRect().right > edge)) {
+          culprit = describe(el);
+          break;
+        }
+      }
+      if (!culprit) {
+        const w = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+        const range = document.createRange();
+        for (let n = w.nextNode(); n && !culprit; n = w.nextNode()) {
+          range.selectNodeContents(n);
+          if (range.getBoundingClientRect().right > edge) culprit = `text "${n.textContent.trim().slice(0, 30)}" in ${describe(n.parentElement)}`;
+        }
+      }
+      report("pane-h-overflow", body, `pane scrolls sideways: ${body.scrollWidth} > ${body.clientWidth}${culprit ? `; sticking out: ${culprit}` : ""}`);
+    }
     const tab = [...body.querySelectorAll(".ws-tab-slot")].find((s) => !s.hidden);
     if (tab && (tab.innerText || "").trim() === "" && !tab.querySelector("img,svg,iframe,canvas")) report("empty-page", body, "the shown tab has no content");
   }
@@ -341,7 +371,8 @@ function __audit(opts) {
     // tiny-target: text links are exempt (they are as big as their words, like "Io" in a list of
     // references); icon links and buttons aren't.
     const inline = el.matches("a") && (cs(el).display === "inline" || (el.textContent.trim() !== "" && !el.querySelector("svg, img")));
-    if (!inline && !el.matches("input[type=checkbox], input[type=radio]") && (r.width < 16 - 0.5 || r.height < 16 - 0.5)) {
+    // Carbon's slider thumb is 14px by design; its whole track takes clicks.
+    if (!inline && !el.matches("input[type=checkbox], input[type=radio], .cds--slider__thumb") && (r.width < 16 - 0.5 || r.height < 16 - 0.5)) {
       report("tiny-target", el, `control is ${Math.round(r.width)}x${Math.round(r.height)}px`);
     }
 
@@ -617,6 +648,9 @@ function __audit(opts) {
       if (!el.matches(".cds--btn--icon-only") || srOnly(el)) continue;
       const p = el.closest(".views-bar, .ws-pane__tabs, .section-header, .page-header__actions, .overflow-bar, .side-nav-search, .cds--toolbar-content, .items-search, .item-info");
       if (!p) continue;
+      // A button in a popover opened from the row is laid out in the popover, not the row.
+      const layer = el.closest(".cds--popover-content");
+      if (layer && !p.closest(".cds--popover-content")) continue;
       if (!rows.has(p)) rows.set(p, []);
       rows.get(p).push(el);
     }
@@ -697,6 +731,80 @@ function __audit(opts) {
     if (!svg || !visible(svg)) continue;
     const r = svg.getBoundingClientRect();
     if (Math.abs(r.width - 16) > 0.5 || Math.abs(r.height - 16) > 0.5) report("icon-size", el, `icon is ${Math.round(r.width)}x${Math.round(r.height)}px, not 16px`);
+  }
+
+  lap();
+  section = "popover-detached / aria-expanded";
+  // ---- popover-detached / aria-expanded ------------------------------------------------------------
+  {
+    const TIP = ".cds--tooltip, .cds--icon-tooltip, .cds--definition-tooltip";
+    const parts = (root) => {
+      const own = root.querySelector(":scope > .cds--popover");
+      const panel = own && own.querySelector(":scope > .cds--popover-content");
+      const trigger = [...root.querySelectorAll("button, [role=button]")].find((b) => !own || !own.contains(b));
+      return { own, panel, trigger };
+    };
+    for (const root of document.querySelectorAll(".cds--popover-container.cds--popover--open")) {
+      if (root.matches(TIP) || !visible(root)) continue;
+      const { panel, trigger } = parts(root);
+      if (!panel || !trigger || !visible(panel) || !visible(trigger)) continue;
+      const p = panel.getBoundingClientRect();
+      const b = trigger.getBoundingClientRect();
+      const M = 16;
+      const near = p.right > b.left - M && p.left < b.right + M && p.bottom > b.top - M && p.top < b.bottom + M;
+      if (!near) report("popover-detached", panel, `panel ${Math.round(p.left)},${Math.round(p.top)}–${Math.round(p.right)},${Math.round(p.bottom)} is away from its button at ${Math.round(b.left)},${Math.round(b.top)}–${Math.round(b.right)},${Math.round(b.bottom)}`);
+    }
+    for (const btn of document.querySelectorAll("button[aria-expanded]")) {
+      if (!visible(btn)) continue;
+      let root = null;
+      for (let p = btn.parentElement; p; p = p.parentElement) {
+        if (p.matches(".cds--popover-container") && !p.matches(TIP)) {
+          root = p;
+          break;
+        }
+      }
+      if (!root) continue;
+      const { own, panel, trigger } = parts(root);
+      if (!panel || trigger !== btn || (own && own.contains(btn))) continue;
+      const open = root.classList.contains("cds--popover--open");
+      if ((btn.getAttribute("aria-expanded") === "true") !== open) report("aria-expanded", btn, `aria-expanded=${btn.getAttribute("aria-expanded")} while its popover is ${open ? "open" : "closed"}`);
+    }
+  }
+
+  lap();
+  section = "focus-hidden";
+  // ---- focus-hidden ---------------------------------------------------------------------------------
+  // Only where asked (opts.focus: right after focus moved, e.g. by Tab): a user who scrolls leaves
+  // the focused control behind on purpose.
+  if (opts.focus) {
+    const el = document.activeElement;
+    if (el && el !== document.body && el !== document.documentElement && el.tagName !== "IFRAME" && visible(el) && !srOnly(el) && !el.closest("[aria-hidden=true]")) {
+      const r = el.getBoundingClientRect();
+      let area = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      for (let p = el.parentElement; p && p !== document.documentElement; p = p.parentElement) {
+        const s = cs(p);
+        if (s.overflowX !== "visible" || s.overflowY !== "visible") {
+          const pr = p.getBoundingClientRect();
+          area = { left: Math.max(area.left, pr.left), top: Math.max(area.top, pr.top), right: Math.min(area.right, pr.right), bottom: Math.min(area.bottom, pr.bottom) };
+        }
+      }
+      area = { left: Math.max(area.left, 0), top: Math.max(area.top, 0), right: Math.min(area.right, vw), bottom: Math.min(area.bottom, vh) };
+      const w = area.right - area.left, h = area.bottom - area.top;
+      const need = Math.min(r.width * r.height * 0.5, 16 * 16);
+      if (w <= 0 || h <= 0 || w * h < need) report("focus-hidden", el, `the focused control is out of sight (${Math.max(0, Math.round(w))}x${Math.max(0, Math.round(h))}px of it shows)`);
+      else {
+        const hit = document.elementFromPoint((area.left + area.right) / 2, (area.top + area.bottom) / 2);
+        if (hit && hit !== el && !el.contains(hit) && !hit.contains(el)) {
+          for (let p = hit; p && p !== document.body; p = p.parentElement) {
+            const pos = cs(p).position;
+            if ((pos === "sticky" || pos === "fixed") && !p.contains(el) && layerOf(p) === layerOf(el)) {
+              report("focus-hidden", el, `the focused control is under ${describe(p)}`);
+              break;
+            }
+          }
+        }
+      }
+    }
   }
 
   lap();

@@ -23,6 +23,7 @@ import { NewButton } from "../ui/NewButton";
 import { CollectionIcon, CollectionLabel } from "../ui/collectionIcons";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage } from "../ui/useConfirm";
+import { useMountedDialog } from "../ui/useMountedDialog";
 import { useTableSort } from "../ui/useTableSort";
 import { RowActions, rowButtonProps } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
@@ -118,6 +119,7 @@ export function BookmarksPage() {
 }
 
 function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: unknown): void }) {
+  const open = useMountedDialog();
   const { repo, spaceCollections, bookmarks, space } = useStore();
   const [collection, setCollection] = useState<Collection | null>(spaceCollections[0] ?? null);
   const [targets, setTargets] = useState<Target[]>([]);
@@ -149,9 +151,10 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
 
   return (
     <Modal
-      open
+      open={open}
       size="xs"
       modalHeading="New bookmark"
+      selectorPrimaryFocus=".cds--list-box__field"
       className="modal--menus"
       primaryButtonText="Add"
       secondaryButtonText="Cancel"

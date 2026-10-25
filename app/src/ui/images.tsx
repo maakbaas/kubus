@@ -92,7 +92,8 @@ export function useFileUrl(fileId: string | null): string | undefined {
 
 export function ImageThumb({ fileId, alt }: { fileId: string; alt: string }) {
   const url = useFileUrl(fileId);
-  return url ? <img className="image-thumb" src={url} alt={alt} data-lightbox /> : null;
+  // Its box while it loads, so the row and column don't change size when it arrives.
+  return url ? <img className="image-thumb" src={url} alt={alt} data-lightbox /> : <span className="image-thumb" aria-hidden />;
 }
 
 interface Props {
@@ -181,7 +182,8 @@ export function UrlImage({ url, className, compact = false }: { url: string; cla
   // A stored image (`files/<sha256>`, e.g. an image field passed through a component).
   const fileId = fileIdFromSrc(url);
   const stored = useFileUrl(fileId);
-  if (fileId && !stored) return null;
+  // In a cell: its box while it loads (as ImageThumb).
+  if (fileId && !stored) return compact ? <span className={className} aria-hidden /> : null;
   if (failed) {
     return compact ? (
       <span className="image-missing image-missing--compact">Image not found</span>

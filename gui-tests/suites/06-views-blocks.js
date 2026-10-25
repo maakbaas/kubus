@@ -174,12 +174,11 @@ for (const vp of ["desktop", "phone"]) {
     const bar = t.page.locator(".views-bar").first();
     for (let i = 0; i < 4; i++) {
       await tool(t, bar, "View settings");
-      const add = t.page.locator(".cds--popover--open").getByRole("combobox", { name: /Add block/ }).first();
-      const addBtn = (await add.count()) ? add : t.page.locator(".cds--popover--open").getByText("Add block").first();
-      await addBtn.click();
+      // "Add block" is a menu button: a menu of the block types and the components that fit.
+      await t.page.locator(".cds--popover--open").getByRole("button", { name: "Add block" }).first().click();
       await t.settle(100);
       await t.audit(`add block menu (${i + 1})`);
-      await t.page.getByRole("option").nth(i).click().catch(() => {});
+      await t.page.getByRole("menuitem").nth(i).click().catch(() => {});
       await t.closeAll();
       await t.settle();
     }

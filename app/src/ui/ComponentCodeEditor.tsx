@@ -68,6 +68,8 @@ export function ComponentCodeEditor({
   const lines = value.split("\n").length;
   const highlighted = useMemo(() => (language ? highlight(value, language) : highlightComponent(value, html ? "markup" : "markdown")), [value, html, language]);
   const pre = useRef<HTMLPreElement>(null);
+  /** Set by Escape: the next Tab leaves the editor instead of indenting. */
+  const tabLeaves = useRef(false);
   /** Where each line starts (px from the top), wrapped lines taking several rows. */
   const [tops, setTops] = useState<number[]>([]);
   useLayoutEffect(() => {
@@ -132,8 +134,11 @@ export function ComponentCodeEditor({
               rows={1}
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={(e) => {
-                // Tab indents (two spaces) instead of leaving the field; Shift+Tab still leaves.
-                if (e.key !== "Tab" || e.shiftKey) return;
+                // Tab indents (two spaces) instead of leaving the field; Shift+Tab still leaves, and
+                // so does a Tab right after Escape (as in other code editors): no keyboard trap.
+                const released = tabLeaves.current;
+                tabLeaves.current = e.key === "Escape";
+                if (e.key !== "Tab" || e.shiftKey || released) return;
                 e.preventDefault();
                 // Inserted as typing would be, so Ctrl+Z still undoes what came before. execCommand
                 // is deprecated but the only way to keep a text area's undo history; without it,

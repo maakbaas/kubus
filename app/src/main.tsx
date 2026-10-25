@@ -8,6 +8,7 @@ import { suppressShellContextMenu } from "./platform/contextMenu";
 import { registerServiceWorker } from "./platform/serviceWorker";
 import { trackKeyboardInset } from "./platform/keyboardInset";
 import { useMediaQuery } from "./ui/useMediaQuery";
+import { escapeThroughDropdowns } from "./ui/escapeThroughDropdowns";
 
 function Root() {
   const dark = useMediaQuery("(prefers-color-scheme: dark)");
@@ -25,6 +26,7 @@ for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
 }
 registerServiceWorker();
 trackKeyboardInset();
+escapeThroughDropdowns();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

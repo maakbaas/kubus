@@ -305,9 +305,16 @@ export function FillTable({ children, stack: stackable = true }: { children: Rea
       }
       const width = el.clientWidth;
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      // Measured without the widths grouped tables share (useSharedColumns), which are made to fit
+      // and lag a frame behind: stale ones (an image that loaded) flashed the groups as cards.
+      const heads = [...(table.tHead?.rows[0]?.cells ?? [])];
+      const shared = heads.map((c) => c.style.minInlineSize);
+      for (const c of heads) c.style.minInlineSize = "";
+      const natural = table.getBoundingClientRect().width;
+      heads.forEach((c, i) => (c.style.minInlineSize = shared[i]));
       // Stacked as cards (styles.css) when the pane is narrow, and also when the columns can't fit
       // it however they wrap (unbreakable content): a table never sticks out of its pane.
-      if (stackable && (width <= STACK_BELOW_REM * rem || table.getBoundingClientRect().width > width + 0.5)) el.dataset.wantsStack = "";
+      if (stackable && (width <= STACK_BELOW_REM * rem || natural > width + 0.5)) el.dataset.wantsStack = "";
       else delete el.dataset.wantsStack;
       // Grouped tables stack together: as soon as one needs it, all do.
       const group = el.closest<HTMLElement>(".table-groups");
@@ -396,7 +403,7 @@ export function useSharedColumns(box: RefObject<HTMLDivElement | null>, active: 
             [...(t.tBodies[0]?.rows ?? [])].map((r) => [...(r.lastElementChild?.children ?? [])].reduce((sum, c) => sum + c.getBoundingClientRect().width, 0)),
           ),
         );
-      const room = (tables[0].parentElement?.clientWidth ?? 0) - icons;
+      let room = (tables[0].parentElement?.clientWidth ?? 0) - icons;
       const measure = () => {
         const widths: number[] = [];
         for (const cells of heads) cells.forEach((c, i) => (widths[i] = Math.max(widths[i] ?? 0, c.getBoundingClientRect().width)));
@@ -410,6 +417,15 @@ export function useSharedColumns(box: RefObject<HTMLDivElement | null>, active: 
       // All in one go, so nothing is drawn (or observed) in between.
       apply(measure());
       apply(measure());
+      // The shared widths must leave every table inside its box (FillTable's), else it restacks as
+      // cards, which drops the widths, which unstacks it again, and so on (seen with wide windows:
+      // the icon column needed more than measured). Narrowed until they fit.
+      for (let i = 0; i < 3; i++) {
+        const over = Math.max(0, ...tables.map((t) => t.getBoundingClientRect().width - (t.closest<HTMLElement>(".table-wrap")?.clientWidth ?? Infinity)));
+        if (over <= 0.5) break;
+        room -= Math.ceil(over);
+        apply(measure());
+      }
     };
     // Set up once: re-synced when the box or a table changes size, and when groups come and go
     // (rows, opened / closed groups), at most once a frame.

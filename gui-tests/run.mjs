@@ -21,6 +21,8 @@
 //   --retries <n>      re-run tests that errored (not failed) up to n times (default 1)
 //   --recycle <n>      restart each browser after n tests (default 8), to drop what it accumulated
 //   --min-free <gb>    wait before starting a test while less memory is free (default 1.5)
+//   --name <name>      name of this run's browser sessions, build and report folders (default: none), so
+//                      a second run (another --port) can go alongside without ending the first's
 //
 // Memory: each session is a Chrome (browser, GPU and network processes) plus a test's renderers
 // (the app with its SQLite worker, one per sandboxed HTML frame): up to about 1.7 GB on ordinary
@@ -50,7 +52,7 @@ const devMode = flag("dev");
 const externalUrl = opt("base-url");
 const previewPort = Number(opt("port", 1430));
 const baseUrl = externalUrl || (devMode ? "http://localhost:1420" : `http://localhost:${previewPort}`);
-const buildDir = join(here, ".build");
+const buildDir = join(here, opt("name") ? `.build-${opt("name")}` : ".build");
 const GB = 1024 ** 3;
 const minFree = Number(opt("min-free", 1.5)) * GB;
 // Measured: a browser peaks at about 1.7 GB on ordinary tests (app, SQLite worker, a renderer per
@@ -62,7 +64,8 @@ const grep = opt("grep") ? new RegExp(opt("grep"), "i") : null;
 const suiteFilter = opt("suite");
 const retries = Number(opt("retries", 1));
 const skipRules = (opt("skip", "") || "").split(",").filter(Boolean);
-const reportDir = join(here, "report");
+const runName = opt("name", "");
+const reportDir = join(here, runName ? `report-${runName}` : "report");
 const shotDir = join(reportDir, "shots");
 const tmpDir = join(reportDir, "tmp");
 // Console messages that are not the app's fault (none known yet; regex sources).
@@ -134,7 +137,7 @@ function killTree(pid) {
   }
 }
 
-const SESSION_PREFIX = "kubus-gui-";
+const SESSION_PREFIX = runName ? `kubus-gui-${runName}-` : "kubus-gui-";
 /**
  * Ends what this suite left running after a run that was killed: its browser daemons (with their
  * Chromes), which `playwright-cli close` no longer reaches, found by the session name on the
@@ -154,7 +157,7 @@ function killStrays() {
     }
   };
   const daemons = find(`cliDaemon\\.js ${SESSION_PREFIX}[0-9]+`);
-  const previews = find("vite.*preview.*gui-tests.\\.build").filter((pid) => pid !== server?.pid);
+  const previews = find(`vite.*preview.*gui-tests.\\.build.*--port ${previewPort}`).filter((pid) => pid !== server?.pid);
   for (const pid of [...daemons, ...previews]) killTree(pid);
   return daemons.length;
 }

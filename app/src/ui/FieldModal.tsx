@@ -15,6 +15,7 @@ import { ComponentArgInput } from "./ComponentArgInput";
 import { NewComponentModal } from "./NewComponentModal";
 import type { FilterRule } from "../domain/query";
 import { errorMessage, useConfirm } from "./useConfirm";
+import { useMountedDialog } from "./useMountedDialog";
 
 /**
  * Adds a field to a collection, or edits a component field, from a view's field picker (table
@@ -38,6 +39,7 @@ export function FieldModal({
 }) {
   const { repo, components, collections, space } = useStore();
   const { confirm, dialog } = useConfirm();
+  const open = useMountedDialog();
   const [name, setName] = useState(field?.name ?? "");
   const [kind, setKind] = useState<FieldKind>(field?.kind ?? "string");
   const [targetCollectionId, setTargetCollectionId] = useState<string | null>(field?.targetCollectionId ?? null);
@@ -110,7 +112,7 @@ export function FieldModal({
   return createPortal(
     <>
     <Modal
-      open
+      open={open}
       size="xs"
       className="modal--menus"
       modalHeading={field ? `Edit ${field.name}` : "Add field"}
@@ -125,6 +127,7 @@ export function FieldModal({
         <TextInput
           size="sm"
           id="field-modal-name"
+          data-modal-primary-focus
           labelText="Name"
           placeholder={kind === "component" ? "e.g. Reading time" : "e.g. Published"}
           value={name}

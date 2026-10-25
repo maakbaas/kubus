@@ -72,8 +72,25 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
     const onPointerDown = (e: PointerEvent) => {
       pressedOutside.current = !inside(e.target as Node);
     };
+    // Escape closes it with focus in the panel, on its button (where opening it leaves focus) or
+    // dropped to the body (the control used was removed, like a rule's trash button), and gives
+    // focus back to the button. Not from a dialog opened from the panel, which closes itself, nor
+    // while a dropdown in the panel has its menu open (that Escape closes the menu). Seen while
+    // capturing: Carbon's dropdowns stop Escape from going further, with their menu closed too.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const focus = document.activeElement;
+      if (focus && focus !== document.body && !root.current?.contains(focus)) return;
+      if (focus && focus.id !== id && focus.getAttribute("aria-expanded") === "true") return;
+      setOpen(false);
+      document.getElementById(id)?.focus();
+    };
     document.addEventListener("pointerdown", onPointerDown, true);
-    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
   }, [open]);
   // The panel never makes the page scroll and never leaves its pane: it gets at most the room on
   // the roomier side of its button (autoAlign flips to that side) and scrolls inside when taller,
@@ -155,12 +172,6 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
               ...(maxWidth !== undefined && { "--popover-width": `${maxWidth}px` }),
             } as React.CSSProperties
           }
-          onKeyDown={(e) => {
-            // An Escape closing a dialog opened from here reaches this panel too (React portal).
-            if (e.key !== "Escape" || e.defaultPrevented || (e.target as Element).closest?.(".cds--modal")) return;
-            setOpen(false);
-            document.getElementById(id)?.focus();
-          }}
         >
           {opened && (typeof children === "function" ? children(() => setOpen(false)) : children)}
         </div>

@@ -53,6 +53,17 @@ function __makeT(ctx, pg, name, opts) {
     if (m.type() === "error") errors.push({ where, text: m.text().slice(0, 500) });
   });
   pg.on("pageerror", (e) => errors.push({ where, text: "Uncaught: " + String(e && e.message || e).slice(0, 500) }));
+  // The app's own files must all load (a missing chunk, icon or stored file); other hosts (a made-up
+  // model address in the AI tests) are not the app's.
+  const sameOrigin = (url) => url.startsWith(base + "/");
+  pg.on("response", (r) => {
+    if (r.status() >= 400 && sameOrigin(r.url())) errors.push({ where, text: `Request failed: ${r.status()} ${r.url().slice(base.length, base.length + 200)}` });
+  });
+  pg.on("requestfailed", (r) => {
+    const why = (r.failure() && r.failure().errorText) || "";
+    // Aborted: a navigation or a reload cancelled it, not a failure.
+    if (sameOrigin(r.url()) && !/ABORTED/i.test(why)) errors.push({ where, text: `Request failed: ${why} ${r.url().slice(base.length, base.length + 200)}` });
+  });
 
   async function shoot(boxes) {
     shotN += 1;
@@ -187,9 +198,9 @@ function __makeT(ctx, pg, name, opts) {
      * Runs the layout audit (audit.js) and records it as one checkpoint, with a screenshot in
      * which every violation is outlined and numbered.
      */
-    async audit(label, { skip = [], settle = true, shotOnFail = false } = {}) {
+    async audit(label, { skip = [], settle = true, shotOnFail = false, focus = false } = {}) {
       if (settle) await t.settle();
-      const res = await timed("audit", () => pg.evaluate(__audit, { skip: [...skip, ...(opts.skip || []), ...(__OPTS.skip || [])], max: 8 }));
+      const res = await timed("audit", () => pg.evaluate(__audit, { skip: [...skip, ...(opts.skip || []), ...(__OPTS.skip || [])], max: 8, focus }));
       timing.audits++;
       const violations = res.violations;
       const boxes = violations.filter((v) => v.box && v.box.w > 0).map((v, i) => ({ ...v.box, n: i + 1 }));
@@ -231,8 +242,10 @@ function __makeT(ctx, pg, name, opts) {
         for (const el of root.querySelectorAll("*")) {
           if (el instanceof SVGElement && !(el instanceof SVGSVGElement)) continue;
           if (!el.checkVisibility({ visibilityProperty: true, opacityProperty: true })) continue;
+          // Not on screen: screen-reader-only text and the box of a closed popover.
+          if (el.closest(".cds--visually-hidden, .cds--assistive-text, .cds--popover-container:not(.cds--popover--open) > .cds--popover")) continue;
           const r = el.getBoundingClientRect();
-          if (r.width === 0 && r.height === 0) continue;
+          if (r.width <= 1 || r.height <= 1) continue;
           map.set(el, { x: r.left, y: r.top + off, w: r.width, h: r.height });
         }
         window.__shiftSnap = map;
@@ -293,6 +306,220 @@ function __makeT(ctx, pg, name, opts) {
       const boxes = moved.filter((v) => v.box.w > 0).map((v, i) => ({ ...v.box, n: i + 1 }));
       const screenshot = moved.length || __OPTS.shotAll ? await shoot(boxes) : null;
       return record({ kind: "shift", label, pass: moved.length === 0, violations: moved, screenshot });
+    },
+
+    /**
+     * One step inside an open popover (typing, toggling, picking an option, adding a row): the
+     * popover stays open (unless `keepOpen: false`), its button doesn't move, its panel keeps the
+     * edge it hangs from (it may grow away from its button, never jump, shrink back past it or flip
+     * to the other side) and keeps its width, and the control acted on (`target`, a locator) stays
+     * under the pointer. With `scope` (a selector), nothing there moves either (noShift's rules:
+     * floating layers excepted), e.g. the tab bars and page header behind the panel.
+     */
+    async popoverStep(label, action, { target = null, scope = null, except = [], keepOpen = true, tolerance = 1 } = {}) {
+      await t.settle(100);
+      const found = await pg.evaluate(() => {
+        for (const el of document.querySelectorAll("[data-step-popover]")) el.removeAttribute("data-step-popover");
+        const roots = [...document.querySelectorAll(".cds--popover-container.cds--popover--open")].filter((r) => !r.matches(".cds--tooltip, .cds--icon-tooltip, .cds--definition-tooltip") && r.querySelector(":scope > .cds--popover > .cds--popover-content"));
+        const root = roots[roots.length - 1];
+        if (!root) return false;
+        root.setAttribute("data-step-popover", "");
+        return true;
+      });
+      if (!found) return t.check(`${label}: a popover is open`, false, "no open popover before the step");
+      // Brought into view first, as a person would scroll to it (a click would scroll it there
+      // itself, after the positions were taken).
+      if (target) {
+        await target.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => {});
+        await target.evaluate((el) => el.setAttribute("data-step-target", "")).catch(() => {});
+      }
+      const geo = () => pg.evaluate(() => {
+        const root = document.querySelector("[data-step-popover]");
+        if (!root) return null;
+        const own = root.querySelector(":scope > .cds--popover");
+        const panel = own && own.querySelector(":scope > .cds--popover-content");
+        const trigger = [...root.querySelectorAll("button")].find((b) => !own || !own.contains(b));
+        const r = (el) => {
+          if (!el || !el.isConnected || !el.getClientRects().length) return null;
+          const b = el.getBoundingClientRect();
+          return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height };
+        };
+        const tgt = document.querySelector("[data-step-target]");
+        return { open: root.classList.contains("cds--popover--open") && !!panel && panel.getClientRects().length > 0, trigger: r(trigger), panel: r(panel), target: r(tgt), targetName: tgt ? (tgt.getAttribute("aria-label") || tgt.textContent || "").trim().slice(0, 40) : "" };
+      });
+      const a = await geo();
+      let shift = null;
+      if (scope) shift = await t.noShift(`${label}: nothing behind the popover moves`, action, { scope, except, tolerance });
+      else {
+        await action();
+        await t.settle();
+      }
+      const b = await geo();
+      const out = [];
+      const box = (r) => (r ? { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) } : null);
+      const off = (x, y) => Math.abs(x - y) > tolerance;
+      if (!b) out.push({ rule: "popover-closed", message: "the popover is gone", target: "popover" });
+      else if (keepOpen && !b.open) out.push({ rule: "popover-closed", message: "the popover closed while being used", target: "popover", box: box(a.panel) });
+      if (a && b && b.open && a.panel && b.panel) {
+        if (a.trigger && b.trigger && (off(a.trigger.left, b.trigger.left) || off(a.trigger.top, b.trigger.top))) out.push({ rule: "popover-jump", message: `its button moved ${(b.trigger.left - a.trigger.left).toFixed(1)},${(b.trigger.top - a.trigger.top).toFixed(1)}`, target: "popover button", box: box(b.trigger) });
+        const below = (g) => g.trigger && g.panel.top >= g.trigger.top;
+        if (a.trigger && below(a) !== below(b)) out.push({ rule: "popover-jump", message: `the panel flipped ${below(a) ? "from below to above" : "from above to below"} its button`, target: "popover panel", box: box(b.panel) });
+        else if (below(a) ? off(a.panel.top, b.panel.top) : off(a.panel.bottom, b.panel.bottom)) out.push({ rule: "popover-jump", message: `the panel's ${below(a) ? "top" : "bottom"} edge moved ${below(a) ? (b.panel.top - a.panel.top).toFixed(1) : (b.panel.bottom - a.panel.bottom).toFixed(1)}px`, target: "popover panel", box: box(b.panel) });
+        if (off(a.panel.left, b.panel.left) || off(a.panel.right, b.panel.right)) out.push({ rule: "popover-jump", message: `the panel moved sideways or changed width: ${Math.round(a.panel.left)}–${Math.round(a.panel.right)} → ${Math.round(b.panel.left)}–${Math.round(b.panel.right)}`, target: "popover panel", box: box(b.panel) });
+        if (a.target && b.target && (off(a.target.left, b.target.left) || off(a.target.top, b.target.top))) out.push({ rule: "target-jump", message: `the control acted on moved ${(b.target.left - a.target.left).toFixed(1)},${(b.target.top - a.target.top).toFixed(1)}`, target: a.targetName, box: box(b.target) });
+      }
+      await pg.evaluate(() => document.querySelector("[data-step-target]")?.removeAttribute("data-step-target")).catch(() => {});
+      const boxes = out.filter((v) => v.box && v.box.w > 0).map((v, i) => ({ ...v.box, n: i + 1 }));
+      const screenshot = out.length || __OPTS.shotAll ? await shoot(boxes) : null;
+      record({ kind: "popover", label, pass: out.length === 0, violations: out, screenshot });
+      return out.length === 0 && (!shift || shift);
+    },
+
+    /**
+     * Escape closes the open popover (or menu, or dialog) at once and leaves nothing floating
+     * behind; for a toolbar popover, focus returns to its button. Recorded as one checkpoint.
+     */
+    async escapeCloses(label, { focusBack = true } = {}) {
+      const before = await pg.evaluate(() => {
+        const root = [...document.querySelectorAll(".cds--popover-container.cds--popover--open")].filter((r) => !r.matches(".cds--tooltip, .cds--icon-tooltip, .cds--definition-tooltip")).pop();
+        for (const el of document.querySelectorAll("[data-esc-trigger]")) el.removeAttribute("data-esc-trigger");
+        const own = root && root.querySelector(":scope > .cds--popover");
+        const trigger = root && [...root.querySelectorAll("button")].find((b) => !own || !own.contains(b));
+        if (trigger) trigger.setAttribute("data-esc-trigger", "");
+        return { popover: !!root, trigger: !!trigger };
+      });
+      await pg.keyboard.press("Escape");
+      await t.settle(100);
+      const after = await pg.evaluate(() => {
+        const left = [...document.querySelectorAll(".cds--popover-container.cds--popover--open, .cds--modal.is-visible, .cds--list-box--expanded, [role=menu]")].filter((r) => !r.matches(".cds--tooltip, .cds--icon-tooltip, .cds--definition-tooltip") && r.checkVisibility());
+        const trig = document.querySelector("[data-esc-trigger]");
+        const focus = document.activeElement;
+        // A popover opened from a "⋮" menu closes with it: focus goes to "⋮" (its button is hidden).
+        const menuToggle = trig && !trig.checkVisibility() ? trig.closest(".overflow-bar")?.querySelector(".overflow-bar__toggle") : null;
+        return { left: left.map((e) => e.className.split(" ").slice(0, 3).join(".")), focusOk: !trig || trig === focus || trig.contains(focus) || (!!menuToggle && menuToggle === focus), focus: focus ? focus.tagName.toLowerCase() + "." + [...focus.classList].slice(0, 2).join(".") + (focus.getAttribute("aria-label") ? `[${focus.getAttribute("aria-label")}]` : "") : "none" };
+      });
+      const problems = [];
+      if (after.left.length) problems.push(`still open after Escape: ${after.left.join(", ")}`);
+      if (focusBack && before.trigger && !after.focusOk) problems.push(`focus went to ${after.focus}, not back to the popover's button`);
+      return t.check(`${label}: Escape closes it${focusBack && before.trigger ? " and focus returns to its button" : ""}`, problems.length === 0, problems.join("; "));
+    },
+
+    /**
+     * One step inside an open dialog (typing, picking, a choice that adds inputs): the dialog stays
+     * open, keeps its width and place sideways and its top edge (it may grow downwards, never move
+     * up or sideways under the pointer), and the control acted on (`target`) stays put.
+     */
+    async dialogStep(label, action, { target = null, keepOpen = true, tolerance = 1 } = {}) {
+      await t.settle(100);
+      if (target) {
+        await target.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => {});
+        await target.evaluate((el) => el.setAttribute("data-step-target", "")).catch(() => {});
+      }
+      const geo = () => pg.evaluate(() => {
+        const m = [...document.querySelectorAll(".cds--modal.is-visible .cds--modal-container")].pop();
+        const r = (el) => {
+          if (!el || !el.isConnected || !el.getClientRects().length) return null;
+          const b = el.getBoundingClientRect();
+          return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height };
+        };
+        const tgt = document.querySelector("[data-step-target]");
+        return { open: !!m, dialog: r(m), target: r(tgt), targetName: tgt ? (tgt.getAttribute("aria-label") || tgt.id || tgt.textContent || "").trim().slice(0, 40) : "" };
+      });
+      const a = await geo();
+      await action();
+      await t.settle();
+      const b = await geo();
+      const out = [];
+      const off = (x, y) => Math.abs(x - y) > tolerance;
+      const box = (r) => (r ? { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) } : null);
+      if (keepOpen && !b.open) out.push({ rule: "popover-closed", message: "the dialog closed while being used", target: "dialog", box: box(a.dialog) });
+      if (a.dialog && b.dialog) {
+        if (off(a.dialog.left, b.dialog.left) || off(a.dialog.right, b.dialog.right)) out.push({ rule: "popover-jump", message: `the dialog moved sideways or changed width: ${Math.round(a.dialog.left)}–${Math.round(a.dialog.right)} → ${Math.round(b.dialog.left)}–${Math.round(b.dialog.right)}`, target: "dialog", box: box(b.dialog) });
+        if (off(a.dialog.top, b.dialog.top)) out.push({ rule: "popover-jump", message: `the dialog's top edge moved ${(b.dialog.top - a.dialog.top).toFixed(1)}px`, target: "dialog", box: box(b.dialog) });
+        if (a.target && b.target && (off(a.target.left, b.target.left) || off(a.target.top, b.target.top))) out.push({ rule: "target-jump", message: `the control acted on moved ${(b.target.left - a.target.left).toFixed(1)},${(b.target.top - a.target.top).toFixed(1)}`, target: a.targetName, box: box(b.target) });
+      }
+      await pg.evaluate(() => document.querySelector("[data-step-target]")?.removeAttribute("data-step-target")).catch(() => {});
+      const boxes = out.filter((v) => v.box && v.box.w > 0).map((v, i) => ({ ...v.box, n: i + 1 }));
+      const screenshot = out.length || __OPTS.shotAll ? await shoot(boxes) : null;
+      return record({ kind: "dialog", label, pass: out.length === 0, violations: out, screenshot });
+    },
+
+    /**
+     * Where focus is now: a short description, whether it is in sight (inside the window and the
+     * boxes that clip it, not under a sticky bar) and whether it is drawn differently from the same
+     * control without focus (an outline, a shadow, a border or background change on it, its label
+     * or a wrapper, or their ::before / ::after). Buttons, links and boxes only: blurring a text
+     * input to compare could end an edit.
+     */
+    async focusInfo() {
+      return pg.evaluate(() => {
+        const el = document.activeElement;
+        if (!el || el === document.body || el === document.documentElement) return { none: true };
+        const describe = (n) => {
+          const parts = [];
+          for (let p = n, i = 0; p && p.nodeType === 1 && i < 3; p = p.parentElement, i++) parts.unshift(p.tagName.toLowerCase() + [...p.classList].slice(0, 2).map((c) => "." + c).join(""));
+          const name = (n.getAttribute("aria-label") || n.textContent || "").trim().replace(/\s+/g, " ").slice(0, 30);
+          return parts.join(" > ") + (name ? ` "${name}"` : "");
+        };
+        const r = el.getBoundingClientRect();
+        let area = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+        for (let p = el.parentElement; p && p !== document.documentElement; p = p.parentElement) {
+          const s = getComputedStyle(p);
+          if (s.overflowX !== "visible" || s.overflowY !== "visible") {
+            const pr = p.getBoundingClientRect();
+            area = { left: Math.max(area.left, pr.left), top: Math.max(area.top, pr.top), right: Math.min(area.right, pr.right), bottom: Math.min(area.bottom, pr.bottom) };
+          }
+        }
+        area = { left: Math.max(area.left, 0), top: Math.max(area.top, 0), right: Math.min(area.right, innerWidth), bottom: Math.min(area.bottom, innerHeight) };
+        const w = area.right - area.left, h = area.bottom - area.top;
+        const shown = el.checkVisibility({ visibilityProperty: true, opacityProperty: true }) || !!el.closest("label, .cds--checkbox-wrapper, .cds--toggle, .cds--slider");
+        let inSight = shown && w > 0 && h > 0 && w * h >= Math.min(r.width * r.height * 0.5, 64);
+        let under = "";
+        if (inSight) {
+          const hit = document.elementFromPoint((area.left + area.right) / 2, (area.top + area.bottom) / 2);
+          if (hit && hit !== el && !el.contains(hit) && !hit.contains(el)) {
+            for (let p = hit; p && p !== document.body; p = p.parentElement) {
+              const pos = getComputedStyle(p).position;
+              if ((pos === "sticky" || pos === "fixed") && !p.contains(el) && !p.closest(".cds--popover-content, [role=tooltip]")) {
+                under = describe(p);
+                inSight = false;
+                break;
+              }
+            }
+          }
+        }
+        const kind = el.matches("input:not([type=checkbox]):not([type=radio]), textarea, select, [contenteditable=true], [contenteditable=plaintext-only], [role=combobox]") ? "text" : "other";
+        let indicator = null;
+        if (kind === "other") {
+          // Its label, wrapper, first descendants (a tree node draws focus on its label row) and next
+          // sibling (Carbon's toggle draws it on the switch beside its button).
+          const parts = [el, el.parentElement, el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`) : null, el.closest("label"), ...[...el.querySelectorAll("*")].slice(0, 4), el.nextElementSibling, ...(el.nextElementSibling ? [...el.nextElementSibling.querySelectorAll("*")].slice(0, 4) : [])].filter(Boolean);
+          // Transitions off while comparing: Carbon fades its focus ring in and out.
+          const still = document.createElement("style");
+          still.textContent = "*, *::before, *::after { transition: none !important; animation: none !important; }";
+          document.head.appendChild(still);
+          const sig = () => parts.map((p) => [null, "::before", "::after"].map((pseudo) => {
+            const s = getComputedStyle(p, pseudo);
+            return [s.outlineStyle, s.outlineWidth, s.outlineColor, s.boxShadow, s.borderTopColor, s.borderBottomColor, s.backgroundColor, s.textDecorationLine].join("|");
+          }).join("/")).join("#");
+          const focused = sig();
+          el.setAttribute("data-focus-probe", "");
+          el.blur();
+          const blurred = sig();
+          el.focus({ preventScroll: true, focusVisible: true });
+          el.removeAttribute("data-focus-probe");
+          still.remove();
+          indicator = focused !== blurred;
+        }
+        // Unique per element: icon buttons often describe alike.
+        el.__focusId ||= (window.__focusIds = (window.__focusIds || 0) + 1);
+        return { none: false, id: el.__focusId, what: describe(el), inSight, under, kind, indicator, tag: el.tagName.toLowerCase(), inDialog: !!el.closest(".cds--modal"), sideNav: !!el.closest(".cds--side-nav") };
+      });
+    },
+
+    /** Number of elements in the document (for leak checks after opening and closing things). */
+    async nodeCount() {
+      return pg.evaluate(() => document.getElementsByTagName("*").length);
     },
 
     /** Bounding boxes of the elements matching a selector (visible ones). */

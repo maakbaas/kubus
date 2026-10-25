@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Button, Dropdown, Form, FormGroup, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
+import { Button, Dropdown, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
@@ -316,15 +316,16 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                   />
                 )}
                 <div className="field-row__actions">
-                  <Button
+                  <IconButton
+                    autoAlign
                     size="sm"
                     kind="ghost"
-                    hasIconOnly
-                    renderIcon={TrashCan}
-                    iconDescription={draft.fields.length === 1 ? "A collection needs at least one field" : "Remove field"}
+                    label={draft.fields.length === 1 ? "A collection needs at least one field" : "Remove field"}
                     disabled={draft.fields.length === 1}
                     onClick={() => removeField(f.id)}
-                  />
+                  >
+                    <TrashCan />
+                  </IconButton>
                   {/* The drag handle is always a row's last icon. */}
                   {reorder.handle(i)}
                 </div>

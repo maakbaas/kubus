@@ -2075,13 +2075,15 @@ img[data-lightbox] {
 }
 
 /* Tables */
-/* Whole image, scaled to the row height (never cropped). */
+/* Whole image, scaled to the row height (never cropped), in a box of a fixed size: the image
+   loads after the row is shown, and a column growing to its width moved the whole table. An
+   empty box of the same size stands in while it loads (ImageThumb). */
 .image-thumb {
   display: block;
   block-size: var(--cds-spacing-06); /* fits Carbon's small table row */
-  inline-size: auto;
-  max-inline-size: 6rem;
+  inline-size: 6rem;
   object-fit: contain;
+  object-position: left center;
 }
 /* Carbon's dropdowns put an inline-block label in a block wrapper, which adds a couple of
    pixels above it; lay them out like .cds--form-item so labels sit like every other field's. */
@@ -2573,7 +2575,7 @@ img[data-lightbox] {
 }
 /* Image columns centre their thumbnails; the header is left-aligned like every other column. */
 .items-table td.cell--image .image-thumb {
-  margin-inline: auto;
+  object-position: center;
 }
 /* An empty markdown field is as tall as the empty editor it turns into (one body-01 line plus
    the editor's padding above and below and the field's bottom border). */
@@ -2911,6 +2913,23 @@ img[data-lightbox] {
     max-block-size: none;
   }
 }
+/* Dialogs hang from a fixed point near the top instead of being centred (as on phones): content
+   that changes (a field type's extra inputs, an error) grows and shrinks downwards, never moving
+   the dialog or the control under the pointer. Not the image lightbox, which is as tall as its
+   image and stays centred. */
+@media (min-width: 42rem) {
+  .cds--modal:not(.lightbox) {
+    --modal-top: min(12vh, 8rem);
+    align-items: flex-start;
+  }
+  .cds--modal:not(.lightbox) .cds--modal-container {
+    margin-block-start: var(--modal-top);
+  }
+  /* Carbon's cap (a share of the window) less that room; dialogs with menus grow uncapped (above). */
+  .cds--modal:not(.lightbox, .modal--menus) .cds--modal-container {
+    max-block-size: calc(100% - var(--modal-top) - var(--cds-spacing-05));
+  }
+}
 
 /* Narrow panes: every table restacks as cards. Each row is a card; each cell a line with its
    column name (data-label) on the left; the row's icons at the bottom right. Driven by the
@@ -3024,6 +3043,13 @@ img[data-lightbox] {
     color: var(--cds-text-primary);
     overflow-wrap: anywhere;
   }
+  /* The title link: Carbon's links are inline-flex, whose text (an anonymous flex item) can't
+     shrink below its longest word, so an unbroken title made the pane scroll sideways. */
+  .items-table tbody td > .cds--link {
+    display: block;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
   /* Editable values: the hover reaches the card's edge on the right and the label on the left
      (the line's padding is 1rem at the sides, 0.25rem above and below); the padding brings the
      text back to where it was. */
@@ -3103,7 +3129,7 @@ img[data-lightbox] {
   }
   /* Images sit at the start of their value, like the other values (wide tables centre them). */
   .items-table tbody td.cell--image .image-thumb {
-    margin-inline: 0;
+    object-position: left center;
   }
   /* No row hover on cards: Carbon's hover adds borders (things shift) and tints the whole row,
      icons included; the icons are buttons with their own hover. */
@@ -3261,6 +3287,12 @@ img[data-lightbox] {
   block-size: 2rem;
   border: 0;
   background: transparent;
+}
+/* Tabbing into the frame (its links and controls) shows like any other focus (a frame is
+   :focus, never :focus-visible, while something in it has focus). */
+.html-frame:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
 }
 .html-frame--fill {
   position: absolute;
