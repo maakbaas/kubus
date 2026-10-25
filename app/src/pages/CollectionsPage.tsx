@@ -209,13 +209,13 @@ export function CollectionsPage() {
                   <Link href={`#/collections/${t.id}/items`}>
                     <span className="icon-label">
                       <CollectionIcon name={t.icon} />
-                      {t.pluralName}
+                      <span className="icon-label__text">{t.pluralName}</span>
                     </span>
                   </Link>
                 ) : (
                   <span className="icon-label">
                     <CollectionIcon name={t.icon} />
-                    {t.pluralName}
+                    <span className="icon-label__text">{t.pluralName}</span>
                   </span>
                 )}
               </TableCell>

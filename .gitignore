@@ -18,3 +18,7 @@ desktop/gen/schemas/
 .idea/
 .DS_Store
 Thumbs.db
+
+# GUI stress suite output (npm run test:gui)
+gui-tests/report/
+gui-tests/.build/

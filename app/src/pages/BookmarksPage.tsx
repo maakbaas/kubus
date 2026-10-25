@@ -89,7 +89,7 @@ export function BookmarksPage() {
                         <span className="icon-label">
                           <CollectionIcon name={collection.icon} />
                           {/* "Note" for an item, "View of Notes" for a view. */}
-                          {b.kind === "view" ? `View of ${collection.pluralName}` : collection.name}
+                          <span className="icon-label__text">{b.kind === "view" ? `View of ${collection.pluralName}` : collection.name}</span>
                         </span>
                       )}
                     </TableCell>

@@ -360,6 +360,10 @@ body {
   .ws-split__child:not(:has(.ws-pane--active)) {
     display: none;
   }
+  /* The shown pane takes the whole window, not its share of the split (an inline flex-grow). */
+  .ws-split__child:has(.ws-pane--active) {
+    flex: 1 1 0 !important;
+  }
   .ws-pane__lead--phone,
   .ws-pane__end--phone {
     display: flex;
@@ -679,6 +683,19 @@ body {
 .form-page {
   max-width: 48rem;
   margin-inline: auto;
+  /* A size container: forms lay out by the pane's width, not the window's (a narrow pane on a
+     wide screen gets the narrow layout too). */
+  container: form-page / inline-size;
+}
+/* A vertical stack (forms, item fields) is never wider than its page: its one column shrinks
+   with the pane, and wide content (a long unbroken line in a code editor, a wide table) scrolls
+   or wraps inside its own box. Without this the grid column takes the widest content's
+   min-content width and the pane scrolls sideways; fieldsets do the same by default. */
+.ws-pane__body .cds--stack-vertical {
+  grid-template-columns: minmax(0, 1fr);
+}
+.ws-pane__body fieldset {
+  min-inline-size: 0;
 }
 /* Item pages (an item, a new item): at most 700px of content, centred in a wider tab. */
 .form-page.item-view {
@@ -893,14 +910,29 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   display: flex;
   flex-direction: column;
   gap: 0.75rem; /* between title and each matched field */
+  min-inline-size: 0;
+  overflow-wrap: anywhere; /* a long unbroken name or value wraps instead of leaving the pane */
 }
 .search-hit__title {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
 }
+.search-hit__title > span {
+  min-inline-size: 0;
+}
+/* A long collection name wraps in its tag instead of being cut off: a cut-off tag becomes a
+   tooltip button, which can't be inside the result (itself a button). */
 .search-hit__title .cds--tag {
   margin: 0;
+  max-inline-size: 100%;
+  block-size: auto;
+  min-block-size: 1.125rem;
+}
+.search-hit__title .cds--tag__label {
+  white-space: normal;
+  overflow: visible;
 }
 .search-hit__title svg {
   fill: var(--cds-icon-primary);
@@ -928,6 +960,16 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
+}
+/* A button label holding a name (e.g. "Create <collection>") stays on the button's one line. */
+.form-actions .cds--btn {
+  max-inline-size: 100%;
+}
+.btn-label {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .helper {
   color: var(--cds-text-secondary);
@@ -958,8 +1000,11 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
 .add-field {
   margin-top: 1rem;
 }
-@media (max-width: 42rem) {
-  .field-row {
+/* A narrow form (a phone, a narrow pane): one input per line. A reference row's four columns
+   need about 44rem. */
+@container form-page (max-width: 46rem) {
+  .field-row,
+  .field-row--reference {
     grid-template-columns: minmax(0, 1fr);
   }
   .field-row__actions {
@@ -1121,6 +1166,9 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   display: block; /* not inline-block: that leaves descender space below the image */
   inline-size: fit-content;
   max-width: 100%;
+  /* At least as wide as its two buttons and their gaps: a narrow image (a tall one) mustn't push
+     them out over the left edge. */
+  min-inline-size: calc(2 * 2rem + 3 * var(--cds-spacing-03));
 }
 .image-input__preview img {
   display: block;
@@ -1343,6 +1391,13 @@ img[data-lightbox] {
 .md-editor .ProseMirror table {
   inline-size: auto;
   table-layout: auto;
+}
+/* ProseMirror's own `word-wrap: break-word` (loaded after this file) beats .md-editor__content's
+   `overflow-wrap: anywhere`; only "anywhere" lets a cell narrow below its longest word, so without
+   this a wide table makes the editor (and the pane) wider than the screen, unlike the view. */
+.md-editor .ProseMirror.md-editor__content,
+.md-editor .ProseMirror :is(td, th, pre) {
+  overflow-wrap: anywhere;
 }
 /* Row and column handles of the hovered table cell, on the table's edges (MarkdownEditor). */
 .md-table-handle {
@@ -1571,6 +1626,14 @@ img[data-lightbox] {
   letter-spacing: var(--cds-body-compact-01-letter-spacing);
   overflow-wrap: anywhere;
 }
+/* A reference is one line, ending in "…" when it doesn't fit: its editor (a combo box) can't
+   wrap, and view and edit mode keep one geometry. */
+.view-field__value--item > * {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Dates and times use Carbon's date/time input style (code-02), like their editors. */
 .view-field__value--date,
 .view-field__value--datetime {
@@ -1684,6 +1747,14 @@ img[data-lightbox] {
   margin: calc(-1 * var(--cds-spacing-05)) calc(-1 * var(--cds-spacing-05)) var(--cds-spacing-05);
   background: var(--cds-layer-accent-01);
 }
+/* An image cover has its shape before its image is there (it is read from storage first), so the
+   card doesn't grow when it arrives. */
+.item-card__cover:not(.item-card__cover--markdown, .item-card__cover--html):not(:has(.image-missing)) {
+  aspect-ratio: var(--cover-ratio, 4 / 3);
+}
+.item-card__cover:not(.item-card__cover--markdown, .item-card__cover--html) > img {
+  block-size: 100%;
+}
 /* Around a whole-shown image: its average colour, nudged a few percent towards the theme's
    layer colour (a touch lighter in light themes, darker in dark ones). */
 .item-card__cover[style*="--cover-tint"] {
@@ -1796,6 +1867,30 @@ img[data-lightbox] {
   container-type: inline-size;
   min-inline-size: 0;
   overflow: hidden;
+  position: relative;
+}
+/* The card opens its item through this link, laid over the whole card (it can't wrap the card:
+   the fields' own links and checkboxes can't be inside a link). What can be clicked in the card
+   sits above it; the card shows the link's hover and focus like a clickable tile. */
+.item-card__link {
+  position: absolute;
+  inset: 0;
+}
+.item-card__link:focus {
+  outline: none;
+}
+.item-card a:not(.item-card__link),
+.item-card .cell-checkbox,
+.item-card__body iframe {
+  position: relative;
+  z-index: 1;
+}
+.item-card:has(> .item-card__link:hover) {
+  background: var(--cds-layer-hover);
+}
+.item-card:has(> .item-card__link:focus-visible) {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
 }
 .item-card__fields > *,
 .item-card__field dd > * {
@@ -1908,8 +2003,8 @@ img[data-lightbox] {
    with it exactly (chevron and text at the block header's offsets: 0.5rem, 2.25rem), without
    Carbon's lines between groups. */
 .table-group__title {
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
+  font-size: var(--cds-heading-compact-01-font-size, 0.875rem);
+  line-height: var(--cds-heading-compact-01-line-height, 1.125rem);
   font-weight: 600;
 }
 .table-groups .cds--accordion__item,
@@ -2514,6 +2609,29 @@ img[data-lightbox] {
   flex: none;
   fill: currentColor;
 }
+/* Its text: on one line, cut off with "…" where the label has no more room (a dropdown, a header). */
+.icon-label {
+  max-inline-size: 100%;
+}
+.icon-label__text {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* In a table (collections, bookmarks, rows stacked as cards) a long name wraps instead: the label
+   grows with it, the icon stays on its first line. */
+.cds--data-table .icon-label {
+  max-block-size: none;
+  align-items: flex-start;
+}
+.cds--data-table .icon-label svg {
+  margin-block-start: calc((1lh - 1rem) / 2);
+}
+.cds--data-table .icon-label__text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 /* A checkbox field: header label above, the box centred in an input-height (2rem) row. */
 .checkbox-field {
   display: flex;
@@ -2949,6 +3067,11 @@ img[data-lightbox] {
   .items-table tbody tr {
     position: relative;
   }
+  /* At least the menu's height: a row without any shown values (a collection without fields) would
+     otherwise be empty, its menu overlapping the next row's. */
+  .items-table tbody tr:has(> td.row-actions:not(:empty)) {
+    min-block-size: 2rem;
+  }
   .items-table tbody td.row-actions {
     position: absolute;
     inset-block-start: 0;
@@ -3102,6 +3225,10 @@ img[data-lightbox] {
    one-line value stays one line high. */
 .field-editor .code-editor__highlight {
   min-block-size: 0;
+}
+/* …and one line is a 2rem input's height (with the bottom border), like the field's empty view box. */
+.field-editor :is(.code-editor__highlight, .code-editor__input) {
+  padding-block: calc((2rem - 1px - 1lh) / 2);
 }
 .code-editor__input {
   block-size: 100%;

@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { Accordion, AccordionItem, Checkbox, ClickableTile, Select, SelectItem, Slider } from "@carbon/react";
+import { Accordion, AccordionItem, Checkbox, Link, Select, SelectItem, Slider, Tile } from "@carbon/react";
 import { Grid as GridIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { fileIdFromSrc } from "../domain/files";
@@ -135,7 +135,11 @@ function CardCover({ fileId: ownFileId, src: srcProp, onRatio }: { fileId?: stri
           <img
             src={url}
             alt=""
-            onError={() => setFailed(true)}
+            onError={() => {
+              setFailed(true);
+              // Reported without a shape, so an "automatic" cover shape doesn't wait for it.
+              onRatio(key, 0);
+            }}
             onLoad={(e) => {
               const img = e.currentTarget;
               // Measured already (the same image on another card): just take its tint.
@@ -179,14 +183,20 @@ const ItemCard = memo(function ItemCard({ collection, item, options, layout, sho
   const hasText = options.showTitle || fields.length > 0;
   const hasCover = typeof cover === "string" && !!cover;
   return (
-    <ClickableTile
-      href={`#/collections/${collection.id}/items/${item.id}`}
-      {...itemLinkProps(item, actions)}
+    // The whole card opens the item through one link stretched over it (styles.css,
+    // `.item-card__link`), not by being a link: its fields hold links and checkboxes of their
+    // own, which can't be inside a link; they sit above it.
+    <Tile
       className={
         !hasText ? "item-card item-card--image-only" : hasCover && listed ? "item-card item-card--cover-left" : "item-card"
       }
-      aria-label={hasText ? undefined : itemLabel(collection, item)}
     >
+      <Link
+        className="item-card__link"
+        href={`#/collections/${collection.id}/items/${item.id}`}
+        {...itemLinkProps(item, actions)}
+        aria-label={itemLabel(collection, item)}
+      />
       {typeof cover === "string" &&
         cover &&
         (kind === "markdown" ? (
@@ -224,7 +234,7 @@ const ItemCard = memo(function ItemCard({ collection, item, options, layout, sho
       )}
         </div>
       )}
-    </ClickableTile>
+    </Tile>
   );
 });
 
@@ -252,13 +262,25 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
     }
     return [...keys];
   }, [result, options.coverFieldId, kind]);
-  const known = coverKeys.map((k) => ratios[k]).filter((r): r is number => r !== undefined);
+  const reported = coverKeys.filter((k) => ratios[k] !== undefined);
+  const known = reported.map((k) => ratios[k]).filter((r) => r > 0);
   const coverRatio =
     options.coverRatio === "auto"
       ? known.length > 0
         ? known.reduce((a, b) => a + b, 0) / known.length
         : FALLBACK_RATIO
       : ratioOf(options.coverRatio);
+  // "auto": the cards stay invisible until every cover image has reported its shape (they come
+  // from local storage: a moment), so the covers take the average shape once, instead of
+  // starting at the fallback and changing with every image that loads (the page jumping).
+  // At most a second: an image that never loads doesn't hide the cards.
+  const [waited, setWaited] = useState(false);
+  const measuring = options.coverRatio === "auto" && reported.length < coverKeys.length && !waited;
+  useEffect(() => {
+    if (!measuring) return;
+    const timer = window.setTimeout(() => setWaited(true), 1000);
+    return () => window.clearTimeout(timer);
+  }, [measuring]);
 
   const grid = useRef<HTMLDivElement>(null);
   const columns = useCardColumns(grid, options.cardWidth, result.total > 0);
@@ -267,7 +289,7 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
   const cards = (group: (typeof result.groups)[number]) => (
             <div
               className={options.coverRatio === "auto" ? "item-cards item-cards--auto-ratio" : "item-cards"}
-              style={{ "--card-columns": columns, "--cover-ratio": coverRatio } as CSSProperties}
+              style={{ "--card-columns": columns, "--cover-ratio": coverRatio, visibility: measuring ? "hidden" : undefined } as CSSProperties}
             >
               {group.items.map((item) => (
                 <ItemCard

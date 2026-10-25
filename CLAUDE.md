@@ -100,6 +100,9 @@ stale peer range.
 - `npm run dev`: Tauri desktop app with hot reload (runs `dev:web` on port 1420).
 - `npm run dev:web`: same app in a normal browser at http://localhost:1420.
 - `npm run typecheck`, `npm test`, `npm run build:web` (to `app/dist`), `npm run build` (desktop bundle).
+- `npm run test:gui`: the GUI stress suite (not in CI; `gui-tests/README.md`): every page, size and content shape through
+  `playwright-cli` against a development-mode build it makes and serves itself (`--dev`: the dev server), layout rules
+  as pass/fail criteria, HTML report with screenshots in `gui-tests/report/`.
 - Server: `docker compose up -d` (change the passwords in `docker-compose.yml` first; it starts its own Postgres and pulls the image that `.github/workflows/image.yml` publishes to ghcr.io); or `cd server && npm install && npm run dev` with `DATABASE_URL` and `KUBUS_TOKEN` set.
 - Browser automation (playwright-cli) runs in a subagent on the cheapest model (`model: "haiku"`).
 

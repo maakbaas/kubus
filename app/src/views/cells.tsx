@@ -1,4 +1,4 @@
-import type { KeyboardEvent, MouseEvent } from "react";
+import { useId, type KeyboardEvent, type MouseEvent } from "react";
 import { Link } from "@carbon/react";
 import { htmlPreview, markdownPreviewParts } from "../domain/fieldKinds";
 import { isOpenableUrl, openExternal } from "../platform/openExternal";
@@ -80,6 +80,8 @@ function MarkdownPreview({ source, search }: { source: string; search: string })
 /** One field value inside a view (table cell, card line), shared by every view type. */
 export function FieldCell({ field, item, refs, search, actions }: Props) {
   const { components } = useStore();
+  // Element ids unique per cell: the same item can show in several blocks, panes and tabs at once.
+  const uid = useId();
   const value: FieldValue = fieldValue(item, field);
   // HTML (a field, or a component's result) shows its text; without any (a chart, a map) a note.
   const html = field.kind === "html" || (field.kind === "component" && outputOf(field, components) === "html");
@@ -111,7 +113,7 @@ export function FieldCell({ field, item, refs, search, actions }: Props) {
       <span className="cell-checkbox" onClick={(e) => e.stopPropagation()}>
         <ToggleInput
           icon={field.toggleIcon}
-          id={`cell-${item.id}-${field.id}`}
+          id={`${uid}-cell-${item.id}-${field.id}`}
           label={field.name}
           checked={value === true}
           onChange={(checked) => actions.setValue(item, field, checked)}

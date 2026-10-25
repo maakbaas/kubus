@@ -426,7 +426,10 @@ function CollectionContent({ collection }: { collection: Collection }) {
         </div>
       )}
 
+      {/* The blocks once the items are in (a fraction of a second), all at once: shown before, each
+          block's header would stand alone and be pushed down as the blocks above it fill. */}
       {savedViews !== null &&
+        (data.items !== null || data.error) &&
         view.blocks.map((block) => (
           <BlockView
             // Keyed by the shown view too, so group collapse state isn't carried over to another view.

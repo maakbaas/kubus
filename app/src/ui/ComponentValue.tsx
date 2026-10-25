@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Html as HtmlIcon } from "@carbon/icons-react";
 import type { FieldValue } from "../domain/model";
 import { useStore } from "../app/store";
@@ -80,7 +80,8 @@ ${frameBaseStyles(dark)}
     root.classList.add("measuring");
     const natural = Math.ceil(document.body.getBoundingClientRect().height);
     root.classList.remove("measuring");
-    const size = { natural, ...wanted() };
+    // After "load" the layout is final (styles, images); a size from while parsing may be off.
+    const size = { natural, ...wanted(), loaded: document.readyState === "complete" };
     const key = JSON.stringify(size);
     if (key !== last) {
       last = key;
@@ -124,6 +125,8 @@ ${frameBaseStyles(dark)}
 
 /** What a page frame's content reported: its own height, and the size it asks for (meta). */
 interface FrameSize {
+  /** Measured after the document loaded (earlier sizes can be off; only these are final). */
+  loaded?: boolean;
   natural: number;
   ratio: number | null;
   height: number | null;
@@ -158,6 +161,47 @@ function useEmbeddedFiles(html: string): string | undefined {
   }, [repo, html, ids]);
   if (ids.length === 0) return html;
   return embedded?.html === html ? embedded.out : undefined;
+}
+
+/** The size a frame's content last measured, by its document: a frame shown again starts at it. */
+const measuredFrames = new Map<string, FrameSize>();
+
+/**
+ * Frames still measuring their content, for a page that shows nothing that would move until
+ * they are done (FramesSizing). A frame's height is only known once its content has rendered;
+ * shown before, everything below it would jump when it takes that height.
+ */
+const FrameSizingContext = createContext<((id: string, sizing: boolean) => void) | null>(null);
+
+/**
+ * Wraps content holding HTML frames: hidden (keeping its place) while any of them is still
+ * measuring, at most `maxMs`, so its frames take their height before anything is seen.
+ */
+export function FramesSizing({ children, maxMs = 1000, className }: { children: ReactNode; maxMs?: number; className?: string }) {
+  const [sizing, setSizing] = useState<ReadonlySet<string>>(() => new Set());
+  const [timedOut, setTimedOut] = useState(false);
+  const report = useCallback((id: string, on: boolean) => {
+    setSizing((s) => {
+      if (s.has(id) === on) return s;
+      const next = new Set(s);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  const waiting = sizing.size > 0 && !timedOut;
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = window.setTimeout(() => setTimedOut(true), maxMs);
+    return () => window.clearTimeout(timer);
+  }, [waiting, maxMs]);
+  return (
+    <FrameSizingContext.Provider value={report}>
+      <div className={className} style={waiting ? { opacity: 0 } : undefined}>
+        {children}
+      </div>
+    </FrameSizingContext.Provider>
+  );
 }
 
 /**
@@ -195,8 +239,14 @@ export function HtmlFrame({
   onContentClick?(): void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
-  const [size, setSize] = useState<FrameSize>();
   const html = useEmbeddedFiles(source);
+  // Shown before: its content's size is known (until it measures itself again).
+  const [size, setSize] = useState<FrameSize | undefined>(() => (fill ? undefined : measuredFrames.get(source)));
+  // Settled: its reports have stopped changing. The first ones, while the frame lays itself out,
+  // can be far off (0, or several times the real height).
+  const [settled, setSettled] = useState(() => !fill && measuredFrames.has(source));
+  const settleTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(settleTimer.current), []);
   const contentClick = useRef(onContentClick);
   contentClick.current = onContentClick;
   useEffect(() => {
@@ -205,11 +255,29 @@ export function HtmlFrame({
       const data = e.data as { kubusFrame?: FrameSize; kubusFrameClick?: boolean } | null;
       if (data?.kubusFrameClick) contentClick.current?.();
       const s = data?.kubusFrame;
-      if (!fill && s && typeof s.natural === "number") setSize(s);
+      if (!fill && s && typeof s.natural === "number") {
+        setSize(s);
+        window.clearTimeout(settleTimer.current);
+        if (!s.loaded) return;
+        // Final once no other size follows for a moment.
+        settleTimer.current = window.setTimeout(() => {
+          measuredFrames.set(source, s);
+          setSettled(true);
+        }, 150);
+      }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [fill]);
+  }, [fill, source]);
+  // Tell a FramesSizing around it while its content's height isn't known yet.
+  const reportSizing = useContext(FrameSizingContext);
+  const id = useRef(Math.random().toString(36)).current;
+  const measuring = !fill && !settled;
+  useLayoutEffect(() => {
+    if (!reportSizing) return;
+    reportSizing(id, measuring);
+    return () => reportSizing(id, false);
+  }, [reportSizing, id, measuring]);
   // Rebuilt when the theme flips (light / dark): the frame's colours are the app's, passed in.
   const dark = useMediaQuery("(prefers-color-scheme: dark)");
   const doc = useMemo(() => (html === undefined ? undefined : frameDocument(html, fill, dark)), [html, fill, dark]);

@@ -106,8 +106,9 @@ function NewItemForm({ collection }: { collection: Collection }) {
             <Button size="sm" kind="secondary" onClick={() => navigate(listPath)}>
               Cancel
             </Button>
-            <Button size="sm" type="submit" disabled={saving}>
-              Create {collection.name}
+            <Button size="sm" type="submit" disabled={saving} title={`Create ${collection.name}`}>
+              {/* One line however long the name: cut off with "…" (styles.css, .btn-label). */}
+              <span className="btn-label">Create {collection.name}</span>
             </Button>
           </div>
         </Stack>

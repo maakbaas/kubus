@@ -1,10 +1,11 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { IconButton, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { checklistItems, itemString, type ChecklistItem } from "../domain/checklist";
 import type { FieldDef, FieldValue } from "../domain/model";
 import { captureEditStart } from "./editStart";
+import { WrappedTextBox } from "./FieldInput";
 import { FieldLabel } from "./fieldKindIcons";
 import { RefCombo } from "./RefCombo";
 import { RelatedLink } from "./RelatedLink";
@@ -51,8 +52,11 @@ export function ListField({
   const uid = useId();
   const fromValue = (v: FieldValue) => (checklist ? checklistItems(v) : (Array.isArray(v) ? v : []).map((text) => ({ text, done: false })));
   const [items, setItems] = useState<ChecklistItem[]>(() => fromValue(value));
-  /** The item being edited, and the caret / selection to start with (offsets in its text). */
-  const [editing, setEditing] = useState<{ index: number; range?: { start: number; end: number } } | null>(null);
+  /**
+   * The item being edited, the caret / selection to start with (offsets in its text), and whether
+   * its text was shown over several lines (then it edits in a box wrapping it the same way).
+   */
+  const [editing, setEditing] = useState<{ index: number; range?: { start: number; end: number }; wrapped?: boolean } | null>(null);
   const editingRef = useRef(editing);
   editingRef.current = editing;
 
@@ -82,13 +86,13 @@ export function ListField({
     setEditing(null);
     save(settled());
   };
-  const edit = (index: number, range?: { start: number; end: number }) => {
+  const edit = (index: number, range?: { start: number; end: number }, wrapped?: boolean) => {
     if (editing) {
       const f = freshRef.current;
       save(settled());
       if (f !== null && f < index && !items[f].text.trim()) index--;
     }
-    setEditing({ index, range });
+    setEditing({ index, range, wrapped });
   };
   const insert = (at: number) => {
     save(items);
@@ -120,14 +124,33 @@ export function ListField({
   const inputId = (i: number) => `${uid}-list-${i}`;
   useLayoutEffect(() => {
     if (!editing) return;
-    const input = document.getElementById(inputId(editing.index)) as HTMLInputElement | null;
-    if (!input) return;
+    const input = document.getElementById(inputId(editing.index));
+    // A wrapped item's text box places its caret itself.
+    if (!(input instanceof HTMLInputElement)) return;
     input.focus();
     const end = input.value.length;
     input.setSelectionRange(Math.min(editing.range?.start ?? end, end), Math.min(editing.range?.end ?? end, end));
     // Only when another item starts being edited.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
+
+  /** Enter adds an item below, Escape stops (an empty item goes); for the input and the wrapped box alike. */
+  const onItemKey = (i: number) => (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      insert(i + 1);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      if (!items[i].text.trim()) remove(i);
+      else finish();
+    }
+  };
+  /** Leaving the item saves it; moving into another of its items' inputs (Enter adding one) isn't leaving. */
+  const onItemBlur = (e: FocusEvent<HTMLElement>) => {
+    const to = e.relatedTarget as HTMLElement | null;
+    if (!to?.id.startsWith(`${uid}-list-`)) finish();
+  };
+  const setText = (i: number, text: string) => setItems(items.map((x, j) => (j === i ? { ...x, text } : x)));
 
   const rows = items.length > 0 || editing ? items : [];
   return (
@@ -166,6 +189,17 @@ export function ListField({
                 }}
                 onLeave={finish}
               />
+            ) : editing?.index === i && editing.wrapped ? (
+              <WrappedTextBox
+                id={inputId(i)}
+                field={field}
+                label={`${field.name} ${i + 1}`}
+                value={item.text}
+                start={{ point: { x: 0, y: 0 }, range: editing.range }}
+                onChange={(v) => setText(i, String(v ?? ""))}
+                onKeyDown={onItemKey(i)}
+                onBlur={onItemBlur}
+              />
             ) : editing?.index === i ? (
               <TextInput
                 size="sm"
@@ -173,22 +207,9 @@ export function ListField({
                 labelText={`${field.name} ${i + 1}`}
                 hideLabel
                 value={item.text}
-                onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
-                onBlur={(e) => {
-                  // Moving into another of its items' inputs (Enter adding one) isn't stopping.
-                  const to = e.relatedTarget as HTMLElement | null;
-                  if (!to?.id.startsWith(`${uid}-list-`)) finish();
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    insert(i + 1);
-                  } else if (e.key === "Escape") {
-                    e.preventDefault();
-                    if (!item.text.trim()) remove(i);
-                    else finish();
-                  }
-                }}
+                onChange={(e) => setText(i, e.target.value)}
+                onBlur={onItemBlur}
+                onKeyDown={onItemKey(i)}
               />
             ) : (
               <div
@@ -202,7 +223,10 @@ export function ListField({
                       // Mouse: editing starts on the click, caret where clicked (no focus first,
                       // which would start it before the click position is known). Keyboard: on focus.
                       onMouseDown: (e: MouseEvent<HTMLDivElement>) => e.preventDefault(),
-                      onClick: (e: MouseEvent<HTMLDivElement>) => edit(i, captureEditStart(e.currentTarget, e).range),
+                      onClick: (e: MouseEvent<HTMLDivElement>) => {
+                        const start = captureEditStart(e.currentTarget, e);
+                        edit(i, start.range, !itemList && start.wrapped);
+                      },
                       onFocus: () => edit(i),
                     })}
               >

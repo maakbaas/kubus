@@ -41,7 +41,7 @@ import { MarkdownView } from "../ui/MarkdownView";
 import { NotFound } from "../ui/NotFound";
 import { formatDateTime } from "../domain/fieldKinds";
 import { ERROR_PREFIX, outputOf, withComputed } from "../domain/components";
-import { HtmlFrame, ComponentValue } from "../ui/ComponentValue";
+import { HtmlFrame, ComponentValue, FramesSizing } from "../ui/ComponentValue";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import {
   itemPageFields,
@@ -380,7 +380,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   <dd>
                     <span className="icon-label">
                       <CollectionIcon name={collection.icon} />
-                      {collection.name}
+                      <span className="icon-label__text">{collection.name}</span>
                     </span>
                   </dd>
                   {/* Moving it to another space takes it out of this space's lists (the page stays open). */}
@@ -529,7 +529,9 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
         </div>
       )}
 
+      {/* Hidden (in place) until its HTML frames know their height, so nothing below one jumps. */}
       {item && (
+        <FramesSizing>
         <Stack ref={fieldList} gap={7} className="item-fields">
           {entries.map((entry) => {
             const block = blocksById.get(entry.id);
@@ -630,6 +632,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
             );
           })}
         </Stack>
+        </FramesSizing>
       )}
       {dialog}
     </div>

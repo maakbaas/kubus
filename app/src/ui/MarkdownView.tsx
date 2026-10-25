@@ -145,11 +145,11 @@ function StoredImage({ src, alt }: { src?: string; alt?: string }) {
   return src ? <UrlImage url={src} /> : null;
 }
 
-/** Where the task item around a checkbox starts in the source, and how to toggle it there. */
-const TaskContext = createContext<{ offset?: number; toggle?(offset: number): void }>({});
+/** Where the task item around a checkbox starts in the source, how to toggle it there, and its text (the box's name). */
+const TaskContext = createContext<{ offset?: number; label?: string; toggle?(offset: number): void }>({});
 
 function TaskBox({ checked }: { checked?: boolean }) {
-  const { offset, toggle } = useContext(TaskContext);
+  const { offset, label, toggle } = useContext(TaskContext);
   const data = checked ? "true" : "false";
   if (!toggle || offset == null) return <span className="md-view__task" data-checked={data} />;
   // Toggles in place, without switching the field to its editor.
@@ -159,6 +159,7 @@ function TaskBox({ checked }: { checked?: boolean }) {
       data-checked={data}
       role="checkbox"
       aria-checked={!!checked}
+      aria-label={label || "Task"}
       tabIndex={0}
       onClick={(e) => {
         e.stopPropagation();
@@ -174,10 +175,14 @@ function TaskBox({ checked }: { checked?: boolean }) {
   );
 }
 
-function TaskOffset({ offset, children }: { offset: number; children: ReactNode }) {
+function TaskOffset({ offset, label, children }: { offset: number; label: string; children: ReactNode }) {
   const { toggle } = useContext(TaskContext);
-  return <TaskContext.Provider value={{ offset, toggle }}>{children}</TaskContext.Provider>;
+  return <TaskContext.Provider value={{ offset, label, toggle }}>{children}</TaskContext.Provider>;
 }
+
+/** The text of a node (a task item's, for its checkbox's name). */
+const textOf = (node: { type: string; value?: string; children?: unknown[] }): string =>
+  node.type === "text" ? (node.value ?? "") : (node.children ?? []).map((c) => textOf(c as typeof node)).join("");
 
 const common: Components = {
   span: ({ node: _node, className, children, ...props }) =>
@@ -203,7 +208,7 @@ const fullComponents: Components = {
   li: ({ node, children, ...props }) => {
     const offset = node?.position?.start.offset;
     const task = offset != null && String(props.className ?? "").includes("task-list-item");
-    return <li {...props}>{task ? <TaskOffset offset={offset}>{children}</TaskOffset> : children}</li>;
+    return <li {...props}>{task ? <TaskOffset offset={offset} label={node ? textOf(node).trim() : ""}>{children}</TaskOffset> : children}</li>;
   },
   a: ({ href, children }) => <PageLink href={href}>{children}</PageLink>,
 };

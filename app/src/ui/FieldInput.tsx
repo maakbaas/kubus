@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 import {
   ComboBox,
   DatePicker,
@@ -496,20 +496,28 @@ function ListInput<T>({
  * replaces, so nothing moves: in a cell it is styled as Carbon's text area, on an item page it
  * has the read-only value's own class. The caret starts where the text was clicked.
  */
-function WrappedTextBox({
+export function WrappedTextBox({
   id,
   field,
   value,
   start,
   compact,
+  label,
   onChange,
+  onKeyDown,
+  onBlur,
 }: {
   id: string;
   field: FieldDef;
   value: string;
   start?: EditStart;
   compact?: boolean;
+  /** Its name for screen readers (default: the field's). */
+  label?: string;
   onChange(value: InputValue): void;
+  /** Keys besides Enter's default (no line break), e.g. a list item's Enter and Escape. */
+  onKeyDown?(e: KeyboardEvent<HTMLDivElement>): void;
+  onBlur?(e: FocusEvent<HTMLDivElement>): void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -534,13 +542,17 @@ function WrappedTextBox({
       ref={ref}
       id={id}
       role="textbox"
-      aria-label={field.name}
+      aria-label={label ?? field.name}
       contentEditable="plaintext-only"
       suppressContentEditableWarning
       className={compact ? "cds--text-area cell-textarea" : "view-field__value field-textbox"}
       // One-line value shown wrapped: a pasted line break becomes a space, Enter saves.
       onInput={(e) => onChange((e.currentTarget.textContent ?? "").replace(/[\r\n]+/g, " "))}
-      onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.preventDefault();
+        onKeyDown?.(e);
+      }}
+      onBlur={onBlur}
     />
   );
 }

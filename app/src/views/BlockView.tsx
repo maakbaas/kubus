@@ -301,7 +301,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
         label={
           <span className="icon-label">
             <type.icon size={16} aria-hidden="true" />
-            {blockName(block)}
+            <span className="icon-label__text">{blockName(block)}</span>
           </span>
         }
       >

@@ -43,7 +43,7 @@ function IconLabel({ icon: Icon, children }: { icon: Icon; children: string }) {
   return (
     <span className="icon-label">
       <Icon size={16} aria-hidden="true" />
-      {children}
+      <span className="icon-label__text">{children}</span>
     </span>
   );
 }
