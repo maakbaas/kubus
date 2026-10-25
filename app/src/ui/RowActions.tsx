@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IconButton, Popover, PopoverContent, TableCell } from "@carbon/react";
-import { OverflowMenuHorizontal } from "@carbon/icons-react";
+import { OverflowMenuVertical } from "@carbon/icons-react";
 
 /**
  * Props for a row action's IconButton. In the menu the tooltips prefer below their button, not
@@ -50,7 +50,7 @@ function RowActionsMenu({ children }: { children: ReactNode }) {
   return (
     <Popover ref={root} open={open} align="bottom-end" autoAlign highContrast className="row-actions__menu" onRequestClose={requestClose}>
       <IconButton autoAlign kind="ghost" size="sm" align="left" label="Actions" isSelected={open} onClick={() => setOpen((o) => !o)}>
-        <OverflowMenuHorizontal />
+        <OverflowMenuVertical />
       </IconButton>
       <PopoverContent>
         {/* Any action closes it. Its buttons exist only while it is open: every row has this

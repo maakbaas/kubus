@@ -10,6 +10,7 @@ import { blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCol
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { ToolbarPopover } from "../ui/ToolbarPopover";
+import { OverflowBar } from "../ui/OverflowBar";
 import { useConfirm } from "../ui/useConfirm";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { BLOCK_TYPES, blockType, normalizeBlock, type BlockPlace, type BlockTypeDefinition, type PageItem } from ".";
@@ -186,7 +187,19 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
             itemToElement={(t) => <BlockKindLabel kind={t} />}
             renderSelectedItem={(t) => <BlockKindLabel kind={t} />}
             // Filter, sort and fields are the block's: they carry over to the other type.
-            onChange={({ selectedItem: next }) => next && next.kind !== type.kind && onSet({ kind: next.kind, options: next.defaultOptions(collection) })}
+            // A type that shows the item's title by default (cards) takes the title field out of the
+            // fields, so it isn't shown twice.
+            onChange={({ selectedItem: next }) => {
+              if (!next || next.kind === type.kind) return;
+              const options = next.defaultOptions(collection);
+              const title = (options as { showTitle?: boolean }).showTitle ? collection.fields.find((f) => f.kind === "string") : undefined;
+              const shown = title && (block.layout.fields ?? pickableFields(collection).map((f) => f.id));
+              onSet({
+                kind: next.kind,
+                options,
+                ...(shown && title && shown.includes(title.id) && { layout: { ...block.layout, fields: shown.filter((id) => id !== title.id) } }),
+              });
+            }}
           />
           {/* Empty: named after its component, or its type ("Table", "Cards"). Stored when left
               (Enter), like a view's name. */}
@@ -272,7 +285,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const toggleCollapsed = () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
   return (
-    <section className={page ? "block block--field" : headless ? "block block--headless" : "block"}>
+    <section className={page ? "block block--field" : headless ? "block block--headless" : "block"} data-block-id={block.id}>
       <div className="block__header">
         {headless ? null : page ? (
           // A Markdown block without a name is just its text, with no heading.
@@ -297,6 +310,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           </>
         )}
         <span className="views-bar__spacer" />
+        <OverflowBar>
         <BlockMenus
           collection={collection}
           block={block}
@@ -309,6 +323,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           onRemove={onRemove}
           onOpenChange={onOpenChange}
         />
+        </OverflowBar>
       </div>
       {!collapsed && data.error && <InlineNotification kind="error" title="Error" subtitle={data.error} hideCloseButton />}
       {/* Nothing until everything is in (a fraction of a second): a placeholder table would only

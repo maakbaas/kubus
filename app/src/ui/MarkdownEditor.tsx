@@ -29,7 +29,9 @@ import "@milkdown/kit/prose/tables/style/tables.css";
 import { useStore } from "../app/store";
 import type { Repository } from "../data";
 import { fileIdFromSrc, fileSrc } from "../domain/files";
-import { openExternal } from "../platform/openExternal";
+import { useLinks } from "../app/useLinks";
+import { parseNameLink } from "../domain/links";
+import { openModeOf, type OpenMode } from "../workspace/Workspace";
 import type { EditStart } from "./editStart";
 import { cachedFileUrl, fileUrl, IMAGE_TYPES, storeImageFile } from "./images";
 import { errorMessage } from "./useConfirm";
@@ -110,6 +112,12 @@ const linkInputRule = $inputRule(
     }),
 );
 
+/** Dispatched on the editor's content after every document change. */
+const DOC_CHANGED = "kubus-doc-changed";
+
+/** Dispatched on a link that was clicked; its detail is `{ href, mode }`. */
+const OPEN_LINK = "kubus-open-link";
+
 /** A plain click on a link opens it (a drag that selects text does not). */
 const linkClick = $prose(
   () =>
@@ -120,7 +128,8 @@ const linkClick = $prose(
             const a = (event.target as HTMLElement).closest?.("a");
             if (!a || !view.dom.contains(a) || !view.state.selection.empty) return false;
             event.preventDefault();
-            openExternal(a.getAttribute("href") ?? "");
+            // The component around the editor opens it (a page of the app needs its router).
+            a.dispatchEvent(new CustomEvent(OPEN_LINK, { bubbles: true, detail: { href: a.getAttribute("href") ?? "", mode: openModeOf(event) } }));
             return true;
           },
         },
@@ -170,7 +179,9 @@ function changes(onChange: (markdown: string) => void) {
       new Plugin({
         view: () => ({
           update: (view, prevState) => {
-            if (!view.state.doc.eq(prevState.doc)) onChange(ctx.get(serializerCtx)(view.state.doc));
+            if (view.state.doc.eq(prevState.doc)) return;
+            onChange(ctx.get(serializerCtx)(view.state.doc));
+            view.dom.dispatchEvent(new CustomEvent(DOC_CHANGED, { bubbles: true }));
           },
         }),
       }),
@@ -335,6 +346,67 @@ function EditorChrome(props: Props) {
   } | null>(null);
   const hideTimer = useRef<number>(undefined);
   const editorBox = useRef<HTMLDivElement>(null);
+  const links = useLinks();
+  const linksRef = useRef(links);
+  linksRef.current = links;
+  // A click on a link (see linkClick) opens it: a page of the app, or outside.
+  useEffect(() => {
+    const box = editorBox.current;
+    if (!box) return;
+    const onOpen = (e: Event) => {
+      const { href, mode } = (e as CustomEvent<{ href: string; mode: OpenMode }>).detail;
+      linksRef.current.open(href, mode).catch((err) => setError(errorMessage(err)));
+    };
+    box.addEventListener(OPEN_LINK, onOpen);
+    return () => box.removeEventListener(OPEN_LINK, onOpen);
+  }, []);
+  // A link typed or pasted by name is stored by id as soon as it names a page (a rename then breaks
+  // nothing). Each href is tried once: one that names nothing (yet) stays as written.
+  const tried = useRef(new Set<string>());
+  const getEditorRef = useRef(getEditor);
+  getEditorRef.current = getEditor;
+  useEffect(() => {
+    const box = editorBox.current;
+    if (!box) return;
+    const rewrite = async () => {
+      const view = getEditorRef.current()?.action((ctx: Ctx) => ctx.get(editorViewCtx));
+      const type = view?.state.schema.marks.link;
+      if (!view || !type) return;
+      const names = new Set<string>();
+      view.state.doc.descendants((node) => {
+        for (const m of node.marks) {
+          const href = m.type === type ? String(m.attrs.href ?? "") : "";
+          if (href && !tried.current.has(href) && parseNameLink(href)) names.add(href);
+        }
+      });
+      for (const href of names) {
+        tried.current.add(href);
+        const stored = await linksRef.current.toStored(href);
+        if (stored === href || !view.dom.isConnected) continue;
+        const tr = view.state.tr;
+        view.state.doc.descendants((node, pos) => {
+          const mark = node.marks.find((m) => m.type === type && m.attrs.href === href);
+          if (mark) tr.removeMark(pos, pos + node.nodeSize, mark).addMark(pos, pos + node.nodeSize, type.create({ ...mark.attrs, href: stored }));
+        });
+        if (tr.docChanged || tr.steps.length) view.dispatch(tr);
+      }
+    };
+    const onChanged = () => void rewrite().catch(() => {});
+    box.addEventListener(DOC_CHANGED, onChanged);
+    return () => box.removeEventListener(DOC_CHANGED, onChanged);
+  }, []);
+  /** The hovered link as shown: a page of the app by name (stored by id), else as it is. */
+  const [hoveredShown, setHoveredShown] = useState("");
+  const hoveredRaw = hovered?.a.getAttribute("href") ?? "";
+  useEffect(() => {
+    setHoveredShown(hoveredRaw);
+    let current = true;
+    links.toShown(hoveredRaw).then((s) => current && setHoveredShown(s));
+    return () => {
+      current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoveredRaw]);
   /**
    * The table cell under the pointer: its table and row / column, for the row and column
    * handles (shown at its row's left edge and its column's top edge). Kept while the pointer
@@ -510,7 +582,6 @@ function EditorChrome(props: Props) {
     });
   }
 
-  const hoveredHref = hovered?.a.getAttribute("href") ?? "";
 
   return (
     <div className="cds--form-item md-field">
@@ -614,10 +685,10 @@ function EditorChrome(props: Props) {
               <PopoverContent>
                 {/* Own wrapper: Carbon's .cds--popover-content rules would override layout set on it. */}
                 <div className="md-link-popover__content">
-                  <span className="md-link-popover__href" title={hoveredHref}>
-                    {hoveredHref}
+                  <span className="md-link-popover__href" title={hoveredShown}>
+                    {hoveredShown}
                   </span>
-                  <IconButton autoAlign label="Open link" kind="ghost" size="sm" align="bottom" onClick={() => openExternal(hoveredHref)}>
+                  <IconButton autoAlign label="Open link" kind="ghost" size="sm" align="bottom" onClick={() => links.open(hoveredRaw).catch((err) => setError(errorMessage(err)))}>
                     <Launch />
                   </IconButton>
                   <IconButton autoAlign
@@ -627,7 +698,7 @@ function EditorChrome(props: Props) {
                     align="bottom"
                     onClick={() => {
                       const range = linkAt(hovered.a);
-                      if (range) setLinkEdit({ href: hoveredHref, ...range });
+                      if (range) setLinkEdit({ href: hoveredShown, ...range });
                       setHovered(null);
                     }}
                   >
@@ -661,7 +732,11 @@ function EditorChrome(props: Props) {
         primaryButtonDisabled={!linkEdit?.href.trim()}
         onRequestClose={() => setLinkEdit(null)}
         onRequestSubmit={() => {
-          if (linkEdit) applyLink(linkEdit.href.trim(), linkEdit.from, linkEdit.to);
+          // A page of the app typed by name is stored by id.
+          if (linkEdit) {
+            const { href, from, to } = linkEdit;
+            links.toStored(href.trim()).then((stored) => applyLink(stored, from, to));
+          }
           setLinkEdit(null);
         }}
       >

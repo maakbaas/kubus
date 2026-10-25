@@ -11,6 +11,9 @@ import { CollectionIcon } from "../ui/collectionIcons";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import { NewButton } from "../ui/NewButton";
 import { PageHeader } from "../ui/PageHeader";
+import { OverflowBar } from "../ui/OverflowBar";
+import { TabMenu, useClippedTabs } from "../ui/TabMenu";
+import { findBlock, useLinkTarget } from "../ui/useLinkTarget";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { blockType, normalizeBlock, normalizeView } from "../views";
 import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
@@ -102,6 +105,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const active = views.find((v) => v.id === activeId) ?? null;
   const reference = active ? normalized(collection, active) : base;
   const changed = !sameView(view, reference);
+  const viewsBar = useRef<HTMLDivElement>(null);
+  const clippedTabs = useClippedTabs(viewsBar);
   shown.current = { activeId, view, reference };
 
   /** A change to what a block shows (filter, sort, grouping, fields): unsaved until Save changes. */
@@ -121,6 +126,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // A bookmark opens a particular view (?view=…), also when this page is already showing.
   const [params] = useSearchParams();
   const wanted = params.get("view");
+  // A link to a block of the view (?block=): scrolled to once the view is shown.
+  useLinkTarget(params.get("block"), findBlock, savedViews !== null);
   useLayoutEffect(() => {
     if (openedDefault.current || savedViews === null) return;
     openedDefault.current = true;
@@ -274,7 +281,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
           Unsaved changes to the shown view surface as icon buttons beside its star. */}
       {/* Always shown, also for a single view: its name, "+", bookmark and saving stay in one place. */}
       {savedViews !== null && (
-        <div className="views-bar">
+        <div className="views-bar" ref={viewsBar}>
           {views.length > 0 && (
             <Tabs selectedIndex={active ? views.indexOf(active) : -1} onChange={({ selectedIndex }) => selectView(views[selectedIndex].id)}>
               <TabList aria-label="Views" className="views-tabs">
@@ -288,8 +295,19 @@ function CollectionContent({ collection }: { collection: Collection }) {
               </TabList>
             </Tabs>
           )}
-          {addButton}
+          {clippedTabs && (
+            <TabMenu
+              label="Views"
+              items={views.map((v) => ({ id: v.id, name: v.name + (changed && v.id === active?.id ? " *" : "") }))}
+              activeId={active?.id}
+              onSelect={selectView}
+            />
+          )}
+          {/* "+" takes the menu arrow's place; with the arrow it joins the icons at the right edge. */}
+          {!clippedTabs && <span className="tab-menu">{addButton}</span>}
           <span className="views-bar__spacer" />
+          <OverflowBar>
+          {clippedTabs && addButton}
           {changed && active && (
             <>
               <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Discard changes" onClick={() => selectView(active.id)}>
@@ -386,6 +404,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
               />
             </div>
           </ToolbarPopover>
+          </OverflowBar>
         </div>
       )}
 

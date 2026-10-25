@@ -59,6 +59,9 @@ import { CollectionIcon } from "../ui/collectionIcons";
 import { SpaceLabel } from "../ui/SpaceSwitcher";
 import type { Space } from "../domain/spaces";
 import { PageHeader } from "../ui/PageHeader";
+import { OverflowBar } from "../ui/OverflowBar";
+import { TabMenu, useClippedTabs } from "../ui/TabMenu";
+import { findBlock, useLinkTarget } from "../ui/useLinkTarget";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { refLabelOf, useReferenceOptions, type RefOptions } from "../ui/useReferenceOptions";
@@ -146,7 +149,15 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const [params] = useSearchParams();
   const [standard, setStandard] = useState(params.get("edit") === "1");
   /** The chosen tab: "item" (this item's own layout) or an item view's id; null = the default. */
-  const [tab, setTab] = useState<string | null>(null);
+  const [tab, setTab] = useState<string | null>(params.get("view"));
+  // Another link to this page while it is open (?view=): shows that item view.
+  const linkedView = params.get("view");
+  useEffect(() => {
+    if (!linkedView) return;
+    setTab(linkedView);
+    setDraft(null);
+    setStandard(false);
+  }, [linkedView]);
   /** Unsaved changes to the shown view's layout (like a collection page's views: saved explicitly). */
   const [draft, setDraft] = useState<ItemLayout | null>(null);
   /** Set after "+": opens the layout popover with the new view's name selected, to rename it. */
@@ -193,6 +204,19 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   });
 
   const listPath = `/collections/${collection.id}/items`;
+  // A link to a field or block of the page (?field=, ?block=): scrolled to and highlighted. Fields
+  // are the children of the list, in the order of its entries (see `entries` below).
+  const fieldList = useRef<HTMLDivElement>(null);
+  const fieldIndex = useRef<string[]>([]);
+  const linkedField = params.get("field");
+  const linkedBlock = params.get("block");
+  useLinkTarget(
+    linkedField ?? linkedBlock,
+    (id) => (linkedBlock ? findBlock(id) : fieldList.current?.children[fieldIndex.current.indexOf(id)]),
+    item != null,
+  );
+  const viewsBar = useRef<HTMLDivElement>(null);
+  const clippedTabs = useClippedTabs(viewsBar);
   // Nothing until it is in (a fraction of a second): a spinner would only flash.
   if (item === undefined && !error) return null;
   if (item === null) return <NotFound />;
@@ -283,6 +307,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const entries = itemPageFields<FieldDef | ViewBlock>([...pickableFields(collection), ...layout.blocks], layout, titleField?.id).filter(
     (f) => blocksById.has(f.id) || !layout.hideEmpty || editing?.fieldId === f.id || !isEmpty(shown ? fieldValue(shown, f as FieldDef) : null),
   );
+  fieldIndex.current = entries.map((e) => e.id);
   const restricted = !!item && isRestricted(collection, item, layout);
 
   async function saveField(field: FieldDef, value: FieldValue) {
@@ -330,7 +355,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
         ]}
         actions={
           item && (
-            <>
+            <OverflowBar>
               {(restricted || standard) && (
                 <IconButton
                   autoAlign
@@ -402,7 +427,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   onError={(e) => setError(errorMessage(e))}
                 />
               </ToolbarPopover>
-            </>
+            </OverflowBar>
           )
         }
       />
@@ -413,7 +438,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
           Layout changes stay unsaved until saved with the icon buttons beside the tabs. */}
       {/* Always shown, also for a single view: its name, "+" and saving stay in one place. */}
       {item && (
-        <div className="views-bar">
+        <div className="views-bar" ref={viewsBar}>
           <Tabs
             selectedIndex={activeView ? itemViews.indexOf(activeView) : -1}
             onChange={({ selectedIndex }) => showTab(itemViews[selectedIndex].id)}
@@ -428,8 +453,19 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
               ))}
             </TabList>
           </Tabs>
-          {addButton}
+          {clippedTabs && (
+            <TabMenu
+              label="Page layouts"
+              items={itemViews.map((v) => ({ id: v.id, name: v.name + (changed && v.id === activeView?.id ? " *" : "") }))}
+              activeId={activeView?.id}
+              onSelect={showTab}
+            />
+          )}
+          {/* "+" takes the menu arrow's place; with the arrow it joins the icons at the right edge. */}
+          {!clippedTabs && <span className="tab-menu">{addButton}</span>}
           <span className="views-bar__spacer" />
+          <OverflowBar>
+          {clippedTabs && addButton}
           {changed && (
             <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Discard changes" onClick={() => setDraft(null)}>
               <Undo />
@@ -486,11 +522,12 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
               )}
             </>
           )}
+          </OverflowBar>
         </div>
       )}
 
       {item && (
-        <Stack gap={7} className="item-fields">
+        <Stack ref={fieldList} gap={7} className="item-fields">
           {entries.map((entry) => {
             const block = blocksById.get(entry.id);
             if (block) {

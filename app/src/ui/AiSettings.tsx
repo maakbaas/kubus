@@ -1,15 +1,13 @@
 import { useEffect, useId, useState } from "react";
-import { Button, ComboBox, Form, InlineNotification, Link, PasswordInput, Stack, TextInput, Toggle } from "@carbon/react";
+import { Button, ComboBox, Form, InlineNotification, PasswordInput, Stack, TextInput, Toggle } from "@carbon/react";
 import { useStore } from "../app/store";
 import { useAiSettings } from "../app/useAi";
 import { createLlmClient } from "../platform/llm";
-import { openExternal } from "../platform/openExternal";
 import { errorMessage } from "./useConfirm";
 
 /**
- * The language model behind AI fields and "Write with AI": an OpenAI-style API (OpenRouter by
- * default: one key, many models; OpenAI, Ollama and LM Studio work too), its key and a model. A
- * section of the settings. Kept on this device only, the key is never synced.
+ * The language model behind AI fields and "Write with AI": any OpenAI-style API, its key and a
+ * model. A section of the settings. Kept on this device only, the key is never synced.
  */
 export function AiSettings() {
   const { ai } = useStore();
@@ -58,19 +56,11 @@ export function AiSettings() {
   };
 
   const dirty = draft.baseUrl !== saved.baseUrl || draft.apiKey !== saved.apiKey || draft.fieldModel !== saved.fieldModel || draft.codeModel !== saved.codeModel;
-  const external = (href: string) => (e: { preventDefault(): void }) => {
-    e.preventDefault();
-    openExternal(href);
-  };
 
   return (
     <>
       <p className="helper">
-        The language models that write the values of AI fields and the code of components. Any OpenAI-style API works:{" "}
-        <Link href="https://openrouter.ai" onClick={external("https://openrouter.ai")}>
-          OpenRouter
-        </Link>{" "}
-        (one key, many models) is the default; OpenAI, Ollama and LM Studio do too. These settings stay on this device and are never synced.
+        The language models that write the values of AI fields and the code of components. Any OpenAI-style API works, hosted or local. These settings stay on this device and are never synced.
       </p>
       {/* Takes effect at once (not with Save): the way to stop requests, e.g. on a metered connection. */}
       <Toggle
@@ -89,7 +79,7 @@ export function AiSettings() {
             size="sm"
             id={`${uid}-url`}
             labelText="Address"
-            placeholder="https://openrouter.ai/api/v1"
+            placeholder="https://api.openai.com/v1"
             helperText="The API's root. Kubus adds /chat/completions."
             value={draft.baseUrl}
             onChange={(e) => setDraft((d) => ({ ...d, baseUrl: e.target.value }))}
@@ -98,15 +88,7 @@ export function AiSettings() {
             size="sm"
             id={`${uid}-key`}
             labelText="API key"
-            helperText={
-              <>
-                Make one at{" "}
-                <Link href="https://openrouter.ai/keys" onClick={external("https://openrouter.ai/keys")}>
-                  openrouter.ai/keys
-                </Link>
-                . A local server needs none.
-              </>
-            }
+            helperText="From your provider. A local server needs none."
             value={draft.apiKey}
             onChange={(e) => setDraft((d) => ({ ...d, apiKey: e.target.value }))}
           />

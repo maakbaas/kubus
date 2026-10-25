@@ -45,7 +45,7 @@ const RECENT_MS = 30_000;
 
 /** The language model settings of this device: one provider, and a model per kind of work. */
 export interface AiConfig {
-  /** The API's root, e.g. https://openrouter.ai/api/v1. */
+  /** The API's root, e.g. https://api.openai.com/v1. */
   baseUrl: string;
   apiKey: string;
   /** The model that writes the values of AI fields. */
@@ -59,7 +59,7 @@ export interface AiConfig {
 /** What a model is asked for: the value of an AI field, or the code of a component. */
 export type AiPurpose = "field" | "code";
 
-const DEFAULT_CONFIG: AiConfig = { baseUrl: DEFAULT_LLM_SETTINGS.baseUrl, apiKey: "", fieldModel: "openrouter/free", codeModel: "", paused: false };
+const DEFAULT_CONFIG: AiConfig = { baseUrl: DEFAULT_LLM_SETTINGS.baseUrl, apiKey: "", fieldModel: "", codeModel: "", paused: false };
 
 export interface AiJob {
   collection: Collection;

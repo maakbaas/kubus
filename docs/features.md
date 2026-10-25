@@ -118,8 +118,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   differ each time, so "regenerate" can change a value.
 - **Settings** (`#/settings`, `pages/SettingsPage.tsx`, the last node of the side nav, pinned at its bottom with Help: `NavFooter`): tabs
   Sync (`ui/SyncSettings.tsx`; `?section=sync`) and AI (`ui/AiSettings.tsx`; `?section=ai`): the language model of this
-  device: the address of an OpenAI-style API (default OpenRouter: one key, many models; OpenAI, Ollama and LM Studio
-  work too), the key and two models, each a combo box over the provider's `/models` (any name can be typed): one for AI fields (runs for every value: fast and cheap) and one for writing components (a stronger one; empty = the field model). `AiService.client("field" | "code")` picks it. Stored per device
+  device: the address of an OpenAI-style API (any provider: OpenAI, OpenRouter, Ollama, LM Studio, …; nothing is preset), the key and two models, each a combo box over the provider's `/models` (any name can be typed): one for AI fields (runs for every value: fast and cheap) and one for writing components (a stronger one; empty = the field model). `AiService.client("field" | "code")` picks it. Stored per device
   (`kubus.ai` in localStorage), never synced. The sync status icon (tab strip, top right) only shows the state; its
   popover tells more and has "Configure sync".
 - **Help** (`#/help`, `pages/HelpPage.tsx`, above Settings in the side nav): components and `{{ }}` code, shown exactly like
@@ -190,6 +189,16 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   for it) except blocked ones (javascript:, data:, file:, …): `isOpenableUrl` / `safeUrl` in
   `platform/openExternal.ts`, used by Markdown (react-markdown's `urlTransform`), cells and the
   editor; the Tauri opener scope (`desktop/capabilities/default.json`) denies the same schemes.
+- **Links to pages of the app** (`domain/links.ts`, `app/useLinks.ts`): plain GFM links without a scheme, written
+  by name: `books` (collection, default view), `books/reading-list#table` (view, block), `book/dune#author`
+  (item by the singular name; field or block), `book/dune/compact#author` (under an item view); `views/` /
+  `items/` after the collection name force the kind. Names match as slugs (lower case, hyphens; a repeat gets
+  `-1`). Stored by id (`#/collections/<id>/items?view=&block=`, `…/items/<id>?view=&field=|block=`), so renames
+  break nothing: the link dialog converts on Apply, and the editor's popover and dialog show the name form
+  again. A name link typed or pasted into the Markdown editor is converted as soon as it names a page (each
+  href tried once per editor); one that names nothing stays as written and is resolved when clicked. `?block=` /
+  `?field=` scroll to the target and flash it (`ui/useLinkTarget.ts`; blocks carry `data-block-id`, item page
+  fields are found by their place among the page's entries).
 - **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's items, substring match over string, markdown, HTML and
   list-of-strings values (ASCII case-insensitive; an FTS index can come later).
 - **Local first.** The app works fully offline on the device's own SQLite database.

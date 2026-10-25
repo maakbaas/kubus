@@ -6,7 +6,9 @@ import type { ElementContent, Root, RootContent } from "hast";
 import type { Nodes as MdNodes, Root as MdRoot } from "mdast";
 import { Link } from "@carbon/react";
 import { fileIdFromSrc } from "../domain/files";
-import { openExternal, safeUrl } from "../platform/openExternal";
+import { safeUrl } from "../platform/openExternal";
+import { useLinks } from "../app/useLinks";
+import { openModeOf } from "../workspace/Workspace";
 import { splitWarnings } from "../domain/components";
 import { matcher, splitMatches } from "./Highlight";
 import { ComponentWarning } from "./ComponentWarning";
@@ -203,18 +205,24 @@ const fullComponents: Components = {
     const task = offset != null && String(props.className ?? "").includes("task-list-item");
     return <li {...props}>{task ? <TaskOffset offset={offset}>{children}</TaskOffset> : children}</li>;
   },
-  a: ({ href, children }) => (
+  a: ({ href, children }) => <PageLink href={href}>{children}</PageLink>,
+};
+
+/** A link in rendered Markdown: a page of the app (by id, or by name: see domain/links.ts) or an outside one. */
+function PageLink({ href, children }: { href: string | undefined; children?: ReactNode }) {
+  const links = useLinks();
+  return (
     <Link
       href={href}
-      onClick={(e) => {
+      onClick={(e: React.MouseEvent) => {
         e.preventDefault();
-        if (href) openExternal(href);
+        if (href) links.open(href, openModeOf(e.nativeEvent)).catch(() => {});
       }}
     >
       {children}
     </Link>
-  ),
-};
+  );
+}
 
 interface Props {
   source: string;

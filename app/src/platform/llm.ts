@@ -1,6 +1,6 @@
 // Language models, behind one small interface. Everything that asks a model (AI fields, writing a
 // component) goes through `LlmClient`, and the one implementation speaks the OpenAI-style chat API
-// that OpenRouter (the default: one key, many models), OpenAI, Ollama, LM Studio and others share. So
+// that OpenAI, OpenRouter, Ollama, LM Studio and others share. So
 // the provider is a base URL, a key and a model name in the settings, and a different API would be
 // another implementation of the interface, not a change in its callers.
 //
@@ -8,7 +8,7 @@
 // device only (domain-free settings in localStorage, see app/ai.ts) and a provider must allow CORS.
 
 export interface LlmSettings {
-  /** The API's root, e.g. https://openrouter.ai/api/v1 (the client adds /chat/completions and /models). */
+  /** The API's root, e.g. https://api.openai.com/v1 (the client adds /chat/completions and /models). */
   baseUrl: string;
   /** Sent as the bearer token; empty for providers without one (a local server). */
   apiKey: string;
@@ -16,7 +16,7 @@ export interface LlmSettings {
   model: string;
 }
 
-export const DEFAULT_LLM_SETTINGS: LlmSettings = { baseUrl: "https://openrouter.ai/api/v1", apiKey: "", model: "" };
+export const DEFAULT_LLM_SETTINGS: LlmSettings = { baseUrl: "", apiKey: "", model: "" };
 
 export interface LlmMessage {
   role: "system" | "user";

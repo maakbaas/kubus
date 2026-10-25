@@ -18,6 +18,7 @@ import { createPortal } from "react-dom";
 import { MemoryRouter, useLocation, useNavigate, useNavigationType } from "react-router";
 import { IconButton, Link, Tab, TabList, Tabs } from "@carbon/react";
 import { Add } from "@carbon/icons-react";
+import { TabMenu, occupied, useClippedTabs } from "../ui/TabMenu";
 import { AppRoutes } from "../app/routes";
 import { readPref, writePref } from "../ui/localPrefs";
 import { useMediaQuery } from "../ui/useMediaQuery";
@@ -411,6 +412,9 @@ function PaneView({ pane }: { pane: PaneNode }) {
   // fits whole with its neighbours peeking in on both sides.
   const tabTitles = pane.tabs.map((t) => ws.titles[t.id] ?? "").join("|");
   const activeTabId = pane.activeTabId;
+  // Too many tabs even at their least width: some are clipped, a down arrow lists them all.
+  // (Judged from each tab's least width, not the width it has now: a clipped bar shows its active tab whole.)
+  const clippedTabs = useClippedTabs(tabBar, (item) => Number(item.dataset.least) || item.offsetWidth);
   useLayoutEffect(() => {
     const bar = tabBar.current;
     if (!bar) return;
@@ -418,11 +422,13 @@ function PaneView({ pane }: { pane: PaneNode }) {
       const items = [...bar.querySelectorAll<HTMLElement>(".cds--tabs__nav-item")];
       const tabs = bar.querySelector<HTMLElement>(".cds--tabs");
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      // The room for tabs: the tabs' box less the scroll buttons while they show. (Not the list's
-      // own width: that is only as wide as its tabs, so a lone tab would cap itself.)
-      let room = tabs ? tabs.clientWidth : Infinity;
-      tabs?.querySelectorAll<HTMLElement>(".cds--tab--overflow-nav-button").forEach((b) => (room -= b.offsetWidth));
-      const cap = Math.min(16 * rem, room * 0.8);
+      // The room for tabs: the strip less what else it holds ("+", the menu arrow, ...). (Not the
+      // tabs' own width: that is only as wide as its tabs, so a lone tab would cap itself.)
+      const room = tabs ? bar.clientWidth - occupied(bar, tabs) : Infinity;
+      // A tab is as wide as it would be alone in the strip: the menu arrow's room counts as free.
+      const menu = bar.querySelector<HTMLElement>(".tab-menu");
+      const menuRoom = menu ? menu.offsetWidth + parseFloat(getComputedStyle(menu).marginInlineStart) : 0;
+      const cap = Math.min(16 * rem, (room + menuRoom) * 0.8);
       const sized = items.flatMap((item) => {
         const label = item.querySelector<HTMLElement>(".cds--tabs__nav-item-label");
         if (!label) return [];
@@ -432,10 +438,9 @@ function PaneView({ pane }: { pane: PaneNode }) {
         const natural = Math.min(label.scrollWidth + chrome, cap);
         return [{ item, natural, least: Math.min(natural, chrome + 6 * rem) }];
       });
-      // The cut: the widest width w with sum(min(natural, w)) <= the room (Infinity: all fit). The
-      // whole box counts here: once the tabs fit, the scroll buttons go.
+      // The cut: the widest width w with sum(min(natural, w)) <= the room (Infinity: all fit).
       let cut = Infinity;
-      let rest = tabs ? tabs.clientWidth : Infinity;
+      let rest = room;
       const naturals = sized.map((t) => t.natural).sort((x, y) => x - y);
       for (let i = 0; i < naturals.length; i++) {
         const share = rest / (naturals.length - i);
@@ -446,7 +451,18 @@ function PaneView({ pane }: { pane: PaneNode }) {
         rest -= naturals[i];
       }
       for (const { item, natural, least } of sized) {
-        if (natural <= cut) {
+        item.dataset.least = String(Math.ceil(least));
+        item.style.flexShrink = "";
+        if (clippedTabs) {
+          // Clipped: the shown tab as wide as it would be alone, the others at their least.
+          const shown = item.classList.contains("cds--tabs__nav-item--selected");
+          const width = `${shown ? natural : least}px`;
+          item.style.minInlineSize = width;
+          item.style.maxInlineSize = shown ? `${cap}px` : width;
+          // The shown tab takes its content's width, as when it is alone (the narrowed list is then
+          // sized to it); squeezed to the measured width it would end in "…" by a fraction.
+          if (shown) item.style.flexShrink = "0";
+        } else if (natural <= cut) {
           // Not cut: at least its natural width, free to grow to the cap (a measurement a fraction
           // short, or made before the web font loaded, must not cut the label).
           item.style.minInlineSize = `${natural}px`;
@@ -457,8 +473,6 @@ function PaneView({ pane }: { pane: PaneNode }) {
           item.style.maxInlineSize = width;
         }
       }
-      // Centre the active tab so the ones around it show.
-      bar.querySelector<HTMLElement>(".cds--tabs__nav-item--selected")?.scrollIntoView({ inline: "center", block: "nearest" });
     };
     fit();
     // Labels widen once the web font is in: measure again.
@@ -466,7 +480,7 @@ function PaneView({ pane }: { pane: PaneNode }) {
     const observer = new ResizeObserver(fit);
     observer.observe(bar);
     return () => observer.disconnect();
-  }, [tabTitles, activeTabId]);
+  }, [tabTitles, activeTabId, clippedTabs]);
 
   const newTab = (
     <IconButton autoAlign label="New tab" kind="ghost" size="sm" align="bottom-end" onClick={() => ws.update((w) => openTab(w, HOME, pane.id))}>
@@ -557,7 +571,18 @@ function PaneView({ pane }: { pane: PaneNode }) {
             ))}
           </TabList>
         </Tabs>
-        {newTab}
+        {clippedTabs && (
+          <TabMenu
+            label="Open pages"
+            items={pane.tabs.map((t) => ({ id: t.id, name: ws.titles[t.id] ?? "…" }))}
+            activeId={pane.activeTabId}
+            onSelect={(id) => ws.update((w) => focusTab(w, id))}
+          />
+        )}
+        {/* "+" takes the menu arrow's place; with the arrow it joins the icons at the right edge. */}
+        {!clippedTabs && <span className="tab-menu">{newTab}</span>}
+        <span className="views-bar__spacer" />
+        {clippedTabs && newTab}
         {end}
       </div>
       {/* The drop highlight covers the whole pane body, scrollbar gutters included: it sits on
