@@ -7,7 +7,8 @@ import { NewItemPage } from "../pages/NewItemPage";
 import { CollectionPage } from "../pages/CollectionPage";
 import { SearchPage } from "../pages/SearchPage";
 import { SpacesPage } from "../pages/SpacesPage";
-import { SyncPage } from "../pages/SyncPage";
+import { HelpPage } from "../pages/HelpPage";
+import { SettingsPage } from "../pages/SettingsPage";
 import { CollectionEditorPage } from "../pages/CollectionEditorPage";
 import { CollectionsPage } from "../pages/CollectionsPage";
 import { NotFound } from "../ui/NotFound";
@@ -20,7 +21,10 @@ export function AppRoutes() {
       <Route path="/search" element={<SearchPage />} />
       <Route path="/collections" element={<CollectionsPage />} />
       <Route path="/bookmarks" element={<BookmarksPage />} />
-      <Route path="/sync" element={<SyncPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/help" element={<HelpPage />} />
+      {/* Sync's page from before the settings (tabs restored from then). */}
+      <Route path="/sync" element={<Navigate to="/settings?section=sync" replace />} />
       <Route path="/spaces" element={<SpacesPage />} />
       <Route path="/components" element={<ComponentsPage />} />
       <Route path="/components/new" element={<ComponentEditorPage />} />

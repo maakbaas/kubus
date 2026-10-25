@@ -2,7 +2,7 @@ import { isEmptyValue as isEmpty } from "../domain/query";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
-import { Add, Checkmark, Edit, Information, Pin, PinFilled, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
+import { Add, Checkmark, Edit, Information, Pin, PinFilled, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
 import { NOTHING_COLLAPSED, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
@@ -10,7 +10,11 @@ import { useBlockName } from "../views/BlockListEditor";
 import { AddBlockButton, type NewBlockSpec } from "../views/AddBlockButton";
 import { useCollectionData } from "../views/useCollectionData";
 import { useStore, useCollection } from "../app/store";
+import { useAiFill } from "../app/useAi";
 import { useDataChanges } from "../app/useDataChanges";
+import { aiRequest } from "../domain/ai";
+import { AiRegenerate } from "../ui/AiRegenerate";
+import { AiStatus } from "../ui/AiStatus";
 import { formatDate, formatTime } from "../domain/fieldKinds";
 import {
   itemLabel,
@@ -18,6 +22,7 @@ import {
   newName,
   fieldValue,
   isMetaField,
+  isReferenceKind,
   pickableFields,
   type FieldDef,
   type FieldValue,
@@ -115,6 +120,8 @@ function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; 
       return <ImageValue fileId={String(value)} alt={field.name} />;
     case "component":
       return value == null ? null : <MarkdownView source={String(value)} />;
+    case "ai":
+      return value == null ? null : field.aiOutput === "markdown" ? <MarkdownView source={String(value)} /> : String(value);
     case "checkbox":
     case "string_list":
     case "checklist":
@@ -123,7 +130,7 @@ function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; 
 }
 
 function ItemContent({ collection, itemId }: { collection: Collection; itemId: string }) {
-  const { repo, components, cache, spaces } = useStore();
+  const { repo, components, cache, spaces, ai } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
   const refs = useReferenceOptions(collection);
@@ -163,6 +170,18 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   );
   /** The page's item, for its blocks ($item, filter values "this item"). */
   const page = useMemo<PageItem | null>(() => (shown ? { collection, item: shown, refLabel: refLabelOf(refs) } : null), [collection, shown, refs]);
+  // AI values that have gone stale (another prompt, or an edit it reads) are generated, once what
+  // the prompts read (referenced items' labels) is in.
+  const refLabel = useMemo(() => refLabelOf(refs), [refs]);
+  const shownItems = useMemo(() => (shown ? [shown] : null), [shown]);
+  const refsLoaded = !collection.fields.some((f) => isReferenceKind(f.kind) && f.targetCollectionId && !refs[f.targetCollectionId]);
+  useAiFill(collection, shownItems, refLabel, refsLoaded);
+  const regenerate = (f: FieldDef, hint: string) => {
+    if (!shown) return;
+    const request = aiRequest(collection, f, shown, refLabel);
+    if ("problem" in request) setError(request.problem);
+    else ai.regenerate({ collection, field: f, itemId: shown.id, request, hint: hint || undefined });
+  };
   // Edits elsewhere (a table cell in another pane, a checkbox) refresh this item.
   // While this page saves a field it reads the item itself afterwards: the change that save
   // announces needn't fetch it a second time.
@@ -516,6 +535,10 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                 refs={refs}
                 onEdit={(start) => setEditing({ fieldId: f.id, start })}
                 onSave={(v) => saveField(f, v).catch((e) => setError(errorMessage(e)))}
+                onRegenerate={f.kind === "ai" ? (hint) => regenerate(f, hint) : undefined}
+                generatedAt={f.kind === "ai" ? item.aiGeneratedAt?.[f.id] : undefined}
+                edited={f.kind === "ai" ? !!item.aiEdited?.[f.id] : undefined}
+                itemId={item.id}
                 readOnly={!layout.editable || isMetaField(f)}
               />
             );
@@ -779,10 +802,18 @@ interface ViewFieldProps {
   readOnly?: boolean;
   /** The value was rendered from {{ }} sections in it (the source is what gets edited). */
   computed?: boolean;
+  /** AI fields: generate the value again. */
+  onRegenerate?(hint: string): void;
+  /** AI fields: when the value was generated, if known. */
+  generatedAt?: string;
+  /** AI fields: the value was typed by the user. */
+  edited?: boolean;
+  /** AI fields: the item the value belongs to (what it is waiting for shows by it). */
+  itemId?: string;
 }
 
-/** One field, laid out like its input in the form: label on top, value in a read-only box. Click to edit. */
-function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed }: ViewFieldProps) {
+/** One field, laid out like its input in the form: label on top, value in a read-only box. Click to edit. (Exported for the help page, which is shown as an item.) */
+export function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed, onRegenerate, generatedAt, edited, itemId }: ViewFieldProps) {
   const { components } = useStore();
   const uid = useId();
   if (field.kind === "component") {
@@ -891,6 +922,43 @@ function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed }: V
       }
     },
   };
+
+  // Written by the model from the field's prompt, or typed over by the user (then never made again
+  // by itself). The button asking for another value sits in the label's row, where a block's menus sit.
+  if (field.kind === "ai") {
+    return (
+      <div className="view-field">
+        <div className="view-field__head">
+          <div className="cds--label">
+            <FieldLabel field={field} />
+          </div>
+          {onRegenerate && (
+            <ToolbarPopover label="Generate again" icon={Renew} width="narrow">
+              {(close) => (
+                <AiRegenerate
+                  generatedAt={generatedAt}
+                  edited={edited}
+                  onGenerate={(hint) => {
+                    close();
+                    onRegenerate(hint);
+                  }}
+                />
+              )}
+            </ToolbarPopover>
+          )}
+        </div>
+        <div
+          className={`view-field__value view-field__value--component view-field__value--ai${readOnly ? "" : " view-field__editable"}${empty ? " view-field__value--empty" : ""}`}
+          {...editable}
+          title={readOnly ? "Written by AI from this field's prompt" : "Click to edit. What you type is kept: it is not generated again by itself."}
+        >
+          <AiStatus itemId={itemId ?? ""} fieldId={field.id}>
+            {!empty && (field.aiOutput === "markdown" ? <MarkdownView source={String(value)} /> : String(value))}
+          </AiStatus>
+        </div>
+      </div>
+    );
+  }
 
   // Lists edit one item at a time, in place (ListField saves each change itself).
   if (field.kind === "checklist" || field.kind === "string_list" || field.kind === "item_list") {

@@ -1,4 +1,4 @@
-import type { FieldValue, Item, ItemLabel, Collection, CollectionDraft } from "../domain/model";
+import type { FieldDef, FieldValue, Item, ItemLabel, Collection, CollectionDraft } from "../domain/model";
 import type { Bookmark, BookmarkKind } from "../domain/bookmarks";
 import type { ItemView } from "../domain/fieldLayout";
 import type { Component } from "../domain/components";
@@ -90,6 +90,16 @@ export interface Repository {
   /** Returns the id of the created item. */
   createItem(collection: Collection, values: Record<string, FieldValue>, spaceId: string): Promise<string>;
   updateItem(collection: Collection, itemId: string, values: Record<string, FieldValue>): Promise<void>;
+  /**
+   * Stores what a model generated for an AI field, with the fingerprint of the prompt it answers
+   * (domain/ai.ts). Leaves the item itself (its updatedAt) alone; ignored for an item that is gone.
+   */
+  setGenerated(collection: Collection, itemId: string, field: FieldDef, value: string | number | null, inputHash: string): Promise<void>;
+  /**
+   * Records that a value the user typed over an AI field's stands for the item as its prompt reads
+   * now (`inputHash`): it is then current, and asked about only when that changes again.
+   */
+  acceptEdit(collection: Collection, itemId: string, field: FieldDef, inputHash: string): Promise<void>;
   /** Moves an item to another space (its references and files stay as they are). */
   moveItem(itemId: string, spaceId: string): Promise<void>;
   deleteItem(itemId: string): Promise<void>;

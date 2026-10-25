@@ -45,7 +45,7 @@ const config = { url: "https://notes.example.com", token: "t", enabled: true };
 const collection = (id: string) => ({ id, name: id, plural_name: id, icon: null, description: "", item_views: null, created_at: T, updated_at: T, deleted_at: null });
 const field = (id: string, collectionId: string) => ({
   id, collection_id: collectionId, name: "Title", kind: "string", target_collection_id: null, component_id: null, component_args: null,
-  choice_filter: null, toggle_icon: null, position: 0, created_at: T, updated_at: T, deleted_at: null,
+  choice_filter: null, toggle_icon: null, ai_prompt: null, ai_output: null, position: 0, created_at: T, updated_at: T, deleted_at: null,
 });
 const item = (id: string, collectionId: string) => ({ id, collection_id: collectionId, space_id: "default", item_view_id: null, created_at: T, updated_at: T, deleted_at: null });
 const value = (itemId: string, fieldId: string, text: string) => ({

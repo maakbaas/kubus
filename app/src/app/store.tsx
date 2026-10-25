@@ -5,6 +5,7 @@ import type { Component } from "../domain/components";
 import type { Collection } from "../domain/model";
 import { DEFAULT_SPACE_ID, inSpace, withDefaultSpace, type Space } from "../domain/spaces";
 import { readPref, writePref } from "../ui/localPrefs";
+import { AiService } from "./ai";
 import { ItemCache } from "./itemCache";
 
 interface Store {
@@ -26,11 +27,13 @@ interface Store {
   bookmarks: Bookmark[];
   /** The items (and labels) of the collections being shown, loaded once and shared (see useItems). */
   cache: ItemCache;
+  /** Generates the values of AI fields (and holds the language model settings of this device). */
+  ai: AiService;
 }
 
 const StoreContext = createContext<Store | null>(null);
 
-type State = { status: "loading" } | { status: "error"; error: string } | { status: "ready"; repo: Repository; cache: ItemCache };
+type State = { status: "loading" } | { status: "error"; error: string } | { status: "ready"; repo: Repository; cache: ItemCache; ai: AiService };
 
 const SPACE_KEY = "kubus.space";
 
@@ -82,7 +85,7 @@ export function StoreProvider({
         };
         // Dev builds only: the repository on `window.kubus`, for debugging from the console.
         if (import.meta.env.DEV) (window as unknown as { kubus: unknown }).kubus = { repo, cache };
-        setState({ status: "ready", repo, cache });
+        setState({ status: "ready", repo, cache, ai: new AiService(repo) });
       })
       .catch((e) => !stopped && setState({ status: "error", error: String(e?.message ?? e) }));
     return () => {
@@ -94,6 +97,7 @@ export function StoreProvider({
   const ready = state.status === "ready" ? state : null;
   const repo = ready?.repo ?? null;
   const cache = ready?.cache ?? null;
+  const ai = ready?.ai ?? null;
 
   // Another space: the cache holds the new one's items; its bookmarks replace the old ones.
   const shownSpace = useRef(space.id);
@@ -135,10 +139,10 @@ export function StoreProvider({
   }, [repo, cache, applyCollections]);
   const value = useMemo(
     () =>
-      repo && cache
-        ? { repo, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks, cache }
+      repo && cache && ai
+        ? { repo, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks, cache, ai }
         : null,
-    [repo, cache, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks],
+    [repo, cache, ai, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks],
   );
   if (!value) {
     return <>{fallback({ loading: state.status === "loading", error: state.status === "error" ? state.error : undefined })}</>;

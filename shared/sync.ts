@@ -52,7 +52,7 @@ export const SYNC_TABLES: SyncTable[] = [
     version: "updated_at",
     columns: {
       id: "text", collection_id: "text", name: "text", kind: "text", target_collection_id: "text", component_id: "text",
-      component_args: "json", choice_filter: "json", toggle_icon: "text", position: "int", ...stamps,
+      component_args: "json", choice_filter: "json", toggle_icon: "text", ai_prompt: "text", ai_output: "text", position: "int", ...stamps,
     },
   },
   {

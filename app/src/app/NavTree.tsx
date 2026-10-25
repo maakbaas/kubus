@@ -1,6 +1,6 @@
 import { useState, type ElementType, type MouseEvent } from "react";
 import { TreeNode, TreeView } from "@carbon/react";
-import { Bookmark as BookmarkIcon, Cube, Code as ComponentIcon } from "@carbon/icons-react";
+import { Bookmark as BookmarkIcon, Cube, Code as ComponentIcon, Help as HelpIcon, Settings as SettingsIcon } from "@carbon/icons-react";
 import { bookmarkPath } from "../domain/bookmarks";
 import { readPref, writePref } from "../ui/localPrefs";
 import { CollectionIcon } from "../ui/collectionIcons";
@@ -124,6 +124,35 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
           ))}
         </TreeNode>
         <TreeNode autoAlign id="components" label="Components" onSelect={() => navigate("/components")} renderIcon={ComponentIcon} />
+      </TreeView>
+    </div>
+  );
+}
+
+/**
+ * Help and Settings at the bottom of the side nav, always in view (the tree above scrolls). The
+ * selected node follows the active tab's page; middle click opens a node's page in a new tab.
+ */
+export function NavFooter({ activePath, navigate, openTab }: { activePath: string; navigate(path: string): void; openTab(path: string): void }) {
+  const [pathname] = activePath.split("?");
+  const selected = pathname === "/help" ? "help" : pathname === "/settings" || pathname === "/sync" ? "settings" : undefined;
+  const paths: Record<string, string> = { help: "/help", settings: "/settings" };
+  const nodePath = (e: MouseEvent) => paths[(e.target as HTMLElement).closest("li[id]")?.id ?? ""];
+  return (
+    <div
+      className="side-nav-footer"
+      onMouseDown={(e) => e.button === 1 && nodePath(e) && e.preventDefault()}
+      onAuxClick={(e) => {
+        const path = e.button === 1 && nodePath(e);
+        if (!path) return;
+        e.preventDefault();
+        openTab(path);
+      }}
+    >
+      {/* Remounted when nothing is selected, like the tree above (Carbon keeps the last node lit). */}
+      <TreeView key={selected ? "tree" : "tree-none"} label="Help and settings" hideLabel size="xs" selected={selected ? [selected] : []} active={selected} className="nav-tree">
+        <TreeNode autoAlign id="help" label="Help" onSelect={() => navigate("/help")} renderIcon={HelpIcon} />
+        <TreeNode autoAlign id="settings" label="Settings" onSelect={() => navigate("/settings")} renderIcon={SettingsIcon} />
       </TreeView>
     </div>
   );

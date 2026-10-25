@@ -40,14 +40,14 @@ export function useItemActions({ collection, stored, query, preset, onSort, conf
     },
     /**
      * A copy with the item's stored values (not computed ones: component fields, rendered {{ }}
-     * sections keep their source); its title numbered. Images are shared (files are immutable).
+     * sections keep their source; AI fields are generated for the copy); its title numbered. Images are shared (files are immutable).
      */
     async duplicate(item) {
       const original = stored?.find((e) => e.id === item.id) ?? item;
       const values: Record<string, FieldValue> = {};
       for (const f of collection.fields) {
         const v = original.values[f.id];
-        if (f.kind !== "component" && v != null) values[f.id] = v;
+        if (f.kind !== "component" && f.kind !== "ai" && v != null) values[f.id] = v;
       }
       const title = labelField(collection, original);
       if (title) values[title.id] = nextName(String(original.values[title.id]), (stored ?? []).map((e) => itemLabel(collection, e)));

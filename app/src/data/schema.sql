@@ -81,7 +81,7 @@ CREATE TABLE fields (
   name           TEXT NOT NULL,
   kind           TEXT NOT NULL CHECK (kind IN (
                    'string', 'markdown', 'html', 'number', 'date', 'datetime', 'checkbox', 'image',
-                   'item', 'string_list', 'checklist', 'item_list', 'component')),
+                   'item', 'string_list', 'checklist', 'item_list', 'component', 'ai')),
   -- for reference kinds: the collection whose items can be referenced
   target_collection_id TEXT REFERENCES collections(id),
   -- for 'component' fields: the component whose result the field shows
@@ -92,6 +92,12 @@ CREATE TABLE fields (
   choice_filter  TEXT,
   -- for 'checkbox' / 'checklist' fields: an icon shown instead of the box (a key of TOGGLE_ICONS in ui/ToggleInput.tsx; null = the box)
   toggle_icon    TEXT,
+  -- for 'ai' fields: the prompt (Markdown with {{ }} sections over $item, domain/ai.ts) and what the
+  -- generated value is: 'string' | 'number' | 'markdown' (AiOutput). The value is stored in
+  -- field_values like any other (value_text, or value_number), with a fingerprint of the rendered
+  -- prompt it came from in value_json: it is stale when that no longer matches.
+  ai_prompt      TEXT,
+  ai_output      TEXT,
   position       INTEGER NOT NULL DEFAULT 0,
   created_at     TEXT NOT NULL,
   updated_at     TEXT NOT NULL,

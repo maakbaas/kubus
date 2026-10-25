@@ -20,7 +20,8 @@ export type FieldKind =
   | "string_list"
   | "checklist"
   | "item_list"
-  | "component";
+  | "component"
+  | "ai";
 
 /**
  * string → string, markdown → GitHub Flavored Markdown source, html → HTML source (shown in a
@@ -40,6 +41,9 @@ export function valuesEqual(a: FieldValue | undefined, b: FieldValue | undefined
   return (a ?? null) === (b ?? null);
 }
 
+/** What an AI field's value is: plain text, a number or Markdown (the generated reply is made to fit). */
+export type AiOutput = "string" | "number" | "markdown";
+
 /** What feeds a component field's variable: a field of the item, or a fixed text / number. */
 export type ComponentArg = { field: string } | { value: string };
 
@@ -58,6 +62,10 @@ export interface FieldDef {
   choiceFilter: FilterRule[];
   /** For checkbox and checklist fields: an icon (outlined off, filled on) shown instead of the box; null = the box. */
   toggleIcon: string | null;
+  /** For AI fields: the prompt (Markdown with {{ }} sections over $item), see domain/ai.ts. */
+  aiPrompt: string | null;
+  /** For AI fields: what the generated value is. */
+  aiOutput: AiOutput | null;
   position: number;
 }
 
@@ -90,6 +98,12 @@ export interface Item {
   itemViewId?: string | null;
   /** Values rendered from their own {{ }} sections (withComputed): the typed source, for editing. */
   sources?: Record<string, FieldValue>;
+  /** AI fields: a fingerprint of the prompt each stored value was generated from (domain/ai.ts), by field id. */
+  aiInputs?: Record<string, string>;
+  /** AI fields: the values the user typed over (never made again by themselves), by field id. */
+  aiEdited?: Record<string, true>;
+  /** AI fields: when each stored value was generated (ISO), by field id. */
+  aiGeneratedAt?: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }
@@ -181,7 +195,7 @@ export const observeStamp = (iso: string) => {
 };
 
 const metaField = (id: string, name: string): FieldDef => ({
-  id, collectionId: "", name, kind: "datetime", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, position: 0,
+  id, collectionId: "", name, kind: "datetime", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null, position: 0,
 });
 /**
  * Created and updated: every item has them (ids are the query's pseudo fields). They aren't
@@ -197,6 +211,12 @@ export function fieldValue(item: Item, field: FieldDef): FieldValue {
   if (field.id === "$created") return item.createdAt;
   if (field.id === "$updated") return item.updatedAt;
   return item.values[field.id] ?? null;
+}
+
+/** The field as its value is edited: an AI field is edited as text, a number or Markdown, by its output. */
+export function editableField(field: FieldDef): FieldDef {
+  if (field.kind !== "ai") return field;
+  return { ...field, kind: field.aiOutput === "number" ? "number" : field.aiOutput === "markdown" ? "markdown" : "string" };
 }
 
 /** The field that provides an item's label: its first non-empty string field. */

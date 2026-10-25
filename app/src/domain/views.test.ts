@@ -6,7 +6,7 @@ import { defaultQuery, filterPreset, PAGE_ITEM, pageItemField, resolvePageValues
 import { blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery } from "./views";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], targetCollectionId: string | null = null): FieldDef => ({
-  id, collectionId: "b", name, kind, targetCollectionId, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, position: 0,
+  id, collectionId: "b", name, kind, targetCollectionId, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null, position: 0,
 });
 
 const books: Collection = {

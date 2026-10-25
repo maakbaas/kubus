@@ -8,6 +8,7 @@ import { useStore } from "../app/store";
 import { outputOf } from "../domain/components";
 import { ComponentValue } from "../ui/ComponentValue";
 import { fieldValue, isMetaField, type FieldDef, type FieldKind, type FieldValue, type Item } from "../domain/model";
+import { AiStatus } from "../ui/AiStatus";
 import { Highlight } from "../ui/Highlight";
 import { ImageThumb } from "../ui/images";
 import { ItemLink } from "../ui/ItemLink";
@@ -93,6 +94,15 @@ export function FieldCell({ field, item, refs, search, actions }: Props) {
     // Text and number results read exactly like a string or number field (no Markdown preview,
     // which would strip characters such as `*`).
     if (output !== "markdown") return <Highlight text={value == null ? "" : String(value)} query={search} />;
+  }
+  // Generated values: as their output type reads; until there is one, what it is waiting for.
+  if (field.kind === "ai") {
+    const shown = value == null || value === "" ? null : typeof value === "string" && field.aiOutput === "markdown" ? <MarkdownPreview source={value} search={search} /> : <Highlight text={String(value)} query={search} />;
+    return (
+      <AiStatus itemId={item.id} fieldId={field.id} compact>
+        {shown}
+      </AiStatus>
+    );
   }
   if ((field.kind === "markdown" || field.kind === "component") && typeof value === "string") return <MarkdownPreview source={value} search={search} />;
   if (field.kind === "checkbox") {

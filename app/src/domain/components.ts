@@ -105,7 +105,7 @@ export interface BlockInputs {
 }
 
 /** Every $name the sections use, in order of first use. Quoted strings are skipped, so "costs $5" or '$x' don't count. */
-function dollarNames(component: string): string[] {
+export function dollarNames(component: string): string[] {
   const names = sections(component).flatMap((code) => {
     // Text in quotes doesn't count, but the ${…} parts of a `template literal` are code.
     const unquoted = code

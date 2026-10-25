@@ -15,6 +15,8 @@ import {
 } from "../domain/model";
 import { FieldKindLabel } from "../ui/fieldKindIcons";
 import { TOGGLE_CHOICES, TOGGLE_ICONS, ToggleIconLabel } from "../ui/ToggleInput";
+import { aiPromptProblem } from "../domain/ai";
+import { AiOutputSelect, AiPromptEditor } from "../ui/AiFieldEditor";
 import { ChoiceFilterEditor } from "../ui/ChoiceFilterEditor";
 import { ComponentArgInput } from "../ui/ComponentArgInput";
 import type { Component } from "../domain/components";
@@ -53,7 +55,7 @@ function initialDraft(existing?: Collection): CollectionDraft {
     icon: "Cube",
     description: "",
     spaceIds: null,
-    fields: [{ id: newId(), name: "Name", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null }],
+    fields: [{ id: newId(), name: "Name", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null }],
   };
 }
 
@@ -68,6 +70,10 @@ function validate(draft: CollectionDraft) {
     seen.add(key);
     if (isReferenceKind(f.kind) && !f.targetCollectionId) targetErrors[f.id] = "Choose a collection";
     if (f.kind === "component" && !f.componentId) targetErrors[f.id] = "Choose a component";
+    if (f.kind === "ai") {
+      const problem = aiPromptProblem(f.aiPrompt);
+      if (problem) targetErrors[f.id] = problem;
+    }
   }
   const nameError = draft.name.trim() ? undefined : "Name is required";
   const pluralError = draft.pluralName.trim() ? undefined : "Plural name is required";
@@ -124,7 +130,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
   const removeField = (id: string) => setDraft((d) => ({ ...d, fields: d.fields.filter((f) => f.id !== id) }));
 
   const addField = () =>
-    setDraft((d) => ({ ...d, fields: [...d.fields, { id: newId(), name: "", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null }] }));
+    setDraft((d) => ({ ...d, fields: [...d.fields, { id: newId(), name: "", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null }] }));
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -232,7 +238,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
           <FormGroup legendText="Fields">
             <p className="helper">A field's type cannot change once saved.</p>
             {draft.fields.map((f, i) => (
-              <div className={isReferenceKind(f.kind) || f.kind === "component" || f.kind === "checkbox" || f.kind === "checklist" ? "field-row field-row--reference" : "field-row"} key={f.id} {...reorder.row(i)}>
+              <div className={isReferenceKind(f.kind) || f.kind === "component" || f.kind === "ai" || f.kind === "checkbox" || f.kind === "checklist" ? "field-row field-row--reference" : "field-row"} key={f.id} {...reorder.row(i)}>
                 <TextInput size="sm"
                   id={`${uid}-field-name-${f.id}`}
                   labelText="Field name"
@@ -252,7 +258,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                   itemToString={(k) => (k ? fieldKinds[k].label : "")}
                   itemToElement={(k) => <FieldKindLabel kind={k} />}
                   renderSelectedItem={(k) => <FieldKindLabel kind={k} />}
-                  onChange={({ selectedItem: k }) => k && updateField(f.id, { kind: k })}
+                  onChange={({ selectedItem: k }) => k && updateField(f.id, { kind: k, ...(k === "ai" && { aiOutput: f.aiOutput ?? "string" }) })}
                 />
                 {isReferenceKind(f.kind) && (
                   <Dropdown<Target> autoAlign
@@ -284,6 +290,14 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                     itemToElement={(i) => <ToggleIconLabel id={i} />}
                     renderSelectedItem={(i) => <ToggleIconLabel id={i} />}
                     onChange={({ selectedItem: i }) => i && updateField(f.id, { toggleIcon: i === "checkbox" ? null : i })}
+                  />
+                )}
+                {f.kind === "ai" && (
+                  <AiOutputSelect
+                    id={`${uid}-field-ai-output-${f.id}`}
+                    value={f.aiOutput}
+                    locked={persisted.has(f.id)}
+                    onChange={(aiOutput) => updateField(f.id, { aiOutput })}
                   />
                 )}
                 {f.kind === "component" && (
@@ -323,6 +337,17 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                     </div>
                   ) : null;
                 })()}
+                {/* An AI field's prompt, over $item. */}
+                {f.kind === "ai" && (
+                  <div className="field-row__mapping">
+                    <AiPromptEditor
+                      id={`${uid}-field-ai-prompt-${f.id}`}
+                      value={f.aiPrompt ?? ""}
+                      problem={submitted ? targetErrors[f.id] : undefined}
+                      onChange={(aiPrompt) => updateField(f.id, { aiPrompt })}
+                    />
+                  </div>
+                )}
                 {/* Each of the component's variables takes the value of a field of this collection, or a fixed value. */}
                 {f.kind === "component" && (() => {
                   const x = components.find((e) => e.id === f.componentId);

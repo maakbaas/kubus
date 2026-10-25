@@ -216,7 +216,9 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
       </Link>
     );
   }
-  if (!editable || !isInlineEditable(field.kind) || isMetaField(field)) {
+  // An AI value is typed over like text or a number (Markdown needs the item page).
+  const inline = isInlineEditable(field.kind) || (field.kind === "ai" && field.aiOutput !== "markdown");
+  if (!editable || !inline || isMetaField(field)) {
     // Wrapped so the column-width rules (one line where possible) apply to plain text too.
     return (
       <div>

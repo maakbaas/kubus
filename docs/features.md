@@ -12,7 +12,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   and elements with handlers keep their clicks), Number, Date, Date & time, Checkbox, Image, Item (reference
   to an item of another collection, e.g. Book → Author), List of strings, Checklist (items with a
   checkbox, stored as GFM task lines "[x] text", `domain/checklist.ts`; tables show "2/5"),
-  List of items, Component (computed from a component).
+  List of items, Component (computed from a component), AI (written by a language model from a prompt).
 - **Checkbox and Checklist fields can show an icon instead of the box** (`fields.toggle_icon`, a
   key of `TOGGLE_ICONS` in `ui/ToggleInput.tsx`: heart, star, flag, bookmark, checkmark, thumbs up,
   faces; outlined when off, filled when on; null = Carbon's checkbox). Every place that toggles
@@ -78,6 +78,57 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
     item page layout; `ui/FieldModal.tsx`, which also edits component fields). They are ordinary
     fields of the collection, shown in the picker's own view; adding asks for confirmation (the field
     belongs to the collection, not the view).
+- **AI fields** (`app/src/domain/ai.ts`, field kind `ai`, `fields.ai_prompt` / `ai_output`; model plumbing in
+  `app/src/app/ai.ts`, `platform/llm.ts`): a field whose value a language model writes per item. The prompt is written
+  like a component (`{{ $item.Artist }}`); only `$item` exists in it (no `$now`, variables or block
+  values, and AI fields are left out of `$item`, as a field reading itself or two reading each other never settle).
+  The field's value (text, number or Markdown; the output type is fixed once saved) is stored with the item
+  (`value_text` / `value_number`) next to a fingerprint of the *rendered* prompt it came from (`value_json`),
+  so it syncs and every device agrees. It is stale when today's rendered prompt differs: dependencies need no
+  tracking (a prompt reading `$item.Artist` but not `$item.Title` renders the same when only the title changes),
+  and `$now`-like input is excluded because it would make everything stale at once. A "layer" around the prompt
+  tells the model the collection, the field and the value's shape, and makes the reply fit (`parseAiReply`: a number
+  is read out, text goes on one line, a fence around Markdown is dropped; a reply that doesn't fit is an error, never
+  stored; when it can't tell, text and Markdown are told to answer "Unknown" (that is the value), a number to stay empty).
+  Stale values are found in two places and offered to `AiService` (`app/ai.ts`): by what shows items
+  (`useAiFill` in `useCollectionData` and the item page; these go first, and a prompt that can't be made shows its
+  reason in place of the value) and by the **backfill** (`app/aiBackfill.ts`, run by `AiBackfillRunner`: every item
+  of every collection with an AI field, in every space, shown or not, a few seconds after the app opens and when the
+  collections, components, spaces or model change, and at a collection when its items change, but not for a value the
+  app generated itself): so a field added to a collection that already has items fills in by itself and can be sorted
+  on. Requests are rate limited: 3 at once and one starting every 1.5 s (40 a minute), a 429 answer pauses everything
+  30 s and retries the value. More than 10 values waiting at any time (a new field on a big collection, a changed
+  prompt, opening the app on a pile of them) stops everything until a modal asks "Generate N AI values?" ("Not now"
+  drops them for the session); a pause switch in Settings → AI sends no request at all. Results are stored via
+  `Repository.setGenerated` (which leaves the item's `updatedAt` alone). Without a model everything waits; failures
+  show their reason in place and "Retry" in the banner (`ui/AiBanner.tsx`, along the bottom of the window); items have
+  a "Generate again" button in the label row whose popover shows when the value was generated (or edited) and takes
+  a nudge for that value, sent once and not kept. AI fields are skipped by duplicate and the new-item form.
+  **Values can be typed over** (item page, table cells for text and numbers; `editableField` edits an AI field as its
+  output type): an edited value is stored with `edited` in `value_json` and an empty fingerprint, which the next look at
+  the item (`aiStaleness` "adopt", `Repository.acceptEdit`) replaces with the prompt as it reads then. It is never
+  made again by itself: when that prompt changes ("ask"), `AiService.offerOverrides` collects the values and a modal
+  asks "Replace what you typed?" ("Generate again" replaces them; "Keep mine", also on closing, keeps them as right for
+  the item as it is now). "Generate again" and the nudge replace a typed value without that question (the user asked).
+  `app/aiScan.ts` sorts values into generate / adopt / ask for both the views and the backfill.
+  Prompts are worked out by one code path for the views and the backfill (`domain/refOptions.ts` decides how a
+  referenced item is labelled, `aiScan.ts` what a value needs; a missing reference reads as nothing everywhere), so they
+  always reach the same fingerprint for the same data. Known trade-offs: two devices that find a stale item at once both ask the
+  model (the last write wins, they agree after sync); a changed prompt costs one call per item; a model's answer can
+  differ each time, so "regenerate" can change a value.
+- **Settings** (`#/settings`, `pages/SettingsPage.tsx`, the last node of the side nav, pinned at its bottom with Help: `NavFooter`): tabs
+  Sync (`ui/SyncSettings.tsx`; `?section=sync`) and AI (`ui/AiSettings.tsx`; `?section=ai`): the language model of this
+  device: the address of an OpenAI-style API (default OpenRouter: one key, many models; OpenAI, Ollama and LM Studio
+  work too), the key and two models, each a combo box over the provider's `/models` (any name can be typed): one for AI fields (runs for every value: fast and cheap) and one for writing components (a stronger one; empty = the field model). `AiService.client("field" | "code")` picks it. Stored per device
+  (`kubus.ai` in localStorage), never synced. The sync status icon (tab strip, top right) only shows the state; its
+  popover tells more and has "Configure sync".
+- **Help** (`#/help`, `pages/HelpPage.tsx`, above Settings in the side nav): components and `{{ }}` code, shown exactly like
+  an item page (a title and one Markdown field with its name hidden; it reuses `ViewField`). Its text is
+  `app/src/help/components.md`, which **must be kept current** when components, `$` names or AI fields change: it is
+  also what "Write with AI" gives the model.
+- **Write with AI** (component editor, `ui/WriteWithAi.tsx`, `domain/componentWriter.ts`): a few words in, the model writes
+  the component's code, description and output (and the name when empty) from the Help text and the fields of the
+  preview's collection (else all collections); it only changes the form (not saving drops it) and its box empties, as the next request changes what was just written.
 - **Blocks** (`app/src/domain/views.ts` `ViewBlock`, `app/src/views/BlockView.tsx`): a collection
   view is a filter plus a list of blocks; each block shows items one way (table, cards, a
   component) with its own sort and grouping, fields (`FieldLayout`) and

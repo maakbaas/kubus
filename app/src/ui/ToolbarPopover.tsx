@@ -14,7 +14,10 @@ interface Props {
   openRequest?: number;
   /** Told when the panel opens and closes (see usePanelsOpen). */
   onOpenChange?(open: boolean): void;
-  children: ReactNode;
+  /** Extra class on the button (e.g. a state colour). */
+  className?: string;
+  /** The panel's content; a function gets `close`, for a panel whose button leads elsewhere. */
+  children: ReactNode | ((close: () => void) => ReactNode);
 }
 
 /**
@@ -40,7 +43,7 @@ export function usePanelsOpen() {
  * closes a popover when its focused control loses focus without a new one, which happens when a
  * change re-renders the panel (a field row moving, a button turning disabled); that isn't closing.
  */
-export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequest, onOpenChange, children }: Props) {
+export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequest, onOpenChange, className, children }: Props) {
   const [open, setOpen] = useState(false);
   const openChange = useRef(onOpenChange);
   openChange.current = onOpenChange;
@@ -140,7 +143,7 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
     }, 0);
   return (
     <Popover ref={root} autoAlign open={open} align="bottom-end" dropShadow onRequestClose={requestClose} className="toolbar-popover">
-      <IconButton autoAlign id={id} label={label} kind="ghost" size="sm" align="bottom" isSelected={open} data-active={active || undefined} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <IconButton autoAlign id={id} className={className} label={label} kind="ghost" size="sm" align="bottom" isSelected={open} data-active={active || undefined} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Icon />
       </IconButton>
       <PopoverContent>
@@ -159,7 +162,7 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
             document.getElementById(id)?.focus();
           }}
         >
-          {opened && children}
+          {opened && (typeof children === "function" ? children(() => setOpen(false)) : children)}
         </div>
       </PopoverContent>
     </Popover>

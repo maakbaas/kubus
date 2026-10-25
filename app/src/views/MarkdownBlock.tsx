@@ -29,6 +29,8 @@ const TEXT_FIELD: FieldDef = {
   componentArgs: {},
   choiceFilter: [],
   toggleIcon: null,
+  aiPrompt: null,
+  aiOutput: null,
   position: 0,
 };
 

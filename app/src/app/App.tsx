@@ -8,7 +8,9 @@ import { Lightbox } from "../ui/Lightbox";
 import { GlobalLinks, useWorkspace, WorkspaceProvider, WorkspaceView } from "../workspace/Workspace";
 import { readPref, writePref } from "../ui/localPrefs";
 import { useMediaQuery } from "../ui/useMediaQuery";
-import { NavTree } from "./NavTree";
+import { AiBanner } from "../ui/AiBanner";
+import { AiBackfillRunner } from "./AiBackfillRunner";
+import { NavFooter, NavTree } from "./NavTree";
 import { StoreProvider, useStore } from "./store";
 
 export function App() {
@@ -27,6 +29,7 @@ export function App() {
     >
       <SpaceWorkspace />
       <Lightbox />
+      <AiBackfillRunner />
     </StoreProvider>
   );
 }
@@ -148,7 +151,10 @@ function Shell() {
             {navShown && navToggle}
             <SpaceSwitcher />
           </Layer>
-          <NavTree activePath={ws.activePath} navigate={(path) => ws.navigate(path)} openTab={(path) => ws.openTab(path)} />
+          <div className="side-nav-tree">
+            <NavTree activePath={ws.activePath} navigate={(path) => ws.navigate(path)} openTab={(path) => ws.openTab(path)} />
+          </div>
+          <NavFooter activePath={ws.activePath} navigate={(path) => ws.navigate(path)} openTab={(path) => ws.openTab(path)} />
         </SideNav>
       </GlobalLinks>
       {desktop && docked && (
@@ -178,10 +184,12 @@ function Shell() {
               <IconButton autoAlign label="Search" kind="ghost" size="sm" align="bottom-end" onClick={() => setSearchOpen(true)}>
                 <SearchIcon />
               </IconButton>
-              <SyncStatusButton onOpen={() => ws.navigate("/sync")} />
+              <SyncStatusButton onConfigure={() => ws.navigate("/settings?section=sync")} />
             </>
           }
         />
+        {/* At the bottom: nothing sits above the tab strip (iOS colours its status bar from it). */}
+        <AiBanner onSetup={() => ws.navigate("/settings?section=ai")} />
       </main>
       {searchOpen && (
         <SearchBar

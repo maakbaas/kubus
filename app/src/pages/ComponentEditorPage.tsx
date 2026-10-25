@@ -19,6 +19,7 @@ import { itemLabel, newId, now, type Collection } from "../domain/model";
 import { refLabelOf, useReferenceOptions } from "../ui/useReferenceOptions";
 import { ComponentCodeEditor } from "../ui/ComponentCodeEditor";
 import { ComponentValue } from "../ui/ComponentValue";
+import { WriteWithAi } from "../ui/WriteWithAi";
 import { NotFound } from "../ui/NotFound";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage } from "../ui/useConfirm";
@@ -102,6 +103,18 @@ export function ComponentEditorPage() {
             onChange={(e) => setName(e.target.value)}
             invalid={submitted && !!nameError}
             invalidText={nameError}
+          />
+          {/* A few words in, the model writes the component and its description (it changes this form only). */}
+          <WriteWithAi
+            id={`${uid}-component-write`}
+            current={{ name, description, output, code }}
+            focus={previewCollection}
+            onApply={(s) => {
+              setCode(s.code);
+              setDescription(s.description);
+              setOutput(s.output);
+              if (!name.trim()) setName(s.name);
+            }}
           />
           <TextInput
             size="sm"

@@ -1,30 +1,40 @@
 import { useSyncExternalStore } from "react";
-import { IconButton } from "@carbon/react";
+import { Button } from "@carbon/react";
 import { CheckmarkOutline, Cloud, Renew, WarningAltFilled } from "@carbon/icons-react";
 import { useStore } from "../app/store";
+import { ToolbarPopover } from "./ToolbarPopover";
 
 const ICONS = { off: Cloud, idle: CheckmarkOutline, syncing: Renew, error: WarningAltFilled } as const;
+const TITLES = { off: "Sync is off", idle: "Up to date", syncing: "Syncing…", error: "Sync failed" } as const;
 
 /**
- * The sync state at the end of the top-right tab strip: off, syncing, up to date or failed.
- * Clicking it opens the Sync page.
+ * The sync state at the end of the top-right tab strip: off, syncing, up to date or failed. The
+ * icon only shows the state; its popover tells more and leads to the sync settings.
  */
-export function SyncStatusButton({ onOpen }: { onOpen(): void }) {
+export function SyncStatusButton({ onConfigure }: { onConfigure(): void }) {
   const { repo } = useStore();
   const { sync } = repo;
   const status = useSyncExternalStore(sync.subscribe.bind(sync), () => sync.status);
-  const Icon = ICONS[status.state];
-  const label =
-    status.state === "error"
-      ? `Sync failed: ${status.error}`
-      : status.state === "syncing"
-        ? "Syncing…"
-        : status.state === "idle"
-          ? `Synced${status.lastSync ? ` ${new Date(status.lastSync).toLocaleTimeString()}` : ""}`
-          : "Sync is off";
+  const lastSync = status.lastSync ? new Date(status.lastSync).toLocaleString() : undefined;
   return (
-    <IconButton autoAlign label={label} kind="ghost" size="sm" align="bottom-end" className={`sync-status sync-status--${status.state}`} onClick={onOpen}>
-      <Icon />
-    </IconButton>
+    <ToolbarPopover label={TITLES[status.state]} icon={ICONS[status.state]} className={`sync-status sync-status--${status.state}`} fit>
+      {(close) => (
+        <div className="sync-popover">
+          <p className="sync-popover__state">{TITLES[status.state]}</p>
+          {status.error && <p className="helper sync-popover__detail">{status.error}</p>}
+          {lastSync && <p className="helper sync-popover__detail">Last synced {lastSync}</p>}
+          <Button
+            size="sm"
+            kind="tertiary"
+            onClick={() => {
+              close();
+              onConfigure();
+            }}
+          >
+            Configure sync
+          </Button>
+        </div>
+      )}
+    </ToolbarPopover>
   );
 }

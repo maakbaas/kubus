@@ -85,8 +85,8 @@ function NewItemForm({ collection }: { collection: Collection }) {
       )}
       <Form onSubmit={save} noValidate>
         <Stack gap={6} className="item-fields item-fields--form">
-          {/* Component fields are computed, not entered. */}
-          {collection.fields.filter((f) => f.kind !== "component").map((f) => (
+          {/* Component fields are computed and AI fields generated, not entered. */}
+          {collection.fields.filter((f) => f.kind !== "component" && f.kind !== "ai").map((f) => (
             <FieldInput
               key={f.id}
               field={f}

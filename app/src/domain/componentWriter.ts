@@ -1,0 +1,96 @@
+// "Write with AI" in the component editor: asking a language model for a component's code and
+// description from a few words. The model is given the whole documentation of components
+// and `{{ }}` code (help/components.md, the same text as the Help page) and the collections' fields, and
+// answers with one JSON object. UI-free: the editor sends the messages and applies the draft.
+
+import { isComponentOutput, type ComponentOutput } from "./components";
+import { fieldKinds } from "./fieldKinds";
+import type { Collection } from "./model";
+
+export interface ComponentSuggestion {
+  name: string;
+  description: string;
+  output: ComponentOutput;
+  code: string;
+}
+
+/** What the model is told about the collections: names and fields, so it can read `$item.Pages`. Cut off at `limit` characters. */
+export function describeCollections(collections: Collection[], limit = 4000): string {
+  const lines = collections.map(
+    (c) =>
+      `- ${c.name}: ${c.fields
+        .map((f) => `${f.name} (${fieldKinds[f.kind].label})`)
+        .join(", ")}`,
+  );
+  let text = "";
+  for (const line of lines) {
+    if (text.length + line.length > limit) break;
+    text += `${text ? "\n" : ""}${line}`;
+  }
+  return text;
+}
+
+/**
+ * The conversation: the documentation and the shape of the answer, then what the user wants (with
+ * the component as it is now, when there is one, to change it). `focus` is the collection the
+ * component is meant for, when the user chose one.
+ */
+export function componentMessages(args: {
+  help: string;
+  request: string;
+  current?: { name: string; description: string; output: ComponentOutput; code: string };
+  collections: Collection[];
+  focus?: Collection;
+}): { role: "system" | "user"; content: string }[] {
+  const { help, request, current, collections, focus } = args;
+  const system = [
+    "You write components for Kubus, a personal knowledge base. A component is text with {{ JavaScript }} sections. The documentation follows; rely on it, and on nothing else about Kubus.",
+    "<documentation>",
+    help.trim(),
+    "</documentation>",
+    "Reply with one JSON object and nothing else (no code fence, no comments):",
+    '{"name": "two to four words", "description": "one short sentence on what it shows", "output": "markdown" | "string" | "number" | "image" | "html", "code": "the text of the component"}',
+    "Rules:",
+    "- When the component is for a particular collection, read its fields with $item (for example {{ $item.Pages }}). Otherwise take $variables, so the component can be reused for any collection.",
+    "- Each section is one JavaScript expression. Guard for empty fields (null).",
+    "- Choose the simplest output that fits: number for a computed number, string for one line of plain text, markdown for formatted text, html only for what Markdown cannot do (charts, maps).",
+    "- Keep it short and plain; do not add what was not asked for.",
+    "- The description says what the finished component shows, worked out from its final code as a whole. It is not about the request, and when you change an existing component it is not about the change: write it as if describing the final component to someone who never saw the earlier one.",
+  ].join("\n");
+  const known = focus ? describeCollections([focus]) : describeCollections(collections);
+  const user = [
+    focus ? `The component is for the collection ${focus.name}. Its fields:` : "The collections and their fields:",
+    known || "(no collections yet)",
+    ...(current?.code.trim()
+      ? ["", "The component as it is now (change it as asked, then describe the whole result in the description, not just the change):", JSON.stringify({ name: current.name, description: current.description, output: current.output, code: current.code })]
+      : []),
+    "",
+    "What the component should do:",
+    request.trim(),
+  ].join("\n");
+  return [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+}
+
+/** The model's answer as a suggestion, or why it is none. */
+export function parseComponentReply(reply: string): ComponentSuggestion | { error: string } {
+  const start = reply.indexOf("{");
+  const end = reply.lastIndexOf("}");
+  if (start < 0 || end <= start) return { error: "The model did not answer with a component." };
+  let data: unknown;
+  try {
+    data = JSON.parse(reply.slice(start, end + 1));
+  } catch {
+    return { error: "The model's answer could not be read." };
+  }
+  const o = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+  if (typeof o.code !== "string" || !o.code.trim()) return { error: "The model's answer has no code." };
+  return {
+    name: typeof o.name === "string" ? o.name.trim() : "",
+    description: typeof o.description === "string" ? o.description.trim() : "",
+    output: isComponentOutput(o.output) ? o.output : "markdown",
+    code: o.code,
+  };
+}

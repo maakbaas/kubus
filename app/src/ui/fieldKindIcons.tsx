@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import {
+  AiGenerate,
   Calendar,
   CheckboxChecked,
   DataReference,
@@ -34,6 +35,7 @@ export const FIELD_KIND_ICONS: Record<FieldKind, Icon> = {
   checklist: ListChecked,
   item_list: DataReference,
   component: ComponentIcon,
+  ai: AiGenerate,
 };
 
 function IconLabel({ icon: Icon, children }: { icon: Icon; children: string }) {
@@ -47,7 +49,8 @@ function IconLabel({ icon: Icon, children }: { icon: Icon; children: string }) {
 
 /** A field's label: its kind's icon and its name (form labels, item page labels). */
 export function FieldLabel({ field }: { field: FieldDef }) {
-  return <IconLabel icon={FIELD_KIND_ICONS[field.kind]}>{field.name}</IconLabel>;
+  // An AI field edited as text (see editableField) keeps its own icon: only AI fields have an output.
+  return <IconLabel icon={FIELD_KIND_ICONS[field.aiOutput ? "ai" : field.kind]}>{field.name}</IconLabel>;
 }
 
 /** A field kind with its icon, e.g. in the collection editor's field type dropdown. */

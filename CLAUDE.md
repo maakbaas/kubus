@@ -40,6 +40,9 @@ is what this split avoids. Keep them current when behaviour changes.
   database): keep `acquireDbLock` / `poolFilesFree` in `worker.ts`.
 - Changing the app identifier `com.kubus.app`, database / pool names, the lock or `kubus.*` storage
   keys orphans existing data.
+- **The Help page text** (`app/src/help/components.md`) documents components and `{{ }}` code (`$` names, outputs, AI
+  fields) and is also what "Write with AI" gives the model: update it whenever that language changes.
+- **The language model key stays on the device** (`kubus.ai`, `app/src/app/ai.ts`): never sync it or put it in the database.
 - Same words in code and UI (see Terminology); no "type", "object", "template", "entry".
 
 ## Terminology

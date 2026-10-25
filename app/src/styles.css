@@ -1527,8 +1527,11 @@ img[data-lightbox] {
 
 /* Space above a multi-line value (markdown, HTML): the same as above one line of text in a
    2rem box, so the gap under a label is the same for every field. */
-/* Blocks on an item page (tables, cards) read as on a collection page: Carbon's own type scale. */
-.item-fields > .block {
+/* Blocks on an item page (tables, cards) read as on a collection page: Carbon's own type scale.
+   So do the tooltips of buttons in the fields (e.g. "Generate again"), which would otherwise
+   inherit the fields' larger scale and read bigger than every other tooltip. */
+.item-fields > .block,
+.item-fields .cds--tooltip-content {
   --cds-body-compact-01-font-size: 0.875rem;
   --cds-body-compact-01-line-height: 1.28572;
   --cds-body-compact-01-letter-spacing: 0.16px;
@@ -2493,7 +2496,7 @@ img[data-lightbox] {
   margin-block-start: var(--cds-spacing-05);
 }
 
-/* Editing a wrapped text cell: an editable block in place of the cell's text (CellTextBox). Its
+/* Editing a wrapped text cell: an editable block in place of the cell's text (WrappedTextBox). Its
    negative margins reach the cell's edges (Carbon's small-row cell padding: 0.4375rem, 1rem)
    and the same padding brings the text back, so it lays out and wraps exactly as before. */
 .cell-inline-editor .cell-textarea {
@@ -2508,9 +2511,9 @@ img[data-lightbox] {
   max-inline-size: none;
   margin: -0.4375rem calc(-1 * var(--cds-spacing-05));
   padding: 0.4375rem var(--cds-spacing-05);
-  /* 2px more room at the line end than the cell's text had: an editable line also needs space
-     for the caret, else a line that exactly fit would wrap. */
-  margin-inline-end: calc(-1 * var(--cds-spacing-05) - 2px);
+  /* Exactly the room the cell's text had at the line end, not a pixel more: with extra room a word
+     that just missed the line in the cell would fit in the editor, and the text would jump. (The
+     caret at a line's end sits in the padding, which is not clipped.) */
   /* Carbon's bottom line drawn inside the box (not a border), so the box is exactly the cell's
      height and never sticks out of the table (that brought up a scrollbar). */
   border-block-end: 0;
@@ -2535,6 +2538,21 @@ img[data-lightbox] {
 /* The side nav's tree (NavTree): a little room above and below. */
 .nav-tree {
   padding-block: var(--cds-spacing-03);
+}
+/* The nav is a column: the tree scrolls, Help and Settings stay in view at the bottom. */
+.cds--side-nav__navigation {
+  block-size: 100%;
+  min-block-size: 0;
+}
+.side-nav-tree {
+  flex: 1 1 0;
+  min-block-size: 0;
+  overflow-y: auto;
+}
+.side-nav-footer {
+  flex: none;
+  border-top: 1px solid var(--cds-border-subtle);
+  padding-block-end: env(safe-area-inset-bottom);
 }
 /* A long name is cut off with "…"; its icon always stays. */
 .nav-tree :is(.cds--tree-node__icon, .nav-tree__icon) {
@@ -3121,4 +3139,91 @@ body[data-reordering] [data-reorder-row] {
 }
 .section-dialog .cds--modal-content > .cds--form-item {
   margin-block-end: 0;
+}
+
+/* AI fields (domain/ai.ts). What a value is waiting for, or why it failed, in the place of the value. */
+.ai-status {
+  color: var(--cds-text-secondary);
+}
+.ai-status--error {
+  color: var(--cds-text-error);
+}
+/* A generated value's label row, with its "Generate again" button at the right: as tall as a label,
+   the 2rem button centred on it (overhanging a little), like the menus of a block on an item page. */
+.view-field__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  block-size: 1rem;
+  margin-block-end: var(--cds-spacing-03);
+}
+.view-field__head > .cds--label {
+  margin: 0;
+}
+/* The sync status popover (ui/SyncStatusButton.tsx). */
+.sync-popover {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cds-spacing-04);
+  max-inline-size: 18rem;
+}
+.sync-popover__state {
+  font-weight: 600;
+}
+.sync-popover__detail {
+  margin: 0;
+}
+/* "Write with AI" in the component editor. */
+.write-with-ai {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-03);
+}
+/* AI values that need the user (ui/AiBanner.tsx): along the bottom, clear of the home indicator. */
+.ai-banner {
+  flex: none;
+  padding-block-end: env(safe-area-inset-bottom);
+  background: var(--cds-layer);
+  border-top: 1px solid var(--cds-border-subtle);
+}
+.ai-banner .cds--actionable-notification {
+  max-inline-size: none;
+  inline-size: 100%;
+}
+.ai-status--compact {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* "Generate again" (ui/AiRegenerate.tsx) (ui/AiRegenerate.tsx): inside the popover panel's own padding, so
+   every line (when, label, box, helper text, button) starts on the panel's one left edge. */
+.ai-regenerate {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--cds-spacing-05);
+}
+.ai-regenerate__when {
+  margin: 0;
+}
+/* Item pages inset every field label by a spacing-05 (".item-fields … .cds--label"); this panel is
+   inside one, but its label belongs on the panel's left edge, with the box under it. */
+.toolbar-popover__panel .ai-regenerate.ai-regenerate .cds--label {
+  padding-inline-start: 0;
+}
+.ai-regenerate__go {
+  align-self: flex-start;
+}
+/* Editing a text that wraps, on an item page (WrappedTextBox): the read-only value's own box
+   (.view-field__value: same padding, type and wrapping), so the text stays where it was, filled like
+   an input with Carbon's line under it and focus ring. */
+.field-textbox {
+  display: block;
+  white-space: pre-wrap;
+  background-color: var(--cds-field);
+  border-block-end-color: var(--cds-border-strong);
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
 }

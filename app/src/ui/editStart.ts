@@ -16,7 +16,7 @@ export interface EditStart {
   /** Height of the whole read-only field, so the editor can hold it while it renders. */
   fieldHeight?: number;
   /** The clicked text wrapped onto several lines: a one-line text value then edits in a box that
-   *  wraps the same way, in place of the text (table cells), so nothing moves. */
+   *  wraps the same way, in place of the text (table cells, item pages), so nothing moves. */
   wrapped?: boolean;
 }
 
@@ -43,11 +43,20 @@ function caretRangeAt(x: number, y: number): Range | null {
   return doc.caretRangeFromPoint?.(x, y) ?? null;
 }
 
+/** Whether the text in `el` is shown over several lines. */
+function isWrapped(el: HTMLElement): boolean {
+  const text = document.createRange();
+  text.selectNodeContents(el);
+  const lines = new Set([...text.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
+  return lines.size > 1;
+}
+
 /** Reads the click and the current text selection inside `container`. */
 export function captureEditStart(container: HTMLElement, e: { clientX: number; clientY: number }): EditStart {
   const start: EditStart = {
     point: { x: e.clientX, y: e.clientY },
     fieldHeight: (container.closest(".view-field") ?? container).getBoundingClientRect().height,
+    wrapped: isWrapped(container),
   };
   const sel = window.getSelection();
   if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
@@ -82,9 +91,5 @@ export function captureEditStart(container: HTMLElement, e: { clientX: number; c
  * editor. A cell keeps no field height to hold: its editor is laid over the cell.
  */
 export function cellEditStart(cell: HTMLElement, e: { clientX: number; clientY: number }): EditStart {
-  const text = document.createRange();
-  text.selectNodeContents(cell);
-  const lines = new Set([...text.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
-  const start = { ...captureEditStart(cell, e), fieldHeight: undefined };
-  return { ...start, wrapped: lines.size > 1 };
+  return { ...captureEditStart(cell, e), fieldHeight: undefined };
 }

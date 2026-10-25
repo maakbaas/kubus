@@ -85,6 +85,8 @@ CREATE TABLE IF NOT EXISTS fields (
   component_args jsonb,
   choice_filter  jsonb,
   toggle_icon    text,
+  ai_prompt      text,
+  ai_output      text,
   position       integer,
   created_at     timestamptz,
   updated_at     timestamptz,
@@ -100,6 +102,8 @@ ALTER TABLE fields ADD COLUMN IF NOT EXISTS component_id text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS component_args jsonb;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS choice_filter jsonb;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS toggle_icon text;
+ALTER TABLE fields ADD COLUMN IF NOT EXISTS ai_prompt text;
+ALTER TABLE fields ADD COLUMN IF NOT EXISTS ai_output text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS position integer;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS created_at timestamptz;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS updated_at timestamptz;

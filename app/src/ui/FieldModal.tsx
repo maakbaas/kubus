@@ -3,12 +3,14 @@ import { createPortal } from "react-dom";
 import { Button, Dropdown, InlineNotification, Modal, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
 import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
-import { isReferenceKind, newId, collectionDraft, type FieldDef, type FieldKind, type Collection, type ComponentArg } from "../domain/model";
+import { isReferenceKind, newId, collectionDraft, type AiOutput, type FieldDef, type FieldKind, type Collection, type ComponentArg } from "../domain/model";
+import { aiPromptProblem } from "../domain/ai";
 import type { Component } from "../domain/components";
 import { FieldKindLabel } from "./fieldKindIcons";
 import { TOGGLE_CHOICES, TOGGLE_ICONS, ToggleIconLabel } from "./ToggleInput";
 import { CollectionLabel } from "./collectionIcons";
 import { ChoiceFilterEditor } from "./ChoiceFilterEditor";
+import { AiOutputSelect, AiPromptEditor } from "./AiFieldEditor";
 import { ComponentArgInput } from "./ComponentArgInput";
 import { NewComponentModal } from "./NewComponentModal";
 import type { FilterRule } from "../domain/query";
@@ -43,6 +45,8 @@ export function FieldModal({
   const [args, setArgs] = useState<Record<string, ComponentArg>>(field?.componentArgs ?? {});
   const [choiceFilter, setChoiceFilter] = useState<FilterRule[]>(field?.choiceFilter ?? []);
   const [toggleIcon, setToggleIcon] = useState<string | null>(field?.toggleIcon ?? null);
+  const [aiPrompt, setAiPrompt] = useState(field?.aiPrompt ?? "");
+  const [aiOutput, setAiOutput] = useState<AiOutput>(field?.aiOutput ?? "string");
   const [creatingComponent, setCreatingComponent] = useState(false);
   // Just created: the store may not list it yet.
   const [created, setCreated] = useState<Component>();
@@ -54,12 +58,13 @@ export function FieldModal({
   const target = collections.find((t) => t.id === targetCollectionId);
   const taken = collection.fields.some((f) => f.id !== field?.id && f.name.trim().toLowerCase() === name.trim().toLowerCase());
   const nameError = !name.trim() ? "Name is required" : taken ? "Another field has this name" : undefined;
+  const promptProblem = kind === "ai" ? aiPromptProblem(aiPrompt) : undefined;
   const choiceError =
     kind === "component" && !componentId ? "Choose a component" : isReferenceKind(kind) && !targetCollectionId ? "Choose a collection" : undefined;
   const sources = collection.fields.filter((f) => f.id !== field?.id);
 
   async function save() {
-    if (nameError || choiceError) {
+    if (nameError || choiceError || promptProblem) {
       setSubmitted(true);
       return;
     }
@@ -85,6 +90,8 @@ export function FieldModal({
       componentArgs: kind === "component" ? args : {},
       choiceFilter: isReferenceKind(kind) ? choiceFilter : [],
       toggleIcon: kind === "checkbox" || kind === "checklist" ? toggleIcon : null,
+      aiPrompt: kind === "ai" ? aiPrompt.trim() : null,
+      aiOutput: kind === "ai" ? aiOutput : null,
     };
     draft.fields = field
       ? draft.fields.map((f) => (f.id === id ? { ...f, ...own } : f))
@@ -182,6 +189,8 @@ export function FieldModal({
             onChange={({ selectedItem: i }) => i && setToggleIcon(i === "checkbox" ? null : i)}
           />
         )}
+        {kind === "ai" && <AiOutputSelect id="field-modal-ai-output" value={aiOutput} locked={!!field} onChange={setAiOutput} />}
+        {kind === "ai" && <AiPromptEditor id="field-modal-ai-prompt" value={aiPrompt} problem={submitted ? promptProblem : undefined} onChange={setAiPrompt} />}
         {kind === "component" && (
           <Dropdown<Component>
             autoAlign

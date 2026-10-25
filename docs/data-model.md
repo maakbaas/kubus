@@ -65,6 +65,10 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   already chosen that no longer matches stays. Single references live
   in `value_ref`; lists (`string_list`, `item_list`) are JSON arrays in `value_json`, which means a
   list merges as one value during sync.
+- AI fields (`fields.ai_prompt`, `fields.ai_output`: `string` | `number` | `markdown`) store their generated value in
+  `value_text` (`value_number` for numbers) and, in `value_json`, the fingerprint (a JSON string) of the rendered
+  prompt it answers (`domain/ai.ts`: JSON `{ "hash": …, "edited": true }`, `edited` when the user typed the value); `Repository.setGenerated` writes both without touching `items.updated_at`, `updateItem` stores a typed value as edited. The
+  fingerprint rides along in sync, so no new synced column was needed for it.
 - Items have no title field; their label (e.g. in reference pickers) is the first non-empty
   String field (`itemLabel`).
 - A collection can't be deleted while another collection has a reference field pointing at it.

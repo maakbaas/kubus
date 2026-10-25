@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useStore } from "../app/store";
+import { useAiFill } from "../app/useAi";
 import { useItems } from "../app/useItems";
 import { withComputed } from "../domain/components";
 import { isReferenceKind, type Collection, type Item } from "../domain/model";
@@ -27,11 +28,16 @@ export function useCollectionData(collection: Collection): CollectionData {
   const { items, error } = useItems(collection);
   const refsLoading = collection.fields.some((f) => isReferenceKind(f.kind) && f.targetCollectionId && !refs[f.targetCollectionId]);
   const ctx: QueryContext = useMemo(() => ({ refLabel: refLabelOf(refs, "(deleted)") }), [refs]);
+  // Computed values and AI prompts read a missing reference as nothing, as on the item's page and in
+  // the AI backfill (the queries above show "(deleted)"): what a prompt says must not depend on where it is worked out.
+  const computeLabel = useMemo(() => refLabelOf(refs), [refs]);
   // Each item is computed once: only items that changed are computed again.
-  const memo = useMemo(() => new WeakMap<Item, Item>(), [collection, components, ctx]);
+  const memo = useMemo(() => new WeakMap<Item, Item>(), [collection, components, computeLabel]);
   const computed = useMemo(
-    () => (items && !refsLoading ? withComputed(collection, items, components, ctx.refLabel, memo) : null),
-    [collection, items, refsLoading, components, ctx, memo],
+    () => (items && !refsLoading ? withComputed(collection, items, components, computeLabel, memo) : null),
+    [collection, items, refsLoading, components, computeLabel, memo],
   );
+  // AI values that need something (stale, typed over) are found.
+  useAiFill(collection, computed, computeLabel);
   return { items: computed, stored: items, refs, ctx, error };
 }

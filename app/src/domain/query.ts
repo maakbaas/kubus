@@ -191,6 +191,14 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     sortKey: (_f, v) => (typeof v === "number" ? v : v == null || v === "" ? null : String(v).toLowerCase()),
     groupKeys: (_f, v) => single(v == null ? "" : String(v)),
   },
+  // Generated text, Markdown or a number (the field says which): compared as text, or as a number
+  // by > and < (numbers sort as numbers).
+  ai: {
+    operators: [...TEXT_OPS.slice(0, 4), op("gt", ">"), op("lt", "<"), ...EMPTY_OPS],
+    text: (_f, v) => (typeof v === "string" ? markdownPlainText(v) : v == null ? "" : String(v)),
+    sortKey: (_f, v) => (typeof v === "number" ? v : typeof v === "string" && v ? markdownPlainText(v).toLowerCase() : null),
+    groupKeys: (_f, v) => single(v == null ? "" : String(v)),
+  },
 };
 
 /** Whether a result is grouped (several groups, or one that isn't the whole list). */

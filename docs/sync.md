@@ -13,9 +13,9 @@ the request shapes).
 client never talks to Postgres: browsers and the iOS PWA can only do HTTP. One container
 (`server/Dockerfile`, `docker-compose.yml` with `DATABASE_URL` and `KUBUS_TOKEN`) serves the
 sync API at `/api` and the built web app at `/`, so the phone installs the app from the server
-(same origin, no CORS). Auth is one shared bearer token (`KUBUS_TOKEN`); the app's Sync page
-(`#/sync`, `pages/SyncPage.tsx`, opened from the status icon ending the top-right tab strip,
-`ui/SyncStatusButton.tsx`) holds server URL + token + on/off + Disconnect (forgets the server; the
+(same origin, no CORS). Auth is one shared bearer token (`KUBUS_TOKEN`); the app's
+Settings (`#/settings?section=sync`, the Sync tab, `ui/SyncSettings.tsx`; reached from the "Configure sync" button in the
+popover of the status icon ending the top-right tab strip, `ui/SyncStatusButton.tsx`, which itself only shows the state) holds server URL + token + on/off + Disconnect (forgets the server; the
 device keeps its data and the next connection is a first one), per device (localStorage
 `kubus.sync`). A readable Postgres replica (not end-to-end encrypted) was chosen, as the hub
 vision wants server-side queries and remote sources later.
@@ -37,7 +37,7 @@ vision wants server-side queries and remote sources later.
   skew instead of a hybrid logical clock.
 - *First connection to a server* (or a changed server URL): the server is the source of truth. If it
   holds data, that replaces everything on the device (one local transaction, nothing is sent; the
-  Sync page asks for confirmation first, `isNewServer`). Only an empty server takes the device's data
+  Sync settings ask for confirmation first, `isNewServer`). Only an empty server takes the device's data
   instead: all local rows are queued and uploaded.
 - *When*: 2 s after a local write, every 30 s, on `online`, when the app becomes visible, and when the
   server signals a change (`GET /api/events`, server-sent events read with `fetch` so the token goes

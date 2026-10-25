@@ -1,13 +1,12 @@
 import { useId, useState, useSyncExternalStore } from "react";
 import { Button, Form, InlineNotification, PasswordInput, Stack, TextInput, Toggle } from "@carbon/react";
 import { useStore } from "../app/store";
-import { PageHeader } from "../ui/PageHeader";
-import { useConfirm } from "../ui/useConfirm";
+import { useConfirm } from "./useConfirm";
 
 const STATE_TEXT = { off: "Off", idle: "Up to date", syncing: "Syncing…", error: "Failed" } as const;
 
-/** Where this device syncs to: the Kubus server's address and token, switched on and off. */
-export function SyncPage() {
+/** Where this device syncs to: the Kubus server's address and token, switched on and off (a section of the settings). */
+export function SyncSettings() {
   const { repo } = useStore();
   const uid = useId();
   const { sync } = repo;
@@ -54,10 +53,7 @@ export function SyncPage() {
 
   return (
     <>
-      <PageHeader
-        title="Sync"
-        subtitle="Keeps this device's data in step with your Kubus server. The data stays on this device too, so Kubus works offline."
-      />
+      <p className="helper">Keeps this device's data in step with your Kubus server. The data stays on this device too, so Kubus works offline.</p>
       {status.error && <InlineNotification kind="error" title="Sync failed" subtitle={status.error} hideCloseButton />}
       <Form onSubmit={save} noValidate>
         <Stack gap={6}>

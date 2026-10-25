@@ -1,27 +1,12 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import { useStore } from "../app/store";
 import { fieldKinds } from "../domain/fieldKinds";
-import {
-  itemLabel,
-  isReferenceKind,
-  untitledLabel,
-  type FieldDef,
-  type FieldValue,
-  type Item,
-  type ItemLabel,
-  type Collection,
-} from "../domain/model";
-import { filterOf } from "../domain/query";
-import { hasSections, withComputed } from "../domain/components";
+import { isReferenceKind, type FieldDef, type FieldValue, type Collection } from "../domain/model";
+import { buildTargetOptions, isFullTarget, labelOf, referenceTargets, type RefOption, type RefOptions, type Target } from "../domain/refOptions";
 
-export interface RefOption {
-  id: string;
-  label: string;
-  /** Reference fields (ids) whose choice filter leaves this item out. */
-  excludedBy?: string[];
-  /** In another space than the one shown: labelled, but not offered. */
-  elsewhere?: boolean;
-}
+// Where these were first; the domain module owns them now.
+export { labelOf, refLabelOf } from "../domain/refOptions";
+export type { RefOption, RefOptions } from "../domain/refOptions";
 
 /**
  * The items a reference field offers: those of the shown space its choice filter lets through,
@@ -30,43 +15,6 @@ export interface RefOption {
  */
 export const choicesFor = (field: FieldDef, options: RefOption[], chosen: string[]): RefOption[] =>
   options.filter((o) => (!o.excludedBy?.includes(field.id) && !o.elsewhere) || chosen.includes(o.id));
-
-/** Labels by item id, per options list (built once; lists are replaced, never changed). */
-const labelMaps = new WeakMap<RefOption[], Map<string, string>>();
-
-/** The label of item `id` among `options` (undefined: not loaded, or deleted). */
-export function labelOf(options: RefOption[] | undefined, id: string): string | undefined {
-  if (!options) return undefined;
-  let labels = labelMaps.get(options);
-  if (!labels) {
-    labels = new Map(options.map((o) => [o.id, o.label]));
-    labelMaps.set(options, labels);
-  }
-  return labels.get(id);
-}
-
-/** Labels of referenced items for queries and components; `missing` for a deleted one. */
-export const refLabelOf =
-  (refs: RefOptions, missing = "") =>
-  (field: FieldDef, id: string): string =>
-    labelOf(refs[field.targetCollectionId ?? ""], id) ?? missing;
-
-/** Selectable items per target collection id, for every reference field of `collection`. */
-export type RefOptions = Record<string, RefOption[]>;
-
-/** A referenced collection of `collection`, and the fields whose choice filters limit what can be chosen from it. */
-interface Target {
-  id: string;
-  limited: FieldDef[];
-}
-
-function referenceTargets(collection: Collection): Target[] {
-  const ids = new Set(collection.fields.filter((f) => isReferenceKind(f.kind) && f.targetCollectionId).map((f) => f.targetCollectionId!));
-  return [...ids].map((id) => ({
-    id,
-    limited: collection.fields.filter((f) => f.targetCollectionId === id && f.choiceFilter.length > 0),
-  }));
-}
 
 /** A target's options with what they were built from, to reuse them while that is unchanged. */
 interface Built {
@@ -94,7 +42,7 @@ export function useReferenceOptions(collection: Collection): RefOptions {
   const targets = referenceTargets(collection);
   const cacheOf = (kind: Need["kind"]) => (kind === "o" ? cache.items : cache.labels);
   /** Whether a target's options are built from its items rather than its labels. */
-  const isFull = (t: Target) => t.limited.length > 0 || !!cache.labels.snapshot(t.id).items?.some((l) => hasSections(l.label));
+  const isFull = (t: Target) => isFullTarget(t, cache.labels.snapshot(t.id).items);
   // What is watched. A target's labels tell whether they hold sections (one with a choice filter
   // needs its items anyway); rendering items shows their own references by label.
   const needs: Need[] = [];
@@ -138,36 +86,9 @@ export function useReferenceOptions(collection: Collection): RefOptions {
         byTarget[t.id] = old;
         continue;
       }
-      let options: RefOption[] = [];
-      if (target && full) {
-        // Rendered labels, and for fields limiting their choices which items each filter leaves
-        // out (computed values included; the target's own references read by their stored labels).
-        const nestedLabels = new Map<string, Map<string, string>>();
-        const refLabel = (f: FieldDef, id: string) => {
-          const collectionId = f.targetCollectionId ?? "";
-          let labels = nestedLabels.get(collectionId);
-          if (!labels) {
-            const nestedType = collections.find((x) => x.id === collectionId);
-            const items = cache.labels.snapshot(collectionId).items ?? [];
-            labels = new Map(items.map((l) => [l.id, l.label ?? (nestedType ? untitledLabel(nestedType) : "")]));
-            nestedLabels.set(collectionId, labels);
-          }
-          return labels.get(id) ?? "";
-        };
-        const ctx = { refLabel };
-        const computed = withComputed(target, items as Item[], components, ctx.refLabel);
-        const passes = t.limited.map((f) => filterOf(target, f.choiceFilter, ctx));
-        options = computed.map((e) => {
-          const excludedBy = t.limited.filter((_, i) => !passes[i](e)).map((f) => f.id);
-          return { id: e.id, label: itemLabel(target, e), ...(excludedBy.length ? { excludedBy } : {}) };
-        });
-      } else if (target) {
-        options = (items as ItemLabel[]).map((l) => ({
-          id: l.id,
-          label: l.label ?? untitledLabel(target),
-          ...(l.spaceId !== space.id ? { elsewhere: true } : {}),
-        }));
-      }
+      const options: RefOption[] = target
+        ? buildTargetOptions({ target, limited: t.limited, full, items, spaceId: space.id, collections, components, labelsOf: (id) => cache.labels.snapshot(id).items ?? [] })
+        : [];
       byTarget[t.id] = { deps, options };
     }
     // Nothing rebuilt: the same options object, so nothing downstream sees a change.

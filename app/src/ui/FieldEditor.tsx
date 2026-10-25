@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../app/store";
-import type { FieldDef, FieldValue } from "../domain/model";
+import { editableField, type FieldDef, type FieldValue } from "../domain/model";
 import type { EditStart } from "./editStart";
 import { FieldInput, parseInputValue, toInputValue, type InputValue } from "./FieldInput";
 import { errorMessage } from "./useConfirm";
@@ -26,8 +26,10 @@ interface FieldEditorProps {
  * The field's normal form input, edited in place. Enter (Ctrl/Cmd+Enter in markdown) or
  * clicking outside saves; Escape cancels.
  */
-export function FieldEditor({ field, value, refs, start, compact, idPrefix, onSave, onCancel }: FieldEditorProps) {
+export function FieldEditor({ field: fieldDef, value, refs, start, compact, idPrefix, onSave, onCancel }: FieldEditorProps) {
   const { repo, collections } = useStore();
+  // An AI field is edited as the text, number or Markdown it holds.
+  const field = useMemo(() => editableField(fieldDef), [fieldDef]);
   const [raw, setRaw] = useState<InputValue>(() => toInputValue(field.kind, value));
   const [error, setError] = useState<string>();
   const box = useRef<HTMLDivElement>(null);

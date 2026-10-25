@@ -33,7 +33,8 @@ export type InputValue = string | boolean | string[];
 export function toInputValue(kind: FieldKind, value: FieldValue | undefined): InputValue {
   switch (kind) {
     case "component":
-      return ""; // computed, never entered
+    case "ai":
+      return ""; // computed or generated, never entered
     case "checkbox":
       return value === true;
     case "number":
@@ -61,6 +62,7 @@ export function parseInputValue(kind: FieldKind, raw: InputValue): { value: Fiel
   const s = typeof raw === "string" ? raw.trim() : "";
   switch (kind) {
     case "component":
+    case "ai":
       return { value: null };
     case "checkbox":
       return { value: raw === true };
@@ -323,7 +325,8 @@ export function FieldInput({
       );
 
     case "component":
-      return null; // computed, never entered
+    case "ai":
+      return null; // computed or generated, never entered
 
     case "markdown":
       return (
@@ -353,8 +356,19 @@ export function FieldInput({
       );
 
     case "string":
-      if (compact && multiline) {
-        return <CellTextBox id={id} field={field} value={String(value)} start={start} onChange={onChange} />;
+      // A text shown over several lines edits in a box that wraps it the same way, so nothing moves.
+      if (multiline) {
+        const box = <WrappedTextBox id={id} field={field} value={String(value)} start={start} compact={compact} onChange={onChange} />;
+        return compact ? (
+          box
+        ) : (
+          <div className="view-field">
+            <label htmlFor={id} className="cds--label">
+              <FieldLabel field={field} />
+            </label>
+            {box}
+          </div>
+        );
       }
       return (
         <TextInput size="sm"
@@ -476,22 +490,25 @@ function ListInput<T>({
 }
 
 /**
- * A wrapped table cell's editor: an editable text block styled as Carbon's text area, in place
- * of the cell's text. Unlike a <textarea> (a form control, whose text is rounded to the pixel
- * differently) it lays out and draws its text exactly like the cell, so nothing moves. The caret
- * starts where the cell was clicked.
+ * The editor of a text shown over several lines (a wrapped table cell, a long value on an item
+ * page): an editable text block in place of the text. Unlike a <textarea> (a form control, whose
+ * text is rounded to the pixel differently) it lays out and draws its text exactly like what it
+ * replaces, so nothing moves: in a cell it is styled as Carbon's text area, on an item page it
+ * has the read-only value's own class. The caret starts where the text was clicked.
  */
-function CellTextBox({
+function WrappedTextBox({
   id,
   field,
   value,
   start,
+  compact,
   onChange,
 }: {
   id: string;
   field: FieldDef;
   value: string;
   start?: EditStart;
+  compact?: boolean;
   onChange(value: InputValue): void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -520,7 +537,7 @@ function CellTextBox({
       aria-label={field.name}
       contentEditable="plaintext-only"
       suppressContentEditableWarning
-      className="cds--text-area cell-textarea"
+      className={compact ? "cds--text-area cell-textarea" : "view-field__value field-textbox"}
       // One-line value shown wrapped: a pasted line break becomes a space, Enter saves.
       onInput={(e) => onChange((e.currentTarget.textContent ?? "").replace(/[\r\n]+/g, " "))}
       onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
