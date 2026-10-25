@@ -996,8 +996,13 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   margin-inline: -0.5rem;
   border-bottom: 1px solid var(--cds-border-subtle);
 }
+/* A selected field row holds controls (buttons with blue text, inputs): marked by an outline, not
+   the selected grey, on which a tertiary button's blue is below AA contrast. */
 .field-row[data-selected] {
+  background: none;
   box-shadow: none;
+  outline: 2px solid var(--cds-border-interactive);
+  outline-offset: -2px;
 }
 /* Reference fields get an extra "Refers to" column. */
 .field-row--reference {
