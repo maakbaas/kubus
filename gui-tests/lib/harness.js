@@ -32,7 +32,9 @@ class TestFailure extends Error {}
 function __makeT(ctx, pg, name, opts) {
   const base = __OPTS.baseUrl.replace(/\/$/, "");
   const shotDir = __OPTS.shotDir;
-  const slug = name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 80);
+  const slug = (__OPTS.shotPrefix || "") + name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 80);
+  // Load mode (--cpu n): the page runs n times slower, so waits for it get longer too.
+  const slow = Math.max(1, __OPTS.cpu || 1);
   const checkpoints = [];
   const errors = [];
   let shotN = 0;
@@ -166,7 +168,7 @@ function __makeT(ctx, pg, name, opts) {
     },
 
     /** Waits until the page stops changing: no DOM mutations for `quiet` ms, fonts and loaders done. */
-    async settle(quiet = 200, max = 5000) {
+    async settle(quiet = 200, max = 5000 * slow) {
       timing.settles++;
       const t0 = Date.now();
       const timedOut = await pg
@@ -198,6 +200,38 @@ function __makeT(ctx, pg, name, opts) {
       await pg.waitForTimeout(ms);
     },
 
+    /**
+     * Waits for an in-place editor opened by a click to be there with focus inside it (instead of
+     * a fixed wait, which a slow machine outruns); false when none came within `timeout`.
+     */
+    async editorReady(selector = ".field-editor, .item-title--editing", timeout = 5000 * slow) {
+      const ok = await pg
+        .waitForFunction((sel) => [...document.querySelectorAll(sel)].some((e) => e.contains(document.activeElement)), selector, { timeout, polling: "raf" })
+        .then(() => true, () => false);
+      if (ok) await pg.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      return ok;
+    },
+
+    /**
+     * Waits until `fn` (run here, may be async) returns something truthy, polling, up to `timeout`
+     * ms; recorded as a check named `label` (a failure with the last value when it never does).
+     * Use it for "the page shows the saved value" instead of settling and reading once.
+     */
+    async until(label, fn, { timeout = 5000 * slow, interval = 50 } = {}) {
+      const end = Date.now() + timeout;
+      let last;
+      for (;;) {
+        try {
+          last = await fn();
+        } catch (e) {
+          last = String((e && e.message) || e);
+        }
+        if (last === true || (last && typeof last !== "string")) return t.check(label, true);
+        if (Date.now() > end) return t.check(label, false, `not within ${timeout}ms${last ? `: ${String(last).slice(0, 300)}` : ""}`);
+        await pg.waitForTimeout(interval);
+      }
+    },
+
     /** Seeds data through the dev build's repository (window.kubus.repo); see data.js. */
     async seed(spec) {
       return await timed("seed", () => pg.evaluate(__seedInPage, spec));
@@ -209,9 +243,13 @@ function __makeT(ctx, pg, name, opts) {
      */
     async audit(label, { skip = [], settle = true, shotOnFail = false, focus = false } = {}) {
       if (settle) await t.settle();
-      const res = await timed("audit", () => pg.evaluate(__audit, { skip: [...skip, ...(opts.skip || []), ...(__OPTS.skip || [])], max: 8, focus }));
+      const skipped = [...skip, ...(opts.skip || []), ...(__OPTS.skip || [])];
+      // The layout audit (breakage, audit.js) and the design rules (consistency, design.js).
+      const res = await timed("audit", () => pg.evaluate(__audit, { skip: skipped, max: 8, focus }));
+      const design = await timed("audit", () => pg.evaluate(__design, { skip: skipped, max: 8 }));
       timing.audits++;
-      const violations = res.violations;
+      const violations = [...res.violations, ...design.violations];
+      Object.assign(res.counts, design.counts);
       const boxes = violations.filter((v) => v.box && v.box.w > 0).map((v, i) => ({ ...v.box, n: i + 1 }));
       const screenshot = shotOnFail && !violations.length && !__OPTS.shotAll ? null : await shoot(boxes);
       return record({ kind: "audit", label, pass: violations.length === 0, violations, counts: res.counts, screenshot });
@@ -696,7 +734,13 @@ async function __main(pg) {
     } catch {}
   });
   const p = await ctx.newPage();
-  p.setDefaultTimeout(8000);
+  const slow = Math.max(1, __OPTS.cpu || 1);
+  p.setDefaultTimeout(8000 * slow);
+  // Load mode (--cpu n): the page's CPU n times slower (Chromium only).
+  if (slow > 1) {
+    const cdp = await ctx.newCDPSession(p);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: slow });
+  }
   const t = __makeT(ctx, p, entry.name, opts);
   const started = Date.now();
   let status = "pass";
@@ -708,7 +752,7 @@ async function __main(pg) {
     status = e instanceof TestFailure ? "fail" : "error";
     try {
       const shot = await (async () => {
-        const file = `${entry.name.replace(/[^a-z0-9]+/gi, "-").slice(0, 80)}--error.jpg`;
+        const file = `${__OPTS.shotPrefix || ""}${entry.name.replace(/[^a-z0-9]+/gi, "-").slice(0, 80)}--error.jpg`;
         await p.screenshot({ path: `${__OPTS.shotDir}/${file}`, type: "jpeg", quality: 70 });
         return file;
       })();

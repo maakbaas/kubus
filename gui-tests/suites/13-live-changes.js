@@ -47,7 +47,7 @@ test("the open item is deleted elsewhere", async (t) => {
   await t.open(t.itemPath(coll, item), { keepTabs: true });
   const v = t.page.locator(".ws-pane").first().getByRole("button", { name: "Edit Count", exact: true }).first();
   await v.click();
-  await t.wait(200);
+  await t.editorReady();
   await external(t, "await repo.deleteItem(arg);", item);
   await t.audit("item page after its item was deleted");
   const left = await t.page.locator(".ws-pane").first().innerText();

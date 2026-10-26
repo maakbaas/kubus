@@ -78,7 +78,7 @@ async function editRoundTrip(t, name, { type = null, height = true, width = true
   // Opening: nothing else on the page moves.
   await t.noShift(`${name}: opening the editor moves nothing else`, async () => {
     await value.click({ position: await t.visiblePoint(value) });
-    await t.wait(250);
+    await t.editorReady();
   }, { scope: ".ws-pane--active .ws-pane__body", except: ["[data-under-test]", ".field-editor", ...below] });
   const editing = await fieldGeometry(t, name);
   const diff = geometryDiff(before, editing, { height: height && !multiline && !(source && !empty), width });
@@ -106,7 +106,7 @@ async function editRoundTrip(t, name, { type = null, height = true, width = true
   if (type !== null) {
     const again = t.page.getByRole("button", { name: `Edit ${name}`, exact: true }).first();
     await again.click({ position: await t.visiblePoint(again) });
-    await t.wait(300);
+    await t.editorReady();
     await t.page.keyboard.press("End");
     await t.page.keyboard.type(type);
     await t.page.keyboard.press(multiline ? "Control+Enter" : "Enter");
@@ -115,8 +115,7 @@ async function editRoundTrip(t, name, { type = null, height = true, width = true
       await t.fail(`${name}: ${multiline ? "Ctrl+Enter" : "Enter"} saves and closes the editor`, "the editor is still open");
       await clickOutside(t);
     }
-    const shown = await t.page.locator(".item-fields").innerText();
-    await t.check(`${name}: typed text is saved and shown`, shown.includes(type.trim()), `"${type.trim()}" not on the page after saving`);
+    await t.until(`${name}: typed text is saved and shown`, async () => (await t.page.locator(".item-fields").innerText()).includes(type.trim()) || `"${type.trim()}" not on the page after saving`);
     await t.audit(`${name}: saved`);
   }
 }
@@ -148,7 +147,7 @@ for (const [style, vp] of EDIT_CASES) {
     const tb = await title.boundingBox();
     await t.noShift("title: editing it moves nothing", async () => {
       await title.click({ position: await t.visiblePoint(title, 5, 5) });
-      await t.wait(200);
+      await t.editorReady(".item-title--editing");
     }, { scope: ".ws-pane--active .ws-pane__body", except: [".item-title"] });
     const te = await t.page.locator(".item-title--editing").boundingBox();
     await t.check("title: the editor has the title's box", te && Math.abs(te.x - tb.x) <= 1 && Math.abs(te.y - tb.y) <= 1 && Math.abs(te.height - tb.height) <= 1 && Math.abs(te.width - tb.width) <= 1, `${JSON.stringify(tb)} → ${JSON.stringify(te)}`);
@@ -156,7 +155,7 @@ for (const [style, vp] of EDIT_CASES) {
     await t.page.keyboard.type(" more");
     await t.page.keyboard.press("Enter");
     await t.settle();
-    await t.check("title: Enter saves it", (await t.page.locator(".item-title").first().innerText()).endsWith("more"));
+    await t.until("title: Enter saves it", async () => (await t.page.locator(".item-title").first().innerText()).endsWith("more"));
     await t.audit("title saved");
     // Checkboxes (box and star icon) toggle in place.
     for (const name of ["Done", "Favourite"]) {
@@ -175,7 +174,7 @@ for (const [style, vp] of EDIT_CASES) {
       await row.scrollIntoViewIfNeeded();
       await t.noShift(`${name}: editing a row moves nothing else`, async () => {
         await row.click({ position: { x: 60, y: 6 } });
-        await t.wait(250);
+        await t.editorReady();
       }, { scope: ".ws-pane--active .ws-pane__body", except: [".field-editor", ".list-input__row", ".view-field__rows"] });
       await t.audit(`${name}: editing a row`);
       await t.page.keyboard.press("Escape");
@@ -230,10 +229,10 @@ for (const vp of ["desktop", "phone"]) {
     for (const name of ["Notes", "Snippet", "Count", "Date", "When", "Related"]) await editRoundTrip(t, name, { height: !["Notes", "When"].includes(name), width: name !== "When", multiline: name === "Notes", source: name === "Snippet" });
     // Type into an empty string field and save with a click outside.
     await t.page.getByRole("button", { name: "Edit Count", exact: true }).click();
-    await t.wait(300);
+    await t.editorReady();
     await t.page.keyboard.type("42");
     await clickOutside(t);
-    await t.check("clicking outside saves", (await t.page.locator(".item-fields").innerText()).includes("42"));
+    await t.until("clicking outside saves", async () => (await t.page.locator(".item-fields").innerText()).includes("42"));
   }, { viewport: vp });
 }
 

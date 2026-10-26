@@ -196,10 +196,12 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   };
   // Edits elsewhere (a table cell in another pane, a checkbox) refresh this item.
   // While this page saves a field it reads the item itself afterwards: the change that save
-  // announces needn't fetch it a second time.
-  const saving = useRef(false);
+  // announces needn't fetch it a second time. A count: two saves can overlap (a field saved by the
+  // press on a checkbox, the checkbox saved by its click), and the first to end mustn't let the
+  // second's change through as if it came from elsewhere.
+  const saving = useRef(0);
   useDataChanges((change) => {
-    if (change.scope === "items" && change.itemId === itemId && !saving.current) {
+    if (change.scope === "items" && change.itemId === itemId && saving.current === 0) {
       repo.getItem(collection, itemId).then(setItem, (e) => setError(errorMessage(e)));
     }
   });
@@ -315,12 +317,12 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
 
   async function saveField(field: FieldDef, value: FieldValue) {
     if (!item) return;
-    saving.current = true;
+    saving.current++;
     try {
       await repo.updateItem(collection, item.id, { [field.id]: value });
       setItem(await repo.getItem(collection, item.id));
     } finally {
-      saving.current = false;
+      saving.current--;
     }
     // Clicking another field saves this one; don't close the editor that click just opened.
     setEditing((current) => (current?.fieldId === field.id ? null : current));

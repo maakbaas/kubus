@@ -20,25 +20,25 @@ for (const vp of ["desktop", "wide"]) {
     // Edit Count in the left pane; the right pane's Count updates, nothing else there moves.
     const count = valueOf(t, "Count", left);
     await count.click();
-    await t.wait(200);
+    await t.editorReady();
     await t.page.keyboard.press("Control+A");
     await t.page.keyboard.type("4242");
     await t.noShift("saving in one pane moves nothing in the other", async () => {
       await t.page.keyboard.press("Enter");
-      await t.wait(300);
+      await t.page.locator(`${right} .item-fields`).getByText("4242").first().waitFor({ timeout: 5000 }).catch(() => {});
     }, { scope: `${right} .ws-pane__body`, except: [`${right} .item-fields > *:has([aria-label="Edit Count"])`] });
-    const other = await t.page.locator(`${right} .item-fields`).innerText();
-    await t.check("the other pane shows the saved value", other.includes("4242"), "4242 not in the right pane");
+    await t.until("the other pane shows the saved value", async () => (await t.page.locator(`${right} .item-fields`).innerText()).includes("4242") || "4242 not in the right pane");
     // The title, edited in the right pane, renames the tabs of both panes.
     await t.page.locator(`${right} .item-title`).first().click();
-    await t.page.waitForSelector(".item-title--editing", { timeout: 3000 }).catch(() => {});
-    await t.wait(100);
+    await t.editorReady(".item-title--editing");
     await t.page.keyboard.press("Control+End");
     await t.page.keyboard.type(" renamed");
     await t.page.keyboard.press("Enter");
     await t.settle();
-    const tabs = await t.page.locator(".ws-pane__tabs .cds--tabs__nav-item--selected").allInnerTexts();
-    await t.check("both panes' tabs show the new title", tabs.length === 2 && tabs.every((x) => x.includes("renamed")), JSON.stringify(tabs));
+    await t.until("both panes' tabs show the new title", async () => {
+      const tabs = await t.page.locator(".ws-pane__tabs .cds--tabs__nav-item--selected").allInnerTexts();
+      return (tabs.length === 2 && tabs.every((x) => x.includes("renamed"))) || JSON.stringify(tabs);
+    });
     await t.audit("after editing in both panes");
   }, { viewport: vp });
 }
@@ -50,35 +50,37 @@ for (const vp of ["desktop", "phone"]) {
     await t.open(t.itemPath(ids.collections.books, ids.items["books/i0"]));
     // Count → Date with one click: Count saved, Date's editor open.
     await valueOf(t, "Count").click();
-    await t.wait(200);
+    await t.editorReady();
     await t.page.keyboard.press("Control+A");
     await t.page.keyboard.type("77");
     const date = valueOf(t, "Date");
     await date.scrollIntoViewIfNeeded();
     await date.click({ position: await t.visiblePoint(date) });
     await t.settle();
-    await t.check("the first field is saved", (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("77"), "77 not shown");
-    await t.check("one click opened the next field's editor", (await t.count(".field-editor")) === 1, `${await t.count(".field-editor")} editors open`);
+    await t.until("the first field is saved", async () => (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("77") || "77 not shown");
+    await t.until("one click opened the next field's editor", async () => (await t.count(".field-editor")) === 1 || `${await t.count(".field-editor")} editors open`);
     await t.audit("moved from one field to the next");
     await t.page.keyboard.press("Escape");
     await t.page.keyboard.press("Escape");
     await t.settle();
     // A checkbox toggled while another field is edited: the edit is saved, the box toggles.
     await valueOf(t, "Count").click();
-    await t.wait(200);
+    await t.editorReady();
     await t.page.keyboard.press("Control+A");
     await t.page.keyboard.type("88");
     const done = t.page.locator(".ws-pane--active .item-fields .checklist-row", { hasText: "Done" }).first();
     await done.scrollIntoViewIfNeeded();
     const before = await done.locator("input, [role=checkbox], .toggle-input").first().evaluate((el) => el.checked ?? el.getAttribute("aria-checked") ?? el.getAttribute("aria-pressed"));
     await done.locator("label, .toggle-input").first().click();
+    await t.until("the edit is saved when a checkbox is clicked", async () => (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("88") || `88 not shown; ${await t.count(".field-editor")} editors open`);
+    await t.until("the checkbox toggled with that same click", async () => {
+      const after = await done.locator("input, [role=checkbox], .toggle-input").first().evaluate((el) => el.checked ?? el.getAttribute("aria-checked") ?? el.getAttribute("aria-pressed"));
+      return String(before) !== String(after) || `${before} → ${after}`;
+    });
     await t.settle();
-    const after = await done.locator("input, [role=checkbox], .toggle-input").first().evaluate((el) => el.checked ?? el.getAttribute("aria-checked") ?? el.getAttribute("aria-pressed"));
-    await t.check("the edit is saved when a checkbox is clicked", (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("88"), "88 not shown");
-    await t.check("the checkbox toggled with that same click", String(before) !== String(after), `${before} → ${after}`);
     // A field being edited while its neighbour collapses: the editor stays, nothing breaks.
     await valueOf(t, "Count").click();
-    await t.wait(200);
+    await t.editorReady();
     await t.page.locator(".ws-pane--active .item-fields .collapse-caret").first().click().catch(() => {});
     await t.settle();
     await t.audit("a field collapsed while another is edited");

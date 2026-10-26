@@ -18,7 +18,10 @@
 //   --port <n>         port for serving the build (default 1430)
 //   --base-url <url>   test an app that is already running there (no build, no server)
 //   --list             list the tests and exit
-//   --retries <n>      re-run tests that errored (not failed) up to n times (default 1)
+//   --retries <n>      re-run a test that errored or failed up to n times (default 1); one that
+//                      failed and then passed is "flaky" in the report, and counts as a failure
+//   --cpu <n>          slow each test's page down n times (CDP CPU throttling): load / stress mode
+//   --repeat <n>       run each selected test n times (names get " #k"), to measure how flaky it is
 //   --recycle <n>      restart each browser after n tests (default 8), to drop what it accumulated
 //   --min-free <gb>    wait before starting a test while less memory is free (default 1.5)
 //   --name <name>      name of this run's browser sessions, build and report folders (default: none), so
@@ -63,6 +66,8 @@ const recycleEvery = Math.max(1, Number(opt("recycle", 8)));
 const grep = opt("grep") ? new RegExp(opt("grep"), "i") : null;
 const suiteFilter = opt("suite");
 const retries = Number(opt("retries", 1));
+const cpu = Math.max(1, Number(opt("cpu", 1)));
+const repeat = Math.max(1, Number(opt("repeat", 1)));
 const skipRules = (opt("skip", "") || "").split(",").filter(Boolean);
 const runName = opt("name", "");
 const reportDir = join(here, runName ? `report-${runName}` : "report");
@@ -73,7 +78,7 @@ const tmpDir = join(reportDir, "tmp");
 // address); broken images are caught by the audit's broken-image rule instead.
 const IGNORE_CONSOLE = ["Download the React DevTools", "\\[vite\\]", "Failed to load resource"];
 
-const lib = ["harness.js", "data.js", "audit.js"].map((f) => readFileSync(join(here, "lib", f), "utf8")).join("\n\n");
+const lib = ["harness.js", "data.js", "audit.js", "design.js"].map((f) => readFileSync(join(here, "lib", f), "utf8")).join("\n\n");
 const suiteFiles = readdirSync(join(here, "suites")).filter((f) => f.endsWith(".js") && (!suiteFilter || new RegExp(suiteFilter, "i").test(f))).sort();
 
 // ---- discover tests (the suites register them at load; nothing runs) ----------------------
@@ -89,8 +94,10 @@ function listTests(file) {
 }
 let tests = suiteFiles.flatMap(listTests);
 if (grep) tests = tests.filter((t) => grep.test(`${t.suite} › ${t.name}`));
+// Each test `repeat` times: the same test (looked up by `name`), reported as "name #k".
+if (repeat > 1) tests = tests.flatMap((t) => Array.from({ length: repeat }, (_, k) => ({ ...t, label: `${t.name} #${k + 1}` })));
 if (flag("list")) {
-  for (const t of tests) console.log(`${t.suite} › ${t.name}`);
+  for (const t of tests) console.log(`${t.suite} › ${t.label || t.name}`);
   console.log(`${tests.length} tests`);
   process.exit(0);
 }
@@ -262,7 +269,7 @@ function stopServer() {
 
 // ---- run --------------------------------------------------------------------------------------
 async function runTest(session, t, n) {
-  const opts = { test: t.name, baseUrl, shotDir: shotDir.replace(/\\/g, "/"), skip: skipRules, shotAll: flag("shot-all"), ignoreConsole: IGNORE_CONSOLE };
+  const opts = { test: t.name, baseUrl, shotDir: shotDir.replace(/\\/g, "/"), skip: skipRules, shotAll: flag("shot-all"), ignoreConsole: IGNORE_CONSOLE, cpu, shotPrefix: t.label ? `r${n}-` : "" };
   const code = `async page => {\nconst __OPTS = ${JSON.stringify(opts)};\n${lib}\n${t.src}\nreturn await __main(page);\n}`;
   const file = join(tmpDir, `t${n}.js`);
   writeFileSync(file, code);
@@ -276,7 +283,7 @@ async function runTest(session, t, n) {
     const msg = (r.out + r.err).trim().slice(0, 2000) || `exit code ${r.code}`;
     result = { name: t.name, status: "error", error: msg, checkpoints: [] };
   }
-  return { ...result, suite: t.suite, viewport: result.viewport || t.opts.viewport || "desktop", dark: !!t.opts.dark };
+  return { ...result, name: t.label || result.name, suite: t.suite, viewport: result.viewport || t.opts.viewport || "desktop", dark: !!t.opts.dark };
 }
 
 async function main() {
@@ -288,7 +295,7 @@ async function main() {
   await ensureServer();
 
   const sessions = Array.from({ length: Math.min(workers, tests.length) }, (_, i) => `${SESSION_PREFIX}${i + 1}`);
-  console.log(`${tests.length} tests in ${sessions.length} browser(s) (${(freemem() / GB).toFixed(1)} GB free)`);
+  console.log(`${tests.length} tests in ${sessions.length} browser(s) (${(freemem() / GB).toFixed(1)} GB free)${cpu > 1 ? `, CPU slowed ${cpu}×` : ""}`);
   activeSessions = sessions;
   await Promise.all(sessions.map(openSession));
 
@@ -307,21 +314,26 @@ async function main() {
         ran++;
         await waitForMemory(t.name);
         let r = await runTest(session, t, i);
-        for (let k = 0; k < retries && r.status === "error"; k++) {
+        // What failed first: a test that fails and then passes is flaky (an error that then passes
+        // was the browser: a crash, a hang).
+        let failedFirst = null;
+        for (let k = 0; k < retries && r.status !== "pass"; k++) {
+          if (r.status === "fail" && !failedFirst) failedFirst = r;
           // A browser session can die (crash, hang): reopen it before retrying.
-          await openSession(session);
+          if (r.status === "error") await openSession(session);
           await waitForMemory(t.name);
           r = await runTest(session, t, i);
         }
+        if (failedFirst && r.status === "pass") r = { ...r, status: "flaky", firstAttempt: failedFirst.checkpoints.filter((c) => !c.pass).map((c) => `${c.label}: ${c.detail || (c.violations || []).map((v) => `${v.rule} ${v.message}`).join("; ")}`.slice(0, 400)) };
         // After an error the browser may still hold the test's page (a timeout, a crash): start over.
         if (r.status === "error") await openSession(session);
         results[i] = r;
         done++;
         writeReport(started, results.filter(Boolean), true);
         const failed = r.checkpoints.filter((c) => !c.pass).length;
-        const mark = r.status === "pass" ? "\x1b[32m✓\x1b[0m" : r.status === "fail" ? "\x1b[31m✗\x1b[0m" : "\x1b[33m!\x1b[0m";
-        const extra = r.status === "pass" ? "" : r.status === "fail" ? ` — ${failed} failed checkpoint${failed === 1 ? "" : "s"}` : ` — ${String(r.error).split("\n")[0].slice(0, 120)}`;
-        console.log(`${String(done).padStart(width)}/${tests.length} ${mark} ${t.suite} › ${t.name} (${((r.ms || 0) / 1000).toFixed(1)}s)${extra}`);
+        const mark = r.status === "pass" ? "\x1b[32m✓\x1b[0m" : r.status === "fail" ? "\x1b[31m✗\x1b[0m" : r.status === "flaky" ? "\x1b[35m~\x1b[0m" : "\x1b[33m!\x1b[0m";
+        const extra = r.status === "pass" ? "" : r.status === "fail" ? ` — ${failed} failed checkpoint${failed === 1 ? "" : "s"}` : r.status === "flaky" ? ` — flaky: failed first (${r.firstAttempt.length} checkpoint${r.firstAttempt.length === 1 ? "" : "s"}), passed on the retry` : ` — ${String(r.error).split("\n")[0].slice(0, 120)}`;
+        console.log(`${String(done).padStart(width)}/${tests.length} ${mark} ${t.suite} › ${t.label || t.name} (${((r.ms || 0) / 1000).toFixed(1)}s)${extra}`);
       }
     }));
   const all = tests.map((t, i) => ({ t, i }));
@@ -345,9 +357,27 @@ async function main() {
   const { summary, byRule } = writeReport(started, results, false);
   console.log("");
   for (const [rule, list] of Object.entries(byRule).sort((a, b) => b[1].length - a[1].length)) console.log(`  ${rule.padEnd(22)} ${list.length}`);
-  console.log(`\n${summary.passed} passed, ${summary.failed} failed, ${summary.errored} errored of ${summary.tests} tests; ${summary.failedCheckpoints} of ${summary.checkpoints} checkpoints failed (${summary.seconds}s)`);
+  for (const f of summary.flakyTests) console.log(`  flaky: ${f}`);
+  console.log(`\n${summary.passed} passed, ${summary.failed} failed, ${summary.flaky} flaky, ${summary.errored} errored of ${summary.tests} tests; ${summary.failedCheckpoints} of ${summary.checkpoints} checkpoints failed (${summary.seconds}s)`);
   console.log(`Report: ${join(reportDir, "index.html")}`);
-  process.exitCode = summary.failed + summary.errored > 0 ? 1 : 0;
+  process.exitCode = summary.failed + summary.errored + summary.flakyTests.length > 0 ? 1 : 0;
+}
+
+/** Tests that passed only on a retry, and repeated tests (--repeat) that passed in some runs only. */
+function flakyList(results) {
+  const out = results.filter((r) => r.status === "flaky").map((r) => `${r.suite} › ${r.name}`);
+  const runs = new Map();
+  for (const r of results) {
+    const m = /^(.*) #\d+$/.exec(r.name);
+    if (!m || repeat < 2) continue;
+    const key = `${r.suite} › ${m[1]}`;
+    runs.set(key, [...(runs.get(key) || []), r.status === "pass"]);
+  }
+  for (const [key, passes] of runs) {
+    const failed = passes.filter((p) => !p).length;
+    if (failed && failed < passes.length) out.push(`${key} (${failed} of ${passes.length} runs failed)`);
+  }
+  return out;
 }
 
 /** Writes results.json and index.html; also after every test, so a run that dies still leaves a report. */
@@ -360,6 +390,9 @@ function writeReport(started, results, partial) {
     passed: results.filter((r) => r.status === "pass").length,
     failed: results.filter((r) => r.status === "fail").length,
     errored: results.filter((r) => r.status === "error").length,
+    flaky: results.filter((r) => r.status === "flaky").length,
+    // Flaky: passed on a retry, or (with --repeat) passed in some runs and not in others.
+    flakyTests: flakyList(results),
     checkpoints: results.reduce((a, r) => a + r.checkpoints.length, 0),
     failedCheckpoints: results.reduce((a, r) => a + r.checkpoints.filter((c) => !c.pass).length, 0),
   };
@@ -394,7 +427,8 @@ function renderReport(summary, byRule, results) {
   };
   const testHtml = (r) => {
     const failed = r.checkpoints.filter((c) => !c.pass).length;
-    return `<details class="test ${r.status}" ${r.status !== "pass" ? "" : ""}><summary><span class="badge">${r.status.toUpperCase()}</span> ${esc(r.name)} <span class="muted">${esc(r.viewport)}${r.dark ? " · dark" : ""} · ${r.checkpoints.length} checkpoints${failed ? `, ${failed} failed` : ""} · ${((r.ms || 0) / 1000).toFixed(1)}s</span></summary>${r.error ? `<pre class="err">${esc(r.error)}</pre>` : ""}${r.checkpoints.map(cp).join("")}</details>`;
+    const first = r.firstAttempt ? `<pre class="err">Failed on the first attempt, passed on the retry:\n${esc(r.firstAttempt.join("\n"))}</pre>` : "";
+    return `<details class="test ${r.status}"><summary><span class="badge">${r.status.toUpperCase()}</span> ${esc(r.name)} <span class="muted">${esc(r.viewport)}${r.dark ? " · dark" : ""} · ${r.checkpoints.length} checkpoints${failed ? `, ${failed} failed` : ""} · ${((r.ms || 0) / 1000).toFixed(1)}s</span></summary>${first}${r.error ? `<pre class="err">${esc(r.error)}</pre>` : ""}${r.checkpoints.map(cp).join("")}</details>`;
   };
   const suiteHtml = suites.map((s) => {
     const rs = results.filter((r) => r.suite === s);
@@ -414,7 +448,7 @@ button{font:inherit;padding:4px 10px;border:1px solid var(--line);background:var
 .rules td{padding:2px 12px 2px 0}
 details.test{border:1px solid var(--line);margin:6px 0;background:var(--bg)}details.test>summary{padding:6px 10px;cursor:pointer}
 .badge{display:inline-block;font-size:11px;font-weight:600;padding:1px 6px;color:#fff;background:var(--ok)}
-.fail>summary .badge,.cp.bad .badge{background:var(--bad)}.error>summary .badge{background:var(--warn)}
+.fail>summary .badge,.cp.bad .badge{background:var(--bad)}.error>summary .badge{background:var(--warn)}.flaky>summary .badge{background:#8a3ffc}
 .cp{border-top:1px solid var(--line);padding:8px 10px}.cp-head{margin-bottom:6px}.kind{color:var(--muted);font-size:12px}
 .cp-body{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}.cp-text{flex:1 1 420px;min-width:0}
 .cp img{max-width:480px;width:100%;border:1px solid var(--line)}
@@ -425,8 +459,8 @@ body.filtered .cp{display:none}body.filtered .cp.match{display:block}body.filter
 </style></head><body>
 <h1>Kubus GUI report</h1>
 <div class="muted">${esc(summary.started)} · ${summary.seconds}s${summary.partial ? ` · <b>incomplete: ${esc(summary.partial)}</b>` : ""}</div>
-<div class="stats"><div class="stat"><b>${summary.tests}</b>tests</div><div class="stat"><b style="color:var(--ok)">${summary.passed}</b>passed</div><div class="stat"><b style="color:var(--bad)">${summary.failed}</b>failed</div><div class="stat"><b style="color:var(--warn)">${summary.errored}</b>errored</div><div class="stat"><b>${summary.failedCheckpoints}/${summary.checkpoints}</b>checkpoints failed</div></div>
-<h2>Failures by criterion</h2>${ruleRows ? `<table class="rules">${ruleRows}</table>` : "<p>None.</p>"}
+<div class="stats"><div class="stat"><b>${summary.tests}</b>tests</div><div class="stat"><b style="color:var(--ok)">${summary.passed}</b>passed</div><div class="stat"><b style="color:var(--bad)">${summary.failed}</b>failed</div><div class="stat"><b style="color:#8a3ffc">${summary.flaky}</b>flaky</div><div class="stat"><b style="color:var(--warn)">${summary.errored}</b>errored</div><div class="stat"><b>${summary.failedCheckpoints}/${summary.checkpoints}</b>checkpoints failed</div></div>
+${summary.flakyTests.length ? `<h2>Flaky</h2><ul>${summary.flakyTests.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}<h2>Failures by criterion</h2>${ruleRows ? `<table class="rules">${ruleRows}</table>` : "<p>None.</p>"}
 <details><summary>All pass/fail criteria (${Object.keys(criteria).length})</summary><table class="rules">${criteriaRows}</table></details>
 <div class="controls"><button id="failed">Only failures</button><button id="expand">Expand all</button><button id="collapse">Collapse all</button><button id="clear">Clear criterion filter</button></div>
 ${suiteHtml}
