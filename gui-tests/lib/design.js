@@ -102,7 +102,9 @@ function __design(opts) {
     const PROPS = ["marginTop", "marginRight", "marginBottom", "marginLeft", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "rowGap", "columnGap"];
     for (const el of shown) {
       if ([...el.classList].some((c) => c.startsWith("cds--")) || el.closest(USER_CONTENT) || !el.classList.length) continue;
+      // The page's end also clears the home indicator and an on-screen keyboard (keyboardInset.ts).
       if (el.matches(".app-content, .cds--data-table td, .cds--data-table th")) continue;
+      const pageEnd = el.matches(".ws-tab-content");
       const s = cs(el);
       const h = el.getBoundingClientRect().height;
       const row = Math.abs(h - 32) <= 1 || Math.abs(h - 31) <= 1;
@@ -116,6 +118,7 @@ function __design(opts) {
         }
         // The same centring for the first line of a taller value (--block-pad-top, styles.css).
         if ((row || el.matches(".view-field__value, .code-editor__input, .code-editor__highlight")) && /^padding(Top|Bottom)$/.test(p)) continue;
+        if (pageEnd && p === "paddingBottom") continue;
         if (/^margin(Left|Right)$/.test(p) && s.marginLeft === s.marginRight) continue;
         judge("spacing-scale", false, el, `${v}`, `${p} ${v}px is not on the spacing scale`);
       }
