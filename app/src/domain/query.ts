@@ -143,7 +143,8 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     groupKeys: (_, v) => single(str(v) ? localDay(v) : ""),
   },
   checkbox: {
-    operators: [op("isChecked", "is checked", false), op("isNotChecked", "is not checked", false)],
+    // "is" takes true or false, so a value from {{ }} can choose.
+    operators: [op("isChecked", "is checked", false), op("isNotChecked", "is not checked", false), op("is", "is")],
     text: (_, v) => (v === true ? "yes" : "no"),
     sortKey: (_, v) => (v === true ? 1 : 0),
     groupKeys: (_, v) => (v === true ? single("yes", "Checked") : single("no", "Not checked")),
@@ -305,6 +306,7 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
       else if (field.kind === "item") equal = value === arg;
       else if (field.kind === "item_list") equal = list(value).includes(arg);
       else if (field.kind === "datetime") equal = dayOf(field, value) === arg;
+      else if (field.kind === "checkbox") equal = (value === true) === (arg.toLowerCase() === "true");
       else equal = text() === arg.toLowerCase();
       return rule.operator === "is" ? equal : !equal;
     }

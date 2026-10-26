@@ -20,6 +20,8 @@ interface Props {
   query: ViewQuery;
   refs: RefOptions;
   part: "filter" | "sortGroup";
+  /** Sort part: without the grouping (a block whose items aren't shown in groups). */
+  noGroup?: boolean;
   /** On an item page: its collection, so reference rules can compare with the page's item. */
   page?: Collection;
   /** Filter part: its heading and what an empty filter means (defaults: a view's). */
@@ -55,7 +57,9 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
       hideLabel
       size="sm"
       type={type}
-      placeholder={page ? "Value or {{ $item.Name }}" : type === "date" ? "yyyy-mm-dd" : "Value"}
+      placeholder={
+        field.kind === "checkbox" ? (page ? "true, false or {{ … }}" : "true or false") : page ? "Value or {{ $item.Name }}" : type === "date" ? "yyyy-mm-dd" : "Value"
+      }
       value={rule.value}
       onChange={(e) => onChange(e.target.value)}
     />
@@ -66,7 +70,7 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
  * Edits part of a view's query: its filters, or its sort and grouping (each shown in its own
  * toolbar popover). Built only on the query registry (domain/query.ts).
  */
-export function QueryEditor({ collection, query, refs, part, page, title = "Filter", emptyText = "Showing all items.", onChange }: Props) {
+export function QueryEditor({ collection, query, refs, part, noGroup, page, title = "Filter", emptyText = "Showing all items.", onChange }: Props) {
   // Element ids unique per editor: several item lists (tabs, panes) can be open at once.
   const uid = useId();
   const fieldsById = new Map(pickableFields(collection).map((f) => [f.id, f]));
@@ -179,6 +183,7 @@ export function QueryEditor({ collection, query, refs, part, page, title = "Filt
         </div>
       </section>
 
+      {!noGroup && (
       <section>
         <Heading className="query-editor__title">Group</Heading>
         <div className="query-editor__pair">
@@ -213,6 +218,7 @@ export function QueryEditor({ collection, query, refs, part, page, title = "Filt
           </Select>
         </div>
       </section>
+      )}
       </>
       )}
     </div>

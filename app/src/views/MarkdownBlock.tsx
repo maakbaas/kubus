@@ -28,7 +28,7 @@ const TEXT_FIELD: FieldDef = {
   componentId: null,
   componentArgs: {},
   choiceFilter: [],
-  toggleIcon: null,
+  toggleIcon: null, strikeThrough: false,
   aiPrompt: null,
   aiOutput: null,
   position: 0,
@@ -114,7 +114,7 @@ export const markdownBlock = defineBlockType<MarkdownBlockOptions>({
   // By what its text uses, like a component: static text has no filter, sort or fields.
   uses(options) {
     const uses = componentUses(options.text);
-    return { query: uses.items, fields: uses.fields ? { labels: false, hideEmpty: false } : null };
+    return { query: uses.items, groups: uses.groups, fields: uses.fields ? { labels: false, hideEmpty: false } : null };
   },
   View: MarkdownBlockView,
 });

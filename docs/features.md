@@ -17,6 +17,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   key of `TOGGLE_ICONS` in `ui/ToggleInput.tsx`: heart, star, flag, bookmark, checkmark, thumbs up,
   faces; outlined when off, filled when on; null = Carbon's checkbox). Every place that toggles
   such a value uses `ToggleInput`, never `Checkbox` directly. Markdown task boxes stay GFM boxes.
+  A checked one's text is greyed, and struck through with the field's "Strike through when checked"
+  (`fields.strike_through`, synced).
 - **Markdown is strictly GitHub Flavored Markdown.** The Milkdown editor (`app/src/ui/MarkdownEditor.tsx`)
   loads only the CommonMark + GFM presets (plus non-syntax utilities: history, listener,
   clipboard, upload, prism). Don't add syntax plugins (math, emoji, diagrams, frontmatter, Crepe, …),
@@ -55,7 +57,9 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   run) and never stored; failing sections show `⚠ message`. One concept on purpose: the same
   components are fields and blocks (see Blocks). The code runs in the app with the
   user's rights (`new Function`); it must move to a sandbox once components can come from others
-  (sync, sharing).
+  (sync, sharing). The editor previews the result as you type, with a test value per variable and only
+  the choices the code calls for: a collection when it reads items, an item for `$item`, a field to group
+  by for `$groups`, the fields for `$fields` (`CollectionPreview` in `ComponentEditorPage.tsx`).
   - `{{ }}` sections also work inside an item's own string, markdown, HTML and number values
     (`withComputed` renders them when shown and keeps the typed source in `item.sources`, which
     editors use). A number field holding sections stores that text in `value_text`, so its input
@@ -101,7 +105,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   prompt, opening the app on a pile of them) stops everything until a modal asks "Generate N AI values?" ("Not now"
   drops them for the session); a pause switch in Settings → AI sends no request at all. Results are stored via
   `Repository.setGenerated` (which leaves the item's `updatedAt` alone). Without a model everything waits; failures
-  show their reason in place and "Retry" in the banner (`ui/AiBanner.tsx`, along the bottom of the window); items have
+  show their reason in place and "Retry" in the AI icon's popover (`AiStatusButton` in `ui/AiBanner.tsx`, left of the
+  sync icon and only there while something needs saying: not set up, paused, writing many, failed); items have
   a "Generate again" button in the label row whose popover shows when the value was generated (or edited) and takes
   a nudge for that value, sent once and not kept. AI fields are skipped by duplicate and the new-item form.
   **Values can be typed over** (item page, table cells for text and numbers; `editableField` edits an AI field as its
@@ -138,8 +143,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   name or "Table" / "Cards"; set under Block settings), a collapse caret after it (clicking the name
   collapses too), and its menus at the right; blocks are separated by a line, like item fields. In a
   collection view the header can be hidden (tag icon in View settings' block list,
-  `ViewBlock.hideHeader`, stored right away), as is that of a Markdown block without a name on an
-  item page: the header row goes and its menus become a "⋮" (`OverflowBar` with `menu`, the dark
+  `ViewBlock.hideHeader`, stored right away), on an item page with the layout's name toggle (a
+  Markdown block too: unnamed, it is headed "Markdown" like any block): the header row goes and its menus become a "⋮" (`OverflowBar` with `menu`, the dark
   popover phones get; always, even for a single button; a narrow button, 1rem wide) to the right
   of the block's content; the block can't collapse. A field shown without its name does the same with its
   label row's buttons ("Generate again"), also while it is edited. The line between fields and
@@ -175,7 +180,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   shown, also for a single view (hiding them was confusing and hid the bookmark button); a changed
   view's tab shows " *"; bookmarking or starring the virtual "All" view stores it first. When a layout hides
   fields or isn't editable, an edit icon switches to the standard page (all fields, editable)
-  for the time being. Every labelled field collapses like a block: a caret before its label
+  for the time being. Every labelled field collapses like a block: a caret before its label (clicking the name collapses too)
   (`FieldCollapse` context, read by `FieldLabel`, so view and edit mode look alike), stored right
   away with the item view's `Collapsed` (field ids among the block ids). The layout's name toggle
   (tag icon, `hiddenLabels`) also covers blocks there: it hides the block's header (its menus move to a "⋮" beside it).
@@ -210,11 +215,11 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   href tried once per editor); one that names nothing stays as written and is resolved when clicked. `?block=` /
   `?field=` scroll to the target and flash it (`ui/useLinkTarget.ts`; blocks carry `data-block-id`, item page
   fields are found by their place among the page's entries).
-- **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's items, substring match over string, markdown, HTML and
-  list-of-strings values (ASCII case-insensitive; an FTS index can come later).
+- **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's items, substring match over string, markdown, HTML, AI,
+  list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; an FTS index can come later).
 - **Local first.** The app works fully offline on the device's own SQLite database. Every asset is part of the build (IBM Plex included, `app/src/fonts.css`; nothing from a
   CDN) and the service worker caches all of it, so offline it looks exactly as online.
-- **Future:** a block's own unnamed component code ("Save as component"), chart block types,
+- **Future:** chart block types,
   blocks side by side (a grid), embedding one item's field elsewhere (deliberately left out for now).
 - **Sync.** The local SQLite is an offline-first replica of a Postgres-backed server (see "Sync with Postgres").
 - **One codebase, many shells.** Desktop runs in Tauri; iOS (and anything else) runs the same web

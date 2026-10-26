@@ -161,7 +161,7 @@ function __audit(opts) {
   const LAYER_SEL = [
     ".cds--popover-content", ".cds--modal", ".cds--list-box__menu", ".cds--overflow-menu-options",
     ".flatpickr-calendar", "[role=tooltip]", "[role=menu]", "[role=listbox]", ".search-bar",
-    ".cds--side-nav", ".ws-drop", ".lightbox", ".ai-banner", ".milkdown-link-popover", ".cds--toast-notification",
+    ".cds--side-nav", ".ws-drop", ".lightbox", ".milkdown-link-popover", ".cds--toast-notification",
     ".overflow-bar[data-open] > .overflow-bar__items", ".md-link-popover",
   ].join(",");
   // The side nav floats over the content unless it is docked (narrow windows, phones).

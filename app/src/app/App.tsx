@@ -8,7 +8,7 @@ import { Lightbox } from "../ui/Lightbox";
 import { GlobalLinks, useWorkspace, WorkspaceProvider, WorkspaceView } from "../workspace/Workspace";
 import { readPref, writePref } from "../ui/localPrefs";
 import { useMediaQuery } from "../ui/useMediaQuery";
-import { AiBanner } from "../ui/AiBanner";
+import { AiDialogs, AiStatusButton } from "../ui/AiBanner";
 import { AiBackfillRunner } from "./AiBackfillRunner";
 import { NavFooter, NavTree } from "./NavTree";
 import { StoreProvider, useStore } from "./store";
@@ -184,12 +184,12 @@ function Shell() {
               <IconButton autoAlign label="Search" kind="ghost" size="sm" align="bottom-end" onClick={() => setSearchOpen(true)}>
                 <SearchIcon />
               </IconButton>
+              <AiStatusButton onSetup={() => ws.navigate("/settings?section=ai")} />
               <SyncStatusButton onConfigure={() => ws.navigate("/settings?section=sync")} />
             </>
           }
         />
-        {/* At the bottom: nothing sits above the tab strip (iOS colours its status bar from it). */}
-        <AiBanner onSetup={() => ws.navigate("/settings?section=ai")} />
+        <AiDialogs />
       </main>
       {searchOpen && (
         <SearchBar

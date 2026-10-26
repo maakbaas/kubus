@@ -16,7 +16,7 @@ Extension points are registries, not special cases in pages:
   the block's "Block settings" menu (gear icon), below "Show as") registered in `BLOCK_TYPES` (`app/src/views/index.ts`). What
   every type shares (filter, sort and group, fields) is the block's, never in options, so
   it carries over when the type is switched. Today: `table` (title column links to the item; string,
-  number, date(time) and item cells edit in place via the shared `ui/FieldEditor` (option "Edit values in place", which also gives the add row; checkboxes toggle either way, in every block type); the last row is empty but for a "+" in the title column, which turns it into an add row
+  number, date(time) and item cells edit in place via the shared `ui/FieldEditor` (the view’s "Fields are editable" in View settings, `ViewState.editable`, a view change like its filter; an item view’s own for blocks on item pages; it also gives the add row; checkboxes toggle either way, in every block type); the last row is empty but for a "+" in the title column, which turns it into an add row
   with inputs per editable column (text aligned with the column); header sorting; grouping = one table per
   group in a collapsible Carbon Accordion; columns as wide as their content on one line while
   there's room, the actions column widened by `FillTable` so the table spans the pane; an editing
@@ -25,7 +25,7 @@ Extension points are registries, not special cases in pages:
   every table restacks as cards, column names as row labels: `.table-wrap` container query) and `cards` (show title, fields, cover = an image or a markdown field rendered in its place, card width (slider: the column count whose width comes closest), cover shape:
   a fixed ratio (image shown whole, the rest filled with its average colour) or the images'
   average ratio (filled, cropped); with no title and no fields a card is just its cover) and
-  `component` (`views/ComponentBlock.tsx`). `markdown` (`views/MarkdownBlock.tsx`) is a block with its own Markdown text, stored in the block's options (not a reusable component), with `{{ }}` sections over `$item` / `$items`; it is shown and edited exactly like a Markdown field (same read-only box, `FieldEditor`). "Add block" is a menu (`views/AddBlockButton.tsx`): a block of each type and one per usable component. A block type only
+  `component` (`views/ComponentBlock.tsx`). `markdown` (`views/MarkdownBlock.tsx`) is a block with its own Markdown text, stored in the block's options (not a reusable component), with `{{ }}` sections over `$item` / `$items`; it is shown and edited exactly like a Markdown field (same read-only box, `FieldEditor`); "Save as component" in its Block settings stores the text as a new component (named like the block) and turns the block into a component block showing it. "Add block" is a menu (`views/AddBlockButton.tsx`): a block of each type and one per usable component. A block type only
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
 - **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + JSON config
@@ -42,8 +42,8 @@ Extension points are registries, not special cases in pages:
   set via `setDefaultView`), else the first; a space without stored views shows a virtual "All" table (id `default`; stored when
   changed, renamed or joined by another view), so a collection always has a view and the last can't be
   deleted. Changes are ephemeral: while the shown view differs from
-  its saved version, icon buttons beside the star offer Discard changes and Save changes to view
-  ("+" saves them as a new view instead). Search is never saved. A shown view without unsaved changes follows its stored settings when they change elsewhere (sync, another pane) instead of turning into "changed".
+  its saved version, a Save changes to view icon button stands left of the bar's buttons, never in
+  the "⋮" menu ("+" saves them as a new view instead); there is no Discard: opening another view drops them. Search is never saved. A shown view without unsaved changes follows its stored settings when they change elsewhere (sync, another pane) instead of turning into "changed".
 
 ## Workspace (tabs and tiling)
 
@@ -85,5 +85,6 @@ Extension points are registries, not special cases in pages:
   lets all fit, and shorter tabs keep their whole label until the cut reaches them (each width is set
   from `fit`; flexbox would shrink every tab in proportion). A tab keeps at least its close button and
   6rem of text, so short names ("Locations") are never cut; when even that doesn't fit the list scrolls
-  (Carbon's buttons) and the active tab is centred. Recomputed on title / active-tab changes and
-  strip resizes (`ResizeObserver`).
+  (Carbon's buttons) and the active tab is centred. A label's width is its text's exact width rounded up
+  (a Range: Safari rounds `scrollWidth` down, and a fraction short cut "Tasks" to "Ta…"). Recomputed on
+  title / active-tab changes, strip resizes (`ResizeObserver`) and font loads (`loadingdone`).

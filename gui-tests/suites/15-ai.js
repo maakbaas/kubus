@@ -134,13 +134,17 @@ test("a failed value shows its error, Retry tries again", async (t) => {
   const fake = await fakeModel(t, () => ({ status: 500, message: "The model is down" }));
   const ids = await t.seed(aiSpec(2));
   await t.open(t.listPath(ids.collections.books));
-  const banner = t.page.locator(".ai-banner");
-  await t.until("the banner says values failed, with the error", async () => /failed/.test(await banner.innerText().catch(() => "")) && /The model is down/.test(await banner.innerText()), { timeout: 15000 });
-  await t.audit("AI failure banner");
+  // The AI icon beside the sync icon; its popover tells what happened.
+  const icon = t.page.getByRole("button", { name: "AI values failed" });
+  await t.until("the AI icon shows a failure", async () => (await icon.count()) === 1, { timeout: 15000 });
+  await icon.click();
+  const panel = t.page.locator(".sync-popover");
+  await t.until("its popover says values failed, with the error", async () => /failed/.test(await panel.innerText().catch(() => "")) && /The model is down/.test(await panel.innerText()));
+  await t.audit("AI failure popover");
   fake.answer = summaryReply;
-  await banner.getByRole("button", { name: "Retry" }).click();
+  await panel.getByRole("button", { name: "Retry" }).click();
   await t.until("Retry fills the values in", async () => ((await t.page.locator(".ws-pane--active").innerText()).match(/AI summary of/g) || []).length >= 2, { timeout: 15000 });
-  await t.until("the failure banner goes", async () => !/failed/.test(await banner.innerText().catch(() => "")));
+  await t.until("the AI icon goes", async () => (await icon.count()) === 0);
 });
 
 for (const vp of ["desktop", "phone"]) {
@@ -165,18 +169,21 @@ for (const vp of ["desktop", "phone"]) {
   }, { viewport: vp });
 }
 
-test("no model set up: the banner says so and leads to the settings", async (t) => {
+test("no model set up: the AI icon says so and leads to the settings", async (t) => {
   await t.boot();
   const spec = profileSpec("typical", { items: 2, ai: true });
   const ids = await t.seed(spec);
   await t.open(t.listPath(ids.collections.books));
-  const banner = t.page.locator(".ai-banner");
-  await t.until("the banner says AI isn't set up", async () => (await banner.innerText().catch(() => "")).includes("AI isn't set up"), { timeout: 10000 });
-  await t.audit("AI not set up banner");
-  await banner.getByRole("button", { name: "Open settings" }).click();
+  const icon = t.page.getByRole("button", { name: "AI isn't set up" });
+  await t.until("the AI icon says AI isn't set up", async () => (await icon.count()) === 1, { timeout: 10000 });
+  await icon.click();
+  const panel = t.page.locator(".sync-popover");
+  await t.until("its popover says why", async () => (await panel.innerText().catch(() => "")).includes("wait for a model"));
+  await t.audit("AI not set up popover");
+  await panel.getByRole("button", { name: "Open settings" }).click();
   await t.settle();
   await t.until("Open settings shows the AI settings", async () => (await t.page.locator(".ws-pane--active").innerText()).includes("API key"), { timeout: 5000 });
-  await t.audit("AI settings from the banner");
+  await t.audit("AI settings from the AI icon");
 });
 
 for (const vp of ["desktop", "phone"]) {

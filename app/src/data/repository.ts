@@ -29,6 +29,13 @@ export interface SyncStatus {
   /** ISO time of the last successful sync. */
   lastSync: string | null;
   error: string | null;
+  /**
+   * The server's database is another one than this device synced with (wiped or replaced since):
+   * sync is paused until the user connects again (`reconnect`) or disconnects. When the new one was
+   * made, and whether it holds anything (connecting again then uploads this device's data, else
+   * replaces it with the server's).
+   */
+  replaced: { createdAt: string; empty: boolean } | null;
 }
 export interface SyncControl {
   readonly config: SyncConfig;
@@ -43,6 +50,18 @@ export interface SyncControl {
    * data; connecting again later counts as a first connection (the server's data replaces it).
    */
   disconnect(): Promise<void>;
+  /**
+   * Stops syncing, keeping the server's address and token. Switching it on again counts as a first
+   * connection (the server's data replaces this device's).
+   */
+  pause(): Promise<void>;
+  /** After `status.replaced`: syncs again, as a first connection to the server's new database. */
+  reconnect(): Promise<void>;
+  /**
+   * Deletes everything on the saved server (all devices' data; also when its tables don't fit the
+   * schema), then pauses sync here: switching it on again uploads this device's data.
+   */
+  wipeServer(): Promise<void>;
   /** True when connecting to `url` would replace this device's data with the server's (first time). */
   isNewServer(url: string): boolean;
 }
@@ -55,6 +74,11 @@ export interface SyncControl {
 export interface Repository {
   /** persistent=false means an in-memory fallback: data is lost on reload. */
   readonly storage: { persistent: boolean };
+  /**
+   * Drops all data on this device, after pausing sync (see `SyncControl.pause`): a new, empty
+   * database. Whatever shows data must start over: the app reloads after it.
+   */
+  wipeLocal(): Promise<void>;
   /** Syncing with the Kubus server. */
   readonly sync: SyncControl;
 

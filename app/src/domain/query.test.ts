@@ -3,7 +3,7 @@ import type { FieldDef, Item, Collection } from "./model";
 import { applyQuery, defaultQuery, type QueryContext } from "./query";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], position: number): FieldDef => ({
-  id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null, position,
+  id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null, position,
 });
 
 const collection: Collection = {
@@ -36,5 +36,13 @@ describe("applyQuery", () => {
     const q = { ...defaultQuery(), filters: [{ id: "f", fieldId: "title", operator: "contains" as const, value: "a" }] };
     expect(applyQuery(collection, books, q, ctx).total).toBe(3);
     expect(applyQuery(collection, books, defaultQuery(), ctx, "brav").total).toBe(1);
+  });
+
+  it("filters a checkbox on true or false", () => {
+    const withRead: Collection = { ...collection, fields: [...collection.fields, field("read", "Read", "checkbox", 2)] };
+    const items = books.map((b, i) => ({ ...b, values: { ...b.values, read: i === 0 } }));
+    const is = (value: string) => ids(applyQuery(withRead, items, { ...defaultQuery(), filters: [{ id: "f", fieldId: "read", operator: "is" as const, value }] }, ctx));
+    expect(is("true")).toEqual(["1"]);
+    expect(is(" False ")).toEqual(["2", "3"]);
   });
 });

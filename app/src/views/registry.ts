@@ -56,6 +56,8 @@ export interface BlockProps<O> {
   fields: FieldDef[];
   layout: FieldLayout;
   options: O;
+  /** Field values are edited in place (the view's or item view's "Fields are editable"). */
+  editable: boolean;
   /** Stores changed options right away (a block that edits its own content, like Markdown). */
   onOptions(options: O): void;
   refs: RefOptions;
@@ -75,6 +77,8 @@ export interface BlockProps<O> {
 export interface BlockUses {
   /** Its items are listed: filter, sort and group apply. */
   query: boolean;
+  /** Its items are shown in groups: grouping applies (a component only with $groups). */
+  groups: boolean;
   /** Fields can be chosen, with these of the layout's settings; null = no field choice. */
   fields: { labels: boolean; hideEmpty: boolean } | null;
 }

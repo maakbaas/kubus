@@ -5,6 +5,7 @@ import { extname, join, normalize } from "node:path";
 import { createPool } from "./db.ts";
 import { broadcast, handleEvents } from "./events.ts";
 import { handleSync } from "./sync.ts";
+import { wipe } from "./wipe.ts";
 import type { SyncRequest } from "../../shared/sync.ts";
 
 // Kubus server: the sync API (/api) and, from the same origin, the web app (so a phone can
@@ -22,7 +23,16 @@ const staticDir = process.env.STATIC_DIR ?? join(import.meta.dirname, "../../app
 const MAX_BODY = 100 * 1024 * 1024;
 
 const pool = createPool(databaseUrl);
-await pool.query(await readFile(join(import.meta.dirname, "../schema.sql"), "utf8"));
+const schemaSql = await readFile(join(import.meta.dirname, "../schema.sql"), "utf8");
+// A database whose tables don't fit the schema doesn't stop the server: sync answers with the
+// error, and wiping the database (which doesn't depend on its tables) can still fix it.
+let schemaError: string | null = null;
+try {
+  await pool.query(schemaSql);
+} catch (e) {
+  schemaError = `The server's database doesn't fit its schema: ${e instanceof Error ? e.message : String(e)}`;
+  console.error(schemaError);
+}
 
 const digest = (s: string) => createHash("sha256").update(s).digest();
 const expected = digest(token);
@@ -80,8 +90,20 @@ createServer(async (req, res) => {
     if (url.startsWith("/api/")) {
       if (!authorized(req)) return send(res, 401, '{"error":"Wrong token"}');
       if (url === "/api/events" && req.method === "GET") return handleEvents(req, res);
+      if (url === "/api/wipe" && req.method === "POST") {
+        // Asked for in so many words, so no stray request can do it.
+        if ((JSON.parse(await readBody(req)) as { confirm?: string }).confirm !== "wipe") return send(res, 400, '{"error":"Not confirmed"}');
+        await wipe(pool, schemaSql);
+        schemaError = null;
+        send(res, 200, '{"ok":true}');
+        broadcast(0);
+        return;
+      }
+      if (schemaError) return send(res, 500, JSON.stringify({ error: schemaError }));
       if (url === "/api/sync" && req.method === "POST") {
-        const { wrote, ...response } = await handleSync(pool, JSON.parse(await readBody(req)) as SyncRequest);
+        const result = await handleSync(pool, JSON.parse(await readBody(req)) as SyncRequest);
+        if ("mismatch" in result) return send(res, 409, JSON.stringify(result.mismatch));
+        const { wrote, ...response } = result;
         send(res, 200, JSON.stringify(response));
         if (wrote) broadcast(response.cursor);
         return;

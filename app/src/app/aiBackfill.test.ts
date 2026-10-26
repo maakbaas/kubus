@@ -5,7 +5,7 @@ import type { AiJob, AiService } from "./ai";
 import { AiBackfill } from "./aiBackfill";
 
 const field = (id: string, collectionId: string, name: string, kind: FieldDef["kind"], extra: Partial<FieldDef> = {}): FieldDef => ({
-  id, collectionId, name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null,
+  id, collectionId, name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false,
   aiPrompt: null, aiOutput: null, position: 0, ...extra,
 });
 const collection = (id: string, name: string, fields: FieldDef[]): Collection => ({

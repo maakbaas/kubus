@@ -47,6 +47,7 @@ interface FieldRow {
   component_args: string | null;
   choice_filter: string | null;
   toggle_icon: string | null;
+  strike_through: number | null;
   ai_prompt: string | null;
   ai_output: string | null;
   position: number;
@@ -106,6 +107,7 @@ const toField = (r: FieldRow): FieldDef => ({
   componentArgs: parseComponentArgs(r.component_args),
   choiceFilter: parseJson<FilterRule[]>(r.choice_filter, []),
   toggleIcon: r.toggle_icon,
+  strikeThrough: r.strike_through === 1,
   aiPrompt: r.ai_prompt,
   aiOutput: r.ai_output === "number" || r.ai_output === "markdown" || r.ai_output === "string" ? r.ai_output : null,
   position: r.position,
@@ -165,6 +167,11 @@ export class SqliteRepository implements Repository {
 
   get storage() {
     return { persistent: this.db.info.persistent };
+  }
+
+  async wipeLocal(): Promise<void> {
+    await this.sync.pause();
+    await this.db.wipe();
   }
 
   async listSpaces(): Promise<Space[]> {
@@ -265,8 +272,8 @@ export class SqliteRepository implements Repository {
       const old = storedById.get(f.id);
       if (!old) {
         writes.push({
-          sql: "INSERT INTO fields (id, collection_id, name, kind, target_collection_id, component_id, component_args, choice_filter, toggle_icon, ai_prompt, ai_output, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?10, ?11, ?12, ?13, ?8, ?9, ?9)",
-          bind: [f.id, draft.id, f.name, f.kind, f.targetCollectionId, f.componentId, args(f), position, ts, choices(f), f.toggleIcon, aiPrompt(f), aiOutput(f)],
+          sql: "INSERT INTO fields (id, collection_id, name, kind, target_collection_id, component_id, component_args, choice_filter, toggle_icon, ai_prompt, ai_output, strike_through, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?10, ?11, ?12, ?13, ?14, ?8, ?9, ?9)",
+          bind: [f.id, draft.id, f.name, f.kind, f.targetCollectionId, f.componentId, args(f), position, ts, choices(f), f.toggleIcon, aiPrompt(f), aiOutput(f), strike(f)],
         });
       } else if (
         old.name !== f.name ||
@@ -275,13 +282,14 @@ export class SqliteRepository implements Repository {
         (old.component_args ?? null) !== args(f) ||
         (old.choice_filter ?? null) !== choices(f) ||
         old.toggle_icon !== f.toggleIcon ||
+        (old.strike_through ?? 0) !== strike(f) ||
         (old.kind === "ai" && old.ai_prompt !== aiPrompt(f))
       ) {
         // Kind, target and an AI field's output are immutable once created (values would need
         // conversion); a component field's component may change (its values are computed, not
         // stored), and so may an AI field's prompt (its values turn stale, see domain/ai.ts).
         writes.push({
-          sql: "UPDATE fields SET name = ?1, position = ?2, component_id = ?3, component_args = ?4, updated_at = ?5, choice_filter = ?7, toggle_icon = ?8, ai_prompt = ?9 WHERE id = ?6",
+          sql: "UPDATE fields SET name = ?1, position = ?2, component_id = ?3, component_args = ?4, updated_at = ?5, choice_filter = ?7, toggle_icon = ?8, ai_prompt = ?9, strike_through = ?10 WHERE id = ?6",
           bind: [
             f.name,
             position,
@@ -292,6 +300,7 @@ export class SqliteRepository implements Repository {
             choices(f),
             f.toggleIcon,
             old.kind === "ai" ? aiPrompt(f) : old.ai_prompt,
+            strike(f),
           ],
         });
       }
@@ -469,7 +478,7 @@ export class SqliteRepository implements Repository {
       [collectionId, spaceId],
     );
     return rows.map((r) => {
-      const { filters, blocks, collapsed } = parseViewConfig(r.config, r.kind);
+      const { filters, blocks, editable, collapsed } = parseViewConfig(r.config, r.kind);
       return {
         id: r.id,
         collectionId: r.collection_id,
@@ -477,6 +486,7 @@ export class SqliteRepository implements Repository {
         name: r.name,
         filters,
         blocks,
+        editable,
         collapsed,
         position: r.position,
         isDefault: r.is_default === 1,
@@ -488,7 +498,7 @@ export class SqliteRepository implements Repository {
 
   async saveView(view: CollectionView): Promise<void> {
     const ts = now();
-    const config = JSON.stringify({ filters: view.filters, blocks: view.blocks, collapsed: view.collapsed });
+    const config = JSON.stringify({ filters: view.filters, blocks: view.blocks, editable: view.editable, collapsed: view.collapsed });
     await this.db.write([
       {
         sql: `INSERT INTO views (id, collection_id, space_id, name, kind, config, position, created_at, updated_at)
@@ -668,14 +678,25 @@ export class SqliteRepository implements Repository {
     if (!q) return [];
     // Case-insensitive for ASCII only (SQLite's lower()); fine until there is an FTS index.
     // Markdown is matched without its backslash escapes: the editor stores a typed "[[" as
-    // "\[\[" (and "*" as "\*", …), which a search for what was typed must still find.
+    // "\[\[" (and "*" as "\*", …), which a search for what was typed must still find. Item and
+    // list-of-items fields match on the labels of the items they point to (as listLabels).
+    const label = (ref: string) =>
+      `(SELECT lv.value_text FROM field_values lv JOIN fields lf ON lf.id = lv.field_id
+         WHERE lv.item_id = ${ref} AND lf.kind = 'string' AND lf.deleted_at IS NULL
+           AND trim(lv.value_text, ' ' || char(9, 10, 13)) <> ''
+         ORDER BY lf.position, lf.created_at LIMIT 1)`;
     const hits = await this.db.select<{ id: string }>(
       `SELECT o.id FROM field_values fv
          JOIN items o ON o.id = fv.item_id
          JOIN fields f ON f.id = fv.field_id
         WHERE o.deleted_at IS NULL AND o.space_id = ?3 AND f.deleted_at IS NULL
-          AND f.kind IN ('string', 'markdown', 'html', 'string_list', 'checklist')
-          AND instr(lower(CASE WHEN f.kind = 'markdown' THEN replace(fv.value_text, '\\', '') ELSE coalesce(fv.value_text, fv.value_json) END), lower(?1)) > 0
+          AND CASE
+            WHEN f.kind IN ('string', 'markdown', 'html', 'string_list', 'checklist', 'ai')
+              THEN instr(lower(CASE WHEN f.kind = 'markdown' THEN replace(fv.value_text, '\\', '') ELSE coalesce(fv.value_text, fv.value_json) END), lower(?1)) > 0
+            WHEN f.kind = 'item' THEN instr(lower(${label("fv.value_ref")}), lower(?1)) > 0
+            WHEN f.kind = 'item_list' THEN EXISTS (SELECT 1 FROM json_each(fv.value_json) j WHERE instr(lower(${label("j.value")}), lower(?1)) > 0)
+            ELSE 0
+          END
         GROUP BY o.id
         ORDER BY max(o.updated_at) DESC
         LIMIT ?2`,
@@ -814,6 +835,7 @@ const args = (f: CollectionDraft["fields"][number]) =>
   f.kind === "component" && Object.keys(f.componentArgs).length > 0 ? JSON.stringify(f.componentArgs) : null;
 
 /** An AI field's prompt and output as stored, or null for other fields. */
+const strike = (f: CollectionDraft["fields"][number]) => (f.strikeThrough && (f.kind === "checkbox" || f.kind === "checklist") ? 1 : 0);
 const aiPrompt = (f: CollectionDraft["fields"][number]) => (f.kind === "ai" && f.aiPrompt?.trim() ? f.aiPrompt : null);
 const aiOutput = (f: CollectionDraft["fields"][number]) => (f.kind === "ai" ? (f.aiOutput ?? "string") : null);
 

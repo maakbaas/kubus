@@ -1,11 +1,12 @@
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Button, Form, Select, SelectItem, Stack, TextInput } from "@carbon/react";
+import { Button, Form, MultiSelect, Select, SelectItem, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
 import { useItems } from "../app/useItems";
 import {
   ERROR_PREFIX,
   FRAME_RATIOS,
+  dollarNames,
   parseParams,
   render,
   withComputed,
@@ -15,7 +16,8 @@ import {
   type BlockInputs,
   type ComponentOutput,
 } from "../domain/components";
-import { itemLabel, newId, now, type Collection } from "../domain/model";
+import { itemLabel, newId, now, pickableFields, type Collection, type FieldDef } from "../domain/model";
+import { applyQuery, defaultQuery, isGroupable } from "../domain/query";
 import { refLabelOf, useReferenceOptions } from "../ui/useReferenceOptions";
 import { ComponentCodeEditor } from "../ui/ComponentCodeEditor";
 import { ComponentValue } from "../ui/ComponentValue";
@@ -55,10 +57,30 @@ export function ComponentEditorPage() {
   const [error, setError] = useState<string>();
 
   const params = useMemo(() => parseParams(code), [code]);
-  const previewCollection = collections.find((c) => c.id === previewCollectionId);
+  // The built-ins the code uses decide which preview choices show: a collection only when it reads
+  // items ($item, $items, $groups, $fields, $all), an item only for $item, and so on.
+  const uses = useMemo(() => {
+    const names = new Set(dollarNames(code));
+    return { item: names.has("item"), groups: names.has("groups"), fields: names.has("fields"), collection: ["item", "items", "groups", "fields", "all"].some((n) => names.has(n)) };
+  }, [code]);
+  const previewCollection = uses.collection ? collections.find((c) => c.id === previewCollectionId) : undefined;
   const nameError = name.trim() ? undefined : "Give the component a name";
 
   if (componentId && !existing) return <NotFound />;
+
+  // A test value per $variable (the preview's result follows them).
+  const paramInputs = params.map((p) => (
+    <TextInput
+      key={p}
+      size="sm"
+      id={`${uid}-component-test-${p}`}
+      labelText={<code>${p}</code>}
+      placeholder="test value"
+      className="component-code"
+      value={tests[p] ?? ""}
+      onChange={(e) => setTests((t) => ({ ...t, [p]: e.target.value }))}
+    />
+  ));
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -159,58 +181,51 @@ export function ComponentEditorPage() {
             </Select>
           )}
           {/* The collection whose items $item and $items read in the preview (none: they are empty). */}
-          <Select
-            size="sm"
-            id={`${uid}-component-preview-collection`}
-            labelText="Preview with collection"
-            helperText="Renders the result with one of its items as $item, and all of them as $items."
-            value={previewCollectionId}
-            onChange={(e) => {
-              setPreviewCollectionId(e.target.value);
-              setPreviewItemId("");
-            }}
-          >
-            <SelectItem value="" text="None" />
-            {collections.map((c) => (
-              <SelectItem key={c.id} value={c.id} text={c.name} />
-            ))}
-          </Select>
+          {uses.collection && (
+            <Select
+              size="sm"
+              id={`${uid}-component-preview-collection`}
+              labelText="Preview with collection"
+              helperText="Renders the result with its items: one of them as $item, all of them as $items."
+              value={previewCollectionId}
+              onChange={(e) => {
+                setPreviewCollectionId(e.target.value);
+                setPreviewItemId("");
+              }}
+            >
+              <SelectItem value="" text="None" />
+              {collections.map((c) => (
+                <SelectItem key={c.id} value={c.id} text={c.name} />
+              ))}
+            </Select>
+          )}
           {/* Try the formula: a value per $variable, the result right away. */}
-          <div className="component-test">
-            {params.map((p) => (
-              <TextInput
-                key={p}
-                size="sm"
-                id={`${uid}-component-test-${p}`}
-                labelText={<code>${p}</code>}
-                placeholder="test value"
-                className="component-code"
-                value={tests[p] ?? ""}
-                onChange={(e) => setTests((t) => ({ ...t, [p]: e.target.value }))}
-              />
-            ))}
-            {previewCollection ? (
-              <CollectionPreview
-                key={previewCollection.id}
-                collection={previewCollection}
-                itemId={previewItemId}
-                onItem={setPreviewItemId}
-                params={params}
-                code={code}
-                output={output}
-                tests={tests}
-                frameRatio={frameRatio}
-                onFill={setFills}
-              />
-            ) : (
+          {previewCollection ? (
+            <CollectionPreview
+              key={previewCollection.id}
+              collection={previewCollection}
+              uses={uses}
+              itemId={previewItemId}
+              onItem={setPreviewItemId}
+              params={params}
+              code={code}
+              output={output}
+              tests={tests}
+              frameRatio={frameRatio}
+              onFill={setFills}
+              inputs={paramInputs}
+            />
+          ) : (
+            <div className="component-test">
+              {paramInputs}
               <PreviewResult
                 result={render({ params, code, output }, params.map((p) => testValue(tests[p] ?? "")))}
                 output={output}
                 frameRatio={frameRatio}
                 onFill={setFills}
               />
-            )}
-          </div>
+            </div>
+          )}
           {error && <p className="cds--form-requirement">{error}</p>}
           <div className="form-actions">
             <Button size="sm" kind="secondary" onClick={() => navigate("/components")}>
@@ -242,9 +257,14 @@ function PreviewResult({ result, output, frameRatio, onFill }: { result: unknown
   );
 }
 
-/** The preview with a collection's items: an item picker, $item = the picked one (else the first), $items / $all = all. */
+/**
+ * The preview with a collection's items, and the choices the code calls for: an item ($item, else
+ * the first), a field to group by ($groups) and the fields ($fields); $items / $all = all items.
+ * Then the test values and the result.
+ */
 function CollectionPreview({
   collection,
+  uses,
   itemId,
   onItem,
   params,
@@ -253,8 +273,10 @@ function CollectionPreview({
   tests,
   frameRatio,
   onFill,
+  inputs,
 }: {
   collection: Collection;
+  uses: { item: boolean; groups: boolean; fields: boolean };
   itemId: string;
   onItem(id: string): void;
   params: string[];
@@ -263,34 +285,68 @@ function CollectionPreview({
   tests: Record<string, string>;
   frameRatio: string | null;
   onFill(fills: boolean): void;
+  /** The test value inputs, shown before the result. */
+  inputs: ReactNode;
 }) {
   const uid = useId();
   const { components } = useStore();
   const refs = useReferenceOptions(collection);
   const { items: stored } = useItems(collection);
+  const [groupBy, setGroupBy] = useState("");
+  const fieldChoices = pickableFields(collection);
+  const [chosenFields, setChosenFields] = useState<FieldDef[]>(fieldChoices);
   const items = useMemo(() => (stored ? withComputed(collection, stored, components, refLabelOf(refs)) : []), [stored, collection, components, refs]);
   const item = items.find((i) => i.id === itemId) ?? items[0];
   const result = useMemo(() => {
     const refLabel = refLabelOf(refs);
     const input = itemsInput(collection, refLabel);
     const all = items.map(input);
+    const grouped = groupBy ? applyQuery(collection, items, { ...defaultQuery(), groupBy }, { refLabel }).groups : null;
     const block: BlockInputs = {
       items: all,
-      groups: [{ key: "", label: "All", items: all }],
-      fields: collection.fields.map((f) => ({ id: f.id, name: f.name, kind: f.kind })),
+      groups: grouped ? grouped.map((g) => ({ key: g.key, label: g.label, items: g.items.map(input) })) : [{ key: "", label: "All", items: all }],
+      fields: chosenFields.map((f) => ({ id: f.id, name: f.name, kind: f.kind })),
       all,
     };
     return render({ params, code, output }, params.map((p) => testValue(tests[p] ?? "")), item, item && fieldLookup(collection, item, refLabel), block);
-  }, [collection, items, item, refs, params, code, output, tests]);
+  }, [collection, items, item, refs, params, code, output, tests, groupBy, chosenFields]);
   return (
     <>
-      <Select size="sm" id={`${uid}-preview-item`} labelText={`Preview ${collection.name}`} value={item?.id ?? ""} onChange={(e) => onItem(e.target.value)} disabled={items.length === 0}>
-        {items.length === 0 && <SelectItem value="" text={`No ${collection.pluralName}`} />}
-        {items.map((i) => (
-          <SelectItem key={i.id} value={i.id} text={itemLabel(collection, i)} />
-        ))}
-      </Select>
-      <PreviewResult result={result} output={output} frameRatio={frameRatio} onFill={onFill} />
+      {uses.item && (
+        <Select size="sm" id={`${uid}-preview-item`} labelText={`Preview ${collection.name}`} value={item?.id ?? ""} onChange={(e) => onItem(e.target.value)} disabled={items.length === 0}>
+          {items.length === 0 && <SelectItem value="" text={`No ${collection.pluralName}`} />}
+          {items.map((i) => (
+            <SelectItem key={i.id} value={i.id} text={itemLabel(collection, i)} />
+          ))}
+        </Select>
+      )}
+      {uses.groups && (
+        <Select size="sm" id={`${uid}-preview-group`} labelText="Preview grouped by" value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
+          <SelectItem value="" text="No grouping" />
+          {fieldChoices
+            .filter((f) => isGroupable(f.kind))
+            .map((f) => (
+              <SelectItem key={f.id} value={f.id} text={f.name} />
+            ))}
+        </Select>
+      )}
+      {uses.fields && (
+        <MultiSelect<FieldDef>
+          autoAlign
+          size="sm"
+          id={`${uid}-preview-fields`}
+          titleText="Preview with fields"
+          label={`${chosenFields.length} of ${fieldChoices.length} fields`}
+          items={fieldChoices}
+          itemToString={(f) => f?.name ?? ""}
+          selectedItems={chosenFields}
+          onChange={({ selectedItems }) => setChosenFields(fieldChoices.filter((f) => selectedItems?.some((s) => s.id === f.id)))}
+        />
+      )}
+      <div className="component-test">
+        {inputs}
+        <PreviewResult result={result} output={output} frameRatio={frameRatio} onFill={onFill} />
+      </div>
     </>
   );
 }

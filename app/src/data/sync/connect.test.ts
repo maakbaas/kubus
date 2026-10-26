@@ -45,7 +45,7 @@ const config = { url: "https://notes.example.com", token: "t", enabled: true };
 const collection = (id: string) => ({ id, name: id, plural_name: id, icon: null, description: "", item_views: null, created_at: T, updated_at: T, deleted_at: null });
 const field = (id: string, collectionId: string) => ({
   id, collection_id: collectionId, name: "Title", kind: "string", target_collection_id: null, component_id: null, component_args: null,
-  choice_filter: null, toggle_icon: null, ai_prompt: null, ai_output: null, position: 0, created_at: T, updated_at: T, deleted_at: null,
+  choice_filter: null, toggle_icon: null, strike_through: null, ai_prompt: null, ai_output: null, position: 0, created_at: T, updated_at: T, deleted_at: null,
 });
 const item = (id: string, collectionId: string) => ({ id, collection_id: collectionId, space_id: "default", item_view_id: null, created_at: T, updated_at: T, deleted_at: null });
 const value = (itemId: string, fieldId: string, text: string) => ({
@@ -148,5 +148,109 @@ describe("first connection to a server", () => {
     const calls = requests.length;
     await engine.syncNow(); // off: no request
     expect(requests).toHaveLength(calls);
+  });
+});
+
+describe("the server's database id", () => {
+  const A = { id: "db-a", createdAt: T };
+  const B = { id: "db-b", createdAt: "2026-10-26T14:03:00.000Z" };
+  /** A server holding `database` (with rows, unless `empty`); a request for another one gets the 409 answer. */
+  function holding(database: { id: string; createdAt: string }, { empty = false } = {}) {
+    requests = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: { body: string }) => {
+        const request = JSON.parse(init.body) as SyncRequest;
+        requests.push(request);
+        if (request.database && request.database !== database.id) {
+          return { ok: false, status: 409, json: async () => ({ error: "The server's database was wiped or replaced", database, empty }) };
+        }
+        const changes = empty && request.since === 0 && Object.keys(request.changes).length === 0 ? {} : { collections: [collection("t1")] };
+        return { ok: true, status: 200, json: async () => ({ cursor: 3, changes, database }) };
+      }),
+    );
+  }
+  const stored = (db: FakeClient) => (db.db.prepare("SELECT value FROM meta WHERE key = 'sync_database'").get() as { value: string } | undefined)?.value;
+
+  it("is remembered on the first connection and sent with every sync", async () => {
+    holding(A);
+    const db = await localDevice();
+    const engine = new SyncEngine(db as never, () => {});
+    await engine.configure(config);
+    expect(stored(db)).toBe("db-a");
+    await engine.syncNow();
+    expect(requests.at(-1)?.database).toBe("db-a");
+    expect(engine.status.replaced).toBeNull();
+  });
+
+  it("is adopted by a device that synced before ids", async () => {
+    server(() => ({ cursor: 1, changes: { collections: [collection("t1")] } })); // an older server: no id
+    const db = await localDevice();
+    const engine = new SyncEngine(db as never, () => {});
+    await engine.configure(config);
+    expect(stored(db)).toBeUndefined();
+    expect(requests.at(-1)?.database).toBeUndefined();
+
+    holding(A); // the server is updated
+    await engine.syncNow();
+    expect(requests.at(-1)?.database).toBeUndefined(); // nothing to compare yet
+    expect(stored(db)).toBe("db-a");
+  });
+
+  it("changed: pauses without writing, keeps the local data, and asks", async () => {
+    holding(A);
+    const db = await localDevice();
+    const engine = new SyncEngine(db as never, () => {});
+    await engine.configure(config);
+    await db.write([{ sql: `UPDATE field_values SET value_text = 'edited', updated_at = '2026-10-22T00:00:00.000Z'` }]);
+
+    holding(B, { empty: true }); // wiped
+    await engine.syncNow();
+
+    expect(requests).toHaveLength(1); // the refused one; nothing after it
+    expect(engine.status.replaced).toEqual({ createdAt: B.createdAt, empty: true });
+    expect(engine.status.state).toBe("off");
+    expect(engine.config).toMatchObject({ enabled: false, token: "t", url: config.url }); // paused, not forgotten
+    expect(db.names("collections")).toEqual(["t1"]);
+    expect(stored(db)).toBeUndefined(); // the next connection is a first one
+    await engine.syncNow();
+    expect(requests).toHaveLength(1); // stays paused
+
+    // A new engine (the app reloaded) still shows it.
+    expect(new SyncEngine(db as never, () => {}).status.replaced).toEqual({ createdAt: B.createdAt, empty: true });
+  });
+
+  it("connecting again to an empty new database uploads everything", async () => {
+    holding(A);
+    const db = await localDevice();
+    const engine = new SyncEngine(db as never, () => {});
+    await engine.configure(config);
+    holding(B, { empty: true });
+    await engine.syncNow();
+
+    await engine.reconnect();
+
+    expect(engine.status.replaced).toBeNull();
+    expect(requests[1]).toEqual({ since: 0, changes: {} }); // the probe, without an id
+    // everything on the device (since the first connection: what the old database held)
+    expect(requests[2].changes.collections.map((r) => r.id)).toEqual(["t1"]);
+    expect(requests[2].database).toBe("db-b");
+    expect(stored(db)).toBe("db-b");
+  });
+
+  it("connecting again to a new database with data replaces the local data", async () => {
+    holding(A);
+    const db = await localDevice();
+    const engine = new SyncEngine(db as never, () => {});
+    await engine.configure(config);
+    await db.write([{ sql: `INSERT INTO collections (id, name, plural_name, created_at, updated_at) VALUES ('extra', 'Extra', 'Extra', '${T}', '${T}')` }]);
+    holding(B);
+    await engine.syncNow();
+    expect(engine.status.replaced).toEqual({ createdAt: B.createdAt, empty: false });
+
+    await engine.reconnect();
+
+    expect(db.names("collections")).toEqual(["t1"]); // "extra" never reached the server, and is gone
+    expect(stored(db)).toBe("db-b");
   });
 });

@@ -14,6 +14,7 @@ import { isEmptyValue, isGrouped } from "../domain/query";
 import { itemLinkProps, FieldCell } from "./cells";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { defineBlockType, type BlockOptionsProps, type BlockProps, type ItemActions } from "./registry";
+import { STACK_BELOW_REM } from "./TableView";
 
 /** Card options: which field is the cover, and the cards' shape (the fields on a card are the block's). */
 export interface CardOptions {
@@ -283,7 +284,7 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
   }, [measuring]);
 
   const grid = useRef<HTMLDivElement>(null);
-  const columns = useCardColumns(grid, options.cardWidth, result.total > 0);
+  const columns = useCardColumns(grid, options.cardWidth, result.total > 0, options.listNarrow);
 
   if (result.total === 0) return <p className="helper view-empty">No {collection.pluralName} match.</p>;
   const cards = (group: (typeof result.groups)[number]) => (
@@ -344,7 +345,8 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
  * by a card plus its gap, rounded to the nearest whole number. Follows the container's width.
  */
 /** `present`: the grid is shown (its element exists); set up again when that changes. */
-function useCardColumns(container: RefObject<HTMLDivElement | null>, targetRem: number, present: boolean): number {
+/** The cards per row for the target width; with `list`, one in a pane narrower than a table restacks in, whatever the width. */
+function useCardColumns(container: RefObject<HTMLDivElement | null>, targetRem: number, present: boolean, list: boolean): number {
   const [columns, setColumns] = useState(1);
   useLayoutEffect(() => {
     const el = container.current;
@@ -352,13 +354,14 @@ function useCardColumns(container: RefObject<HTMLDivElement | null>, targetRem: 
     const measure = () => {
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
       const gap = rem; // the grid's gap is spacing-05 (1rem)
+      if (list && el.clientWidth < STACK_BELOW_REM * rem) return setColumns(1);
       setColumns(Math.max(1, Math.round((el.clientWidth + gap) / (targetRem * rem + gap))));
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [container, targetRem, present]);
+  }, [container, targetRem, present, list]);
   return columns;
 }
 
@@ -424,7 +427,7 @@ export const cardsView = defineBlockType<CardOptions>({
   label: "Cards",
   icon: GridIcon,
   defaultOptions: (collection) => ({ coverFieldId: imageFields(collection)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, listNarrow: false }),
-  uses: () => ({ query: true, fields: { labels: true, hideEmpty: true } }),
+  uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true } }),
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<CardOptions>;
     const ids = new Set(pickableFields(collection).map((f) => f.id));

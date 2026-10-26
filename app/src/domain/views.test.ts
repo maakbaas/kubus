@@ -6,7 +6,7 @@ import { defaultQuery, filterPreset, PAGE_ITEM, pageItemField, resolvePageValues
 import { blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery } from "./views";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], targetCollectionId: string | null = null): FieldDef => ({
-  id, collectionId: "b", name, kind, targetCollectionId, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null, position: 0,
+  id, collectionId: "b", name, kind, targetCollectionId, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null, position: 0,
 });
 
 const books: Collection = {
@@ -39,7 +39,7 @@ describe("parseViewConfig", () => {
   });
 
   it("reads blocks as stored, and compares equal to what was stored", () => {
-    const state = { filters: [rule("pages", "lt", "50")], blocks: [newBlock("table", {}, "x"), { ...newBlock("cards", {}, "y"), filters: [] }] };
+    const state = { filters: [rule("pages", "lt", "50")], blocks: [newBlock("table", {}, "x"), { ...newBlock("cards", {}, "y"), filters: [] }], editable: false };
     const read = parseViewConfig(JSON.stringify(state), "table");
     expect(sameView(read, state)).toBe(true);
   });
@@ -84,8 +84,9 @@ describe("page item filter values", () => {
 describe("components in blocks", () => {
   it("are classed by the built-ins they use", () => {
     expect(componentUses("{{ $item.Title }}").scope).toBe("item");
-    expect(componentUses("{{ $items.length }} of {{ $all.length }}")).toEqual({ scope: "items", items: true, fields: false });
-    expect(componentUses("{{ $fields.map(f => f.name) }}")).toEqual({ scope: "items", items: false, fields: true });
+    expect(componentUses("{{ $items.length }} of {{ $all.length }}")).toEqual({ scope: "items", items: true, groups: false, fields: false });
+    expect(componentUses("{{ $groups.length }}")).toEqual({ scope: "items", items: true, groups: true, fields: false });
+    expect(componentUses("{{ $fields.map(f => f.name) }}")).toEqual({ scope: "items", items: false, groups: false, fields: true });
     expect(componentUses("Hello {{ $now.getFullYear() }}, '$items' in text").scope).toBe("static");
     expect(componentUses("Read **$items** carefully").scope).toBe("static");
   });

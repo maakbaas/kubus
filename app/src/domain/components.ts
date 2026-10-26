@@ -88,12 +88,13 @@ export const parseParams = (component: string): string[] => dollarNames(componen
  */
 export type ComponentScope = "item" | "items" | "static";
 
-/** What a component's code uses of a block: its items (filter, sort, grouping apply) and its fields. */
-export function componentUses(code: string): { scope: ComponentScope; items: boolean; fields: boolean } {
+/** What a component's code uses of a block: its items (filter and sort apply), their groups (grouping applies) and its fields. */
+export function componentUses(code: string): { scope: ComponentScope; items: boolean; groups: boolean; fields: boolean } {
   const names = new Set(dollarNames(code));
-  const items = names.has("items") || names.has("groups");
+  const groups = names.has("groups");
+  const items = names.has("items") || groups;
   const fields = names.has("fields");
-  return { scope: names.has("item") ? "item" : items || fields ? "items" : "static", items, fields };
+  return { scope: names.has("item") ? "item" : items || fields ? "items" : "static", items, groups, fields };
 }
 
 /** What a block gives its component: the built-ins beyond $item and $now. */

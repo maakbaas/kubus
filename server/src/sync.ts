@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { SYNC_TABLES, type ColumnType, type SyncRequest, type SyncResponse, type SyncTable, type WireRow, type WireValue } from "../../shared/sync.ts";
+import { SYNC_TABLES, type ColumnType, type DatabaseInfo, type SyncMismatch, type SyncRequest, type SyncResponse, type SyncTable, type WireRow, type WireValue } from "../../shared/sync.ts";
 
 // Server side of the sync protocol (see shared/sync.ts and CLAUDE.md, "Sync").
 //
@@ -51,11 +51,22 @@ function upsertSql(t: SyncTable): string {
   return sql;
 }
 
-export async function handleSync(pool: pg.Pool, req: SyncRequest): Promise<SyncResponse & { wrote: boolean }> {
+export async function handleSync(pool: pg.Pool, req: SyncRequest): Promise<(SyncResponse & { wrote: boolean }) | { mismatch: SyncMismatch }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock($1)", [LOCK_ID]);
+
+    // A device that synced with another database (this one was wiped or replaced since) writes
+    // nothing: its outbox holds only what changed since then, which would land here as fragments.
+    const meta = await client.query<{ key: string; value: string }>("SELECT key, value FROM server_meta");
+    const get = (key: string) => meta.rows.find((r) => r.key === key)?.value ?? "";
+    const database: DatabaseInfo = { id: get("database_id"), createdAt: get("created_at") };
+    if (req.database && req.database !== database.id) {
+      const seq = await client.query<{ is_called: boolean }>("SELECT is_called FROM sync_seq");
+      await client.query("ROLLBACK");
+      return { mismatch: { error: "The server's database was wiped or replaced", database, empty: !seq.rows[0].is_called } };
+    }
 
     let wrote = false;
     for (const t of SYNC_TABLES) {
@@ -79,7 +90,7 @@ export async function handleSync(pool: pg.Pool, req: SyncRequest): Promise<SyncR
       changes[t.name] = result.rows.map((r) => Object.fromEntries(cols.map((c) => [c, fromDb(t.columns[c], r[c])])));
     }
     await client.query("COMMIT");
-    return { cursor, changes, wrote };
+    return { cursor, changes, database, wrote };
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
     throw e;

@@ -52,7 +52,7 @@ export const SYNC_TABLES: SyncTable[] = [
     version: "updated_at",
     columns: {
       id: "text", collection_id: "text", name: "text", kind: "text", target_collection_id: "text", component_id: "text",
-      component_args: "json", choice_filter: "json", toggle_icon: "text", ai_prompt: "text", ai_output: "text", position: "int", ...stamps,
+      component_args: "json", choice_filter: "json", toggle_icon: "text", strike_through: "int", ai_prompt: "text", ai_output: "text", position: "int", ...stamps,
     },
   },
   {
@@ -103,15 +103,38 @@ export type WireRow = Record<string, WireValue>;
 /** Rows by table name. */
 export type WireChanges = Record<string, WireRow[]>;
 
+/**
+ * Which database a server holds: a random id made with the database (a wipe, a new volume or
+ * another database gives a new one), and when that was, for people.
+ */
+export interface DatabaseInfo {
+  id: string;
+  createdAt: string;
+}
+
 export interface SyncRequest {
   /** The highest server sequence number this device has already received (0 = nothing yet). */
   since: number;
   /** Rows changed on the device since its last successful sync. */
   changes: WireChanges;
+  /**
+   * The id of the server database this device synced with (absent: none yet, or an older app).
+   * Another one there: nothing is written and the server answers 409 with a `SyncMismatch`.
+   */
+  database?: string;
 }
 export interface SyncResponse {
   /** Pass as `since` next time. */
   cursor: number;
   /** Rows changed on the server after `since` (including the ones just pushed). */
   changes: WireChanges;
+  /** The server's database (absent from servers older than it). */
+  database?: DatabaseInfo;
+}
+/** The 409 answer when the device synced with another database than the server holds now. */
+export interface SyncMismatch {
+  error: string;
+  database: DatabaseInfo;
+  /** The server holds no rows at all (as after a wipe). */
+  empty: boolean;
 }

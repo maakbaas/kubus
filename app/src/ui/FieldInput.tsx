@@ -177,7 +177,7 @@ export function FieldInput({
           </div>
           <div className="checklist-row">
             <span className="checklist-box">{box}</span>
-            <label htmlFor={id} className={`checkbox-field__name${value === true ? " checklist-row__done" : ""}`}>
+            <label htmlFor={id} className={`checkbox-field__name${value === true ? ` checklist-row__done${field.strikeThrough ? " checklist-row__done--struck" : ""}` : ""}`}>
               {field.name}
             </label>
           </div>

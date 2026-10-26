@@ -62,6 +62,8 @@ export interface FieldDef {
   choiceFilter: FilterRule[];
   /** For checkbox and checklist fields: an icon (outlined off, filled on) shown instead of the box; null = the box. */
   toggleIcon: string | null;
+  /** For checkbox and checklist fields: a checked one's text is struck through. */
+  strikeThrough: boolean;
   /** For AI fields: the prompt (Markdown with {{ }} sections over $item), see domain/ai.ts. */
   aiPrompt: string | null;
   /** For AI fields: what the generated value is. */
@@ -195,7 +197,7 @@ export const observeStamp = (iso: string) => {
 };
 
 const metaField = (id: string, name: string): FieldDef => ({
-  id, collectionId: "", name, kind: "datetime", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null, position: 0,
+  id, collectionId: "", name, kind: "datetime", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null, position: 0,
 });
 /**
  * Created and updated: every item has them (ids are the query's pseudo fields). They aren't

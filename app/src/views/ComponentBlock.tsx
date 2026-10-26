@@ -115,7 +115,7 @@ export const componentBlock = defineBlockType<ComponentBlockOptions>({
   uses(options, components) {
     const component = components.find((c) => c.id === options.componentId);
     const uses = component ? componentUses(component.code) : null;
-    return { query: !!uses?.items, fields: uses?.fields ? { labels: false, hideEmpty: false } : null };
+    return { query: !!uses?.items, groups: !!uses?.groups, fields: uses?.fields ? { labels: false, hideEmpty: false } : null };
   },
   View: ComponentBlockView,
   OptionsEditor: ComponentBlockOptionsEditor,

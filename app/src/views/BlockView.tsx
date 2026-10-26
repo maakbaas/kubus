@@ -1,10 +1,12 @@
 import { useId, useMemo } from "react";
 import { Button, Checkbox, Dropdown, InlineNotification, TextInput } from "@carbon/react";
-import { ArrowsVertical, Filter, ListChecked, Settings, TrashCan } from "@carbon/icons-react";
+import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { orderFields } from "../domain/fieldLayout";
-import { newId, pickableFields, type Collection } from "../domain/model";
-import { fieldLookup, render } from "../domain/components";
+import { newId, now, pickableFields, type Collection } from "../domain/model";
+import { fieldLookup, parseParams, render } from "../domain/components";
+import type { MarkdownBlockOptions } from "./MarkdownBlock";
+import type { ComponentBlockOptions } from "./ComponentBlock";
 import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolvePageValues, type FilterRule, type QueryResult } from "../domain/query";
 import { blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
@@ -48,9 +50,9 @@ export function newPageBlock(target: Collection, page: Collection, spec?: { kind
   return normalizeBlock(target, { ...newBlock(kind, spec?.options ?? blockType(kind).defaultOptions(target)), collectionId: target.id, filters });
 }
 
-/** Sorted by title (ascending), not grouped: what every block starts with. */
-const isDefaultSort = (block: ViewBlock) =>
-  block.groupBy === null && JSON.stringify(block.sort) === JSON.stringify(defaultQuery().sort);
+/** Sorted by title (ascending), not grouped (where grouping applies): what every block starts with. */
+const isDefaultSort = (block: ViewBlock, grouped: boolean) =>
+  (!grouped || block.groupBy === null) && JSON.stringify(block.sort) === JSON.stringify(defaultQuery().sort);
 
 interface MenusProps {
   collection: Collection;
@@ -66,13 +68,23 @@ interface MenusProps {
   /** What arranges the view (type, its options, name, the listed collection): stored right away. */
   onSet(patch: Partial<ViewBlock>): void;
   onRemove?(): void;
+  onError?(message: string): void;
   onOpenChange?(open: boolean): void;
 }
 
 /** A block's menus: Filter, Sort and group, Fields (each where its block type uses it), and its type's settings. */
-export function BlockMenus({ collection, block, refs, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange }: MenusProps) {
+export function BlockMenus({ collection, block, refs, place, viewFilters, page, onChange, onSet, onRemove, onError, onOpenChange }: MenusProps) {
   const uid = useId();
-  const { components, collections } = useStore();
+  const { repo, components, collections } = useStore();
+  // A Markdown block's text kept as a component (named like the block), which the block then shows:
+  // the same text, now reusable elsewhere and edited in the component editor.
+  const saveAsComponent = async () => {
+    const text = (block.options as MarkdownBlockOptions).text;
+    const ts = now();
+    const id = newId();
+    await repo.saveComponent({ id, name: block.title || `${collection.name} text`, description: "", params: parseParams(text), code: text, output: "markdown", frameRatio: null, createdAt: ts, updatedAt: ts });
+    onSet({ kind: "component", options: { componentId: id, args: {} } satisfies ComponentBlockOptions });
+  };
   const blockName = useBlockName();
   const type = blockType(block.kind);
   const uses = type.uses(block.options, components);
@@ -115,8 +127,8 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
         </ToolbarPopover>
       )}
       {uses.query && (
-        <ToolbarPopover label="Sort and group" icon={ArrowsVertical} active={!isDefaultSort(block)} onOpenChange={onOpenChange}>
-          <QueryEditor collection={collection} query={query} refs={refs} part="sortGroup" onChange={(q) => onChange(withQuery(block, q))} />
+        <ToolbarPopover label={uses.groups ? "Sort and group" : "Sort"} icon={ArrowsVertical} active={!isDefaultSort(block, uses.groups)} onOpenChange={onOpenChange}>
+          <QueryEditor collection={collection} query={query} refs={refs} part="sortGroup" noGroup={!uses.groups} onChange={(q) => onChange(withQuery(block, q))} />
         </ToolbarPopover>
       )}
       {uses.fields && (
@@ -218,6 +230,11 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           />
           {type.OptionsEditor && <type.OptionsEditor collection={collection} options={block.options} place={place} onChange={(options) => onSet({ options })} />}
+          {type.kind === "markdown" && (
+            <Button kind="tertiary" size="sm" renderIcon={Save} onClick={() => saveAsComponent().catch((e) => onError?.(e instanceof Error ? e.message : String(e)))}>
+              Save as component
+            </Button>
+          )}
           {onRemove && (
             <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} className="block-settings__remove" onClick={onRemove}>
               Remove block
@@ -239,6 +256,8 @@ interface Props {
   place: BlockPlace;
   /** On an item page: its item. */
   page: PageItem | null;
+  /** Field values are edited in place (the view's or item view's "Fields are editable"). */
+  editable: boolean;
   /** On an item page: its header hidden (the layout's hidden labels; collection views use `hideHeader`). */
   headerHidden?: boolean;
   /** The view's collapsed blocks and groups, and storing a change (right away, not a view change). */
@@ -253,7 +272,7 @@ interface Props {
   onOpenChange?(open: boolean): void;
 }
 
-export function BlockView({ collection, data, block, viewFilters, search, place, page, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange }: Props) {
+export function BlockView({ collection, data, block, viewFilters, search, place, page, editable, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange }: Props) {
   const { components } = useStore();
   const { confirm, dialog } = useConfirm();
   const type = blockType(block.kind);
@@ -285,9 +304,9 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   });
   const blockName = useBlockName();
   // Headed like a field (its name as a label, with its type's icon), collapsible. A hidden header
-  // (View settings; Page layout on item pages), or a Markdown block on an item page without a name
-  // (just its text), leaves only its menus, as a "⋮" beside the content; such a block can't collapse.
-  const headless = page ? !!headerHidden || (!block.title && type.kind === "markdown") : !!block.hideHeader;
+  // (View settings; Page layout on item pages) leaves only its menus, as a "⋮" beside the content;
+  // such a block can't collapse.
+  const headless = page ? !!headerHidden : !!block.hideHeader;
   const collapsed = !headless && state.blocks.includes(block.id);
   const toggleCollapsed = () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
@@ -315,6 +334,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           onChange={onChange}
           onSet={onSet}
           onRemove={onRemove}
+          onError={onError}
           onOpenChange={onOpenChange}
         />
       </SectionHeader>
@@ -328,6 +348,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           fields={fields}
           layout={block.layout}
           options={block.options}
+          editable={editable}
           onOptions={(options) => onSet({ options })}
           refs={data.refs}
           search={search}

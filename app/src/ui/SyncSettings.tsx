@@ -2,6 +2,7 @@ import { useId, useState, useSyncExternalStore } from "react";
 import { Button, Form, InlineNotification, PasswordInput, Stack, TextInput, Toggle } from "@carbon/react";
 import { useStore } from "../app/store";
 import { useConfirm } from "./useConfirm";
+import { ServerReplaced } from "./ServerReplaced";
 
 const STATE_TEXT = { off: "Off", idle: "Up to date", syncing: "Syncing…", error: "Failed" } as const;
 
@@ -16,6 +17,7 @@ export function SyncSettings() {
   // Whether a server is saved (the Disconnect button), as opposed to what is typed.
   const [connected, setConnected] = useState(sync.config.token !== "");
   const { confirm, dialog } = useConfirm();
+  const [wipeError, setWipeError] = useState<string>();
 
   const save = async (e?: { preventDefault(): void }) => {
     e?.preventDefault();
@@ -39,6 +41,35 @@ export function SyncSettings() {
     }
   };
 
+  const wipe = async () => {
+    const ok = await confirm({
+      title: "Wipe this device's data?",
+      body: connected
+        ? "Deletes all data on this device. Sync is paused first, so the server keeps its data; switching sync on again downloads it."
+        : "Deletes all data on this device. It can't be undone.",
+      confirmLabel: "Wipe",
+    });
+    if (!ok) return;
+    await repo.wipeLocal();
+    location.reload();
+  };
+
+  const wipeServer = async () => {
+    const ok = await confirm({
+      title: "Wipe the server's database?",
+      body: `Deletes ALL data on ${sync.config.url}: every collection, item and file of every device that syncs with it. It can't be undone. Sync on this device is paused; switching it on again uploads this device's data. Other devices keep their data but stop matching the server: disconnect and connect them again, or wipe them.`,
+      confirmLabel: "Wipe server database",
+    });
+    if (!ok) return;
+    setWipeError(undefined);
+    try {
+      await sync.wipeServer();
+      setDraft(sync.config);
+    } catch (e) {
+      setWipeError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const disconnect = async () => {
     const ok = await confirm({
       title: "Disconnect from the server?",
@@ -55,6 +86,12 @@ export function SyncSettings() {
     <>
       <p className="helper">Keeps this device's data in step with your Kubus server. The data stays on this device too, so Kubus works offline.</p>
       {status.error && <InlineNotification kind="error" title="Sync failed" subtitle={status.error} hideCloseButton />}
+      {status.replaced && (
+        <div className="sync-popover">
+          <ServerReplaced replaced={status.replaced} onConnect={() => setDraft((d) => ({ ...d, enabled: true }))} />
+        </div>
+      )}
+      {wipeError && <InlineNotification kind="error" title="Wiping the server failed" subtitle={wipeError} onClose={() => setWipeError(undefined)} />}
       <Form onSubmit={save} noValidate>
         <Stack gap={6}>
           <TextInput
@@ -95,6 +132,19 @@ export function SyncSettings() {
                 {" "}
                 <Button size="sm" kind="danger--tertiary" onClick={() => void disconnect()}>
                   Disconnect
+                </Button>
+              </>
+            )}
+          </div>
+          <div>
+            <Button size="sm" kind="danger--tertiary" onClick={() => void wipe()}>
+              Wipe local database
+            </Button>
+            {connected && (
+              <>
+                {" "}
+                <Button size="sm" kind="danger--tertiary" onClick={() => void wipeServer()}>
+                  Wipe server database
                 </Button>
               </>
             )}

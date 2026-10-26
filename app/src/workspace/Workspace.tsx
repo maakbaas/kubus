@@ -435,7 +435,12 @@ function PaneView({ pane }: { pane: PaneNode }) {
         item.style.minInlineSize = "0";
         item.style.maxInlineSize = "none";
         const chrome = item.offsetWidth - label.clientWidth; // padding and close button
-        const natural = Math.min(label.scrollWidth + chrome, cap);
+        // The text's exact width, rounded up: scrollWidth is rounded (down, in Safari), and a tab a
+        // fraction too narrow ends in "…".
+        const range = document.createRange();
+        range.selectNodeContents(label);
+        const text = Math.max(label.scrollWidth, Math.ceil(range.getBoundingClientRect().width));
+        const natural = Math.min(text + chrome, cap);
         return [{ item, natural, least: Math.min(natural, chrome + 6 * rem) }];
       });
       // The cut: the widest width w with sum(min(natural, w)) <= the room (Infinity: all fit).
@@ -475,11 +480,16 @@ function PaneView({ pane }: { pane: PaneNode }) {
       }
     };
     fit();
-    // Labels widen once the web font is in: measure again.
+    // Labels widen once the web font is in: measure again (also for a font loaded later, as iOS
+    // can resolve `ready` before a tab's font has started loading).
     void document.fonts?.ready.then(fit);
+    document.fonts?.addEventListener("loadingdone", fit);
     const observer = new ResizeObserver(fit);
     observer.observe(bar);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      document.fonts?.removeEventListener("loadingdone", fit);
+    };
   }, [tabTitles, activeTabId, clippedTabs]);
 
   const newTab = (

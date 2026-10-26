@@ -545,6 +545,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   key={block.id}
                   block={block}
                   page={page}
+                  editable={layout.editable}
                   headerHidden={layout.hiddenLabels.includes(block.id)}
                   collapsed={collapsed}
                   onCollapse={setCollapsed}
@@ -726,6 +727,7 @@ function EditableTitle({ value, source, onSave }: { value: string; source: strin
 function ItemPageBlock({
   block,
   page,
+  editable,
   headerHidden,
   collapsed,
   onCollapse,
@@ -737,6 +739,7 @@ function ItemPageBlock({
 }: {
   block: ViewBlock;
   page: PageItem;
+  editable: boolean;
   headerHidden: boolean;
   collapsed: Collapsed;
   onCollapse(collapsed: Collapsed): void;
@@ -758,6 +761,7 @@ function ItemPageBlock({
       collection={collection}
       block={block}
       page={page}
+      editable={editable}
       headerHidden={headerHidden}
       collapsed={collapsed}
       onCollapse={onCollapse}
@@ -983,7 +987,7 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, comput
           <span className="checklist-box">
             <ToggleInput icon={field.toggleIcon} id={boxId} label={field.name} checked={value === true} onChange={onSave} />
           </span>
-          <label htmlFor={boxId} className={`checkbox-field__name${value === true ? " checklist-row__done" : ""}`}>
+          <label htmlFor={boxId} className={`checkbox-field__name${value === true ? ` checklist-row__done${field.strikeThrough ? " checklist-row__done--struck" : ""}` : ""}`}>
             {field.name}
           </label>
         </div>

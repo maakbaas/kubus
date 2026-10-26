@@ -6,6 +6,17 @@
 
 CREATE SEQUENCE IF NOT EXISTS sync_seq;
 
+-- Which database this is: a random id made with it (never changed; a wipe drops this table and
+-- makes a new one) and when, for people. Devices compare the id to tell a wiped or replaced
+-- database from the one they synced with (server/src/sync.ts).
+CREATE TABLE IF NOT EXISTS server_meta (
+  key            text NOT NULL,
+  value          text NOT NULL,
+  PRIMARY KEY (key)
+);
+INSERT INTO server_meta (key, value) VALUES ('database_id', gen_random_uuid()::text) ON CONFLICT (key) DO NOTHING;
+INSERT INTO server_meta (key, value) VALUES ('created_at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')) ON CONFLICT (key) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS spaces (
   id             text NOT NULL,
   name           text,
@@ -85,6 +96,7 @@ CREATE TABLE IF NOT EXISTS fields (
   component_args jsonb,
   choice_filter  jsonb,
   toggle_icon    text,
+  strike_through integer,
   ai_prompt      text,
   ai_output      text,
   position       integer,
@@ -102,6 +114,7 @@ ALTER TABLE fields ADD COLUMN IF NOT EXISTS component_id text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS component_args jsonb;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS choice_filter jsonb;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS toggle_icon text;
+ALTER TABLE fields ADD COLUMN IF NOT EXISTS strike_through integer;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS ai_prompt text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS ai_output text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS position integer;
