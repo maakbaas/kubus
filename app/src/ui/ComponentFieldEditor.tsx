@@ -100,7 +100,7 @@ export function ComponentFieldEditor({ field, component, onDone }: { field: Fiel
       {error && <InlineNotification kind="error" lowContrast hideCloseButton title={error} />}
       <Modal
         open={answer !== null}
-        size="sm"
+        size="xs"
         modalHeading={`Change component “${component.name}”?`}
         primaryButtonText="Change component"
         // Closing the dialog (×, Escape) goes back to editing; nothing is lost.

@@ -8,7 +8,8 @@
 //   images: [{ key, w, h }],                      // generated PNGs (putFile)
 //   collections: [{ key, name, plural?, icon?, description?, spaces?: [spaceKey],
 //                   fields: [{ key, name, kind, target?: collectionKey, component?: key,
-//                              args?: { var: { field: fieldKey } | { value } }, toggleIcon?, aiPrompt?, aiOutput? }],
+//                              args?: { var: { field: fieldKey } | { value } }, toggleIcon?, aiPrompt?, aiOutput?,
+//                              choiceFilter?: [{ field: targetFieldKey, operator, value }] }],
 //                   items: [{ key?, space?: spaceKey, values: { fieldKey: value } }],
 //                   views?: [{ name, blocks: [partial ViewBlock with kind/options/layout/groupBy/sort], filters?, isDefault? }],
 //                   itemViews?: [{ name, layout }] }],
@@ -66,7 +67,8 @@ async function __seedInPage(spec) {
       targetCollectionId: f.target ? ids.collections[f.target] : null,
       componentId: f.component ? ids.components[f.component] : null,
       componentArgs: Object.fromEntries(Object.entries(f.args || {}).map(([k, v]) => [k, v.field ? { field: ids.fields[`${c.key}.${v.field}`] || v.field } : v])),
-      choiceFilter: [],
+      // { field: a field key of the target collection, operator, value }: which items it offers.
+      choiceFilter: (f.choiceFilter || []).map((r) => ({ id: uid(), fieldId: ids.fields[`${f.target}.${r.field}`], operator: r.operator, value: r.value })),
       toggleIcon: f.toggleIcon || null,
       aiPrompt: f.aiPrompt || null,
       aiOutput: f.aiOutput || (f.kind === "ai" ? "string" : null),

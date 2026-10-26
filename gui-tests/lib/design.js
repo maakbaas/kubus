@@ -155,6 +155,8 @@ function __design(opts) {
       "14/18/0.32": "code-02 on one 2rem row (dates and code in tables)",
       // Carbon sets its labels in a fixed 1rem line; item fields' labels are one step up (label-02's size).
       "14/16/0.16": "label-02 in Carbon's 1rem label line (item fields)",
+      // Carbon's menu items set their text in a fixed 1rem line too; in item fields, at body-compact-02's size.
+      "16/16/0": "body-compact-02 in Carbon's 1rem menu-item line (item fields)",
       "16/22/0": "body-compact-02 / heading-compact-02",
       "16/24/0": "body-02 / heading-02",
       "20/28/0": "heading-03",
@@ -183,7 +185,7 @@ function __design(opts) {
     // the content switcher's ends, loading spinner; the Markdown's inline code (the editor's).
     const ROUND = ".cds--popover-content, .cds--checkbox-label, .cds--toggle__switch, .cds--toggle__appearance, .cds--tag, .cds--slider__thumb, .cds--radio-button__appearance, .cds--loading, .cds--popover-caret, .cds--tooltip-content, .cds--skeleton";
     // Floating layers (shadows give them depth) and the dragged row of a reorder.
-    const FLOATING = ".cds--popover-content, .overflow-bar[data-open] > .overflow-bar__items, .cds--modal-container, .cds--list-box__menu, .cds--overflow-menu-options, .flatpickr-calendar, [role=menu], .search-bar, .cds--side-nav, [data-reorder-dragging], .cds--toast-notification, .ws-drop";
+    const FLOATING = ".cds--popover-content, .overflow-bar[data-open] > .overflow-bar__items, .cds--modal-container, .cds--list-box__menu, .cds--overflow-menu-options, .flatpickr-calendar, [role=menu], .search-bar, .cds--side-nav, [data-dragging], .cds--toast-notification, .ws-drop";
     for (const el of shown) {
       const s = cs(el);
       const radius = [s.borderTopLeftRadius, s.borderTopRightRadius, s.borderBottomLeftRadius, s.borderBottomRightRadius].map(px);
@@ -289,7 +291,9 @@ function __design(opts) {
       ];
       for (const [name, sel, inset, text] of LEFT) {
         for (const el of own(sel).slice(0, 4)) {
-          const left = text ? textLeft(el) : el.getBoundingClientRect().left;
+          // A tab list scrolled sideways (the selected tab brought into view) moves its labels with it.
+        const scrolled = text ? el.closest(".cds--tab--list")?.scrollLeft ?? 0 : 0;
+        const left = text ? textLeft(el) + scrolled : el.getBoundingClientRect().left;
           if (left === null) continue;
           const d = Math.round(left - edge - inset);
           judge("edge-align", Math.abs(d) <= 1, el, `${name} ${d}`, `${name} starts ${d}px off the page's left edge${inset ? ` (+${inset}px)` : ""}`);

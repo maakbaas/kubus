@@ -2403,7 +2403,8 @@ img[data-lightbox] {
   z-index: 10;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem;
+  /* The buttons touch, as in every toolbar row (a 32px pitch). */
+  gap: 0;
   padding: 0.25rem;
   inline-size: max-content;
   max-inline-size: min(20rem, 90vw);
