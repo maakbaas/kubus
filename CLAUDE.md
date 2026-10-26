@@ -103,7 +103,9 @@ stale peer range.
 - `npm run typecheck`, `npm test`, `npm run build:web` (to `app/dist`), `npm run build` (desktop bundle).
 - `npm run test:gui`: the GUI stress suite (not in CI; `gui-tests/README.md`): every page, size and content shape through
   `playwright-cli` against a development-mode build it makes and serves itself (`--dev`: the dev server), layout rules
-  as pass/fail criteria, HTML report with screenshots in `gui-tests/report/`.
+  as pass/fail criteria, HTML report with screenshots in `gui-tests/report/`. `npm run test:gui:smoke`: its ~22-test smoke
+  subset; `--cpu 4` load mode, `--repeat n`; screenshot baselines in `gui-tests/baselines/` (`--update-baselines` after a
+  deliberate visual change).
 - Server: `docker compose up -d` (change the passwords in `docker-compose.yml` first; it starts its own Postgres and pulls the image that `.github/workflows/image.yml` publishes to ghcr.io); or `cd server && npm install && npm run dev` with `DATABASE_URL` and `KUBUS_TOKEN` set.
 - Browser automation (playwright-cli) runs in a subagent on the cheapest model (`model: "haiku"`).
 
@@ -119,6 +121,10 @@ stale peer range.
 - **Toolbar popover buttons** show their panel's state: grey (selected) only while open; a blue
   icon while its settings are in effect (a filter, a sort other than by title / grouping); Fields
   and settings menus are never marked.
+- **Design rules** (the GUI suite's `gui-tests/lib/design.js` enforces them): spacing from Carbon's scale (`var(--cds-spacing-…)`,
+  all declared at the root of `styles.css`), a page's parts on its breadcrumb's left edge, equal gaps between fields and
+  between blocks, icon buttons touching (32px pitch), text in Carbon's type styles (weights 300/400/600), square corners,
+  shadows only on floating layers, 1–2px borders, ellipsized text readable whole (a title or tooltip), 24px touch targets.
 - **Nothing moves under the pointer while a panel or dialog is used** (the GUI suite checks it):
   what a change in a toolbar panel would add to the bar or header around its button (Save /
   Discard, a switch) is held with `usePanelsOpen().hold` until the panel closes; dialogs hang from a
