@@ -8,9 +8,20 @@ import { Highlight } from "./Highlight";
 import { useMediaQuery } from "./useMediaQuery";
 import { fileDataUrl, UrlImage } from "./images";
 import { MarkdownView } from "./MarkdownView";
+import { frameFonts } from "./frameFonts";
 
-/** App tokens a frame's base styles use: passed in as resolved values (the frame has no Carbon CSS). */
+/**
+ * App tokens a frame's base styles use: passed in as resolved values (the frame has no Carbon
+ * CSS), read where the frame is, because the type tokens depend on the place: item fields read one
+ * step up the type scale, blocks and cards don't (styles.css), exactly as rendered Markdown there.
+ */
 const FRAME_TOKENS = [
+  "--cds-body-01-font-size",
+  "--cds-body-01-line-height",
+  "--cds-body-01-letter-spacing",
+  "--cds-code-02-font-size",
+  "--cds-code-02-line-height",
+  "--cds-code-02-letter-spacing",
   "--cds-background",
   "--cds-text-primary",
   "--cds-text-secondary",
@@ -28,14 +39,19 @@ const FRAME_TOKENS = [
  * (:where), so any CSS in the component overrides them. Spacing goes only between text blocks:
  * the divs a map or chart library creates (often absolutely placed) are left alone.
  */
-function frameBaseStyles(dark: boolean): string {
-  const app = getComputedStyle(document.querySelector(".app-root") ?? document.body);
-  const tokens = FRAME_TOKENS.map((t) => `${t}:${app.getPropertyValue(t).trim()};`).join("");
+/** The frame tokens' values at `place` (the frame's parent), as declarations. */
+function frameTokens(place: Element): string {
+  const at = getComputedStyle(place);
+  return FRAME_TOKENS.map((t) => `${t}:${at.getPropertyValue(t).trim()};`).join("");
+}
+
+function frameBaseStyles(tokens: string, dark: boolean): string {
   return `:root{${tokens}color-scheme:${dark ? "dark" : "light"};}
 :where(html,body){margin:0;height:100%;}
 html{overflow:hidden;}
 html.measuring,html.measuring body{height:auto;}
-:where(body){font-family:var(--font-sans);font-size:0.875rem;line-height:1.42857;letter-spacing:0.16px;color:var(--cds-text-primary);overflow-wrap:anywhere;font-variant-ligatures:none;}
+html.fonts-pending body{visibility:hidden;}
+:where(body){font-family:var(--font-sans);font-size:var(--cds-body-01-font-size);line-height:var(--cds-body-01-line-height);letter-spacing:var(--cds-body-01-letter-spacing);color:var(--cds-text-primary);overflow-wrap:anywhere;font-variant-ligatures:none;}
 :where(p,h1,h2,h3,h4,h5,h6,ul,ol,dl,blockquote,pre,table,figure,hr){margin:0;}
 :where(:not(style,script,meta,link,title,component)) + :where(p,h1,h2,h3,h4,h5,h6,ul,ol,dl,blockquote,pre,table,figure,hr){margin-top:0.75rem;}
 :where(h1){font-size:1.75rem;line-height:1.3;font-weight:400;}
@@ -48,7 +64,7 @@ html.measuring,html.measuring body{height:auto;}
 :where(li) > :where(p){margin:0;}
 :where(li + li){margin-top:0;}
 :where(blockquote){border-left:3px solid var(--cds-border-strong);padding-left:1rem;color:var(--cds-text-secondary);}
-:where(code,pre,kbd,samp){font-family:var(--cds-code-02-font-family);font-size:0.875rem;line-height:1.42857;letter-spacing:0.32px;}
+:where(code,pre,kbd,samp){font-family:var(--cds-code-02-font-family);font-size:var(--cds-code-02-font-size);line-height:var(--cds-code-02-line-height);letter-spacing:var(--cds-code-02-letter-spacing);}
 :where(code){background:var(--cds-layer-accent-01);padding:0 0.25rem;}
 :where(pre){background:var(--cds-layer-accent-01);padding:0.75rem 1rem;white-space:pre-wrap;}
 :where(pre code){padding:0;background:none;}
@@ -59,12 +75,37 @@ html.measuring,html.measuring body{height:auto;}
 :where(img,svg,canvas,video){max-width:100%;}`;
 }
 
-function frameDocument(html: string, fill: boolean, dark: boolean): string {
-  return `<!doctype html><html class="${fill ? "in-card" : "in-page"}"><head><meta charset="utf-8"><style>
-${frameBaseStyles(dark)}
+function frameDocument(html: string, fill: boolean, dark: boolean, tokens: string): string {
+  // Hidden (laid out, not shown) until the page has handed over the app's fonts: no flash of
+  // another font, and the height it reports is measured in the fonts it shows.
+  return `<!doctype html><html class="${fill ? "in-card" : "in-page"} fonts-pending"><head><meta charset="utf-8"><style>
+${frameBaseStyles(tokens, dark)}
 </style></head><body>${html}<script>
 (() => {
   const root = document.documentElement;
+  // The app's fonts (frameFonts.ts): asked for from the page, which sends their bytes.
+  let fontsReady = false;
+  const fontsDone = () => {
+    if (fontsReady) return;
+    fontsReady = true;
+    root.classList.remove("fonts-pending");
+    watch();
+  };
+  addEventListener("message", async (e) => {
+    if (e.source !== parent || !e.data || !Array.isArray(e.data.kubusFonts)) return;
+    try {
+      await Promise.all(e.data.kubusFonts.map((f) => {
+        const face = new FontFace(f.family, f.data, { style: f.style, weight: f.weight });
+        document.fonts.add(face);
+        return face.load();
+      }));
+    } finally {
+      fontsDone();
+    }
+  });
+  // Shown anyway if the page doesn't answer (it always does unless its fonts failed to load).
+  setTimeout(fontsDone, 2000);
+  parent.postMessage({ kubusFrameReady: true }, "*");
   const wanted = () => {
     const m = document.querySelector('meta[name="frame"]')?.getAttribute("content") ?? "";
     const ratio = /ratio\\s*=\\s*([\\d.]+)\\s*(?:\\/\\s*([\\d.]+))?/.exec(m);
@@ -80,8 +121,8 @@ ${frameBaseStyles(dark)}
     root.classList.add("measuring");
     const natural = Math.ceil(document.body.getBoundingClientRect().height);
     root.classList.remove("measuring");
-    // After "load" the layout is final (styles, images); a size from while parsing may be off.
-    const size = { natural, ...wanted(), loaded: document.readyState === "complete" };
+    // After "load" and the fonts the layout is final (styles, images, text); a size from before may be off.
+    const size = { natural, ...wanted(), loaded: document.readyState === "complete" && fontsReady };
     const key = JSON.stringify(size);
     if (key !== last) {
       last = key;
@@ -269,7 +310,12 @@ export function HtmlFrame({
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.source !== frame.current?.contentWindow) return;
-      const data = e.data as { kubusFrame?: FrameSize; kubusFrameClick?: boolean } | null;
+      const data = e.data as { kubusFrame?: FrameSize; kubusFrameClick?: boolean; kubusFrameReady?: boolean } | null;
+      // The frame asks for the app's fonts (it can't load them itself): their bytes, once per frame.
+      if (data?.kubusFrameReady) {
+        const target = e.source as Window;
+        frameFonts().then((fonts) => target.postMessage({ kubusFonts: fonts }, "*"));
+      }
       if (data?.kubusFrameClick) contentClick.current?.();
       const s = data?.kubusFrame;
       if (!fill && s && typeof s.natural === "number") {
@@ -297,7 +343,13 @@ export function HtmlFrame({
   }, [reportSizing, id, measuring]);
   // Rebuilt when the theme flips (light / dark): the frame's colours are the app's, passed in.
   const dark = useMediaQuery("(prefers-color-scheme: dark)");
-  const doc = useMemo(() => (html === undefined ? undefined : frameDocument(html, fill, dark)), [html, fill, dark]);
+  // The type tokens where the frame is (read once it is in place, before it is first drawn).
+  const [tokens, setTokens] = useState<string>();
+  useLayoutEffect(() => {
+    const place = frame.current?.parentElement;
+    if (place) setTokens(frameTokens(place));
+  }, [dark]);
+  const doc = useMemo(() => (html === undefined || tokens === undefined ? undefined : frameDocument(html, fill, dark, tokens)), [html, fill, dark, tokens]);
   const fills = !!size && !size.height && !size.ratio && size.natural < FILL_THRESHOLD;
   useEffect(() => {
     if (size) onFill?.(fills);

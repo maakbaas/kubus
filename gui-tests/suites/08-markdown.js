@@ -102,3 +102,58 @@ for (const vp of ["desktop", "phone"]) {
     await t.settle();
   }, { viewport: vp });
 }
+
+// HTML fields look like Markdown fields: the frame gets the app's fonts (frameFonts.ts) and the
+// same type styles, so the same text is set identically, offline too.
+for (const vp of ["desktop", "phone"]) {
+  test(`HTML fields render text exactly like Markdown fields @ ${vp}`, async (t) => {
+    await t.boot();
+    const spec = profileSpec("typical", { items: 1 });
+    spec.collections[0].items.push({
+      key: "same",
+      values: {
+        title: "Same text twice",
+        // One short paragraph per style: where a long line breaks may differ (the Markdown view keeps
+        // spaces as ProseMirror does, white-space: break-spaces, which HTML can't: its source's line
+        // breaks would show), the type itself may not.
+        notes: "Plain text\n\n**bold text**\n\n*italic text*\n\n***bold italic***\n\n`code text`\n\n[a link](https://example.com)",
+        html: "<p>Plain text</p><p><strong>bold text</strong></p><p><em>italic text</em></p><p><strong><em>bold italic</em></strong></p><p><code>code text</code></p><p><a href=\"https://example.com\">a link</a></p>",
+      },
+    });
+    const ids = await t.seed(spec);
+    await t.open(t.itemPath(ids.collections.books, ids.items["books/same"]));
+    await t.page.waitForSelector("iframe.html-frame");
+    // Each inline part: its type style and the width it is set in.
+    const measure = (root) => {
+      const ps = [...root.querySelectorAll("p")];
+      const p = ps[0];
+      const part = (sel) => {
+        const el = sel ? ps.map((x) => x.querySelector(sel)).find(Boolean) : p;
+        if (!el) return { missing: sel };
+        const s = getComputedStyle(el);
+        const r = document.createRange();
+        r.selectNodeContents(sel ? el : p.firstChild);
+        return { family: s.fontFamily.split(",")[0].replace(/"/g, ""), size: s.fontSize, weight: s.fontWeight, style: s.fontStyle, lineHeight: s.lineHeight, spacing: s.letterSpacing, lines: r.getClientRects().length, width: Math.round(r.getBoundingClientRect().width * 10) / 10 };
+      };
+      return { box: Math.round(p.getBoundingClientRect().width * 10) / 10, left: Math.round(p.getBoundingClientRect().left * 10) / 10, plain: part(null), bold: part("strong"), italic: part("em"), boldItalic: part("strong em, em strong"), code: part("code"), link: part("a"), plexLoaded: document.fonts.check('600 14px "IBM Plex Sans"') && [...document.fonts].some((f) => f.family.replace(/"/g, "") === "IBM Plex Sans" && f.status === "loaded") };
+    };
+    const md = await t.page.locator(".item-fields .md-view").first().evaluate((root, src) => new Function(`return (${src})`)()(root), measure.toString());
+    let inFrame = null;
+    for (let i = 0; i < 40 && !inFrame; i++) {
+      const frame = t.page.frames().find((f) => f !== t.page.mainFrame());
+      const r = frame ? await frame.evaluate(`(${measure.toString()})(document)`).catch(() => null) : null;
+      if (r && r.plexLoaded) inFrame = r;
+      else await t.wait(100);
+    }
+    await t.require("the HTML frame has the app's IBM Plex loaded", !!inFrame, "Plex never loaded in the frame");
+    // The text runs as wide in both, so it wraps at the same words.
+    await t.check("the text is as wide in HTML as in Markdown", Math.abs(md.box - inFrame.box) <= 0.5, `${md.box} → ${inFrame.box}`);
+    for (const k of ["plain", "bold", "italic", "boldItalic", "code", "link"]) {
+      const a = md[k], b = inFrame[k];
+      const diff = a.missing || b.missing ? [`no ${a.missing || b.missing} in ${a.missing ? "Markdown" : "HTML"}`] : ["family", "size", "weight", "style", "lineHeight", "spacing", "lines"].filter((x) => a[x] !== b[x]).map((x) => `${x} ${a[x]} → ${b[x]}`);
+      if (Math.abs(a.width - b.width) > 0.5) diff.push(`width ${a.width} → ${b.width}`);
+      await t.check(`${k} text is set the same in Markdown and HTML`, diff.length === 0, diff.join("; "));
+    }
+    await t.audit("Markdown and HTML fields side by side");
+  }, { viewport: vp });
+}
