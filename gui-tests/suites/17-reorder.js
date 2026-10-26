@@ -29,8 +29,8 @@ const moved = (list, from, to) => {
 
 /** Keyboard: ArrowDown / ArrowUp on a row's handle move it; focus stays on its handle. */
 async function keyboardReorder(t, label, scope) {
+  await t.until(`${label}: has rows to reorder`, async () => (await rowNames(t, scope)).length >= 3 || `${(await rowNames(t, scope)).length} rows`);
   const start = await rowNames(t, scope);
-  await t.require(`${label}: has rows to reorder`, start.length >= 3, `${start.length} rows`);
   await handleOf(t, scope, 0).focus();
   await t.page.keyboard.press("ArrowDown");
   await t.settle(100);

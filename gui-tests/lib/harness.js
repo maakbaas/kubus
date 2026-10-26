@@ -176,6 +176,8 @@ function __makeT(ctx, pg, name, opts) {
 
     /** Waits until the page stops changing: no DOM mutations for `quiet` ms, fonts and loaders done. */
     async settle(quiet = 200, max = 5000 * slow) {
+      // In load mode a render takes longer without touching the DOM: a quiet spell must be longer too.
+      quiet *= slow;
       timing.settles++;
       const t0 = Date.now();
       const timedOut = await pg
