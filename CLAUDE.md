@@ -29,7 +29,8 @@ is what this split avoids. Keep them current when behaviour changes.
   The editor reports changes synchronously (`changes` plugin); don't switch back to the debounced
   listener plugin.
 - **Local first, one codebase**: all logic and storage in the web frontend (SQLite WASM in a worker,
-  OPFS). Tauri is only a window (only plugin: `opener`); native capabilities go behind an interface
+  OPFS). Every asset is bundled, nothing from a CDN (IBM Plex: `app/src/fonts.css`, Carbon's CDN
+  `@font-face` rules are dropped in `vite.config.ts`): the app looks the same offline. Tauri is only a window (only plugin: `opener`); native capabilities go behind an interface
   in `app/src/platform/` with a web fallback.
 - **No migration scripts.** `app/src/data/schema.sql` is the schema; simple changes (new tables /
   nullable or defaulted columns, removed columns, changed CHECKs) are applied in place, anything

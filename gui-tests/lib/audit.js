@@ -71,6 +71,7 @@ const CRITERIA = {
   "focus-hidden": "The focused control is in sight: inside the window and its pane, not under a sticky bar or another layer.",
   "content-jump": "Nothing on screen moves or resizes during an interaction that shouldn't move it (editing in place, hovering, toggling, opening popovers).",
   "scroll-jump": "An interaction doesn't scroll the pane by itself.",
+  "external-asset": "The app loads no fonts, scripts, styles or images from other hosts: it looks the same offline.",
   "console-error": "No console error or uncaught exception during the test (React warnings included).",
   "layout-shift": "A page settles without layout shifts once shown (CLS ≤ 0.02).",
   "popover-closed": "A popover stays open while its own controls are used (typing, toggling, picking).",

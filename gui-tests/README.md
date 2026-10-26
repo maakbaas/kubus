@@ -19,9 +19,8 @@ It needs `playwright-cli` on the PATH (`npm install -g @playwright/cli`) and Chr
 `PLAYWRIGHT_MCP_CONFIG`, e.g. `{ "browser": { "browserName": "chromium", "launchOptions":
 { "executablePath": "/path/to/chromium", "chromiumSandbox": false } } }` (no sandbox when running as root).
 
-The app loads IBM Plex from IBM's CDN; where that host can't be reached (offline, a locked-down
-container) it falls back to the system fonts, and the suite is meant to pass either way: layout rules
-must not depend on one font's metrics. It tests a
+Every test also fails when the app loads a font, script, style or image from another host: the
+app is offline first and must look the same without a network (IBM Plex is bundled, `app/src/fonts.css`). It tests a
 bundled build of the app in `gui-tests/.build`, made with `NODE_ENV=development` (so the dev-only
 `window.kubus.repo` the tests seed data through stays, and React logs its warnings, which count as
 console errors) and served by `vite preview` on port 1430 (`--port`) for the run. The build is

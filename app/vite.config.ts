@@ -29,6 +29,19 @@ const hoverOnlyWhenHovering = {
   },
 };
 
+// Carbon's stylesheet loads IBM Plex from IBM's CDN, out of reach offline (and never cached: the
+// service worker keeps to this origin). Its @font-face rules are dropped; src/fonts.css declares
+// the same faces from the bundled @ibm/plex-* packages, so the app looks the same with or without
+// a network.
+const bundledFonts = {
+  postcssPlugin: "bundled-fonts",
+  AtRule: {
+    "font-face"(rule: any) {
+      if (rule.toString().includes("s81c.com")) rule.remove();
+    },
+  },
+};
+
 // One build serves both the Tauri shell and the plain web / home-screen app.
 // Tauri expects a fixed dev port and must not watch its own Rust sources.
 export default defineConfig({
@@ -56,7 +69,7 @@ export default defineConfig({
       },
     },
   ],
-  css: { postcss: { plugins: [hoverOnlyWhenHovering] } },
+  css: { postcss: { plugins: [hoverOnlyWhenHovering, bundledFonts] } },
   clearScreen: false,
   // sqlite-wasm locates its .wasm via import.meta.url; pre-bundling breaks that.
   optimizeDeps: { exclude: ["@sqlite.org/sqlite-wasm"] },

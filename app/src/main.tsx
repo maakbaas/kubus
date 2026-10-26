@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Theme } from "@carbon/react";
 import "@carbon/styles/css/styles.css";
+import "./fonts.css";
 import "./styles.css";
 import { App } from "./app/App";
 import { suppressShellContextMenu } from "./platform/contextMenu";

@@ -365,7 +365,7 @@ function writeReport(started, results, partial) {
   const byRule = {};
   for (const r of results) for (const c of r.checkpoints) {
     if (c.pass) continue;
-    const rules = c.violations && c.violations.length ? [...new Set(c.violations.map((v) => v.rule))] : [c.kind === "console" ? "console-error" : c.kind === "error" ? "test-error" : /layout shift/.test(c.label) ? "layout-shift" : "assertion"];
+    const rules = c.violations && c.violations.length ? [...new Set(c.violations.map((v) => v.rule))] : [c.kind === "console" ? "console-error" : c.kind === "error" ? "test-error" : /layout shift/.test(c.label) ? "layout-shift" : /other hosts/.test(c.label) ? "external-asset" : "assertion"];
     for (const rule of rules) (byRule[rule] ||= []).push(`${r.suite} › ${r.name} › ${c.label}`);
   }
   writeFileSync(join(reportDir, "results.json"), JSON.stringify({ summary, byRule, results }, null, 1));
@@ -382,7 +382,7 @@ function renderReport(summary, byRule, results) {
     .map(([rule, list]) => `<tr><td><button class="rule" data-rule="${esc(rule)}">${esc(rule)}</button></td><td>${list.length}</td><td class="muted">${esc(criteria[rule] || "")}</td></tr>`).join("");
   const criteriaRows = Object.entries(criteria).map(([rule, text]) => `<tr><td><code>${esc(rule)}</code></td><td>${byRule[rule] ? `<b style="color:var(--bad)">FAIL ×${byRule[rule].length}</b>` : `<span style="color:var(--ok)">pass</span>`}</td><td>${esc(text)}</td></tr>`).join("");
   const cp = (c) => {
-    const rules = c.violations ? [...new Set(c.violations.map((v) => v.rule))].join(" ") : c.kind === "console" ? "console-error" : c.kind === "error" ? "test-error" : /layout shift/.test(c.label) ? "layout-shift" : "assertion";
+    const rules = c.violations ? [...new Set(c.violations.map((v) => v.rule))].join(" ") : c.kind === "console" ? "console-error" : c.kind === "error" ? "test-error" : /layout shift/.test(c.label) ? "layout-shift" : /other hosts/.test(c.label) ? "external-asset" : "assertion";
     const viol = c.violations && c.violations.length
       ? `<table class="viol"><tr><th>#</th><th>rule</th><th>element</th><th>problem</th></tr>${c.violations.map((v, i) => `<tr><td>${i + 1}</td><td>${esc(v.rule)}</td><td><code>${esc(v.target)}</code></td><td>${esc(v.message)}</td></tr>`).join("")}</table>`
       : "";

@@ -16,6 +16,8 @@
   "dependencies": {
     "@carbon/icons-react": "^11.90.0",
     "@carbon/react": "^1.118.0",
+    "@ibm/plex-mono": "^2.5.0",
+    "@ibm/plex-sans": "^1.1.0",
     "@milkdown/kit": "^7.22.3",
     "@milkdown/plugin-prism": "^7.22.3",
     "@milkdown/react": "^7.22.3",

@@ -59,6 +59,14 @@ function __makeT(ctx, pg, name, opts) {
   pg.on("response", (r) => {
     if (r.status() >= 400 && sameOrigin(r.url())) errors.push({ where, text: `Request failed: ${r.status()} ${r.url().slice(base.length, base.length + 200)}` });
   });
+  // Offline first: everything the app needs to look right comes from its own origin (a model's
+  // address, called by AI fields, is data, not an asset).
+  const external = [];
+  pg.on("request", (r) => {
+    const u = r.url();
+    if (/^(data|blob|about):/.test(u) || sameOrigin(u)) return;
+    if (["font", "stylesheet", "script", "image", "media"].includes(r.resourceType())) external.push(`${r.resourceType()} ${u.slice(0, 120)}`);
+  });
   pg.on("requestfailed", (r) => {
     const why = (r.failure() && r.failure().errorText) || "";
     // Aborted: a navigation or a reload cancelled it, not a failure.
@@ -110,6 +118,7 @@ function __makeT(ctx, pg, name, opts) {
     base,
     checkpoints,
     errors,
+    external,
     timing,
 
     /** Names what the test is doing now (shown with console errors and failures). */
@@ -681,6 +690,7 @@ async function __main(pg) {
   // Criterion for every test: no console errors / uncaught exceptions while it ran.
   const ignored = (__OPTS.ignoreConsole || []).map((s) => new RegExp(s));
   const errs = t.errors.filter((e) => !ignored.some((r) => r.test(e.text)));
+  t.checkpoints.push({ kind: "check", label: "no fonts, scripts, styles or images from other hosts (offline first)", pass: t.external.length === 0, detail: [...new Set(t.external)].slice(0, 10).join("\n") });
   t.checkpoints.push({ kind: "console", label: "no console errors", pass: errs.length === 0, detail: errs.slice(0, 10).map((e) => `[${e.where}] ${e.text}`).join("\n") });
   if (status === "pass" && t.checkpoints.some((c) => !c.pass)) status = "fail";
   await ctx.close().catch(() => {});
