@@ -953,12 +953,12 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   flex-direction: column;
   gap: 0.25rem;
 }
-.search-hit__field {
-  font-size: 0.75rem;
-  color: var(--cds-text-helper);
-}
+/* label-01 */
+.search-hit__field,
 .search-hit__more {
-  font-size: 0.75rem;
+  font-size: var(--cds-label-01-font-size);
+  line-height: var(--cds-label-01-line-height);
+  letter-spacing: var(--cds-label-01-letter-spacing);
   color: var(--cds-text-helper);
 }
 .search-hit__snippet {
@@ -981,9 +981,12 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* body-01 */
 .helper {
   color: var(--cds-text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--cds-body-01-font-size);
+  line-height: var(--cds-body-01-line-height);
+  letter-spacing: var(--cds-body-01-letter-spacing);
   margin-bottom: 1rem;
 }
 .field-row {
@@ -1852,8 +1855,11 @@ img[data-lightbox] {
   padding: 1rem;
   background: var(--cds-layer-01);
 }
+/* heading-compact-02 */
 .item-card__title {
-  font-size: 1rem;
+  font-size: var(--cds-heading-compact-02-font-size, 1rem);
+  line-height: var(--cds-heading-compact-02-line-height, 1.375);
+  letter-spacing: var(--cds-heading-compact-02-letter-spacing, 0);
   font-weight: 600;
   margin-bottom: 0.5rem;
   overflow-wrap: anywhere;
@@ -3577,6 +3583,12 @@ body[data-reordering] [data-reorder-row] {
 .ai-banner .cds--actionable-notification {
   max-inline-size: none;
   inline-size: 100%;
+}
+/* The action after the text (AiBanner.tsx), centred on its line without making the notification
+   taller: the 2rem button overhangs the 1lh line equally above and below. */
+.ai-banner__action {
+  margin-inline-start: var(--cds-spacing-05);
+  margin-block: calc((1lh - 2rem) / 2);
 }
 .ai-status--compact {
   display: block;

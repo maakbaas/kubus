@@ -19,7 +19,6 @@
 //   popover-in-viewport  an open popover / menu / modal / tooltip reaching outside the window
 //   popover-overflow     an open popover whose content overflows it sideways
 //   filter-ancestor      a CSS filter on an ancestor of an open floating panel (Safari 26)
-//   font-scale           a font size outside Carbon's type scale
 //   theme-color          a colour that is no Carbon theme token value
 //   tab-strip            the top tab strip isn't sticky at top 0 with a solid background
 //   toolbar-align        icon buttons in one row not vertically centred on one line
@@ -54,7 +53,6 @@ const CRITERIA = {
   "popover-in-viewport": "Open popovers, menus, modals and calendars stay inside the window.",
   "popover-overflow": "Open popovers don't overflow sideways.",
   "filter-ancestor": "No CSS filter on an ancestor of an open floating panel (Safari 26).",
-  "font-scale": "Font sizes are on Carbon's type scale.",
   "theme-color": "Every colour is a Carbon theme token value (no custom colours).",
   "tab-strip": "The top tab strip sits at the window's top with a solid background; nothing is above it.",
   "toolbar-align": "Icon buttons in one toolbar row are vertically centred on one line.",
@@ -69,6 +67,19 @@ const CRITERIA = {
   "aria-expanded": "A popover's button says aria-expanded=true exactly while its popover is open.",
   contrast: "Text has WCAG AA contrast with what is behind it: 4.5:1, or 3:1 for large text (placeholders, disabled controls and text over images excepted).",
   "focus-hidden": "The focused control is in sight: inside the window and its pane, not under a sticky bar or another layer.",
+  // Design rules (design.js): consistency, measured from what the GUI does on every page.
+  "spacing-scale": "The app's margins, paddings and gaps are on Carbon's spacing scale (2, 4, 8, 12, 16, 24, 32, 40, 48, 64, 80, 96, 160px); derived values excepted (centring a line in a 2rem row, centred columns, the docked nav's width).",
+  "edge-align": "A page's title, description, views bar and blocks start on its breadcrumb's left edge (the first view tab's label 16px in, Carbon's tab inset); page header buttons, views bar and block headers end on one right edge.",
+  rhythm: "The gaps between an item page's fields and between a view's blocks are all equal.",
+  "toolbar-pitch": "Icon buttons side by side in a row touch: a 32px pitch, no gaps, no overlaps.",
+  "type-style": "Text is set in one of the type styles the app uses (Carbon's label-01, body-compact-01, body-01, code-02, heading-compact-02, heading-04 …, and the item fields' one step up); weights only 300, 400, 600.",
+  baseline: "A checkbox's label is centred on its box.",
+  radius: "Square corners, except Carbon's own round parts (checkbox, toggle, tag, slider thumb, radio, tooltips).",
+  shadow: "Box-shadows only on floating layers (popovers, menus, dialogs, dragged rows) and as inset focus / selection marks.",
+  border: "Border widths are 1 or 2px.",
+  "truncation-hint": "Text cut with an ellipsis can be read whole (a title, a tooltip or an accessible name holding it).",
+  "touch-target": "On phones, controls are at least 24×24px or have no other control within 24px of their centre (WCAG 2.5.8; links in a line of text excepted).",
+  "popover-padding": "Toolbar popover panels have the same padding on all sides.",
   "content-jump": "Nothing on screen moves or resizes during an interaction that shouldn't move it (editing in place, hovering, toggling, opening popovers).",
   "scroll-jump": "An interaction doesn't scroll the pane by itself.",
   "external-asset": "The app loads no fonts, scripts, styles or images from other hosts: it looks the same offline.",
@@ -548,23 +559,6 @@ function __audit(opts) {
       if (cs(p).filter !== "none") {
         report("filter-ancestor", p, `has filter: ${cs(p).filter} above an open floating panel`);
         break;
-      }
-    }
-  }
-
-  lap();
-  section = "font-scale";
-  // ---- font-scale -----------------------------------------------------------------------------------
-  {
-    const SCALE = new Set([10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 54, 60, 68, 76, 84, 92]);
-    const seenSizes = new Set();
-    for (const el of shown) {
-      const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
-      if (!hasText || srOnly(el)) continue;
-      const size = Math.round(parseFloat(cs(el).fontSize) * 100) / 100;
-      if (!SCALE.has(size) && !seenSizes.has(size)) {
-        seenSizes.add(size);
-        report("font-scale", el, `font-size ${size}px is not on Carbon's type scale`);
       }
     }
   }

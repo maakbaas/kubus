@@ -8,7 +8,7 @@ npm run test:gui                                  # everything (~215 tests; brow
 npm run test:gui -- --suite 04                    # one suite (regex on the file name)
 npm run test:gui -- --grep "phone"                # tests whose "suite › name" matches
 npm run test:gui -- --workers 3 --shot-all        # fewer browsers, a screenshot of every checkpoint
-npm run test:gui -- --skip theme-color,font-scale # leave audit rules out
+npm run test:gui -- --skip theme-color,type-style # leave audit rules out
 npm run test:gui -- --list                        # list the tests
 npm run test:gui -- --dev                         # against the dev server (port 1420) instead of a build
 npm run test:gui -- --name b --port 1431          # a second run alongside the first (own browsers, build, report-b/)

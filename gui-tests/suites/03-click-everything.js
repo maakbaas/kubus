@@ -140,7 +140,7 @@ async function hoverPage(t, label, path) {
     await t.wait(250);
     const name = await loc.getAttribute("aria-label").catch(() => "") || (await loc.innerText().catch(() => "")) || `#${i}`;
     // Only what tooltips can break: staying in the window, overlapping and covering.
-    await t.audit(`${label}: tooltip of "${name.trim().slice(0, 40)}"`, { settle: false, shotOnFail: true, skip: ["font-scale", "theme-color", "compact-size", "native-control", "accessible-name", "duplicate-id", "icon-size", "nested-scroll", "text-clipped", "escapes-container"] });
+    await t.audit(`${label}: tooltip of "${name.trim().slice(0, 40)}"`, { settle: false, shotOnFail: true, skip: ["type-style", "theme-color", "compact-size", "native-control", "accessible-name", "duplicate-id", "icon-size", "nested-scroll", "text-clipped", "escapes-container"] });
   }
   await t.page.mouse.move(1, t.vp.height - 2);
 }

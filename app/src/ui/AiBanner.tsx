@@ -1,4 +1,4 @@
-import { ActionableNotification, InlineNotification, Modal } from "@carbon/react";
+import { ActionableNotification, Button, InlineNotification, Modal } from "@carbon/react";
 import { useStore } from "../app/store";
 import { useAiProgress, useAiSettings } from "../app/useAi";
 
@@ -45,6 +45,8 @@ export function AiBanner({ onSetup }: { onSetup(): void }) {
             : `${progress.overrides} AI values you typed over (such as ${progress.overrideSample}) are made from data that has changed since. Generate them again, replacing what you typed?`}
         </p>
       </Modal>
+      {/* Their actions are tertiary buttons in the text (Carbon's own action button of an inline
+          notification is a ghost one, and text buttons are never borderless here). */}
       {(progress.held > 0 || progress.failed > 0 || progress.paused || progress.working > 1) && (
         <div className="ai-banner">
           {progress.held > 0 && !progress.configured && (
@@ -54,13 +56,15 @@ export function AiBanner({ onSetup }: { onSetup(): void }) {
               kind="info"
               title="AI isn't set up"
               subtitle={`${progress.held} AI values wait for a model.`}
-              actionButtonLabel="Open settings"
-              onActionButtonClick={onSetup}
               onCloseButtonClick={() => {
                 ai.dismissHeld();
                 return false;
               }}
-            />
+            >
+              <Button kind="tertiary" size="sm" className="ai-banner__action" onClick={onSetup}>
+                Open settings
+              </Button>
+            </ActionableNotification>
           )}
           {progress.paused && progress.working > 0 && (
             <ActionableNotification
@@ -70,9 +74,11 @@ export function AiBanner({ onSetup }: { onSetup(): void }) {
               kind="info"
               title="AI is paused"
               subtitle={`${progress.working} AI values wait. No requests are sent.`}
-              actionButtonLabel="Open settings"
-              onActionButtonClick={onSetup}
-            />
+            >
+              <Button kind="tertiary" size="sm" className="ai-banner__action" onClick={onSetup}>
+                Open settings
+              </Button>
+            </ActionableNotification>
           )}
           {!progress.paused && progress.confirm === 0 && progress.working > 1 && (
             <InlineNotification lowContrast hideCloseButton kind="info" title="Writing AI values" subtitle={`${progress.working} left`} />
@@ -84,13 +90,15 @@ export function AiBanner({ onSetup }: { onSetup(): void }) {
               kind="error"
               title={progress.failed === 1 ? "An AI value failed" : `${progress.failed} AI values failed`}
               subtitle={progress.lastError}
-              actionButtonLabel="Retry"
-              onActionButtonClick={() => ai.retryFailed()}
               onCloseButtonClick={() => {
                 ai.dismissFailed();
                 return false;
               }}
-            />
+            >
+              <Button kind="tertiary" size="sm" className="ai-banner__action" onClick={() => ai.retryFailed()}>
+                Retry
+              </Button>
+            </ActionableNotification>
           )}
         </div>
       )}
