@@ -22,6 +22,8 @@
 //                      failed and then passed is "flaky" in the report, and counts as a failure
 //   --cpu <n>          slow each test's page down n times (CDP CPU throttling): load / stress mode
 //   --repeat <n>       run each selected test n times (names get " #k"), to measure how flaky it is
+//   --update-baselines store the screenshot baselines (t.baseline) taken by this run in
+//                      gui-tests/baselines/ instead of comparing with them
 //   --recycle <n>      restart each browser after n tests (default 8), to drop what it accumulated
 //   --min-free <gb>    wait before starting a test while less memory is free (default 1.5)
 //   --name <name>      name of this run's browser sessions, build and report folders (default: none), so
@@ -36,11 +38,13 @@
 // start of the next run.
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { freemem } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { PNG } from "pngjs";
+import pixelmatch from "pixelmatch";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -68,6 +72,11 @@ const suiteFilter = opt("suite");
 const retries = Number(opt("retries", 1));
 const cpu = Math.max(1, Number(opt("cpu", 1)));
 const repeat = Math.max(1, Number(opt("repeat", 1)));
+const baselineDir = join(here, "baselines");
+const updateBaselines = flag("update-baselines");
+/** A pixel differs when pixelmatch's colour distance is over this (0…1); a baseline fails when more than BASELINE_SHARE of its pixels differ. */
+const BASELINE_THRESHOLD = 0.1;
+const BASELINE_SHARE = 0.001;
 const skipRules = (opt("skip", "") || "").split(",").filter(Boolean);
 const runName = opt("name", "");
 const reportDir = join(here, runName ? `report-${runName}` : "report");
@@ -283,7 +292,36 @@ async function runTest(session, t, n) {
     const msg = (r.out + r.err).trim().slice(0, 2000) || `exit code ${r.code}`;
     result = { name: t.name, status: "error", error: msg, checkpoints: [] };
   }
+  for (const c of result.checkpoints || []) if (c.kind === "baseline") compareBaseline(c);
+  if (result.status === "pass" && (result.checkpoints || []).some((c) => !c.pass)) result.status = "fail";
   return { ...result, name: t.label || result.name, suite: t.suite, viewport: result.viewport || t.opts.viewport || "desktop", dark: !!t.opts.dark };
+}
+
+/**
+ * A baseline checkpoint (t.baseline): its screenshot is stored as the baseline (--update-baselines),
+ * or compared with the stored one: it fails when the sizes differ or more than BASELINE_SHARE of
+ * the pixels differ; the difference image goes into the report beside it.
+ */
+function compareBaseline(c) {
+  const shot = join(shotDir, c.screenshot);
+  const stored = join(baselineDir, c.baseline);
+  if (!existsSync(shot)) return Object.assign(c, { pass: false, detail: "no screenshot was taken" });
+  if (updateBaselines) {
+    mkdirSync(baselineDir, { recursive: true });
+    copyFileSync(shot, stored);
+    return Object.assign(c, { detail: "stored as the baseline" });
+  }
+  if (!existsSync(stored)) return Object.assign(c, { pass: false, detail: `no baseline yet: run with --update-baselines to store gui-tests/baselines/${c.baseline}` });
+  const a = PNG.sync.read(readFileSync(stored));
+  const b = PNG.sync.read(readFileSync(shot));
+  if (a.width !== b.width || a.height !== b.height) return Object.assign(c, { pass: false, detail: `size ${b.width}x${b.height}, baseline ${a.width}x${a.height}` });
+  const diff = new PNG({ width: a.width, height: a.height });
+  const n = pixelmatch(a.data, b.data, diff.data, a.width, a.height, { threshold: BASELINE_THRESHOLD });
+  const share = n / (a.width * a.height);
+  if (share <= BASELINE_SHARE) return Object.assign(c, { detail: `${n} pixels differ (${(share * 100).toFixed(3)}%)` });
+  const diffFile = c.screenshot.replace(/\.png$/, "--diff.png");
+  writeFileSync(join(shotDir, diffFile), PNG.sync.write(diff));
+  return Object.assign(c, { pass: false, detail: `${n} pixels differ (${(share * 100).toFixed(2)}% > ${BASELINE_SHARE * 100}%); the differences are red in ${diffFile}`, diff: diffFile });
 }
 
 async function main() {
@@ -399,7 +437,7 @@ function writeReport(started, results, partial) {
   const byRule = {};
   for (const r of results) for (const c of r.checkpoints) {
     if (c.pass) continue;
-    const rules = c.violations && c.violations.length ? [...new Set(c.violations.map((v) => v.rule))] : [c.kind === "console" ? "console-error" : c.kind === "error" ? "test-error" : /layout shift/.test(c.label) ? "layout-shift" : /other hosts/.test(c.label) ? "external-asset" : "assertion"];
+    const rules = c.violations && c.violations.length ? [...new Set(c.violations.map((v) => v.rule))] : [c.kind === "baseline" ? "baseline" : c.kind === "console" ? "console-error" : c.kind === "error" ? "test-error" : /layout shift/.test(c.label) ? "layout-shift" : /other hosts/.test(c.label) ? "external-asset" : "assertion"];
     for (const rule of rules) (byRule[rule] ||= []).push(`${r.suite} › ${r.name} › ${c.label}`);
   }
   writeFileSync(join(reportDir, "results.json"), JSON.stringify({ summary, byRule, results }, null, 1));
@@ -416,13 +454,13 @@ function renderReport(summary, byRule, results) {
     .map(([rule, list]) => `<tr><td><button class="rule" data-rule="${esc(rule)}">${esc(rule)}</button></td><td>${list.length}</td><td class="muted">${esc(criteria[rule] || "")}</td></tr>`).join("");
   const criteriaRows = Object.entries(criteria).map(([rule, text]) => `<tr><td><code>${esc(rule)}</code></td><td>${byRule[rule] ? `<b style="color:var(--bad)">FAIL ×${byRule[rule].length}</b>` : `<span style="color:var(--ok)">pass</span>`}</td><td>${esc(text)}</td></tr>`).join("");
   const cp = (c) => {
-    const rules = c.violations ? [...new Set(c.violations.map((v) => v.rule))].join(" ") : c.kind === "console" ? "console-error" : c.kind === "error" ? "test-error" : /layout shift/.test(c.label) ? "layout-shift" : /other hosts/.test(c.label) ? "external-asset" : "assertion";
+    const rules = c.violations ? [...new Set(c.violations.map((v) => v.rule))].join(" ") : c.kind === "baseline" ? "baseline" : c.kind === "console" ? "console-error" : c.kind === "error" ? "test-error" : /layout shift/.test(c.label) ? "layout-shift" : /other hosts/.test(c.label) ? "external-asset" : "assertion";
     const viol = c.violations && c.violations.length
       ? `<table class="viol"><tr><th>#</th><th>rule</th><th>element</th><th>problem</th></tr>${c.violations.map((v, i) => `<tr><td>${i + 1}</td><td>${esc(v.rule)}</td><td><code>${esc(v.target)}</code></td><td>${esc(v.message)}</td></tr>`).join("")}</table>`
       : "";
     const counts = c.counts && Object.keys(c.counts).length ? `<div class="muted">totals: ${Object.entries(c.counts).map(([k, v]) => `${esc(k)} ${v}`).join(", ")}</div>` : "";
     const detail = c.detail ? `<pre>${esc(c.detail)}</pre>` : "";
-    const shot = c.screenshot ? `<a href="shots/${esc(c.screenshot)}" target="_blank"><img loading="lazy" src="shots/${esc(c.screenshot)}" alt="${esc(c.label)}"></a>` : "";
+    const shot = (c.screenshot ? `<a href="shots/${esc(c.screenshot)}" target="_blank"><img loading="lazy" src="shots/${esc(c.screenshot)}" alt="${esc(c.label)}"></a>` : "") + (c.diff ? `<a href="shots/${esc(c.diff)}" target="_blank"><img loading="lazy" src="shots/${esc(c.diff)}" alt="differences"></a>` : "");
     return `<div class="cp ${c.pass ? "ok" : "bad"}" data-rules="${c.pass ? "" : esc(rules)}"><div class="cp-head"><span class="badge">${c.pass ? "PASS" : "FAIL"}</span> <span class="kind">${esc(c.kind)}</span> ${esc(c.label)}</div><div class="cp-body"><div class="cp-text">${viol}${counts}${detail}</div>${shot}</div></div>`;
   };
   const testHtml = (r) => {

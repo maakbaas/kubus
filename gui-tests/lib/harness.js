@@ -266,6 +266,20 @@ function __makeT(ctx, pg, name, opts) {
       if (!(await t.check(label, pass, detail))) throw new TestFailure(`${label}: ${detail}`);
     },
 
+    /**
+     * A screenshot baseline: the window as it is now, saved as a PNG that run.mjs compares with
+     * gui-tests/baselines/<name>@<viewport>[-dark].png (or, with --update-baselines, stores as it).
+     * The pointer is moved out of the way and the caret hidden, so only the page decides the pixels.
+     */
+    async baseline(name) {
+      await pg.mouse.move(t.vp.width - 1, t.vp.height - 1);
+      await t.settle(300);
+      const file = `${name}@${t.viewport}${opts.dark ? "-dark" : ""}.png`;
+      const shot = `${__OPTS.shotPrefix || ""}baseline--${file}`;
+      await pg.screenshot({ path: `${shotDir}/${shot}`, type: "png", animations: "disabled", caret: "hide" });
+      return record({ kind: "baseline", label: `baseline ${file}`, pass: true, baseline: file, screenshot: shot });
+    },
+
     /** A screenshot checkpoint without a criterion (shows the state in the report). */
     async snap(label) {
       await t.settle();

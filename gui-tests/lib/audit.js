@@ -89,6 +89,7 @@ const CRITERIA = {
   "popover-jump": "While a popover's controls are used, its button stays put and its panel keeps the edge it hangs from and its width (no jump, no flip).",
   "target-jump": "The control being used (in a popover, a dialog, an editor) stays under the pointer.",
   leak: "Opening and closing things repeatedly leaves no elements behind.",
+  baseline: "A key state looks as its stored screenshot (gui-tests/baselines/): at most 0.1% of the pixels differ.",
   assertion: "The behaviour checked by the test holds (named per check).",
   "test-error": "The test ran to its end (a control it needed was there and usable).",
 };
