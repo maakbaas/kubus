@@ -147,9 +147,10 @@ function __makeT(ctx, pg, name, opts) {
     async open(path = "/collections", { settle = true, keepTabs = false } = {}) {
       where = path;
       // A fresh single tab (unless keepTabs), and a real load: a changed hash alone loads nothing.
-      if (!keepTabs && pg.url().startsWith(base)) {
-        await pg.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("kubus.workspace.")).forEach((k) => localStorage.removeItem(k)));
-      }
+      // The stored tabs are cleared in the new document before the app starts (an init script, see
+      // __main): cleared here, the old page could store its tabs again before it unloads (seen
+      // under load).
+      if (!keepTabs && pg.url().startsWith(base)) await pg.evaluate(() => sessionStorage.setItem("__gui_clear_tabs", "1"));
       loads += 1;
       await timed("load", async () => {
         await pg.goto(`${base}/?load=${loads}#${path}`);
@@ -732,6 +733,14 @@ async function __main(pg) {
     deviceScaleFactor: 1,
     colorScheme: opts.dark ? "dark" : "light",
     reducedMotion: "reduce",
+  });
+  // t.open's fresh tabs: the stored workspace is cleared before the app reads it.
+  await ctx.addInitScript(() => {
+    try {
+      if (!sessionStorage.getItem("__gui_clear_tabs")) return;
+      sessionStorage.removeItem("__gui_clear_tabs");
+      for (const k of Object.keys(localStorage)) if (k.startsWith("kubus.workspace.")) localStorage.removeItem(k);
+    } catch {}
   });
   // Layout shifts as the browser measures them (CLS), with whether input preceded them.
   await ctx.addInitScript(() => {
