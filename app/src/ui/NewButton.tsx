@@ -9,7 +9,10 @@ export function NewButton({ label, onClick }: { label: string; onClick(): void }
   return (
     <>
       <Button size="sm" renderIcon={Add} iconDescription={label} onClick={onClick} className="new-button new-button--full">
-        <span className="new-button__label">{label}</span>
+        {/* Its whole text on hover when a long label is cut. */}
+        <span className="new-button__label" title={label}>
+          {label}
+        </span>
       </Button>
       <IconButton autoAlign size="sm" kind="primary" label={label} align="bottom-end" onClick={onClick} className="new-button new-button--icon">
         <Add />

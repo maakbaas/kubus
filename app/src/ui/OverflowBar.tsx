@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { IconButton } from "@carbon/react";
 import { OverflowMenuVertical } from "@carbon/icons-react";
 import { useMediaQuery } from "./useMediaQuery";
 import { PANEL_OPENED } from "./ToolbarPopover";
+import { visibleArea } from "./panelRoom";
 
 /**
  * A row of icon buttons. On a phone, in a narrow page header (styles.css, `.overflow-bar`) or with
@@ -16,6 +17,18 @@ export function OverflowBar({ children, menu }: { children: ReactNode; /** The "
   const root = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const asMenu = menu || narrow;
+  // Opened near the bottom of the window (a block low on a phone's screen): the menu opens upwards,
+  // or it, and the panels opened from it, would run out of the window.
+  const [up, setUp] = useState(false);
+  useLayoutEffect(() => {
+    if (!open || !asMenu) return setUp(false);
+    const items = root.current?.querySelector<HTMLElement>(":scope > .overflow-bar__items");
+    const button = toggle.current?.getBoundingClientRect();
+    if (!items || !button) return;
+    const { top, bottom } = visibleArea();
+    const need = items.offsetHeight + 6;
+    setUp(button.bottom + need > bottom && button.top - need >= top);
+  }, [open, asMenu]);
   // A toolbar popover among the buttons that opens (also by itself, e.g. View settings for a new
   // view's name) opens the menu, or its panel would be hidden with it.
   useEffect(() => {
@@ -48,7 +61,7 @@ export function OverflowBar({ children, menu }: { children: ReactNode; /** The "
     };
   }, [open]);
   return (
-    <div ref={root} className={asMenu ? "overflow-bar overflow-bar--menu" : "overflow-bar"} data-open={open || undefined}>
+    <div ref={root} className={asMenu ? "overflow-bar overflow-bar--menu" : "overflow-bar"} data-open={open || undefined} data-up={up || undefined}>
       <IconButton
         autoAlign
         kind="ghost"

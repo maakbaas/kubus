@@ -43,7 +43,10 @@ function IconLabel({ icon: Icon, children }: { icon: Icon; children: string }) {
   return (
     <span className="icon-label">
       <Icon size={16} aria-hidden="true" />
-      <span className="icon-label__text">{children}</span>
+      {/* A long name is cut with "…": its whole text on hover. */}
+      <span className="icon-label__text" title={children}>
+        {children}
+      </span>
     </span>
   );
 }

@@ -115,7 +115,7 @@ function __design(opts) {
           continue;
         }
         // The same centring for the first line of a taller value (--block-pad-top, styles.css).
-        if ((row || el.matches(".view-field__value")) && /^padding(Top|Bottom)$/.test(p)) continue;
+        if ((row || el.matches(".view-field__value, .code-editor__input, .code-editor__highlight")) && /^padding(Top|Bottom)$/.test(p)) continue;
         if (/^margin(Left|Right)$/.test(p) && s.marginLeft === s.marginRight) continue;
         judge("spacing-scale", false, el, `${v}`, `${p} ${v}px is not on the spacing scale`);
       }
@@ -193,7 +193,9 @@ function __design(opts) {
       if (r > 0 || survey) judge("radius", r === 0 || !!el.closest(ROUND) || el.matches(ROUND) || !!el.closest(USER_CONTENT), el, `${r}`, `rounded corners (${r}px)`);
       if (s.boxShadow !== "none") {
         // An inset shadow is a focus / selection mark (Carbon draws focus and selected rows with it).
-        const inset = /inset/.test(s.boxShadow);
+        // Carbon's contained tabs draw their dividers as box-shadows (Carbon's design).
+        // So does what is being edited in place (the title's field background spread around it).
+        const inset = /inset/.test(s.boxShadow) || el.matches(".cds--tabs--contained .cds--tabs__nav-item, :focus-within");
         judge("shadow", inset || !!el.closest(FLOATING) || el.matches(FLOATING), el, inset ? "inset" : "outer", `a box-shadow outside the floating layers: ${s.boxShadow.slice(0, 60)}`);
       }
       // Carbon's notifications mark their kind with a 3px edge (Carbon's design).
@@ -251,7 +253,8 @@ function __design(opts) {
 
   // ---- popover-padding ----------------------------------------------------------------------------
   for (const panel of document.querySelectorAll(".cds--popover--open .toolbar-popover__panel")) {
-    if (!visible(panel)) continue;
+    // A list of rows (the tab menu) is padded at the sides only: its rows bring their own height, as a menu's do.
+    if (!visible(panel) || panel.querySelector(":scope > .tab-menu__list")) continue;
     const s = cs(panel);
     const pads = [s.paddingTop, s.paddingRight, s.paddingBottom, s.paddingLeft].map(px);
     const even = pads.every((p) => p === pads[0]);
@@ -317,7 +320,9 @@ function __design(opts) {
   for (const b of document.querySelectorAll(".ws-tab-content .block")) if (!b.closest(".item-fields")) lists.set(b.parentElement, ".block");
   for (const [list, only] of lists) {
     if (!visible(list)) continue;
-    const kids = [...list.children].filter((k) => (!only || k.matches(only)) && visible(k) && k.getBoundingClientRect().height > 0);
+    // Through display: contents wrappers (a field shown without its label); not screen-reader-only bits.
+    const flat = (els) => els.flatMap((k) => (cs(k).display === "contents" ? flat([...k.children]) : [k]));
+    const kids = flat([...list.children]).filter((k) => (!only || k.matches(only)) && visible(k) && !srOnly(k) && k.getBoundingClientRect().height > 2);
     const gaps = [];
     for (let i = 1; i < kids.length; i++) gaps.push(Math.round(kids[i].getBoundingClientRect().top - kids[i - 1].getBoundingClientRect().bottom));
     const set = [...new Set(gaps)];

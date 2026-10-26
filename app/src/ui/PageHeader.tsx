@@ -24,20 +24,21 @@ export function PageHeader({ title, current, subtitle, breadcrumbs = [], actions
           right; the subtitle below spans the full width. */}
       <div className="page-header__row">
         <div className="page-header__main">
+      {/* A long breadcrumb is cut with "…": its whole text is its title (hover). */}
       {/* A top-level page (no parents) shows itself as a link with a trailing slash ("Collections /");
           deeper pages show their parents as links, ending in the current page as plain text. */}
       {breadcrumbs.length === 0 ? (
         <Breadcrumb>
-          <BreadcrumbItem href={`#${pathname}`}>{currentLabel}</BreadcrumbItem>
+          <BreadcrumbItem href={`#${pathname}`} title={currentLabel}>{currentLabel}</BreadcrumbItem>
         </Breadcrumb>
       ) : (
         <Breadcrumb noTrailingSlash>
           {breadcrumbs.map((b) => (
-            <BreadcrumbItem key={b.href} href={b.href}>
+            <BreadcrumbItem key={b.href} href={b.href} title={b.label}>
               {b.label}
             </BreadcrumbItem>
           ))}
-          {currentLabel && <BreadcrumbItem isCurrentPage>{currentLabel}</BreadcrumbItem>}
+          {currentLabel && <BreadcrumbItem isCurrentPage title={currentLabel}>{currentLabel}</BreadcrumbItem>}
         </Breadcrumb>
       )}
           {typeof title === "string" ? <Heading className="page-header__title">{title}</Heading> : title}

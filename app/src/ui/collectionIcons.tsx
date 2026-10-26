@@ -78,7 +78,9 @@ export function CollectionLabel({ collection }: { collection: Pick<Collection, "
   return (
     <span className="icon-label">
       <CollectionIcon name={collection.icon} />
-      <span className="icon-label__text">{collection.name}</span>
+      <span className="icon-label__text" title={collection.name}>
+        {collection.name}
+      </span>
     </span>
   );
 }
