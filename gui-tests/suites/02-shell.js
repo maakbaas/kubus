@@ -222,15 +222,16 @@ test("tabs: new, middle click close, close all, history", async (t) => {
   // Navigate within the tab, then back / forward with Alt+arrows.
   await t.page.getByRole("link", { name: "Books" }).first().click();
   await t.settle();
+  const linkText = (await t.page.locator(".items-table a.cds--link").first().innerText()).trim();
   await t.page.locator(".items-table a.cds--link").first().click();
-  await t.settle();
+  await t.until("the link opens its item in the tab", async () => (await t.page.locator(".page-header__title").first().innerText()).includes(linkText) || "not yet");
   const itemTitle = await t.page.locator(".page-header__title").first().innerText();
   await t.page.keyboard.press("Alt+ArrowLeft");
   await t.settle();
   await t.until("Alt+Left goes back in the tab", async () => (await t.page.locator(".page-header__title").first().innerText()).includes("Books"));
   await t.page.keyboard.press("Alt+ArrowRight");
   await t.settle();
-  await t.check("Alt+Right goes forward", (await t.page.locator(".page-header__title").first().innerText()) === itemTitle);
+  await t.until("Alt+Right goes forward", async () => (await t.page.locator(".page-header__title").first().innerText()) === itemTitle || (await t.page.locator(".page-header__title").first().innerText()));
   // Close every tab: an empty workspace with a way back.
   await t.page.locator(".cds--tabs__nav-item--close-icon").first().click();
   await t.settle();
