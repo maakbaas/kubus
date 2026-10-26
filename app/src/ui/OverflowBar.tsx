@@ -68,6 +68,9 @@ export function OverflowBar({ children, menu }: { children: ReactNode; /** The "
         className="overflow-bar__items"
         onClick={(e) => {
           const t = e.target as Element;
+          // Not a click in a dialog opened from a panel here: it reaches this handler through
+          // React's tree (a portal), and closing the menu hid the panel behind it.
+          if (!e.currentTarget.contains(t)) return;
           if (t.closest("button") && !t.closest(".toolbar-popover")) setOpen(false);
         }}
       >

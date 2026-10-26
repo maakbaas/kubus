@@ -247,6 +247,23 @@ export function HtmlFrame({
   const [settled, setSettled] = useState(() => !fill && measuredFrames.has(source));
   const settleTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(settleTimer.current), []);
+  // Focus inside the (sandboxed) frame, e.g. tabbing to one of its links: the frame matches no
+  // :focus or :focus-within then, so it is marked for its focus ring (styles.css). The page sees
+  // it only as its window losing focus with the frame as the active element.
+  useEffect(() => {
+    const el = frame.current;
+    if (!el) return;
+    const update = () => el.toggleAttribute("data-focused", document.activeElement === el);
+    const later = () => setTimeout(update);
+    window.addEventListener("blur", later);
+    window.addEventListener("focus", update);
+    document.addEventListener("focusin", update);
+    return () => {
+      window.removeEventListener("blur", later);
+      window.removeEventListener("focus", update);
+      document.removeEventListener("focusin", update);
+    };
+  }, []);
   const contentClick = useRef(onContentClick);
   contentClick.current = onContentClick;
   useEffect(() => {

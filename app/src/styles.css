@@ -3333,9 +3333,9 @@ img[data-lightbox] {
   border: 0;
   background: transparent;
 }
-/* Tabbing into the frame (its links and controls) shows like any other focus (while something
-   in it has focus, the frame matches only :focus-within). */
-.html-frame:focus-within {
+/* Tabbing into the frame (its links and controls) shows like any other focus (a sandboxed frame
+   matches no :focus while something in it has it: HtmlFrame marks it). */
+.html-frame[data-focused] {
   outline: 2px solid var(--cds-focus);
   outline-offset: -2px;
 }
