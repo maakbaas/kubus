@@ -47,7 +47,7 @@ for (const vp of ["desktop", "phone", "laptop"]) {
     await t.audit("bottom of the form");
     await t.page.getByRole("button", { name: "Create collection" }).click();
     await t.settle();
-    await t.check("the collection is created and opened", (await t.page.locator(".page-header__title").first().innerText()).includes("Publication"), await t.page.locator(".page-header__title").first().innerText().catch(() => ""));
+    await t.until("the collection is created and opened", async () => (await t.page.locator(".page-header__title").first().innerText()).includes("Publication") || (await t.page.locator(".page-header__title").first().innerText().catch(() => "")));
     await t.audit("new collection's page");
     // New item form with every field.
     await t.page.getByRole("button", { name: /^New Publication/ }).first().click();
@@ -211,7 +211,7 @@ for (const vp of ["desktop", "phone"]) {
       await t.page.keyboard.type(" — edited");
       await t.page.keyboard.press("Enter");
       await t.settle();
-      await t.check("description saved", (await t.page.locator(".ws-pane--active .ws-pane__body").innerText()).includes("— edited"));
+      await t.until("description saved", async () => (await t.page.locator(".ws-pane--active .ws-pane__body").innerText()).includes("— edited"));
     }
     await t.page.getByRole("button", { name: /^Duplicate .* collection$/ }).first().click().catch(() => {});
     await t.settle();

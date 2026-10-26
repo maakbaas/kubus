@@ -85,8 +85,12 @@ for (const vp of ["desktop", "phone"]) {
     await t.settle();
     await t.audit("a field collapsed while another is edited");
     await t.closeAll();
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 }
+
+// The same under load (the page's CPU 4× slower): it once failed on a busy machine, when the save
+// answered after the test had looked.
+test("editing in place, then elsewhere, under load (CPU 4× slower)", (t) => __tests.find((x) => x.name === "editing in place, then elsewhere: one click saves and opens the next @ desktop").fn(t), { cpu: 4, smoke: true });
 
 test("editing in place survives a window resize, a tab switch and the side nav", async (t) => {
   await t.boot();

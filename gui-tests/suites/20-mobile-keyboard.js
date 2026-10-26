@@ -89,7 +89,7 @@ for (const vp of ["phone", "phone-small"]) {
       await t.page.getByRole("option", { name: /Cards/ }).first().click();
       await t.settle();
       await withKeyboard(t, "cards block name", t.page.locator(KB_PANEL).last().getByRole("textbox", { name: "Name" }), KB_PANEL, style);
-    }, { viewport: vp });
+    }, { viewport: vp, smoke: vp === "phone" });
 
     test(`view settings name with the keyboard (${style}) @ ${vp}`, async (t) => {
       await t.boot();

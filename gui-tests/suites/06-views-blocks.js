@@ -34,7 +34,7 @@ for (const vp of ["desktop", "laptop", "phone"]) {
     await t.page.keyboard.press("Enter");
     await t.closeAll();
     await t.settle();
-    await t.check("typing renames the new view", (await bar.innerText()).includes("Renamed view with a fairly long name"));
+    await t.until("typing renames the new view", async () => (await bar.innerText()).includes("Renamed view with a fairly long name"));
     await t.audit("renamed");
     // Unsaved change: a filter rule; the tabs must not move when "*" and Save / Discard appear.
     const tabsBefore = await t.rects(".views-bar .views-tabs [role=tab]");
@@ -53,7 +53,7 @@ for (const vp of ["desktop", "laptop", "phone"]) {
     await t.audit("view with unsaved changes");
     if (changed) {
       await tool(t, bar, "Save changes to view").catch(() => t.fail("Save changes to view is offered", "no Save button"));
-      await t.check("Save removes the *", !(await bar.innerText()).includes("*"));
+      await t.until("Save removes the *", async () => !(await bar.innerText()).includes("*"));
     }
     // Star, then delete (asks first).
     await tool(t, bar, "Star as default view").catch(() => {});
@@ -62,7 +62,7 @@ for (const vp of ["desktop", "laptop", "phone"]) {
     await t.audit("delete view confirmation");
     await t.page.locator(".cds--modal.is-visible").getByRole("button", { name: /Delete/ }).click();
     await t.settle();
-    await t.check("the view is gone", !(await bar.innerText()).includes("Renamed view"));
+    await t.until("the view is gone", async () => !(await bar.innerText()).includes("Renamed view"));
     await t.audit("after deleting a view");
   }, { viewport: vp });
 

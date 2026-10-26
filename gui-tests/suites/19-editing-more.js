@@ -49,7 +49,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.check("the saved note has the pasted text and address", text.includes("Pasted plain words") && text.includes("example.com/pasted"));
     await t.check("the {{ }} code is evaluated on the page (no raw code)", !text.includes("{{ $item.Title }}"), "raw code shown");
     await t.audit("markdown with pasted content saved");
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 }
 
 test("code editor: undo and redo", async (t) => {

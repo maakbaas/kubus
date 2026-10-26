@@ -74,7 +74,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.until("the nudged value replaces the old one", async () => (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("AI summary, nudged"), { timeout: 10000 });
     await t.check("one more request, with the nudge in it", fake.calls.length === before + 1 && promptOf(fake.calls[fake.calls.length - 1]).includes("the second edition"), `${fake.calls.length - before} requests`);
     await t.audit("after generating again");
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 }
 
 test("a value typed over is kept or replaced only when asked", async (t) => {

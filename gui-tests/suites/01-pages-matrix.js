@@ -46,7 +46,7 @@ for (const style of MATRIX_STYLES) {
         const biggest = cls <= 0.02 ? [] : await t.shiftSources();
         await t.check(`${label}: no layout shift while loading (CLS ${cls.toFixed(3)})`, cls <= 0.02, [`CLS ${cls.toFixed(3)} > 0.02. Biggest shifts:`, ...biggest].join(String.fromCharCode(10)));
       }
-    }, { viewport: vp });
+    }, { viewport: vp, smoke: style === "typical" && (vp === "phone" || vp === "desktop") });
   }
 }
 

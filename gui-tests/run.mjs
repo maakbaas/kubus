@@ -22,6 +22,10 @@
 //                      failed and then passed is "flaky" in the report, and counts as a failure
 //   --cpu <n>          slow each test's page down n times (CDP CPU throttling): load / stress mode
 //   --repeat <n>       run each selected test n times (names get " #k"), to measure how flaky it is
+//   --browser <name>   webkit / firefox / chrome / msedge instead of the default (playwright-cli open
+//                      --browser); WebKit needs `playwright install webkit` for playwright-cli's own
+//                      Playwright (and no PLAYWRIGHT_MCP_CONFIG naming another browser)
+//   --smoke            only the tests marked { smoke: true } (~25: a quick check; the full run before larger pushes)
 //   --update-baselines store the screenshot baselines (t.baseline) taken by this run in
 //                      gui-tests/baselines/ instead of comparing with them
 //   --recycle <n>      restart each browser after n tests (default 8), to drop what it accumulated
@@ -103,6 +107,7 @@ function listTests(file) {
 }
 let tests = suiteFiles.flatMap(listTests);
 if (grep) tests = tests.filter((t) => grep.test(`${t.suite} › ${t.name}`));
+if (flag("smoke")) tests = tests.filter((t) => t.opts.smoke);
 // Each test `repeat` times: the same test (looked up by `name`), reported as "name #k".
 if (repeat > 1) tests = tests.flatMap((t) => Array.from({ length: repeat }, (_, k) => ({ ...t, label: `${t.name} #${k + 1}` })));
 if (flag("list")) {
@@ -179,9 +184,10 @@ function killStrays() {
   return daemons.length;
 }
 
+const browserName = opt("browser");
 async function openSession(s) {
   await cli(s, "close");
-  const r = await cli(s, "open");
+  const r = await cli(s, "open", ...(browserName ? [`--browser=${browserName}`] : []));
   if (r.code !== 0) throw new Error(`Could not open browser session ${s}: ${r.out}${r.err}`);
 }
 
@@ -278,7 +284,7 @@ function stopServer() {
 
 // ---- run --------------------------------------------------------------------------------------
 async function runTest(session, t, n) {
-  const opts = { test: t.name, baseUrl, shotDir: shotDir.replace(/\\/g, "/"), skip: skipRules, shotAll: flag("shot-all"), ignoreConsole: IGNORE_CONSOLE, cpu, shotPrefix: t.label ? `r${n}-` : "" };
+  const opts = { browser: browserName || "chromium", test: t.name, baseUrl, shotDir: shotDir.replace(/\\/g, "/"), skip: skipRules, shotAll: flag("shot-all"), ignoreConsole: IGNORE_CONSOLE, cpu, shotPrefix: t.label ? `r${n}-` : "" };
   const code = `async page => {\nconst __OPTS = ${JSON.stringify(opts)};\n${lib}\n${t.src}\nreturn await __main(page);\n}`;
   const file = join(tmpDir, `t${n}.js`);
   writeFileSync(file, code);
@@ -333,7 +339,7 @@ async function main() {
   await ensureServer();
 
   const sessions = Array.from({ length: Math.min(workers, tests.length) }, (_, i) => `${SESSION_PREFIX}${i + 1}`);
-  console.log(`${tests.length} tests in ${sessions.length} browser(s) (${(freemem() / GB).toFixed(1)} GB free)${cpu > 1 ? `, CPU slowed ${cpu}×` : ""}`);
+  console.log(`${tests.length} tests in ${sessions.length} ${browserName || "chromium"} browser(s) (${(freemem() / GB).toFixed(1)} GB free)${cpu > 1 ? `, CPU slowed ${cpu}×` : ""}`);
   activeSessions = sessions;
   await Promise.all(sessions.map(openSession));
 

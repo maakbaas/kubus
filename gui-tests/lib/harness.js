@@ -12,7 +12,11 @@
 /* global __OPTS, page */
 
 const __tests = [];
-/** Registers a test. `opts.viewport`: a key of VIEWPORTS (default desktop); `opts.dark`: dark theme. */
+/**
+ * Registers a test. `opts.viewport`: a key of VIEWPORTS (default desktop); `opts.dark`: dark theme;
+ * `opts.cpu`: its page n times slower (load mode for this test); `opts.smoke`: in the quick smoke run
+ * (--smoke); `opts.heavy`: big data, run last and alone.
+ */
 function test(name, fn, opts = {}) {
   __tests.push({ name, fn, opts });
 }
@@ -34,7 +38,7 @@ function __makeT(ctx, pg, name, opts) {
   const shotDir = __OPTS.shotDir;
   const slug = (__OPTS.shotPrefix || "") + name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 80);
   // Load mode (--cpu n): the page runs n times slower, so waits for it get longer too.
-  const slow = Math.max(1, __OPTS.cpu || 1);
+  const slow = Math.max(1, opts.cpu || __OPTS.cpu || 1);
   const checkpoints = [];
   const errors = [];
   let shotN = 0;
@@ -748,10 +752,10 @@ async function __main(pg) {
     } catch {}
   });
   const p = await ctx.newPage();
-  const slow = Math.max(1, __OPTS.cpu || 1);
+  const slow = Math.max(1, opts.cpu || __OPTS.cpu || 1);
   p.setDefaultTimeout(8000 * slow);
-  // Load mode (--cpu n): the page's CPU n times slower (Chromium only).
-  if (slow > 1) {
+  // Load mode (--cpu n): the page's CPU n times slower (Chromium only: CDP).
+  if (slow > 1 && /chrom|msedge/.test(__OPTS.browser || "chromium")) {
     const cdp = await ctx.newCDPSession(p);
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: slow });
   }

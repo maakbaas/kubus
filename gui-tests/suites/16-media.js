@@ -100,7 +100,7 @@ for (const vp of ["desktop", "phone"]) {
     await dispatchWithFile(t, field.locator(".cds--file__drop-container").first(), "drop", "third");
     await t.until("a dropped image is stored and shown", async () => (await shape()) === "wide" || await shape(), { timeout: 8000 });
     await t.audit("image dropped");
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 }
 
 for (const vp of ["desktop", "phone"]) {

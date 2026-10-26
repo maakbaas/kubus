@@ -174,7 +174,7 @@ for (const vp of ["desktop", "phone"]) {
       await t.boot();
       const ids = await t.seed(crawlSpec());
       await crawlPage(t, label, path(ids));
-    }, { viewport: vp });
+    }, { viewport: vp, smoke: vp === "desktop" && label === CRAWL_PAGES[0][0] });
   }
   test(`hover every icon button @ ${vp}`, async (t) => {
     await t.boot();

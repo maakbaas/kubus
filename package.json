@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --config app/vite.config.ts",
     "test:gui": "node gui-tests/run.mjs",
+    "test:gui:smoke": "node gui-tests/run.mjs --smoke",
     "tauri": "tauri"
   },
   "dependencies": {

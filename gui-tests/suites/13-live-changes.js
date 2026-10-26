@@ -27,15 +27,15 @@ for (const vp of ["desktop", "phone"]) {
     }, { scope: ".ws-pane--active .ws-pane__body", except: [".item-fields > *:has([aria-label='Edit Count']) ~ *", ".item-fields > *:has([aria-label='Edit Count'])"] });
     await t.check("the editor is still open", (await t.count(".ProseMirror")) === 1);
     await t.check("what was typed is still in the editor", (await t.page.locator(".ProseMirror").innerText()).includes("typed while it changed"));
-    await t.check("the changed field shows its new value", (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("31337"));
+    await t.until("the changed field shows its new value", async () => (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("31337"));
     // The same field changed elsewhere while it is being edited: what is typed here wins on save.
     await external(t, `const col = await c(arg.coll); const f = col.fields.find((x) => x.name === "Notes"); const it = await repo.getItem(col, arg.item); await repo.updateItem(col, arg.item, { ...it.values, [f.id]: "Written elsewhere" });`, { coll, item });
     await t.check("an edit of the same field elsewhere doesn't replace what is being typed", (await t.page.locator(".ProseMirror").innerText().catch(() => "")).includes("typed while it changed"), "the editor's text was replaced");
     await t.page.keyboard.press("Control+Enter");
     await t.settle();
-    await t.check("saving keeps what was typed here", (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("typed while it changed"));
+    await t.until("saving keeps what was typed here", async () => (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("typed while it changed"));
     await t.audit("after changes from elsewhere");
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 }
 
 test("the open item is deleted elsewhere", async (t) => {
@@ -66,7 +66,7 @@ test("a collection is deleted while its pages are open", async (t) => {
   await external(t, "await repo.deleteCollection(arg);", coll);
   await t.audit("collection page after its collection was deleted");
   await t.check("no popover is left hanging over a page that is gone", (await t.count(".toolbar-popover.cds--popover--open")) === 0 || (await t.count(".ws-pane .items-table")) > 0);
-  await t.check("the overview no longer lists it", !(await t.page.locator(".ws-pane").nth(1).innerText()).includes("Books"));
+  await t.until("the overview no longer lists it", async () => !(await t.page.locator(".ws-pane").nth(1).innerText()).includes("Books"));
   await t.page.locator(".ws-pane").first().locator(".cds--tabs__nav-item").nth(1).click().catch(() => {});
   await t.settle();
   await t.audit("its item page after the collection was deleted");

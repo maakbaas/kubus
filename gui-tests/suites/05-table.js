@@ -75,7 +75,7 @@ for (const [style, vp] of [["typical", "desktop"], ["long", "desktop"], ["typica
       await t.page.keyboard.type("987654");
       await t.page.keyboard.press("Enter");
       await t.settle();
-      await t.check("number cell saves with Enter", (await t.page.locator(".items-table").innerText()).includes("987654"));
+      await t.until("number cell saves with Enter", async () => (await t.page.locator(".items-table").innerText()).includes("987654"));
       await t.audit("after saving a cell");
     }
   }, { viewport: vp });
@@ -97,7 +97,7 @@ for (const vp of ["desktop", "laptop"]) {
     await t.page.keyboard.type("A brand new book from the add row");
     await t.page.keyboard.press("Enter");
     await t.settle();
-    await t.check("Enter in the add row creates the item", (await t.page.locator(".items-table").innerText()).includes("A brand new book from the add row"));
+    await t.until("Enter in the add row creates the item", async () => (await t.page.locator(".items-table").innerText()).includes("A brand new book from the add row"));
     await t.audit("after adding a row");
     await t.closeAll();
     await t.page.keyboard.press("Escape");
@@ -153,7 +153,7 @@ for (const vp of ["desktop", "laptop"]) {
     await t.audit("view search");
     const found = await t.count(".items-table tbody tr:not(.table-add-row)");
     await t.check("search narrows the rows to the match", found === 1, `${found} rows`);
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 }
 
 for (const vp of ["desktop", "phone"]) {

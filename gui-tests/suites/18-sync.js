@@ -105,7 +105,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.page.locator(".cds--modal.is-visible").getByRole("button", { name: "Disconnect" }).click();
     await t.until("after disconnecting sync is off", async () => (await t.page.getByRole("button", { name: "Sync is off" }).count()) > 0);
     await t.audit("sync settings after disconnecting");
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 }
 
 test("sync: a server that holds data replaces this device's data, after asking", async (t) => {

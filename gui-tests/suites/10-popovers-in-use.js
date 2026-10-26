@@ -111,7 +111,7 @@ for (const vp of POP_VPS) {
     await t.check("the changed view offers Save once the popover is closed", (await t.page.getByRole("button", { name: "Save changes to view" }).count()) > 0 || (await bar.innerText()).includes("*"));
     await t.audit("filtered view, popover closed");
     await noLeak(t, "filter popover", () => openPopover(t, bar, /^Filter/));
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 
   test(`block popovers in use: sort and group, fields, block settings @ ${vp}`, async (t) => {
     await t.boot();
@@ -173,7 +173,7 @@ for (const vp of POP_VPS) {
     await t.audit("cards settings after changes");
     await t.escapeCloses("block settings");
     await noLeak(t, "block settings", () => openPopover(t, header(), "Block settings"));
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 
   test(`view settings in use: rename, headers, add and remove blocks @ ${vp}`, async (t) => {
     await t.boot();
@@ -206,7 +206,7 @@ for (const vp of POP_VPS) {
     await t.check("cancelling the confirmation keeps View settings open", (await t.count(".toolbar-popover.cds--popover--open")) === 1);
     await t.escapeCloses("view settings");
     await noLeak(t, "view settings", () => openPopover(t, bar, "View settings"));
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 
   test(`item page popovers in use: page layout, details @ ${vp}`, async (t) => {
     await t.boot();
@@ -238,7 +238,7 @@ for (const vp of POP_VPS) {
     }
     await t.escapeCloses("details");
     await noLeak(t, "page layout", () => openPopover(t, header, "Page layout"));
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 }
 
 for (const vp of ["desktop", "phone"]) {

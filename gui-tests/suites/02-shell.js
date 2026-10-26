@@ -136,7 +136,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.page.getByRole("option", { name: /Work space/ }).click();
     await t.settle();
     await t.audit("switched to a space with a long name");
-    await t.check("switched space shows its (empty) collections list", (await t.page.locator(".side-nav-search").innerText()).includes("Work space"));
+    await t.until("switched space shows its (empty) collections list", async () => (await t.page.locator(".side-nav-search").innerText()).includes("Work space"));
     // Back to the default space.
     if (t.phone && !(await t.page.locator(".cds--side-nav--expanded").count())) await t.page.getByRole("button", { name: "Show menu" }).first().click();
     await t.page.locator(".side-nav-search .cds--dropdown button").first().click();
@@ -151,7 +151,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.page.keyboard.type("Proceedings");
     await t.settle(400);
     await t.audit("search with long results");
-    await t.check("search shows results", (await t.page.locator(".ws-pane--active .ws-tab-slot:not([hidden])").innerText()).includes("Proceedings"));
+    await t.until("search shows results", async () => (await t.page.locator(".ws-pane--active .ws-tab-slot:not([hidden])").innerText()).includes("Proceedings"));
     await t.page.keyboard.press("Control+A");
     await t.page.keyboard.type("zzzz-nothing");
     await t.settle(400);
@@ -227,7 +227,7 @@ test("tabs: new, middle click close, close all, history", async (t) => {
   const itemTitle = await t.page.locator(".page-header__title").first().innerText();
   await t.page.keyboard.press("Alt+ArrowLeft");
   await t.settle();
-  await t.check("Alt+Left goes back in the tab", (await t.page.locator(".page-header__title").first().innerText()).includes("Books"));
+  await t.until("Alt+Left goes back in the tab", async () => (await t.page.locator(".page-header__title").first().innerText()).includes("Books"));
   await t.page.keyboard.press("Alt+ArrowRight");
   await t.settle();
   await t.check("Alt+Right goes forward", (await t.page.locator(".page-header__title").first().innerText()) === itemTitle);

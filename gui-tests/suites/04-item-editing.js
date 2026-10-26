@@ -136,7 +136,7 @@ for (const [style, vp] of EDIT_CASES) {
     await editRoundTrip(t, "When", { height: false, width: false });
     await editRoundTrip(t, "Related");
     await editRoundTrip(t, "Notes", { type: " appended", height: false, multiline: true });
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: style === "typical" && vp === "desktop" });
 
   test(`title, checkboxes, lists, collapse, image hover: ${style} @ ${vp}`, async (t) => {
     await t.boot();

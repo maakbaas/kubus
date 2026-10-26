@@ -89,7 +89,7 @@ for (const vp of ["desktop", "phone"]) {
       await t.open(path(ids));
       await tabWalk(t, label);
     }
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 }
 
 /** Opens a dialog with `open`, then checks focus is inside, Tab stays inside, Escape closes and focus returns. */

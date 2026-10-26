@@ -123,7 +123,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.page.locator(".cds--modal.is-visible").getByRole("button", { name: /Cancel/ }).click();
     await t.settle();
     await t.check("Cancel keeps the field", (await rowNames(t, scope)).length === n);
-  }, { viewport: vp });
+  }, { viewport: vp, smoke: vp === "desktop" });
 
   test(`Fields popover and View settings: reorder fields and blocks @ ${vp}`, async (t) => {
     await t.boot();
