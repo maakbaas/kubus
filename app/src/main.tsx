@@ -29,8 +29,14 @@ registerServiceWorker();
 trackKeyboardInset();
 escapeThroughDropdowns();
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <Root />
-  </StrictMode>,
+// The first render waits (at most a second) for the bundled faces nearly every page uses: drawn in
+// a fallback first and swapped, their different widths re-wrapped the text and moved the page.
+const FACES = ['400 1em "IBM Plex Sans"', '600 1em "IBM Plex Sans"', '300 1em "IBM Plex Sans"', '400 1em "IBM Plex Mono"'];
+const fontsLoaded = Promise.all(FACES.map((f) => document.fonts?.load(f))).catch(() => undefined);
+void Promise.race([fontsLoaded, new Promise((r) => setTimeout(r, 1000))]).then(() =>
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <Root />
+    </StrictMode>,
+  ),
 );
