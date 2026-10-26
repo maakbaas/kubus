@@ -2102,7 +2102,6 @@ img[data-lightbox] {
   display: block;
   block-size: var(--cds-spacing-06); /* fits Carbon's small table row */
   inline-size: 6rem;
-  max-inline-size: 100%;
   object-fit: contain;
   object-position: left center;
 }
@@ -3173,8 +3172,11 @@ img[data-lightbox] {
     display: none;
   }
   /* Images sit at the start of their value, like the other values (wide tables centre them). */
+  /* Never wider than the value's column (in a wide table a percentage cap would make the image
+     shrinkable where its stand-in isn't: the column would change when it loads). */
   .items-table tbody td.cell--image .image-thumb {
     object-position: left center;
+    max-inline-size: 100%;
   }
   /* No row hover on cards: Carbon's hover adds borders (things shift) and tints the whole row,
      icons included; the icons are buttons with their own hover. */
