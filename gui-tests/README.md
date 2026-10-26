@@ -95,6 +95,7 @@ those): on a big page that is the difference between a minute and a second per c
 | `12-combinations` | an edit in one pane shows in the other, one click from one field's edit to the next, edits surviving a resize / tab switch / side nav, popovers while the layout changes around them, arrangement kept across a reload |
 | `13-live-changes` | data changing underneath (another pane, a sync): an open editor keeps what is typed, the open item / collection deleted elsewhere, fields renamed / added / removed under an open table, a burst of writes |
 | `14-dark-layers` | every popover, menu, tooltip and dialog in the dark theme, audited open (contrast included) |
+| `20-mobile-keyboard` | a field in a popover (block settings, view settings, icon picker) on phones with the on-screen keyboard coming up the Android way (shorter window) and the iOS way (shorter visual viewport, `t.keyboardUp`): it stays open and focused, keeps its side of its button, fits above the keyboard with the field in sight, typing works |
 
 ## Adding to it
 

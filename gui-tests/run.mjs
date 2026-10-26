@@ -157,7 +157,8 @@ function killStrays() {
     }
   };
   const daemons = find(`cliDaemon\\.js ${SESSION_PREFIX}[0-9]+`);
-  const previews = find(`vite.*preview.*gui-tests.\\.build.*--port ${previewPort}`).filter((pid) => pid !== server?.pid);
+  // None with --base-url: this run serves nothing, and the port may be another run's (whose server it ended).
+  const previews = externalUrl ? [] : find(`vite.*preview.*gui-tests.\\.build.*--port ${previewPort}`).filter((pid) => pid !== server?.pid);
   for (const pid of [...daemons, ...previews]) killTree(pid);
   return daemons.length;
 }

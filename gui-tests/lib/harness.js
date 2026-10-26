@@ -530,6 +530,34 @@ function __makeT(ctx, pg, name, opts) {
       });
     },
 
+    /**
+     * An on-screen keyboard covering `fraction` of the window's height, the way a phone does it.
+     * "android": the window itself gets shorter (`interactive-widget=resizes-content`). "ios": the
+     * window keeps its size and only the visual viewport shrinks (its `height` overridden, a
+     * `resize` dispatched on it), as Safari does. `t.keyboardDown()` takes it away again.
+     */
+    async keyboardUp(fraction = 0.45, style = "android") {
+      const h = Math.round(t.vp.height * (1 - fraction));
+      if (style === "android") await pg.setViewportSize({ width: t.vp.width, height: h });
+      else await pg.evaluate((h) => {
+        Object.defineProperty(window.visualViewport, "height", { configurable: true, get: () => h });
+        window.visualViewport.dispatchEvent(new Event("resize"));
+      }, h);
+      t.keyboard = { style, top: 0, bottom: h };
+      await t.settle(150);
+    },
+    async keyboardDown() {
+      if (!t.keyboard) return;
+      if (t.keyboard.style === "android") await pg.setViewportSize({ width: t.vp.width, height: t.vp.height });
+      else await pg.evaluate(() => {
+        delete window.visualViewport.height;
+        window.visualViewport.dispatchEvent(new Event("resize"));
+      });
+      t.keyboard = null;
+      await t.settle(150);
+    },
+    keyboard: null,
+
     /** Number of elements in the document (for leak checks after opening and closing things). */
     async nodeCount() {
       return pg.evaluate(() => document.getElementsByTagName("*").length);

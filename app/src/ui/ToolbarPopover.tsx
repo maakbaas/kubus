@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { IconButton, Popover, PopoverContent } from "@carbon/react";
+import { keepFocusInView, onViewportChange, panelRoom, setRoom as applyRoom, sideOf, typingIn, type PanelSide } from "./panelRoom";
 
 interface Props {
   label: string;
@@ -114,9 +115,20 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
       const pane = root.current?.closest(".ws-pane__body")?.getBoundingClientRect();
       return { left: Math.max(pane?.left ?? 0, 0), right: Math.min(pane?.right ?? window.innerWidth, window.innerWidth) };
     };
+    // The side the panel was on before typing in it began (an on-screen keyboard may come up then).
+    let side: PanelSide | null = null;
     const measure = () => {
       const r = root.current?.getBoundingClientRect();
-      if (r) setRoom(Math.max(r.top, window.innerHeight - r.bottom) - margin);
+      const el = content();
+      // Within what an on-screen keyboard leaves, on its side while it is typed in (panelRoom.ts).
+      if (r) {
+        const p = el?.getBoundingClientRect();
+        const typing = typingIn(el);
+        if (!typing && p && p.height > 0) side = sideOf(r, p);
+        const height = panelRoom(r, typing ? side : null, margin);
+        applyRoom(el?.querySelector<HTMLElement>(".toolbar-popover__panel"), height);
+        setRoom(height);
+      }
       const b = bounds();
       setMaxWidth(Math.max(b.right - b.left - 2 * margin, 0));
     };
@@ -139,15 +151,18 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
     };
     const update = () => {
       measure();
-      requestAnimationFrame(place);
+      requestAnimationFrame(() => {
+        place();
+        keepFocusInView(content()?.querySelector<HTMLElement>(".toolbar-popover__panel"));
+      });
     };
     update();
-    window.addEventListener("resize", update);
+    const stop = onViewportChange(update);
     const el = content();
     const observer = el ? new ResizeObserver(update) : undefined;
     if (el) observer?.observe(el);
     return () => {
-      window.removeEventListener("resize", update);
+      stop();
       observer?.disconnect();
       if (el) el.style.translate = "";
       const tip = el && caret(el);

@@ -128,6 +128,8 @@ stale peer range.
   opener); Escape closes toolbar popovers from their button too, and an Escape on a closed Carbon
   dropdown is passed on to its dialog or popover (`escapeThroughDropdowns`, Carbon swallows it).
 - **Popovers never make the page scroll**: toolbar popover panels are capped to the room beside their button (`--popover-room`, set by `ToolbarPopover`) and scroll inside; the icon picker is capped likewise.
+  The room is what an on-screen keyboard leaves (the visual viewport: iOS doesn't resize the window for it), and while a
+  field in the panel has focus the panel keeps its side of the button (`ui/panelRoom.ts`; suite `20-mobile-keyboard`).
 - **Safari / iOS rules** (each has its reason in a comment in `styles.css`):
   - No `filter` on an ancestor of a floating panel; shadows around popovers are box-shadows
     (Safari 26 makes a filter a containing block for `position: fixed`; Floating UI doesn't know).

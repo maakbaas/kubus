@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Button, IconButton, Popover, PopoverContent, Search } from "@carbon/react";
 import { iconNames, CollectionIcon } from "./collectionIcons";
+import { onViewportChange, panelRoom, setRoom as applyRoom, sideOf, typingIn, type PanelSide } from "./panelRoom";
 
 const MAX_SHOWN = 60;
 
@@ -28,13 +29,21 @@ export function IconPicker({ id, value, onChange, size = 24 }: Props) {
   const [room, setRoom] = useState<number>();
   useEffect(() => {
     if (!open) return;
+    // Within what an on-screen keyboard leaves (its search box has focus), on the side it is on (panelRoom.ts).
+    let side: PanelSide | null = null;
     const measure = () => {
       const r = root.current?.getBoundingClientRect();
-      if (r) setRoom(Math.max(r.top, window.innerHeight - r.bottom) - 16);
+      const panel = root.current?.querySelector(":scope > .cds--popover > .cds--popover-content");
+      if (!r) return;
+      const p = panel?.getBoundingClientRect();
+      const typing = typingIn(panel);
+      if (!typing && p && p.height > 0) side = sideOf(r, p);
+      const height = panelRoom(r, typing ? side : null);
+      applyRoom(panel?.querySelector<HTMLElement>(".icon-picker__panel"), height);
+      setRoom(height);
     };
     measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    return onViewportChange(measure);
   }, [open]);
 
   const matches = useMemo(() => {
