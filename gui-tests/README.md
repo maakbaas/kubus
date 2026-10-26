@@ -62,7 +62,7 @@ those): on a big page that is the difference between a minute and a second per c
     pane overflow, nothing sticking out or cut off, no overlapping text or controls, every control
     clickable, Carbon's small sizes, no ghost buttons with text, accessible names, popovers inside
     the window, type scale, theme colours only, the tab strip rules, no nested scrolling, unique ids,
-    no broken images, no native controls, …
+    no broken images, no native controls, WCAG AA text contrast, open popovers hanging at their button, aria-expanded matching, …
   - `t.noShift(label, action)`: nothing on screen moves or resizes (and no pane scrolls) while the
     action runs: editing in place, hovering, toggling, collapsing.
   - `t.popoverStep(label, action, { target, scope })`: a step inside an open popover (typing,
