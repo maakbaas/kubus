@@ -4,7 +4,7 @@ A browser test suite that clicks through the whole app and checks layout rules o
 many window sizes and with content of every shape. Not part of `npm test` or CI: run it by hand.
 
 ```
-npm run test:gui                                  # everything (~210 tests; browsers in parallel by free memory)
+npm run test:gui                                  # everything (~215 tests; browsers in parallel by free memory)
 npm run test:gui -- --suite 04                    # one suite (regex on the file name)
 npm run test:gui -- --grep "phone"                # tests whose "suite › name" matches
 npm run test:gui -- --workers 3 --shot-all        # fewer browsers, a screenshot of every checkpoint
@@ -94,6 +94,8 @@ those): on a big page that is the difference between a minute and a second per c
 | `10-popovers-in-use` | every toolbar popover used like a person would (typing a character at a time, toggling, picking, adding and removing rows, a dialog from it): nothing jumps, it stays open, Escape closes it and returns focus, no leaks; one at a time, click-through, scrolling and resizing with one open, two panes |
 | `11-keyboard-hover-dialogs` | Tab through every page (every stop in sight, with a focus ring, no hidden stops, never stuck), dialogs (focus inside, Tab kept inside, Escape, focus back), hovering any control moves nothing, typing and choosing in dialogs |
 | `12-combinations` | an edit in one pane shows in the other, one click from one field's edit to the next, edits surviving a resize / tab switch / side nav, popovers while the layout changes around them, arrangement kept across a reload |
+| `13-live-changes` | data changing underneath (another pane, a sync): an open editor keeps what is typed, the open item / collection deleted elsewhere, fields renamed / added / removed under an open table, a burst of writes |
+| `14-dark-layers` | every popover, menu, tooltip and dialog in the dark theme, audited open (contrast included) |
 
 ## Adding to it
 
