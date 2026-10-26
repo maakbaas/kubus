@@ -201,7 +201,7 @@ for (const vp of ["wide", "desktop", "laptop", "tablet", "phone"]) {
 async function timeOpen(t, path) {
   const started = Date.now();
   await t.open(path, { settle: false });
-  await t.page.waitForSelector(".items-table tbody tr", { timeout: 120000 });
+  await t.page.waitForSelector(".items-table tbody tr", { timeout: 120000 * t.slow });
   const ms = Date.now() - started;
   await t.settle();
   return ms;
@@ -211,7 +211,7 @@ async function timeSearch(t) {
   const t0 = Date.now();
   await t.page.getByRole("button", { name: "Search Books" }).first().click();
   await t.page.keyboard.type("Hyperion", { delay: 30 });
-  await t.settle(200, 60000);
+  await t.settle(200, 60000 * t.slow);
   const ms = Date.now() - t0;
   await t.page.getByRole("button", { name: "Close search" }).first().click().catch(() => {});
   return ms;
@@ -227,7 +227,7 @@ for (const n of [200, 1000]) {
     const pace = await timeOpen(t, t.listPath(small.collections.books));
     const paceSearch = await timeSearch(t);
     const ms = await timeOpen(t, t.listPath(ids.collections.books));
-    const limit = Math.min(pace * (n / 20) * 1.25, 120000);
+    const limit = Math.min(pace * (n / 20) * 1.25, 120000 * t.slow);
     await t.check(`${n} rows show within ${(limit / 1000).toFixed(1)}s, ${n / 20}× the 20-row time and some (${(ms / 1000).toFixed(1)}s)`, ms <= limit, `${ms}ms; 20 rows took ${pace}ms`);
     await t.audit(`${n} rows`);
     const rows = await t.count(".items-table tbody tr");
@@ -238,7 +238,7 @@ for (const n of [200, 1000]) {
     }
     // Typing a search over many rows stays responsive: proportional to the rows as well.
     const sms = await timeSearch(t);
-    const slimit = Math.min(paceSearch * (n / 20) * 1.25, 120000);
+    const slimit = Math.min(paceSearch * (n / 20) * 1.25, 120000 * t.slow);
     await t.check(`searching ${n} rows takes at most ${n / 20}× the 20-row search and some (${(sms / 1000).toFixed(1)}s)`, sms <= slimit, `${sms}ms; 20 rows took ${paceSearch}ms`);
   }, { heavy: true });
 }

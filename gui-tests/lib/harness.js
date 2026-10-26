@@ -121,6 +121,8 @@ function __makeT(ctx, pg, name, opts) {
     viewport: opts.viewport || "desktop",
     vp: VIEWPORTS[opts.viewport || "desktop"],
     phone: (opts.viewport || "desktop").startsWith("phone"),
+    /** How many times slower the page runs (load mode, --cpu / the test's cpu); 1 normally. */
+    slow,
     base,
     checkpoints,
     errors,

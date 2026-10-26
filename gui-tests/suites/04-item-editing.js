@@ -110,6 +110,8 @@ async function editRoundTrip(t, name, { type = null, height = true, width = true
     await t.page.keyboard.press("End");
     await t.page.keyboard.type(type);
     await t.page.keyboard.press(multiline ? "Control+Enter" : "Enter");
+    // The editor closes once the save is stored (a slow machine takes longer than a settle).
+    await t.page.locator(".field-editor").first().waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
     await t.settle();
     if (await t.page.locator(".field-editor").count()) {
       await t.fail(`${name}: ${multiline ? "Ctrl+Enter" : "Enter"} saves and closes the editor`, "the editor is still open");
