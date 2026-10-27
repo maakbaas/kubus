@@ -155,7 +155,7 @@ headless device doesn't generate AI values (that stays with the apps).
 Databases the server reads for the devices, read-only, whose tables and queries the app shows as
 collections ("remote collections": `Collection.source`, `domain/sources.ts`). Set up in Settings →
 Server (name, connection string, password, schemas, whether queries written in the app are allowed,
-a time limit); the connection string's scheme picks the connector.
+a time limit); the connection string's scheme picks the connector (`postgres://`, `n8n://`).
 - *Protocol* (`shared/sources.ts`), connector-neutral, all behind the token:
   `GET /api/sources` (names, connector, capabilities, problem; never addresses),
   `GET /api/sources/<name>/tables`, `POST …/describe` (`{ target }`: a table or a query → its
@@ -184,6 +184,17 @@ a time limit); the connection string's scheme picks the connector.
   A list column groups a row under each value. At start (and on every change) `check` warns about a
   superuser or a user that can write: give it a user that can only read (`GRANT SELECT`); queries
   written in the app read whatever that user can (turn queries off per source to allow tables only).
+- *n8n* (`connectors/n8n.ts`): n8n's data tables through its public API, `n8n://host[:port][/path]`
+  (https) or `n8n+http://…` (plain http), the API key as the password (header `X-N8N-API-KEY`).
+  Strictly read-only: its one request helper only sends `GET`s (`/data-tables`, `…/<id>/rows`); give
+  it a key with only the read scopes (`dataTable:list`, `dataTableRow:read`) where
+  n8n offers scopes. Tables only (no query language; `schema` null, a name two projects share gets
+  its id: "Notes (<id>)"); "Schemas" lists project ids. Types: string as text, number, boolean as a
+  checkbox, date as a date & time; then n8n's `id` (the key), `createdAt`, `updatedAt`. The API's
+  filter is one flat and / or list with one sort and no counts, so a table is read whole (250 rows a
+  request, by id, at most 100,000 rows; kept 5 s, so a view's pages and counts share a read) and
+  queried in memory (`connectors/memory.ts`, pure: the same meaning as `postgresSql.ts`; text sorts
+  as the app's, "Customer 9" before "Customer 10"). The time limit bounds each request.
 - *App*: a block of a remote collection asks the source for its query (`useRemoteResult`, 100 rows
   a page, "Show more"; search waits for typing to pause) instead of `applyQuery`; the item page reads
   its row by key (`rowKey` of the item id, a base64url of the key). Rows become items keeping their

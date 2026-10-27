@@ -148,7 +148,7 @@ export function ServerSettings() {
                     id={`${uid}-src-url-${s.id}`}
                     labelText="Connection string"
                     placeholder="postgres://reader@db-host:5432/crm"
-                    helperText={state?.connector ? `Read by its ${state.connector} connector.` : "Postgres for now: postgres://user@host:port/database."}
+                    helperText={state?.connector ? `Read by its ${state.connector} connector.` : "postgres://user@host:port/database, or n8n://host for n8n's data tables (its API key as the password)."}
                     value={s.url}
                     onChange={(e) => setSource(i, { url: e.target.value })}
                   />
@@ -166,7 +166,7 @@ export function ServerSettings() {
                     id={`${uid}-src-schemas-${s.id}`}
                     labelText="Schemas"
                     placeholder="All"
-                    helperText="Only these schemas' tables are offered, comma-separated."
+                    helperText="Only these schemas' tables are offered (n8n: these projects' ids), comma-separated."
                     value={s.schemasText}
                     onChange={(e) => setSource(i, { schemasText: e.target.value })}
                   />
