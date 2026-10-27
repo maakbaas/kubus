@@ -48,7 +48,7 @@ The stages, in order:
 - **Native Kubus core**: item links (reference fields), field and block components. Built.
 - **The server + sync** (docs/sync.md). Built.
 - **Remote sources**, read-only: tables and SQL queries through the server, same views and
-  components (docs/sync.md "Remote sources"). Built for Postgres and n8n data tables. Remote data stays read-only by
+  components (docs/sync.md "Remote sources"). Built for Postgres, n8n data tables and InfluxDB 2. Remote data stays read-only by
   design (no Directus side).
 - **Chart / dashboard block types** (Metabase side). Not started.
 
