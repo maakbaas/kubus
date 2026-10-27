@@ -1,7 +1,6 @@
 import { createContext, memo, useContext, useMemo, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { refractor } from "refractor";
 import type { ElementContent, Root, RootContent } from "hast";
 import type { Nodes as MdNodes, Root as MdRoot } from "mdast";
 import { Link } from "@carbon/react";
@@ -11,6 +10,7 @@ import { useLinks } from "../app/useLinks";
 import { openModeOf } from "../workspace/Workspace";
 import { splitWarnings } from "../domain/components";
 import { splitTags } from "../domain/tags";
+import { COMPONENT_LANGUAGE, highlightCode, highlightComponent } from "./codeHighlight";
 import { matcher, splitMatches } from "./Highlight";
 import { ComponentWarning } from "./ComponentWarning";
 import { TagChip } from "./TagChip";
@@ -22,7 +22,10 @@ import { UrlImage, useFileUrl } from "./images";
 //  - "excerpt": search results, rendered inside clickable list items, so it has no
 //    interactive elements (links are styled text) and is clipped in height.
 
-/** rehype plugin: colors fenced code with refractor (same tokens/CSS as the editor's prism plugin). */
+/**
+ * rehype plugin: colors fenced code with refractor (same tokens/CSS as the editor's prism plugin);
+ * a `component` fence like the component editor ({{ }} sections as JavaScript).
+ */
 function rehypeCodeColor() {
   return (tree: Root) => {
     const walk = (nodes: RootContent[]) => {
@@ -32,9 +35,9 @@ function rehypeCodeColor() {
         if (code?.type === "element") {
           const classes = (code.properties.className as string[] | undefined) ?? [];
           const lang = classes.find((c) => c.startsWith("language-"))?.slice("language-".length);
-          if (lang && refractor.registered(lang)) {
+          if (lang) {
             const text = code.children.map((c) => (c.type === "text" ? c.value : "")).join("");
-            code.children = refractor.highlight(text, lang).children as ElementContent[];
+            code.children = lang === COMPONENT_LANGUAGE ? highlightComponent(text) : highlightCode(text, lang);
           }
         } else {
           walk(node.children);

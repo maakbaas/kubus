@@ -1,41 +1,16 @@
-import { createElement, Fragment, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { refractor } from "refractor";
+import { createElement, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import type { ElementContent } from "hast";
+import { highlightCode, highlightComponent } from "./codeHighlight";
 
-// refractor's tree (hast): just the parts highlighting produces.
-type HastNode = { type: "text"; value: string } | { type: "element"; tagName: string; properties?: { className?: string[] }; children: HastNode[] };
-
-const toReact = (nodes: HastNode[]): ReactNode[] =>
+/** Highlighted code (hast, codeHighlight.ts) as React elements: just the parts highlighting produces. */
+const toReact = (nodes: ElementContent[]): ReactNode[] =>
   nodes.map((n, i) =>
     n.type === "text"
       ? n.value
-      : createElement(n.tagName, { key: i, className: n.properties?.className?.join(" ") }, toReact(n.children)),
+      : n.type === "element"
+        ? createElement(n.tagName, { key: i, className: (n.properties.className as string[] | undefined)?.join(" ") }, toReact(n.children))
+        : null,
   );
-
-const highlight = (text: string, language: string): ReactNode[] =>
-  refractor.registered(language) ? toReact(refractor.highlight(text, language).children as HastNode[]) : [text];
-
-/**
- * A component, highlighted: the text around the {{ }} sections as Markdown (or HTML, for HTML
- * output), the sections as JavaScript, the braces as punctuation.
- */
-function highlightComponent(code: string, textLanguage: string): ReactNode[] {
-  const parts: ReactNode[] = [];
-  let at = 0;
-  for (const m of code.matchAll(/\{\{([\s\S]*?)\}\}/g)) {
-    const i = m.index ?? 0;
-    parts.push(<Fragment key={`t${i}`}>{highlight(code.slice(at, i), textLanguage)}</Fragment>);
-    parts.push(
-      <span key={`s${i}`} className="code-editor__section">
-        <span className="token punctuation">{"{{"}</span>
-        {highlight(m[1], "javascript")}
-        <span className="token punctuation">{"}}"}</span>
-      </span>,
-    );
-    at = i + m[0].length;
-  }
-  parts.push(<Fragment key="end">{highlight(code.slice(at), textLanguage)}</Fragment>);
-  return parts;
-}
 
 /**
  * The component editor (also HTML fields' editor): a plain text area (so typing, undo, selection and IME behave natively)
@@ -69,7 +44,7 @@ export function ComponentCodeEditor({
   onChange(value: string): void;
 }) {
   const lines = value.split("\n").length;
-  const highlighted = useMemo(() => (language ? highlight(value, language) : highlightComponent(value, html ? "markup" : "markdown")), [value, html, language]);
+  const highlighted = useMemo(() => toReact(language ? highlightCode(value, language) : highlightComponent(value, html ? "markup" : "markdown")), [value, html, language]);
   const pre = useRef<HTMLPreElement>(null);
   /** Set by Escape: the next Tab leaves the editor instead of indenting. */
   const tabLeaves = useRef(false);

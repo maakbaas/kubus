@@ -2,7 +2,7 @@
 
 A component is a piece of text that fills itself in. You write it like any Markdown, and wherever you put code between double curly braces, the result of that code takes its place.
 
-```
+```component
 **{{ $item.Title }}**: about {{ Math.round($item.Pages / 40) }} hours of reading
 ```
 
@@ -97,13 +97,13 @@ A block on an item's page doesn't see that page's item as `$item`. Its filter pi
 
 Reading time for a book, empty when the page count is missing:
 
-```
+```component
 {{ $item.Pages ? Math.round($item.Pages / 40) : null }}
 ```
 
 A block that lists its items' titles:
 
-```
+```component
 {{ $items.map((i) => "- " + i.Title).join("\n") }}
 ```
 
@@ -120,7 +120,7 @@ Filter code can read `$now`, and in a block on an item's page also that page's i
 
 Turn on **Ask AI** and a component becomes a **prompt**. You write it the same way. For each item, the sections are filled in and the text is sent to a language model. The model's reply becomes the value of an AI field (a Component field that asks AI) and is stored with the item.
 
-```
+```component
 Artist: {{ $item.Artist }}. Give the last name.
 ```
 

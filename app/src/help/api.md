@@ -10,13 +10,13 @@ All addresses below start with /api/v1 on your server.
 
 Every request needs the server's token: the same KUBUS_TOKEN your devices use to sync. Send it as a bearer token. This lists your collections:
 
-```
+```bash
 curl -H "Authorization: Bearer $KUBUS_TOKEN" https://notes.example.com/api/v1/collections
 ```
 
 And this adds a book:
 
-```
+```bash
 curl -X POST -H "Authorization: Bearer $KUBUS_TOKEN" -H "Content-Type: application/json" \
   -d '{"values": {"Title": "Dune", "Pages": 412}}' \
   https://notes.example.com/api/v1/collections/books/items
@@ -154,7 +154,7 @@ A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, o
 
 Images are stored apart from items, named by a fingerprint of their bytes (SHA-256). Upload one by sending its bytes:
 
-```
+```bash
 curl -X POST -H "Authorization: Bearer $KUBUS_TOKEN" -H "Content-Type: image/png" \
   --data-binary @cover.png https://notes.example.com/api/v1/files
 → { "id": "<sha256>", "src": "files/<sha256>" }
