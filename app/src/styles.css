@@ -739,6 +739,11 @@ body {
 .cds--tag.inline-tag {
   display: inline;
   margin: 0;
+  /* Even room around the text (12px, Carbon's smallest type), no taller than a 20px line of
+     body text: an inline box's padding never changes the line's height, so it must fit it. */
+  padding: var(--cds-spacing-01) var(--cds-spacing-02);
+  font-size: var(--cds-label-01-font-size, 0.75rem);
+  line-height: 1rem;
   cursor: pointer;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
@@ -1408,17 +1413,20 @@ img[data-lightbox] {
   padding-left: var(--cds-spacing-05);
   color: var(--cds-text-secondary);
 }
+/* Code sits on a subtle layer (the step below the field's surface), its tokens in vivid colours. */
 .md-editor__content code {
   font-family: "IBM Plex Mono", monospace;
-  background: var(--cds-layer-accent-01);
+  background: var(--cds-layer-01);
   padding: 0 var(--cds-spacing-02);
 }
 .md-editor__content pre {
-  background: var(--cds-layer-accent-01);
+  background: var(--cds-layer-01);
   padding: var(--cds-spacing-04) var(--cds-spacing-05);
   white-space: pre-wrap; /* code wraps (keeping its indentation) rather than scrolling */
 }
 .md-editor__content pre code { padding: 0; background: none; }
+/* On a card (a tile, itself layer-01) the next layer up, so code still stands apart. */
+.cds--tile .md-editor__content :is(code, pre) { background: var(--cds-layer-02); }
 /* Code block language select: laid over the block's top-right corner (no added height). */
 .md-code-block {
   position: relative;
@@ -1588,25 +1596,28 @@ img[data-lightbox] {
   background: var(--cds-background-inverse-hover);
 }
 
-/* Code syntax coloring (prism/refractor tokens) using the IBM/Carbon palette. */
+/* Code syntax coloring (prism/refractor tokens): Carbon's saturated steps, vivid on the code's
+   subtle background (still AA on it: the 60s in light, the 30/40s in dark). */
 .cds--white {
   --code-comment: #6f6f6f;  /* gray 60 */
-  --code-keyword: #8a3ffc;  /* purple 60 */
+  --code-keyword: #d02670;  /* magenta 60 */
   --code-string: #198038;   /* green 60 */
-  --code-number: #0043ce;   /* blue 70 */
-  --code-function: #005d5d; /* teal 70 */
+  --code-number: #0f62fe;   /* blue 60 */
+  --code-function: #8a3ffc; /* purple 60 */
+  --code-class: #007d79;    /* teal 60 */
   --code-tag: #da1e28;      /* red 60 */
-  --code-attr: #8e6a00;     /* yellow 60 */
+  --code-attr: #ba4e00;     /* orange 60 */
   --code-operator: #525252; /* gray 70 */
 }
 .cds--g100 {
   --code-comment: #8d8d8d;  /* gray 50 */
-  --code-keyword: #be95ff;  /* purple 40 */
-  --code-string: #6fdc8c;   /* green 30 */
+  --code-keyword: #ff7eb6;  /* magenta 40 */
+  --code-string: #42be65;   /* green 40 */
   --code-number: #78a9ff;   /* blue 40 */
-  --code-function: #3ddbd9; /* teal 30 */
+  --code-function: #be95ff; /* purple 40 */
+  --code-class: #3ddbd9;    /* teal 30 */
   --code-tag: #ff8389;      /* red 40 */
-  --code-attr: #f1c21b;     /* yellow 30 */
+  --code-attr: #ff832b;     /* orange 40 */
   --code-operator: #c6c6c6; /* gray 30 */
 }
 :is(.md-editor__content pre, .code-editor__highlight) .token.comment,
@@ -1626,8 +1637,8 @@ img[data-lightbox] {
 :is(.md-editor__content pre, .code-editor__highlight) .token.boolean,
 :is(.md-editor__content pre, .code-editor__highlight) .token.constant,
 :is(.md-editor__content pre, .code-editor__highlight) .token.symbol { color: var(--code-number); }
-:is(.md-editor__content pre, .code-editor__highlight) .token.function,
-:is(.md-editor__content pre, .code-editor__highlight) .token.class-name { color: var(--code-function); }
+:is(.md-editor__content pre, .code-editor__highlight) .token.function { color: var(--code-function); }
+:is(.md-editor__content pre, .code-editor__highlight) .token.class-name { color: var(--code-class); }
 :is(.md-editor__content pre, .code-editor__highlight) .token.tag,
 :is(.md-editor__content pre, .code-editor__highlight) .token.selector,
 :is(.md-editor__content pre, .code-editor__highlight) .token.deleted { color: var(--code-tag); }
