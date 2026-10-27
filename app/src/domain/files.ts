@@ -6,6 +6,9 @@ export { fileIdsIn } from "../../../shared/files";
 
 const FILE_SRC = /^files\/([0-9a-f]{64})$/;
 
+/** The image types a file can have (what the app shows). */
+export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/svg+xml"];
+
 export const fileSrc = (fileId: string) => `files/${fileId}`;
 
 export function fileIdFromSrc(src: string): string | null {

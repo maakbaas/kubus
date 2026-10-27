@@ -3,17 +3,17 @@ import { FileUploaderDropContainer, FormGroup, IconButton, InlineLoading, Inline
 import { ImageReference, Renew, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import type { Repository } from "../data";
-import { fileIdFromSrc } from "../domain/files";
+import { fileIdFromSrc, IMAGE_TYPES } from "../domain/files";
+import { MAX_FILE_BYTES } from "../../../shared/sync";
 import { errorMessage } from "./useConfirm";
 import { makeThumbnail } from "./thumbnails";
 
-export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/svg+xml"];
-const MAX_BYTES = 20 * 1024 * 1024;
+export { IMAGE_TYPES };
 
 /** Validates and stores an image file (and its thumbnail, in the background); returns its file id. Throws a user-facing error. */
 export async function storeImageFile(repo: Repository, file: File): Promise<string> {
   if (!IMAGE_TYPES.includes(file.type)) throw new Error(`Unsupported image type: ${file.name}`);
-  if (file.size > MAX_BYTES) throw new Error(`Images can be at most 20 MB: ${file.name}`);
+  if (file.size > MAX_FILE_BYTES) throw new Error(`Images can be at most 20 MB: ${file.name}`);
   const data = new Uint8Array(await file.arrayBuffer());
   const fileId = await repo.putFile(data, file.type);
   void storeThumbnail(repo, fileId, data, file.type);

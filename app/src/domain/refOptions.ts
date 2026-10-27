@@ -104,3 +104,51 @@ export function buildTargetOptions(args: {
     return { id: e.id, label: itemLabel(target, e), ...(excludedBy.length ? { excludedBy } : {}) };
   });
 }
+
+/** What `refLabelForSpace` reads: the repository's item and label lists. */
+export interface RefSource {
+  listLabels(collection: Collection): Promise<ItemLabel[]>;
+  listItems(collection: Collection, spaceId: string): Promise<Item[]>;
+}
+
+/**
+ * The labels of the items `collection`'s reference fields point to, as the screens show them in
+ * `spaceId`: what works out values without the UI (the background fill of AI fields, the API's
+ * computed values) uses this, so it reaches the same text. `labels` caches each collection's
+ * labels between calls (they don't depend on the space).
+ */
+export async function refLabelForSpace(
+  source: RefSource,
+  collection: Collection,
+  spaceId: string,
+  world: { collections: Collection[]; components: Component[] },
+  labels = new Map<string, ItemLabel[]>(),
+): Promise<(field: FieldDef, id: string) => string> {
+  const { collections, components } = world;
+  const targets = referenceTargets(collection).flatMap((t) => {
+    const target = collections.find((c) => c.id === t.id);
+    return target ? [{ ...t, target }] : [];
+  });
+  const labelsOf = async (c: Collection) => {
+    let list = labels.get(c.id);
+    if (!list) labels.set(c.id, (list = await source.listLabels(c)));
+    return list;
+  };
+  const options: RefOptions = {};
+  for (const t of targets) {
+    const own = await labelsOf(t.target);
+    const full = isFullTarget(t);
+    if (full) for (const n of referenceTargets(t.target)) await labelsOf(collections.find((c) => c.id === n.id) ?? t.target);
+    options[t.id] = buildTargetOptions({
+      target: t.target,
+      limited: t.limited,
+      full,
+      items: full ? await source.listItems(t.target, spaceId) : own,
+      spaceId,
+      collections,
+      components,
+      labelsOf: (id) => labels.get(id) ?? [],
+    });
+  }
+  return refLabelOf(options);
+}

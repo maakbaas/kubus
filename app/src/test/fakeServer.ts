@@ -3,7 +3,7 @@
 // through it as through the real one (server/src).
 import { createHash } from "node:crypto";
 import { vi } from "vitest";
-import { SYNC_TABLES, type SyncRequest, type SyncResponse, type WireRow } from "../../../shared/sync";
+import { SYNC_TABLES, type SyncMismatch, type SyncRequest, type SyncResponse, type WireRow } from "../../../shared/sync";
 import { DirectSqlClient } from "../data/sqlite/direct";
 import { SqliteRepository } from "../data/sqlite/SqliteRepository";
 import { memoryEnvironment } from "../data/sync/environment";
@@ -24,11 +24,22 @@ export class FakeServer {
   /** Answers a sync gives on top of the protocol's (tests of later additions). */
   extra: (request: SyncRequest) => Partial<SyncResponse> = () => ({});
 
+  /** As a wipe does: everything gone, a new database id. */
+  wipe() {
+    this.tables.clear();
+    this.files.clear();
+    this.seq = 0;
+    this.database = { id: `db-${Math.random()}`, createdAt: new Date().toISOString() };
+  }
+
   rows(table: string): WireRow[] {
     return [...(this.tables.get(table)?.values() ?? [])].map((r) => r.row);
   }
 
-  sync(request: SyncRequest): SyncResponse {
+  sync(request: SyncRequest): SyncResponse | SyncMismatch {
+    if (request.database && request.database !== this.database.id) {
+      return { error: "The server's database was wiped or replaced", database: this.database, empty: this.seq === 0 };
+    }
     for (const t of SYNC_TABLES) {
       const table = this.tables.get(t.name) ?? new Map();
       this.tables.set(t.name, table);
@@ -55,7 +66,10 @@ export class FakeServer {
     const headers = new Headers(init.headers);
     if (headers.get("Authorization") !== `Bearer ${TOKEN}`) return Response.json({ error: "Wrong token" }, { status: 401 });
     if (path === "/api/events") return new Response(new ReadableStream({ start() {} }));
-    if (path === "/api/sync") return Response.json(this.sync(JSON.parse(String(init.body)) as SyncRequest));
+    if (path === "/api/sync") {
+      const answer = this.sync(JSON.parse(String(init.body)) as SyncRequest);
+      return Response.json(answer, { status: "error" in answer ? 409 : 200 });
+    }
     const file = /^\/api\/files\/(\w+)$/.exec(path);
     if (file) {
       const id = file[1];

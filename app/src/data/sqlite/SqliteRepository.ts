@@ -157,7 +157,8 @@ export class SqliteRepository implements Repository {
     for (const change of changes) for (const listener of this.listeners) listener(change);
   }
 
-  private async collectionOfItem(itemId: string): Promise<string | undefined> {
+  /** The collection an item belongs to (also a deleted one's). */
+  async collectionOfItem(itemId: string): Promise<string | undefined> {
     return (await this.db.select<{ collection_id: string }>("SELECT collection_id FROM items WHERE id = ?1", [itemId]))[0]?.collection_id;
   }
 

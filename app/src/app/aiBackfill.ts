@@ -14,7 +14,7 @@
 import type { Repository } from "../data";
 import { withComputed, type Component } from "../domain/components";
 import type { Collection, ItemLabel } from "../domain/model";
-import { buildTargetOptions, isFullTarget, referenceTargets, refLabelOf, type RefOptions } from "../domain/refOptions";
+import { refLabelForSpace } from "../domain/refOptions";
 import { inSpace, type Space } from "../domain/spaces";
 import type { AiService } from "./ai";
 import { scanAiValues } from "./aiScan";
@@ -83,39 +83,12 @@ export class AiBackfill {
 
   private async fill(collection: Collection) {
     const { collections, components, spaces } = this.world();
-    // Labels of referenced items, as the screens get them (domain/refOptions.ts decides how): the
-    // labels of every space, and for a target that needs them (a field's choice filter) its items
-    // of the space looked at.
-    const targets = referenceTargets(collection).flatMap((t) => {
-      const target = collections.find((c) => c.id === t.id);
-      return target ? [{ ...t, target }] : [];
-    });
+    // Labels of referenced items, as the screens get them (domain/refOptions.ts decides how).
     const labels = new Map<string, ItemLabel[]>();
-    const labelsOf = async (c: Collection) => {
-      let list = labels.get(c.id);
-      if (!list) labels.set(c.id, (list = await this.repo.listLabels(c)));
-      return list;
-    };
     for (const space of spaces) {
       if (this.disposed) return;
       if (!inSpace(collection, space.id)) continue;
-      const options: RefOptions = {};
-      for (const t of targets) {
-        const own = await labelsOf(t.target);
-        const full = isFullTarget(t);
-        if (full) for (const n of referenceTargets(t.target)) await labelsOf(collections.find((c) => c.id === n.id) ?? t.target);
-        options[t.id] = buildTargetOptions({
-          target: t.target,
-          limited: t.limited,
-          full,
-          items: full ? await this.repo.listItems(t.target, space.id) : own,
-          spaceId: space.id,
-          collections,
-          components,
-          labelsOf: (id) => labels.get(id) ?? [],
-        });
-      }
-      const refLabel = refLabelOf(options);
+      const refLabel = await refLabelForSpace(this.repo, collection, space.id, { collections, components }, labels);
       const items = withComputed(collection, await this.repo.listItems(collection, space.id), components, refLabel);
       const scan = scanAiValues(collection, items, refLabel);
       this.ai.offerBackground(scan.generate);
