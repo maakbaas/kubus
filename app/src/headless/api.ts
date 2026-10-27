@@ -9,7 +9,7 @@ import { MAX_FILE_BYTES } from "../../../shared/sync";
 import type { SqliteRepository } from "../data/sqlite/SqliteRepository";
 import { aiPromptProblem, aiRequest } from "../domain/ai";
 import type { Bookmark } from "../domain/bookmarks";
-import { isComponentOutput, parseParams, placeProblem, withComputed, type Component } from "../domain/components";
+import { isComponentOutput, parseParams, placeProblem, type Component } from "../domain/components";
 import { fieldKindList } from "../domain/fieldKinds";
 import { fileSrc, IMAGE_TYPES } from "../domain/files";
 import { parseItemViews, type ItemView } from "../domain/fieldLayout";
@@ -19,14 +19,9 @@ import { refLabelForSpace } from "../domain/refOptions";
 import { DEFAULT_SPACE_ID, type Space } from "../domain/spaces";
 import { defaultViewState, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
 import { fieldOf, itemOut, valuesIn, type ItemsExist } from "./values";
+import { computeItems, loadWorld, type World } from "./world";
 
 const MAX_JSON = 5 * 1024 * 1024;
-
-interface World {
-  collections: Collection[];
-  components: Component[];
-  spaces: Space[];
-}
 
 type Body = Record<string, unknown>;
 
@@ -143,15 +138,8 @@ function blockIn(world: World, own: Collection, raw: unknown): ViewBlock {
 }
 
 export function createApi(repo: SqliteRepository): Router {
-  const world = async (): Promise<World> => ({
-    collections: await repo.listCollections(),
-    components: await repo.listComponents(),
-    spaces: await repo.listSpaces(),
-  });
-
-  /** Items with their computed values, as the screens of their space show them. */
-  const computed = async (w: World, collection: Collection, items: Item[], spaceId: string) =>
-    withComputed(collection, items, w.components, await refLabelForSpace(repo, collection, spaceId, w));
+  const world = () => loadWorld(repo);
+  const computed = (w: World, collection: Collection, items: Item[], spaceId: string) => computeItems(repo, w, collection, items, spaceId);
 
   const exist =
     (w: World): ItemsExist =>

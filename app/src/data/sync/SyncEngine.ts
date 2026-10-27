@@ -120,6 +120,17 @@ const requeueFiles = (ids: string[]): Statement[] =>
 
 export const keyOf = (t: SyncTable) => (t.key.length > 1 ? `json_array(${t.key.join(", ")})` : t.key[0]);
 
+/** Rows a sync brought, after they were applied (the headless device's webhooks). */
+export interface Pulled {
+  changes: WireChanges;
+  /** The server's sequence number they bring this device to. */
+  cursor: number;
+  /** The server database's id. */
+  database: string | undefined;
+  /** The first download from a server (everything it holds), not changes. */
+  initial: boolean;
+}
+
 export class SyncEngine implements SyncControl {
   config: SyncConfig;
   status: SyncStatus;
@@ -132,6 +143,7 @@ export class SyncEngine implements SyncControl {
   private events: AbortController | undefined;
   private downloading: Promise<void> | null = null;
   private downloadAgain = false;
+  private pulledListeners = new Set<(pulled: Pulled) => void>();
 
   constructor(
     private db: SqlClient,
@@ -151,6 +163,17 @@ export class SyncEngine implements SyncControl {
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** Calls `listener` with the rows of every sync that brought some, once they are applied. */
+  onPulled(listener: (pulled: Pulled) => void): () => void {
+    this.pulledListeners.add(listener);
+    return () => this.pulledListeners.delete(listener);
+  }
+
+  private pulled(pulled: Pulled) {
+    if (!SYNC_TABLES.some((t) => (pulled.changes[t.name] ?? []).length > 0)) return;
+    for (const listener of this.pulledListeners) listener(pulled);
   }
 
   private setStatus(patch: Partial<SyncStatus>) {
@@ -331,6 +354,7 @@ export class SyncEngine implements SyncControl {
     );
     await this.db.write(statements);
     if (freed.length > 0) await this.releaseFiles(freed);
+    this.pulled({ changes, cursor, database: current?.id ?? database, initial: false });
 
     await this.announce(changes);
     // More to upload, and uploading works (or files to upload again): go on right away.
@@ -512,6 +536,7 @@ export class SyncEngine implements SyncControl {
       );
       await this.db.write(statements);
       replaced = true;
+      this.pulled({ changes: remote.changes, cursor: remote.cursor, database: remote.database?.id, initial: true });
       await this.announce(remote.changes, oldCollections);
     } else {
       await this.db.write([

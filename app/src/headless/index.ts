@@ -14,16 +14,20 @@ import { memoryEnvironment } from "../data/sync/environment";
 import { setCompiler } from "../domain/components";
 import { createApi } from "./api";
 import { contextCompiler } from "./compiler";
+import { Webhooks } from "./webhooks";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export class HeadlessDevice {
   private queue: Promise<unknown> = Promise.resolve();
+  readonly webhooks: Webhooks;
 
   private constructor(
     readonly repo: SqliteRepository,
     private options: HeadlessOptions,
   ) {
+    this.webhooks = new Webhooks(repo, options.webhooks, options.log);
+    this.webhooks.attach();
     // The server's database was wiped or replaced: this device holds nothing it must keep (it is
     // a cache of the server), so it starts over with what the server holds now.
     repo.sync.subscribe(() => {
