@@ -83,22 +83,25 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
 
 ## Local components
 
-6. **Local components: code owned by its place, promoted to shared on demand.** Proposed earlier,
+6. **Local components: one paradigm for every place that takes a component.** Proposed earlier,
    never built (fcef991 took the other route: Markdown blocks are plain GFM; "Save as component"
    makes a shared component, static since the text uses no `$` names). Design it together with
    items 1–2.
    - **Item values never hold `{{ }}`**: removed on purpose, stays that way.
-   - A component may be *local*: owned by one place instead of shared. Same table, code language,
-     editor; an owner reference (e.g. `components.owner_id` + what it is) marks it local. Deleting
-     the owner deletes it. Where:
-     - **Markdown blocks** (inline code in a block's text): **static only** (no `$item`, no block
-       names); the static kind is enforced, as `placeProblem` does per place.
-     - **Component fields** (to confirm): a one-off formula or AI prompt over `$item` (a field
-       component), written in the field modal with no name and no trip to the Components page;
-       `NewComponentModal` and the "New component" button become this. Without it, item 2's
-       one-off AI prompts need a shared component each.
-   - The Components page lists local ones too, with where they are used ("Used in: Books ›
-     Reading time", "Dune › Notes"), filterable apart from the shared ones.
-   - **Promote to shared** (the general form of today's "Save as component"): gives it a name, and
-     it can then be picked elsewhere. Editing a shared one asks first (applies everywhere; for AI
-     components: regenerates everywhere); editing a local one doesn't.
+   - **The rule**: wherever a component is used, either pick a shared one or write one in place.
+     Written in place = a *local* component, owned by that place: same table, code language and
+     editor; an owner reference (e.g. `components.owner_id` + what it is) marks it local; deleting
+     the owner deletes it. Local ones have no name to give (shown as their place).
+   - **Kinds per place stay as they are** (`placeProblem`):
+     - component field: field or static (a one-off formula or AI prompt over `$item`; the field
+       modal edits it in place; `NewComponentModal` / the "New component" button become this);
+     - component block: block or static;
+     - Markdown block: static only. A Markdown block then *is* a block with a local static
+       Markdown component (consider merging the two block types).
+   - **Components page** lists local ones too, with where they are used ("Used in: Books › Reading
+     time", "Dune › Notes"), filterable apart from the shared ones.
+   - **Promote to shared** (the general form of today's "Save as component", in every place):
+     gives it a name, and it can then be picked elsewhere. Editing a shared one asks first
+     (applies everywhere; for AI components: regenerates everywhere); editing a local one doesn't.
+   - Deciding between picking and writing in place must stay one simple control in the field modal
+     and block settings (see item 3's hierarchy), not two parallel sets of inputs.
