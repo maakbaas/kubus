@@ -1,10 +1,11 @@
-import { useId, useMemo } from "react";
+import { useId, useMemo, useState } from "react";
 import { Button, Checkbox, Dropdown, InlineNotification, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { orderFields } from "../domain/fieldLayout";
-import { newId, now, pickableFields, type Collection } from "../domain/model";
-import { parseParams } from "../domain/components";
+import { newId, pickableFields, type Collection } from "../domain/model";
+import { placeProblem } from "../domain/components";
+import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
 import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolvePageValues, type FilterRule, type QueryResult } from "../domain/query";
@@ -73,18 +74,15 @@ interface MenusProps {
 }
 
 /** A block's menus: Filter, Sort and group, Fields (each where its block type uses it), and its type's settings. */
-export function BlockMenus({ collection, block, refs, place, viewFilters, page, onChange, onSet, onRemove, onError, onOpenChange }: MenusProps) {
+export function BlockMenus({ collection, block, refs, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange }: MenusProps) {
   const uid = useId();
-  const { repo, components, collections } = useStore();
-  // A Markdown block's text kept as a component (named like the block), which the block then shows:
-  // the same text, now reusable elsewhere and edited in the component editor.
-  const saveAsComponent = async () => {
-    const text = (block.options as MarkdownBlockOptions).text;
-    const ts = now();
-    const id = newId();
-    await repo.saveComponent({ id, name: block.title || `${collection.name} text`, description: "", params: parseParams(text), code: text, output: "markdown", frameRatio: null, createdAt: ts, updatedAt: ts });
-    onSet({ kind: "component", options: { componentId: id, args: {} } satisfies ComponentBlockOptions });
-  };
+  const { components, collections } = useStore();
+  // A Markdown block's text is its own static component: promoted, it becomes a shared one (named
+  // like the block), which the block then shows as a component block: the same text, now reusable
+  // elsewhere and edited in the component editor.
+  const [promoting, setPromoting] = useState(false);
+  const markdown = block.kind === "markdown" ? (block.options as MarkdownBlockOptions).text : null;
+  const markdownLocal = markdown === null ? null : { code: markdown, output: "markdown" as const, frameRatio: null, ai: false };
   const blockName = useBlockName();
   const type = blockType(block.kind);
   const uses = type.uses(block.options, components);
@@ -230,10 +228,21 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           />
           {type.OptionsEditor && <type.OptionsEditor collection={collection} options={block.options} place={place} onChange={(options) => onSet({ options })} />}
-          {type.kind === "markdown" && (
-            <Button kind="tertiary" size="sm" renderIcon={Save} onClick={() => saveAsComponent().catch((e) => onError?.(e instanceof Error ? e.message : String(e)))}>
-              Save as component
+          {markdownLocal && (
+            <Button kind="tertiary" size="sm" renderIcon={Save} disabled={!markdownLocal.code.trim() || !!placeProblem(markdownLocal, "static")} onClick={() => setPromoting(true)}>
+              Save as shared component
             </Button>
+          )}
+          {promoting && markdownLocal && (
+            <PromoteComponentModal
+              local={markdownLocal}
+              suggestedName={block.title || `${collection.name} text`}
+              onClose={() => setPromoting(false)}
+              onPromoted={(c) => {
+                setPromoting(false);
+                onSet({ kind: "component", options: { componentId: c.id, local: null } satisfies ComponentBlockOptions });
+              }}
+            />
           )}
           {onRemove && (
             <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} className="block-settings__remove" onClick={onRemove}>

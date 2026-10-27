@@ -3,8 +3,7 @@ import { componentMessages, describeCollections, parseComponentReply } from "./c
 import type { Collection, FieldDef } from "./model";
 
 const field = (id: string, name: string, kind: FieldDef["kind"]): FieldDef => ({
-  id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false,
-  aiPrompt: null, aiOutput: null, position: 0,
+  id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position: 0,
 });
 const book: Collection = {
   id: "t", name: "Book", pluralName: "Books", icon: null, description: "", itemViews: [], spaceIds: null,

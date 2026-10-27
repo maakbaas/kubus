@@ -1,24 +1,11 @@
 import { Stack } from "@carbon/react";
 import help from "../help/components.md?raw";
-import type { FieldDef } from "../domain/model";
+import { blankField, type FieldDef } from "../domain/model";
 import { PageHeader } from "../ui/PageHeader";
 import { ViewField } from "./ItemPage";
 
 /** The help text as the one field of a (made up) item: a Markdown field. */
-const HELP: FieldDef = {
-  id: "help",
-  collectionId: "",
-  name: "Help",
-  kind: "markdown",
-  targetCollectionId: null,
-  componentId: null,
-  componentArgs: {},
-  choiceFilter: [],
-  toggleIcon: null, strikeThrough: false,
-  aiPrompt: null,
-  aiOutput: null,
-  position: 0,
-};
+const HELP: FieldDef = blankField("help", "Help", "markdown");
 
 const nothing = () => undefined;
 

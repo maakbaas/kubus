@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { InlineNotification, Modal } from "@carbon/react";
 import { useStore } from "../app/store";
-import { now, type FieldDef } from "../domain/model";
-import { parseParams, placeProblem, type Component } from "../domain/components";
+import { collectionDraft, now, type Collection, type FieldDef } from "../domain/model";
+import { placeProblem, type Component, type ComponentCode } from "../domain/components";
 import { FieldLabel } from "./fieldKindIcons";
 import { ComponentCodeEditor } from "./ComponentCodeEditor";
 import { errorMessage } from "./useConfirm";
@@ -11,13 +11,27 @@ import { errorMessage } from "./useConfirm";
 type Choice = "save" | "discard" | "edit";
 
 /**
- * A component field edited in place on an item page: it edits the field's component itself
- * (its code; name, output and the field's variable mapping stay as they are). Like every
- * field editor: Ctrl/Cmd+Enter or a click outside saves, Escape cancels. The component is shared,
- * so a change is saved only after a confirmation that it applies everywhere; there the edit can also be discarded (reverted) or taken up again.
+ * A component field edited in place on an item page: it edits the field's component itself (its
+ * code; name and output stay as they are). Like every field editor: Ctrl/Cmd+Enter or a click
+ * outside saves, Escape cancels. The field's own component is saved with the field; a shared one
+ * only after a confirmation that it applies everywhere; there the edit can also be discarded
+ * (reverted) or taken up again.
  */
-export function ComponentFieldEditor({ field, component, onDone }: { field: FieldDef; component: Component; onDone(): void }) {
-  const { repo } = useStore();
+export function ComponentFieldEditor({
+  collection,
+  field,
+  component,
+  shared,
+  onDone,
+}: {
+  collection: Collection;
+  field: FieldDef;
+  component: ComponentCode;
+  /** The shared component it shows (none: the field's own). */
+  shared?: Component;
+  onDone(): void;
+}) {
+  const { repo, space } = useStore();
   const uid = useId();
   // The open confirmation's answer (null: none open).
   const [answer, setAnswer] = useState<((choice: Choice) => void) | null>(null);
@@ -39,13 +53,19 @@ export function ComponentFieldEditor({ field, component, onDone }: { field: Fiel
     const next = latest.current;
     if (next === component.code) return onDone();
     // Code that no longer fits a field (a block's $items, or mixed) isn't saved: the editor says why.
-    if (placeProblem(next, "field")) return;
+    if (placeProblem({ ...component, code: next }, "field")) return;
     busy.current = true;
     try {
-      const choice = await ask();
-      if (choice === "edit") return;
-      if (choice === "discard") return onDone();
-      await repo.saveComponent({ ...component, code: next, params: parseParams(next), updatedAt: now() });
+      if (shared) {
+        const choice = await ask();
+        if (choice === "edit") return;
+        if (choice === "discard") return onDone();
+        await repo.saveComponent({ ...shared, code: next, updatedAt: now() });
+      } else {
+        const draft = collectionDraft(collection);
+        draft.fields = draft.fields.map((f) => (f.id === field.id ? { ...f, code: next } : f));
+        await repo.saveCollection(draft, space.id);
+      }
       onDone();
     } catch (e) {
       setError(errorMessage(e));
@@ -97,14 +117,14 @@ export function ComponentFieldEditor({ field, component, onDone }: { field: Fiel
         labelText={<FieldLabel field={field} />}
         value={code}
         html={component.output === "html"}
-        invalidText={placeProblem(code, "field") ?? undefined}
+        invalidText={placeProblem({ ...component, code }, "field") ?? undefined}
         onChange={setCode}
       />
       {error && <InlineNotification kind="error" lowContrast hideCloseButton title={error} />}
       <Modal
         open={answer !== null}
         size="xs"
-        modalHeading={`Change component “${component.name}”?`}
+        modalHeading={`Change component “${shared?.name ?? ""}”?`}
         primaryButtonText="Change component"
         // Closing the dialog (×, Escape) goes back to editing; nothing is lost.
         secondaryButtons={[

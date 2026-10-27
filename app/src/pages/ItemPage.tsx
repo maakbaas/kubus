@@ -39,7 +39,7 @@ import { ImageInput, useFileUrl } from "../ui/images";
 import { MarkdownView } from "../ui/MarkdownView";
 import { NotFound } from "../ui/NotFound";
 import { formatDateTime } from "../domain/fieldKinds";
-import { ERROR_PREFIX, outputOf, withComputed } from "../domain/components";
+import { ERROR_PREFIX, fieldComponent, outputOf, withComputed } from "../domain/components";
 import { HtmlFrame, ComponentValue, FramesSizing } from "../ui/ComponentValue";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import {
@@ -123,7 +123,7 @@ function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; 
     case "component":
       return value == null ? null : <MarkdownView source={String(value)} />;
     case "ai":
-      return value == null ? null : field.aiOutput === "markdown" ? <MarkdownView source={String(value)} /> : String(value);
+      return value == null ? null : field.output === "markdown" ? <MarkdownView source={String(value)} /> : String(value);
     case "checkbox":
     case "string_list":
     case "checklist":
@@ -188,7 +188,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   useAiFill(collection, shownItems, refLabel, refsLoaded);
   const regenerate = (f: FieldDef, hint: string) => {
     if (!shown) return;
-    const request = aiRequest(collection, f, shown, refLabel);
+    const request = aiRequest(collection, f, shown, refLabel, components);
     if ("problem" in request) setError(request.problem);
     else ai.regenerate({ collection, field: f, itemId: shown.id, request, hint: hint || undefined });
   };
@@ -556,15 +556,17 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
               );
             }
             const f = entry as FieldDef;
-            const component = f.kind === "component" ? components.find((t) => t.id === f.componentId) : undefined;
+            // Its own component (written in its settings), or the shared one it picks.
+            const component = f.kind === "component" ? fieldComponent(f, components) : undefined;
+            const shared = component && f.code === null ? components.find((t) => t.id === f.componentId) : undefined;
             const labelHidden = layout.hiddenLabels.includes(f.id);
             // An AI field's "Generate again", in its label row (or "⋮"), also while collapsed or edited.
             const regenerateButton = f.kind === "ai" && (
               <RegenerateButton generatedAt={item.aiGeneratedAt?.[f.id]} edited={!!item.aiEdited?.[f.id]} onRegenerate={(hint) => regenerate(f, hint)} />
             );
             // A component field's "Edit component", in its label row: its value is computed, so a click
-            // on it edits nothing; the component is shared, so editing it is asked for explicitly.
-            const editComponentButton = component && layout.editable && <EditComponentButton name={component.name} onEdit={() => setEditing({ fieldId: f.id })} />;
+            // on it edits nothing; a shared component changes everywhere, so editing it is asked for explicitly.
+            const editComponentButton = component && layout.editable && <EditComponentButton name={shared?.name} onEdit={() => setEditing({ fieldId: f.id })} />;
             const editor = editing?.fieldId === f.id && (
               <FieldEditor
                 key={f.id}
@@ -579,7 +581,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
             const field =
             editing?.fieldId === f.id && component ? (
               // A component field edits its component (shared: saving asks first).
-              <ComponentFieldEditor key={f.id} field={f} component={component} onDone={() => setEditing(null)} />
+              <ComponentFieldEditor key={f.id} collection={collection} field={f} component={component} shared={shared} onDone={() => setEditing(null)} />
             ) : editor && regenerateButton ? (
               // Its buttons stay where they were while it is edited: over the input's label row, or "⋮" beside it.
               <div key={f.id} className="view-field">
@@ -926,10 +928,10 @@ function RegenerateButton({ generatedAt, edited, onRegenerate }: { generatedAt?:
   );
 }
 
-/** A component field's "Edit component" button, in its label row. */
-function EditComponentButton({ name, onEdit }: { name: string; onEdit(): void }) {
+/** A component field's "Edit component" button, in its label row (`name`: its shared component's; none: its own). */
+function EditComponentButton({ name, onEdit }: { name?: string; onEdit(): void }) {
   return (
-    <IconButton autoAlign kind="ghost" size="sm" align="left" label={`Edit component “${name}” (used everywhere it is shown)`} onClick={onEdit}>
+    <IconButton autoAlign kind="ghost" size="sm" align="left" label={name ? `Edit component “${name}” (used everywhere it is shown)` : "Edit this field's component"} onClick={onEdit}>
       <Code />
     </IconButton>
   );
@@ -945,7 +947,7 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, onRege
     const text = value == null ? "" : String(value);
     // Not clickable: the value is computed, and its component is shared by every item showing it
     // (it is edited from the label row's "Edit component", which asks before saving).
-    const component = components.find((t) => t.id === field.componentId);
+    const component = field.code === null ? components.find((t) => t.id === field.componentId) : undefined;
     return (
       <div className="view-field">
         <SectionHeader label={<FieldLabel field={field} />} hidden={labelHidden}>
@@ -953,9 +955,9 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, onRege
         </SectionHeader>
         <div
           className={`view-field__value view-field__value--component${text.startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}${text ? "" : " view-field__value--empty"}`}
-          title={component ? `Computed by the component “${component.name}”` : "Computed by a component"}
+          title={component ? `Computed by the component “${component.name}”` : "Computed by its component"}
         >
-          <ComponentValue value={value} output={outputOf(field, components)} frameRatio={component?.frameRatio} variant="page" />
+          <ComponentValue value={value} output={outputOf(field, components)} frameRatio={fieldComponent(field, components)?.frameRatio} variant="page" />
         </div>
       </div>
     );
@@ -1037,7 +1039,7 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, onRege
           title={readOnly ? "Written by AI from this field's prompt" : "Click to edit. What you type is kept: it is not generated again by itself."}
         >
           <AiStatus itemId={itemId ?? ""} fieldId={field.id}>
-            {!empty && (field.aiOutput === "markdown" ? <MarkdownView source={String(value)} /> : String(value))}
+            {!empty && (field.output === "markdown" ? <MarkdownView source={String(value)} /> : String(value))}
           </AiStatus>
         </div>
       </div>

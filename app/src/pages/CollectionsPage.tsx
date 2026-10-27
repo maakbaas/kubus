@@ -20,6 +20,7 @@ import { useTableSort } from "../ui/useTableSort";
 import { inSpace } from "../domain/spaces";
 import { useDataChanges } from "../app/useDataChanges";
 import {
+  blankField,
   countLabel,
   newId,
   nextName,
@@ -46,20 +47,7 @@ import { FillTable, useSharedColumns } from "../views/TableView";
  * confirmation.
  */
 /** The description, edited in its cell with the shared field editor as a one-line text field. */
-const descriptionField = (t: Collection): FieldDef => ({
-  id: `description-${t.id}`,
-  collectionId: t.id,
-  name: "Description",
-  kind: "string",
-  targetCollectionId: null,
-  componentId: null,
-  componentArgs: {},
-  choiceFilter: [],
-  toggleIcon: null, strikeThrough: false,
-  aiPrompt: null,
-  aiOutput: null,
-  position: 0,
-});
+const descriptionField = (t: Collection): FieldDef => blankField(`description-${t.id}`, "Description", "string", { collectionId: t.id });
 
 const draftOf = collectionDraft;
 
@@ -150,12 +138,6 @@ export function CollectionsPage() {
             targetCollectionId: self(f.targetCollectionId)
               ? id
               : f.targetCollectionId,
-            componentArgs: Object.fromEntries(
-              Object.entries(f.componentArgs).map(([k, arg]) => [
-                k,
-                "field" in arg ? { field: mapId(arg.field) } : arg,
-              ]),
-            ),
             choiceFilter: self(f.targetCollectionId)
               ? f.choiceFilter.map((r) => ({
                   ...r,

@@ -1,20 +1,19 @@
 import { useId, useMemo } from "react";
-import { Button, Dropdown } from "@carbon/react";
 import { Code as ComponentIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import {
-  blockArgValue,
   componentUses,
   ERROR_PREFIX,
   componentsFor,
+  isComponentOutput,
   itemsInput,
   placeProblem,
   render,
   type BlockInputs,
   type Component,
+  type ComponentCode,
 } from "../domain/components";
-import type { ComponentArg } from "../domain/model";
-import { ComponentArgInput } from "../ui/ComponentArgInput";
+import { ComponentChoice } from "../ui/ComponentChoice";
 import { ComponentValue } from "../ui/ComponentValue";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
@@ -22,20 +21,25 @@ import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./regi
 // A block that shows a component: a block component, which lists the block's items ($items,
 // $groups, $fields, $all), or a static one (neither). Never one that uses $item, also not on an
 // item page: that is a field component (a block on an item page filters on the page's item instead).
-// Its variables take a fixed value or a field of the block's collection, given as the field's
-// name (which field to use, e.g. a chart's values), not a value.
+// The component is shared (picked by id) or the block's own (local), written in its settings.
 
 export interface ComponentBlockOptions {
   componentId: string | null;
-  args: Record<string, ComponentArg>;
+  /** Its own component, written here; null = the shared `componentId`. */
+  local: ComponentCode | null;
 }
+
+/** The component a block shows: its own, else the shared one it picks. */
+export const blockComponent = (options: ComponentBlockOptions, components: Component[]): ComponentCode | undefined =>
+  options.local ?? components.find((c) => c.id === options.componentId);
 
 function ComponentBlockView({ collection, result, fields, options, refs, all }: BlockProps<ComponentBlockOptions>) {
   const { components } = useStore();
-  const component = components.find((c) => c.id === options.componentId);
+  const component = blockComponent(options, components);
   const value = useMemo(() => {
     if (!component) return `${ERROR_PREFIX}${options.componentId ? "Component not found" : "No component chosen"}`;
-    const problem = placeProblem(component.code, "block");
+    if (!component.code.trim()) return null;
+    const problem = placeProblem(component, "block");
     if (problem) return ERROR_PREFIX + problem;
     const uses = componentUses(component.code);
     const input = itemsInput(collection, refLabelOf(refs));
@@ -47,10 +51,8 @@ function ComponentBlockView({ collection, result, fields, options, refs, all }: 
       fields: fields.map((f) => ({ id: f.id, name: f.name, kind: f.kind })),
       all: /\$all\b/.test(component.code) ? all.map(input) : [],
     };
-    const byId = new Map(collection.fields.map((f) => [f.id, f]));
-    const args = component.params.map((p) => blockArgValue(options.args[p], byId));
-    return render(component, args, undefined, undefined, block);
-  }, [component, options, collection, result, fields, refs, all]);
+    return render(component, undefined, undefined, block);
+  }, [component, options.componentId, collection, result, fields, refs, all]);
   return (
     <div className="component-block">
       <ComponentValue value={value} output={component?.output ?? "markdown"} frameRatio={component?.frameRatio} variant="page" />
@@ -61,65 +63,37 @@ function ComponentBlockView({ collection, result, fields, options, refs, all }: 
 /** Components a block can show: block and static ones. */
 export const blockComponents = (components: Component[], chosen?: string | null) => componentsFor(components, "block", chosen);
 
-function ComponentBlockOptionsEditor({ collection, options, onChange }: BlockOptionsProps<ComponentBlockOptions>) {
+function ComponentBlockOptionsEditor({ options, onChange }: BlockOptionsProps<ComponentBlockOptions>) {
   const uid = useId();
-  const { components } = useStore();
-  const offered = blockComponents(components, options.componentId);
-  const component = components.find((c) => c.id === options.componentId);
   return (
-    <div className="view-options">
-      <Dropdown<Component>
-        autoAlign
-        size="sm"
-        id={`${uid}-component`}
-        titleText="Component"
-        label="Choose a component"
-        items={offered}
-        // Carbon takes null (nothing chosen) at runtime; its types only say undefined.
-        selectedItem={component ?? (null as unknown as Component)}
-        itemToString={(c) => c?.name ?? ""}
-        onChange={({ selectedItem }) => selectedItem && onChange({ componentId: selectedItem.id, args: {} })}
-      />
-      {/* Its code is shared by every place showing it: edited on its own page, never from the block. */}
-      {component && (
-        <Button kind="tertiary" size="sm" href={`#/components/${component.id}`}>
-          Edit component
-        </Button>
-      )}
-      {component?.params.map((p) => (
-        <ComponentArgInput
-          // A new component starts its variables afresh.
-          key={`${component.id}-${p}`}
-          id={`${uid}-arg-${p}`}
-          param={p}
-          fields={collection.fields}
-          value={options.args[p]}
-          onChange={(arg) => {
-            const { [p]: _old, ...rest } = options.args;
-            onChange({ ...options, args: arg ? { ...rest, [p]: arg } : rest });
-          }}
-        />
-      ))}
+    <div className="view-options view-options--stack">
+      <ComponentChoice id={`${uid}-block`} place="block" value={options} onChange={(ref) => onChange({ componentId: ref.local ? null : ref.componentId, local: ref.local })} />
     </div>
   );
+}
+
+/** A stored local component, or null when it isn't one. */
+function normalizeLocal(raw: unknown): ComponentCode | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Partial<ComponentCode>;
+  if (typeof o.code !== "string") return null;
+  return { code: o.code, output: isComponentOutput(o.output) ? o.output : "markdown", frameRatio: typeof o.frameRatio === "string" ? o.frameRatio : null, ai: false };
 }
 
 export const componentBlock = defineBlockType<ComponentBlockOptions>({
   kind: "component",
   label: "Component",
   icon: ComponentIcon,
-  defaultOptions: () => ({ componentId: null, args: {} }),
+  // A new one starts with its own (empty) component, written in its settings.
+  defaultOptions: () => ({ componentId: null, local: { code: "", output: "markdown", frameRatio: null, ai: false } }),
   normalizeOptions(raw) {
-    const o = (raw ?? {}) as Partial<ComponentBlockOptions>;
-    const args: Record<string, ComponentArg> = {};
-    for (const [k, v] of Object.entries(o.args ?? {})) {
-      if (v && typeof v === "object" && (("field" in v && typeof v.field === "string") || ("value" in v && typeof v.value === "string"))) args[k] = v;
-    }
-    return { componentId: typeof o.componentId === "string" ? o.componentId : null, args };
+    const o = (raw ?? {}) as { componentId?: unknown; local?: unknown };
+    const local = normalizeLocal(o.local);
+    return { componentId: !local && typeof o.componentId === "string" ? o.componentId : null, local };
   },
   // By what its code uses: a static component has no filter, sort or fields.
   uses(options, components) {
-    const component = components.find((c) => c.id === options.componentId);
+    const component = blockComponent(options, components);
     const uses = component ? componentUses(component.code) : null;
     return { query: !!uses?.items, groups: !!uses?.groups, fields: uses?.fields ? { labels: false, hideEmpty: false } : null };
   },

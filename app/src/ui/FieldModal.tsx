@@ -1,28 +1,22 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Button, Checkbox, Dropdown, InlineNotification, Modal, Stack, TextInput } from "@carbon/react";
+import { Dropdown, InlineNotification, Modal, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
-import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
-import { isReferenceKind, newId, collectionDraft, type AiOutput, type FieldDef, type FieldKind, type Collection, type ComponentArg } from "../domain/model";
-import { aiPromptProblem } from "../domain/ai";
-import { componentsFor, type Component } from "../domain/components";
+import { useItemCounts } from "../app/useItemCounts";
+import { fieldKindList, fieldKinds, offeredKind } from "../domain/fieldKinds";
+import { blankField, isReferenceKind, newId, collectionDraft, type FieldDef, type FieldDraft, type Collection } from "../domain/model";
 import { FieldKindLabel } from "./fieldKindIcons";
-import { TOGGLE_CHOICES, TOGGLE_ICONS, ToggleIconLabel } from "./ToggleInput";
-import { CollectionLabel } from "./collectionIcons";
-import { ChoiceFilterEditor } from "./ChoiceFilterEditor";
-import { AiOutputSelect, AiPromptEditor } from "./AiFieldEditor";
-import { ComponentArgInput } from "./ComponentArgInput";
-import { NewComponentModal } from "./NewComponentModal";
-import type { FilterRule } from "../domain/query";
+import { FieldSettings, newKindPatch, settingsProblem, type Target } from "./FieldSettings";
 import { errorMessage, useConfirm } from "./useConfirm";
 import { useMountedDialog } from "./useMountedDialog";
 
 /**
- * Adds a field to a collection, or edits a component field, from a view's field picker (table
- * columns, card fields, item page layout): name and field type, plus the referenced collection or the
- * component and its variables (a field or a fixed value each). It is an ordinary field of the
- * collection, shown everywhere like fields added in the collection editor, and the picker shows it in
- * its own view. Type and reference target can't change once created.
+ * Adds a field to a collection, or edits one, from a view's field picker (table columns, card
+ * fields, item page layout): name and field type, plus what the type brings (FieldSettings, as in
+ * the collection editor: the referenced collection, a checkbox's icon, a component field's
+ * component, written here or shared, asking AI or not). It is an ordinary field of the collection,
+ * shown everywhere like fields added in the collection editor, and the picker shows it in its own
+ * view. Type and reference target can't change once created.
  */
 export function FieldModal({
   collection,
@@ -40,34 +34,25 @@ export function FieldModal({
   const { repo, components, collections, space } = useStore();
   const { confirm, dialog } = useConfirm();
   const open = useMountedDialog();
-  const [name, setName] = useState(field?.name ?? "");
-  const [kind, setKind] = useState<FieldKind>(field?.kind ?? "string");
-  const [targetCollectionId, setTargetCollectionId] = useState<string | null>(field?.targetCollectionId ?? null);
-  const [componentId, setComponentId] = useState<string | null>(field?.componentId ?? null);
-  const [args, setArgs] = useState<Record<string, ComponentArg>>(field?.componentArgs ?? {});
-  const [choiceFilter, setChoiceFilter] = useState<FilterRule[]>(field?.choiceFilter ?? []);
-  const [toggleIcon, setToggleIcon] = useState<string | null>(field?.toggleIcon ?? null);
-  const [strikeThrough, setStrikeThrough] = useState(field?.strikeThrough ?? false);
-  const [aiPrompt, setAiPrompt] = useState(field?.aiPrompt ?? "");
-  const [aiOutput, setAiOutput] = useState<AiOutput>(field?.aiOutput ?? "string");
-  const [creatingComponent, setCreatingComponent] = useState(false);
-  // Just created: the store may not list it yet.
-  const [created, setCreated] = useState<Component>();
+  const [draft, setDraft] = useState<FieldDraft>(() => {
+    const { collectionId: _c, position: _p, ...own } = field ?? blankField(newId(), "", "string");
+    return own;
+  });
+  const update = (patch: Partial<FieldDraft>) => setDraft((d) => ({ ...d, ...patch }));
+  const counts = useItemCounts();
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
-  const component = components.find((t) => t.id === componentId) ?? (created?.id === componentId ? created : undefined);
-  const target = collections.find((t) => t.id === targetCollectionId);
+  const name = draft.name;
+  const kind = draft.kind;
+  const targets = useMemo<Target[]>(() => collections.map((t) => ({ id: t.id, name: t.pluralName, icon: t.icon })), [collections]);
   const taken = collection.fields.some((f) => f.id !== field?.id && f.name.trim().toLowerCase() === name.trim().toLowerCase());
   const nameError = !name.trim() ? "Name is required" : taken ? "Another field has this name" : undefined;
-  const promptProblem = kind === "ai" ? aiPromptProblem(aiPrompt) : undefined;
-  const choiceError =
-    kind === "component" && !componentId ? "Choose a component" : isReferenceKind(kind) && !targetCollectionId ? "Choose a collection" : undefined;
-  const sources = collection.fields.filter((f) => f.id !== field?.id);
+  const problem = settingsProblem(draft, components);
 
   async function save() {
-    if (nameError || choiceError || promptProblem) {
+    if (nameError || problem) {
       setSubmitted(true);
       return;
     }
@@ -82,27 +67,19 @@ export function FieldModal({
       if (!ok) return;
     }
     setSaving(true);
-    const draft = collectionDraft(collection);
-    const id = field?.id ?? newId();
-    const own = {
-      id,
+    const collectionAsDraft = collectionDraft(collection);
+    const own: FieldDraft = {
+      ...draft,
       name: name.trim(),
-      kind,
-      targetCollectionId: isReferenceKind(kind) ? targetCollectionId : null,
-      componentId: kind === "component" ? componentId : null,
-      componentArgs: kind === "component" ? args : {},
-      choiceFilter: isReferenceKind(kind) ? choiceFilter : [],
-      toggleIcon: kind === "checkbox" || kind === "checklist" ? toggleIcon : null,
-      strikeThrough: (kind === "checkbox" || kind === "checklist") && strikeThrough,
-      aiPrompt: kind === "ai" ? aiPrompt.trim() : null,
-      aiOutput: kind === "ai" ? aiOutput : null,
+      targetCollectionId: isReferenceKind(kind) ? draft.targetCollectionId : null,
+      choiceFilter: isReferenceKind(kind) ? draft.choiceFilter : [],
     };
-    draft.fields = field
-      ? draft.fields.map((f) => (f.id === id ? { ...f, ...own } : f))
-      : [...draft.fields, own];
+    collectionAsDraft.fields = field
+      ? collectionAsDraft.fields.map((f) => (f.id === own.id ? own : f))
+      : [...collectionAsDraft.fields, own];
     try {
-      await repo.saveCollection(draft, space.id);
-      onSaved(id);
+      await repo.saveCollection(collectionAsDraft, space.id);
+      onSaved(own.id);
     } catch (e) {
       setError(errorMessage(e));
       setSaving(false);
@@ -131,134 +108,38 @@ export function FieldModal({
           id="field-modal-name"
           data-modal-primary-focus
           labelText="Name"
-          placeholder={kind === "component" ? "e.g. Reading time" : "e.g. Published"}
+          placeholder={kind === "component" || kind === "ai" ? "e.g. Reading time" : "e.g. Published"}
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => update({ name: e.target.value })}
           invalid={submitted && !!nameError}
           invalidText={nameError}
         />
-        <Dropdown<FieldKind>
+        <Dropdown<FieldDraft["kind"]>
           autoAlign
           size="sm"
           id="field-modal-kind"
           titleText="Field type"
           label="Field type"
           items={fieldKindList}
-          selectedItem={kind}
+          selectedItem={offeredKind(kind)}
           disabled={!!field}
           itemToString={(k) => (k ? fieldKinds[k].label : "")}
           itemToElement={(k) => <FieldKindLabel kind={k} />}
           renderSelectedItem={(k) => <FieldKindLabel kind={k} />}
           onChange={({ selectedItem: k }) => {
             if (!k) return;
-            setKind(k);
-            // The dropdowns the new collection brings along start without errors.
+            update(newKindPatch(k));
+            // The inputs the new type brings along start without errors.
             setSubmitted(false);
           }}
         />
-        {isReferenceKind(kind) && (
-          <Dropdown<Collection>
-            autoAlign
-            size="sm"
-            id="field-modal-target"
-            titleText="Refers to"
-            label="Choose…"
-            items={collections}
-            // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
-            selectedItem={(target ?? null) as Collection}
-            disabled={!!field}
-            itemToString={(t) => t?.pluralName ?? ""}
-            itemToElement={(t) => <CollectionLabel collection={{ name: t.pluralName, icon: t.icon }} />}
-            renderSelectedItem={(t) => <CollectionLabel collection={{ name: t.pluralName, icon: t.icon }} />}
-            onChange={({ selectedItem: t }) => {
-              setTargetCollectionId(t?.id ?? null);
-              setChoiceFilter([]);
-            }}
-            invalid={submitted && !!choiceError}
-            invalidText={choiceError}
-          />
-        )}
-        {isReferenceKind(kind) && target && <ChoiceFilterEditor target={target} filters={choiceFilter} onChange={setChoiceFilter} />}
-        {(kind === "checkbox" || kind === "checklist") && (
-          <Dropdown<string>
-            autoAlign
-            size="sm"
-            id="field-modal-toggle-icon"
-            titleText="Icon"
-            label="Icon"
-            items={TOGGLE_CHOICES}
-            selectedItem={toggleIcon ?? "checkbox"}
-            itemToString={(i) => (i ? (TOGGLE_ICONS[i]?.label ?? "Checkbox") : "")}
-            itemToElement={(i) => <ToggleIconLabel id={i} />}
-            renderSelectedItem={(i) => <ToggleIconLabel id={i} />}
-            onChange={({ selectedItem: i }) => i && setToggleIcon(i === "checkbox" ? null : i)}
-          />
-        )}
-        {(kind === "checkbox" || kind === "checklist") && (
-          <Checkbox id="field-modal-strike-through" labelText="Strike through when checked" checked={strikeThrough} onChange={(_, { checked }) => setStrikeThrough(checked)} />
-        )}
-        {kind === "ai" && <AiOutputSelect id="field-modal-ai-output" value={aiOutput} locked={!!field} onChange={setAiOutput} />}
-        {kind === "ai" && <AiPromptEditor id="field-modal-ai-prompt" value={aiPrompt} problem={submitted ? promptProblem : undefined} onChange={setAiPrompt} />}
-        {kind === "component" && (
-          <Dropdown<Component>
-            autoAlign
-            size="sm"
-            id="field-modal-component"
-            titleText="Component"
-            label={componentsFor(components, "field").length ? "Choose…" : "No field or static components yet"}
-            // Field and static components: a block component lists items, which a field has not.
-            items={componentsFor(components, "field", componentId)}
-            // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
-            selectedItem={(component ?? null) as Component}
-            itemToString={(t) => t?.name ?? ""}
-            onChange={({ selectedItem: t }) => {
-              setComponentId(t?.id ?? null);
-              setArgs({});
-            }}
-            invalid={submitted && !!choiceError}
-            invalidText={choiceError}
-          />
-        )}
-        {kind === "component" && (
-          <Button size="sm" kind="tertiary" onClick={() => setCreatingComponent(true)}>
-            New component
-          </Button>
-        )}
-        {kind === "component" &&
-          component?.params.map((p) => (
-            <ComponentArgInput
-              key={`${component.id}-${p}`}
-              id={`field-modal-arg-${p}`}
-              param={p}
-              fields={sources}
-              value={args[p]}
-              onChange={(arg) =>
-                setArgs((a) => {
-                  const next = { ...a };
-                  if (arg) next[p] = arg;
-                  else delete next[p];
-                  return next;
-                })
-              }
-            />
-          ))}
+        <FieldSettings id="field-modal" field={draft} persisted={!!field} targets={targets} problem={submitted ? problem : undefined} itemCount={counts[collection.id] ?? 0} onChange={update} />
         <p className="helper">
           A field of the collection: it can be shown in other views too, sorted and filtered on, and read by components as $item["
           {name.trim() || "Name"}"].
         </p>
       </Stack>
     </Modal>
-    {creatingComponent && (
-      <NewComponentModal
-        onClose={() => setCreatingComponent(false)}
-        onCreated={(t) => {
-          setCreated(t);
-          setComponentId(t.id);
-          setArgs({});
-          setCreatingComponent(false);
-        }}
-      />
-    )}
     {dialog}
     </>,
     document.querySelector(".app-root") ?? document.body,

@@ -3,11 +3,10 @@ import { aiPromptProblem, aiRequest, aiStaleness, decodeAiInput, encodeAiInput, 
 import type { Collection, FieldDef, Item } from "./model";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], position: number, ai?: Partial<FieldDef>): FieldDef => ({
-  id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false,
-  aiPrompt: null, aiOutput: null, position, ...ai,
+  id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position, ...ai,
 });
 
-const sorted = field("sorted", "Shelf", "ai", 2, { aiPrompt: "Artist: {{ $item.Artist }}. Give the artist's last name.", aiOutput: "string" });
+const sorted = field("sorted", "Shelf", "ai", 2, { code: "Artist: {{ $item.Artist }}. Give the artist's last name.", output: "string" });
 const collection: Collection = {
   id: "t", name: "Album", pluralName: "Albums", icon: null, description: "", itemViews: [], spaceIds: null,
   fields: [field("title", "Title", "string", 0), field("artist", "Artist", "string", 1), sorted],
@@ -16,7 +15,7 @@ const collection: Collection = {
 const album = (title: string, artist: string, shelf?: string): Item => ({
   id: "a1", collectionId: "t", spaceId: "default", values: { title, artist, ...(shelf && { sorted: shelf }) }, createdAt: "", updatedAt: "",
 });
-const request = (item: Item, f = sorted) => aiRequest(collection, f, item, () => "");
+const request = (item: Item, f = sorted) => aiRequest(collection, f, item, () => "", []);
 
 describe("aiRequest", () => {
   it("renders the prompt for the item", () => {
@@ -37,33 +36,51 @@ describe("aiRequest", () => {
 
   it("depends on the output type", () => {
     const a = request(album("x", "y")) as { hash: string };
-    const b = request(album("x", "y"), { ...sorted, aiOutput: "number" }) as { hash: string };
+    const b = request(album("x", "y"), { ...sorted, output: "number" }) as { hash: string };
     expect(a.hash).not.toBe(b.hash);
   });
 
   it("keeps AI fields out of $item", () => {
-    const other = field("other", "Other", "ai", 3, { aiPrompt: "{{ $item.Shelf }}" });
+    const other = field("other", "Other", "ai", 3, { code: "{{ $item.Shelf }}" });
     const c = { ...collection, fields: [...collection.fields, other] };
-    expect(aiRequest(c, other, album("x", "y", "Davis"), () => "")).toEqual({ problem: "The prompt is empty for this item" });
+    expect(aiRequest(c, other, album("x", "y", "Davis"), () => "", [])).toEqual({ problem: "The prompt is empty for this item" });
   });
 
   it("says why a failing section has no request", () => {
-    const broken = { ...sorted, aiPrompt: "{{ $item.Artist.nope.nope }}" };
+    const broken = { ...sorted, code: "{{ $item.Artist.nope.nope }}" };
     expect(request(album("x", "y"), broken)).toHaveProperty("problem");
   });
 });
 
 describe("aiPromptProblem", () => {
+  const prompt = (code: string, output: "string" | "html" = "string") => ({ code, output, frameRatio: null, ai: true });
   it("needs a prompt", () => {
-    expect(aiPromptProblem("  ")).toBeDefined();
-    expect(aiPromptProblem("Say hi")).toBeUndefined();
+    expect(aiPromptProblem(undefined)).toBeDefined();
+    expect(aiPromptProblem(prompt("  "))).toBeDefined();
+    expect(aiPromptProblem(prompt("Say hi"))).toBeUndefined();
   });
 
   it("allows only $item", () => {
-    expect(aiPromptProblem("{{ $item.Title }}")).toBeUndefined();
-    expect(aiPromptProblem("{{ $now }}")).toMatch(/\$now/);
-    expect(aiPromptProblem("{{ $pages }}")).toMatch(/\$pages/);
-    expect(aiPromptProblem("costs '$5' {{ $item.Title }}")).toBeUndefined();
+    expect(aiPromptProblem(prompt("{{ $item.Title }}"))).toBeUndefined();
+    expect(aiPromptProblem(prompt("{{ $now }}"))).toMatch(/\$now/);
+    expect(aiPromptProblem(prompt("{{ $pages }}"))).toMatch(/\$pages/);
+    expect(aiPromptProblem(prompt("{{ $items.length }}"))).toBeDefined();
+    expect(aiPromptProblem(prompt("costs '$5' {{ $item.Title }}"))).toBeUndefined();
+  });
+
+  it("allows only text, numbers and Markdown", () => {
+    expect(aiPromptProblem(prompt("Say hi", "html"))).toBeDefined();
+  });
+});
+
+describe("a shared AI component", () => {
+  it("is the prompt of the fields that pick it, with each field's own output", () => {
+    const shared = { id: "x", name: "Shelf", description: "", code: "Artist: {{ $item.Artist }}.", output: "string" as const, frameRatio: null, ai: true, createdAt: "", updatedAt: "" };
+    const picking = { ...sorted, code: null, componentId: "x", output: "number" as const };
+    const r = aiRequest(collection, picking, album("x", "Miles Davis"), () => "", [shared]);
+    expect(r).toMatchObject({ prompt: "Artist: Miles Davis." });
+    expect((r as { system: string }).system).toMatch(/single number/);
+    expect(aiRequest(collection, { ...picking, componentId: "gone" }, album("x", "y"), () => "", [shared])).toHaveProperty("problem");
   });
 });
 

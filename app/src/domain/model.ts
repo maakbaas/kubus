@@ -4,6 +4,7 @@
 // entries (a particular book), a Space is a separate environment (e.g. Work, Private) whose items
 // (and collection views) are kept apart while collections and components are shared (domain/spaces.ts).
 
+import type { ComponentOutput } from "./components";
 import type { ItemView } from "./fieldLayout";
 import type { FilterRule } from "./query";
 
@@ -44,9 +45,6 @@ export function valuesEqual(a: FieldValue | undefined, b: FieldValue | undefined
 /** What an AI field's value is: plain text, a number or Markdown (the generated reply is made to fit). */
 export type AiOutput = "string" | "number" | "markdown";
 
-/** What feeds a component field's variable: a field of the item, or a fixed text / number. */
-export type ComponentArg = { field: string } | { value: string };
-
 export interface FieldDef {
   id: string;
   collectionId: string;
@@ -54,21 +52,30 @@ export interface FieldDef {
   kind: FieldKind;
   /** For reference kinds: the collection whose items can be referenced. */
   targetCollectionId: string | null;
-  /** For component fields: the component whose result is shown (computed, never stored). */
+  /**
+   * For component and AI fields: the shared component it shows (a component field's result is
+   * computed, never stored; an AI field's is generated and stored). null when it has its own
+   * (local) component: `code`.
+   */
   componentId: string | null;
-  /** For component fields: what feeds each of the component's variables (a field, or a fixed value). */
-  componentArgs: Record<string, ComponentArg>;
+  /** For component and AI fields: its own (local) component's code, written in place; null = the shared `componentId`. */
+  code: string | null;
+  /**
+   * For component and AI fields: its own component's output. An AI field always has one (text, a
+   * number or Markdown, also with a shared component): what its stored values are, fixed once saved.
+   */
+  output: ComponentOutput | null;
+  /** For its own component with HTML output that fills its box: that box's shape ("4/3"); null = 16:9. */
+  frameRatio: string | null;
   /** For reference kinds: filters over the target's items limiting what can be chosen ([] = any). */
   choiceFilter: FilterRule[];
   /** For checkbox and checklist fields: an icon (outlined off, filled on) shown instead of the box; null = the box. */
   toggleIcon: string | null;
   /** For checkbox and checklist fields: a checked one's text is struck through. */
   strikeThrough: boolean;
-  /** For AI fields: the prompt (Markdown with {{ }} sections over $item), see domain/ai.ts. */
-  aiPrompt: string | null;
-  /** For AI fields: what the generated value is. */
-  aiOutput: AiOutput | null;
   position: number;
+  /** Set by editableField only: an AI field edited as the text, number or Markdown it holds (it keeps its AI icon). */
+  editedAi?: true;
 }
 
 export interface Collection {
@@ -134,22 +141,6 @@ export const collectionDraft = ({ id, name, pluralName, icon, description, space
   fields: fields.map(({ collectionId: _collectionId, position: _position, ...field }) => field),
 });
 
-/** A component field's stored variable mapping (JSON): field ids (older form) or ComponentArgs. */
-export function parseComponentArgs(json: string | null): Record<string, ComponentArg> {
-  if (!json) return {};
-  try {
-    const out: Record<string, ComponentArg> = {};
-    for (const [k, v] of Object.entries(JSON.parse(json) as Record<string, unknown>)) {
-      if (typeof v === "string") out[k] = { field: v };
-      else if (v && typeof v === "object" && "field" in v && typeof v.field === "string") out[k] = { field: v.field };
-      else if (v && typeof v === "object" && "value" in v && typeof v.value === "string") out[k] = { value: v.value };
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
-
 /**
  * A name for a copy, numbered like new views: "Name" becomes "Name 2" (then "Name 3", …, the
  * first one not taken); copying "Name 2" continues that series rather than making "Name 2 2".
@@ -194,9 +185,12 @@ export const observeStamp = (iso: string) => {
   if (t > lastStamp) lastStamp = t;
 };
 
-const metaField = (id: string, name: string): FieldDef => ({
-  id, collectionId: "", name, kind: "datetime", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null, position: 0,
+/** A field with nothing but its id, name and kind set (the rest empty): for drafts, tests and stand-ins. */
+export const blankField = (id: string, name: string, kind: FieldKind, rest: Partial<FieldDef> = {}): FieldDef => ({
+  id, collectionId: "", name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null,
+  choiceFilter: [], toggleIcon: null, strikeThrough: false, position: 0, ...rest,
 });
+const metaField = (id: string, name: string): FieldDef => blankField(id, name, "datetime");
 /**
  * Created and updated: every item has them (ids are the query's pseudo fields). They aren't
  * stored as fields, but can be picked like one (columns, card and page fields, filters, grouping);
@@ -216,7 +210,7 @@ export function fieldValue(item: Item, field: FieldDef): FieldValue {
 /** The field as its value is edited: an AI field is edited as text, a number or Markdown, by its output. */
 export function editableField(field: FieldDef): FieldDef {
   if (field.kind !== "ai") return field;
-  return { ...field, kind: field.aiOutput === "number" ? "number" : field.aiOutput === "markdown" ? "markdown" : "string" };
+  return { ...field, editedAi: true, kind: field.output === "number" ? "number" : field.output === "markdown" ? "markdown" : "string" };
 }
 
 /** The field that provides an item's label: its first non-empty string field. */

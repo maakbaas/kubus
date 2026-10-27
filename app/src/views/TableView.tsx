@@ -215,7 +215,7 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
     );
   }
   // An AI value is typed over like text or a number (Markdown needs the item page).
-  const inline = isInlineEditable(field.kind) || (field.kind === "ai" && field.aiOutput !== "markdown");
+  const inline = isInlineEditable(field.kind) || (field.kind === "ai" && field.output !== "markdown");
   if (!editable || !inline || isMetaField(field)) {
     // Wrapped so the column-width rules (one line where possible) apply to plain text too.
     return (
@@ -244,7 +244,7 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
     // where they were (an overlay would be drawn at a rounded position, a pixel off). Only text
     // has such an editor (FieldInput's multiline): another wrapped value (a reference, a date) is
     // edited in an input over the cell, whose own width would otherwise widen the column.
-    const text = (field.kind === "ai" ? field.aiOutput : field.kind) === "string";
+    const text = (field.kind === "ai" ? field.output : field.kind) === "string";
     if (editing.start?.wrapped && text) return <div className="cell-inline-editor">{editor}</div>;
     // Otherwise the editor overlays the cell; the value stays rendered (invisibly) underneath
     // so the column keeps the width its content gave it.

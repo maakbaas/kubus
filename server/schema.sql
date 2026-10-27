@@ -65,10 +65,10 @@ CREATE TABLE IF NOT EXISTS components (
   id             text NOT NULL,
   name           text,
   description    text,
-  params         jsonb,
   code           text,
   output         text,
   frame_ratio    text,
+  ai             integer,
   created_at     timestamptz,
   updated_at     timestamptz,
   deleted_at     timestamptz,
@@ -77,10 +77,11 @@ CREATE TABLE IF NOT EXISTS components (
 );
 ALTER TABLE components ADD COLUMN IF NOT EXISTS name text;
 ALTER TABLE components ADD COLUMN IF NOT EXISTS description text;
-ALTER TABLE components ADD COLUMN IF NOT EXISTS params jsonb;
 ALTER TABLE components ADD COLUMN IF NOT EXISTS code text;
 ALTER TABLE components ADD COLUMN IF NOT EXISTS output text;
 ALTER TABLE components ADD COLUMN IF NOT EXISTS frame_ratio text;
+ALTER TABLE components ADD COLUMN IF NOT EXISTS ai integer;
+ALTER TABLE components DROP COLUMN IF EXISTS params;
 ALTER TABLE components ADD COLUMN IF NOT EXISTS created_at timestamptz;
 ALTER TABLE components ADD COLUMN IF NOT EXISTS updated_at timestamptz;
 ALTER TABLE components ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
@@ -93,12 +94,12 @@ CREATE TABLE IF NOT EXISTS fields (
   kind           text,
   target_collection_id text,
   component_id   text,
-  component_args jsonb,
+  code           text,
+  output         text,
+  frame_ratio    text,
   choice_filter  jsonb,
   toggle_icon    text,
   strike_through integer,
-  ai_prompt      text,
-  ai_output      text,
   position       integer,
   created_at     timestamptz,
   updated_at     timestamptz,
@@ -111,12 +112,24 @@ ALTER TABLE fields ADD COLUMN IF NOT EXISTS name text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS kind text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS target_collection_id text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS component_id text;
-ALTER TABLE fields ADD COLUMN IF NOT EXISTS component_args jsonb;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS choice_filter jsonb;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS toggle_icon text;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS strike_through integer;
-ALTER TABLE fields ADD COLUMN IF NOT EXISTS ai_prompt text;
-ALTER TABLE fields ADD COLUMN IF NOT EXISTS ai_output text;
+-- 2026-10: an AI field's prompt became its own (local) component: ai_prompt / ai_output are now
+-- code / output (renamed where the old names are still there), and variables (component_args) are gone.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'fields' AND column_name = 'ai_prompt')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'fields' AND column_name = 'code') THEN
+    ALTER TABLE fields RENAME COLUMN ai_prompt TO code;
+    ALTER TABLE fields RENAME COLUMN ai_output TO output;
+  END IF;
+END $$;
+ALTER TABLE fields ADD COLUMN IF NOT EXISTS code text;
+ALTER TABLE fields ADD COLUMN IF NOT EXISTS output text;
+ALTER TABLE fields ADD COLUMN IF NOT EXISTS frame_ratio text;
+ALTER TABLE fields DROP COLUMN IF EXISTS component_args;
+ALTER TABLE fields DROP COLUMN IF EXISTS ai_prompt;
+ALTER TABLE fields DROP COLUMN IF EXISTS ai_output;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS position integer;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS created_at timestamptz;
 ALTER TABLE fields ADD COLUMN IF NOT EXISTS updated_at timestamptz;

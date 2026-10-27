@@ -2,7 +2,7 @@
 
 Kubus (Dutch for "cube", after its icon; a working name) is a personal knowledge management app in the spirit of Obsidian, but backed by a
 relational (CRUD/SQL) store instead of Markdown files: user-defined collections (Book, Person, …)
-with typed fields, items, views made of blocks, components (`{{ }}` code over `$variables`),
+with typed fields, items, views made of blocks, components (`{{ }}` code over `$item`, `$items`, …),
 spaces, bookmarks, and an optional Postgres sync server.
 
 ## Detailed docs (read the one you need before working in that area)
@@ -42,11 +42,14 @@ is what this split avoids. Keep them current when behaviour changes.
   database): keep `acquireDbLock` / `poolFilesFree` in `worker.ts`.
 - Changing the app identifier `com.kubus.app`, database / pool names, the lock or `kubus.*` storage
   keys orphans existing data.
-- **Code lives only in components** (and AI prompts): item values, Markdown blocks and filter values
-  are data, never run. A component is a field (`$item`), block (`$items`, `$groups`, `$fields`, `$all`)
-  or static component (neither), never both (`componentUses`, `placeProblem` in `domain/components.ts`).
-- **The Help page text** (`app/src/help/components.md`) documents components and `{{ }}` code (`$` names, outputs, AI
-  fields) and is also what "Write with AI" gives the model: update it whenever that language changes.
+- **Code lives only in components**: item values are data, never run. A component is shared (table
+  `components`) or local (written in place, stored with its field or block; a Markdown block's text is
+  a static one); there are no `$variables`, only the built-ins. A component is a field (`$item`),
+  block (`$items`, `$groups`, `$fields`, `$all`) or static component (neither), never both
+  (`componentUses`, `placeProblem` in `domain/components.ts`); with "Ask AI" (`ai`) it is the prompt of
+  an AI field (kind `ai`: a Component field asking AI, its values stored).
+- **The Help page text** (`app/src/help/components.md`) documents components and `{{ }}` code (`$` names, outputs, Ask
+  AI) and is also what "Write with AI" gives the model: update it whenever that language changes.
 - **The language model key stays on the device** (`kubus.ai`, `app/src/app/ai.ts`): never sync it or put it in the database.
 - Same words in code and UI (see Terminology); no "type", "object", "template", "entry".
 
@@ -67,8 +70,9 @@ A Collection defines fields and holds its items (Books); an Item is one of them 
 book). "View" is both how a collection's items are listed (collection view: its blocks) and how
 one item's page looks (item view, whose layout is its fields and blocks); say "collection view" /
 "item view" only where both could be meant. A Block shows items one way (table, cards, a
-component) inside a view. A Component is reusable rendering ({{ }} code over $variables): a field,
-block or static component by the built-ins it uses.
+component) inside a view. A Component is rendering ({{ }} code over the built-in $ names), shared
+(reusable, by name) or local (written in one place): a field, block or static component by the
+built-ins it uses; with "Ask AI" its text is a prompt for an AI field.
 A Space keeps items apart while sharing collections. A field's own kind is called "Field type" in the UI.
 
 ## Architecture

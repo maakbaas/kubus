@@ -65,7 +65,9 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   already chosen that no longer matches stays. Single references live
   in `value_ref`; lists (`string_list`, `item_list`) are JSON arrays in `value_json`, which means a
   list merges as one value during sync.
-- AI fields (`fields.ai_prompt`, `fields.ai_output`: `string` | `number` | `markdown`) store their generated value in
+- Component and AI fields keep their own (local) component in `fields.code` / `output` / `frame_ratio`, else
+  `component_id` names a shared one; blocks keep theirs in their options. AI fields (`fields.output`:
+  `string` | `number` | `markdown`, also with a shared prompt) store their generated value in
   `value_text` (`value_number` for numbers) and, in `value_json`, the fingerprint (a JSON string) of the rendered
   prompt it answers (`domain/ai.ts`: JSON `{ "hash": …, "edited": true }`, `edited` when the user typed the value); `Repository.setGenerated` writes both without touching `items.updated_at`, `updateItem` stores a typed value as edited. The
   fingerprint rides along in sync, so no new synced column was needed for it.

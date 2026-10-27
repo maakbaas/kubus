@@ -18,6 +18,7 @@ export function WriteWithAi({
   id,
   current,
   focus,
+  ai: asksAi = false,
   onApply,
 }: {
   id: string;
@@ -25,6 +26,8 @@ export function WriteWithAi({
   current: ComponentSuggestion;
   /** The collection the component is for (the preview's), when chosen. */
   focus?: Collection;
+  /** The component asks AI: the model writes a prompt. */
+  ai?: boolean;
   /** The suggestion to put into the editor. */
   onApply(suggestion: ComponentSuggestion): void;
 }) {
@@ -40,7 +43,7 @@ export function WriteWithAi({
     setWriting(true);
     setError(undefined);
     try {
-      const reply = await ai.client("code").complete(componentMessages({ help, request, current, collections, focus }));
+      const reply = await ai.client("code").complete(componentMessages({ help, request, current, collections, focus, ai: asksAi }));
       const suggestion = parseComponentReply(reply);
       if ("error" in suggestion) throw new Error(suggestion.error);
       onApply(suggestion);

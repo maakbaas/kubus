@@ -3,7 +3,7 @@ import { IconButton, InlineNotification, Table, TableBody, TableCell, TableHead,
 import { ArrowRight, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
-import { newId, nextName, type FieldDef } from "../domain/model";
+import { blankField, newId, nextName, type FieldDef } from "../domain/model";
 import type { Space } from "../domain/spaces";
 import { cellEditStart, type EditStart } from "../ui/editStart";
 import { FieldEditor } from "../ui/FieldEditor";
@@ -17,20 +17,7 @@ import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { FillTable } from "../views/TableView";
 
 /** The name, edited in its cell with the shared field editor as a one-line text field. */
-const nameField = (s: Space): FieldDef => ({
-  id: `space-name-${s.id}`,
-  collectionId: "",
-  name: "Name",
-  kind: "string",
-  targetCollectionId: null,
-  componentId: null,
-  componentArgs: {},
-  choiceFilter: [],
-  toggleIcon: null, strikeThrough: false,
-  aiPrompt: null,
-  aiOutput: null,
-  position: 0,
-});
+const nameField = (s: Space): FieldDef => blankField(`space-name-${s.id}`, "Name", "string");
 
 /**
  * The spaces as a table: icon (picker), name (edits in place, taking the row's spare width), and per row a switch

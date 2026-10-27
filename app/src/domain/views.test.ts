@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { componentUses, itemsInput, parseParams, placeProblem, render } from "./components";
+import { codeProblem, componentUses, itemsInput, localComponents, placeProblem, render, unknownNames } from "./components";
 import { parseLayout } from "./fieldLayout";
 import type { Collection, FieldDef, Item } from "./model";
 import { defaultQuery, filterPreset, PAGE_ITEM, pageItemField, resolvePageValues, type FilterRule } from "./query";
 import { blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery } from "./views";
 
+const code = (text: string) => ({ code: text, ai: false });
 const field = (id: string, name: string, kind: FieldDef["kind"], targetCollectionId: string | null = null): FieldDef => ({
-  id, collectionId: "b", name, kind, targetCollectionId, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null, position: 0,
+  id, collectionId: "b", name, kind, targetCollectionId, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position: 0,
 });
 
 const books: Collection = {
@@ -94,34 +95,72 @@ describe("components in blocks", () => {
 
   it("never mix $item with a block's names", () => {
     expect(componentUses("{{ $item.Name }}: {{ $items.length }}")).toMatchObject({ kind: "field", mixed: true });
-    expect(placeProblem("{{ $item.Name }}: {{ $all.length }}", "field")).toMatch(/both/);
-    expect(placeProblem("{{ $item.Name }}: {{ $items.length }}", "block")).toMatch(/both/);
+    expect(placeProblem(code("{{ $item.Name }}: {{ $all.length }}"), "field")).toMatch(/both/);
+    expect(placeProblem(code("{{ $item.Name }}: {{ $items.length }}"), "block")).toMatch(/both/);
   });
 
   it("fit their place: field components as fields, block components as blocks, static ones anywhere", () => {
-    expect(placeProblem("{{ $item.Pages }}", "field")).toBeNull();
-    expect(placeProblem("{{ $item.Pages }}", "block")).toMatch(/use it as a field/);
-    expect(placeProblem("{{ $items.length }}", "block")).toBeNull();
-    expect(placeProblem("{{ $items.length }}", "field")).toMatch(/use it as a block/);
-    expect(placeProblem("{{ $pages / 40 }}", "field")).toBeNull();
-    expect(placeProblem("Read me", "block")).toBeNull();
+    expect(placeProblem(code("{{ $item.Pages }}"), "field")).toBeNull();
+    expect(placeProblem(code("{{ $item.Pages }}"), "block")).toMatch(/use it as a field/);
+    expect(placeProblem(code("{{ $items.length }}"), "block")).toBeNull();
+    expect(placeProblem(code("{{ $items.length }}"), "field")).toMatch(/use it as a block/);
+    expect(placeProblem(code("Read me"), "block")).toBeNull();
+    expect(placeProblem(code("{{ $now.getFullYear() }}"), "static")).toBeNull();
+    expect(placeProblem(code("{{ $item.Pages }}"), "static")).toMatch(/same everywhere/);
+    expect(placeProblem(code("{{ $items.length }}"), "static")).toMatch(/same everywhere/);
   });
 
-  it("don't count the built-ins as variables", () => {
-    expect(parseParams("{{ $items.length * $factor + $all.length + $groups.length + $fields.length }}")).toEqual(["factor"]);
+  it("know no variables: any other $ name is a problem", () => {
+    expect(unknownNames("{{ $items.length * $factor + $all.length + $groups.length + $fields.length }}")).toEqual(["factor"]);
+    expect(codeProblem("{{ $pages / 40 }}")).toMatch(/\$pages isn't known/);
+    expect(placeProblem(code("{{ $pages / 40 }}"), "field")).toMatch(/\$pages/);
+    expect(render({ code: "{{ $pages / 40 }}" })).toMatch(/^⚠ \$pages/);
+  });
+
+  it("asking AI fill a field, without $now", () => {
+    expect(placeProblem({ code: "{{ $item.Pages }}", ai: true }, "field")).toBeNull();
+    expect(placeProblem({ code: "{{ $item.Pages }}", ai: true }, "block")).toMatch(/fills a field/);
+    expect(placeProblem({ code: "{{ $now }}", ai: true }, "field")).toMatch(/\$now/);
   });
 
   it("see the block's items by field name", () => {
     const input = itemsInput(books, () => "");
     const items = [book("1", "A", 10, null), book("2", "B", 32, null)];
-    const code = "{{ $items.map(b => b.Title + ':' + b.pages).join(', ') }} / {{ $all.length }} / {{ $share }}";
-    const component = { params: parseParams(code), code };
-    const out = render(component, [0.5], undefined, undefined, { items: items.map(input), groups: [], fields: [], all: items.map(input) });
-    expect(out).toBe("A:10, B:32 / 2 / 0.5");
+    const out = render({ code: "{{ $items.map(b => b.Title + ':' + b.pages).join(', ') }} / {{ $all.length }}" }, undefined, undefined, {
+      items: items.map(input),
+      groups: [],
+      fields: [],
+      all: items.map(input),
+    });
+    expect(out).toBe("A:10, B:32 / 2");
   });
 
   it("outside a block see empty lists", () => {
-    expect(render({ params: [], code: "{{ $items.length }}" }, [])).toBe(0);
+    expect(render({ code: "{{ $items.length }}" })).toBe(0);
+  });
+});
+
+describe("local components", () => {
+  it("are listed by where they are written: fields, component blocks and Markdown blocks with code", () => {
+    const withLocal = {
+      ...books,
+      fields: [...books.fields, { ...field("r", "Reading", "component"), code: "{{ $item.Pages / 40 }}", output: "number" as const }],
+    };
+    const view = {
+      id: "v",
+      collectionId: books.id,
+      name: "All",
+      blocks: [
+        { id: "b1", title: "", kind: "component", options: { componentId: null, local: { code: "{{ $items.length }}", output: "markdown" } } },
+        { id: "b2", title: "Notes", kind: "markdown", options: { text: "Today: {{ $now.getDay() }}" } },
+        { id: "b3", title: "", kind: "markdown", options: { text: "Plain text" } },
+        { id: "b4", title: "", kind: "component", options: { componentId: "shared", local: null } },
+      ],
+    };
+    const found = localComponents([withLocal], [view]);
+    expect(found.map((l) => l.where)).toEqual(["Books › Reading", "Books › All › Component", "Books › All › Notes"]);
+    expect(found[0].component).toMatchObject({ output: "number", ai: false });
+    expect(found[2].owner).toMatchObject({ type: "view", markdown: true });
   });
 });
 

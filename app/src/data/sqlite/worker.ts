@@ -146,7 +146,11 @@ function schemaHash(text: string): number {
  * in place, and stored values that name them are updated. Each step applies only when the old
  * name is still there. (Pre-alpha: kept until no database with the old names exists.)
  */
-const RENAMES: ({ table: string; to: string } | { table: string; column: string; to: string })[] = [];
+const RENAMES: ({ table: string; to: string } | { table: string; column: string; to: string })[] = [
+  // 2026-10: an AI field's prompt became its own (local) component.
+  { table: "fields", column: "ai_prompt", to: "code" },
+  { table: "fields", column: "ai_output", to: "output" },
+];
 /** Statements updating stored values that name renamed things, run after RENAMES. */
 const RENAMED_VALUES: { table: string; sql: string }[] = [];
 
