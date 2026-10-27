@@ -6,7 +6,7 @@ import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import { describe, expect, it } from "vitest";
 import firstRelease from "./schema-v1.sql?raw";
 import { MIGRATIONS, type Db } from "./migrations";
-import { ensureSchema, FIRST_RELEASE_HASH, latestVersion } from "./sqlite/engine";
+import { ensureSchema, FIRST_RELEASE_HASHES, latestVersion } from "./sqlite/engine";
 import { outboxTriggerSql, schema } from "./schema";
 
 /** 32-bit FNV-1a hash of the schema text, as a signed int: what pre-release versions kept in user_version. */
@@ -47,7 +47,9 @@ describe("migrations", () => {
   });
 
   it("start from the first release's schema, which databases made before them are recognized by", () => {
-    expect(schemaHash(firstRelease)).toBe(FIRST_RELEASE_HASH);
+    // LF and CRLF (the Windows builds' checkout): whatever this checkout has, both are recognized.
+    const lf = firstRelease.replace(/\r\n/g, "\n");
+    expect(FIRST_RELEASE_HASHES).toEqual([schemaHash(lf), schemaHash(lf.replace(/\n/g, "\r\n"))]);
   });
 
   it("bring a database of the first release to exactly the schema of a new one", async () => {

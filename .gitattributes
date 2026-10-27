@@ -1,0 +1,8 @@
+# Every checkout keeps LF line endings, Windows included: the app hashes and compares text files
+# it bundles (schema-v1.sql's hash identifies first-release databases, app/src/data/sqlite/engine.ts).
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary

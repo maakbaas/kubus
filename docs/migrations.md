@@ -28,7 +28,8 @@ append-only migrations in one transaction, the version stored in the database.
 - A database of a **newer** version (an older app opened it, a cached PWA, say) is not touched:
   opening fails with "update the app".
 - Databases made before versions were counted have a hash of their schema in `user_version`: the
-  first release's hash (`FIRST_RELEASE_HASH`) counts as version 1; any other pre-release hash starts
+  first release's hash counts as version 1 (`FIRST_RELEASE_HASHES`: of its text with LF, and with CRLF as
+  the Windows builds read it); any other pre-release hash starts
   afresh, as pre-release versions did.
 - **Migrations don't sync.** The outbox triggers are off while they run: each side converts its own
   copy (the server's rows by a server migration).

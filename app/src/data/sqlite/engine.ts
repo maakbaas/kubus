@@ -58,9 +58,11 @@ export const latestVersion = (plan: SchemaPlan) => plan.migrations.at(-1)?.versi
 
 /**
  * PRAGMA user_version of a database made before versions were counted: a hash of the schema it was
- * made with. This one is the hash of the first release's schema (schema-v1.sql), i.e. version 1.
+ * made with. These are the hashes of the first release's schema (schema-v1.sql), i.e. version 1:
+ * its text with LF line endings, and with CRLF, as the Windows builds read it (they were made from a
+ * Windows checkout, before .gitattributes kept every checkout at LF).
  */
-export const FIRST_RELEASE_HASH = -1610800982;
+export const FIRST_RELEASE_HASHES = [-1610800982, 571953669];
 /** Version numbers are below this; anything else in user_version is a pre-release schema's hash. */
 const MAX_VERSION = 1_000_000;
 
@@ -76,7 +78,7 @@ export function ensureSchema(db: Db, plan: SchemaPlan = CURRENT) {
   const latest = latestVersion(plan);
   let version = Number(db.selectValue("PRAGMA user_version"));
   if (version === latest) return;
-  if (version === FIRST_RELEASE_HASH) version = 1;
+  if (FIRST_RELEASE_HASHES.includes(version)) version = 1;
   if (version > latest && version < MAX_VERSION) {
     throw new Error(`This database was made by a newer version of Kubus (schema ${version}, this one knows ${latest}): update the app`);
   }
