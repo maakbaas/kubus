@@ -155,7 +155,7 @@ export function SearchPage() {
         if (!collection) return [];
         const matches = excerpts(collection, item, query, results!.labels);
         const titleMatches = itemLabel(collection, item).toLowerCase().includes(query.trim().toLowerCase());
-        return titleMatches || matches.length > 0 ? [{ item, collection, matches }] : [];
+        return titleMatches || matches.length > 0 ? [{ item, collection, matches, titleMatches }] : [];
       }),
     [results, collections, query],
   );
@@ -239,9 +239,12 @@ export function SearchPage() {
       )}
       {hits.length > 0 && (
         <ContainedList label={`${hits.length}${results?.items.length === 50 ? "+" : ""} items`} kind="on-page">
-          {hits.map(({ item, collection, matches }) => {
+          {hits.map(({ item, collection, matches, titleMatches }) => {
+            // Opened at the first field that matched (scrolled to, where its page shows it); at the
+            // top when the title did.
+            const at = titleMatches || matches.length === 0 ? "" : `?field=${encodeURIComponent(matches[0].field.id)}`;
             return (
-              <ContainedListItem key={item.id} onClick={() => navigate(`/collections/${collection.id}/items/${item.id}`)}>
+              <ContainedListItem key={item.id} onClick={() => navigate(`/collections/${collection.id}/items/${item.id}${at}`)}>
                 <div className="search-hit">
                   <div className="search-hit__title">
                     <span>
