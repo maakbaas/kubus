@@ -44,7 +44,7 @@ Rules that keep this from becoming three products glued together:
 Roadmap, in order: (1) native Kubus core: item links + backlinks, per-record and query components;
 (2) the server + sync; (3) remote sources, read-only (tables and SQL queries through the server,
 same views/components: built, docs/sync.md "Remote sources"; still to come: links to remote rows,
-connectors beyond Postgres); remote data stays read-only by design (no Directus side); (4) chart /
+more connectors (Postgres and n8n data tables so far)); remote data stays read-only by design (no Directus side); (4) chart /
 dashboard view types (Metabase side), any time after (3).
 Cheap step that can be done any time: introduce the capabilities type with the native source
 declaring everything, and make the UI respect it.
