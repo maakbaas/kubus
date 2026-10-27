@@ -10,8 +10,8 @@ Status: proposal, nothing built yet.
 2. The server can call a webhook whenever data changes, whoever changed it (a device, the API).
 3. Many images (thousands) stay fast and fit on a phone: file bytes no longer travel inside
    `/api/sync`, small images (thumbnails) are shown wherever an image is shown small, and a device
-   can download originals only when they are opened. On the server, bytes sit behind a `FileStore`
-   interface, kept in Postgres for now; S3 can come later as a second implementation.
+   can download originals only when they are opened. The server keeps the bytes in Postgres (no S3),
+   and files no longer used by any item are cleaned up automatically, on devices and on the server.
 4. The Help page gets tabs along the top: "Components" (today's text) and "API".
 5. Computed (component) field values are included when the API returns items.
 
@@ -28,7 +28,7 @@ another SQL dialect, so that is ruled out.
 ```
 outside tool ──HTTP /api/v1 + token──> server ──> headless device (SqliteRepository, in-memory SQLite)
                                                         │  syncs over HTTP to 127.0.0.1, like any device
-devices ──────/api/sync, /api/files──> server ──> Postgres (rows) + FileStore (file bytes, Postgres for now)
+devices ──────/api/sync, /api/files──> server ──> Postgres (rows, file bytes)
 ```
 
 - **Database:** the same sqlite-wasm the app uses (it has a Node build), in memory. The headless
@@ -117,14 +117,15 @@ images slow. Item queries never read the `files` table. Three things are slow:
 - bytes as base64 inside the `/api/sync` JSON, in one unpaged request;
 - every device downloading every original (thousands of photos don't fit on a phone, and iOS evicts).
 
-Moving bytes to S3 fixes none of these, so S3 is left for later (see Open questions). Nothing
-changes for a device without a server: it keeps every byte it stores, as now.
+Moving bytes to S3 would fix none of these, so there is no S3. Nothing changes for a device
+without a server: it keeps every byte it stores, as now.
 
 **Thumbnails (on every device, with or without a server)**
-- When an image is stored (`storeImageFile`), the device also makes a thumbnail: longest side
-  512 px, with `createImageBitmap` and `OffscreenCanvas`. It is WebP, or JPEG / PNG (if
+- When an image is stored (`storeImageFile`), the device also makes a thumbnail: shortest side
+  512 px (so a card cropping it to its own shape stays sharp), the longest side capped at 2048 px
+  (panoramas), with `createImageBitmap` and `OffscreenCanvas`. It is WebP, or JPEG / PNG (if
   transparent) where the browser can't encode WebP (Safari). No thumbnail when the image is
-  already small (≤ 512 px or ≤ 100 KB), for SVG (vector), or for an animated GIF: those show the
+  already small (shortest side ≤ 512 px, or ≤ 100 KB), for SVG (vector), or for an animated GIF: those show the
   original.
 - The thumbnail is an ordinary content-addressed `files` row. A new synced, insert-only table
   `thumbnails (file_id PRIMARY KEY, thumb_id)` links it to its original. `files` rows stay
@@ -132,8 +133,9 @@ changes for a device without a server: it keeps every byte it stores, as now.
   link. A device whose own link lost keeps using its own thumbnail, and both are valid.
 - Images stored before this change, and images stored through the API (no canvas in Node), get a
   thumbnail lazily: the first device that shows one small, with its original present, makes it.
-- **Used:** table cells, cards and an image field shown at its small size (`useFileUrl` gets a
-  "small" flag). **Original:** the Lightbox, Markdown images and component images (`fileDataUrl`).
+- **Used:** only in table cells and cards (`useFileUrl` gets a "small" flag). **Original:**
+  everywhere else: image fields on an item page, the Lightbox, Markdown images and component
+  images (`fileDataUrl`).
   A small place whose thumbnail isn't there yet shows the original if present; the Lightbox shows
   the thumbnail until the original arrives.
 - `releaseFile` releases the thumbnail together with its original.
@@ -166,9 +168,8 @@ changes for a device without a server: it keeps every byte it stores, as now.
   keeps them, unless the device keeps no bytes (the headless device).
 
 **On the server**
-- A `FileStore` interface (`put`, `get`, `has`, `clear`). For now it has one implementation in
-  Postgres: a new table `file_bytes (id PRIMARY KEY, data bytea)`, out of the sync tables. S3
-  later is a second implementation; nothing else changes then.
+- The bytes go in a new Postgres table `file_bytes (id PRIMARY KEY, data bytea, stored_at)`, out of
+  the sync tables, read and written only by `server/src/files.ts`.
 - `files` keeps the synced metadata: `id` (SHA-256), `mime`, `size`, `created_at`, `seq`.
 - `PUT /api/files/{id}`: checks that the SHA-256 of the body equals `id` (a wrong or partial upload
   is refused) and the 20 MB limit (+ margin). `GET /api/files/{id}` returns the bytes with their
@@ -177,12 +178,42 @@ changes for a device without a server: it keeps every byte it stores, as now.
   dropped (in `server/schema.sql`, in one transaction). No server loses its images, and devices
   keep their own bytes.
 - `/api/sync` gets much smaller, so `MAX_BODY` can drop from 100 MB to about 10 MB.
-- Wipe server: also clears the `FileStore`.
+- Wipe server: also clears `file_bytes`.
 - `shared/sync.ts`: `files` loses `data`, and `thumbnails` is added. The `bytes` column type and
   the base64 code go (nothing else uses them). `sync/spec.test.ts` is updated so the local-only
   `data` column is allowed.
 - `/api/v1/files` (the API) uses the headless device's `putFile` / `getFile`, so it goes through
   the same path as the GUI.
+
+**Cleaning up unused files**
+
+Today a device deletes a file when its own edit removes the file's last use (`releaseFile`). That
+delete isn't synced (`files` is insert-only), and nothing runs when the last use goes away through
+a sync (an item deleted on another device). So other devices and the server keep such files for
+good. To clean them up automatically:
+- **One rule.** A file is in use when a live item, through a live field, has it as an image value
+  or mentions `files/<id>` in a Markdown or HTML value. This is the `liveUse` expression of
+  `releaseFile` today. A thumbnail is in use when its original is. `SqliteRepository` gets
+  `unusedFiles(ids?)` built from that same expression, so there's no second version of it.
+- **No synced deletes.** Every device and the server apply the same rule to the same data and reach
+  the same answer, so `files` stays insert-only and needs no tombstones.
+- **Devices.** While applying a sync, the engine notes the files the replaced or deleted rows used
+  (read before the merge overwrites them: image values, `fileIdsIn` of Markdown / HTML, the
+  fields and items deleted). After the sync it releases those that are now unused, exactly as a
+  local edit does today, with their thumbnails and `thumbnails` links.
+- **Server.** Once a day the headless device (it holds every row, so the same SQLite rule runs
+  there) lists the unused files. The server deletes the `files` row and the `file_bytes` of each
+  one whose bytes it received more than 7 days ago (`stored_at`).
+- **The 7 days** cover a file whose use arrives later than its bytes: a sync that ran out of its
+  upload budget, or a device offline with an edit that uses it.
+- **Back in use after deletion.** A device that brings a deleted file back into use (an old
+  offline edit) doesn't lose it. The `/api/sync` answer lists the files used by the pushed rows
+  that the server doesn't have (`missingFiles`). The device queues them again and uploads their
+  bytes at the next sync. For this, `fileIdsIn` moves from `domain/files.ts` to `shared/files.ts`,
+  used by the app and the server. Only a file nobody has the bytes of anymore is lost: unused for
+  a week, and then used again by a device that only had its metadata. It shows as missing.
+- **A download that answers 404** (deleted on the server) removes the local row when it is unused
+  locally too.
 
 ## 4. Webhooks
 
@@ -219,9 +250,9 @@ into events and POSTs them to the configured URL(s).
 
 - **`docker-compose.yml`:**
   - commented `KUBUS_WEBHOOK_URL` / `KUBUS_WEBHOOK_SECRET` on the server. Nothing else changes
-    (no S3 yet).
+    (no S3).
 - **Docs:**
-  - `docs/sync.md`: the headless device, the API, webhooks, `/api/files`, the `FileStore`, thumbnails, the download setting and the updated known limits;
+  - `docs/sync.md`: the headless device, the API, webhooks, `/api/files`, file clean-up, thumbnails, the download setting and the updated known limits;
   - `docs/data-model.md`: files (nullable `data`, thumbnails);
   - `docs/features.md`: thumbnails and the Lightbox loading the original;
   - `CLAUDE.md`: commands (`build:headless`), the repo layout, and the rule "the API goes through
@@ -236,33 +267,34 @@ into events and POSTs them to the configured URL(s).
   - the sync engine's file upload and download against a fake fetch (upload before the row,
     the per-sync upload budget, thumbnails first, the "when opened" setting, retries);
   - the `files` upgrade (a database with bytes keeps them; `data` becomes nullable);
+  - clean-up: the rule (image value, Markdown, HTML, deleted item or field, thumbnail with its
+    original), release after a sync, `missingFiles` and re-upload;
   - thumbnail choice: when one is made, which size, which places use it, `releaseFile` freeing both;
   - `DirectSqlClient` plus `SqliteRepository` running in Node (the headless device's own path).
 - **Server:** typecheck. A manual run with Postgres (`docker compose up`): create items by API,
   see them on a device, upload an image on one device and see its thumbnail and original arrive on
-  another, start an existing server and check its images moved to `file_bytes`, receive webhooks.
+  another, start an existing server and check its images moved to `file_bytes`, delete an item and
+  see its image released on the other device (and on the server after the grace period, shortened
+  for the test), receive webhooks.
 - **GUI suite:** the image cases still pass (thumbnails in tables and cards, the original in the
   Lightbox).
 
 ## Order of work
 
 1. `SqliteEngine` / `SqlClient` split, then `SyncEnvironment` (no behaviour change; tests stay green).
-2. Files: `FileStore` and `file_bytes` with the move of existing bytes, `/api/files`, nullable local
-   `data`, upload and download in the engine, the download setting, wipe.
+2. Files: `file_bytes` with the move of existing bytes, `/api/files`, nullable local `data`, upload
+   and download in the engine, the download setting, wipe.
 3. Thumbnails: making them on store and lazily, `thumbnails` table and sync, the places that use
    them, release.
-4. Headless device: bundle, `DirectSqlClient`, start-up and reset, request queue.
-5. API: values, routes, RPC, shared reference-label function, computed values.
-6. Webhooks.
-7. Help tabs and `api.md`; compose, docs, CLAUDE.md.
+4. Clean-up: `unusedFiles`, release after a sync, `missingFiles`, the server's daily run (needs the
+   headless device, so its server half lands with step 5).
+5. Headless device: bundle, `DirectSqlClient`, start-up and reset, request queue.
+6. API: values, routes, RPC, shared reference-label function, computed values.
+7. Webhooks.
+8. Help tabs and `api.md`; compose, docs, CLAUDE.md.
 
 ## Open questions
 
 - Should a separate, more limited token for outside tools come later (read-only, or no wipe)?
   This plan uses the one `KUBUS_TOKEN`, as asked.
-- S3 as a second `FileStore` (`S3_*` settings, a tiny SigV4 client, copying existing bytes over,
-  MinIO in compose) comes later. It only changes the server: devices only talk to `/api/files`.
-  Its gains are in running the server (small database backups, cheap storage), not speed.
-- The server never deletes file bytes (known limit, as today); a clean-up of unreferenced files
-  could come with S3.
 - A device never throws away originals it has (no "free up space" yet).
