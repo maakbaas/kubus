@@ -1886,12 +1886,12 @@ img[data-lightbox] {
   margin-bottom: var(--cds-spacing-03);
   overflow-wrap: anywhere;
 }
-/* Label and value side by side, labels in a fixed column (narrower only when the card is: a label
-   then wraps, readable whole, rather than stacking above its value: a card looks the same at every
-   width unless its view asks for list rows). */
+/* Label and value side by side, labels in a column of 6rem, at most two fifths of a narrow card
+   (a label then wraps, readable whole, rather than stacking above its value: a card looks the same
+   at every width unless its view asks for list rows). */
 .item-card__fields {
   display: grid;
-  grid-template-columns: minmax(0, 6rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, min(6rem, 40%)) minmax(0, 1fr);
   gap: var(--cds-spacing-02) var(--cds-spacing-05);
   align-items: baseline;
 }

@@ -243,6 +243,7 @@ for (const vp of ["desktop", "phone"]) {
     // The card's link is stretched over it: a click anywhere on the card's title area is on it.
     const title = card.locator(".item-card__title");
     const at = async () => {
+      await title.scrollIntoViewIfNeeded();
       const b = await title.boundingBox();
       return [b.x + 8, b.y + b.height / 2];
     };
