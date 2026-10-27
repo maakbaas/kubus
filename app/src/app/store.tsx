@@ -7,6 +7,7 @@ import { DEFAULT_SPACE_ID, inSpace, withDefaultSpace, type Space } from "../doma
 import { readPref, writePref } from "../ui/localPrefs";
 import { AiService } from "./ai";
 import { ItemCache } from "./itemCache";
+import { SourcesClient } from "../data/remote/client";
 
 interface Store {
   repo: Repository;
@@ -29,11 +30,13 @@ interface Store {
   cache: ItemCache;
   /** Generates the values of AI fields (and holds the language model settings of this device). */
   ai: AiService;
+  /** The server's remote sources, which remote collections read their rows from. */
+  sources: SourcesClient;
 }
 
 const StoreContext = createContext<Store | null>(null);
 
-type State = { status: "loading" } | { status: "error"; error: string } | { status: "ready"; repo: Repository; cache: ItemCache; ai: AiService };
+type State = { status: "loading" } | { status: "error"; error: string } | { status: "ready"; repo: Repository; cache: ItemCache; ai: AiService; sources: SourcesClient };
 
 const SPACE_KEY = "kubus.space";
 
@@ -85,7 +88,7 @@ export function StoreProvider({
         };
         // Dev builds only: the repository on `window.kubus`, for debugging from the console.
         if (import.meta.env.DEV) (window as unknown as { kubus: unknown }).kubus = { repo, cache };
-        setState({ status: "ready", repo, cache, ai: new AiService(repo) });
+        setState({ status: "ready", repo, cache, ai: new AiService(repo), sources: new SourcesClient(() => repo.sync.config) });
       })
       .catch((e) => !stopped && setState({ status: "error", error: String(e?.message ?? e) }));
     return () => {
@@ -98,6 +101,7 @@ export function StoreProvider({
   const repo = ready?.repo ?? null;
   const cache = ready?.cache ?? null;
   const ai = ready?.ai ?? null;
+  const sources = ready?.sources ?? null;
 
   // Another space: the cache holds the new one's items; its bookmarks replace the old ones.
   const shownSpace = useRef(space.id);
@@ -139,10 +143,10 @@ export function StoreProvider({
   }, [repo, cache, applyCollections]);
   const value = useMemo(
     () =>
-      repo && cache && ai
-        ? { repo, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks, cache, ai }
+      repo && cache && ai && sources
+        ? { repo, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks, cache, ai, sources }
         : null,
-    [repo, cache, ai, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks],
+    [repo, cache, ai, sources, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks],
   );
   if (!value) {
     return <>{fallback({ loading: state.status === "loading", error: state.status === "error" ? state.error : undefined })}</>;

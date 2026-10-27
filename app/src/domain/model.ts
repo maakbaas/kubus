@@ -7,6 +7,7 @@
 import type { ComponentOutput } from "./components";
 import type { ItemView } from "./fieldLayout";
 import type { FilterRule } from "./query";
+import type { SourceColumn, SourceTarget } from "../../../shared/sources";
 
 export type FieldKind =
   | "string"
@@ -74,6 +75,11 @@ export interface FieldDef {
   /** For checkbox and checklist fields: a checked one's text is struck through. */
   strikeThrough: boolean;
   position: number;
+  /**
+   * In a remote collection (`Collection.source`): the source column whose values it shows; null
+   * (or absent) for a field of its own there (a component field), and in every native collection.
+   */
+  column?: string | null;
   /** Set by editableField only: an AI field edited as the text, number or Markdown it holds (it keeps its AI icon). */
   editedAi?: true;
 }
@@ -92,6 +98,11 @@ export interface Collection {
   itemViews: ItemView[];
   /** The spaces it is shown in; null = every space. */
   spaceIds: string[] | null;
+  /**
+   * Where its items come from when they aren't stored here: a table or query of one of the server's
+   * sources, read-only (domain/sources.ts). null (or absent) = its own items (a native collection).
+   */
+  source?: CollectionSource | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -115,6 +126,18 @@ export interface Item {
   updatedAt: string;
 }
 
+/** A remote collection's source: what it reads, through the Kubus server (shared/sources.ts). */
+export interface CollectionSource {
+  /** The server's name for the source, e.g. "CRM". */
+  name: string;
+  /** One of its tables, or a query in its language. */
+  target: SourceTarget;
+  /** The column that tells its rows apart (assumed unique): an item's id is made from it. */
+  key: string;
+  /** Its columns as last read from the source (their types and what they can do). */
+  columns: SourceColumn[];
+}
+
 /** A field as edited and saved: the field without what the repository fills in (its collection, its place). */
 export type FieldDraft = Omit<FieldDef, "collectionId" | "position">;
 
@@ -126,18 +149,20 @@ export interface CollectionDraft {
   icon: string | null;
   description: string;
   spaceIds: string[] | null;
+  source?: CollectionSource | null;
   /** Order in the array is the field order. Ids are client-generated. */
   fields: FieldDraft[];
 }
 
 /** A collection as a draft for saving, its fields as they are. */
-export const collectionDraft = ({ id, name, pluralName, icon, description, spaceIds, fields }: Collection): CollectionDraft => ({
+export const collectionDraft = ({ id, name, pluralName, icon, description, spaceIds, source, fields }: Collection): CollectionDraft => ({
   id,
   name,
   pluralName,
   icon,
   description,
   spaceIds,
+  source: source ?? null,
   fields: fields.map(({ collectionId: _collectionId, position: _position, ...field }) => field),
 });
 
@@ -188,7 +213,7 @@ export const observeStamp = (iso: string) => {
 /** A field with nothing but its id, name and kind set (the rest empty): for drafts, tests and stand-ins. */
 export const blankField = (id: string, name: string, kind: FieldKind, rest: Partial<FieldDef> = {}): FieldDef => ({
   id, collectionId: "", name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null,
-  choiceFilter: [], toggleIcon: null, strikeThrough: false, position: 0, ...rest,
+  choiceFilter: [], toggleIcon: null, strikeThrough: false, position: 0, column: null, ...rest,
 });
 const metaField = (id: string, name: string): FieldDef => blankField(id, name, "datetime");
 /**
@@ -198,8 +223,8 @@ const metaField = (id: string, name: string): FieldDef => blankField(id, name, "
  */
 export const META_FIELDS: FieldDef[] = [metaField("$created", "Created"), metaField("$updated", "Updated")];
 export const isMetaField = (f: { id: string }) => f.id.startsWith("$");
-/** The collection's fields plus created / updated: what pickers offer. */
-export const pickableFields = (collection: Collection): FieldDef[] => [...collection.fields, ...META_FIELDS];
+/** The collection's fields plus created / updated (which a remote collection's rows don't have): what pickers offer. */
+export const pickableFields = (collection: Collection): FieldDef[] => (collection.source ? collection.fields : [...collection.fields, ...META_FIELDS]);
 /** A field's value on an item (created / updated included). */
 export function fieldValue(item: Item, field: FieldDef): FieldValue {
   if (field.id === "$created") return item.createdAt;

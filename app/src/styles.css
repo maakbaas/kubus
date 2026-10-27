@@ -2253,6 +2253,16 @@ img[data-lightbox] {
 .view-empty {
   padding: var(--cds-spacing-05);
 }
+/* "Show more" under a remote collection's block (its rows come a page at a time), with how many are shown. */
+.block-more {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-05);
+  margin-block-start: var(--cds-spacing-05);
+}
+.block-more .helper {
+  margin-bottom: 0;
+}
 
 /* Tables */
 /* Whole image, scaled to the row height (never cropped), in a box of a fixed size: the image
@@ -3760,4 +3770,9 @@ body[data-reordering] [data-reorder-row] {
 }
 .components-scope .cds--dropdown__wrapper--inline .cds--label {
   margin: 0;
+}
+
+/* A remote collection's query (SourceSettings): code, in the code font. */
+.source-query textarea {
+  font-family: var(--cds-code-02-font-family);
 }

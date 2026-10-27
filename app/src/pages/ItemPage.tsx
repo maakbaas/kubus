@@ -1,5 +1,5 @@
 import { isEmptyValue as isEmpty } from "../domain/query";
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
 import { Add, Checkmark, Code, Edit, Information, Pin, PinFilled, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
@@ -66,6 +66,7 @@ import { findBlock, useLinkTarget } from "../ui/useLinkTarget";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { refLabelOf, useReferenceOptions, type RefOptions } from "../ui/useReferenceOptions";
+import { isRemote, rowItem, rowKey, sourceShape } from "../domain/sources";
 
 // An item's page: every field in the user's order, each read-only until clicked,
 // then edited in place (one at a time). The full form is only for new items.
@@ -133,14 +134,16 @@ function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; 
 }
 
 function ItemContent({ collection, itemId }: { collection: Collection; itemId: string }) {
-  const { repo, components, cache, spaces, ai } = useStore();
+  const { repo, components, cache, spaces, ai, sources } = useStore();
+  // A remote collection's item is a row of its source, read by its key; it is only shown.
+  const remote = isRemote(collection);
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
   const refs = useReferenceOptions(collection);
   // undefined = loading, null = not found. Opened from a list, the item is in memory already:
   // shown at once (and read again below, as always).
   const [item, setItem] = useState<Item | null | undefined>(() =>
-    cache.items.snapshot(collection.id).items?.find((o) => o.id === itemId),
+    remote ? sources.shownItem(collection.id, itemId) : cache.items.snapshot(collection.id).items?.find((o) => o.id === itemId),
   );
   /** The field being edited, and where its value was clicked (markdown starts editing there). */
   const [editing, setEditing] = useState<{ fieldId: string; start?: EditStart } | null>(null);
@@ -171,9 +174,19 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const [local, setLocal] = useState<Record<string, { collapsed?: Collapsed; layout?: ItemLayout }>>({});
   useEffect(() => setLocal({}), [collection.itemViews]);
 
+  /** Reads the item (a remote one's row) again. */
+  const load = useCallback((): Promise<Item | null> => {
+    if (!collection.source) return repo.getItem(collection, itemId);
+    const key = rowKey(itemId);
+    if (key === null) return Promise.resolve(null);
+    const shape = sourceShape(collection);
+    return sources.row(collection.source.name, { ...shape, keyValue: key }).then((row) => row && rowItem(collection, shape, row));
+  }, [repo, sources, collection, itemId]);
   useEffect(() => {
-    repo.getItem(collection, itemId).then(setItem, (e) => setError(errorMessage(e)));
-  }, [repo, collection, itemId]);
+    load().then(setItem, (e) => setError(errorMessage(e)));
+  }, [load]);
+  // "Read again" on the collection's page reads this row again too.
+  useEffect(() => (remote ? sources.onRefresh((id) => (id === null || id === collection.id) && load().then(setItem, (e) => setError(errorMessage(e)))) : undefined), [remote, sources, collection.id, load]);
   // Component fields show their computed results.
   const shown = useMemo(
     () => (item ? withComputed(collection, [item], components, refLabelOf(refs))[0] : null),
@@ -200,7 +213,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   // second's change through as if it came from elsewhere.
   const saving = useRef(0);
   useDataChanges((change) => {
-    if (change.scope === "items" && change.itemId === itemId && saving.current === 0) {
+    if (!remote && change.scope === "items" && change.itemId === itemId && saving.current === 0) {
       repo.getItem(collection, itemId).then(setItem, (e) => setError(errorMessage(e)));
     }
   });
@@ -237,8 +250,9 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const saved = (activeView && local[activeView.id]?.layout) ?? activeView?.layout ?? FULL_LAYOUT;
   const current = draft ?? saved;
   const changed = draft !== null && !sameLayout(draft, saved);
-  // The standard page keeps the blocks: they aren't fields.
-  const layout = standard ? { ...FULL_LAYOUT, blocks: current.blocks } : current;
+  // The standard page keeps the blocks: they aren't fields. A remote item is never editable.
+  const shownLayout = standard ? { ...FULL_LAYOUT, blocks: current.blocks } : current;
+  const layout = remote ? { ...shownLayout, editable: false } : shownLayout;
   /** A change to what a block shows (filter, sort, grouping, fields): unsaved until Save changes, as on collection pages. */
   const setBlock = (block: ViewBlock) => setDraft({ ...current, blocks: current.blocks.map((b) => (b.id === block.id ? block : b)) });
   const showTab = (id: string | null) => {
@@ -312,7 +326,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
     (f) => blocksById.has(f.id) || !layout.hideEmpty || editing?.fieldId === f.id || !isEmpty(shown ? fieldValue(shown, f as FieldDef) : null),
   );
   fieldIndex.current = entries.map((e) => e.id);
-  const restricted = !!item && isRestricted(collection, item, layout);
+  const restricted = !!item && isRestricted(collection, item, remote ? { ...shownLayout, editable: true } : layout);
 
   async function saveField(field: FieldDef, value: FieldValue) {
     if (!item) return;
@@ -369,7 +383,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   size="sm"
                   kind="ghost"
                   align="bottom"
-                  label={standard ? "Back to this page's layout" : "Show all fields, editable"}
+                  label={standard ? "Back to this page's layout" : remote ? "Show all fields" : "Show all fields, editable"}
                   aria-pressed={standard}
                   onClick={() => setStandard((s) => !s)}
                 >
@@ -388,7 +402,13 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                     </span>
                   </dd>
                   {/* Moving it to another space takes it out of this space's lists (the page stays open). */}
-                  {spaces.length > 1 && (
+                  {remote && (
+                    <>
+                      <dt>Read from</dt>
+                      <dd>{collection.source!.name}</dd>
+                    </>
+                  )}
+                  {!remote && spaces.length > 1 && (
                     <>
                       <dt>Space</dt>
                       <dd>
@@ -411,16 +431,22 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                       </dd>
                     </>
                   )}
-                  <dt>Created</dt>
-                  <dd>{formatDateTime(item.createdAt)}</dd>
-                  <dt>Updated</dt>
-                  <dd>{formatDateTime(item.updatedAt)}</dd>
+                  {!remote && (
+                    <>
+                      <dt>Created</dt>
+                      <dd>{formatDateTime(item.createdAt)}</dd>
+                      <dt>Updated</dt>
+                      <dd>{formatDateTime(item.updatedAt)}</dd>
+                    </>
+                  )}
                 </dl>
               </ToolbarPopover>
               {/* Subtle: a ghost icon button; the confirmation dialog carries the danger styling. */}
-              <IconButton autoAlign size="sm" kind="ghost" align="bottom" label={`Delete ${collection.name}`} onClick={remove}>
-                <TrashCan />
-              </IconButton>
+              {!remote && (
+                <IconButton autoAlign size="sm" kind="ghost" align="bottom" label={`Delete ${collection.name}`} onClick={remove}>
+                  <TrashCan />
+                </IconButton>
+              )}
               {/* The page's layout last. */}
               <ToolbarPopover label="Page layout" icon={SettingsAdjust} fit openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
                 <ItemLayoutSettings
@@ -504,7 +530,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
               {/* Pin and star choose between views: with one view it opens anyway. */}
               {itemViews.length > 1 && (
                 <>
-              <IconButton
+              {/* A remote item has nothing stored to pin a view to. */}
+              {!remote && <IconButton
                 autoAlign
                 kind="ghost"
                 size="sm"
@@ -514,7 +541,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                 onClick={() => togglePin(activeView)}
               >
                 {pinned ? <PinFilled /> : <Pin />}
-              </IconButton>
+              </IconButton>}
               <IconButton
                 autoAlign
                 kind="ghost"
@@ -610,6 +637,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                 itemId={item.id}
                 labelHidden={labelHidden}
                 readOnly={!layout.editable || isMetaField(f)}
+                fixed={remote}
               />
             );
             // A field shown without its name (the layout's choice); the wrapper adds no box. Without
@@ -871,7 +899,9 @@ function ItemLayoutSettings({
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
         />
       )}
-      <Checkbox id={`${uid}-item-layout-editable`} labelText="Fields are editable" checked={layout.editable} onChange={(_, { checked }) => onChange({ editable: checked })} />
+      {!isRemote(collection) && (
+        <Checkbox id={`${uid}-item-layout-editable`} labelText="Fields are editable" checked={layout.editable} onChange={(_, { checked }) => onChange({ editable: checked })} />
+      )}
       <Checkbox id={`${uid}-item-layout-hide-empty`} labelText="Hide empty fields" checked={layout.hideEmpty} onChange={(_, { checked }) => onChange({ hideEmpty: checked })} />
       <FieldOrderEditor
         id={`${uid}-item-layout-fields`}
@@ -899,6 +929,8 @@ interface ViewFieldProps {
   onSave(value: FieldValue): void;
   /** Shown, not editable (the page's layout). */
   readOnly?: boolean;
+  /** Nothing changes it (a remote item's): a checkbox doesn't toggle either, as it does on a read-only page. */
+  fixed?: boolean;
   /** Component fields: the label row's "Edit component" button (their value can't be clicked to edit). */
   componentButton?: ReactNode;
   /** AI fields: generate the value again. */
@@ -941,7 +973,7 @@ function EditComponentButton({ name, onEdit }: { name?: string; onEdit(): void }
 }
 
 /** One field, laid out like its input in the form: label on top, value in a read-only box. Click to edit. (Exported for the help page, which is shown as an item.) */
-export function ViewField({ field, value, refs, onEdit, onSave, readOnly, onRegenerate, componentButton, generatedAt, edited, itemId, labelHidden }: ViewFieldProps) {
+export function ViewField({ field, value, refs, onEdit, onSave, readOnly, fixed, onRegenerate, componentButton, generatedAt, edited, itemId, labelHidden }: ViewFieldProps) {
   const { components } = useStore();
   const uid = useId();
   if (field.kind === "component") {
@@ -976,7 +1008,7 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, onRege
         </div>
         <div className="checklist-row">
           <span className="checklist-box">
-            <ToggleInput icon={field.toggleIcon} id={boxId} label={field.name} checked={value === true} onChange={onSave} />
+            <ToggleInput icon={field.toggleIcon} id={boxId} label={field.name} checked={value === true} readOnly={fixed} onChange={onSave} />
           </span>
           <label htmlFor={boxId} className={`checkbox-field__name${value === true ? ` checklist-row__done${field.strikeThrough ? " checklist-row__done--struck" : ""}` : ""}`}>
             {field.name}

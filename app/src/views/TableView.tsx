@@ -234,7 +234,7 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
         start={editing.start}
         idPrefix={`cell-${item.id}`}
         onSave={async (value) => {
-          await actions.setValue(item, field, value);
+          await actions.setValue?.(item, field, value);
           onDone();
         }}
         onCancel={onDone}
@@ -512,9 +512,11 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
             <Copy />
           </IconButton>
         )}
-        <IconButton {...props} label="Delete" onClick={() => actions.remove(item)}>
-          <TrashCan />
-        </IconButton>
+        {actions.remove && (
+          <IconButton {...props} label="Delete" onClick={() => actions.remove?.(item)}>
+            <TrashCan />
+          </IconButton>
+        )}
       </>
     );
   };

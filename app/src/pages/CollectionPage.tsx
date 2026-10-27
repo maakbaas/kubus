@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Heading, IconButton, InlineNotification, Search, Tab, TabList, Tabs, TextInput } from "@carbon/react";
-import { Add, Filter, Save, Search as SearchIcon, SettingsAdjust, Star, StarFilled, TrashCan } from "@carbon/icons-react";
+import { Add, Filter, Renew, Save, Search as SearchIcon, SettingsAdjust, Star, StarFilled, TrashCan } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { newName, now, newId, type Collection } from "../domain/model";
+import { firstShownFields, isRemote } from "../domain/sources";
 import { defaultViewState, newBlock, NOTHING_COLLAPSED, sameView, withViewFilters, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
 import { NotFound } from "../ui/NotFound";
 import { CollectionIcon } from "../ui/collectionIcons";
@@ -39,8 +40,10 @@ const VIRTUAL_VIEW = "default";
 function CollectionContent({ collection }: { collection: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { repo, space } = useStore();
+  const { repo, space, sources } = useStore();
   const navigate = useNavigate();
+  // A remote collection's rows are read from its source, read-only (domain/sources.ts).
+  const remote = isRemote(collection);
   const { confirm, dialog } = useConfirm();
   // The collection's items (component fields computed), shared with every other pane showing them
   // and current from the change feed; every block of the view lists them.
@@ -52,7 +55,10 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // collection starts with an ordinary saved "All" view (in the space it was made in). A space
   // without one (the collection is shared from another space) shows `base` as a virtual "All"
   // view, stored once it is changed, renamed or joined by another view; a collection always has a view.
-  const base = useMemo(() => normalized(collection, defaultViewState(blockType("table").defaultOptions(collection))), [collection]);
+  const base = useMemo(
+    () => normalized(collection, defaultViewState(blockType("table").defaultOptions(collection), firstShownFields(collection), !isRemote(collection))),
+    [collection],
+  );
   const virtualView = useMemo<CollectionView>(
     () => ({ ...base, id: VIRTUAL_VIEW, collectionId: collection.id, spaceId: space.id, name: "All", position: 0, isDefault: false, collapsed: NOTHING_COLLAPSED, createdAt: "", updatedAt: "" }),
     [base, collection.id, space.id],
@@ -268,11 +274,12 @@ function CollectionContent({ collection }: { collection: Collection }) {
             {collection.pluralName}
           </Heading>
         }
-        subtitle={collection.description || undefined}
+        subtitle={collection.description || (remote ? `Read from ${collection.source!.name}` : undefined)}
         breadcrumbs={[{ label: "Collections", href: "#/collections" }]}
         actions={
-          // Like "New collection" and "New component": the page's main action, in its header.
-          <NewButton label={`New ${collection.name}`} onClick={() => navigate(`/collections/${collection.id}/items/new`)} />
+          // Like "New collection" and "New component": the page's main action, in its header. A
+          // remote collection's rows are the source's: none are added here.
+          !remote && <NewButton label={`New ${collection.name}`} onClick={() => navigate(`/collections/${collection.id}/items/new`)} />
         }
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
@@ -346,6 +353,12 @@ function CollectionContent({ collection }: { collection: Collection }) {
               onError={(e) => setError(errorMessage(e))}
             />
           )}
+          {/* A remote collection's rows, read again from its source (they aren't kept current by themselves). */}
+          {remote && (
+            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label={`Read again from ${collection.source!.name}`} onClick={() => sources.refresh(collection.id)}>
+              <Renew />
+            </IconButton>
+          )}
           {/* The view's own tools: search in it (a bar below), its filter (every block uses it
               unless it has its own) and its settings. A blue icon = in effect. */}
           <IconButton
@@ -393,7 +406,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
                   onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                 />
               )}
-              <Checkbox id={`${uid}-view-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
+              {!remote && (
+                <Checkbox id={`${uid}-view-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
+              )}
               <BlockListEditor
                 blocks={view.blocks}
                 onMove={moveBlocks}
@@ -440,7 +455,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
             search={search}
             place="collection"
             page={null}
-            editable={view.editable}
+            editable={view.editable && !remote}
             collapsed={active?.collapsed ?? NOTHING_COLLAPSED}
             onCollapse={(next) => setCollapsed(next).catch((e) => setError(errorMessage(e)))}
             onChange={setBlock}

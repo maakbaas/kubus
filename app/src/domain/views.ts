@@ -113,9 +113,13 @@ export function newBlock(kind: BlockKind, options: unknown, id = newId()): ViewB
   return { id, title: "", kind, filters: null, sort: defaultQuery().sort, groupBy: null, layout: BLOCK_LAYOUT, collectionId: null, options };
 }
 
-/** The unsaved starting view of every collection: a table of all items, sorted by title. */
-export function defaultViewState(defaultOptions: unknown): ViewState {
-  return { filters: [], blocks: [newBlock("table", defaultOptions, MAIN_BLOCK)], editable: true };
+/**
+ * The unsaved starting view of every collection: a table of all items, sorted by title (of these
+ * fields; null = all), its fields editable unless the collection is read-only (a remote one).
+ */
+export function defaultViewState(defaultOptions: unknown, fields: string[] | null = null, editable = true): ViewState {
+  const block = newBlock("table", defaultOptions, MAIN_BLOCK);
+  return { filters: [], blocks: [fields ? { ...block, layout: { ...block.layout, fields } } : block], editable };
 }
 
 /** Id of the first block of a view stored before blocks (and of the default view's block). */

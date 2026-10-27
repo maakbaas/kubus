@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import { Dropdown, InlineNotification, Modal, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
 import { useItemCounts } from "../app/useItemCounts";
-import { fieldKindList, fieldKinds, offeredKind } from "../domain/fieldKinds";
+import { fieldKinds, offeredKind } from "../domain/fieldKinds";
+import { isRemote, offeredKinds } from "../domain/sources";
 import { blankField, isReferenceKind, newId, collectionDraft, type FieldDef, type FieldDraft, type Collection } from "../domain/model";
 import { FieldKindLabel } from "./fieldKindIcons";
 import { FieldSettings, newKindPatch, type Target } from "./FieldSettings";
@@ -36,7 +37,8 @@ export function FieldModal({
   const { confirm, dialog } = useConfirm();
   const open = useMountedDialog();
   const [draft, setDraft] = useState<FieldDraft>(() => {
-    const { collectionId: _c, position: _p, ...own } = field ?? blankField(newId(), "", "string");
+    // A remote collection's own fields are component fields (domain/sources.ts).
+    const { collectionId: _c, position: _p, ...own } = field ?? blankField(newId(), "", isRemote(collection) ? "component" : "string");
     return own;
   });
   const update = (patch: Partial<FieldDraft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -47,10 +49,12 @@ export function FieldModal({
 
   const name = draft.name;
   const kind = draft.kind;
-  const targets = useMemo<Target[]>(() => collections.map((t) => ({ id: t.id, name: t.pluralName, icon: t.icon })), [collections]);
+  // References point at native collections only (a remote one's rows aren't stored to point at).
+  const targets = useMemo<Target[]>(() => collections.filter((t) => !isRemote(t)).map((t) => ({ id: t.id, name: t.pluralName, icon: t.icon })), [collections]);
+  const kinds = offeredKinds(collection, field);
   const taken = collection.fields.some((f) => f.id !== field?.id && f.name.trim().toLowerCase() === name.trim().toLowerCase());
   const nameError = !name.trim() ? "Name is required" : taken ? "Another field has this name" : undefined;
-  const problem = settingsProblem(draft, components);
+  const problem = settingsProblem(draft, components, isRemote(collection));
 
   async function save() {
     if (nameError || problem) {
@@ -121,9 +125,11 @@ export function FieldModal({
           id="field-modal-kind"
           titleText="Field type"
           label="Field type"
-          items={fieldKindList}
+          items={kinds}
           selectedItem={offeredKind(kind)}
-          disabled={!!field}
+          // A saved field keeps its type (its values would need converting), but for a remote
+          // collection's column shown as text, Markdown or HTML.
+          disabled={kinds.length < 2 || (!!field && !isRemote(collection))}
           itemToString={(k) => (k ? fieldKinds[k].label : "")}
           itemToElement={(k) => <FieldKindLabel kind={k} />}
           renderSelectedItem={(k) => <FieldKindLabel kind={k} />}

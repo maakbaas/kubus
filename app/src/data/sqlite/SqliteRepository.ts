@@ -9,6 +9,8 @@ import {
   type ItemLabel,
   type Collection,
   type CollectionDraft,
+  type CollectionSource,
+  type FieldDraft,
   valuesEqual,
 } from "../../domain/model";
 import type { FilterRule } from "../../domain/query";
@@ -23,6 +25,7 @@ import type { SyncEnvironment } from "../sync/environment";
 import { acceptedStatement, editedStatement, generatedStatement } from "./generated";
 import { decodeAiInput } from "../../domain/ai";
 import { draftProblem } from "../../domain/collectionDraft";
+import { columnKinds, firstShownFields, isRemote } from "../../domain/sources";
 import type { SqlClient, Statement } from "./protocol";
 
 interface CollectionRow {
@@ -33,6 +36,7 @@ interface CollectionRow {
   description: string;
   item_views: string | null;
   space_ids: string | null;
+  source: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +53,7 @@ interface FieldRow {
   code: string | null;
   output: string | null;
   frame_ratio: string | null;
+  source_column: string | null;
   position: number;
 }
 interface ComponentRow {
@@ -110,6 +115,7 @@ const toField = (r: FieldRow): FieldDef => ({
   toggleIcon: r.toggle_icon,
   strikeThrough: r.strike_through === 1,
   position: r.position,
+  column: r.source_column,
 });
 
 /** A stored view as a CollectionView (its config parsed and normalized). */
@@ -137,6 +143,14 @@ const spaceIdsOf = (json: string | null): string[] | null => {
   return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : null;
 };
 const spaceIdsJson = (ids: string[] | null) => (ids === null ? null : JSON.stringify(ids));
+/** A remote collection's source, as stored (null: a native collection). */
+const sourceJson = (draft: CollectionDraft) => (draft.source ? JSON.stringify(draft.source) : null);
+/** The column a field shows: only in a remote collection. */
+const columnOf = (draft: CollectionDraft, f: FieldDraft) => (draft.source ? (f.column ?? null) : null);
+/** Remote collections are read-only: their items are the source's. */
+function writable(collection: Collection) {
+  if (isRemote(collection)) throw new Error(`${collection.pluralName} are read from ${collection.source!.name}: they can't be changed here.`);
+}
 
 function parseJson<T>(text: string | null, fallback: T): T {
   if (!text) return fallback;
@@ -272,6 +286,7 @@ export class SqliteRepository implements Repository {
       fields: fields.filter((f) => f.collection_id === t.id).map(toField),
       itemViews: withDefaultItemView(parseItemViews(t.item_views)),
       spaceIds: spaceIdsOf(t.space_ids),
+      source: parseJson<CollectionSource | null>(t.source, null),
       createdAt: t.created_at,
       updatedAt: t.updated_at,
     }));
@@ -285,8 +300,8 @@ export class SqliteRepository implements Repository {
     const existing = await this.db.select<{ id: string }>("SELECT id FROM collections WHERE id = ?1", [draft.id]);
     if (existing.length === 0) {
       writes.push({
-        sql: "INSERT INTO collections (id, name, plural_name, icon, description, space_ids, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?7, ?6, ?6)",
-        bind: [draft.id, draft.name, draft.pluralName, draft.icon, draft.description, ts, spaceIdsJson(draft.spaceIds)],
+        sql: "INSERT INTO collections (id, name, plural_name, icon, description, space_ids, source, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?7, ?8, ?6, ?6)",
+        bind: [draft.id, draft.name, draft.pluralName, draft.icon, draft.description, ts, spaceIdsJson(draft.spaceIds), sourceJson(draft)],
       });
       // Every collection starts with an ordinary (renamable, deletable) "All" view in the space it
       // was made in: a table of all items sorted by title; its options are filled in by the block
@@ -294,7 +309,7 @@ export class SqliteRepository implements Repository {
       writes.push({
         sql: `INSERT INTO views (id, collection_id, space_id, name, kind, config, position, is_default, created_at, updated_at)
               VALUES (?1, ?2, ?5, 'All', 'table', ?3, 0, 0, ?4, ?4)`,
-        bind: [newId(), draft.id, JSON.stringify(defaultViewState(null)), ts, spaceId],
+        bind: [newId(), draft.id, JSON.stringify(defaultViewState(null, firstShownFields(draft), !draft.source)), ts, spaceId],
       });
     }
 
@@ -308,15 +323,19 @@ export class SqliteRepository implements Repository {
       const old = storedById.get(f.id);
       if (!old) {
         writes.push({
-          sql: "INSERT INTO fields (id, collection_id, name, kind, target_collection_id, component_id, code, output, frame_ratio, choice_filter, toggle_icon, strike_through, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14)",
-          bind: [f.id, draft.id, f.name, f.kind, f.targetCollectionId, componentOf(f), ...local(f, null), choices(f), f.toggleIcon, strike(f), position, ts],
+          sql: "INSERT INTO fields (id, collection_id, name, kind, target_collection_id, component_id, code, output, frame_ratio, choice_filter, toggle_icon, strike_through, source_column, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?15, ?13, ?14, ?14)",
+          bind: [f.id, draft.id, f.name, f.kind, f.targetCollectionId, componentOf(f), ...local(f, null), choices(f), f.toggleIcon, strike(f), position, ts, columnOf(draft, f)],
         });
       } else {
         // Kind, target and an AI field's output are immutable once created (values would need
         // conversion); a component field's component may change (its values are computed, not
-        // stored), and so may an AI field's prompt (its values turn stale, see domain/ai.ts).
+        // stored), and so may an AI field's prompt (its values turn stale, see domain/ai.ts). A
+        // remote collection stores no values: its column fields may change between the kinds that
+        // read the same values (text as Markdown, domain/sources.ts).
         const [code, output, frameRatio] = local(f, old);
+        const kind = draft.source && old.source_column && columnKinds(old.kind).includes(f.kind) ? f.kind : old.kind;
         if (
+          old.kind !== kind ||
           old.name !== f.name ||
           old.position !== position ||
           old.component_id !== componentOf(f) ||
@@ -328,8 +347,8 @@ export class SqliteRepository implements Repository {
           (old.strike_through ?? 0) !== strike(f)
         ) {
           writes.push({
-            sql: "UPDATE fields SET name = ?1, position = ?2, component_id = ?3, code = ?4, output = ?5, frame_ratio = ?6, choice_filter = ?7, toggle_icon = ?8, strike_through = ?9, updated_at = ?10 WHERE id = ?11",
-            bind: [f.name, position, componentOf(f), code, output, frameRatio, choices(f), f.toggleIcon, strike(f), ts, f.id],
+            sql: "UPDATE fields SET name = ?1, position = ?2, component_id = ?3, code = ?4, output = ?5, frame_ratio = ?6, choice_filter = ?7, toggle_icon = ?8, strike_through = ?9, updated_at = ?10, kind = ?12 WHERE id = ?11",
+            bind: [f.name, position, componentOf(f), code, output, frameRatio, choices(f), f.toggleIcon, strike(f), ts, f.id, kind],
           });
         }
       }
@@ -340,8 +359,8 @@ export class SqliteRepository implements Repository {
     }
 
     writes.push({
-      sql: "UPDATE collections SET name = ?1, plural_name = ?2, icon = ?3, description = ?4, space_ids = ?7, updated_at = ?5 WHERE id = ?6",
-      bind: [draft.name, draft.pluralName, draft.icon, draft.description, ts, draft.id, spaceIdsJson(draft.spaceIds)],
+      sql: "UPDATE collections SET name = ?1, plural_name = ?2, icon = ?3, description = ?4, space_ids = ?7, source = ?8, updated_at = ?5 WHERE id = ?6",
+      bind: [draft.name, draft.pluralName, draft.icon, draft.description, ts, draft.id, spaceIdsJson(draft.spaceIds), sourceJson(draft)],
     });
     for (const old of removed) {
       writes.push(...(await this.releaseFilesWhere("field_id = ?1", [old.id])));
@@ -444,6 +463,7 @@ export class SqliteRepository implements Repository {
   }
 
   async createItems(entries: NewItem[]): Promise<string[]> {
+    for (const e of entries) writable(e.collection);
     const ids = entries.map((e) => e.id ?? newId());
     // Each its own time, in order (as if created one by one).
     const stamps = entries.map(() => now());
@@ -468,6 +488,7 @@ export class SqliteRepository implements Repository {
   }
 
   async updateItem(collection: Collection, itemId: string, values: Record<string, FieldValue>): Promise<void> {
+    writable(collection);
     const current = await this.getItem(collection, itemId);
     if (!current) throw new Error("Item not found");
     const ts = now();
@@ -496,6 +517,7 @@ export class SqliteRepository implements Repository {
   }
 
   async setGenerated(collection: Collection, itemId: string, field: FieldDef, value: string | number | null, inputHash: string): Promise<void> {
+    writable(collection);
     // Not through updateItem: the item itself doesn't change (its updatedAt stays, so a prompt
     // reading it isn't stale because of this write). Nothing is written for an item gone meanwhile.
     await this.db.write([generatedStatement(itemId, field.id, field.output === "number" ? "number" : "text", value, inputHash, now())]);

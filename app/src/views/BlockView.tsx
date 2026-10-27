@@ -20,6 +20,7 @@ import { BLOCK_TYPES, blockType, normalizeBlock, type BlockPlace, type BlockType
 import { QueryEditor } from "./QueryEditor";
 import type { CollectionData } from "./useCollectionData";
 import { useItemActions } from "./useItemActions";
+import { useRemoteResult } from "./useRemoteResult";
 import { useBlockName } from "./BlockListEditor";
 
 // One block: a collection's items shown one way (its block type), with its own sort, grouping,
@@ -281,10 +282,15 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const base = blockQuery(viewFilters, block);
   const filters = useMemo(() => resolveFilterValues(base.filters, page ?? null), [base.filters, page]);
   const query = useMemo(() => ({ ...base, filters }), [filters, base.sort, base.groupBy, base.groupOrder]); // eslint-disable-line react-hooks/exhaustive-deps
-  const result = useMemo(
-    () => (data.items && uses.query ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),
-    [collection, data.items, data.ctx, uses.query, query, search],
+  // A remote collection's rows come from its source a page at a time, filtered and sorted there.
+  const remote = useRemoteResult(collection, query, search, uses.query);
+  const local = useMemo(
+    () => (!remote && data.items && uses.query ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),
+    [remote, collection, data.items, data.ctx, uses.query, query, search],
   );
+  const result = remote ? remote.result : local;
+  const items = remote ? remote.items : data.items;
+  const error = remote?.error ?? data.error;
   const fields = useMemo(() => orderFields(pickableFields(collection), block.layout.fields), [collection, block.layout.fields]);
   const preset = useMemo(() => filterPreset(collection, filters), [collection, filters]);
   const actions = useItemActions({
@@ -305,7 +311,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const toggleCollapsed = () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
   // Searching the view: a block listing items that has none matching is left out altogether.
-  if (search.trim() && uses.query && data.items && result.total === 0) return null;
+  if (search.trim() && uses.query && items && result.total === 0) return null;
   return (
     <section className="block" data-block-id={block.id}>
       <SectionHeader
@@ -334,10 +340,10 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           onOpenChange={onOpenChange}
         />
       </SectionHeader>
-      {!collapsed && data.error && <InlineNotification kind="error" title="Error" subtitle={data.error} hideCloseButton />}
+      {!collapsed && error && <InlineNotification kind="error" title="Error" subtitle={error} hideCloseButton />}
       {/* Nothing until everything is in (a fraction of a second): a placeholder table would only
           flash, shaped unlike the real one. */}
-      {!collapsed && data.items && (
+      {!collapsed && items && (
         <type.View
           collection={collection}
           result={result}
@@ -349,11 +355,22 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           refs={data.refs}
           search={search}
           actions={actions}
-          all={data.items}
+          all={items}
           page={page}
           collapsedGroups={groups}
           onGroupCollapse={(key, on) => block.groupBy && onCollapse(withGroupCollapsed(state, block.id, block.groupBy, key, on))}
         />
+      )}
+      {/* A remote collection's rows come a page at a time. */}
+      {!collapsed && items && remote?.more && (
+        <div className="block-more">
+          <Button kind="tertiary" size="sm" disabled={remote.loadingMore} onClick={remote.more}>
+            Show more
+          </Button>
+          <span className="helper">
+            {items.length} of {result.total}
+          </span>
+        </div>
       )}
       {dialog}
     </section>

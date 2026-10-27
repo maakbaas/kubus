@@ -1,15 +1,14 @@
 import { useId } from "react";
 import { Button, Heading, IconButton, Select, SelectItem, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
-import { newId, pickableFields, type FieldDef, type FieldKind, type Collection } from "../domain/model";
+import { isMetaField, newId, pickableFields, type FieldDef, type FieldKind, type Collection } from "../domain/model";
+import { canFilter, canGroup, canSort, fieldOperators } from "../domain/sources";
 import { dollarNames } from "../domain/components";
 import {
   filterCodeValue,
   filterValueProblem,
   hasSections,
-  isGroupable,
   isPageValue,
-  operatorsFor,
   PAGE_ITEM,
   pageItemField,
   sortableFields,
@@ -18,7 +17,7 @@ import {
   type GroupOrder,
   type ViewQuery,
 } from "../domain/query";
-import { periodRule } from "../domain/datePeriod";
+import { dateFields, periodRule } from "../domain/datePeriod";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { DatePeriodFilter } from "./DatePeriodFilter";
 
@@ -136,29 +135,37 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
   const setFilter = (id: string, patch: Partial<FilterRule>) =>
     onChange({ ...query, filters: query.filters.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
 
+  // Fields it can filter by (in a remote collection: its columns, by what each supports).
+  const filterable = pickableFields(collection).filter((f) => canFilter(collection, f));
+  const operators = (f: FieldDef) => fieldOperators(collection, f);
   const addFilter = () => {
-    const field = collection.fields[0];
+    const field = filterable.find((f) => !isMetaField(f));
     if (!field) return;
-    onChange({ ...query, filters: [...query.filters, { id: newId(), fieldId: field.id, operator: operatorsFor(field.kind)[0].id, value: "" }] });
+    onChange({ ...query, filters: [...query.filters, { id: newId(), fieldId: field.id, operator: operators(field)[0].id, value: "" }] });
   };
 
   // The date period's rule is edited above the others (DatePeriodFilter), not in their list.
   const period = periodRule(query.filters);
   const sort = query.sort[0];
-  const groupable = pickableFields(collection).filter((f) => isGroupable(f.kind));
+  const groupable = pickableFields(collection).filter((f) => canGroup(collection, f));
 
   return (
     <div className="query-editor">
       {part === "filter" && (
       <section>
         <Heading className="query-editor__title">{title}</Heading>
-        <DatePeriodFilter collection={collection} filters={query.filters} onChange={(filters) => onChange({ ...query, filters })} />
+        {/* Not for a remote collection without dates (its rows have no Created or Updated). */}
+        {dateFields(collection).length > 0 && (
+          <DatePeriodFilter collection={collection} filters={query.filters} onChange={(filters) => onChange({ ...query, filters })} />
+        )}
         {query.filters.length === 0 && <p className="helper">{emptyText}</p>}
         {query.filters.map((rule) => {
           if (rule === period) return null;
           const field = fieldsById.get(rule.fieldId);
           if (!field) return null;
-          const operator = operatorsFor(field.kind).find((o) => o.id === rule.operator) ?? operatorsFor(field.kind)[0];
+          const offered = operators(field);
+          if (offered.length === 0) return null;
+          const operator = offered.find((o) => o.id === rule.operator) ?? offered[0];
           return (
             <div key={rule.id} className="query-editor__rule">
               <Select
@@ -169,10 +176,10 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
                 value={rule.fieldId}
                 onChange={(e) => {
                   const next = fieldsById.get(e.target.value)!;
-                  setFilter(rule.id, { fieldId: next.id, operator: operatorsFor(next.kind)[0].id, value: "" });
+                  setFilter(rule.id, { fieldId: next.id, operator: operators(next)[0].id, value: "" });
                 }}
               >
-                {pickableFields(collection).map((f) => (
+                {filterable.map((f) => (
                   <SelectItem key={f.id} value={f.id} text={f.name} />
                 ))}
               </Select>
@@ -184,7 +191,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
                 value={operator.id}
                 onChange={(e) => setFilter(rule.id, { operator: e.target.value as FilterOperator })}
               >
-                {operatorsFor(field.kind).map((o) => (
+                {offered.map((o) => (
                   <SelectItem key={o.id} value={o.id} text={o.label} />
                 ))}
               </Select>
@@ -205,7 +212,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
             </div>
           );
         })}
-        {collection.fields.length > 0 && (
+        {filterable.some((f) => !isMetaField(f)) && (
           <Button kind="tertiary" size="sm" renderIcon={Add} iconDescription="Add filter" onClick={addFilter} className="query-editor__add">
             Add filter
           </Button>
@@ -228,7 +235,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
             }
           >
             <SelectItem value="" text="No sorting" />
-            {sortableFields(collection).map((f) => (
+            {sortableFields(collection).filter((f) => canSort(collection, f.id)).map((f) => (
               <SelectItem key={f.id} value={f.id} text={f.name} />
             ))}
           </Select>

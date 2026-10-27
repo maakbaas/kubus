@@ -14,7 +14,7 @@ import {
   TableRow,
   Tile,
 } from "@carbon/react";
-import { Copy, Edit, TrashCan } from "@carbon/icons-react";
+import { Copy, DataBase, Edit, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { useTableSort } from "../ui/useTableSort";
 import { inSpace } from "../domain/spaces";
@@ -52,7 +52,7 @@ const descriptionField = (t: Collection): FieldDef => blankField(`description-${
 const draftOf = collectionDraft;
 
 export function CollectionsPage() {
-  const { repo, collections, spaces, space } = useStore();
+  const { repo, collections, spaces, space, sources } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
   const spaceNames = (t: Collection) =>
@@ -83,6 +83,16 @@ export function CollectionsPage() {
     start?: EditStart;
   } | null>(null);
 
+  // Whether the server offers sources: then remote collections can be made.
+  const [remoteOffered, setRemoteOffered] = useState(false);
+  useEffect(() => {
+    let stale = false;
+    sources.list().then((list) => !stale && setRemoteOffered(list.length > 0), () => undefined);
+    return () => {
+      stale = true;
+    };
+  }, [sources]);
+
   const loadCounts = () =>
     repo
       .countItemsByCollection(null)
@@ -97,7 +107,10 @@ export function CollectionsPage() {
     const n = counts[collection.id] ?? 0;
     const ok = await confirm({
       title: `Delete “${collection.pluralName}”?`,
-      body: `This removes the collection, its fields and its ${countLabel(collection, n)}.`,
+      // A remote collection's rows stay where they are: only its fields and views go.
+      body: collection.source
+        ? `This removes the collection, its fields and its views. ${collection.source.name} is not affected.`
+        : `This removes the collection, its fields and its ${countLabel(collection, n)}.`,
     });
     if (!ok) return;
     try {
@@ -311,10 +324,25 @@ export function CollectionsPage() {
         title="Collections"
         subtitle="Define the kinds of things you keep track of, and the fields they have."
         actions={
-          <NewButton
-            label="New collection"
-            onClick={() => navigate("/collections/new")}
-          />
+          <>
+            {/* Only while the server offers sources to read collections from. */}
+            {remoteOffered && (
+              <IconButton
+                autoAlign
+                kind="ghost"
+                size="sm"
+                align="bottom"
+                label="New remote collection (read from a source of the server)"
+                onClick={() => navigate("/collections/new?remote=1")}
+              >
+                <DataBase />
+              </IconButton>
+            )}
+            <NewButton
+              label="New collection"
+              onClick={() => navigate("/collections/new")}
+            />
+          </>
         }
       />
       {error && (

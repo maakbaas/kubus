@@ -65,16 +65,19 @@ export function ToggleInput({
   id,
   label,
   checked,
+  readOnly,
   onChange,
 }: {
   icon: string | null;
   id: string;
   label: string;
   checked: boolean;
+  /** Shown, not toggled (a remote collection's rows). */
+  readOnly?: boolean;
   onChange(checked: boolean): void;
 }) {
   const def = icon ? TOGGLE_ICONS[icon] : undefined;
-  if (!def) return <Checkbox id={id} labelText={label} hideLabel checked={checked} onChange={(_, { checked: c }) => onChange(c)} />;
+  if (!def) return <Checkbox id={id} labelText={label} hideLabel checked={checked} readOnly={readOnly} onChange={(_, { checked: c }) => !readOnly && onChange(c)} />;
   const Icon = checked ? def.on : def.off;
   return (
     // A plain icon Button, not an IconButton: the icon needs no tooltip (its state is its look).
@@ -88,9 +91,10 @@ export function ToggleInput({
       aria-label={label}
       role="checkbox"
       aria-checked={checked}
+      aria-readonly={readOnly || undefined}
       onClick={(e) => {
         e.stopPropagation();
-        onChange(!checked);
+        if (!readOnly) onChange(!checked);
       }}
     />
   );

@@ -24,11 +24,12 @@ export interface ItemActions {
    * `edit` opens its standard page (all fields, editable) whatever its layout.
    */
   open(item: Item, mode?: OpenMode, options?: { edit?: boolean }): void;
-  remove(item: Item): void;
+  /** Deletes an item (asked first); absent where items can't be changed (a remote collection). */
+  remove?(item: Item): void;
   /** Adds a copy of an item (its title numbered: "Name 2"). */
   duplicate?(item: Item): void;
-  /** Saves one field right away (a checkbox toggle, an inline cell edit). */
-  setValue(item: Item, field: FieldDef, value: FieldValue): Promise<void>;
+  /** Saves one field right away (a checkbox toggle, an inline cell edit); absent where items are read-only. */
+  setValue?(item: Item, field: FieldDef, value: FieldValue): Promise<void>;
   /** The values that put a new item in a group (by the group's key), when grouped. */
   groupPreset?(groupKey: string): Record<string, FieldValue>;
   /** The field the items are grouped by: a new item takes its group's value, not edited. */

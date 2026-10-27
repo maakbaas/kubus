@@ -117,7 +117,8 @@ export function FieldCell({ field, item, refs, search, actions }: Props) {
           id={`${uid}-cell-${item.id}-${field.id}`}
           label={field.name}
           checked={value === true}
-          onChange={(checked) => actions.setValue(item, field, checked)}
+          readOnly={!actions.setValue}
+          onChange={(checked) => actions.setValue?.(item, field, checked)}
         />
       </span>
     );

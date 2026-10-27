@@ -4,7 +4,9 @@ import { Button, Dropdown, Form, FormGroup, IconButton, InlineNotification, Mult
 import { Add, TrashCan } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { useItemCounts } from "../app/useItemCounts";
-import { fieldKindList, fieldKinds, offeredKind } from "../domain/fieldKinds";
+import { fieldKinds, offeredKind } from "../domain/fieldKinds";
+import { isRemote, offeredKinds } from "../domain/sources";
+import { SourceSettings } from "../ui/SourceSettings";
 import {
   blankField,
   isReferenceKind,
@@ -31,8 +33,11 @@ import { useLinkTarget } from "../ui/useLinkTarget";
 export function CollectionEditorPage() {
   const { collectionId } = useParams();
   const existing = useCollection(collectionId);
+  // ?remote=1: a new remote collection (its items read from one of the server's sources).
+  const [params] = useSearchParams();
+  const remote = !collectionId && params.get("remote") === "1";
   if (collectionId && !existing) return <NotFound />;
-  return <CollectionEditor key={collectionId ?? "new"} existing={existing} />;
+  return <CollectionEditor key={collectionId ?? (remote ? "new-remote" : "new")} existing={existing} remote={remote} />;
 }
 
 type DraftField = CollectionDraft["fields"][number];
@@ -43,8 +48,21 @@ export function draftField(name = "", kind: FieldKind = "string"): FieldDraft {
   return field;
 }
 
-function initialDraft(existing?: Collection): CollectionDraft {
+function initialDraft(existing?: Collection, remote = false): CollectionDraft {
   if (existing) return collectionDraft(existing);
+  // Its fields come from the columns it reads.
+  if (remote) {
+    return {
+      id: newId(),
+      name: "",
+      pluralName: "",
+      icon: "DataBase",
+      description: "",
+      spaceIds: null,
+      source: { name: "", target: { table: { schema: null, name: "" } }, key: "", columns: [] },
+      fields: [],
+    };
+  }
   return {
     id: newId(),
     name: "",
@@ -57,13 +75,14 @@ function initialDraft(existing?: Collection): CollectionDraft {
   };
 }
 
-function CollectionEditor({ existing }: { existing?: Collection }) {
+function CollectionEditor({ existing, remote: newRemote = false }: { existing?: Collection; remote?: boolean }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
   const { repo, collections, reloadCollections, components, spaces, space } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
-  const [draft, setDraft] = useState(() => initialDraft(existing));
+  const [draft, setDraft] = useState(() => initialDraft(existing, newRemote));
+  const remote = isRemote(draft);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
@@ -84,13 +103,17 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
 
   const counts = useItemCounts();
   const persisted = useMemo(() => new Set(existing?.fields.map((f) => f.id)), [existing]);
-  const { nameError, pluralError, fieldErrors, targetErrors, valid } = draftProblems(draft, components);
+  const { nameError, pluralError, fieldErrors, targetErrors, sourceError, valid } = draftProblems(draft, components);
+  // Names typed by hand stay; until then a remote collection is named after its table.
+  const [namesTyped, setNamesTyped] = useState(!!existing);
 
-  // Reference targets: all collections, plus this one itself while it is being created.
+  // Reference targets: all native collections (a remote one's rows aren't stored to point at),
+  // plus this one itself while it is being created.
+  const native = collections.filter((t) => !isRemote(t));
   const targets: Target[] = existing
-    ? collections.map((t) => ({ id: t.id, name: t.pluralName, icon: t.icon }))
+    ? native.map((t) => ({ id: t.id, name: t.pluralName, icon: t.icon }))
     : [
-        ...collections.map((t) => ({ id: t.id, name: t.pluralName, icon: t.icon })),
+        ...native.map((t) => ({ id: t.id, name: t.pluralName, icon: t.icon })),
         { id: draft.id, name: `${draft.pluralName || "This collection"} (itself)`, icon: draft.icon },
       ];
 
@@ -105,10 +128,17 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
     noun: ["field", "fields"],
   });
 
+  /** A column's type as the source names it, for its field's helper text. */
+  const columnType = (column: string) => {
+    const type = draft.source?.columns.find((c) => c.name === column)?.type;
+    return type ? ` (${type})` : "";
+  };
+
   const removeField = (id: string) => setDraft((d) => ({ ...d, fields: d.fields.filter((f) => f.id !== id) }));
 
+  // A remote collection's own fields are component fields: its stored values are the source's.
   const addField = () =>
-    setDraft((d) => ({ ...d, fields: [...d.fields, draftField()] }));
+    setDraft((d) => ({ ...d, fields: [...d.fields, remote ? { ...draftField(), ...newKindPatch("component") } : draftField()] }));
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -149,7 +179,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
   return (
     <div className="form-page">
       <PageHeader
-        current={existing ? `Edit ${existing.pluralName}` : "New collection"}
+        current={existing ? `Edit ${existing.pluralName}` : remote ? "New remote collection" : "New collection"}
         title={
           // The header is the editor for the collection's icon and name.
           <div className="title-edit">
@@ -163,6 +193,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
               value={draft.name}
               onChange={(e) => {
                 const name = e.target.value;
+                setNamesTyped(true);
                 setDraft((d) => ({ ...d, name, pluralName: pluralTouched ? d.pluralName : suggestPlural(name) }));
               }}
               invalid={submitted && !!nameError}
@@ -182,6 +213,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
             value={draft.pluralName}
             onChange={(e) => {
               setPluralTouched(true);
+              setNamesTyped(true);
               setDraft((d) => ({ ...d, pluralName: e.target.value }));
             }}
             invalid={submitted && !!pluralError}
@@ -213,14 +245,25 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
             />
           )}
 
+          {draft.source && (
+            <FormGroup legendText="Source">
+              <SourceSettings draft={draft} isNew={!existing} namesFree={!namesTyped} problem={submitted ? sourceError : undefined} onChange={setDraft} />
+            </FormGroup>
+          )}
+
           <FormGroup legendText="Fields">
-            <p className="helper">A field's type cannot change once saved.</p>
+            <p className="helper">
+              {remote
+                ? "Its fields show the source's columns (a text column also as Markdown or HTML); fields added here are component fields."
+                : "A field's type cannot change once saved."}
+            </p>
             {draft.fields.map((f, i) => (
               <div className="field-row" key={f.id} data-field-id={f.id} {...reorder.row(i)}>
                 <TextInput size="sm"
                   id={`${uid}-field-name-${f.id}`}
                   labelText="Field name"
                   value={f.name}
+                  helperText={f.column ? `Column ${f.column}${columnType(f.column)}` : undefined}
                   onChange={(e) => updateField(f.id, { name: e.target.value })}
                   invalid={submitted && !!fieldErrors[f.id]}
                   invalidText={fieldErrors[f.id]}
@@ -230,9 +273,9 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                   id={`${uid}-field-kind-${f.id}`}
                   titleText="Field type"
                   label="Field type"
-                  items={fieldKindList}
+                  items={offeredKinds(draft, f)}
                   selectedItem={offeredKind(f.kind)}
-                  disabled={persisted.has(f.id)}
+                  disabled={offeredKinds(draft, f).length < 2 || (persisted.has(f.id) && !remote)}
                   itemToString={(k) => (k ? fieldKinds[k].label : "")}
                   itemToElement={(k) => <FieldKindLabel kind={k} />}
                   renderSelectedItem={(k) => <FieldKindLabel kind={k} />}
@@ -282,7 +325,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
               Cancel
             </Button>
             <Button size="sm" type="submit" disabled={saving}>
-              {existing ? "Save changes" : "Create collection"}
+              {existing ? "Save changes" : remote ? "Add collection" : "Create collection"}
             </Button>
           </div>
         </Stack>

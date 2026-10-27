@@ -5,6 +5,7 @@ import { useStore, useCollection } from "../app/store";
 import type { FieldValue, Collection } from "../domain/model";
 import { FieldInput, parseInputValue, toInputValue, type InputValue } from "../ui/FieldInput";
 import { NotFound } from "../ui/NotFound";
+import { isRemote } from "../domain/sources";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage } from "../ui/useConfirm";
 import { useReferenceOptions } from "../ui/useReferenceOptions";
@@ -15,7 +16,8 @@ import { useReferenceOptions } from "../ui/useReferenceOptions";
 export function NewItemPage() {
   const { collectionId } = useParams();
   const collection = useCollection(collectionId);
-  if (!collection) return <NotFound />;
+  // A remote collection's rows are its source's: none are added here.
+  if (!collection || isRemote(collection)) return <NotFound />;
   return <NewItemForm key={collection.id} collection={collection} />;
 }
 

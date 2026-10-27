@@ -37,6 +37,7 @@ CREATE TABLE collections (
   description TEXT NOT NULL DEFAULT '',
   item_views  TEXT,            -- JSON [{ id, name, layout, isDefault }]: item page layouts (fieldLayout.ts)
   space_ids   TEXT,            -- JSON array of the spaces it is shown in; null = every space
+  source      TEXT,            -- JSON { name, target, key, columns }: a remote collection's source (model.ts CollectionSource); null = its own items
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   deleted_at  TEXT
@@ -101,6 +102,8 @@ CREATE TABLE fields (
   code           TEXT,
   output         TEXT,
   frame_ratio    TEXT,
+  -- in a remote collection (collections.source): the source column it shows (null: a field of its own, a component field)
+  source_column  TEXT,
   position       INTEGER NOT NULL DEFAULT 0,
   created_at     TEXT NOT NULL,
   updated_at     TEXT NOT NULL,
