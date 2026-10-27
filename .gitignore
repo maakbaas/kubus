@@ -25,3 +25,6 @@ gui-tests/report-*/
 gui-tests/.build/
 gui-tests/.build-*/
 .playwright-cli/
+
+# Working copies of parallel agent sessions
+.claude/worktrees/
