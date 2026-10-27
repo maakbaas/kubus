@@ -48,11 +48,11 @@ for (const vp of ["desktop", "phone"]) {
     await t.check("fields with settings have them", layout.length >= 6, `${layout.length}`);
     await t.check("settings are under the field's name and type, inside its row", layout.every((l) => l.below && l.inside), JSON.stringify(layout));
     await t.check("settings start on one left edge, one per line", layout.every((l) => l.oneEdge && l.stacked), JSON.stringify(layout));
-    // The local component field: its code and output; Ask AI on the AI field, fixed once saved.
+    // The local component field: its code and output; AI prompt on the AI field, fixed once saved.
     const hours = t.page.locator(".ws-pane--active .field-row").filter({ has: t.page.locator('input[value="Hours"]') });
     await t.check("a local component shows its code", (await hours.getByRole("textbox", { name: "Code" }).inputValue()).includes("$item.Count"));
     const shelf = t.page.locator(".ws-pane--active .field-row").filter({ has: t.page.locator('input[value="Shelf"]') });
-    await t.check("an AI field's Ask AI is on and fixed", (await shelf.getByRole("switch", { name: /Ask AI/ }).getAttribute("aria-checked")) === "true" && (await shelf.getByRole("switch", { name: /Ask AI/ }).isDisabled()));
+    await t.check("an AI field's AI prompt is selected and fixed", (await shelf.getByRole("tab", { name: "AI prompt" }).getAttribute("aria-selected")) === "true" && (await shelf.getByRole("tab", { name: "AI prompt" }).isDisabled()));
     await t.check("an AI field's prompt is shown", (await shelf.getByRole("textbox", { name: "Prompt" }).inputValue()).includes("Shelf for"));
     // Code with an unknown $ name can't be saved; it says why.
     await hours.getByRole("textbox", { name: "Code" }).fill("{{ $pages / 40 }}");
@@ -119,7 +119,7 @@ test("components page: local ones by where they are used, saved as shared", asyn
 }, { viewport: "desktop" });
 
 for (const vp of ["desktop", "phone"]) {
-  test(`a component block written in its settings; add field with Ask AI @ ${vp}`, async (t) => {
+  test(`a component block written in its settings; add field with AI prompt @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(componentSpec());
     await t.open(t.listPath(ids.collections.books));
@@ -140,7 +140,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.popoverStep("typing a block's code", () => t.page.keyboard.type("{{ $items.length }} shown", { delay: 10 }), { target: code });
     await t.closeAll();
     await t.until("the block shows its result", async () => (await block.innerText()).includes("shown"));
-    // Add field (from a block's Fields) as a Component with Ask AI: prompt and the cost.
+    // Add field (from a block's Fields) as a Component with AI prompt: prompt and the cost.
     await t.open(t.listPath(ids.collections.books));
     await blockTool(t, t.page.locator(".block").first().locator(".section-header").first(), "Fields");
     await t.page.locator(".cds--popover--open").getByRole("button", { name: "Add field" }).click();
@@ -151,9 +151,9 @@ for (const vp of ["desktop", "phone"]) {
     await type.click();
     await t.settle(100);
     await t.dialogStep("field type → Component", () => t.page.getByRole("option", { name: "Component", exact: true }).first().click(), { target: type });
-    await t.dialogStep("Ask AI on", () => modal.locator(".cds--toggle__switch").first().click());
+    await t.dialogStep("AI prompt", () => modal.getByRole("tab", { name: "AI prompt" }).click());
     const outputs = (await modal.locator("select").filter({ has: t.page.locator('option[value="string"]') }).first().locator("option").allInnerTexts()).join(",");
-    await t.check("Ask AI offers only text, number and Markdown", outputs.split(",").sort().join(",") === "Markdown,Number,Text", outputs);
+    await t.check("AI prompt offers only text, number and Markdown", outputs.split(",").sort().join(",") === "Markdown,Number,Text", outputs);
     await t.check("it says what asking AI costs", (await modal.innerText()).includes("for 4 items"));
     await modal.getByRole("textbox", { name: "Prompt" }).fill("The genre of {{ $item.Title }}");
     // A shared AI component can be picked instead.
@@ -162,7 +162,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.settle(100);
     await t.check("shared AI components are offered", (await t.page.getByRole("option", { name: /Short summary/ }).count()) === 1);
     await t.page.keyboard.press("Escape");
-    await t.audit("add field dialog: Ask AI", { shotOnFail: true });
+    await t.audit("add field dialog: AI prompt", { shotOnFail: true });
     await modal.getByRole("button", { name: "Add" }).click();
     const confirm = t.page.locator(".cds--modal.is-visible", { hasText: "Add field" });
     await confirm.getByRole("button", { name: "Add field" }).click().catch(() => {});

@@ -4,6 +4,7 @@
 // fields: their ids are in the same list.
 
 import { isMetaField, labelField, type Item, type Collection } from "./model";
+import type { FilterRule } from "./query";
 import { NOTHING_COLLAPSED, parseBlock, parseCollapsed, type Collapsed, type ViewBlock } from "./views";
 
 /** The fields to show, in the layout's order (unknown ids are skipped); the default ones for null. */
@@ -28,6 +29,8 @@ export interface FieldLayout {
 /** How an item page shows its fields, and the blocks among them (their ids are in `fields`). */
 export interface ItemLayout extends FieldLayout {
   blocks: ViewBlock[];
+  /** A filter for all the page's blocks listing items, on top of their own (offered with more than one: `pageFilters` in domain/views.ts). */
+  filters: FilterRule[];
 }
 
 /** A named item page layout of a collection (shown as tabs on its item pages once there are several). */
@@ -65,7 +68,7 @@ export function parseItemViews(json: string | null): ItemView[] {
 }
 
 /** The standard item page: every field, editable, with its name. */
-export const FULL_LAYOUT: ItemLayout = { fields: null, editable: true, hiddenLabels: [], hideEmpty: false, blocks: [] };
+export const FULL_LAYOUT: ItemLayout = { fields: null, editable: true, hiddenLabels: [], hideEmpty: false, blocks: [], filters: [] };
 
 /** Two layouts show the same page. */
 export const sameLayout = (a: ItemLayout, b: ItemLayout) =>
@@ -73,7 +76,8 @@ export const sameLayout = (a: ItemLayout, b: ItemLayout) =>
   a.hideEmpty === b.hideEmpty &&
   JSON.stringify(a.fields) === JSON.stringify(b.fields) &&
   JSON.stringify(a.hiddenLabels) === JSON.stringify(b.hiddenLabels) &&
-  JSON.stringify(a.blocks) === JSON.stringify(b.blocks);
+  JSON.stringify(a.blocks) === JSON.stringify(b.blocks) &&
+  JSON.stringify(a.filters) === JSON.stringify(b.filters);
 
 /**
  * The item view an item's page opens with: the one it is pinned to, else the collection's starred
@@ -125,7 +129,8 @@ export function parseLayout(json: string | null): ItemLayout | null {
     const layout = parseFieldLayout(o);
     if (!layout) return null;
     const blocks = Array.isArray(o?.blocks) ? o.blocks.map(parseBlock).filter((b): b is ViewBlock => b !== null) : [];
-    return { ...layout, blocks };
+    const filters = Array.isArray(o?.filters) ? (o.filters as FilterRule[]) : [];
+    return { ...layout, blocks, filters };
   } catch {
     return null;
   }

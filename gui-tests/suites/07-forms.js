@@ -2,7 +2,7 @@
 // new item form, components (with failing code), spaces, bookmarks, settings, the collections
 // overview's inline editing, the icon picker.
 
-// "AI" is a Component field with "Ask AI" on (no field type of its own).
+// "AI" is a Component field with Value "AI prompt" (no field type of its own).
 const FIELD_TYPES = ["String", "Markdown", "HTML", "Number", "Date", "Date & time", "Checkbox", "Image", "Item", "List of strings", "Checklist", "List of items", "Component", "AI"];
 
 for (const vp of ["desktop", "phone", "laptop"]) {
@@ -38,13 +38,13 @@ for (const vp of ["desktop", "phone", "laptop"]) {
         await t.settle(80);
         await t.page.getByRole("option").first().click().catch(() => {});
       }
-      // A component field starts with its own, local component; AI turns "Ask AI" on.
+      // A component field starts with its own, local component; AI picks "AI prompt".
       if (type === "Component") {
         await row.getByRole("textbox", { name: "Code" }).fill("{{ $item.id }}");
         await t.settle(80);
       }
       if (type === "AI") {
-        await row.locator(".cds--toggle__switch").first().click();
+        await row.getByRole("tab", { name: "AI prompt" }).click();
         await t.settle(80);
         await row.getByRole("textbox", { name: "Prompt" }).fill("Summarise {{ $item.Title }}");
         await t.settle(80);

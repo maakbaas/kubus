@@ -160,7 +160,9 @@ a time limit); the connection string's scheme picks the connector.
   `GET /api/sources` (names, connector, capabilities, problem; never addresses),
   `GET /api/sources/<name>/tables`, `POST …/describe` (`{ target }`: a table or a query → its
   columns as Kubus field types, the primary key, the columns not read), `POST …/query` (a page of
-  rows for a view's query: filters with plain values, search, sort, grouping, the device's time zone,
+  rows for a view's query: its filter as one and / or tree of rules with plain values (`SourceCondition`,
+  built by the app: the view's or page's filter with the block's on top; `conditionText` writes it in a
+  connector's language, every rule bracketed; checked by `isSourceCondition` before a connector sees it), search, sort, grouping, the device's time zone,
   offset / limit, and with the first page the total and the groups' sizes), `POST …/row` (one row
   by its key). The app never sends SQL but for a query collection's own query.
 - *Connectors* (`server/src/connectors/`): `Connector` (check, tables, describe, query, row, close),

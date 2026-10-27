@@ -1,4 +1,4 @@
-import { Select, SelectItem, Stack, Toggle } from "@carbon/react";
+import { Select, SelectItem, Stack } from "@carbon/react";
 import {
   AI_COMPONENT_OUTPUTS,
   COMPONENT_OUTPUTS,
@@ -13,6 +13,7 @@ import {
 } from "../domain/components";
 import type { Collection } from "../domain/model";
 import { ComponentCodeEditor } from "./ComponentCodeEditor";
+import { ValueSourceSwitch } from "./ValueSourceSwitch";
 import { WriteWithAi } from "./WriteWithAi";
 
 /** What the code editor says about the built-in $ names. */
@@ -24,7 +25,7 @@ export const PROMPT_HELP =
 
 /**
  * The editor of a component's code, the same wherever a component is written: on its own page
- * (a shared one) and in place (a field's or block's own): Ask AI, Write with AI, Output, the code
+ * (a shared one) and in place (a field's or block's own): Value (code or AI prompt), Write with AI, Output, the code
  * with what kind it makes and what is wrong with it, and for HTML that fills its box its shape.
  * The page adds what belongs to a shared component around it (name, description, the preview).
  */
@@ -45,7 +46,7 @@ export function ComponentForm({
   onChange(value: ComponentCode): void;
   /** Where it is shown, when it is used in one place (its code is checked for it); none: anywhere (the page). */
   place?: ComponentPlace;
-  /** The Ask AI switch, when it is shown here (fields keep theirs with the choice of component). */
+  /** The Value switch (code or AI prompt), when it is shown here (fields keep theirs with the choice of component). */
   askAi?: { locked: boolean; help?: string };
   /** The output is fixed (an AI field's, once saved: its values are stored in that form). */
   outputLocked?: boolean;
@@ -64,15 +65,11 @@ export function ComponentForm({
   return (
     <Stack gap={5}>
       {askAi && (
-        <Toggle
-          size="sm"
-          id={`${id}-ai`}
-          labelText="Ask AI"
-          labelA="Off"
-          labelB="On: the text is a prompt; the language model writes an AI field's value"
-          toggled={ai}
-          disabled={askAi.locked}
-          onToggle={(on: boolean) => set({ ai: on, output: on && !isAiOutput(value.output) ? "string" : value.output })}
+        <ValueSourceSwitch
+          id={id}
+          ai={ai}
+          locked={askAi.locked}
+          onChange={(on) => set({ ai: on, output: on && !isAiOutput(value.output) ? "string" : value.output })}
         />
       )}
       {askAi?.help && <p className="helper field-settings__note">{askAi.help}</p>}

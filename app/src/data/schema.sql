@@ -70,7 +70,7 @@ CREATE TABLE components (
   code        TEXT NOT NULL DEFAULT '',        -- Markdown with {{ JavaScript }} sections; $item is the current item
   output      TEXT NOT NULL DEFAULT 'markdown',  -- markdown | string | number | image | html (ComponentOutput)
   frame_ratio TEXT,                              -- html that fills its box: the box's shape on pages, e.g. '4/3' (null = 16/9)
-  ai          INTEGER NOT NULL DEFAULT 0,        -- 1 = "Ask AI": the result is a prompt, for 'ai' fields
+  ai          INTEGER NOT NULL DEFAULT 0,        -- 1 = "AI prompt": the result is a prompt, for 'ai' fields
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   deleted_at  TEXT

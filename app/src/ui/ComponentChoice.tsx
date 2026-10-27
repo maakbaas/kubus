@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Button, Dropdown, Stack, Tag, Toggle } from "@carbon/react";
+import { Button, Dropdown, Stack, Tag } from "@carbon/react";
 import { useStore } from "../app/store";
 import { componentsFor, isAiOutput, placeProblem, type Component, type ComponentCode, type ComponentPlace } from "../domain/components";
 import type { Collection } from "../domain/model";
 import { ComponentForm } from "./ComponentForm";
 import { PromoteComponentModal } from "./PromoteComponentModal";
+import { ValueSourceSwitch } from "./ValueSourceSwitch";
 
 /** A place's component: a shared one it picks, or its own (local, written in place). */
 export interface ComponentRef {
@@ -18,7 +19,7 @@ const LOCAL = "local";
 /**
  * Chooses a place's component (a component field, a component block): local (a
  * component, owned by the place: output, code and "Save as shared component") or a shared one,
- * picked by name (only those that fit the place). For fields, "Ask AI" first: the component's text
+ * picked by name (only those that fit the place). For fields, the Value switch (code or AI prompt) first: the component's text
  * is then a prompt, and the field stores the model's replies; fixed once the field is saved.
  */
 export function ComponentChoice({
@@ -59,15 +60,11 @@ export function ComponentChoice({
   return (
     <Stack gap={5}>
       {ai && (
-        <Toggle
-          size="sm"
-          id={`${id}-ai`}
-          labelText="Ask AI"
-          labelA="Off"
-          labelB="On: the language model writes the value"
-          toggled={ai.value}
-          disabled={ai.locked}
-          onToggle={(on: boolean) => {
+        <ValueSourceSwitch
+          id={id}
+          ai={ai.value}
+          locked={ai.locked}
+          onChange={(on) => {
             ai.onChange(on);
             // A shared component that doesn't ask the same goes; a local one keeps its code, the output follows.
             if (local) onChange({ componentId: null, local: { ...local, ai: on, output: on && !isAiOutput(local.output) ? "string" : local.output } });
@@ -79,7 +76,7 @@ export function ComponentChoice({
         autoAlign
         size="sm"
         id={`${id}-component`}
-        titleText="Component"
+        titleText={asksAi ? "Prompt" : "Component"}
         label="Choose…"
         helperText={local ? `Local: only this ${place === "field" ? "field" : "block"} uses it.` : shared ? "Shared: a change applies everywhere it is used." : undefined}
         items={choices}
@@ -96,7 +93,7 @@ export function ComponentChoice({
       />
       {local && (
         <>
-          {/* The same editor as on a shared component's page (ComponentForm); Ask AI stays above, with the choice. */}
+          {/* The same editor as on a shared component's page (ComponentForm); the Value switch stays above, with the choice. */}
           <ComponentForm
             id={id}
             value={{ ...local, ai: asksAi }}

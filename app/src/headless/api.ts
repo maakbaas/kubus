@@ -99,14 +99,23 @@ const viewOut = ({ collapsed: _collapsed, ...view }: CollectionView) => view;
 const bookmarkOut = (b: Bookmark) => b;
 
 /** Field names in a block or filter list resolved to ids (against the collection it lists). */
-function resolveRules<R extends { fieldId: string }>(collection: Collection, rules: unknown, what: string): R[] {
+/** Rules (filters, sorts) with their fields named by id or name; an item view's filter names fields of any of its blocks' collections. */
+function resolveRules<R extends { fieldId: string }>(collections: Collection | Collection[], rules: unknown, what: string): R[] {
   if (rules === undefined || rules === null) return [];
   if (!Array.isArray(rules)) throw new HttpError(400, `\`${what}\` must be a list`);
+  const scope = Array.isArray(collections) ? collections : [collections];
+  const fieldIdOf = (name: string) => {
+    const owner = scope.find((c) => c.fields.some((f) => f.id === name || same(f.name, name))) ?? scope[0];
+    return fieldOf(owner, name).id;
+  };
   return rules.map((r) => {
     if (!r || typeof r !== "object" || typeof (r as { fieldId?: unknown }).fieldId !== "string") {
       throw new HttpError(400, `Each of \`${what}\` needs a \`fieldId\` (a field's id or name)`);
     }
-    return { id: newId(), ...(r as object), fieldId: fieldOf(collection, (r as { fieldId: string }).fieldId).id } as unknown as R;
+    const join = (r as { join?: unknown }).join;
+    if (join !== undefined && join !== "and" && join !== "or") throw new HttpError(400, "A filter's `join` is and or or");
+    const { join: _join, ...rest } = r as { join?: unknown };
+    return { id: newId(), ...rest, ...(join === "or" && { join }), fieldId: fieldIdOf((r as { fieldId: string }).fieldId) } as unknown as R;
   });
 }
 
@@ -280,6 +289,7 @@ export function createApi(repo: Repository): Router {
           hideEmpty: false,
           ...layout,
           fields: layout.fields === undefined || layout.fields === null ? null : ids(layout.fields),
+          filters: resolveRules<FilterRule>([collection, ...blocks.map((b) => (b.collectionId ? collectionOf(w, b.collectionId) : collection))], layout.filters, "layout.filters"),
           hiddenLabels: ids(layout.hiddenLabels) ?? [],
           blocks,
         },

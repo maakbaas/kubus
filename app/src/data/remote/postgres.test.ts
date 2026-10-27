@@ -6,7 +6,7 @@
 import { createRequire } from "node:module";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Connector, SourceConfig } from "../../../../server/src/connectors/connector.ts";
-import type { SourceQuery } from "../../../../shared/sources";
+import type { SourceFilter, SourceQuery } from "../../../../shared/sources";
 
 // What the test uses of pg (its types are the server's: not installed for the app).
 interface Pg {
@@ -56,7 +56,7 @@ const base = (over: Partial<SourceQuery> = {}): SourceQuery => ({
   columns: ["name", "age"],
   title: ["name", "nick"],
   untitled: "Person",
-  filters: [],
+  filter: { and: [] },
   search: "",
   sort: [{ column: "$title", direction: "asc" }],
   groupBy: null,
@@ -128,7 +128,7 @@ describe.skipIf(!ADMIN)("Postgres connector", () => {
   });
 
   it("reads values as the app stores them", async () => {
-    const r = await connector.query(base({ columns: ["score", "active", "born", "seen", "local_seen", "tags", "lucky", "feeling", "data", "span"], filters: [{ column: "id", operator: "is", value: "1" }] }));
+    const r = await connector.query(base({ columns: ["score", "active", "born", "seen", "local_seen", "tags", "lucky", "feeling", "data", "span"], filter: { column: "id", operator: "is", value: "1" } }));
     expect(r.rows).toEqual([
       {
         key: "1",
@@ -148,7 +148,7 @@ describe.skipIf(!ADMIN)("Postgres connector", () => {
   });
 
   it("filters", async () => {
-    const keys = async (filters: SourceQuery["filters"]) => (await connector.query(base({ filters }))).rows.map((r) => r.key);
+    const keys = async (filters: SourceFilter[]) => (await connector.query(base({ filter: { and: filters } }))).rows.map((r) => r.key);
     expect(await keys([{ column: "name", operator: "contains", value: "A" }])).toEqual(["1", "4"]);
     expect(await keys([{ column: "nick", operator: "contains", value: "_100%" }])).toEqual(["4"]);
     expect(await keys([{ column: "nick", operator: "notContains", value: "a" }])).toEqual(["2", "3"]);
@@ -167,6 +167,14 @@ describe.skipIf(!ADMIN)("Postgres connector", () => {
     expect(await keys([{ column: "seen", operator: "is", value: "2026-03-02" }])).toEqual(["1", "2"]);
     expect(await keys([{ column: "seen", operator: "between", value: "2026-03-01..2026-03-01" }])).toEqual(["4"]);
     expect(await keys([{ column: "seen", operator: "after", value: "2026-03-01" }])).toEqual(["1", "2"]);
+  });
+
+  it("filters by and / or trees, as the app combines a view's filter and a block's", async () => {
+    const keys = async (filter: SourceQuery["filter"]) => (await connector.query(base({ filter }))).rows.map((r) => r.key);
+    const named = { column: "name", operator: "contains", value: "A" } as const;
+    expect(await keys({ or: [named, { column: "age", operator: "gt", value: "36" }] })).toEqual(["1", "2", "4"]);
+    expect(await keys({ and: [{ or: [named, { column: "age", operator: "gt", value: "36" }] }, { column: "active", operator: "isNotChecked", value: "" }] })).toEqual(["2"]);
+    expect(await keys({ or: [] })).toEqual([]);
   });
 
   it("refuses what a column can't do", async () => {

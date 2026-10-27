@@ -12,7 +12,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   and elements with handlers keep their clicks), Number, Date, Date & time, Checkbox, Image, Item (reference
   to an item of another collection, e.g. Book → Author), List of strings, Checklist (items with a
   checkbox, stored as GFM task lines "[x] text", `domain/checklist.ts`; tables show "2/5"),
-  List of items, Component (computed from a component, or with "Ask AI" on written by a language
+  List of items, Component (computed from a component, or with Value "AI prompt" written by a language
   model from the component as a prompt: an AI field, kind `ai`).
 - **Checkbox and Checklist fields can show an icon instead of the box** (`fields.toggle_icon`, a
   key of `TOGGLE_ICONS` in `ui/ToggleInput.tsx`: heart, star, flag, bookmark, checkmark, thumbs up,
@@ -77,15 +77,15 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
     (field settings, block settings); "Show" filters the list (all, shared, local). One
     control chooses (`ui/ComponentChoice.tsx`): a dropdown of "Local" plus the shared
     components that fit; Local shows the same editor as a shared component's page
-    (`ui/ComponentForm.tsx`: Ask AI, Write with AI, Output, the code with its kind and problems, an
+    (`ui/ComponentForm.tsx`: Value (Code / AI prompt), Write with AI, Output, the code with its kind and problems, an
     HTML component's shape), the page adding name, description and the preview around it.
     Editing a shared one asks first (it applies everywhere); a local one doesn't.
-  - **Ask AI** (`components.ai`, a local field component's AI-ness is its field's kind `ai`): the
+  - **AI prompt** (the Value switch, `ui/ValueSourceSwitch.tsx`; `components.ai`, a local field component's AI-ness is its field's kind `ai`): the
     component's rendered text is a prompt; the model's reply is an AI field's value, stored (see AI
     fields). Output is then Text, Number or Markdown (`AI_COMPONENT_OUTPUTS`), and an AI component
     only fits a field (`placeProblem`: not a block, no `$now`). An AI field is a Component field with
-    "Ask AI" on (`fieldKindList` doesn't offer `ai`; the kind is fixed once saved, like an AI field's
-    output). A shared component's Ask AI is fixed while fields use it, its output while AI fields
+    "AI prompt" chosen (`fieldKindList` doesn't offer `ai`; the kind is fixed once saved, like an AI field's
+    output). A shared component's Value is fixed while fields use it, its output while AI fields
     use it; changing a shared prompt asks first, naming the fields and how many items are asked
     again. The component editor previews a prompt as it reads for an item ("Sent to the model") and
     "Try" asks the model once (nothing stored); Write with AI isn't offered for a prompt (a model writing
@@ -120,7 +120,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
     same settings (`ui/FieldSettings.tsx`): name and type in the row, what the type brings (target
     and choice filter, a checkbox's icon and strike through, the component) under it, one control
     per line, set in behind a rule as a part of that field.
-- **AI fields** (`app/src/domain/ai.ts`, field kind `ai`: a Component field with "Ask AI" on, its prompt
+- **AI fields** (`app/src/domain/ai.ts`, field kind `ai`: a Component field with Value "AI prompt", its prompt
   its own component in `fields.code` or a shared AI component, its value's form in `fields.output`; model plumbing in
   `app/src/app/ai.ts`, `platform/llm.ts`): a field whose value a language model writes per item. The prompt is a
   component (`{{ $item.Artist }}`); only `$item` exists in it (no `$now` or block
@@ -185,10 +185,9 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
 - **Blocks** (`app/src/domain/views.ts` `ViewBlock`, `app/src/views/BlockView.tsx`): a collection
   view is a filter plus a list of blocks; each block shows items one way (table, cards, a
   component) with its own sort and grouping, fields (`FieldLayout`) and
-  type options. Its filter is the view's until it is made different in its Filter menu (not
-  stacked; `blockFilters`, `withViewFilters` in `domain/views.ts`): a block whose filter is the same as the view's
-  (`null`, or edited back to equal rules) follows the view's when that changes; one that differs keeps its own,
-  and its Filter button is blue ("Own filter"). Every block, also a
+  type options. It always builds on the view's filter (on an item page, the page's): its own rules,
+  in its Filter menu, come after the view's (`ViewQuery.inherited`, `domain/filterTree.ts`), each joined by
+  And (narrows it) or Or (an exception to it); its Filter button is blue while it has rules of its own. Every block, also a
   view's only one, has a header (`ui/SectionHeader.tsx`, shared with item fields' label rows): its
   name styled as an item field's label with its block type's icon (its title, else its component's
   name or "Table" / "Cards"; set under Block settings), a collapse caret after it (clicking the name

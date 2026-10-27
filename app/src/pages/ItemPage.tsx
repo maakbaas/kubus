@@ -1,11 +1,12 @@
-import { isEmptyValue as isEmpty } from "../domain/query";
+import { isEmptyValue as isEmpty, type FilterRule } from "../domain/query";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
-import { Add, Checkmark, Code, Edit, Information, Pin, PinFilled, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
-import { NOTHING_COLLAPSED, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
+import { Add, Checkmark, Code, Edit, Filter, Information, Pin, PinFilled, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
+import { NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
+import { QueryEditor } from "../views/QueryEditor";
 import { useBlockName } from "../views/BlockListEditor";
 import { AddBlockButton, type NewBlockSpec } from "../views/AddBlockButton";
 import { useCollectionData } from "../views/useCollectionData";
@@ -134,7 +135,7 @@ function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; 
 }
 
 function ItemContent({ collection, itemId }: { collection: Collection; itemId: string }) {
-  const { repo, components, cache, spaces, ai, sources } = useStore();
+  const { repo, components, collections, cache, spaces, ai, sources } = useStore();
   // A remote collection's item is a row of its source, read by its key; it is only shown.
   const remote = isRemote(collection);
   const navigate = useNavigate();
@@ -251,10 +252,16 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const current = draft ?? saved;
   const changed = draft !== null && !sameLayout(draft, saved);
   // The standard page keeps the blocks: they aren't fields. A remote item is never editable.
-  const shownLayout = standard ? { ...FULL_LAYOUT, blocks: current.blocks } : current;
+  const shownLayout = standard ? { ...FULL_LAYOUT, blocks: current.blocks, filters: current.filters } : current;
   const layout = remote ? { ...shownLayout, editable: false } : shownLayout;
   /** A change to what a block shows (filter, sort, grouping, fields): unsaved until Save changes, as on collection pages. */
   const setBlock = (block: ViewBlock) => setDraft({ ...current, blocks: current.blocks.map((b) => (b.id === block.id ? block : b)) });
+  // With more than one block listing items the page gets a filter for all of them (on top of their own).
+  const listing = layout.blocks.filter((b) => blockType(b.kind).uses(b.options, components).query);
+  const pageScope = [...new Set(listing.map((b) => b.collectionId ?? collection.id))]
+    .map((id) => collections.find((c) => c.id === id))
+    .filter((c): c is Collection => !!c);
+  const pageFilters = listing.length > 1 ? layout.filters : [];
   const showTab = (id: string | null) => {
     setTab(id);
     setDraft(null);
@@ -447,6 +454,10 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   <TrashCan />
                 </IconButton>
               )}
+              {/* Held while a panel is open: adding a block in the layout panel mustn't move its button. */}
+              {panels.hold("pageFilter", listing.length > 1 && pageScope.length > 0) && pageScope.length > 0 && (
+                <PageFilter scope={pageScope} filters={layout.filters} onChange={(filters) => setDraft({ ...current, filters })} onOpenChange={panels.onOpenChange} />
+              )}
               {/* The page's layout last. */}
               <ToolbarPopover label="Page layout" icon={SettingsAdjust} fit openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
                 <ItemLayoutSettings
@@ -573,6 +584,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   key={block.id}
                   block={block}
                   page={page}
+                  pageFilters={pageFilters}
                   editable={layout.editable}
                   headerHidden={layout.hiddenLabels.includes(block.id)}
                   collapsed={collapsed}
@@ -760,6 +772,7 @@ function EditableTitle({ value, source, onSave }: { value: string; source: strin
 function ItemPageBlock({
   block,
   page,
+  pageFilters,
   editable,
   headerHidden,
   collapsed,
@@ -772,6 +785,8 @@ function ItemPageBlock({
 }: {
   block: ViewBlock;
   page: PageItem;
+  /** The page-wide filter (each collection takes its own fields' rules). */
+  pageFilters: FilterRule[];
   editable: boolean;
   headerHidden: boolean;
   collapsed: Collapsed;
@@ -794,6 +809,7 @@ function ItemPageBlock({
       collection={collection}
       block={block}
       page={page}
+      pageFilters={pageFilters}
       editable={editable}
       headerHidden={headerHidden}
       collapsed={collapsed}
@@ -810,12 +826,39 @@ function ItemPageBlock({
 function ItemPageBlockContent({
   collection,
   block,
+  pageFilters,
   ...rest
 }: Parameters<typeof ItemPageBlock>[0] & { collection: Collection }) {
   // Its items, shared with every pane showing that collection.
   const data = useCollectionData(collection);
   const normalized = useMemo(() => normalizeBlock(collection, block), [collection, block]);
-  return <BlockView collection={collection} data={data} block={normalized} viewFilters={null} search="" place="item" {...rest} />;
+  const applying = useMemo(() => pageFiltersFor(collection, pageFilters), [collection, pageFilters]);
+  return <BlockView collection={collection} data={data} block={normalized} viewFilters={applying} search="" place="item" {...rest} />;
+}
+
+/**
+ * The page-wide filter of an item page with several blocks listing items: the same panel as a
+ * collection view's filter (QueryEditor), over the fields of all their collections, remote ones too
+ * (their sources filter by it). A rule narrows the blocks whose collection has its field; the rest
+ * are left alone.
+ */
+function PageFilter({ scope, filters, onChange, onOpenChange }: { scope: Collection[]; filters: FilterRule[]; onChange(filters: FilterRule[]): void; onOpenChange(open: boolean): void }) {
+  const merged = pageFilterScope(scope);
+  const refs = useReferenceOptions(merged);
+  return (
+    <ToolbarPopover label={filters.length > 0 ? `Filter all blocks (${filters.length})` : "Filter all blocks"} icon={Filter} width="wide" active={filters.length > 0} onOpenChange={onOpenChange}>
+      <QueryEditor
+        collection={merged}
+        query={{ filters, sort: [], groupBy: null }}
+        refs={refs}
+        part="filter"
+        title="Filter all blocks"
+        emptyText="No filter: every block shows what its own filter lets through."
+        owners={scope}
+        onChange={(q) => onChange(q.filters)}
+      />
+    </ToolbarPopover>
+  );
 }
 
 /**

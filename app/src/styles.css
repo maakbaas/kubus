@@ -2094,9 +2094,13 @@ img[data-lightbox] {
 .query-editor__rule {
   align-self: stretch;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  /* How it joins the rules before it (And / Or, "Where" for the first), field, condition, value, remove. */
+  grid-template-columns: 4.5rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: var(--cds-spacing-03);
   align-items: center;
+}
+.query-editor__join {
+  padding-inline-start: var(--cds-spacing-05);
 }
 /* A rule's value on an item page: where it comes from (a value, or one of the page's item's), and the value. */
 /* The date period above the filter's rules: the switcher with its field beside it, then the period

@@ -48,10 +48,10 @@ is what this split avoids. Keep them current when behaviour changes.
   `components`) or local (written in place, stored with its field or block; a Markdown block's text is
   a static one); there are no `$variables`, only the built-ins. A component is a field (`$item`),
   block (`$items`, `$groups`, `$fields`, `$all`) or static component (neither), never both
-  (`componentUses`, `placeProblem` in `domain/components.ts`); with "Ask AI" (`ai`) it is the prompt of
+  (`componentUses`, `placeProblem` in `domain/components.ts`); with Value "AI prompt" (`ai`) it is the prompt of
   an AI field (kind `ai`: a Component field asking AI, its values stored).
-- **The Help page text** (`app/src/help/components.md`) documents components and `{{ }}` code (`$` names, outputs, Ask
-  AI) and is also what "Write with AI" gives the model: update it whenever that language changes.
+- **The Help page text** (`app/src/help/components.md`) documents components and `{{ }}` code (`$` names, outputs, AI
+  prompt) and is also what "Write with AI" gives the model: update it whenever that language changes.
 - **The language model key stays where it is set**: a device's own on the device (`kubus.ai`, `app/src/app/ai.ts`),
   the server's in its own settings table (`server_settings`, set in Settings → Server, used only by its proxy
   `server/src/ai.ts`). Never sync a key, put it in the synced data or send the server's to a device; the same goes for
@@ -77,7 +77,7 @@ one item's page looks (item view, whose layout is its fields and blocks); say "c
 "item view" only where both could be meant. A Block shows items one way (table, cards, a
 component) inside a view. A Component is rendering ({{ }} code over the built-in $ names), shared
 (reusable, by name) or local (written in one place): a field, block or static component by the
-built-ins it uses; with "Ask AI" its text is a prompt for an AI field.
+built-ins it uses; with "AI prompt" its text is a prompt for an AI field.
 A Space keeps items apart while sharing collections. A field's own kind is called "Field type" in the UI.
 
 ## Architecture

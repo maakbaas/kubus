@@ -68,11 +68,6 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
   useEffect(() => {
     if (!remote || !collection.source) return;
     const asked = `${key}#${refreshes}`;
-    if (request === null) {
-      // A rule that can't match: nothing to ask.
-      setLoaded({ key, rows: [], total: 0, groups: [], more: false });
-      return;
-    }
     if (!request) return;
     sources.query(collection.source.name, { ...request, offset: 0, limit: PAGE, counts: true }).then(
       (r) => current.current === asked && setLoaded({ key, rows: r.rows, total: r.total ?? r.rows.length, groups: r.groups, more: r.more }),

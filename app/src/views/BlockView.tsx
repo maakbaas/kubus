@@ -9,7 +9,7 @@ import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
 import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type QueryResult } from "../domain/query";
-import { blockFilters, blockQuery, collapsedGroups, newBlock, sameFilters, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
+import { blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { ToolbarPopover } from "../ui/ToolbarPopover";
@@ -61,7 +61,7 @@ interface MenusProps {
   block: ViewBlock;
   refs: RefOptions;
   place: BlockPlace;
-  /** The view's filter, which the block uses unless it has its own; null on item pages. */
+  /** The filter the block builds on: its view's, or its item page's (that page's rules for its collection). */
   viewFilters: FilterRule[] | null;
   /** On an item page: its collection (filter values "this item"), and choosing the listed collection. */
   page?: Collection;
@@ -88,18 +88,17 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
   const type = blockType(block.kind);
   const uses = type.uses(block.options, components);
   const query = blockQuery(viewFilters, block);
-  // A collection view's block filters as the view does until its filter is made different (then
-  // it keeps its own, marked blue); on item pages there is no view filter, only the block's.
-  const differs = block.filters !== null && (viewFilters === null ? block.filters.length > 0 : !sameFilters(block.filters, viewFilters));
+  // A block always builds on its view's (or item page's) filter; its own rules are marked blue.
   const filterCount = query.filters.length;
+  const inherits = place === "item" ? "the page's" : "the view's";
   return (
     <>
       {uses.query && (
         <ToolbarPopover
-          label={differs ? `Own filter (${filterCount})` : filterCount > 0 ? `Filter (${filterCount})` : "Filter"}
+          label={filterCount > 0 ? `Filter (${filterCount})` : "Filter"}
           icon={Filter}
           width="wide"
-          active={differs}
+          active={filterCount > 0}
           onOpenChange={onOpenChange}
         >
           <div className="view-settings">
@@ -110,7 +109,8 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
               part="filter"
               page={page}
               title="Filter"
-              onChange={(q) => onChange({ ...block, filters: blockFilters(q.filters, viewFilters) })}
+              emptyText={query.inherited?.length ? `Only ${inherits} filter. A rule joined with And narrows it, with Or lets more items in.` : "Showing all items."}
+              onChange={(q) => onChange({ ...block, filters: q.filters.length > 0 ? q.filters : null })}
             />
           </div>
         </ToolbarPopover>
@@ -281,7 +281,8 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   // Page-item values ("this item") filled in from the page's item; {{ }} code worked out.
   const base = blockQuery(viewFilters, block);
   const filters = useMemo(() => resolveFilterValues(base.filters, page ?? null), [base.filters, page]);
-  const query = useMemo(() => ({ ...base, filters }), [filters, base.sort, base.groupBy, base.groupOrder]); // eslint-disable-line react-hooks/exhaustive-deps
+  const inherited = useMemo(() => resolveFilterValues(viewFilters ?? [], page ?? null), [viewFilters, page]);
+  const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder]); // eslint-disable-line react-hooks/exhaustive-deps
   // A remote collection's rows come from its source a page at a time, filtered and sorted there.
   const remote = useRemoteResult(collection, query, search, uses.query);
   const local = useMemo(
@@ -292,7 +293,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const items = remote ? remote.items : data.items;
   const error = remote?.error ?? data.error;
   const fields = useMemo(() => orderFields(pickableFields(collection), block.layout.fields), [collection, block.layout.fields]);
-  const preset = useMemo(() => filterPreset(collection, filters), [collection, filters]);
+  const preset = useMemo(() => filterPreset(collection, filters, inherited), [collection, filters, inherited]);
   const actions = useItemActions({
     collection,
     stored: data.stored,

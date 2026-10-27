@@ -31,10 +31,10 @@ const KINDS: { kind: PeriodKind; text: string; current: string }[] = [
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString(undefined, { month: "long" }));
 
-/** The years to pick from: a century back and twenty years on from this one, and the year shown if outside. */
+/** The years to pick from: a century back up to this one (none in the future), and the year shown if outside. */
 function yearsAround(shown: number, current: number): number[] {
   const first = Math.min(shown, current - 100);
-  const last = Math.max(shown, current + 20);
+  const last = Math.max(shown, current);
   return Array.from({ length: last - first + 1 }, (_, i) => last - i);
 }
 

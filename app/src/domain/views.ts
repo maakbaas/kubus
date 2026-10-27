@@ -1,12 +1,12 @@
 // Views of a collection's items. A view (a tab of the collection page) = a filter + a list of
 // blocks. A block shows items one way (a block type: table, cards, a component, …) with its own
-// sort, grouping, fields (a FieldLayout) and type-specific options; its filter is the
-// view's unless it has its own, which replaces it (not added to it). Item pages hold blocks too
+// sort, grouping, fields (a FieldLayout) and type-specific options; its filter builds on the
+// view's (domain/filterTree.ts: its And rules narrow it, Or rules make exceptions). Item pages hold blocks too
 // (fieldLayout.ts): there a block may list another collection, filtered by the page's item.
 // The "current" view state is ephemeral; it becomes a CollectionView only when the user saves it.
 
 import { parseFieldLayout, type FieldLayout } from "./fieldLayout";
-import { newId } from "./model";
+import { newId, pickableFields, type Collection } from "./model";
 import { defaultQuery, type FilterRule, type GroupOrder, type SortRule, type ViewQuery } from "./query";
 
 /** Name of a block type in the registry (src/views/index.ts). */
@@ -17,7 +17,10 @@ export interface ViewBlock {
   /** Shown above the block; "" = none (then the type and collection name it, where named). */
   title: string;
   kind: BlockKind;
-  /** Its own filter, replacing the view's; null = the view's. Blocks on item pages always have their own. */
+  /**
+   * Its own filter, on top of the view's (or its item page's), which it always builds on: its And rules
+   * narrow that, its Or rules make exceptions to it (domain/filterTree.ts). null = none of its own.
+   */
   filters: FilterRule[] | null;
   sort: SortRule[];
   /** Field to group by, or null. */
@@ -125,31 +128,32 @@ export function defaultViewState(defaultOptions: unknown, fields: string[] | nul
 /** Id of the first block of a view stored before blocks (and of the default view's block). */
 const MAIN_BLOCK = "main";
 
-/** Whether two filters are the same rules (their ids aside). */
-export function sameFilters(a: FilterRule[], b: FilterRule[]): boolean {
-  const rules = (f: FilterRule[]) => JSON.stringify(f.map(({ fieldId, operator, value }) => [fieldId, operator, value]));
-  return rules(a) === rules(b);
+/**
+ * What a page-wide filter (an item page's) does to one collection's block: its rules on fields
+ * this collection has (and, for a native one, the pseudo fields), in addition to the block's own
+ * filter. A rule on another collection's field leaves the block alone. A remote block asks its
+ * source with them like with its own (`sourceQuery`), so they work for every connector.
+ */
+export function pageFiltersFor(collection: Collection, filters: FilterRule[]): FilterRule[] {
+  const fields = new Set(pickableFields(collection).map((f) => f.id));
+  return filters.filter((r) => fields.has(r.fieldId));
 }
 
 /**
- * A block's filter as edited: null (the view's, following it) when it is the same as the view's,
- * so a block differs from the view only while its filter does.
+ * The collection a page-wide filter is edited against: the fields of all the collections it applies
+ * to, native and remote alike (a field name several have gets its collection's name behind it).
+ * Created and Updated are offered while a native one is among them (remote rows have neither).
  */
-export const blockFilters = (filters: FilterRule[], viewFilters: FilterRule[] | null): FilterRule[] | null =>
-  viewFilters !== null && sameFilters(filters, viewFilters) ? null : filters;
-
-/**
- * The view with a new filter: the blocks whose filter was the same as the view's follow it (also
- * a copy stored equal); the ones that differ keep theirs.
- */
-export function withViewFilters<T extends { filters: FilterRule[]; blocks: ViewBlock[] }>(view: T, filters: FilterRule[]): T {
-  const follows = (b: ViewBlock) => b.filters !== null && sameFilters(b.filters, view.filters);
-  return { ...view, filters, blocks: view.blocks.map((b) => (follows(b) ? { ...b, filters: null } : b)) };
+export function pageFilterScope(collections: Collection[]): Collection {
+  const names = new Map<string, number>();
+  for (const c of collections) for (const f of c.fields) names.set(f.name, (names.get(f.name) ?? 0) + 1);
+  const fields = collections.flatMap((c) => c.fields.map((f) => ((names.get(f.name) ?? 0) > 1 ? { ...f, name: `${f.name} (${c.name})` } : f)));
+  return { ...collections[0], fields, source: collections.every((c) => c.source) ? collections[0].source : null };
 }
 
-/** The query a block runs: its own filter, else the view's (none on item pages). */
-export function blockQuery(viewFilters: FilterRule[] | null, block: ViewBlock): ViewQuery {
-  const query: ViewQuery = { filters: block.filters ?? viewFilters ?? [], sort: block.sort, groupBy: block.groupBy };
+/** The query a block runs: its own filter on top of the one it inherits (its view's or item page's). */
+export function blockQuery(inherited: FilterRule[] | null, block: ViewBlock): ViewQuery {
+  const query: ViewQuery = { filters: block.filters ?? [], inherited: inherited ?? [], sort: block.sort, groupBy: block.groupBy };
   return block.groupOrder ? { ...query, groupOrder: block.groupOrder } : query;
 }
 

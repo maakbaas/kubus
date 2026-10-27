@@ -118,7 +118,7 @@ Filter code can read `$now`, and in a block on an item's page also that page's i
 
 ## Asking AI
 
-Turn on **Ask AI** and a component becomes a **prompt**. You write it the same way. For each item, the sections are filled in and the text is sent to a language model. The model's reply becomes the value of an AI field (a Component field that asks AI) and is stored with the item.
+Switch **Value** from *Code* to *AI prompt* and a component becomes a **prompt**. You write it the same way. For each item, the sections are filled in and the text is sent to a language model. The model's reply becomes the value of an AI field (a Component field that asks AI) and is stored with the item.
 
 ```component
 Artist: {{ $item.Artist }}. Give the last name.

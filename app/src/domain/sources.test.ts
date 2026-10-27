@@ -75,13 +75,20 @@ describe("remote collections", () => {
       "UTC",
     );
     expect(q).toMatchObject({
-      filters: [{ column: "born", operator: "between", value: "2026-01-01..2026-01-31" }, { column: "name", operator: "contains", value: "ad" }],
+      filter: { and: [{ column: "born", operator: "between", value: "2026-01-01..2026-01-31" }, { column: "name", operator: "contains", value: "ad" }] },
       sort: [{ column: "$title", direction: "desc" }],
       groupBy: "tags",
       search: "x",
     });
     // A value that can't be compared matches nothing, as in the app.
-    expect(sourceQuery(people, { ...defaultQuery(), filters: [{ id: "1", fieldId: "f-born", operator: "before", value: "soon" }] }, "", "UTC")).toBeNull();
+    expect(sourceQuery(people, { ...defaultQuery(), filters: [{ id: "1", fieldId: "f-born", operator: "before", value: "soon" }] }, "", "UTC").filter).toEqual({ or: [] });
+  });
+
+  it("send the view's (or page's) filter and the block's as one and / or tree", () => {
+    const name = (value: string, join?: "or") => ({ id: value, fieldId: "f-name", operator: "contains" as const, value, ...(join && { join }) });
+    const q = sourceQuery(people, { ...defaultQuery(), inherited: [name("a")], filters: [name("b", "or"), name("c")] }, "", "UTC");
+    const leaf = (value: string) => ({ column: "name", operator: "contains", value });
+    expect(q.filter).toEqual({ and: [{ or: [leaf("a"), leaf("b")] }, leaf("c")] });
   });
 
   it("keep their fields when the columns are read again", () => {

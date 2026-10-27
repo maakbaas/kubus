@@ -4,11 +4,12 @@
 // What a field can do (filter operators, sorting, grouping) follows its column; fields of the
 // collection's own (component fields) are only shown, computed for the rows that are loaded.
 
-import { TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceRow, type SourceShape, type SourceSort } from "../../../shared/sources";
+import { TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceRow, type SourceShape, type SourceSort } from "../../../shared/sources";
 import { resolveRange } from "./datePeriod";
 import { fieldKindList } from "./fieldKinds";
 import { blankField, isMetaField, newId, type Collection, type CollectionSource, type FieldDef, type FieldKind, type FieldValue, type Item } from "./model";
-import { filterValueProblem, isGroupable, operatorsFor, TITLE, type OperatorSpec, type ViewQuery } from "./query";
+import { filterTree, mapTree } from "./filterTree";
+import { filterValueProblem, isGroupable, waitsForValue, operatorsFor, TITLE, type FilterRule, type OperatorSpec, type ViewQuery } from "./query";
 
 export const isRemote = (collection: Pick<Collection, "source">): boolean => !!collection.source;
 
@@ -124,34 +125,43 @@ export function groupLabel(field: FieldDef | undefined, key: string): string {
 }
 
 /**
- * A view's query for the source, its filter values already worked out (resolveFilterValues): rules
- * on fields it can't filter by are left out, sorts it can't sort by too (as rules on removed fields
- * are). null when a rule can't match anything (a value that can't be compared, as in the app).
+ * A view's query for the source, its filter values already worked out (resolveFilterValues): the
+ * same condition tree as the app checks its own items with (filterTree: the inherited filter, then
+ * the block's, And and Or). Rules on fields it can't filter by are left out, sorts it can't sort by
+ * too (as rules on removed fields are); a rule that can't match (a value that can't be compared, as
+ * in the app) is `{ or: [] }`, which keeps no row.
  */
+/** A rule with the field and column it filters. */
+type Paired = FilterRule & { field: FieldDef; column: string };
+
 export function sourceQuery(
   collection: Collection,
   query: ViewQuery,
   search: string,
   timeZone: string,
-): Omit<SourceQuery, "offset" | "limit" | "counts"> | null {
+): Omit<SourceQuery, "offset" | "limit" | "counts"> {
   const shape = sourceShape(collection);
   const byId = new Map(collection.fields.map((f) => [f.id, f]));
-  const filters: SourceFilter[] = [];
-  for (const rule of query.filters) {
-    const field = byId.get(rule.fieldId);
-    if (!field?.column || !fieldOperators(collection, field).some((o) => o.id === rule.operator || rule.operator === "between")) continue;
-    const value = rule.value.trim();
-    // A rule still without its value (just added) doesn't filter yet.
-    if (value === "" && operatorsFor(field.kind).find((o) => o.id === rule.operator)?.needsValue) continue;
-    if (filterValueProblem(field, rule.operator, value)) return null;
-    if (rule.operator === "between") {
-      const period = resolveRange(value);
-      if (!period) return null;
-      filters.push({ column: field.column, operator: "between", value: `${period.start}..${period.end}` });
-    } else {
-      filters.push({ column: field.column, operator: rule.operator, value });
-    }
-  }
+  // A rule still without its value (just added) doesn't filter yet; one on a column the source can't filter by neither.
+  const paired = (rules: FilterRule[]): Paired[] =>
+    rules.flatMap((rule) => {
+      const field = byId.get(rule.fieldId);
+      if (!field?.column || waitsForValue(field, rule)) return [];
+      if (!fieldOperators(collection, field).some((o) => o.id === rule.operator || rule.operator === "between")) return [];
+      return [{ ...rule, field, column: field.column }];
+    });
+  const tree = filterTree([paired(query.inherited ?? []), paired(query.filters)]);
+  const never: SourceCondition = { or: [] };
+  const filter: SourceCondition =
+    tree === null
+      ? { and: [] }
+      : mapTree<Paired, SourceFilter>(tree, (rule) => {
+          const value = rule.value.trim();
+          if (filterValueProblem(rule.field, rule.operator, value)) return never;
+          if (rule.operator !== "between") return { column: rule.column, operator: rule.operator, value };
+          const period = resolveRange(value);
+          return period ? { column: rule.column, operator: "between", value: `${period.start}..${period.end}` } : never;
+        });
   const sort: SourceSort[] = query.sort.flatMap((s) => {
     if (s.fieldId === TITLE) return [{ column: TITLE_COLUMN, direction: s.direction }];
     const field = byId.get(s.fieldId);
@@ -159,7 +169,7 @@ export function sourceQuery(
   });
   const groupField = query.groupBy ? byId.get(query.groupBy) : undefined;
   const groupBy = groupField?.column && canGroup(collection, groupField) ? groupField.column : null;
-  return { ...shape, filters, search: search.trim(), sort, groupBy, groupOrder: query.groupOrder ?? "asc", timeZone };
+  return { ...shape, filter, search: search.trim(), sort, groupBy, groupOrder: query.groupOrder ?? "asc", timeZone };
 }
 
 /** The device's time zone (its days: dates are compared and grouped by them). */

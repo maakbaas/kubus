@@ -36,15 +36,23 @@ const columns = new Map<string, PgColumn>(
 );
 const query = (over: Partial<SourceQuery> = {}): SourceQuery => ({
   target: { table: { schema: "public", name: "people" } }, key: "id", columns: ["name"], title: ["name"], untitled: "Person",
-  filters: [], search: "", sort: [], groupBy: null, groupOrder: "asc", timeZone: "UTC", offset: 0, limit: 10, counts: false, ...over,
+  filter: { and: [] }, search: "", sort: [], groupBy: null, groupOrder: "asc", timeZone: "UTC", offset: 0, limit: 10, counts: false, ...over,
 });
 
 describe("query SQL", () => {
   it("passes every value as a parameter and quotes every name", () => {
-    const { rows } = querySql(query({ target: { table: { schema: "pub\"lic", name: "peo ple" } }, filters: [{ column: "name", operator: "contains", value: "x'; DROP TABLE y; --" }] }), columns);
+    const { rows } = querySql(query({ target: { table: { schema: "pub\"lic", name: "peo ple" } }, filter: { column: "name", operator: "contains", value: "x'; DROP TABLE y; --" } }), columns);
     expect(rows.text).toContain('FROM "pub""lic"."peo ple" AS q');
     expect(rows.text).not.toContain("DROP");
     expect(rows.values).toContain("%x'; DROP TABLE y; --%");
+  });
+  it("writes a filter's and / or tree with every rule bracketed", () => {
+    const named = { column: "name", operator: "contains", value: "a" } as const;
+    const big = { column: "id", operator: "gt", value: "3" } as const;
+    const { rows } = querySql(query({ filter: { and: [{ or: [named, big] }, big] } }), columns);
+    expect(rows.text).toMatch(/WHERE \(\(\(.+ILIKE \$1\) OR \(q\."id" > \$2::numeric\)\) AND \(q\."id" > \$3::numeric\)\)/);
+    expect(querySql(query({ filter: { or: [] } }), columns).rows.text).toContain("WHERE FALSE");
+    expect(querySql(query({ filter: { and: [] } }), columns).rows.text).not.toContain("WHERE FALSE");
   });
   it("compares numbers with the column itself, unless the value doesn't fit it", () => {
     const p = new Params();

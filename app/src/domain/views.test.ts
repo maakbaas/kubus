@@ -3,7 +3,7 @@ import { codeProblem, componentUses, itemsInput, localComponents, placeProblem, 
 import { parseLayout } from "./fieldLayout";
 import type { Collection, FieldDef, Item } from "./model";
 import { defaultQuery, filterPreset, PAGE_ITEM, pageItemField, resolvePageValues, type FilterRule } from "./query";
-import { blockFilters, blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery, withViewFilters } from "./views";
+import { blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery } from "./views";
 
 const code = (text: string) => ({ code: text, ai: false });
 const field = (id: string, name: string, kind: FieldDef["kind"], targetCollectionId: string | null = null): FieldDef => ({
@@ -47,12 +47,13 @@ describe("parseViewConfig", () => {
 });
 
 describe("blocks", () => {
-  it("use the view's filter unless they have their own, which replaces it", () => {
+  it("always build on the view's filter, their own rules after it", () => {
     const view = [rule("pages", "gt", "100")];
-    const inherit = newBlock("table", null);
-    expect(blockQuery(view, inherit).filters).toBe(view);
-    expect(blockQuery(view, { ...inherit, filters: [] }).filters).toEqual([]);
-    expect(blockQuery(null, inherit).filters).toEqual([]);
+    const own = [rule("title", "contains", "a")];
+    const block = { ...newBlock("table", null), filters: own };
+    expect(blockQuery(view, block)).toMatchObject({ inherited: view, filters: own });
+    expect(blockQuery(view, newBlock("table", null))).toMatchObject({ inherited: view, filters: [] });
+    expect(blockQuery(null, block).inherited).toEqual([]);
   });
 
   it("take sort and grouping from a query, the default group order not stored", () => {
@@ -184,23 +185,25 @@ describe("collapsed blocks and groups", () => {
   });
 });
 
-describe("block filters and the view's", () => {
-  const rule = (id: string, value: string): FilterRule => ({ id, fieldId: "f1", operator: "is", value });
-  const view = (filters: FilterRule[], blocks: (FilterRule[] | null)[]) => ({
-    filters,
-    blocks: blocks.map((f, i) => ({ ...newBlock("table", null, `b${i}`), filters: f })),
+describe("page-wide filter", () => {
+  const films: Collection = { ...books, id: "f", name: "Film", fields: [{ ...field("title", "Title", "string"), id: "ftitle", collectionId: "f" }, { ...field("year", "Year", "number"), collectionId: "f" }] };
+  it("takes a collection's own rules and the pseudo fields, leaving others' alone", () => {
+    const filters = [rule("pages", "gt", "100"), rule("year", "gt", "1990"), rule("$updated", "gt", "2020-01-01")];
+    expect(pageFiltersFor(books, filters).map((r) => r.fieldId)).toEqual(["pages", "$updated"]);
+    expect(pageFiltersFor(films, filters).map((r) => r.fieldId)).toEqual(["year", "$updated"]);
   });
-
-  it("a block filter edited to the view's follows the view again", () => {
-    expect(blockFilters([rule("x", "a")], [rule("y", "a")])).toBeNull();
-    expect(blockFilters([rule("x", "b")], [rule("y", "a")])).toEqual([rule("x", "b")]);
-    // Item pages have no view filter: the block's is kept as it is.
-    expect(blockFilters([], null)).toEqual([]);
+  it("gives a remote collection its columns' rules (no Created / Updated: remote rows have none)", () => {
+    const remote: Collection = { ...films, source: { name: "db" } as unknown as Collection["source"] };
+    expect(pageFiltersFor(remote, [rule("year", "gt", "1990"), rule("$updated", "gt", "2020-01-01")]).map((r) => r.fieldId)).toEqual(["year"]);
   });
-
-  it("a changed view filter takes the blocks that were the same along, not the ones that differ", () => {
-    const next = withViewFilters(view([rule("v", "a")], [null, [rule("c", "a")], [rule("d", "b")]]), [rule("v", "z")]);
-    expect(next.filters).toEqual([rule("v", "z")]);
-    expect(next.blocks.map((b) => b.filters)).toEqual([null, null, [rule("d", "b")]]);
+  it("edits against all the collections' fields, naming a clash by its collection", () => {
+    const names = pageFilterScope([books, films]).fields.map((f) => f.name);
+    expect(names).toContain("Pages");
+    expect(names).toContain("Year");
+  });
+  it("is part of a stored item layout", () => {
+    const layout = parseLayout(JSON.stringify({ fields: null, blocks: [], filters: [rule("pages", "gt", "1")] }));
+    expect(layout?.filters).toEqual([rule("pages", "gt", "1")]);
+    expect(parseLayout(JSON.stringify({ fields: null }))?.filters).toEqual([]);
   });
 });

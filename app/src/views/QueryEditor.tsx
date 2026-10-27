@@ -33,6 +33,8 @@ interface Props {
   /** Filter part: its heading and what an empty filter means (defaults: a view's). */
   title?: string;
   emptyText?: string;
+  /** A page-wide filter over several collections (`collection` holds all their fields): each field's operators are its own collection's (a remote one's, what its column supports). */
+  owners?: Collection[];
   onChange(query: ViewQuery): void;
 }
 
@@ -128,7 +130,7 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
  * Edits part of a view's query: its filters, or its sort and grouping (each shown in its own
  * toolbar popover). Built only on the query registry (domain/query.ts).
  */
-export function QueryEditor({ collection, query, refs, part, noGroup, page, title = "Filter", emptyText = "Showing all items.", onChange }: Props) {
+export function QueryEditor({ collection, query, refs, part, noGroup, page, title = "Filter", emptyText = "Showing all items.", owners, onChange }: Props) {
   // Element ids unique per editor: several item lists (tabs, panes) can be open at once.
   const uid = useId();
   const fieldsById = new Map(pickableFields(collection).map((f) => [f.id, f]));
@@ -136,8 +138,9 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
     onChange({ ...query, filters: query.filters.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
 
   // Fields it can filter by (in a remote collection: its columns, by what each supports).
-  const filterable = pickableFields(collection).filter((f) => canFilter(collection, f));
-  const operators = (f: FieldDef) => fieldOperators(collection, f);
+  const ownerOf = (f: FieldDef) => owners?.find((c) => c.fields.some((x) => x.id === f.id)) ?? collection;
+  const filterable = pickableFields(collection).filter((f) => canFilter(ownerOf(f), f));
+  const operators = (f: FieldDef) => fieldOperators(ownerOf(f), f);
   const addFilter = () => {
     const field = filterable.find((f) => !isMetaField(f));
     if (!field) return;
@@ -146,6 +149,10 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
 
   // The date period's rule is edited above the others (DatePeriodFilter), not in their list.
   const period = periodRule(query.filters);
+  // Each rule says how it joins what comes before it (the filter it builds on, the rules above):
+  // And narrows, Or lets more items in. The first rule of a filter building on nothing has nothing to join.
+  const listed = query.filters.filter((r) => r !== period);
+  const joinsFirst = (query.inherited?.length ?? 0) > 0;
   const sort = query.sort[0];
   const groupable = pickableFields(collection).filter((f) => canGroup(collection, f));
 
@@ -168,6 +175,21 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
           const operator = offered.find((o) => o.id === rule.operator) ?? offered[0];
           return (
             <div key={rule.id} className="query-editor__rule">
+              {rule === listed[0] && !joinsFirst ? (
+                <span className="query-editor__join">Where</span>
+              ) : (
+                <Select
+                  id={`${uid}-filter-join-${rule.id}`}
+                  labelText="Join"
+                  hideLabel
+                  size="sm"
+                  value={rule.join ?? "and"}
+                  onChange={(e) => setFilter(rule.id, { join: e.target.value === "or" ? "or" : undefined })}
+                >
+                  <SelectItem value="and" text="And" />
+                  <SelectItem value="or" text="Or" />
+                </Select>
+              )}
               <Select
                 id={`${uid}-filter-field-${rule.id}`}
                 labelText="Field"

@@ -1,4 +1,4 @@
-import { MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
+import { conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
 
 // The Postgres connector's SQL: how a column of each type is read, and the statements a query
@@ -326,9 +326,10 @@ function selectSql(shape: SourceShape, columns: Map<string, PgColumn>): string {
   return [`${ref(column(columns, shape.key))}::text AS "$key"`, ...shape.columns.map((name, i) => `${valueSql(column(columns, name))} AS "v${i}"`)].join(", ");
 }
 
-/** The conditions of a query (filters and search), "TRUE" for none. */
+/** The conditions of a query (its filter's and / or tree, and search), "TRUE" for none. */
 function whereSql(query: SourceQuery, columns: Map<string, PgColumn>, p: Params): string {
-  const conditions = query.filters.map((rule) => filterSql(column(columns, rule.column), rule, p, query.timeZone));
+  const filter = conditionText(query.filter, (rule) => filterSql(column(columns, rule.column), rule, p, query.timeZone), { and: "AND", or: "OR", all: "TRUE", none: "FALSE" });
+  const conditions = filter === "TRUE" ? [] : [filter];
   const needle = query.search.trim();
   if (needle) {
     const pattern = p.add(containing(needle));

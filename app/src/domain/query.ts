@@ -6,6 +6,7 @@ import { dollarNames, ERROR_PREFIX, fieldLookup, render, splitWarnings, type Ref
 import { checklistItems } from "./checklist";
 import { resolveRange } from "./datePeriod";
 import { formatDate, htmlPlainText } from "./fieldKinds";
+import { filterTree, holds, requiredRules } from "./filterTree";
 import { markdownPlainText } from "./markdownExcerpt";
 import { fieldValue, itemLabel, pickableFields, type FieldDef, type FieldKind, type FieldValue, type Item, type Collection } from "./model";
 
@@ -35,6 +36,8 @@ export interface FilterRule {
   operator: FilterOperator;
   /** The comparison value as entered (text, number, yyyy-mm-dd, yyyy-mm-dd..yyyy-mm-dd or an item id). */
   value: string;
+  /** How it joins the rules before it (and the filter it builds on): "or" lets more items in; absent = and, narrowing (domain/filterTree.ts). */
+  join?: "or";
 }
 
 export interface SortRule {
@@ -44,6 +47,8 @@ export interface SortRule {
 
 export interface ViewQuery {
   filters: FilterRule[];
+  /** The filter these build on (a block's view's, or its item page's): applied first, `filters` after it. */
+  inherited?: FilterRule[];
   sort: SortRule[];
   /** Field to group by, or null. */
   groupBy: string | null;
@@ -303,9 +308,10 @@ export function filterValueProblem(field: FieldDef, operator: FilterOperator, va
  * The values a new item needs to pass the reference rules of a filter ("Author is X" sets X), so
  * an item added to a filtered list shows up in it.
  */
-export function filterPreset(collection: Collection, filters: FilterRule[]): Record<string, FieldValue> {
+export function filterPreset(collection: Collection, filters: FilterRule[], inherited: FilterRule[] = []): Record<string, FieldValue> {
   const preset: Record<string, FieldValue> = {};
-  for (const rule of filters) {
+  // Only rules every listed item meets (an Or rule's alternatives aren't required).
+  for (const rule of requiredRules(filterTree([inherited, filters]))) {
     const field = collection.fields.find((f) => f.id === rule.fieldId);
     if (!field || rule.operator !== "is" || !rule.value || rule.value.startsWith(PAGE_ITEM)) continue;
     if (field.kind === "item") preset[field.id] = rule.value;
@@ -402,18 +408,25 @@ function compareKeys(a: string | number | null, b: string | number | null): numb
 }
 
 /**
- * Whether an item passes every filter, as a test for many items: rules are paired with their
- * fields once (rules on fields that no longer exist are ignored).
+ * Whether an item passes a filter (and the one it builds on: `inherited`), as a test for many
+ * items: rules are paired with their fields once; a rule on a field that no longer exists, or
+ * without its value yet, doesn't take part (domain/filterTree.ts).
  */
-export function filterOf(collection: Collection, filters: FilterRule[], ctx: QueryContext): (item: Item) => boolean {
+export function filterOf(collection: Collection, filters: FilterRule[], ctx: QueryContext, inherited: FilterRule[] = []): (item: Item) => boolean {
   const byId = new Map(pickableFields(collection).map((f) => [f.id, f]));
   // {{ }} code not worked out yet (a reference field's choice filter: no page) is worked out here.
-  const rules = resolveFilterValues(filters, null).flatMap((rule) => {
-    const field = byId.get(rule.fieldId);
-    return field ? [{ rule, field }] : [];
-  });
-  return (item) => rules.every(({ rule, field }) => matches(field, fieldValue(item, field), rule, ctx));
+  const paired = (rules: FilterRule[]) =>
+    resolveFilterValues(rules, null).flatMap((rule) => {
+      const field = byId.get(rule.fieldId);
+      return field && !waitsForValue(field, rule) ? [{ ...rule, field }] : [];
+    });
+  const tree = filterTree([paired(inherited), paired(filters)]);
+  return (item) => holds(tree, (rule) => matches(rule.field, fieldValue(item, rule.field), rule, ctx));
 }
+
+/** A rule still without the value its operator needs (just added): it doesn't filter yet. */
+export const waitsForValue = (field: FieldDef, rule: FilterRule) =>
+  rule.value.trim() === "" && !!operatorsFor(field.kind).find((o) => o.id === rule.operator)?.needsValue;
 
 /** Applies a query (plus an optional free-text search) to a collection's items. */
 export function applyQuery(
@@ -426,7 +439,7 @@ export function applyQuery(
   const fieldsById = new Map(pickableFields(collection).map((f) => [f.id, f]));
   const needle = search.trim().toLowerCase();
 
-  const passes = filterOf(collection, query.filters, ctx);
+  const passes = filterOf(collection, query.filters, ctx, query.inherited);
   const filtered = items.filter((item) => {
     if (!passes(item)) return false;
     if (!needle) return true;

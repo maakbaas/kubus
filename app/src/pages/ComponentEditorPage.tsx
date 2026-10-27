@@ -145,7 +145,7 @@ export function ComponentEditorPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-          {/* The same editor as where a component is written in place (ComponentForm). Ask AI is
+          {/* The same editor as where a component is written in place (ComponentForm). The Value switch is
               fixed while fields use it; an AI component's output while AI fields do. Write with AI
               also fills in the description (and the name, while empty). */}
           <ComponentForm

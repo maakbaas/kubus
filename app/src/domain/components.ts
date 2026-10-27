@@ -59,7 +59,7 @@ export interface ComponentCode {
   /** HTML that fills its box (a map, a chart): that box's shape on pages, e.g. "4/3"; null = 16:9. */
   frameRatio: string | null;
   /**
-   * "Ask AI": the rendered text is a prompt, and the model's reply is the value (only for AI
+   * "AI prompt": the rendered text is a prompt, and the model's reply is the value (only for AI
    * fields, stored per item; outputs text, a number or Markdown). Fixed once a field uses it.
    */
   ai: boolean;

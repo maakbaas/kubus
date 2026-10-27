@@ -17,11 +17,23 @@ Extension points are registries, not special cases in pages:
   checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
   nothing, never the wrong items. The value input is text for every kind (the braces must be typable);
   under it, what the code works out to ("= true").
+- **And / Or** (`app/src/domain/filterTree.ts`): each rule says how it joins what comes before it
+  (`FilterRule.join`: absent = And, narrowing; "or" lets more items in), read in order without precedence
+  (`A or B and C` = `(A or B) and C`); the first rule of a filter building on nothing shows "Where". A
+  block always builds on its view's filter (on an item page, the page-wide one): its rules come after it
+  (`ViewQuery.inherited`, `blockQuery`), so its And rules tighten the view's filter and its Or rules make
+  exceptions to it; a block's Filter button is blue while it has rules of its own. A filter's date period
+  frames that filter (and-ed with its other rules and what it builds on), so a block's Or can step outside
+  the view's period but not its own. A rule without its value yet, or on a missing field, takes no part
+  (`waitsForValue`), so a half-written Or never lets everything through. The result is one condition tree
+  (`filterTree`), checked locally (`filterOf`) and sent as is to remote sources (`sourceQuery`,
+  `SourceCondition`), so every connector filters the same way; a new item is preset only from rules every
+  listed item meets (`requiredRules`).
 - **Date period** (`app/src/domain/datePeriod.ts`, `views/DatePeriodFilter.tsx`): the top of every
   filter panel. A content switcher (Day, Week, Month, Year, Range) sets the current day / week
   (Sunday to Saturday, like the date pickers' calendars; week 1 holds 1 January) / month / year in
   one click; ‹ › step to the one before / after (a range by its length), the calendar button back
-  to the current one, × clears it; Range shows two date inputs. It goes by the first date or date &
+  to the current one, × clears it; Range shows two date inputs. The year dropdown runs from a century back to the current year, never into the future (the year shown stays if outside). It goes by the first date or date &
   time field (none: Updated), or one picked beside the switcher (Created and Updated included). It
   is stored as the filter's first `between` rule, which the rule list leaves out (a date & time by
   its local day). The current day, week, month or year is stored counted from today (`week+0`,
@@ -30,6 +42,7 @@ Extension points are registries, not special cases in pages:
   (`yyyy-mm-dd..yyyy-mm-dd`, both included; what they are, a week, a month, …, follows from them).
   The current period can't be kept as fixed days, by design. `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.
+- **Page-wide filter** (item pages): with more than one block listing items (`uses.query`), the page toolbar gets "Filter all blocks", the collection views' filter panel (`QueryEditor`, date period included) over the fields of all those collections (`pageFilterScope`; a name several share gets its collection behind it; remote collections included: a remote block hands the rules to its source like its own filter, `sourceQuery`, connector-neutral, so a block of a remote table can show this month's rows). It is `ItemLayout.filters`, unsaved until Save changes like a block's filter. Like a view's filter, each block builds on it (And / Or above): a block takes the rules on its collection's fields and, if native, the pseudo fields (`pageFiltersFor`) and ignores the rest. With one block, or none, it doesn't apply.
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,
   fields with labels / hide empty), the `View` component, optional `OptionsEditor` in

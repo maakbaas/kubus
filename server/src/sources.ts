@@ -1,5 +1,5 @@
 import { HttpError, json, readJson, type ApiRequest, type Router } from "../../shared/router.ts";
-import type { SourceInfo, SourceQuery, SourceRowRequest, SourceTarget } from "../../shared/sources.ts";
+import { isSourceCondition, type SourceInfo, type SourceQuery, type SourceRowRequest, type SourceTarget } from "../../shared/sources.ts";
 import { SourceError, type Connector, type SourceConfig } from "./connectors/connector.ts";
 import { connectorFor } from "./connectors/index.ts";
 
@@ -114,7 +114,7 @@ export class Sources {
       .add("POST", "/api/sources/{name}/query", async (req, params) => {
         const query = await body<SourceQuery>(
           req,
-          (b) => isShape(b) && Array.isArray(b.filters) && Array.isArray(b.sort) && typeof b.timeZone === "string" && typeof b.offset === "number" && typeof b.limit === "number",
+          (b) => isShape(b) && isSourceCondition(b.filter) && Array.isArray(b.sort) && typeof b.timeZone === "string" && typeof b.offset === "number" && typeof b.limit === "number",
         );
         return json(200, await this.on(params.name, (c) => c.query({ ...query, search: String(query.search ?? ""), groupOrder: query.groupOrder ?? "asc" })));
       })

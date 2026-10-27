@@ -6,7 +6,7 @@ import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { newName, now, newId, type Collection } from "../domain/model";
 import { firstShownFields, isRemote } from "../domain/sources";
-import { defaultViewState, newBlock, NOTHING_COLLAPSED, sameView, withViewFilters, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
+import { defaultViewState, newBlock, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
 import { NotFound } from "../ui/NotFound";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { BookmarkButton } from "../ui/BookmarkButton";
@@ -389,7 +389,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
               query={{ filters: view.filters, sort: [], groupBy: null }}
               refs={data.refs}
               part="filter"
-              onChange={(q) => setView((v) => withViewFilters(v, q.filters))}
+              onChange={(q) => setView((v) => ({ ...v, filters: q.filters }))}
             />
           </ToolbarPopover>
           <ToolbarPopover label="View settings" icon={SettingsAdjust} width="narrow" openRequest={renameRequest} onOpenChange={panels.onOpenChange}>

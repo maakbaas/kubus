@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FieldDef, Item, Collection } from "./model";
-import { applyQuery, defaultQuery, filterCodeValue, filterValueProblem, resolveFilterValues, type FilterRule, type QueryContext } from "./query";
+import { applyQuery, defaultQuery, filterCodeValue, filterPreset, filterValueProblem, resolveFilterValues, type FilterRule, type QueryContext } from "./query";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], position: number): FieldDef => ({
   id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position,
@@ -44,6 +44,48 @@ describe("applyQuery", () => {
     const is = (value: string) => ids(applyQuery(withRead, items, { ...defaultQuery(), filters: [{ id: "f", fieldId: "read", operator: "is" as const, value }] }, ctx));
     expect(is("true")).toEqual(["1"]);
     expect(is(" False ")).toEqual(["2", "3"]);
+  });
+});
+
+describe("And and Or", () => {
+  const r = (fieldId: string, operator: FilterRule["operator"], value: string, join?: "or"): FilterRule => ({ id: `${fieldId}${value}`, fieldId, operator, value, ...(join && { join }) });
+  const run = (filters: FilterRule[], inherited: FilterRule[] = []) => ids(applyQuery(collection, books, { ...defaultQuery(), filters, inherited }, ctx));
+
+  it("reads a filter's rules in order: And narrows, Or lets more in", () => {
+    expect(run([r("title", "contains", "ar"), r("pages", "gt", "200")])).toEqual(["1"]);
+    expect(run([r("title", "is", "Alpha"), r("pages", "gt", "200", "or")])).toEqual(["2", "1"]);
+    // (Alpha or Bravo) and more than 100 pages: no precedence, in order.
+    expect(run([r("title", "is", "Alpha"), r("title", "is", "Bravo", "or"), r("pages", "gt", "100")])).toEqual(["3"]);
+  });
+
+  it("builds a block's filter on the view's: its And rules tighten it, its Or rules make exceptions", () => {
+    const view = [r("pages", "gt", "100")];
+    expect(run([], view)).toEqual(["3", "1"]);
+    expect(run([r("title", "is", "Bravo")], view)).toEqual(["3"]);
+    expect(run([r("title", "is", "Alpha", "or")], view)).toEqual(["2", "3", "1"]);
+    // The view's own Or is kept together: (more than 100 or Alpha) and not Charlie.
+    expect(run([r("title", "isNot", "Charlie")], [...view, r("title", "is", "Alpha", "or")])).toEqual(["2", "3"]);
+  });
+
+  it("frames each filter with its date period", () => {
+    const dated: Collection = { ...collection, fields: [...collection.fields, field("read", "Read", "date", 2)] };
+    const items = [book("1", "Charlie", 300), book("2", "Alpha", null), book("3", "Bravo", 120)].map((b, i) => ({ ...b, values: { ...b.values, read: `2026-0${i + 1}-15` } }));
+    const january = r("read", "between", "2026-01-01..2026-01-31");
+    const q = (filters: FilterRule[], inherited: FilterRule[] = []) => ids(applyQuery(dated, items, { ...defaultQuery(), filters, inherited }, ctx));
+    // Or within the filter stays inside its period: January and (Alpha or Charlie).
+    expect(q([january, r("title", "is", "Alpha"), r("title", "is", "Charlie", "or")])).toEqual(["1"]);
+    // A block's Or is an exception to the view's period.
+    expect(q([r("title", "is", "Alpha", "or")], [january])).toEqual(["2", "1"]);
+  });
+
+  it("leaves a rule without its value out, so a new Or rule doesn't let everything through", () => {
+    expect(run([r("pages", "gt", "200"), r("title", "contains", "", "or")])).toEqual(["1"]);
+  });
+
+  it("presets a new item only with what every listed item meets", () => {
+    const linked: Collection = { ...collection, fields: [...collection.fields, { ...field("author", "Author", "item", 2), targetCollectionId: "a" }] };
+    expect(filterPreset(linked, [r("author", "is", "x")], [r("pages", "gt", "1")])).toEqual({ author: "x" });
+    expect(filterPreset(linked, [r("author", "is", "x", "or")], [r("pages", "gt", "1")])).toEqual({});
   });
 });
 

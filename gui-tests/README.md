@@ -144,7 +144,7 @@ strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 | `20-mobile-keyboard` | a field in a popover (block settings, view settings, icon picker) on phones with the on-screen keyboard coming up the Android way (shorter window) and the iOS way (shorter visual viewport, `t.keyboardUp`): it stays open and focused, keeps its side of its button, fits above the keyboard with the field in sight, typing works |
 | `21-baselines` | screenshot baselines of 9 key states (pages of typical content, a popover, a dialog) at desktop and phone, light and dark |
 | `23-perf` | perf tests, run only with `--perf` (left out of other runs): the app's hot paths, each phase (a load, a click, a key, to the state it leads to) timed with main-thread busy time, long tasks, elements and heap; seeding, settling and audits reported apart |
-| `22-components-filters-cards` | a field's settings under its name and type; local components (fields, blocks, Markdown code) and saved as shared from the Components page; Ask AI in the field dialog; strike through the item on tables and cards; `{{ }}` code in a filter value and an invalid value; card list rows only with "Show as a list when narrow" in a narrow pane |
+| `22-components-filters-cards` | a field's settings under its name and type; local components (fields, blocks, Markdown code) and saved as shared from the Components page; AI prompt in the field dialog; strike through the item on tables and cards; `{{ }}` code in a filter value and an invalid value; card list rows only with "Show as a list when narrow" in a narrow pane |
 
 ## Adding to it
 

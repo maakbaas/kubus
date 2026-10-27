@@ -254,7 +254,7 @@ export const fieldKinds: Record<FieldKind, FieldKindSpec> = {
   // component's rendered text (domain/ai.ts) and then stored like any value, never typed: text or
   // Markdown in value_text, a number in value_number (see the repository's assemble), with the
   // prompt it came from in value_json. Not a field type of its own in the UI: a Component field
-  // with "Ask AI" on (the kind is fixed once saved, as the values are stored).
+  // with "AI prompt" chosen (the kind is fixed once saved, as the values are stored).
   ai: {
     label: "Component (AI)",
     column: "value_text",

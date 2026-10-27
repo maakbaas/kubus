@@ -78,6 +78,32 @@ export interface SourceFilter {
   value: string;
 }
 
+/**
+ * What rows a query keeps: a column's rule, or all (`and`) / any (`or`) of several, nested as deep
+ * as the app's filters make them (a view's or item page's filter with a block's on top; the app
+ * works out the order: app/src/domain/filterTree.ts). `{ and: [] }` keeps every row, `{ or: [] }` none.
+ */
+export type SourceCondition = SourceFilter | { and: SourceCondition[] } | { or: SourceCondition[] };
+
+/** How deep a condition may nest (the app's are a few levels; this bounds a malformed request). */
+const MAX_CONDITION_DEPTH = 32;
+
+/** Whether a request's filter is a condition tree (checked by the server before any connector sees it). */
+export function isSourceCondition(x: unknown, depth = 0): x is SourceCondition {
+  if (!x || typeof x !== "object" || depth > MAX_CONDITION_DEPTH) return false;
+  const o = x as Record<string, unknown>;
+  if (Array.isArray(o.and)) return o.and.every((c) => isSourceCondition(c, depth + 1));
+  if (Array.isArray(o.or)) return o.or.every((c) => isSourceCondition(c, depth + 1));
+  return typeof o.column === "string" && typeof o.operator === "string" && typeof o.value === "string";
+}
+
+/** A condition in a connector's own language: each rule as `rule` writes it (bracketed, whatever it holds), joined by its words. */
+export function conditionText(c: SourceCondition, rule: (filter: SourceFilter) => string, words: { and: string; or: string; all: string; none: string }): string {
+  if ("and" in c) return c.and.length === 0 ? words.all : `(${c.and.map((x) => conditionText(x, rule, words)).join(` ${words.and} `)})`;
+  if ("or" in c) return c.or.length === 0 ? words.none : `(${c.or.map((x) => conditionText(x, rule, words)).join(` ${words.or} `)})`;
+  return `(${rule(c)})`;
+}
+
 /** The title: the first of these columns with a value that isn't blank (the app's labelField), else `untitled`. */
 export const TITLE_COLUMN = "$title";
 
@@ -102,7 +128,7 @@ export interface SourceShape {
 
 /** POST /api/sources/<name>/query: a page of rows. */
 export interface SourceQuery extends SourceShape {
-  filters: SourceFilter[];
+  filter: SourceCondition;
   /** Free text, looked for in every text column (case-insensitive). */
   search: string;
   /** Empty values last in both directions; the key breaks ties, so pages never overlap. */
