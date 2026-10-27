@@ -1,6 +1,6 @@
 # Plan: server API (headless device), webhooks, file transfer and thumbnails, Help tabs
 
-Status: proposal, nothing built yet.
+Status: built (steps 1 to 8). Where the build differs from this text, `docs/sync.md` and `app/src/help/api.md` are right: views are `/collections/{c}/views/{v}`, and `/api/sync` keeps its 100 MB limit for apps from before `/api/files`.
 
 ## Goals
 

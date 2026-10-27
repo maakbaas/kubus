@@ -54,12 +54,15 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 - Tables: `spaces`, `collections`, `fields`, `items`, `field_values` (EAV with typed columns
   `value_text | value_number | value_date | value_datetime | value_bool | value_ref | value_json`),
   `meta` (holds `replica_id`).
-- Images live in `files` (content-addressed: id = SHA-256, immutable, BLOB in SQLite) and are
-  referenced from `field_values.value_file` or from markdown as `files/<sha256>`. Files are stored as soon as they're picked and
-  released (`releaseFile` in `SqliteRepository.ts`) in the same transaction as any write that drops
-  a reference (changed/removed image, deleted item/field); the item editor releases
-  unsaved uploads when it closes. A file is only deleted when no live item uses it. For sync,
-  files should move to object storage (or `bytea`) and transfer separately from the row data.
+- Images live in `files` (content-addressed: id = SHA-256, immutable; the bytes in the local-only,
+  nullable BLOB `data`: NULL until downloaded from the server) and are referenced from
+  `field_values.value_file` (no foreign key: a file's row can arrive after its use) or from markdown
+  as `files/<sha256>`. `thumbnails` links an image to its small copy (another `files` row). Files are stored as soon as they're picked and
+  released (`releaseFile` in `SqliteRepository.ts`, with their thumbnail) in the same transaction as any write that drops
+  a reference (changed/removed image, deleted item/field), and after a sync that drops one; the item editor releases
+  unsaved uploads when it closes. A file is only deleted when no live item uses it. Bytes travel
+  apart from the rows (`/api/files`); the server keeps them in Postgres (`file_bytes`) and deletes
+  unused ones after a week. See `docs/sync.md`, "Files".
 - Reference fields (`item`, `item_list`) carry `fields.target_collection_id`, and optionally
   `fields.choice_filter` (JSON filter rules over the target, edited with the views' filter editor:
   `ui/ChoiceFilterEditor.tsx`): pickers offer only matching items (`choicesFor`); a value

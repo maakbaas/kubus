@@ -1,4 +1,4 @@
-# The Kubus server (sync API and web app on one port) with its own Postgres. The server image is
+# The Kubus server (sync, the HTTP API at /api/v1 and the web app on one port) with its own Postgres. The server image is
 # built by GitHub Actions (.github/workflows/image.yml). Change the two passwords/tokens below,
 # then `docker compose up -d`. Update with `docker compose pull && docker compose up -d`.
 # To use a Postgres you already run instead, delete the `db` service and `depends_on`, and point
@@ -29,6 +29,12 @@ services:
       # Shared secret of all your devices; enter it with the server URL on the app's Sync page.
       # Any long random string, e.g. node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
       KUBUS_TOKEN: change-me
+      # Optional: a URL (or several, comma-separated) called with every change, signed with the
+      # secret (X-Kubus-Signature; see Help → API in the app).
+      # KUBUS_WEBHOOK_URL: https://automation.example.com/hooks/kubus
+      # KUBUS_WEBHOOK_SECRET: another-long-random-string
+      # Days a file (image) no item uses is kept before it is deleted; default 7.
+      # KUBUS_UNUSED_FILE_DAYS: 7
     ports:
       - "8080:8080"
     depends_on:

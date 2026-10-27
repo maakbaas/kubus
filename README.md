@@ -23,6 +23,8 @@ want, and fill them with items that link to each other.
 - **Workspace.** Tabs and tiled panes, side by side, like an editor.
 - **Local first.** Everything runs offline on a SQLite database in the app itself.
 - **Sync.** Optionally sync every device with your own server backed by Postgres.
+- **HTTP API and webhooks.** The server lets scripts and automation tools do everything the app does
+  (`/api/v1`), and can call a webhook on every change (Help → API in the app).
 - **Everywhere.** A desktop app (Tauri) for Windows, macOS and Linux, and the same build as an
   installable web app on your phone (iOS home-screen app).
 - **Compact, themed UI** built with the Carbon Design System; follows your OS light / dark theme.
@@ -66,3 +68,8 @@ the server: it syncs through a Postgres database and also serves the web app.
 To use an existing Postgres instead, remove the `db` service and point `DATABASE_URL` at it. For
 the phone (an installable home-screen app) and the desktop app, put the server behind HTTPS, for
 example with Caddy, Tailscale Serve or a Cloudflare tunnel.
+
+The same server answers an HTTP API at `/api/v1` with the same token, and calls `KUBUS_WEBHOOK_URL`
+on every change when set (commented in `docker-compose.yml`); Help → API in the app documents both.
+Running the server from the repository instead of the image: `npm run build:headless` first, or the
+API answers 503.

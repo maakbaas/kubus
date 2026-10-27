@@ -1,13 +1,16 @@
 # Sync with Postgres
 
-The server, the sync engine and the home-screen app.
+The server, the sync engine, files, the HTTP API (headless device) and webhooks, and the
+home-screen app.
 
 ## Sync with Postgres (the server and the sync engine)
 
 Repo layout: `app/` the web app (what Tauri and the phone run), `desktop/` the Tauri shell,
-`server/` the sync server (Node 24, runs its TypeScript directly, only dependency `pg`),
-`shared/sync.ts` the protocol both sides import (the list of synced tables / columns / types and
-the request shapes).
+`server/` the sync server (Node 24, runs its TypeScript directly, dependencies `pg` and
+`@sqlite.org/sqlite-wasm` for the headless device), `shared/` what both sides import: `sync.ts`
+the protocol (the list of synced tables / columns / types and the request shapes), `files.ts`
+(file ids, `fileIdsIn`), `router.ts` (the routes of the server and the API), `api.ts` (types of the
+server ↔ headless device interface).
 
 **Topology.** `app ──HTTPS──> server ──> Postgres` (the example `docker-compose.yml` runs its own; any other via `DATABASE_URL`). The
 client never talks to Postgres: browsers and the iOS PWA can only do HTTP. One container
@@ -38,7 +41,8 @@ vision wants server-side queries and remote sources later.
   (`id <= snapshot`; edits made during the request stay queued) and storing `meta.sync_cursor` is
   one local transaction. Pulls are incremental (per row; `field_values` rows are single fields).
 - *Merge*: a row replaces the local one only if its `updated_at` is newer (field-level last writer
-  wins, since every value is its own row). Files are immutable and inserted if missing. `now()`
+  wins, since every value is its own row). Files and thumbnail links are immutable and inserted if
+  missing. `now()`
   never goes below a timestamp received from the server (`observeStamp`), a cheap guard against clock
   skew instead of a hybrid logical clock.
 - *First connection to a server* (or a changed server URL): the server is the source of truth. If it
@@ -66,9 +70,84 @@ vision wants server-side queries and remote sources later.
 
 **Server** (`server/src`): `sync.ts` runs a request in one transaction under an advisory lock, so
 `seq` (from `sync_seq`, taken per written row) order is commit order and a cursor never skips a row.
-`server/schema.sql` is generated from `shared/sync.ts` (jsonb, timestamptz, bytea, …; no foreign
+`server/schema.sql` is generated from `shared/sync.ts` (jsonb, timestamptz, …; no foreign
 keys or checks) and applied idempotently at start. `events.ts` is the change signal. Proxies must not
-buffer `/api/events` (nginx: `proxy_buffering off`); polling covers a dropped stream.
+buffer `/api/events` (nginx: `proxy_buffering off`); polling covers a dropped stream. Its routes
+(`index.ts`) go through the shared `Router` (`shared/router.ts`).
+
+## Files
+
+File bytes (images) never travel inside `/api/sync`; the synced `files` row is metadata only.
+- *On a device* the bytes are the local-only column `files.data` (`spec.test.ts` allows it). `NULL`
+  = known from a sync, not downloaded yet. A device without a server keeps every byte it stores.
+- *Upload*: before a sync sends a queued `files` row, the engine asks `HEAD /api/files/<id>` and
+  else uploads `PUT /api/files/<id>` (raw body, `Content-Type`); the server checks the SHA-256 against
+  the id and the 20 MB limit (`MAX_FILE_BYTES`). Only then is the row sent, so the server never lists
+  a file it can't serve. A sync uploads up to 50 MB / 30 s; the rest stays queued (and the engine
+  syncs again at once), the other rows don't wait: image values have no foreign key
+  (`field_values.value_file`), as a file's row may arrive after its use. A failed upload is retried
+  at the next sync; a refused one (400/413) and one nobody has bytes for are dropped.
+- *Download*: after each sync, in the background, three at a time (`downloadFiles`): thumbnails first,
+  then originals; with the Sync setting "Download images: Full size when opened" (`SyncConfig.originals`
+  = "opened") only thumbnails, an original then when `getFile` is first asked for it (and kept).
+  `getFile` fetches missing bytes from the server, also for a file this device released (an undo or a
+  paste put its use back: the server keeps unused files a week).
+- *Thumbnails* (`ui/thumbnails.ts`, `Repository.putThumbnail`): a copy with its shortest side 512 px
+  (longest at most 2048), WebP, else JPEG or PNG, made in the browser when an image is stored or the
+  first time one without a thumbnail is shown small (images from before, or from the API: Node can't
+  draw). Not for images already small (≤ 512 px or ≤ 100 KB), SVG or GIF. Stored as an ordinary file
+  plus a row of the synced, insert-only `thumbnails` table (`file_id` → `thumb_id`; the first link the
+  server gets stays, another device's own is as good). Used only by table cells, cards and compact
+  component images (`useFileUrl(id, true)`); item pages, Markdown and the Lightbox (`data-file`) show
+  the original. Released with the original.
+- *On the server* the bytes are `file_bytes` (id, mime, data, stored_at, unused_since), out of the sync
+  tables (`server/src/files.ts`). Servers from before kept them in `files.data`: moved at start, then
+  the column is dropped. An app from before that still pushes bytes in a row (base64) gets them stored.
+  `GET /api/files/<id>` sends them with a year-long private cache. Wiping drops them with every table.
+- *Clean-up*. One rule (`liveUse` in `SqliteRepository.ts`): a file is in use when a live item, through
+  a live field, has it as an image value or mentions `files/<id>` in a Markdown or HTML value; a
+  thumbnail through its original. Devices: a local edit releases at once (`releaseFile`), and a sync
+  releases the files its incoming rows stop using (`filesUsedBefore`, read before the apply). Nothing
+  about it is synced: every device reaches the same answer from the same rows. Server: every sync
+  request marks the files a pushed row stops using (`trackUses`: replaced values, deleted items and
+  fields; `unused_since`) and unmarks the ones pushed rows use; an upload starts marked. Hourly, the
+  headless device lists the files marked longer than `KUBUS_UNUSED_FILE_DAYS` (7), checks them with
+  the same rule (`unusedFiles`) on its full copy, unmarks the used ones and deletes the rest (bytes,
+  row, thumbnail link; under the sync lock, only if still marked). The grace period covers late
+  and out-of-order syncs, an offline edit, an undo. When pushed rows use a file the server no longer
+  has, the answer lists it (`missingFiles`) and a device with the bytes queues it again.
+
+## The API (headless device) and webhooks
+
+`/api/v1` (documented for users in `app/src/help/api.md`, the Help page's API tab) is answered by the
+app's own `SqliteRepository` running inside the server process as one more synced device
+(`app/src/headless`), never by writing to Postgres: so it follows the GUI's rules (field diffing,
+file release, AI fields, the "All" view, soft deletes, change sets).
+- *Device*: `DirectSqlClient` (in-memory sqlite-wasm, `SqliteEngine` as in the worker), the real
+  `SyncEngine` with `memoryEnvironment({ keepFiles: false })` (settings in memory; file bytes dropped
+  once uploaded, fetched from the server when asked), syncing over HTTP with `http://127.0.0.1:$PORT`
+  and listening to `/api/events`. It starts with a first connection (everything but bytes). After a
+  wipe (409) it wipes itself and connects again: it is a cache, it never uploads stale data.
+- *Requests* run one at a time (`HeadlessDevice.serial`); each syncs first (reads see the latest
+  data), and a write syncs again before it answers.
+- *Routes* (`headless/api.ts`): each a thin translation onto one `Repository` method; names by id or
+  name (`values.ts`: values by field name, checked per kind; component values included, read only,
+  computed with `refLabelForSpace` as the screens and the AI backfill do). File bytes
+  (`GET /api/v1/files/<id>`) come from the server's own handler. Errors `{ error }` 400 / 404 / 409 /
+  503.
+- *Component code* runs there in a V8 context of its own (`headless/compiler.ts` via `setCompiler`):
+  no Node globals, no `eval`, 1 s per section. Not a security boundary: whoever holds the token can
+  run code on the server.
+- *Build*: `npm run build:headless` (`app/vite.headless.config.ts`, an SSR build) bundles
+  `app/src/headless/index.ts` into `server/headless/index.js` (git-ignored; the Dockerfile's web stage
+  builds it); sqlite-wasm stays external. The server loads it with a dynamic import
+  (`server/src/headless.ts`); without it `/api/v1` answers 503 saying to build it.
+- *Webhooks* (`headless/webhooks.ts`): `SyncEngine.onPulled` reports each sync's applied rows; the
+  device turns them into events (item created / updated / deleted with the item as the API returns
+  it; collection, view, space, component, bookmark changed) and POSTs one payload per sync to each of
+  `KUBUS_WEBHOOK_URL` (comma-separated), signed with `KUBUS_WEBHOOK_SECRET` (`X-Kubus-Signature:
+  sha256=<HMAC>`). Created = first seen by the hook. In order per URL, retried after 1, 5, 30 s, then
+  dropped and logged; nothing survives a restart. The first download isn't sent.
 
 **iOS / home-screen app.** The same web build. Status bar: no style meta (`default`); iOS
 colours the bar from the top tab strip (sticky, solid, full width; see Conventions). `body` is
@@ -83,8 +162,10 @@ tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 **Known limits / next steps:**
 - Last writer wins per field; concurrent offline edits to the *same markdown field* lose one side
   (upgrade path: a text CRDT such as Yjs for markdown). Equal timestamps on two devices don't converge.
-- Files travel inline (base64) and are never deleted on the server; a pull is not paged.
-- One user, one token. A device that is not synced can lose its data on a schema wipe; with the
+- A pull is not paged. Webhooks are best effort (lost on a restart). A device never frees space by
+  dropping originals it has. A file unused for a week and then used again by a device that only had
+  its metadata is lost (shown as missing).
+- One user, one token (the API too; it can also run component code on the server). A device that is not synced can lose its data on a schema wipe; with the
   server the replica re-syncs, so enable sync before putting real notes in. Connecting a device that
   has data of its own to a server that has data too discards the device's data (no merge).
 - Not built: hybrid logical clocks, Merkle-trie diffing (Actual Budget style), end-to-end encryption,

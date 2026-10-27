@@ -17,7 +17,8 @@ is what this split avoids. Keep them current when behaviour changes.
   component, markdown), saved views; workspace tabs, tiling, side nav, tab history, tab width.
 - `docs/data-model.md`: tables, EAV `field_values`, files, references, soft deletes, UUIDs;
   scale limits, SAH-pool VFS danger, storage location, iOS eviction.
-- `docs/sync.md`: server, sync engine (outbox triggers, merge, first connection), iOS home-screen app,
+- `docs/sync.md`: server, sync engine (outbox triggers, merge, first connection), files (upload,
+  download, thumbnails, clean-up), the HTTP API (headless device) and webhooks, iOS home-screen app,
   known sync limits.
 - `docs/vision.md`: the "one hub" vision (native + remote sources, capabilities) and the roadmap.
 
@@ -78,7 +79,9 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 ```
 
 Repo layout: `app/` the web app (what Tauri and the phone run), `desktop/` the Tauri shell,
-`server/` the sync server (Node 24, only dependency `pg`), `shared/sync.ts` the sync protocol.
+`server/` the sync server (Node 24, dependencies `pg` and `@sqlite.org/sqlite-wasm`), `shared/` what
+both import (`sync.ts` the sync protocol, `files.ts`, `router.ts`, `api.ts`), `app/src/headless` the
+headless device that answers the server's HTTP API (bundled into `server/headless`).
 
 - **Repository boundary.** The UI only talks to `Repository` (`app/src/data/repository.ts`).
 - **Change feed.** After every committed write the repository emits a `DataChange` via
@@ -94,6 +97,9 @@ Repo layout: `app/` the web app (what Tauri and the phone run), `desktop/` the T
   kinds; `ui/FieldInput.tsx` holds the matching editors.
 - **Extension points are registries**, not special cases in pages: `KIND_RULES` in
   `domain/query.ts`, `BLOCK_TYPES` in `views/index.ts`.
+- **The API goes through the headless device's Repository, never into Postgres.** `/api/v1`
+  routes (`app/src/headless/api.ts`) are thin translations onto `Repository` methods; the server
+  only stores rows and file bytes. Keep `app/src/help/api.md` (Help → API) current with them.
 - **Workspace**: every tab renders `AppRoutes` in its own `MemoryRouter`; in-app links are plain
   `href="#/…"` anchors; navigate with `useNavigate()` (this tab) or `useOpenRelated()`.
 
@@ -105,6 +111,8 @@ stale peer range.
 - `npm run dev`: Tauri desktop app with hot reload (runs `dev:web` on port 1420).
 - `npm run dev:web`: same app in a normal browser at http://localhost:1420.
 - `npm run typecheck`, `npm test`, `npm run build:web` (to `app/dist`), `npm run build` (desktop bundle).
+- `npm run build:headless`: the headless device for the server (`server/headless`, git-ignored); without it the
+  server's `/api/v1` answers 503. Rebuild it after app changes when running the server locally.
 - `npm run test:gui`: the GUI stress suite (not in CI; `gui-tests/README.md`): every page, size and content shape through
   `playwright-cli` against a development-mode build it makes and serves itself (`--dev`: the dev server), layout rules
   as pass/fail criteria, HTML report with screenshots in `gui-tests/report/`. `npm run test:gui:smoke`: its ~22-test smoke

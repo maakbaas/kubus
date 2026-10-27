@@ -130,10 +130,15 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   device: the address of an OpenAI-style API (any provider: OpenAI, OpenRouter, Ollama, LM Studio, …; nothing is preset), the key and two models, each a combo box over the provider's `/models` (any name can be typed): one for AI fields (runs for every value: fast and cheap) and one for writing components (a stronger one; empty = the field model). `AiService.client("field" | "code")` picks it. Stored per device
   (`kubus.ai` in localStorage), never synced. The sync status icon (tab strip, top right) only shows the state; its
   popover tells more and has "Configure sync".
-- **Help** (`#/help`, `pages/HelpPage.tsx`, above Settings in the side nav): components and `{{ }}` code, shown exactly like
-  an item page (a title and one Markdown field with its name hidden; it reuses `ViewField`). Its text is
-  `app/src/help/components.md`, which **must be kept current** when components, `$` names or AI fields change: it is
-  also what "Write with AI" gives the model.
+- **Help** (`#/help`, `pages/HelpPage.tsx`, above Settings in the side nav): tabs along the top like Settings
+  (`?section=components|api`), each shown exactly like an item page (one Markdown field with its name hidden; it
+  reuses `ViewField`). Components: components and `{{ }}` code, `app/src/help/components.md`, which **must be kept
+  current** when components, `$` names or AI fields change: it is also what "Write with AI" gives the model. API: the
+  server's HTTP API and webhooks, `app/src/help/api.md`, kept current with `app/src/headless`.
+- **Images have thumbnails** (`ui/thumbnails.ts`): a small copy (shortest side 512 px) made when an image is stored
+  (or first shown small), synced like any file. Table cells and cards show it; item pages, Markdown and the
+  Lightbox show the full-size image. Settings → Sync → "Download images": all full size after each sync (offline,
+  the default), or full size only when opened (thumbnails only until then; for phones with many photos).
 - **Write with AI** (component editor, `ui/WriteWithAi.tsx`, `domain/componentWriter.ts`): a few words in, the model writes
   the component's code, description and output (and the name when empty) from the Help text and the fields of the
   preview's collection (else all collections); it only changes the form (not saving drops it) and its box empties, as the next request changes what was just written.
@@ -227,6 +232,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
 - **Future:** chart block types,
   blocks side by side (a grid), embedding one item's field elsewhere (deliberately left out for now).
 - **Sync.** The local SQLite is an offline-first replica of a Postgres-backed server (see "Sync with Postgres").
+- **HTTP API and webhooks.** The server answers `/api/v1` (same token) for other tools, through its own copy of the
+  app (the headless device), and can call webhooks on every change (`docs/sync.md`, Help → API).
 - **One codebase, many shells.** Desktop runs in Tauri; iOS (and anything else) runs the same web
   build as a home-screen web app (PWA). No native-only features in the core app.
 - **Responsive UI** built strictly with the Carbon Design System (`@carbon/react`): use Carbon
