@@ -88,7 +88,8 @@ test("components page: local ones by where they are used, saved as shared", asyn
   await t.audit("components: shared and local");
   const text = await t.page.locator(".ws-pane--active .items-table, .ws-pane--active table").first().innerText();
   for (const where of ["Books › Hours", "Books › Shelf", "Books › All › Count", "Books › All › Notes"]) await t.check(`lists ${where}`, text.includes(where), text.slice(0, 300));
-  await t.check("an AI component is tagged", (await t.page.locator(".ws-pane--active .cds--tag", { hasText: "AI" }).count()) >= 2);
+  const aiRows = await t.page.locator(".ws-pane--active tbody tr", { hasText: "AI field" }).count();
+  await t.check("AI components show their kind", aiRows >= 2, `${aiRows} rows say "AI field"`);
   // Show: shared only, then local only.
   const rowCount = () => t.page.locator(".ws-pane--active table tbody tr").count();
   for (const [choice, n] of [["Shared", 2], ["Local", 4], ["All components", 6]]) {
@@ -192,10 +193,10 @@ for (const vp of ["desktop", "phone"]) {
     const panel = t.page.locator(".cds--popover--open");
     await panel.getByRole("button", { name: "Add filter" }).first().click();
     await t.settle(100);
-    const field = panel.locator("select").first();
-    await field.selectOption({ label: "Read" });
+    // The rule's own selects (the panel also holds the date period's).
+    await panel.getByRole("combobox", { name: "Field", exact: true }).last().selectOption({ label: "Read" });
     await t.settle(100);
-    await panel.locator("select").nth(1).selectOption({ label: "is" });
+    await panel.getByRole("combobox", { name: "Condition", exact: true }).last().selectOption({ label: "is" });
     await t.settle(100);
     const value = panel.getByRole("textbox", { name: "Value" }).last();
     await value.click();

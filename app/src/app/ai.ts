@@ -69,7 +69,10 @@ const DEFAULT_CONFIG: AiConfig = { source: "server", baseUrl: DEFAULT_LLM_SETTIN
 
 /** The stored settings. */
 function loadConfig(): AiConfig {
-  return { ...DEFAULT_CONFIG, ...readPref<Partial<AiConfig>>(SETTINGS_KEY, {}) };
+  const stored = readPref<Partial<AiConfig>>(SETTINGS_KEY, {});
+  // Saved before the server could offer a model (no `source`): a model or key set there is the device's own.
+  const own = stored.source === undefined && !!(stored.fieldModel || stored.codeModel || stored.apiKey);
+  return { ...DEFAULT_CONFIG, ...stored, ...(own && { source: "own" as const }) };
 }
 
 /** Where requests go and which models they ask for (the server's or the device's own). */

@@ -770,6 +770,24 @@ function __audit(opts) {
     const pageBg = rgba(cs(document.body).backgroundColor)[3] > 0 ? rgba(cs(document.body).backgroundColor) : rgba(cs(document.documentElement).backgroundColor);
     /** The colour behind an element: its own and its ancestors' backgrounds, composited; null when an image or gradient is behind it. */
     const bgCache = new Map();
+    /**
+     * A ::before / ::after that covers the element with a background (Carbon draws a selected
+     * content switch's on ::after, scaled to nothing until selected): its colour, else null.
+     */
+    function coverOf(el) {
+      const box = el.getBoundingClientRect();
+      for (const pseudo of ["::before", "::after"]) {
+        const p = getComputedStyle(el, pseudo);
+        if (p.content === "none" || p.display === "none" || p.position !== "absolute" || p.visibility === "hidden") continue;
+        const c = rgba(p.backgroundColor);
+        if (c[3] === 0) continue;
+        const m = /^matrix\(([^,]+), [^,]+, [^,]+, ([^,]+),/.exec(p.transform);
+        if (m && (Math.abs(+m[1]) < 0.9 || Math.abs(+m[2]) < 0.9)) continue; // scaled away (or mostly)
+        if (parseFloat(p.width) < box.width * 0.9 || parseFloat(p.height) < box.height * 0.9) continue;
+        return c;
+      }
+      return null;
+    }
     function behind(el) {
       if (!el || el === document.documentElement) return pageBg[3] > 0 ? pageBg : [255, 255, 255, 1];
       if (bgCache.has(el)) return bgCache.get(el);
@@ -778,7 +796,9 @@ function __audit(opts) {
       if (s.backgroundImage !== "none" || el.matches("img, video, canvas, iframe") || parseFloat(s.opacity) < 1) out = null;
       else {
         const under = behind(el.parentElement);
-        const c = rgba(s.backgroundColor);
+        const own = rgba(s.backgroundColor);
+        const cover = coverOf(el);
+        const c = cover ? (own[3] > 0 ? over(cover, own) : cover) : own;
         out = under === null ? (c[3] >= 1 ? c : null) : c[3] > 0 ? over(c, under) : under;
       }
       bgCache.set(el, out);

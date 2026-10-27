@@ -111,7 +111,9 @@ centred column) and documented exceptions are listed in the rule with the reason
 distance of 0.1; the baseline fails when more than 0.1% differ, the difference image in the report).
 Deterministic: bundled fonts, no animations, the pointer out of the way, the caret hidden, seeded data
 and no times of day on the pages chosen. After a deliberate visual change, `--update-baselines`
-and commit the PNGs.
+and commit the PNGs. Pixels still depend on the machine's browser build and font rasterisation: the
+baselines match Playwright's Chromium on Linux (a cloud session's), not CI's Chrome, so CI leaves
+suite 21 out.
 
 ## WebKit
 

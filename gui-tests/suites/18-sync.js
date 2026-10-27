@@ -5,11 +5,12 @@
 
 /**
  * A fake Kubus server at `url`: POST /api/sync stores the rows it is sent and answers with the rows
- * changed since the cursor; /api/events answers 204 (no live signal). `rows` preloads it
+ * changed since the cursor, as the server's database `fake.database`; /api/events answers 204 (no
+ * live signal), anything else 404. `rows` preloads it
  * ({ table: [row] }); `fake.reject` makes it answer 401.
  */
 async function fakeServer(t, url, rows = {}) {
-  const fake = { requests: [], seq: 0, store: [], reject: false };
+  const fake = { requests: [], seq: 0, store: [], reject: false, database: { id: "db-gui", createdAt: "2026-10-01T00:00:00.000Z" } };
   for (const [table, list] of Object.entries(rows)) for (const row of list) fake.store.push({ seq: ++fake.seq, table, row });
   await t.context.route(`${url}/api/**`, async (route) => {
     const req = route.request();
@@ -17,6 +18,8 @@ async function fakeServer(t, url, rows = {}) {
     if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
     if (req.url().endsWith("/api/events")) return route.fulfill({ status: 204, headers: cors });
     if (fake.reject) return route.fulfill({ status: 401, headers: cors, json: { error: "bad token" } });
+    // Only syncing: what else devices ask (the server's language model, its sources) it doesn't offer.
+    if (!req.url().endsWith("/api/sync")) return route.fulfill({ status: 404, headers: cors, json: { error: "Not found" } });
     let body = { since: 0, changes: {} };
     try {
       body = JSON.parse(req.postData() || "{}");
@@ -25,7 +28,7 @@ async function fakeServer(t, url, rows = {}) {
     for (const [table, list] of Object.entries(body.changes || {})) for (const row of list) fake.store.push({ seq: ++fake.seq, table, row });
     const changes = {};
     for (const e of fake.store) if (e.seq > (body.since || 0)) (changes[e.table] ||= []).push(e.row);
-    return route.fulfill({ status: 200, headers: cors, json: { cursor: fake.seq, changes } });
+    return route.fulfill({ status: 200, headers: cors, json: { cursor: fake.seq, changes, database: fake.database } });
   });
   return fake;
 }

@@ -5,7 +5,8 @@ name: Test
 #   the headless device (a few minutes);
 # - gui: the GUI suite's smoke tests (gui-tests/), only those of the suites covering the files this
 #   branch changed (gui-tests/areas.mjs), all of them on main; skipped when nothing the GUI shows
-#   changed. The full GUI suite (an hour) stays a local run before larger changes.
+#   changed; not the screenshot baselines (machine-dependent). The full GUI suite (an hour) stays a
+#   local run before larger changes.
 # docs/testing.md says which suite covers what.
 on:
   push:
@@ -81,8 +82,10 @@ jobs:
       # The runner's Chrome is the browser.
       - run: npm install -g @playwright/cli@0.1.22
 
+      # Not the screenshot baselines (suite 21): pixels depend on the machine's Chrome and font
+      # rendering, so they are compared where they were made (gui-tests/README.md).
       - name: GUI smoke tests
-        run: npm run test:gui:smoke -- ${{ github.ref == 'refs/heads/main' && '' || '--changed origin/main' }}
+        run: npm run test:gui:smoke -- --suite '^(?!21-)' ${{ github.ref == 'refs/heads/main' && '' || '--changed origin/main' }}
 
       - name: Report
         if: failure()
