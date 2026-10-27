@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markdownPreview } from "./fieldKinds";
+import { markdownPreview, markdownPreviewParts } from "./fieldKinds";
 import { markdownExcerpt } from "./markdownExcerpt";
 import { containsQuery, isTag, splitTags, tagSearchPath, tagsIn } from "./tags";
 
@@ -38,6 +38,8 @@ describe("tags", () => {
 
   it("shows a tag the editor escaped at a line's start", () => {
     expect(markdownPreview("\\#books are *great*")).toBe("#books are great");
+    // Inline code is its own part in a preview: shown without tags, as rendered Markdown does.
+    expect(markdownPreviewParts("a `#x` b")).toEqual(["a ", { text: "#x", href: "" }, " b"]);
     expect(markdownExcerpt("Para\n\n\\#books here\n\n#bookshelf", "#books", true).markdown).toBe("\\#books here");
   });
 });

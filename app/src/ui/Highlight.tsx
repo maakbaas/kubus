@@ -33,22 +33,34 @@ export function splitMatches(text: string, re: RegExp): string[] {
  * failing component sections in it shown as warnings and its `#tags` as tags (TagChip): every
  * plain text the app shows goes through here.
  */
-export function Highlight({ text, query, exactTag }: { text: string; query: string; /** See matcher. */ exactTag?: boolean }) {
+export function Highlight({
+  text,
+  query,
+  exactTag,
+  tags = true,
+}: {
+  text: string;
+  query: string;
+  /** See matcher. */
+  exactTag?: boolean;
+  /** False where `#` is no tag: code, a link's text. */
+  tags?: boolean;
+}) {
   const parts = splitWarnings(text);
   if (parts.length > 1) {
     return (
       <span>
         {parts.map((part, i) =>
-          i % 2 === 1 ? <ComponentWarning key={i}>{part}</ComponentWarning> : <Highlight key={i} text={part} query={query} exactTag={exactTag} />,
+          i % 2 === 1 ? <ComponentWarning key={i}>{part}</ComponentWarning> : <Highlight key={i} text={part} query={query} exactTag={exactTag} tags={tags} />,
         )}
       </span>
     );
   }
-  const tags = splitTags(text);
-  if (tags.length > 1) {
+  const tagParts = tags ? splitTags(text) : [text];
+  if (tagParts.length > 1) {
     return (
       <span>
-        {tags.map((part, i) =>
+        {tagParts.map((part, i) =>
           i % 2 === 1 ? (
             <TagChip key={i} tag={part}>
               <Marked text={part} query={query} exactTag={exactTag} />

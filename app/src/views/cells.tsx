@@ -57,7 +57,8 @@ function MarkdownPreview({ source, search }: { source: string; search: string })
     <span>
       {markdownPreviewParts(source).map((part, i) =>
         typeof part === "string" || !isOpenableUrl(part.href) ? (
-          <Highlight key={i} text={typeof part === "string" ? part : part.text} query={search} />
+          // Inline code or a link that can't be opened: as text (no tags in it, like rendered Markdown).
+          <Highlight key={i} text={typeof part === "string" ? part : part.text} query={search} tags={typeof part === "string"} />
         ) : (
           <Link
             key={i}
@@ -69,7 +70,7 @@ function MarkdownPreview({ source, search }: { source: string; search: string })
               openExternal(part.href);
             }}
           >
-            <Highlight text={part.text} query={search} />
+            <Highlight text={part.text} query={search} tags={false} />
           </Link>
         ),
       )}

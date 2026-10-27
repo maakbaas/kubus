@@ -48,6 +48,7 @@ export function formatDateTime(iso: string): string {
 const PREVIEW_LENGTH = 120;
 
 /** A piece of a Markdown preview: plain text, or a link (its text and target). */
+/** Text, or a link (`href` "" for inline code: shown as it is, no link and no tags in it). */
 export type PreviewPart = string | { text: string; href: string };
 
 const EMPHASIS = /(\*\*|__|~~|\*|_|`)/g;
@@ -70,6 +71,7 @@ export function markdownPreviewParts(md: string): PreviewPart[] {
         .replace(/^\s*(#{1,6}|>|[-*+]|\d+\.)\s+(\[[ xX]\]\s+)?/, "") // block markers, task boxes
         .replace(/^\s*(```|~~~).*$/, "") // code fences
         .replace(/^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*$/, "") // table delimiter rows
+        .replace(/`([^`]+)`/g, (_, code: string) => mark(code, "")) // inline code
         .replace(/!\[([^\]]*)\]\([^)]*\)/g, "") // images: no text (an alt like "photo.png" reads as noise)
         .replace(/\[([^\]]*)\]\(\s*<?([^)\s>]*)>?(?:\s+"[^"]*")?\s*\)/g, (_, t: string, href: string) => mark(t, href)) // links
         .replace(/<([a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^<>\s]*)>/g, (_, href: string) => mark(href, href)) // autolinks, any scheme
