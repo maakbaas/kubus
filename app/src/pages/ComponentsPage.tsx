@@ -36,14 +36,15 @@ const nameOf = (r: Row) => (r.shared ? r.shared.name : r.local.where);
 export function ComponentsPage() {
   const { repo, collections, components, space } = useStore();
   const navigate = useNavigate();
-  const [views, setViews] = useState<CollectionView[]>([]);
+  // null while loading: the list shows once complete, so the local ones of views don't shift it.
+  const [views, setViews] = useState<CollectionView[] | null>(null);
   const loadViews = useCallback(() => {
     repo.listAllViews().then(setViews, (e) => console.error("Loading views failed", e));
   }, [repo]);
   useEffect(loadViews, [loadViews]);
   useDataChanges((change) => change.scope === "views" && loadViews());
   const rows = useMemo<Row[]>(
-    () => [...components.map((shared) => ({ shared })), ...localComponents(collections, views).map((local) => ({ local }))],
+    () => [...components.map((shared) => ({ shared })), ...localComponents(collections, views ?? []).map((local) => ({ local }))],
     [components, collections, views],
   );
   const { sort, header } = useTableSort<Row, "name" | "kind" | "place" | "description" | "code">({
@@ -82,7 +83,7 @@ export function ComponentsPage() {
         actions={<NewButton label="New component" onClick={() => navigate("/components/new")} />}
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
-      {rows.length === 0 ? (
+      {views === null ? null : rows.length === 0 ? (
         <Tile className="empty-state">
           <p>No components yet.</p>
         </Tile>

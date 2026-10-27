@@ -149,7 +149,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.check("it says what asking AI costs", (await modal.innerText()).includes("for 4 items"));
     await modal.getByRole("textbox", { name: "Prompt" }).fill("The genre of {{ $item.Title }}");
     // A shared AI component can be picked instead.
-    const pick = modal.getByRole("combobox", { name: /^Component/ }).nth(1);
+    const pick = modal.locator(".cds--dropdown").nth(1);
     await pick.click();
     await t.settle(100);
     await t.check("shared AI components are offered", (await t.page.getByRole("option", { name: /Short summary/ }).count()) === 1);

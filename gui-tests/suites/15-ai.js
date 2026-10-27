@@ -64,7 +64,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.until("the item page shows the value", async () => (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("AI summary of"));
     fake.answer = (body) => (promptOf(body).includes("the second edition") ? "AI summary, nudged" : summaryReply(body));
     const before = fake.calls.length;
-    await t.openPanel(t.page.locator(".ws-pane--active .item-fields"), "Generate again");
+    await t.openPanel(t.page.locator(".ws-pane--active .item-fields > *", { hasText: "Summary" }).first(), "Generate again");
     await t.audit("generate again popover");
     const nudge = t.page.locator(".toolbar-popover.cds--popover--open").getByRole("textbox", { name: /Nudge/ });
     await nudge.click();
