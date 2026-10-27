@@ -1,4 +1,4 @@
-import { MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget, type SourceValue } from "../../../shared/sources.ts";
+import { conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget, type SourceValue } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
 
 // The InfluxDB 2 connector's Flux: how a column of each type is read, the scripts a query
@@ -512,11 +512,18 @@ export function filterFlux(c: InfluxColumn, rule: SourceFilter, tz: string): str
   return `(${parts.join(" and ")})`;
 }
 
-/** The range a measurement's filters on _time leave to read (so InfluxDB reads only those days). */
-export function rangeOf(filters: SourceFilter[], tz: string): { start: string; stop: string } {
+/** The rules every row a condition keeps must meet: those not under an `or` (of more than one). */
+function requiredRules(c: SourceCondition): SourceFilter[] {
+  if ("and" in c) return c.and.flatMap(requiredRules);
+  if ("or" in c) return c.or.length === 1 ? requiredRules(c.or[0]) : [];
+  return [c];
+}
+
+/** The range a measurement's filter on _time leaves to read (so InfluxDB reads only those days). */
+export function rangeOf(filter: SourceCondition, tz: string): { start: string; stop: string } {
   let from = ALL_START_MS;
   let to = ALL_STOP_MS;
-  for (const rule of filters) {
+  for (const rule of requiredRules(filter)) {
     if (rule.column !== "_time") continue;
     const bounds = dayBounds(rule, tz);
     if (!bounds) continue;
@@ -529,9 +536,10 @@ export function rangeOf(filters: SourceFilter[], tz: string): { start: string; s
   return { start: timeLiteral(from), stop: timeLiteral(to) };
 }
 
-/** The conditions of a query (filters and search), or null for none. */
+/** The conditions of a query (its filter's and / or tree, and search), or null for none. */
 function whereFlux(query: SourceQuery, columns: Map<string, InfluxColumn>): string | null {
-  const conditions = query.filters.map((rule) => filterFlux(column(columns, rule.column), rule, query.timeZone));
+  const filter = conditionText(query.filter, (rule) => filterFlux(column(columns, rule.column), rule, query.timeZone), { and: "and", or: "or", all: "true", none: "false" });
+  const conditions = filter === "true" ? [] : [filter];
   const needle = query.search.trim();
   if (needle) {
     const searched = query.columns.map((name) => `${textOf(column(columns, name))} =~ ${fluxRegex(needle)}`);
@@ -542,7 +550,7 @@ function whereFlux(query: SourceQuery, columns: Map<string, InfluxColumn>): stri
 
 /** A script with the query's range, filters and search. */
 function filtered(query: SourceQuery, columns: Map<string, InfluxColumn>): { script: Script; pipeline: string[] } {
-  const script = new Script(query.target, columns, "table" in query.target ? rangeOf(query.filters, query.timeZone) : undefined);
+  const script = new Script(query.target, columns, "table" in query.target ? rangeOf(query.filter, query.timeZone) : undefined);
   const where = whereFlux(query, columns);
   return { script, pipeline: where ? [`filter(fn: (r) => ${where})`] : [] };
 }

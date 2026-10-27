@@ -34,7 +34,7 @@ const columns = new Map<string, InfluxColumn>(
 );
 const query = (over: Partial<SourceQuery> = {}): SourceQuery => ({
   target: { table: { schema: "metrics", name: "cpu" } }, key: "_id", columns: ["host", "usage"], title: ["host"], untitled: "cpu",
-  filters: [], search: "", sort: [], groupBy: null, groupOrder: "asc", timeZone: "UTC", offset: 0, limit: 10, counts: false, ...over,
+  filter: { and: [] }, search: "", sort: [], groupBy: null, groupOrder: "asc", timeZone: "UTC", offset: 0, limit: 10, counts: false, ...over,
 });
 
 describe("literals", () => {
@@ -124,16 +124,22 @@ describe("filters", () => {
     );
   });
   it("narrows a measurement's range to the days filtered on", () => {
-    expect(rangeOf([{ column: "_time", operator: "after", value: "2026-03-01" }], "UTC")).toEqual({ start: "2026-03-02T00:00:00.000Z", stop: "2262-01-01T00:00:00.000Z" });
-    expect(rangeOf([], "UTC").start).toBe("1970-01-01T00:00:00.000Z");
-    const none = rangeOf([{ column: "_time", operator: "before", value: "2026-01-01" }, { column: "_time", operator: "after", value: "2026-02-01" }], "UTC");
+    expect(rangeOf({ and: [{ column: "_time", operator: "after", value: "2026-03-01" }] }, "UTC")).toEqual({ start: "2026-03-02T00:00:00.000Z", stop: "2262-01-01T00:00:00.000Z" });
+    expect(rangeOf({ and: [] }, "UTC").start).toBe("1970-01-01T00:00:00.000Z");
+    const none = rangeOf({ and: [{ column: "_time", operator: "before", value: "2026-01-01" }, { column: "_time", operator: "after", value: "2026-02-01" }] }, "UTC");
     expect(Date.parse(none.stop)).toBeGreaterThan(Date.parse(none.start));
+  });
+  it("narrows the range only by rules every row must meet (not those under an or)", () => {
+    const after = { column: "_time", operator: "after" as const, value: "2026-03-01" };
+    const host = { column: "host", operator: "is" as const, value: "a" };
+    expect(rangeOf({ or: [after, host] }, "UTC").start).toBe("1970-01-01T00:00:00.000Z");
+    expect(rangeOf({ and: [{ or: [after] }, { or: [host, after] }] }, "UTC").start).toBe("2026-03-02T00:00:00.000Z");
   });
 });
 
 describe("scripts", () => {
   it("reads a measurement pivoted, its rows told apart by time and series", () => {
-    const flux = rowsFlux(query({ filters: [{ column: "_time", operator: "after", value: "2026-03-01" }] }), columns);
+    const flux = rowsFlux(query({ filter: { and: [{ column: "_time", operator: "after", value: "2026-03-01" }] } }), columns);
     expect(flux).toContain('from(bucket: "metrics")\n  |> range(start: 2026-03-02T00:00:00.000Z, stop: 2262-01-01T00:00:00.000Z)');
     expect(flux).toContain('r._measurement == "cpu"');
     expect(flux).toContain('pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")');

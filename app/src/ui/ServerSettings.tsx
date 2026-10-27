@@ -148,7 +148,7 @@ export function ServerSettings() {
                     id={`${uid}-src-url-${s.id}`}
                     labelText="Connection string"
                     placeholder="postgres://reader@db-host:5432/crm"
-                    helperText={state?.connector ? `Read by its ${state.connector} connector.` : "postgres://user@host:port/database, n8n://host for n8n's data tables (its API key as the password), or influxdb://host:8086/org (influxdbs:// for HTTPS; the token as password)."}
+                    helperText={state?.connector ? `Read by its ${state.connector} connector.` : "postgres://user@host:port/database, n8n://host for n8n's data tables (its API key as the password), influxdb://host:8086/org (influxdbs:// for HTTPS; the token as password), or d1://account-id/database-id for Cloudflare D1 (an API token with D1 Read as the password)."}
                     value={s.url}
                     onChange={(e) => setSource(i, { url: e.target.value })}
                   />
