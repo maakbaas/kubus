@@ -15,7 +15,8 @@ const __tests = [];
 /**
  * Registers a test. `opts.viewport`: a key of VIEWPORTS (default desktop); `opts.dark`: dark theme;
  * `opts.cpu`: its page n times slower (load mode for this test); `opts.smoke`: in the quick smoke run
- * (--smoke); `opts.heavy`: big data, run last and alone.
+ * (--smoke); `opts.heavy`: big data, run last and alone; `opts.perf`: a perf test (--perf only: phases
+ * measured with t.measure, run at normal speed and slowed down).
  */
 function test(name, fn, opts = {}) {
   __tests.push({ name, fn, opts });
@@ -54,6 +55,8 @@ function __makeT(ctx, pg, name, opts) {
     }
   };
   let where = "";
+  /** The renderer's Performance metrics now (CDP), by name: durations in seconds, sizes in bytes. */
+  const perfMetrics = async () => Object.fromEntries((await t.cdp.send("Performance.getMetrics")).metrics.map((m) => [m.name, m.value]));
 
   pg.on("console", (m) => {
     if (m.type() === "error") errors.push({ where, text: m.text().slice(0, 500) });
@@ -160,8 +163,8 @@ function __makeT(ctx, pg, name, opts) {
       if (settle) await t.settle();
     },
 
-    /** Navigates the active tab like a side-nav link would (no reload). */
-    async go(path) {
+    /** Navigates the active tab like a side-nav link would (no reload); then settles, unless `settle: false`. */
+    async go(path, { settle = true } = {}) {
       where = path;
       await pg.evaluate((path) => {
         const a = document.createElement("a");
@@ -171,39 +174,89 @@ function __makeT(ctx, pg, name, opts) {
         a.click();
         a.remove();
       }, path);
-      await t.settle();
+      if (settle) await t.settle();
     },
 
-    /** Waits until the page stops changing: no DOM mutations for `quiet` ms, fonts and loaders done. */
+    /**
+     * Waits until the page stops changing: no DOM mutations for `quiet` ms, fonts and loaders done.
+     * Returns when (epoch ms, page clock) the last change it saw happened, null when it saw none.
+     */
     async settle(quiet = 200, max = 5000 * slow) {
       // In load mode a render takes longer without touching the DOM: a quiet spell must be longer too.
       quiet *= slow;
       timing.settles++;
       const t0 = Date.now();
-      const timedOut = await pg
+      const res = await pg
         .evaluate(
           ({ quiet, max }) =>
             new Promise((resolve) => {
               const start = performance.now();
               let last = performance.now();
-              const obs = new MutationObserver(() => (last = performance.now()));
+              let changed = null;
+              const obs = new MutationObserver(() => (last = changed = performance.now()));
               obs.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
               const tick = () => {
                 const busy = document.querySelector(".page-loading, .cds--loading:not(.cds--loading--stop), .cds--skeleton");
                 const t = performance.now();
                 if ((!busy && t - last >= quiet) || t - start > max) {
                   obs.disconnect();
-                  resolve(t - start > max);
+                  resolve({ timedOut: t - start > max, changed: changed === null ? null : performance.timeOrigin + changed });
                 } else requestAnimationFrame(tick);
               };
               (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => requestAnimationFrame(tick));
             }),
           { quiet, max },
         )
-        .catch(() => false);
+        .catch(() => ({ timedOut: false, changed: null }));
       timing.settle += Date.now() - t0;
-      if (timedOut) timing.settleTimeouts++;
+      if (res.timedOut) timing.settleTimeouts++;
+      return res.changed;
     },
+
+    /**
+     * Perf tests (`perf: true`): one phase of the app's own work, measured in the page. `action`
+     * (Playwright: a click, typing, a navigation) starts it; `until` is the state that ends it: a
+     * function run in the page (with `arg`), polled every frame until it returns something truthy;
+     * without one the phase ends at the next frame. Recorded: `ms` from just before the action
+     * to that frame (what a person waits for), `doneMs` to the last DOM change after it (the page
+     * still filling in), the main thread's busy time (CDP: tasks, script, style and layout), long
+     * tasks (over 50ms: count and total), elements and JS heap. The settling after it is the
+     * suite's time (timing.settle), not the app's.
+     */
+    async measure(name, action, until = null, { arg = null, timeout = 60000 * slow } = {}) {
+      where = name;
+      if (!t.cdp) throw new Error("t.measure is for perf tests ({ perf: true })");
+      const m0 = await perfMetrics();
+      const s0 = await pg.evaluate(() => performance.timeOrigin + performance.now());
+      await action();
+      // The predicate's source runs in the page as an expression (whatever the page's CSP says).
+      const pred = until ? `(${until.toString()})(${JSON.stringify(arg)})` : "true";
+      const handle = await pg.waitForFunction(`(${pred}) ? performance.timeOrigin + performance.now() : false`, null, { polling: "raf", timeout });
+      const s1 = await handle.jsonValue();
+      const changed = await t.settle();
+      const m1 = await perfMetrics();
+      const end = await pg.evaluate(() => ({ at: performance.timeOrigin + performance.now(), nodes: document.getElementsByTagName("*").length }));
+      const long = await pg.evaluate(([a, b]) => (window.__perfLong || []).filter((e) => e.start >= a && e.start < b).map((e) => e.ms), [s0, end.at]);
+      const d = (k) => Math.round(((m1[k] || 0) - (m0[k] || 0)) * 1000);
+      const phase = {
+        name,
+        ms: Math.round(s1 - s0),
+        doneMs: Math.round(Math.max(s1, changed || 0) - s0),
+        cpuMs: d("TaskDuration"),
+        scriptMs: d("ScriptDuration"),
+        layoutMs: d("LayoutDuration") + d("RecalcStyleDuration"),
+        longTasks: long.length,
+        longMs: Math.round(long.reduce((a, b) => a + b, 0)),
+        nodes: end.nodes,
+        heapMB: Math.round(((m1.JSHeapUsedSize || 0) / 2 ** 20) * 10) / 10,
+      };
+      t.phases.push(phase);
+      return phase;
+    },
+    /** The phases measured so far (t.measure). */
+    phases: [],
+    /** The page's CDP session (perf tests): Performance metrics, CPU throttling. */
+    cdp: null,
 
     async wait(ms) {
       await pg.waitForTimeout(ms);
@@ -764,15 +817,28 @@ async function __main(pg) {
       }).observe({ type: "layout-shift", buffered: true });
     } catch {}
   });
+  // Perf tests: long tasks (the main thread busy for over 50ms at a time), with epoch times.
+  if (opts.perf) {
+    await ctx.addInitScript(() => {
+      window.__perfLong = [];
+      try {
+        new PerformanceObserver((list) => {
+          for (const e of list.getEntries()) window.__perfLong.push({ start: performance.timeOrigin + e.startTime, ms: e.duration });
+        }).observe({ type: "longtask", buffered: true });
+      } catch {}
+    });
+  }
   const p = await ctx.newPage();
   const slow = Math.max(1, opts.cpu || __OPTS.cpu || 1);
   p.setDefaultTimeout(8000 * slow);
-  // Load mode (--cpu n): the page's CPU n times slower (Chromium only: CDP).
-  if (slow > 1 && /chrom|msedge/.test(__OPTS.browser || "chromium")) {
-    const cdp = await ctx.newCDPSession(p);
-    await cdp.send("Emulation.setCPUThrottlingRate", { rate: slow });
-  }
+  const chromium = /chrom|msedge/.test(__OPTS.browser || "chromium");
+  // Load mode (--cpu n): the page's CPU n times slower (Chromium only: CDP). Perf tests read the
+  // renderer's metrics through the same session.
+  const cdp = chromium && (slow > 1 || opts.perf) ? await ctx.newCDPSession(p) : null;
+  if (cdp && slow > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: slow });
+  if (cdp && opts.perf) await cdp.send("Performance.enable");
   const t = __makeT(ctx, p, entry.name, opts);
+  t.cdp = opts.perf ? cdp : null;
   const started = Date.now();
   let status = "pass";
   let error = null;
@@ -796,6 +862,18 @@ async function __main(pg) {
   t.checkpoints.push({ kind: "check", label: "no fonts, scripts, styles or images from other hosts (offline first)", pass: t.external.length === 0, detail: [...new Set(t.external)].slice(0, 10).join("\n") });
   t.checkpoints.push({ kind: "console", label: "no console errors", pass: errs.length === 0, detail: errs.slice(0, 10).map((e) => `[${e.where}] ${e.text}`).join("\n") });
   if (status === "pass" && t.checkpoints.some((c) => !c.pass)) status = "fail";
+  // Perf tests: the JS heap after a garbage collection, at the end.
+  let perf = null;
+  if (opts.perf) {
+    let heapMB = null;
+    try {
+      await cdp.send("HeapProfiler.collectGarbage");
+      const m = (await cdp.send("Performance.getMetrics")).metrics.find((x) => x.name === "JSHeapUsedSize");
+      heapMB = m ? Math.round((m.value / 2 ** 20) * 10) / 10 : null;
+    } catch {}
+    perf = { cpu: slow, phases: t.phases, heapMB };
+  }
+  const ms = Date.now() - started;
   await ctx.close().catch(() => {});
-  return JSON.stringify({ name: entry.name, status, error, ms: Date.now() - started, timing: t.timing, viewport: opts.viewport || "desktop", dark: !!opts.dark, checkpoints: t.checkpoints });
+  return JSON.stringify({ name: entry.name, status, error, ms, timing: t.timing, perf, viewport: opts.viewport || "desktop", dark: !!opts.dark, checkpoints: t.checkpoints });
 }

@@ -32,6 +32,10 @@
 //   --min-free <gb>    wait before starting a test while less memory is free (default 1.5)
 //   --name <name>      name of this run's browser sessions, build and report folders (default: none), so
 //                      a second run (another --port) can go alongside without ending the first's
+//   --perf             only the perf tests ({ perf: true }, left out of other runs): each at normal speed
+//                      and at 4× CPU throttling (or the --cpu given), one browser (--workers), repeats
+//                      (--repeat) interleaved; per-phase timings in perf-summary.json beside the report
+//   --perf-compare <file>  with --perf: compare with an earlier perf-summary.json (change per test)
 //
 // Memory: each session is a Chrome (browser, GPU and network processes) plus a test's renderers
 // (the app with its SQLite worker, one per sandboxed HTML frame): up to about 1.7 GB on ordinary
@@ -69,7 +73,9 @@ const minFree = Number(opt("min-free", 1.5)) * GB;
 // Measured: a browser peaks at about 1.7 GB on ordinary tests (app, SQLite worker, a renderer per
 // sandboxed HTML frame); keep `minFree` for everything else; at most 3.
 const autoWorkers = Math.max(1, Math.min(3, Math.floor((freemem() - minFree) / (1.7 * GB))));
-const workers = Math.max(1, Number(opt("workers", autoWorkers)));
+const perfMode = flag("perf");
+// Perf runs measure: one browser by default, so tests don't slow each other down.
+const workers = Math.max(1, Number(opt("workers", perfMode ? 1 : autoWorkers)));
 const recycleEvery = Math.max(1, Number(opt("recycle", 8)));
 const grep = opt("grep") ? new RegExp(opt("grep"), "i") : null;
 const suiteFilter = opt("suite");
@@ -108,8 +114,18 @@ function listTests(file) {
 let tests = suiteFiles.flatMap(listTests);
 if (grep) tests = tests.filter((t) => grep.test(`${t.suite} › ${t.name}`));
 if (flag("smoke")) tests = tests.filter((t) => t.opts.smoke);
-// Each test `repeat` times: the same test (looked up by `name`), reported as "name #k".
-if (repeat > 1) tests = tests.flatMap((t) => Array.from({ length: repeat }, (_, k) => ({ ...t, label: `${t.name} #${k + 1}` })));
+// Perf tests only run in a perf run, each at every CPU speed of `perfCpus` (`cpu` per test).
+const perfCpus = opt("cpu") ? [cpu] : [1, 4];
+tests = tests.filter((t) => !!t.opts.perf === perfMode);
+if (perfMode) tests = tests.flatMap((t) => perfCpus.map((c) => ({ ...t, cpu: c, label: `${t.name} · cpu ${c}×` })));
+// Each test `repeat` times: the same test (looked up by `name`), reported as "name #k". Perf runs
+// take turns (every test once, then again), so a slower spell of the machine hits all alike.
+if (repeat > 1) {
+  const runs = (t, k) => ({ ...t, label: `${t.label || t.name} #${k + 1}` });
+  tests = perfMode
+    ? Array.from({ length: repeat }, (_, k) => tests.map((t) => runs(t, k))).flat()
+    : tests.flatMap((t) => Array.from({ length: repeat }, (_, k) => runs(t, k)));
+}
 if (flag("list")) {
   for (const t of tests) console.log(`${t.suite} › ${t.label || t.name}`);
   console.log(`${tests.length} tests`);
@@ -284,7 +300,7 @@ function stopServer() {
 
 // ---- run --------------------------------------------------------------------------------------
 async function runTest(session, t, n) {
-  const opts = { browser: browserName || "chromium", test: t.name, baseUrl, shotDir: shotDir.replace(/\\/g, "/"), skip: skipRules, shotAll: flag("shot-all"), ignoreConsole: IGNORE_CONSOLE, cpu, shotPrefix: t.label ? `r${n}-` : "" };
+  const opts = { browser: browserName || "chromium", test: t.name, baseUrl, shotDir: shotDir.replace(/\\/g, "/"), skip: skipRules, shotAll: flag("shot-all"), ignoreConsole: IGNORE_CONSOLE, cpu: t.cpu || cpu, shotPrefix: t.label ? `r${n}-` : "" };
   const code = `async page => {\nconst __OPTS = ${JSON.stringify(opts)};\n${lib}\n${t.src}\nreturn await __main(page);\n}`;
   const file = join(tmpDir, `t${n}.js`);
   writeFileSync(file, code);
@@ -300,7 +316,7 @@ async function runTest(session, t, n) {
   }
   for (const c of result.checkpoints || []) if (c.kind === "baseline") compareBaseline(c);
   if (result.status === "pass" && (result.checkpoints || []).some((c) => !c.pass)) result.status = "fail";
-  return { ...result, name: t.label || result.name, suite: t.suite, viewport: result.viewport || t.opts.viewport || "desktop", dark: !!t.opts.dark };
+  return { ...result, name: t.label || result.name, test: t.name, cpu: t.cpu || cpu, suite: t.suite, viewport: result.viewport || t.opts.viewport || "desktop", dark: !!t.opts.dark };
 }
 
 /**
@@ -399,12 +415,94 @@ async function main() {
   rmSync(tmpDir, { recursive: true, force: true });
 
   const { summary, byRule } = writeReport(started, results, false);
+  if (perfMode) perfSummary(results);
   console.log("");
   for (const [rule, list] of Object.entries(byRule).sort((a, b) => b[1].length - a[1].length)) console.log(`  ${rule.padEnd(22)} ${list.length}`);
   for (const f of summary.flakyTests) console.log(`  flaky: ${f}`);
   console.log(`\n${summary.passed} passed, ${summary.failed} failed, ${summary.flaky} flaky, ${summary.errored} errored of ${summary.tests} tests; ${summary.failedCheckpoints} of ${summary.checkpoints} checkpoints failed (${summary.seconds}s)`);
   console.log(`Report: ${join(reportDir, "index.html")}`);
   process.exitCode = summary.failed + summary.errored + summary.flakyTests.length > 0 ? 1 : 0;
+}
+
+// ---- perf summary ---------------------------------------------------------------------------
+const median = (xs) => {
+  const v = xs.filter((x) => typeof x === "number").sort((a, b) => a - b);
+  if (!v.length) return null;
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+};
+const SUITE_TIMES = ["boot", "seed", "load", "settle", "audit", "screenshot"];
+
+/**
+ * perf-summary.json: per perf test and CPU speed, the medians over its runs (--repeat) of the
+ * app's time (the phases' `ms`, summed: what a person waits for), each phase's measures, and the
+ * suite's own time (seeding, loads, settling, audits, screenshots: the test's time minus the
+ * phases'). Printed as a table, compared with an earlier summary when --perf-compare names one.
+ */
+function perfSummary(results) {
+  const byKey = new Map();
+  for (const r of results) {
+    if (!r.perf) continue;
+    const key = `${r.test} · cpu ${r.cpu}×`;
+    byKey.set(key, [...(byKey.get(key) || []), r]);
+  }
+  const tests = {};
+  for (const [key, runs] of byKey) {
+    const ok = runs.filter((r) => r.status === "pass" || r.status === "flaky");
+    const use = ok.length ? ok : runs;
+    const appMs = use.map((r) => r.perf.phases.reduce((a, p) => a + p.ms, 0));
+    const doneMs = use.map((r) => r.perf.phases.reduce((a, p) => a + p.doneMs, 0));
+    const names = [...new Set(use.flatMap((r) => r.perf.phases.map((p) => p.name)))];
+    const phases = Object.fromEntries(names.map((name) => {
+      const ps = use.map((r) => r.perf.phases.find((p) => p.name === name)).filter(Boolean);
+      return [name, Object.fromEntries(["ms", "doneMs", "cpuMs", "scriptMs", "layoutMs", "longTasks", "longMs", "nodes", "heapMB"].map((k) => [k, median(ps.map((p) => p[k]))]))];
+    }));
+    const suite = Object.fromEntries(SUITE_TIMES.map((k) => [k, median(use.map((r) => r.timing?.[k] || 0))]));
+    tests[key] = {
+      runs: runs.length,
+      failed: runs.length - ok.length,
+      appMs: median(appMs),
+      appMsAll: appMs,
+      doneMs: median(doneMs),
+      cpuMs: median(use.map((r) => r.perf.phases.reduce((a, p) => a + p.cpuMs, 0))),
+      longTasks: median(use.map((r) => r.perf.phases.reduce((a, p) => a + p.longTasks, 0))),
+      longMs: median(use.map((r) => r.perf.phases.reduce((a, p) => a + p.longMs, 0))),
+      maxNodes: median(use.map((r) => Math.max(0, ...r.perf.phases.map((p) => p.nodes)))),
+      heapMB: median(use.map((r) => r.perf.heapMB)),
+      testMs: median(use.map((r) => r.ms)),
+      suiteMs: median(use.map((r) => r.ms - r.perf.phases.reduce((a, p) => a + p.doneMs, 0))),
+      suite,
+      phases,
+    };
+  }
+  const summary = { started: new Date().toISOString(), repeat, tests };
+  writeFileSync(join(reportDir, "perf-summary.json"), JSON.stringify(summary, null, 1));
+  let before = null;
+  if (opt("perf-compare")) {
+    try {
+      before = JSON.parse(readFileSync(resolve(opt("perf-compare")), "utf8")).tests;
+    } catch (e) {
+      console.log(`Could not read ${opt("perf-compare")}: ${e.message}`);
+    }
+  }
+  const pct = (a, b) => (a == null || !b ? "" : `${a <= b ? "" : "+"}${(((a - b) / b) * 100).toFixed(1)}%`);
+  const rows = Object.entries(tests).map(([key, x]) => ({
+    test: key.length > 58 ? key.slice(0, 57) + "…" : key,
+    "app ms": Math.round(x.appMs),
+    "(runs)": x.appMsAll.map(Math.round).join("/"),
+    ...(before ? { "vs before": pct(x.appMs, before[key]?.appMs) } : {}),
+    "done ms": Math.round(x.doneMs),
+    "cpu ms": Math.round(x.cpuMs),
+    "long tasks": `${x.longTasks} / ${Math.round(x.longMs)}ms`,
+    nodes: x.maxNodes,
+    "heap MB": x.heapMB,
+    "suite s": (x.suiteMs / 1000).toFixed(1),
+    ...(before ? { "suite vs": pct(x.suiteMs, before[key]?.suiteMs) } : {}),
+    ...(x.failed ? { failed: x.failed } : {}),
+  }));
+  console.log("\nPerf (medians; app ms = the phases' time to their end state, suite s = the test's other time):");
+  console.table(rows);
+  console.log(`Perf summary: ${join(reportDir, "perf-summary.json")}`);
 }
 
 /** Tests that passed only on a retry, and repeated tests (--repeat) that passed in some runs only. */
