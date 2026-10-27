@@ -16,5 +16,5 @@
     "skipLibCheck": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["app/src", "app/vite.config.ts", "shared"]
+  "include": ["app/src", "app/vite.config.ts", "app/vite.headless.config.ts", "shared"]
 }

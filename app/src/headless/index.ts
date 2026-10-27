@@ -1,0 +1,116 @@
+// The headless device: the app's own repository and sync engine inside the server process, with
+// an in-memory database, so the HTTP API (/api/v1) follows exactly the rules the GUI does. It is
+// one more synced device: it syncs with the server over HTTP like the others, hears their changes
+// through /api/events, and its own writes reach them through sync. Bundled for Node by
+// `npm run build:headless` (app/vite.headless.config.ts) into server/headless, which the server
+// loads (server/src/headless.ts). See docs/sync.md, "The API".
+
+import type { HeadlessOptions, StartHeadless } from "../../../shared/api";
+import type { ApiRequest, ApiResponse } from "../../../shared/router";
+import { HttpError, json } from "../../../shared/router";
+import { DirectSqlClient } from "../data/sqlite/direct";
+import { SqliteRepository } from "../data/sqlite/SqliteRepository";
+import { memoryEnvironment } from "../data/sync/environment";
+import { setCompiler } from "../domain/components";
+import { createApi } from "./api";
+import { contextCompiler } from "./compiler";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export class HeadlessDevice {
+  private queue: Promise<unknown> = Promise.resolve();
+
+  private constructor(
+    readonly repo: SqliteRepository,
+    private options: HeadlessOptions,
+  ) {
+    // The server's database was wiped or replaced: this device holds nothing it must keep (it is
+    // a cache of the server), so it starts over with what the server holds now.
+    repo.sync.subscribe(() => {
+      if (repo.sync.status.replaced) void this.serial(() => this.reset());
+    });
+  }
+
+  /** Opens an empty device and connects it: its first sync downloads everything (but file bytes). */
+  static async start(options: HeadlessOptions): Promise<HeadlessDevice> {
+    setCompiler(contextCompiler);
+    const repo = await SqliteRepository.open(await DirectSqlClient.open(), memoryEnvironment({ keepFiles: false }));
+    const device = new HeadlessDevice(repo, options);
+    await device.serial(() => device.connect());
+    return device;
+  }
+
+  private async connect() {
+    const { serverUrl: url, token } = this.options;
+    await this.repo.sync.configure({ url, token, enabled: true, originals: "opened" });
+    this.check();
+  }
+
+  private async reset() {
+    if (!this.repo.sync.status.replaced) return;
+    this.options.log("The server's database was replaced: the headless device starts over");
+    await this.repo.wipeLocal();
+    await this.connect();
+  }
+
+  /** Throws (503) unless the last sync worked. */
+  private check() {
+    const { state, error } = this.repo.sync.status;
+    if (state === "error") throw new HttpError(503, `The server's headless device can't sync: ${error}`);
+  }
+
+  /** Brings this device up to date with the server. */
+  async refresh() {
+    await this.repo.sync.syncNow();
+    if (this.repo.sync.status.replaced) await this.reset();
+    this.check();
+  }
+
+  /** Runs tasks one at a time, in order. */
+  serial<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(task, task);
+    this.queue = run.catch(() => {});
+    return run;
+  }
+
+  /**
+   * Deletes the server's files that have been unused for long enough. The server's marks name the
+   * candidates; this device, holding every row, decides with the app's own rule.
+   */
+  async cleanUpFiles(): Promise<string[]> {
+    return this.serial(async () => {
+      await this.refresh();
+      const cutoff = new Date(Date.now() - this.options.unusedFileDays * DAY_MS);
+      const marked = await this.options.files.marked(cutoff);
+      if (marked.length === 0) return [];
+      const unused = await this.repo.unusedFiles(marked);
+      await this.options.files.unmark(marked.filter((id) => !unused.includes(id)));
+      const deleted = await this.options.files.delete(unused, cutoff);
+      if (deleted.length > 0) this.options.log(`Deleted ${deleted.length} unused file(s)`);
+      return deleted;
+    });
+  }
+}
+
+export const startHeadless: StartHeadless = async (options) => {
+  const device = await HeadlessDevice.start(options);
+  const api = createApi(device.repo);
+  const cleanUp = () => device.cleanUpFiles().catch((e) => options.log(`File clean-up failed: ${e instanceof Error ? e.message : String(e)}`));
+  void cleanUp();
+  setInterval(cleanUp, options.cleanUpEveryMs);
+  return {
+    handle: (req: ApiRequest): Promise<ApiResponse> =>
+      device.serial(async () => {
+        try {
+          await device.refresh(); // reads see the latest data
+          const response = await api.handle(req);
+          // A write is on the server (and on its way to every device) when the answer arrives.
+          if (req.method !== "GET" && response.status < 400) await device.refresh();
+          return response;
+        } catch (e) {
+          if (e instanceof HttpError) return json(e.status, { error: e.message });
+          throw e;
+        }
+      }),
+  };
+};

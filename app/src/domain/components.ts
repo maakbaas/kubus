@@ -22,7 +22,9 @@
 //
 // The code runs in the app itself (new Function), with the user's own rights. That's fine for a
 // personal, local app; once components can come from someone else (sync, sharing) they must run
-// in a sandbox (a worker or an iframe without access to the app).
+// in a sandbox (a worker or an iframe without access to the app). On the server (the headless
+// device computing values for the API) it runs in a separate V8 context with a time limit
+// (headless/compiler.ts, through setCompiler).
 
 import { checklistItems } from "./checklist";
 import { fileSrc } from "./files";
@@ -263,6 +265,16 @@ export const outputOf = (field: FieldDef, components: Component[]): ComponentOut
   components.find((t) => t.id === field.componentId)?.output ?? "markdown";
 
 type Compiled = (...args: unknown[]) => unknown;
+/** Turns a function body with these parameter names into a function; throws on a syntax error. */
+export type Compiler = (params: string[], body: string) => Compiled;
+let compiler: Compiler = (params, body) => new Function(...params, body) as Compiled;
+
+/** Replaces how section code is compiled (the server's headless device: a separate context). */
+export function setCompiler(next: Compiler) {
+  compiler = next;
+  compiled.clear();
+}
+
 /** Compiled sections by parameters and code; bounded (the component editor compiles on every keystroke). */
 const compiled = new Map<string, Compiled | Error>();
 const COMPILED_MAX = 500;
@@ -272,7 +284,7 @@ function compile(params: string[], code: string): Compiled | Error {
   let fn = compiled.get(key);
   if (!fn) {
     try {
-      fn = new Function(...params.map((p) => `$${p}`), "$item", "$now", "$items", "$groups", "$fields", "$all", `"use strict"; return (${code});`) as Compiled;
+      fn = compiler([...params.map((p) => `$${p}`), "$item", "$now", "$items", "$groups", "$fields", "$all"], `"use strict"; return (${code});`);
     } catch (e) {
       fn = e instanceof Error ? e : new Error(String(e));
     }

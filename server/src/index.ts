@@ -4,17 +4,22 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize } from "node:path";
 import { createPool } from "./db.ts";
 import { broadcast, handleEvents } from "./events.ts";
-import { getFile, hasFile, putFile } from "./files.ts";
+import { deleteUnusedFiles, getFile, hasFile, markedFiles, putFile, unmarkFiles } from "./files.ts";
+import { HeadlessHost } from "./headless.ts";
 import { FILE_ID } from "../../shared/files.ts";
-import { handleSync } from "./sync.ts";
+import { handleSync, LOCK_ID } from "./sync.ts";
 import { wipe } from "./wipe.ts";
 import { MAX_FILE_BYTES, type SyncRequest } from "../../shared/sync.ts";
 import { HttpError, json, Router, type ApiRequest, type ApiResponse } from "../../shared/router.ts";
 
-// Kubus server: the sync API (/api) and, from the same origin, the web app (so a phone can
+// Kubus server: the sync API (/api), the HTTP API for other tools (/api/v1, answered by the
+// headless device: server/src/headless.ts) and, from the same origin, the web app (so a phone can
 // install it as a home-screen app). Configuration is environment only:
-//   DATABASE_URL  Postgres connection string        KUBUS_TOKEN  shared secret of the devices
+//   DATABASE_URL  Postgres connection string        KUBUS_TOKEN  shared secret of the devices and the API
 //   PORT          default 8080                      STATIC_DIR   built web app, default ../../app/dist
+//   KUBUS_WEBHOOK_URL     URL(s), comma-separated, called with every change (docs/sync.md)
+//   KUBUS_WEBHOOK_SECRET  signs each webhook request (X-Kubus-Signature)
+//   KUBUS_UNUSED_FILE_DAYS  how long a file no item uses is kept, default 7
 
 const databaseUrl = process.env.DATABASE_URL;
 const token = process.env.KUBUS_TOKEN;
@@ -22,6 +27,7 @@ if (!databaseUrl || !token) {
   console.error("DATABASE_URL and KUBUS_TOKEN must be set");
   process.exit(1);
 }
+const port = Number(process.env.PORT ?? 8080);
 const staticDir = process.env.STATIC_DIR ?? join(import.meta.dirname, "../../app/dist");
 /** A sync request's largest body (an app from before /api/files sends files' bytes in it). */
 const MAX_SYNC_BODY = 100 * 1024 * 1024;
@@ -116,6 +122,20 @@ const routes = new Router()
     return json(200, { ok: true });
   });
 
+const headless = new HeadlessHost();
+
+// The HTTP API. A file's bytes come straight from here; everything else from the headless device.
+const api = new Router()
+  .add("GET", "/api/v1/files/{id}", (req, params) => routes.handle({ ...req, path: `/api/files/${params.id}` }))
+  .add("HEAD", "/api/v1/files/{id}", (req, params) => routes.handle({ ...req, path: `/api/files/${params.id}` }));
+
+async function handleApi(req: ApiRequest): Promise<ApiResponse> {
+  fitting();
+  if (api.has(req.path)) return api.handle(req);
+  if (!headless.device) return json(503, { error: headless.problem });
+  return headless.device.handle(req);
+}
+
 /** Writes a router's answer to the node:http response. */
 function reply(res: ServerResponse, answer: ApiResponse, head: boolean) {
   const headers: Record<string, string> = { ...answer.headers };
@@ -172,7 +192,9 @@ createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/")) {
       if (!authorized(req)) return send(res, 401, '{"error":"Wrong token"}');
       if (url.pathname === "/api/events" && req.method === "GET") return handleEvents(req, res);
-      return reply(res, await routes.handle(toApiRequest(req, url)), req.method === "HEAD");
+      const request = toApiRequest(req, url);
+      const answer = url.pathname.startsWith("/api/v1/") ? await handleApi(request) : await routes.handle(request);
+      return reply(res, answer, req.method === "HEAD");
     }
     if (req.method === "GET") return await serveStatic(req.url ?? "/", res);
     send(res, 405, "Method not allowed", "text/plain");
@@ -181,4 +203,22 @@ createServer(async (req, res) => {
     if (status === 500) console.error(e);
     if (!res.headersSent) send(res, status, JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
   }
-}).listen(Number(process.env.PORT ?? 8080), () => console.log(`Kubus server on :${process.env.PORT ?? 8080}`));
+}).listen(port, () => {
+  console.log(`Kubus server on :${port}`);
+  void headless.start({
+    serverUrl: `http://127.0.0.1:${port}`,
+    token,
+    files: {
+      marked: (cutoff) => markedFiles(pool, cutoff),
+      unmark: (ids) => unmarkFiles(pool, ids),
+      delete: (ids, cutoff) => deleteUnusedFiles(pool, ids, cutoff, LOCK_ID),
+    },
+    unusedFileDays: Number(process.env.KUBUS_UNUSED_FILE_DAYS ?? 7),
+    cleanUpEveryMs: 60 * 60 * 1000,
+    webhooks: {
+      urls: (process.env.KUBUS_WEBHOOK_URL ?? "").split(",").map((u) => u.trim()).filter(Boolean),
+      secret: process.env.KUBUS_WEBHOOK_SECRET || null,
+    },
+    log: (message) => console.log(`[api] ${message}`),
+  });
+});
