@@ -21,7 +21,6 @@ is what this split avoids. Keep them current when behaviour changes.
   download, thumbnails, clean-up), the HTTP API (headless device) and webhooks, iOS home-screen app,
   known sync limits.
 - `docs/vision.md`: the "one hub" vision (native + remote sources, capabilities) and the roadmap.
-- `docs/todo.md`: planned changes agreed on but not done yet.
 
 ## Rules that always apply
 

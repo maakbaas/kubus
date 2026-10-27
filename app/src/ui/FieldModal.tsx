@@ -6,7 +6,8 @@ import { useItemCounts } from "../app/useItemCounts";
 import { fieldKindList, fieldKinds, offeredKind } from "../domain/fieldKinds";
 import { blankField, isReferenceKind, newId, collectionDraft, type FieldDef, type FieldDraft, type Collection } from "../domain/model";
 import { FieldKindLabel } from "./fieldKindIcons";
-import { FieldSettings, newKindPatch, settingsProblem, type Target } from "./FieldSettings";
+import { FieldSettings, newKindPatch, type Target } from "./FieldSettings";
+import { settingsProblem } from "../domain/collectionDraft";
 import { errorMessage, useConfirm } from "./useConfirm";
 import { useMountedDialog } from "./useMountedDialog";
 

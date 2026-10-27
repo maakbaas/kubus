@@ -24,12 +24,6 @@
 import { fieldComponent, fieldLookup, isAiOutput, placeProblem, render, splitWarnings, type Component, type ComponentCode, type FieldLookup, type RefLabel } from "./components";
 import type { AiOutput, Collection, FieldDef, Item } from "./model";
 
-export const AI_OUTPUTS: { value: AiOutput; text: string }[] = [
-  { value: "string", text: "Text" },
-  { value: "number", text: "Number" },
-  { value: "markdown", text: "Markdown" },
-];
-
 /** The prompt of an AI field is stored as it is typed; this is the output a field without one gets. */
 export const DEFAULT_AI_OUTPUT: AiOutput = "string";
 

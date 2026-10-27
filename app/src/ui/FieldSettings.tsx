@@ -43,8 +43,6 @@ const fromRef = (ref: ComponentRef, local: ComponentCode | null = ref.local): Pa
   frameRatio: local?.frameRatio ?? null,
 });
 
-/** Why a field's settings can't be saved (shown at them once the user tried), or undefined. */
-export { settingsProblem } from "../domain/collectionDraft";
 
 /**
  * The settings of one field beyond its name and type, the same in the collection editor (under
