@@ -33,9 +33,9 @@ export function CollapseCaret({ collapsed, onToggle }: Collapse) {
  * The heading row of a field or a block: a collapse caret where it collapses, its name as a field
  * label (small text, with its icon), and its buttons at the right (an OverflowBar: "⋮" on phones).
  * The row is as tall as a label; the 2rem buttons are centred on it and overhang a little.
- * `hidden` drops the row: its buttons become a "⋮" menu to the right of the content (styles.css,
- * `.section-header--hidden`). `overlay` keeps only the buttons, over the right of the label row of
- * what follows (a field being edited: its input brings its own label).
+ * `hidden` keeps only a low row in its place: its buttons become a "…" menu at its right, above
+ * the content (styles.css, `.section-header--hidden`). `overlay` keeps only the buttons, over the
+ * right of the label row of what follows (a field being edited: its input brings its own label).
  */
 export function SectionHeader({
   label,
@@ -62,7 +62,9 @@ export function SectionHeader({
   if (hidden) {
     return children ? (
       <div className="section-header section-header--hidden">
-        <OverflowBar menu>{children}</OverflowBar>
+        <OverflowBar menu horizontal>
+          {children}
+        </OverflowBar>
       </div>
     ) : null;
   }

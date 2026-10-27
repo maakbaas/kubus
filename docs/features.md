@@ -190,9 +190,9 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   collapses too), and its menus at the right; blocks are separated by a line, like item fields. In a
   collection view the header can be hidden (tag icon in View settings' block list,
   `ViewBlock.hideHeader`, stored right away), on an item page with the layout's name toggle (a
-  Markdown block too: unnamed, it is headed "Markdown" like any block): the header row goes and its menus become a "⋮" (`OverflowBar` with `menu`, the dark
-  popover phones get; always, even for a single button; a narrow button, 1rem wide) to the right
-  of the block's content; the block can't collapse. A field shown without its name does the same with its
+  Markdown block too: unnamed, it is headed "Markdown" like any block): the header row gives way to a low one (1rem, 24px on touch screens) holding its menus
+  as a "…" at the right (`OverflowBar` with `menu`, the dark popover phones get; always, even for a
+  single button), so the content keeps the full width; the block can't collapse. A field shown without its name does the same with its
   label row's buttons ("Generate again"), also while it is edited. The line between fields and
   blocks stays either way: a hidden header or name never joins two sections. What
   arranges a view is stored right away, applied to the shown and the saved view alike, so it never

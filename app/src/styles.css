@@ -2574,37 +2574,27 @@ img[data-lightbox] {
   block-size: 0;
   margin-inline-start: auto;
 }
-/* A hidden header: no row; its buttons are a "⋮" menu at the top right, beside the content, which
-   leaves room for it (the button and a gap). The "⋮" is a narrow button (1rem, as tall as the
-   others), taking as little of the content's width as it can. */
-:is(.block, .view-field):has(> .section-header--hidden) {
-  position: relative;
-  padding-inline-end: calc(var(--toggle-width) + var(--cds-spacing-03));
-  --toggle-width: 1rem;
+/* A hidden header: a thin row in its place with its buttons as a "…" menu at the right, so the
+   content keeps the full width. The "…" is a low button (2rem wide, 1rem tall), the row only as
+   tall as it: most of a header's height goes. */
+.section-header--hidden {
+  --toggle-height: 1rem;
+  justify-content: flex-end;
+  min-block-size: 0;
+  block-size: var(--toggle-height);
+  margin: 0;
 }
-/* On touch screens wide enough to hit (WCAG 2.5.8: 24px). */
+/* On touch screens tall enough to hit (WCAG 2.5.8: 24px). */
 @media (pointer: coarse) {
-  :is(.block, .view-field):has(> .section-header--hidden) {
-    --toggle-width: 1.5rem;
+  .section-header--hidden {
+    --toggle-height: 1.5rem;
   }
 }
 .section-header--hidden .overflow-bar__toggle.cds--btn {
-  inline-size: var(--toggle-width);
-  min-inline-size: var(--toggle-width);
+  block-size: var(--toggle-height);
+  min-block-size: var(--toggle-height);
   padding: 0;
   justify-content: center;
-}
-/* The popover's caret on the narrow button's centre. */
-.section-header--hidden .overflow-bar--menu > .overflow-bar__items::before {
-  inset-inline-end: calc(var(--toggle-width) / 2 - 0.375rem);
-}
-.section-header--hidden {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-end: 0;
-  z-index: 2;
-  min-block-size: 0;
-  margin: 0;
 }
 /* Only the buttons, at the right of the label row of what follows (a field being edited, whose
    input brings its own label): the row's height, from the top. */
