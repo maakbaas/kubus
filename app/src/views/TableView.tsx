@@ -228,8 +228,7 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
     const editor = (
       <FieldEditor
         field={field}
-        // The typed source when the shown value was rendered from {{ }} sections.
-        value={item.sources?.[field.id] ?? item.values[field.id] ?? null}
+        value={item.values[field.id] ?? null}
         refs={refs}
         compact
         start={editing.start}

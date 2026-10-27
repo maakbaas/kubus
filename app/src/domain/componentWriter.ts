@@ -57,6 +57,7 @@ export function componentMessages(args: {
     "</code>",
     "Rules:",
     "- When the component is for a particular collection, read its fields with $item (for example {{ $item.Pages }}). Otherwise take $variables, so the component can be reused for any collection.",
+    "- Never use $item together with $items, $groups, $fields or $all in one component: it is either about one item or about a block's items.",
     "- Each section is one JavaScript expression. Guard for empty fields (null).",
     "- Choose the simplest output that fits: number for a computed number, string for one line of plain text, markdown for formatted text, html only for what Markdown cannot do (charts, maps).",
     "- Keep it short and plain; do not add what was not asked for.",

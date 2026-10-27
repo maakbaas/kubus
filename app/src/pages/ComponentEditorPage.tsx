@@ -6,7 +6,9 @@ import { useItems } from "../app/useItems";
 import {
   ERROR_PREFIX,
   FRAME_RATIOS,
+  componentUses,
   dollarNames,
+  kindText,
   parseParams,
   render,
   withComputed,
@@ -65,6 +67,8 @@ export function ComponentEditorPage() {
   }, [code]);
   const previewCollection = uses.collection ? collections.find((c) => c.id === previewCollectionId) : undefined;
   const nameError = name.trim() ? undefined : "Give the component a name";
+  // One item ($item) or a block's items, never both: such code fits no place, so it isn't saved.
+  const codeError = useMemo(() => (componentUses(code).mixed ? kindText(code) : undefined), [code]);
 
   if (componentId && !existing) return <NotFound />;
 
@@ -85,7 +89,7 @@ export function ComponentEditorPage() {
   async function save(e: FormEvent) {
     e.preventDefault();
     setSubmitted(true);
-    if (nameError) return;
+    if (nameError || codeError) return;
     setSaving(true);
     try {
       const ts = now();
@@ -160,7 +164,10 @@ export function ComponentEditorPage() {
             labelText="Component"
             html={output === "html"}
             placeholder={"**{{ $title }}**: {{ Math.round($pages / 40) }} h of reading"}
-            helperText={`${output === "html" ? "HTML" : "Markdown"} with {{ JavaScript }} sections. Variables start with $; built in are $now (the current date) and $item, the item itself: its fields by name ($item.Pages, or $item["Read at"]) and $item.id, createdAt, updatedAt. A variable mapped to a reference gets the linked item's title.${output === "image" ? " The result is the image's URL." : ""}${output === "html" ? " It runs in a sandboxed frame: scripts work (maps, charts), the app and its data are out of reach." : ""}`}
+            // What the code makes it (a field, block or static component) as it is typed; using
+            // $item and a block's names together is an error.
+            helperText={`${kindText(code)} ${output === "html" ? "HTML" : "Markdown"} with {{ JavaScript }} sections. Built in: $now (the current date); $item, one item: its fields by name ($item.Pages, or $item["Read at"]) and $item.id, createdAt, updatedAt; a block's $items, $groups, $fields and $all. Any other $name is a variable, given a value where the component is used (a field's value, or a fixed one).${output === "image" ? " The result is the image's URL." : ""}${output === "html" ? " It runs in a sandboxed frame: scripts work (maps, charts), the app and its data are out of reach." : ""}`}
+            invalidText={codeError}
             value={code}
             onChange={setCode}
           />

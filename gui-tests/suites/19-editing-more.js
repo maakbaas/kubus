@@ -1,6 +1,6 @@
-// More editing: undo / redo and pasting (text, a link, {{ }} code) in the Markdown editor, undo in
+// More editing: undo / redo and pasting (text, a link, braces as text) in the Markdown editor, undo in
 // the code editor, a reference field's choice filter, moving an item to another space, an item
-// view pinned / starred / deleted, a component field's code and its "Change component?" dialog,
+// view pinned / starred / deleted, a component field's code ("Edit component") and its "Change component?" dialog,
 // cards (open, a checkbox in a card, open in a new tab) and opening search results.
 
 const fieldsText = (t) => t.page.locator(".ws-pane--active .item-fields").innerText();
@@ -16,7 +16,7 @@ async function pasteText(t, text) {
 }
 
 for (const vp of ["desktop", "phone"]) {
-  test(`Markdown: undo, redo and pasting text, a link and {{ }} code @ ${vp}`, async (t) => {
+  test(`Markdown: undo, redo and pasting text, a link and {{ }} (kept as text) @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(profileSpec("typical", { items: 2 }));
     await t.open(t.itemPath(ids.collections.books, ids.items["books/i0"]));
@@ -41,13 +41,13 @@ for (const vp of ["desktop", "phone"]) {
     await t.until("a pasted address is inserted", async () => (await pm.innerText()).includes("example.com/pasted"));
     await t.page.keyboard.press("Enter");
     await pasteText(t, "Shown title: {{ $item.Title }}");
-    await t.until("pasted {{ }} code becomes a section chip, not text", async () => (await pm.locator("[data-type=section], .md-section, .section-chip").count()) > 0 || !(await pm.innerText()).includes("{{") || "shown as text", { timeout: 3000 });
+    await t.until("pasted {{ }} is plain text (a value is data, never code)", async () => (await pm.innerText()).includes("{{ $item.Title }}") || "not inserted as typed", { timeout: 3000 });
     await t.audit("markdown after pasting");
     await t.page.keyboard.press("Control+Enter");
     await t.until("saved", async () => (await t.count(".field-editor")) === 0);
     const text = await fieldsText(t);
     await t.check("the saved note has the pasted text and address", text.includes("Pasted plain words") && text.includes("example.com/pasted"));
-    await t.check("the {{ }} code is evaluated on the page (no raw code)", !text.includes("{{ $item.Title }}"), "raw code shown");
+    await t.check("the {{ }} is shown as typed, not run", text.includes("{{ $item.Title }}"), "braces changed");
     await t.audit("markdown with pasted content saved");
   }, { viewport: vp, smoke: vp === "desktop" });
 }
@@ -160,16 +160,43 @@ for (const vp of ["desktop", "phone"]) {
   }, { viewport: vp });
 }
 
-test("a component field: its code, and Change component? (keep editing, discard, change)", async (t) => {
+// A block on an item page filtered by one of the page item's values, picked by name ("This Book's
+// Count"), never typed as code.
+test("item page block: a filter value from the page's item", async (t) => {
+  await t.boot();
+  const spec = profileSpec("typical", { items: 3 });
+  const books = spec.collections[0];
+  books.items.forEach((it, k) => Object.assign(it.values, { title: `Book number ${k}`, count: k + 1 }));
+  books.itemViews = [{ name: "Higher", layout: { fields: ["title", "count", "higher"], blocks: [{ id: "higher", kind: "table", collection: "books", title: "Higher counts", filters: [{ field: "count", operator: "gt", value: "$item.@count" }] }] } }];
+  const ids = await t.seed(spec);
+  await t.open(t.itemPath(ids.collections.books, ids.items["books/i0"]));
+  const block = t.page.locator(".ws-pane--active [data-block-id]").first();
+  await t.until("the block lists the books with a higher count", async () => {
+    const text = await block.innerText().catch(() => "");
+    return (text.includes("Book number 1") && text.includes("Book number 2") && !text.includes("Book number 0")) || text;
+  });
+  await block.getByRole("button", { name: /Filter/ }).first().click();
+  await t.settle();
+  const from = t.page.locator(".cds--popover--open .query-editor__value select").first();
+  await t.check("the value is picked by name from the page's item", (await from.locator("option:checked").innerText().catch(() => "")).includes("Count"));
+  await t.audit("filter value from the page's item");
+  await t.closeAll();
+}, { viewport: "desktop" });
+
+test("a component field: not edited by a click; Edit component, and Change component? (keep editing, discard, change)", async (t) => {
   await t.boot();
   const ids = await t.seed(profileSpec("typical", { items: 2 }));
   await t.open(t.itemPath(ids.collections.books, ids.items["books/i1"]));
   const computed = () => t.page.locator(".ws-pane--active .item-fields > *", { hasText: "Computed" }).first();
   const valueBefore = (await computed().innerText()).replace("Computed", "").trim();
   const openCode = async () => {
-    await computed().getByRole("button").filter({ hasNotText: /Collapse/ }).last().click().catch(async () => computed().click());
+    await computed().getByRole("button", { name: /^Edit component/ }).click();
     await t.page.waitForSelector(".field-editor textarea", { timeout: 5000 });
   };
+  // The value is computed: clicking it edits nothing.
+  await computed().locator(".view-field__value").click();
+  await t.settle();
+  await t.check("clicking a component field's value opens no editor", (await t.count(".field-editor")) === 0);
   const away = async () => {
     const b = await t.page.locator(".ws-pane--active .page-header").boundingBox();
     await t.page.mouse.click(b.x + 4, b.y + b.height - 4);

@@ -98,8 +98,6 @@ export interface Item {
   values: Record<string, FieldValue>;
   /** The item view this item is pinned to, instead of its collection's default. */
   itemViewId?: string | null;
-  /** Values rendered from their own {{ }} sections (withComputed): the typed source, for editing. */
-  sources?: Record<string, FieldValue>;
   /** AI fields: a fingerprint of the prompt each stored value was generated from (domain/ai.ts), by field id. */
   aiInputs?: Record<string, string>;
   /** AI fields: the values the user typed over (never made again by themselves), by field id. */

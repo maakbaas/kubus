@@ -19,7 +19,7 @@ import { aiPromptProblem } from "../domain/ai";
 import { AiOutputSelect, AiPromptEditor } from "../ui/AiFieldEditor";
 import { ChoiceFilterEditor } from "../ui/ChoiceFilterEditor";
 import { ComponentArgInput } from "../ui/ComponentArgInput";
-import type { Component } from "../domain/components";
+import { componentsFor, type Component } from "../domain/components";
 import { IconPicker } from "../ui/IconPicker";
 import { CollectionLabel } from "../ui/collectionIcons";
 import { SpaceLabel } from "../ui/SpaceSwitcher";
@@ -313,8 +313,9 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                     size="sm"
                     id={`${uid}-field-component-${f.id}`}
                     titleText="Component"
-                    label={components.length ? "Choose…" : "No components yet"}
-                    items={components}
+                    label={componentsFor(components, "field").length ? "Choose…" : "No field or static components yet"}
+                    // Field and static components: a block component lists items, which a field has not.
+                    items={componentsFor(components, "field", f.componentId)}
                     // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
                     selectedItem={(components.find((x) => x.id === f.componentId) ?? null) as Component}
                     itemToString={(x) => x?.name ?? ""}

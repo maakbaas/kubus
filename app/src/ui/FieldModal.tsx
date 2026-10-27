@@ -5,7 +5,7 @@ import { useStore } from "../app/store";
 import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
 import { isReferenceKind, newId, collectionDraft, type AiOutput, type FieldDef, type FieldKind, type Collection, type ComponentArg } from "../domain/model";
 import { aiPromptProblem } from "../domain/ai";
-import type { Component } from "../domain/components";
+import { componentsFor, type Component } from "../domain/components";
 import { FieldKindLabel } from "./fieldKindIcons";
 import { TOGGLE_CHOICES, TOGGLE_ICONS, ToggleIconLabel } from "./ToggleInput";
 import { CollectionLabel } from "./collectionIcons";
@@ -205,8 +205,9 @@ export function FieldModal({
             size="sm"
             id="field-modal-component"
             titleText="Component"
-            label={components.length ? "Choose…" : "No components yet"}
-            items={components}
+            label={componentsFor(components, "field").length ? "Choose…" : "No field or static components yet"}
+            // Field and static components: a block component lists items, which a field has not.
+            items={componentsFor(components, "field", componentId)}
             // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
             selectedItem={(component ?? null) as Component}
             itemToString={(t) => t?.name ?? ""}

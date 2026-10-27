@@ -16,7 +16,7 @@ import {
 import type { FilterRule } from "../../domain/query";
 import type { Bookmark, BookmarkKind } from "../../domain/bookmarks";
 import { parseItemViews, withDefaultItemView, type ItemView } from "../../domain/fieldLayout";
-import { hasSections, isComponentOutput, type Component } from "../../domain/components";
+import { isComponentOutput, type Component } from "../../domain/components";
 import { DEFAULT_SPACE_ID, withDefaultSpace, type Space } from "../../domain/spaces";
 import { defaultViewState, parseViewConfig, type CollectionView } from "../../domain/views";
 import type { DataChange, Repository } from "../repository";
@@ -779,8 +779,7 @@ export class SqliteRepository implements Repository {
         byItem.set(v.item_id, record);
         continue;
       }
-      // A number with {{ }} sections is stored as its text (see valueStatement).
-      record[field.id] = field.kind === "number" && v.value_number == null && v.value_text != null ? v.value_text : spec.fromDb(v[spec.column]);
+      record[field.id] = spec.fromDb(v[spec.column]);
       byItem.set(v.item_id, record);
     }
     return items.map((o) => ({
@@ -852,8 +851,6 @@ function valueStatement(itemId: string, field: FieldDef, value: FieldValue, ts: 
     value_json: null,
   };
   cols[spec.column] = spec.toDb(value);
-  // A number field's {{ }} sections (computed when shown) are text: kept in value_text.
-  if (field.kind === "number" && hasSections(value)) cols.value_text = value;
   return {
     sql: `INSERT INTO field_values (item_id, field_id, value_text, value_number, value_date, value_datetime,
                                       value_bool, value_ref, value_file, value_json, updated_at)

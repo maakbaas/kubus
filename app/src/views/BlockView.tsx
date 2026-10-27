@@ -4,7 +4,7 @@ import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@
 import { useStore } from "../app/store";
 import { orderFields } from "../domain/fieldLayout";
 import { newId, now, pickableFields, type Collection } from "../domain/model";
-import { fieldLookup, parseParams, render } from "../domain/components";
+import { parseParams } from "../domain/components";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
 import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolvePageValues, type FilterRule, type QueryResult } from "../domain/query";
@@ -279,13 +279,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const uses = type.uses(block.options, components);
   // Page-item values ("this item") filled in from the page's item.
   const base = blockQuery(viewFilters, block);
-  const filters = useMemo(() => {
-    // {{ }} in a filter value reads the page's item as $item.
-    const evalText = page
-      ? (text: string) => String(render({ params: [], code: text }, [], page.item, fieldLookup(page.collection, page.item, page.refLabel)) ?? "")
-      : undefined;
-    return resolvePageValues(base.filters, page?.item ?? null, evalText);
-  }, [base.filters, page]);
+  const filters = useMemo(() => resolvePageValues(base.filters, page?.item ?? null), [base.filters, page]);
   const query = useMemo(() => ({ ...base, filters }), [filters, base.sort, base.groupBy, base.groupOrder]); // eslint-disable-line react-hooks/exhaustive-deps
   const result = useMemo(
     () => (data.items && uses.query ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),

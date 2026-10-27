@@ -24,7 +24,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   clipboard, upload, prism). Don't add syntax plugins (math, emoji, diagrams, frontmatter, Crepe, …),
   and any future renderer must also be GFM-only. Behaviour-only additions are fine: clickable task
   checkboxes, typed `[text](url)` links, link hover popover (open/edit/remove), code coloring
-  (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs. `{{ }}` sections (JavaScript, see Components) are kept out of the editor: swapped for tokens before loading, shown as chips (an inline atom node) edited from a code dialog, written back raw (`ui/markdownSections.ts`; typed or pasted `{{ … }}` become chips), so Markdown never reads or escapes the code.
+  (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs. A Markdown value is data: `{{ }}` in it is plain text, never run (code lives only in components).
 - **Collections have a singular and plural name** ("Author" / "Authors"): singular for one item
   ("New Author"), plural for lists, navigation and counts (`countLabel`).
 - **Items are edited in place**: `#/collections/<id>/items/<itemId>` shows every field in the
@@ -51,7 +51,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   `params`), plus the built-ins `$now` / `$item` (the item itself, n8n style) and, in a block,
   `$items` / `$groups` / `$fields` / `$all` (details in the header of `components.ts`). A Component field picks one (`fields.component_id`) and maps each
   variable to a field of its collection or a fixed text/number (`fields.component_args`, `ComponentArg`),
-  so one component serves any collection. A component that is only `{{ … }}` yields that raw value
+  so one component serves any collection. **Code lives only in components** (and AI prompts): item values
+  (string, number, Markdown, HTML), Markdown blocks and filter values are data, never run. A component that is only `{{ … }}` yields that raw value
   (numbers sort as numbers); otherwise rendered Markdown (rendered on item pages, plain text in
   tables/cards). Results are computed whenever items are shown (`withComputed`, before queries
   run) and never stored; failing sections show `⚠ message`. One concept on purpose: the same
@@ -60,24 +61,27 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   (sync, sharing). The editor previews the result as you type, with a test value per variable and only
   the choices the code calls for: a collection when it reads items, an item for `$item`, a field to group
   by for `$groups`, the fields for `$fields` (`CollectionPreview` in `ComponentEditorPage.tsx`).
-  - `{{ }}` sections also work inside an item's own string, markdown, HTML and number values
-    (`withComputed` renders them when shown and keeps the typed source in `item.sources`, which
-    editors use). A number field holding sections stores that text in `value_text`, so its input
-    is a Carbon TextInput with a decimal keyboard (NumberInput takes no braces).
   - HTML output renders in a sandboxed frame that sizes itself, one component for every place
     (`HtmlFrame` in `ui/ComponentValue.tsx`, which documents flow/fill sizing, `frame_ratio`, the
     `<meta name="frame">` override and the zero-specificity base styles).
   - Components see an image field as its src, `files/<sha256>`: Markdown and image outputs (and
     card covers) resolve it to the stored file; HTML frames get each file embedded as a data URL.
-  - A component field on an item page is edited in place like any field: clicking it edits its
-    component's code (`ui/ComponentFieldEditor.tsx`); saving asks first, as the change applies
-    everywhere the component is used (Change component /
-    Discard changes, which reverts / Keep editing, also on × or Escape).
-  - What a component uses decides where it can go (`componentUses`): `$item` = needs an item
-    (a field, a block on an item page; never offered on a collection view); `$items` / `$groups` /
-    `$fields` = lists a block's items (its block then offers filter, sort, fields); neither = static
-    content. A block's variables take a fixed value or a field of the block's collection, passed
-    as the field's name (which field to use), not a value.
+  - **Click to edit only what belongs to the place** (field values, Markdown blocks). A component
+    field's value is computed, so clicking it does nothing; "Edit component" (code icon in its label
+    row, in the "⋮" when its name is hidden) edits its component's code in place
+    (`ui/ComponentFieldEditor.tsx`); saving asks first, as the change applies everywhere the component
+    is used (Change component / Discard changes, which reverts / Keep editing, also on × or Escape).
+    A component block's Block settings link to the component's page.
+  - **Kinds** (`componentUses`, `placeProblem`, `componentsFor`): what a component uses makes it a
+    *field* component (`$item`: a component field), a *block* component (`$items` / `$groups` /
+    `$fields` / `$all`: a block, which then offers filter, sort, fields as its code needs) or a
+    *static* one (neither: either place). Never both (`mixed`): the component editor refuses to save
+    it. Pickers offer only what fits (component fields: field and static; "Add block" and Block
+    settings: block and static); one that doesn't fit where it is used (edited since) shows
+    "⚠ … use it as a block / field" there, never an empty result. The Components page has a Kind
+    column; the editor says the kind under the code as it is typed. A block on an item page gets no
+    `$item`: its filter takes the page's item instead. A block's variables take a fixed value or a
+    field of the block's collection, passed as the field's name (which field to use), not a value.
   - Fields can also be added from every field picker ("Add field": table columns, card fields,
     item page layout; `ui/FieldModal.tsx`, which also edits component fields). They are ordinary
     fields of the collection, shown in the picker's own view; adding asks for confirmation (the field
@@ -160,7 +164,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   copy of the last; a view keeps one). Item pages hold blocks too, among the
   fields (`ItemLayout.blocks`, their ids in `fields`): a block there may list another collection
   (`ViewBlock.collectionId`) and filter on the page's item (rule values `$item` = this item,
-  `$item.<fieldId>` = what one of its reference fields points to; `resolvePageValues`), so
+  `$item.<fieldId>` = one of its values: what a reference field points to, or a value of the same
+  kind to compare with, picked by name, "This Book's Year"; `resolvePageValues`), so
   "Books by this Author" is a table on the Author's pages; a new item added there gets the
   filter's references (`filterPreset`). On item pages the same split holds: arranging the page
   (its layout: fields and blocks and their order, names shown, editable, hide empty) is stored

@@ -2023,6 +2023,12 @@ img[data-lightbox] {
   gap: var(--cds-spacing-03);
   align-items: center;
 }
+/* A rule's value on an item page: where it comes from (a value, or one of the page's item's), and the value. */
+.query-editor__value {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-03);
+}
 .query-editor__pair,
 .view-options {
   align-self: stretch;
@@ -3529,17 +3535,10 @@ body[data-reordering] [data-reorder-row] {
 .markdown-block--editing .md-field > .cds--label {
   display: none;
 }
-/* A {{ }} section in the Markdown editor: a chip, its code edited from a dialog. */
-.md-editor .md-section {
-  display: inline-block;
-  padding: 0 var(--cds-spacing-02);
-  border-radius: 2px;
-  background: var(--cds-layer-accent);
-  font: inherit;
-  cursor: pointer;
-}
-.md-editor .md-section.ProseMirror-selectednode {
-  outline: 2px solid var(--cds-focus);
+/* The code editor's problem (ComponentCodeEditor's invalidText): shown as Carbon shows invalid input. */
+.code-editor__invalid {
+  display: block;
+  color: var(--cds-text-error);
 }
 /* A Markdown block reads like a Markdown field (the field type scale) wherever it is, not like
    the tables and cards around it, which keep the smaller collection page scale. */
@@ -3566,25 +3565,6 @@ body[data-reordering] [data-reorder-row] {
     margin-inline: calc(-0.5 * var(--cds-spacing-05));
   }
 }
-/* The code dialog (opened from a section chip): its label sits at the left, Carbon's room under the
-   content (for a scroll fade) is not needed. It sits inside the item page's fields, whose labels are
-   inset to line up with their inputs' text, so that inset is cancelled (specific enough to beat
-   those rules, also the phone ones). */
-.section-dialog .cds--label {
-  text-align: start;
-  align-self: flex-start;
-}
-.cds--modal.section-dialog.section-dialog .cds--label {
-  padding-inline-start: 0;
-}
-.section-dialog .cds--modal-content {
-  padding-block-end: var(--cds-spacing-05);
-  margin-block-end: 0;
-}
-.section-dialog .cds--modal-content > .cds--form-item {
-  margin-block-end: 0;
-}
-
 /* AI fields (domain/ai.ts). What a value is waiting for, or why it failed, in the place of the value. */
 .ai-status {
   color: var(--cds-text-secondary);

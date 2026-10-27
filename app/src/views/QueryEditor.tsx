@@ -1,9 +1,10 @@
 import { useId } from "react";
 import { Button, Heading, IconButton, Select, SelectItem, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
-import { newId, pickableFields, type FieldDef, type Collection } from "../domain/model";
+import { newId, pickableFields, type FieldDef, type FieldKind, type Collection } from "../domain/model";
 import {
   isGroupable,
+  isPageValue,
   operatorsFor,
   PAGE_ITEM,
   pageItemField,
@@ -30,7 +31,21 @@ interface Props {
   onChange(query: ViewQuery): void;
 }
 
-/** Value input for a filter rule, by field kind (a date input, an item picker, plain text…). */
+/** The page's fields whose values a rule on a field of this kind compares with (same kind; text with text). */
+const TEXT_KINDS: FieldKind[] = ["string", "markdown", "html", "ai", "string_list", "checklist"];
+function comparablePageFields(kind: FieldKind, page: Collection): FieldDef[] {
+  const kinds: FieldKind[] = TEXT_KINDS.includes(kind) ? ["string", "ai"] : kind === "number" || kind === "date" || kind === "datetime" || kind === "checkbox" ? [kind] : [];
+  return page.fields.filter((f) => kinds.includes(f.kind));
+}
+
+/** A rule's value as typed (not taken from the page's item). */
+const FIXED = "fixed";
+
+/**
+ * Value input for a filter rule, by field kind (a date input, an item picker, plain text…). On an
+ * item page the value can also be one of the page's item's values, picked by name ("This Book's
+ * Year"), never typed as code.
+ */
 function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; field: FieldDef; rule: FilterRule; refs: RefOptions; page?: Collection; onChange(value: string): void }) {
   if (field.kind === "item" || field.kind === "item_list") {
     // On an item page: the page's item itself, or what one of its reference fields points to.
@@ -48,21 +63,39 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
       </Select>
     );
   }
-  // On an item page a value may hold {{ $item.Name }}, which number and date inputs would refuse.
-  const type = page ? "text" : field.kind === "number" ? "number" : field.kind === "date" || field.kind === "datetime" ? "date" : "text";
-  return (
+  const type = field.kind === "number" ? "number" : field.kind === "date" || field.kind === "datetime" ? "date" : "text";
+  const input = (
     <TextInput
       id={id}
       labelText="Value"
       hideLabel
       size="sm"
       type={type}
-      placeholder={
-        field.kind === "checkbox" ? (page ? "true, false or {{ … }}" : "true or false") : page ? "Value or {{ $item.Name }}" : type === "date" ? "yyyy-mm-dd" : "Value"
-      }
+      placeholder={field.kind === "checkbox" ? "true or false" : type === "date" ? "yyyy-mm-dd" : "Value"}
       value={rule.value}
       onChange={(e) => onChange(e.target.value)}
     />
+  );
+  const pageFields = page ? comparablePageFields(field.kind, page) : [];
+  if (pageFields.length === 0) return input;
+  const fromPage = isPageValue(rule.value);
+  return (
+    <div className="query-editor__value">
+      <Select
+        id={`${id}-from`}
+        labelText="Value from"
+        hideLabel
+        size="sm"
+        value={fromPage ? rule.value : FIXED}
+        onChange={(e) => onChange(e.target.value === FIXED ? "" : e.target.value)}
+      >
+        <SelectItem value={FIXED} text="A value" />
+        {pageFields.map((f) => (
+          <SelectItem key={f.id} value={pageItemField(f.id)} text={`This ${page!.name}’s ${f.name}`} />
+        ))}
+      </Select>
+      {!fromPage && input}
+    </div>
   );
 }
 

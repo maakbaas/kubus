@@ -25,7 +25,7 @@ export function AiPromptEditor({ id, value, problem, onChange }: { id: string; v
         id={id}
         labelText="Prompt"
         placeholder={"Album by {{ $item.Artist }}. If these albums were sorted by artist last name in a record store, give that last name."}
-        helperText="Asked for each item. Put what it needs in with {{ $item.Name }}, e.g. {{ $item.Artist }}; the value is made again only when the prompt, as it reads for that item, changes. Keep it short: the model is told the collection, the field and the shape of the value."
+        helperText="Asked for each item. Put what it needs in with {{ $item.Name }}, e.g. {{ $item.Artist }}; the value is made again only when the prompt, as it reads for that item, changes. Only $item is here: no $now (the value would be stale every moment), no variables (nothing gives them a value) and no other AI fields (two reading each other never settle). Keep it short: the model is told the collection, the field and the shape of the value."
         value={value}
         onChange={onChange}
       />

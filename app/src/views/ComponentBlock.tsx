@@ -1,13 +1,14 @@
 import { useId, useMemo } from "react";
-import { Dropdown } from "@carbon/react";
+import { Button, Dropdown } from "@carbon/react";
 import { Code as ComponentIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import {
   blockArgValue,
   componentUses,
   ERROR_PREFIX,
-  fieldLookup,
+  componentsFor,
   itemsInput,
+  placeProblem,
   render,
   type BlockInputs,
   type Component,
@@ -18,8 +19,9 @@ import { ComponentValue } from "../ui/ComponentValue";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
-// A block that shows a component: one that lists the block's items ($items, $groups, $fields),
-// or static content (neither); on an item page also one that uses the page's item ($item).
+// A block that shows a component: a block component, which lists the block's items ($items,
+// $groups, $fields, $all), or a static one (neither). Never one that uses $item, also not on an
+// item page: that is a field component (a block on an item page filters on the page's item instead).
 // Its variables take a fixed value or a field of the block's collection, given as the field's
 // name (which field to use, e.g. a chart's values), not a value.
 
@@ -28,13 +30,14 @@ export interface ComponentBlockOptions {
   args: Record<string, ComponentArg>;
 }
 
-function ComponentBlockView({ collection, result, fields, options, refs, all, page }: BlockProps<ComponentBlockOptions>) {
+function ComponentBlockView({ collection, result, fields, options, refs, all }: BlockProps<ComponentBlockOptions>) {
   const { components } = useStore();
   const component = components.find((c) => c.id === options.componentId);
   const value = useMemo(() => {
     if (!component) return `${ERROR_PREFIX}${options.componentId ? "Component not found" : "No component chosen"}`;
+    const problem = placeProblem(component.code, "block");
+    if (problem) return ERROR_PREFIX + problem;
     const uses = componentUses(component.code);
-    if (uses.scope === "item" && !page) return `${ERROR_PREFIX}This component needs an item: it uses $item`;
     const input = itemsInput(collection, refLabelOf(refs));
     // An item in several groups is in $items once.
     const items = uses.items ? [...new Set(result.groups.flatMap((g) => g.items))] : [];
@@ -46,10 +49,8 @@ function ComponentBlockView({ collection, result, fields, options, refs, all, pa
     };
     const byId = new Map(collection.fields.map((f) => [f.id, f]));
     const args = component.params.map((p) => blockArgValue(options.args[p], byId));
-    return page
-      ? render(component, args, page.item, fieldLookup(page.collection, page.item, page.refLabel), block)
-      : render(component, args, undefined, undefined, block);
-  }, [component, options, collection, result, fields, refs, all, page]);
+    return render(component, args, undefined, undefined, block);
+  }, [component, options, collection, result, fields, refs, all]);
   return (
     <div className="component-block">
       <ComponentValue value={value} output={component?.output ?? "markdown"} frameRatio={component?.frameRatio} variant="page" />
@@ -57,14 +58,13 @@ function ComponentBlockView({ collection, result, fields, options, refs, all, pa
   );
 }
 
-/** Components a block can show here: on a collection view not those that need an item. */
-export const blockComponents = (components: Component[], place: BlockOptionsProps<unknown>["place"]) =>
-  components.filter((c) => place === "item" || componentUses(c.code).scope !== "item");
+/** Components a block can show: block and static ones. */
+export const blockComponents = (components: Component[], chosen?: string | null) => componentsFor(components, "block", chosen);
 
-function ComponentBlockOptionsEditor({ collection, options, place, onChange }: BlockOptionsProps<ComponentBlockOptions>) {
+function ComponentBlockOptionsEditor({ collection, options, onChange }: BlockOptionsProps<ComponentBlockOptions>) {
   const uid = useId();
   const { components } = useStore();
-  const offered = blockComponents(components, place);
+  const offered = blockComponents(components, options.componentId);
   const component = components.find((c) => c.id === options.componentId);
   return (
     <div className="view-options">
@@ -80,6 +80,12 @@ function ComponentBlockOptionsEditor({ collection, options, place, onChange }: B
         itemToString={(c) => c?.name ?? ""}
         onChange={({ selectedItem }) => selectedItem && onChange({ componentId: selectedItem.id, args: {} })}
       />
+      {/* Its code is shared by every place showing it: edited on its own page, never from the block. */}
+      {component && (
+        <Button kind="tertiary" size="sm" href={`#/components/${component.id}`}>
+          Edit component
+        </Button>
+      )}
       {component?.params.map((p) => (
         <ComponentArgInput
           // A new component starts its variables afresh.

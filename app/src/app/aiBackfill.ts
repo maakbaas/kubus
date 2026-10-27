@@ -84,8 +84,8 @@ export class AiBackfill {
   private async fill(collection: Collection) {
     const { collections, components, spaces } = this.world();
     // Labels of referenced items, as the screens get them (domain/refOptions.ts decides how): the
-    // labels of every space, and for a target that needs them (a label with {{ }} sections) its
-    // items of the space looked at.
+    // labels of every space, and for a target that needs them (a field's choice filter) its items
+    // of the space looked at.
     const targets = referenceTargets(collection).flatMap((t) => {
       const target = collections.find((c) => c.id === t.id);
       return target ? [{ ...t, target }] : [];
@@ -102,7 +102,7 @@ export class AiBackfill {
       const options: RefOptions = {};
       for (const t of targets) {
         const own = await labelsOf(t.target);
-        const full = isFullTarget(t, own);
+        const full = isFullTarget(t);
         if (full) for (const n of referenceTargets(t.target)) await labelsOf(collections.find((c) => c.id === n.id) ?? t.target);
         options[t.id] = buildTargetOptions({
           target: t.target,

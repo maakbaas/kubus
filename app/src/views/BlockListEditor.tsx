@@ -75,7 +75,7 @@ export function BlockListEditor({
           </div>
         );
       })}
-      <AddBlockButton place="collection" className="field-order__add" onAdd={onAdd} />
+      <AddBlockButton className="field-order__add" onAdd={onAdd} />
       {reorder.dialog}
     </FormGroup>
   );

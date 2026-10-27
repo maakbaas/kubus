@@ -178,8 +178,7 @@ export const fieldKinds: Record<FieldKind, FieldKindSpec> = {
     fromDb: (raw) => (raw == null ? null : Number(raw)),
     toDb: (v) => (typeof v === "number" && Number.isFinite(v) ? v : null),
     // Exactly as typed (no thousands separators), so a value reads the same as in its input.
-    // A value with {{ }} sections is stored as text (see valueStatement); shown it is its result.
-    format: (v) => (typeof v === "number" ? String(v) : typeof v === "string" ? v : ""),
+    format: (v) => (typeof v === "number" ? String(v) : ""),
   },
   date: {
     label: "Date",

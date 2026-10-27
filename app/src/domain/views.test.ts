@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { componentUses, itemsInput, parseParams, render } from "./components";
+import { componentUses, itemsInput, parseParams, placeProblem, render } from "./components";
 import { parseLayout } from "./fieldLayout";
 import type { Collection, FieldDef, Item } from "./model";
 import { defaultQuery, filterPreset, PAGE_ITEM, pageItemField, resolvePageValues, type FilterRule } from "./query";
@@ -83,12 +83,28 @@ describe("page item filter values", () => {
 
 describe("components in blocks", () => {
   it("are classed by the built-ins they use", () => {
-    expect(componentUses("{{ $item.Title }}").scope).toBe("item");
-    expect(componentUses("{{ $items.length }} of {{ $all.length }}")).toEqual({ scope: "items", items: true, groups: false, fields: false });
-    expect(componentUses("{{ $groups.length }}")).toEqual({ scope: "items", items: true, groups: true, fields: false });
-    expect(componentUses("{{ $fields.map(f => f.name) }}")).toEqual({ scope: "items", items: false, groups: false, fields: true });
-    expect(componentUses("Hello {{ $now.getFullYear() }}, '$items' in text").scope).toBe("static");
-    expect(componentUses("Read **$items** carefully").scope).toBe("static");
+    expect(componentUses("{{ $item.Title }}").kind).toBe("field");
+    expect(componentUses("{{ $items.length }} of {{ $all.length }}")).toEqual({ kind: "block", mixed: false, items: true, groups: false, fields: false });
+    expect(componentUses("{{ $groups.length }}")).toEqual({ kind: "block", mixed: false, items: true, groups: true, fields: false });
+    expect(componentUses("{{ $fields.map(f => f.name) }}")).toEqual({ kind: "block", mixed: false, items: false, groups: false, fields: true });
+    expect(componentUses("Hello {{ $now.getFullYear() }}, '$items' in text").kind).toBe("static");
+    expect(componentUses("Read **$items** carefully").kind).toBe("static");
+    expect(componentUses("{{ $all.length }}").kind).toBe("block");
+  });
+
+  it("never mix $item with a block's names", () => {
+    expect(componentUses("{{ $item.Name }}: {{ $items.length }}")).toMatchObject({ kind: "field", mixed: true });
+    expect(placeProblem("{{ $item.Name }}: {{ $all.length }}", "field")).toMatch(/both/);
+    expect(placeProblem("{{ $item.Name }}: {{ $items.length }}", "block")).toMatch(/both/);
+  });
+
+  it("fit their place: field components as fields, block components as blocks, static ones anywhere", () => {
+    expect(placeProblem("{{ $item.Pages }}", "field")).toBeNull();
+    expect(placeProblem("{{ $item.Pages }}", "block")).toMatch(/use it as a field/);
+    expect(placeProblem("{{ $items.length }}", "block")).toBeNull();
+    expect(placeProblem("{{ $items.length }}", "field")).toMatch(/use it as a block/);
+    expect(placeProblem("{{ $pages / 40 }}", "field")).toBeNull();
+    expect(placeProblem("Read me", "block")).toBeNull();
   });
 
   it("don't count the built-ins as variables", () => {

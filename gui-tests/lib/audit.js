@@ -456,7 +456,7 @@ function __audit(opts) {
   section = "compact-size";
   // ---- compact-size ---------------------------------------------------------------------------------
   {
-    // Deliberately larger modals: one holding a code editor (a component's code, a {{ }} section;
+    // Deliberately larger modals: one holding a code editor (a component's code;
     // too cramped at xs) and the image lightbox (as wide as its image).
     const bigModal = (el) => !!el.closest(".cds--modal-container") && !!el.closest(".cds--modal")?.querySelector(".code-editor, .lightbox img") || !!el.closest(".lightbox");
     const BIG = [".cds--btn--md", ".cds--btn--lg", ".cds--btn--xl", ".cds--btn--2xl", ".cds--text-input--md", ".cds--text-input--lg", ".cds--select--md", ".cds--select--lg", ".cds--search--md", ".cds--search--lg", ".cds--list-box--md", ".cds--list-box--lg", ".cds--accordion--md", ".cds--accordion--lg", ".cds--dropdown--md", ".cds--dropdown--lg", ".cds--number--md", ".cds--number--lg", ".cds--modal-container--sm", ".cds--modal-container--md", ".cds--modal-container--lg", ".cds--date-picker__input--md", ".cds--date-picker__input--lg", ".cds--time-picker--md", ".cds--time-picker--lg", ".cds--overflow-menu--md", ".cds--overflow-menu--lg", ".cds--data-table--md", ".cds--data-table--lg", ".cds--data-table--xl", ".cds--data-table--xs"];
