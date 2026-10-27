@@ -38,7 +38,7 @@ for (const vp of ["desktop", "phone", "laptop"]) {
         await t.settle(80);
         await t.page.getByRole("option").first().click().catch(() => {});
       }
-      // A component field starts with its own component, written here; AI turns "Ask AI" on.
+      // A component field starts with its own, local component; AI turns "Ask AI" on.
       if (type === "Component") {
         await row.getByRole("textbox", { name: "Code" }).fill("{{ $item.id }}");
         await t.settle(80);

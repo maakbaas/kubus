@@ -29,7 +29,7 @@ function componentSpec() {
 }
 
 for (const vp of ["desktop", "phone"]) {
-  test(`collection editor: a field's settings under it, one per line; components written here @ ${vp}`, async (t) => {
+  test(`collection editor: a field's settings under it, one per line; local components @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(componentSpec());
     await t.open(`/collections/${ids.collections.books}/edit`);
@@ -48,9 +48,9 @@ for (const vp of ["desktop", "phone"]) {
     await t.check("fields with settings have them", layout.length >= 6, `${layout.length}`);
     await t.check("settings are under the field's name and type, inside its row", layout.every((l) => l.below && l.inside), JSON.stringify(layout));
     await t.check("settings start on one left edge, one per line", layout.every((l) => l.oneEdge && l.stacked), JSON.stringify(layout));
-    // The component field written here: its code and output; Ask AI on the AI field, fixed once saved.
+    // The local component field: its code and output; Ask AI on the AI field, fixed once saved.
     const hours = t.page.locator(".ws-pane--active .field-row").filter({ has: t.page.locator('input[value="Hours"]') });
-    await t.check("a component written here shows its code", (await hours.getByRole("textbox", { name: "Code" }).inputValue()).includes("$item.Count"));
+    await t.check("a local component shows its code", (await hours.getByRole("textbox", { name: "Code" }).inputValue()).includes("$item.Count"));
     const shelf = t.page.locator(".ws-pane--active .field-row").filter({ has: t.page.locator('input[value="Shelf"]') });
     await t.check("an AI field's Ask AI is on and fixed", (await shelf.getByRole("switch", { name: /Ask AI/ }).getAttribute("aria-checked")) === "true" && (await shelf.getByRole("switch", { name: /Ask AI/ }).isDisabled()));
     await t.check("an AI field's prompt is shown", (await shelf.getByRole("textbox", { name: "Prompt" }).inputValue()).includes("Shelf for"));
@@ -59,7 +59,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.settle();
     await t.check("an unknown $ name is explained at the code", (await hours.innerText()).includes("$pages isn't known"));
     await hours.getByRole("textbox", { name: "Code" }).fill("{{ Math.round(($item.Count ?? 0) / 20) }} h");
-    // A new component field: written here by default; switching to a shared one and back.
+    // A new component field: local by default; switching to a shared one and back.
     await t.page.getByRole("button", { name: "Add field" }).click();
     await t.settle(100);
     const row = t.page.locator(".ws-pane--active .field-row").last();
@@ -68,7 +68,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.settle(100);
     await t.page.getByRole("option", { name: "Component", exact: true }).first().click();
     await t.settle(100);
-    await t.audit("a new component field, written here");
+    await t.audit("a new component field, local");
     await row.getByRole("textbox", { name: "Code" }).fill("{{ ($item.Count ?? 0) / 40 }}");
     await t.page.getByRole("button", { name: "Save changes" }).click();
     await t.until("saved: the collection's page", async () => (await t.page.locator(".ws-pane--active .page-header__title").innerText().catch(() => "")).includes("Books"));
@@ -85,13 +85,13 @@ test("components page: local ones by where they are used, saved as shared", asyn
   spec.collections[0].views = [{ name: "All", blocks: [{ kind: "table" }, { kind: "component", title: "Count", local: "{{ $items.length }} books" }, { kind: "markdown", title: "Notes", options: { text: "Year {{ $now.getFullYear() }}" } }] }];
   const ids = await t.seed(spec);
   await t.open("/components");
-  await t.audit("components: shared and written here");
+  await t.audit("components: shared and local");
   const text = await t.page.locator(".ws-pane--active .items-table, .ws-pane--active table").first().innerText();
   for (const where of ["Books › Hours", "Books › Shelf", "Books › All › Count", "Books › All › Notes"]) await t.check(`lists ${where}`, text.includes(where), text.slice(0, 300));
   await t.check("an AI component is tagged", (await t.page.locator(".ws-pane--active .cds--tag", { hasText: "AI" }).count()) >= 2);
-  // Show: shared only, then written here only.
+  // Show: shared only, then local only.
   const rowCount = () => t.page.locator(".ws-pane--active table tbody tr").count();
-  for (const [choice, n] of [["Shared", 2], ["Written here", 4], ["All components", 6]]) {
+  for (const [choice, n] of [["Shared", 2], ["Local", 4], ["All components", 6]]) {
     await t.page.locator(".components-scope .cds--list-box__field").click();
     await t.settle(100);
     await t.page.getByRole("option", { name: choice }).click();
@@ -123,18 +123,18 @@ for (const vp of ["desktop", "phone"]) {
     await t.boot();
     const ids = await t.seed(componentSpec());
     await t.open(t.listPath(ids.collections.books));
-    // Add block → "Component (written here)": its code in Block settings.
+    // Add block → "Component (local)": its code in Block settings.
     await blockTool(t, t.page.locator(".views-bar").first(), "View settings");
     await t.page.locator(".cds--popover--open").getByRole("button", { name: "Add block" }).click();
     await t.settle(100);
-    await t.page.getByRole("menuitem", { name: "Component (written here)" }).click();
+    await t.page.getByRole("menuitem", { name: "Component (local)" }).click();
     await t.settle();
     await t.closeAll();
     const block = t.page.locator(".ws-pane--active .block").last();
     await block.scrollIntoViewIfNeeded();
     await blockTool(t, block.locator(".section-header").first(), "Block settings");
     const panel = t.page.locator(".cds--popover--open");
-    await t.audit("block settings: a component written here");
+    await t.audit("block settings: a local component");
     const code = panel.getByRole("textbox", { name: "Code" });
     await code.click();
     await t.popoverStep("typing a block's code", () => t.page.keyboard.type("{{ $items.length }} shown", { delay: 10 }), { target: code });

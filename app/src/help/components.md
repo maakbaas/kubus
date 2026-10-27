@@ -2,7 +2,7 @@
 
 A component is text with `{{ … }}` sections. Each section is one JavaScript **expression**; its result replaces it. Code lives only in components: the values of items are plain data, never run.
 
-A component is **shared** (on the Components page, picked by name wherever it fits) or **written here**: in one place only (a Component field, a Component block, a Markdown block's text), listed on the Components page by where it is used, and saved as a shared one with "Save as shared component".
+A component is **shared** (on the Components page, picked by name wherever it fits) or **local**: written in one place only (a Component field, a Component block, a Markdown block's text), listed on the Components page by where it is used, and saved as a shared one with "Save as shared component".
 
 ```
 **{{ $item.Title }}**: about {{ Math.round($item.Pages / 40) }} h of reading

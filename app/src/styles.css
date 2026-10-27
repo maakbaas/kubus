@@ -3643,7 +3643,7 @@ body[data-reordering] [data-reorder-row] {
 .helper.field-settings__note {
   margin-bottom: 0;
 }
-/* The Components page's "Show: all / shared / written here": on the page's left edge, its label
+/* The Components page's "Show: all / shared / local": on the page's left edge, its label
    beside it, a gap above the list. */
 .components-scope {
   margin-block-end: var(--cds-spacing-05);

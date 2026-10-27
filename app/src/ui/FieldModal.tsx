@@ -14,7 +14,7 @@ import { useMountedDialog } from "./useMountedDialog";
  * Adds a field to a collection, or edits one, from a view's field picker (table columns, card
  * fields, item page layout): name and field type, plus what the type brings (FieldSettings, as in
  * the collection editor: the referenced collection, a checkbox's icon, a component field's
- * component, written here or shared, asking AI or not). It is an ordinary field of the collection,
+ * component, local or shared, asking AI or not). It is an ordinary field of the collection,
  * shown everywhere like fields added in the collection editor, and the picker shows it in its own
  * view. Type and reference target can't change once created.
  */

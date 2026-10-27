@@ -18,7 +18,7 @@ export interface Target {
 export const hasSettings = (kind: FieldDraft["kind"]) =>
   isReferenceKind(kind) || kind === "component" || kind === "ai" || kind === "checkbox" || kind === "checklist";
 
-/** A new field's type changed: its settings start afresh (a component field with one written here). */
+/** A new field's type changed: its settings start afresh (a component field with a local one). */
 export const newKindPatch = (kind: FieldDraft["kind"]): Partial<FieldDraft> => ({
   kind,
   targetCollectionId: null,
@@ -52,7 +52,7 @@ export function settingsProblem(f: FieldDraft, components: Parameters<typeof fie
 /**
  * The settings of one field beyond its name and type, the same in the collection editor (under
  * the field's row) and in the field dialog: the referenced collection and which of its items can
- * be chosen; a checkbox's icon and strike through; a component field's component (written here or
+ * be chosen; a checkbox's icon and strike through; a component field's component (local or
  * shared, asking AI or not). Stacked, one control per line, as a part of the field it belongs to.
  */
 export function FieldSettings({

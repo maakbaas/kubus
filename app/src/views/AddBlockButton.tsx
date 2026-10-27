@@ -26,7 +26,7 @@ export function AddBlockButton({
     <MenuButton label="Add block" kind="tertiary" size="sm" menuAlignment="bottom-start" className={className}>
       {/* A component block from here starts with its own component, written in its settings. */}
       {BLOCK_TYPES.map((t) => (
-        <MenuItem key={t.kind} label={t.kind === "component" ? "Component (written here)" : t.label} renderIcon={t.icon} onClick={() => onAdd({ kind: t.kind })} />
+        <MenuItem key={t.kind} label={t.kind === "component" ? "Component (local)" : t.label} renderIcon={t.icon} onClick={() => onAdd({ kind: t.kind })} />
       ))}
       {blockComponents(components).map((c) => (
         <MenuItem

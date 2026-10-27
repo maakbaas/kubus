@@ -26,7 +26,7 @@ import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./regi
 
 export interface ComponentBlockOptions {
   componentId: string | null;
-  /** Its own component, written here; null = the shared `componentId`. */
+  /** Its own (local) component, written in its settings; null = the shared `componentId`. */
   local: ComponentCode | null;
 }
 

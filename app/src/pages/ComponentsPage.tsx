@@ -24,7 +24,7 @@ function kindLabel(x: ComponentCode): string {
 
 const SCOPES = ["all", "shared", "local"] as const;
 type Scope = (typeof SCOPES)[number];
-const SCOPE_TEXT: Record<Scope, string> = { all: "All components", shared: "Shared", local: "Written here" };
+const SCOPE_TEXT: Record<Scope, string> = { all: "All components", shared: "Shared", local: "Local" };
 
 /** A row of the list: a shared component, or a local one (written in place) by where it is used. */
 type Row = { shared: Component; local?: undefined } | { local: LocalComponent; shared?: undefined };
@@ -54,7 +54,7 @@ export function ComponentsPage() {
   const { sort, header } = useTableSort<Row, "name" | "kind" | "place" | "description" | "code">({
     name: nameOf,
     kind: (r) => kindLabel(codeOf(r)),
-    place: (r) => (r.shared ? "Shared" : "Written here"),
+    place: (r) => (r.shared ? "Shared" : "Local"),
     description: (r) => r.shared?.description ?? "",
     code: (r) => codeOf(r).code.split("\n")[0],
   });
@@ -146,7 +146,7 @@ export function ComponentsPage() {
                         )}
                       </span>
                     </TableCell>
-                    <TableCell data-label="Where">{r.shared ? "Shared" : "Written here"}</TableCell>
+                    <TableCell data-label="Where">{r.shared ? "Shared" : "Local"}</TableCell>
                     <TableCell data-label="Description">{r.shared?.description ?? ""}</TableCell>
                     {/* Its first line; the whole component is edited on its page (or in its place). */}
                     <TableCell data-label="Component" className="components-table__code">

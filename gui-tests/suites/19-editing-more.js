@@ -78,7 +78,7 @@ test("a reference field's choice filter limits what it offers", async (t) => {
   const ids = await t.seed(spec);
   // The editor shows the filter under the field.
   await t.open(`/collections/${ids.collections.books}/edit`);
-  await t.check("the collection editor shows the field's choice filter", (await t.page.locator(".ws-pane--active").innerText()).includes("Choices"));
+  await t.until("the collection editor shows the field's choice filter", async () => (await t.page.locator(".ws-pane--active").innerText()).includes("Choices"));
   await t.audit("collection editor with a choice filter");
   // The item page offers only matching authors.
   await t.open(t.itemPath(ids.collections.books, ids.items["books/i1"]));
