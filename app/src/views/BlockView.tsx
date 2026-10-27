@@ -314,6 +314,8 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const collapsed = !headless && state.blocks.includes(block.id);
   const toggleCollapsed = () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
+  // Searching the view: a block listing items that has none matching is left out altogether.
+  if (search.trim() && uses.query && data.items && result.total === 0) return null;
   return (
     <section className="block" data-block-id={block.id}>
       <SectionHeader
