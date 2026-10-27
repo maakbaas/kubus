@@ -4,6 +4,7 @@
 
 import { dollarNames, ERROR_PREFIX, fieldLookup, render, splitWarnings, type RefLabel } from "./components";
 import { checklistItems } from "./checklist";
+import { parseRange } from "./datePeriod";
 import { formatDate, htmlPlainText } from "./fieldKinds";
 import { markdownPlainText } from "./markdownExcerpt";
 import { fieldValue, itemLabel, pickableFields, type FieldDef, type FieldKind, type FieldValue, type Item, type Collection } from "./model";
@@ -22,6 +23,7 @@ export type FilterOperator =
   | "lt"
   | "before"
   | "after"
+  | "between"
   | "isChecked"
   | "isNotChecked"
   | "isEmpty"
@@ -31,7 +33,7 @@ export interface FilterRule {
   id: string;
   fieldId: string;
   operator: FilterOperator;
-  /** The comparison value as entered (text, number, yyyy-mm-dd or an item id). */
+  /** The comparison value as entered (text, number, yyyy-mm-dd, yyyy-mm-dd..yyyy-mm-dd or an item id). */
   value: string;
 }
 
@@ -206,7 +208,10 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
 /** Whether a result is grouped (several groups, or one that isn't the whole list). */
 export const isGrouped = (result: QueryResult) => result.groups.length > 1 || result.groups[0]?.key !== "";
 
-/** Filter operators offered for a field kind. */
+/**
+ * Filter operators offered for a field kind. Not "between" (dates: a day, week, month, year or
+ * range, both days included), which only the filter's date period sets (domain/datePeriod.ts).
+ */
 export const operatorsFor = (kind: FieldKind) => KIND_RULES[kind].operators;
 
 /**
@@ -285,6 +290,7 @@ export function filterValueProblem(field: FieldDef, operator: FilterOperator, va
   if (value.startsWith(ERROR_PREFIX)) return value.slice(ERROR_PREFIX.length);
   const v = value.trim();
   if (v === "" || isPageValue(v)) return undefined;
+  if (operator === "between") return (field.kind === "date" || field.kind === "datetime") && parseRange(v) ? undefined : "A period is yyyy-mm-dd..yyyy-mm-dd";
   const compares = operator === "is" || operator === "isNot" || operator === "gt" || operator === "lt" || operator === "before" || operator === "after";
   if (!compares) return undefined;
   if (field.kind === "checkbox" && !/^(true|false)$/i.test(v)) return "A checkbox is true or false";
@@ -372,6 +378,11 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
       return !!dayOf(field, value) && dayOf(field, value) < arg;
     case "after":
       return !!dayOf(field, value) && dayOf(field, value) > arg;
+    case "between": {
+      const day = dayOf(field, value);
+      const period = parseRange(arg);
+      return !!day && !!period && day >= period.start && day <= period.end;
+    }
   }
 }
 

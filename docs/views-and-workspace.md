@@ -17,6 +17,16 @@ Extension points are registries, not special cases in pages:
   checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
   nothing, never the wrong items. The value input is text for every kind (the braces must be typable);
   under it, what the code works out to ("= true").
+- **Date period** (`app/src/domain/datePeriod.ts`, `views/DatePeriodFilter.tsx`): the top of every
+  filter panel. A content switcher (Day, Week, Month, Year, Range) sets the current day / week
+  (Monday first, ISO numbers) / month / year in one click; ‹ › step to the one before / after
+  (a range by its length), the calendar button back to the current one, × clears it; Range shows
+  two date inputs. It goes by the first date or date & time field, or one picked beside the switcher
+  (Created and Updated included). It is stored as the filter's first `between` rule (value
+  `yyyy-mm-dd..yyyy-mm-dd`, both days included; a date & time by its local day), which the rule
+  list leaves out; what it is (a week, a month, …) follows from its two days, so nothing else is
+  stored. The days are fixed: a view saved on "this month" keeps that month. `between` isn't in the
+  operator menus (`operatorsFor`), but the API can set it.
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,
   fields with labels / hide empty), the `View` component, optional `OptionsEditor` in

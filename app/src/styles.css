@@ -2074,6 +2074,45 @@ img[data-lightbox] {
   align-items: center;
 }
 /* A rule's value on an item page: where it comes from (a value, or one of the page's item's), and the value. */
+/* The date period above the filter's rules: the switcher with its field beside it, then the period
+   shown with its buttons (touching, at the right), then a range's two days. */
+.date-period {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-03);
+}
+.date-period__kinds {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--cds-spacing-03);
+  align-items: center;
+}
+/* Five switches fit a phone's panel unclipped ("Month" whole) with a step less padding (Carbon's
+   own rule is this specific). */
+.date-period .cds--content-switcher:not(.cds--content-switcher--icon-only) .cds--content-switcher-btn {
+  padding-inline: var(--cds-spacing-03);
+}
+.date-period__nav {
+  display: flex;
+  align-items: center;
+}
+/* Wraps on a phone rather than hiding the week's last day. */
+.date-period__label {
+  flex: 1;
+  min-inline-size: 0;
+}
+.date-period__range .cds--date-picker--range {
+  inline-size: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--cds-spacing-03);
+}
+.date-period__range .cds--date-picker-container,
+.date-period__range .cds--date-picker-input__wrapper > *,
+.date-period__range .cds--date-picker__input {
+  inline-size: 100%;
+}
 .query-editor__value {
   display: flex;
   flex-direction: column;
@@ -2089,6 +2128,7 @@ img[data-lightbox] {
 @media (max-width: 42rem) {
   .query-editor__rule,
   .query-editor__pair,
+  .date-period__kinds,
   .view-options {
     grid-template-columns: minmax(0, 1fr);
   }

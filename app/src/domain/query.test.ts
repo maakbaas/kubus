@@ -75,3 +75,21 @@ describe("{{ }} code in filter values", () => {
     expect(ids([{ id: "r", fieldId: "pages", operator: "gt", value: "{{ $item.Pages }}" }], page)).toEqual(["b"]);
   });
 });
+
+describe("date periods", () => {
+  const dated: Collection = { ...collection, fields: [...collection.fields, field("read", "Read", "date", 2), field("at", "At", "datetime", 3)] };
+  const at = (id: string, read: string | null, at: string | null): Item => ({ ...book(id, id, null), values: { title: id, read, at } });
+  const items = [at("a", "2026-09-30", null), at("b", "2026-10-01", "2026-10-15T10:00:00"), at("c", "2026-10-31", null), at("d", null, null)];
+  const between = (fieldId: string, value: string) => ({ ...defaultQuery(), filters: [{ id: "r", fieldId, operator: "between" as const, value }] });
+
+  it("matches the days of a period, both included; empty never", () => {
+    expect(ids(applyQuery(dated, items, between("read", "2026-10-01..2026-10-31"), ctx))).toEqual(["b", "c"]);
+    expect(ids(applyQuery(dated, items, between("at", "2026-10-15..2026-10-15"), ctx))).toEqual(["b"]);
+  });
+
+  it("matches nothing for a value that isn't a period", () => {
+    expect(ids(applyQuery(dated, items, between("read", "2026-10-31..2026-10-01"), ctx))).toEqual([]);
+    expect(filterValueProblem(dated.fields[2], "between", "October")).toBeTruthy();
+    expect(filterValueProblem(dated.fields[2], "between", "2026-10-01..2026-10-31")).toBeUndefined();
+  });
+});

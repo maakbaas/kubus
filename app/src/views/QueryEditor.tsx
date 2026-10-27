@@ -18,7 +18,9 @@ import {
   type GroupOrder,
   type ViewQuery,
 } from "../domain/query";
+import { periodRule } from "../domain/datePeriod";
 import type { RefOptions } from "../ui/useReferenceOptions";
+import { DatePeriodFilter } from "./DatePeriodFilter";
 
 interface Props {
   collection: Collection;
@@ -140,6 +142,8 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
     onChange({ ...query, filters: [...query.filters, { id: newId(), fieldId: field.id, operator: operatorsFor(field.kind)[0].id, value: "" }] });
   };
 
+  // The date period's rule is edited above the others (DatePeriodFilter), not in their list.
+  const period = periodRule(query.filters);
   const sort = query.sort[0];
   const groupable = pickableFields(collection).filter((f) => isGroupable(f.kind));
 
@@ -148,8 +152,10 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
       {part === "filter" && (
       <section>
         <Heading className="query-editor__title">{title}</Heading>
+        <DatePeriodFilter collection={collection} filters={query.filters} onChange={(filters) => onChange({ ...query, filters })} />
         {query.filters.length === 0 && <p className="helper">{emptyText}</p>}
         {query.filters.map((rule) => {
+          if (rule === period) return null;
           const field = fieldsById.get(rule.fieldId);
           if (!field) return null;
           const operator = operatorsFor(field.kind).find((o) => o.id === rule.operator) ?? operatorsFor(field.kind)[0];

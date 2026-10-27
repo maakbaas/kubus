@@ -72,8 +72,8 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
   const id = useId();
   const root = useRef<HTMLSpanElement>(null);
   const pressedOutside = useRef(false);
-  // A dialog opened from the panel (rendered at the window level) counts as part of it.
-  const inside = (n: Node | null) => !!n && (!!root.current?.contains(n) || (n instanceof Element && !!n.closest(".cds--modal, .cds--menu")));
+  // A dialog or a date picker's calendar opened from the panel (rendered at the window level) counts as part of it.
+  const inside = (n: Node | null) => !!n && (!!root.current?.contains(n) || (n instanceof Element && !!n.closest(".cds--modal, .cds--menu, .flatpickr-calendar")));
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
