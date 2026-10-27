@@ -32,11 +32,11 @@ for (const vp of ["desktop", "phone", "laptop"]) {
       });
       await t.settle(100);
       // Reference fields ask for more: pick the first choice.
-      const choose = row.getByRole("combobox").nth(1);
+      const choose = row.getByRole("combobox", { name: /Refers to/ });
       if (["Item", "List of items"].includes(type) && (await choose.count())) {
         await choose.click().catch(() => {});
         await t.settle(80);
-        await t.page.getByRole("option").first().click().catch(() => {});
+        await t.page.getByRole("option", { name: /Author/ }).first().click().catch(() => {});
       }
       // A component field starts with its own, local component; AI picks "AI prompt".
       if (type === "Component") {

@@ -2065,6 +2065,10 @@ img[data-lightbox] {
   display: flex;
   flex-direction: column;
   gap: var(--cds-spacing-06);
+  /* Its own text ("Where", the period shown) in Carbon's body-compact-01, not what the panel around it has. */
+  font-size: var(--cds-body-compact-01-font-size);
+  line-height: var(--cds-body-compact-01-line-height);
+  letter-spacing: var(--cds-body-compact-01-letter-spacing);
 }
 .query-editor section {
   display: flex;
@@ -3774,6 +3778,12 @@ body[data-reordering] [data-reorder-row] {
 }
 .components-scope .cds--dropdown__wrapper--inline .cds--label {
   margin: 0;
+}
+/* Its menu as wide as its three short choices: Carbon's 18rem, aligned to the end of the narrow
+   button, reached out of a phone's window on the left. */
+.components-scope .cds--list-box__menu {
+  min-inline-size: 0;
+  inline-size: max-content;
 }
 
 /* A remote collection's query (SourceSettings): code, in the code font. */
