@@ -19,14 +19,16 @@ Extension points are registries, not special cases in pages:
   under it, what the code works out to ("= true").
 - **Date period** (`app/src/domain/datePeriod.ts`, `views/DatePeriodFilter.tsx`): the top of every
   filter panel. A content switcher (Day, Week, Month, Year, Range) sets the current day / week
-  (Monday first, ISO numbers) / month / year in one click; ‹ › step to the one before / after
-  (a range by its length), the calendar button back to the current one, × clears it; Range shows
-  two date inputs. It goes by the first date or date & time field, or one picked beside the switcher
-  (Created and Updated included). It is stored as the filter's first `between` rule (value
-  `yyyy-mm-dd..yyyy-mm-dd`, both days included; a date & time by its local day), which the rule
-  list leaves out; what it is (a week, a month, …) follows from its two days, so nothing else is
-  stored. The days are fixed: a view saved on "this month" keeps that month. `between` isn't in the
-  operator menus (`operatorsFor`), but the API can set it.
+  (Sunday to Saturday, like the date pickers' calendars; week 1 holds 1 January) / month / year in
+  one click; ‹ › step to the one before / after (a range by its length), the calendar button back
+  to the current one, × clears it; Range shows two date inputs. It goes by the first date or date &
+  time field (none: Updated), or one picked beside the switcher (Created and Updated included). It
+  is stored as the filter's first `between` rule, which the rule list leaves out (a date & time by
+  its local day). Its value is fixed days (`yyyy-mm-dd..yyyy-mm-dd`, both included; what they are,
+  a week, a month, …, follows from them) or, with "Rolling", counted from today (`week+0` this
+  week, `month-1` last month: `resolveRange` works it out when the filter runs), so a saved "this
+  week" stays this week; a range is always fixed days. `between` isn't in the operator menus
+  (`operatorsFor`), but the API can set it.
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,
   fields with labels / hide empty), the `View` component, optional `OptionsEditor` in

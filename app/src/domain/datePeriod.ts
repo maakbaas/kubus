@@ -1,7 +1,9 @@
 // The date filter's periods: a day, a week, a month, a year or any start and end, kept as one
-// "between" rule (FilterRule value "yyyy-mm-dd..yyyy-mm-dd", both days included). Which of them
-// a rule is follows from its two days, so nothing but the rule is stored. Weeks start on Monday
-// (ISO weeks). Storage-free and UI-free.
+// "between" rule. Its value is fixed days ("yyyy-mm-dd..yyyy-mm-dd", both included), or rolling: a
+// day, week, month or year counted from today ("month+0" this month, "week-1" last week), worked
+// out whenever the filter runs. Which period fixed days are follows from them, so nothing but the
+// rule is stored. Weeks run Sunday to Saturday, like the date pickers' calendars; week 1 is the one
+// holding 1 January. Storage-free and UI-free.
 
 import { formatDate } from "./fieldKinds";
 import { pickableFields, type Collection, type FieldDef } from "./model";
@@ -21,7 +23,29 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 /** A between rule's value. */
 export const rangeValue = ({ start, end }: Period) => `${start}${SEPARATOR}${end}`;
 
-/** The period of a between rule's value, or null when it isn't two days (first not after last). */
+/** A rolling period: so many days, weeks, months or years from today's (0: today's own). */
+export interface Rolling {
+  kind: Exclude<PeriodKind, "range">;
+  offset: number;
+}
+const ROLLING = /^(day|week|month|year)([+-]\d+)$/;
+
+/** A rolling between rule's value ("week-1"). */
+export const rollingValue = ({ kind, offset }: Rolling) => `${kind}${offset < 0 ? "-" : "+"}${Math.abs(offset)}`;
+
+/** The rolling period of a between rule's value, or null when it holds fixed days (or nothing valid). */
+export function parseRolling(value: string): Rolling | null {
+  const m = ROLLING.exec(value.trim());
+  return m ? { kind: m[1] as Rolling["kind"], offset: Number(m[2]) } : null;
+}
+
+/** The days of a between rule's value as of today (a rolling one worked out), or null when it isn't a period. */
+export function resolveRange(value: string, today = formatDate(new Date())): Period | null {
+  const rolling = parseRolling(value);
+  return rolling ? rollingPeriod(rolling, today) : parseRange(value);
+}
+
+/** The fixed days of a between rule's value, or null when it isn't two days (first not after last). */
 export function parseRange(value: string): Period | null {
   const [start, end, ...rest] = value.trim().split(SEPARATOR);
   if (rest.length || !DAY.test(start ?? "") || !DAY.test(end ?? "") || start > end) return null;
@@ -39,8 +63,8 @@ const addDays = (day: string, n: number) => {
   return formatDate(d);
 };
 const daysBetween = (a: string, b: string) => Math.round((toDate(b).getTime() - toDate(a).getTime()) / 86_400_000);
-/** Monday of the day's week. */
-const weekStart = (day: string) => addDays(day, -((toDate(day).getDay() + 6) % 7));
+/** Sunday of the day's week. */
+const weekStart = (day: string) => addDays(day, -toDate(day).getDay());
 
 /** The day, week, month or year a day falls in (a range: that day alone). */
 export function periodAround(kind: PeriodKind, day: string): Period {
@@ -86,11 +110,48 @@ export function shiftPeriod(period: Period, kind: PeriodKind, direction: 1 | -1)
   }
 }
 
-/** The ISO week number of a day (week 1 holds the year's first Thursday). */
-export function isoWeek(day: string): { week: number; year: number } {
-  const thursday = toDate(addDays(weekStart(day), 3));
-  const jan1 = new Date(thursday.getFullYear(), 0, 1);
-  return { week: Math.floor((thursday.getTime() - jan1.getTime()) / (7 * 86_400_000)) + 1, year: thursday.getFullYear() };
+/** The days a rolling period stands for today. */
+export const rollingPeriod = ({ kind, offset }: Rolling, today: string): Period =>
+  offset === 0 ? periodAround(kind, today) : shiftBy(periodAround(kind, today), kind, offset);
+const shiftBy = (period: Period, kind: PeriodKind, steps: number): Period => {
+  let p = period;
+  for (let i = 0; i < Math.abs(steps); i++) p = shiftPeriod(p, kind, steps < 0 ? -1 : 1);
+  return p;
+};
+
+/** How many days, weeks, months or years a day, week, month or year is from today's. */
+export function offsetFrom(kind: Rolling["kind"], period: Period, today: string): number {
+  const a = toDate(today);
+  const b = toDate(period.start);
+  switch (kind) {
+    case "day":
+      return daysBetween(today, period.start);
+    case "week":
+      return Math.round(daysBetween(weekStart(today), weekStart(period.start)) / 7);
+    case "month":
+      return (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth();
+    case "year":
+      return b.getFullYear() - a.getFullYear();
+  }
+}
+
+const UNITS = { day: ["Today", "Yesterday", "Tomorrow"], week: ["This week", "Last week", "Next week"], month: ["This month", "Last month", "Next month"], year: ["This year", "Last year", "Next year"] };
+/** A rolling period in words: "This week", "Last month", "3 days ago", "In 2 years". */
+export function rollingLabel({ kind, offset }: Rolling): string {
+  const [current, last, next] = UNITS[kind];
+  if (offset === 0) return current;
+  if (offset === -1) return last;
+  if (offset === 1) return next;
+  const unit = `${Math.abs(offset)} ${kind}s`;
+  return offset < 0 ? `${unit} ago` : `In ${unit}`;
+}
+
+/** The week number of a day: week 1 is the week (Sunday to Saturday) holding 1 January. */
+export function weekNumber(day: string): { week: number; year: number } {
+  const start = weekStart(day);
+  // The week belongs to the year of its Saturday (a week holding 1 January is that year's first).
+  const year = toDate(addDays(start, 6)).getFullYear();
+  return { week: daysBetween(weekStart(`${year}-01-01`), start) / 7 + 1, year };
 }
 
 /** A period in words ("Week 44 · 26 Oct – 1 Nov 2026", "October 2026", "Tue 27 Oct 2026", "1 Oct – 15 Nov 2026"). */
@@ -102,7 +163,7 @@ export function periodLabel(period: Period, kind: PeriodKind, locale?: string): 
     case "day":
       return fmt(start, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
     case "week": {
-      const { week } = isoWeek(period.start);
+      const { week } = weekNumber(period.start);
       return `Week ${week} · ${periodLabel(period, "range", locale)}`;
     }
     case "month":
@@ -120,6 +181,11 @@ export function periodLabel(period: Period, kind: PeriodKind, locale?: string): 
 /** The fields a date filter can go by: date and date & time fields in field order, then Created and Updated. */
 export const dateFields = (collection: Collection): FieldDef[] =>
   pickableFields(collection).filter((f) => f.kind === "date" || f.kind === "datetime");
+
+/** The field a date filter goes by unless another is picked: the first date or date & time field, else Updated. */
+export const defaultDateField = (collection: Collection): string =>
+  collection.fields.find((f) => f.kind === "date" || f.kind === "datetime")?.id ?? UPDATED_FIELD;
+const UPDATED_FIELD = "$updated";
 
 /** The filter's date period rule (its first "between" rule), if any. */
 export const periodRule = (filters: FilterRule[]) => filters.find((r) => r.operator === "between");

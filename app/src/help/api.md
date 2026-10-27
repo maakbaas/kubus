@@ -129,7 +129,7 @@ Any field can also have a choiceFilter, a toggleIcon and strikeThrough.
 
 A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, options? }`. Its kind is table, cards, component or markdown. Fields in a block can be named by id or by name, in:
 
-- filters, a list of `{ fieldId, operator, value }` (a date period: operator `between`, value `2026-10-01..2026-10-31`, both days included);
+- filters, a list of `{ fieldId, operator, value }` (a date period: operator `between`, value `2026-10-01..2026-10-31`, both days included, or counted from today: `day`, `week`, `month` or `year` and an offset, `week+0` this week, `month-1` last month);
 - sort, a list of `{ fieldId, direction }`;
 - layout.fields.
 

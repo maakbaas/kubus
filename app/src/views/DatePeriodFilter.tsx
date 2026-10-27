@@ -1,17 +1,22 @@
 import { useId, useState } from "react";
-import { ContentSwitcher, DatePicker, DatePickerInput, IconButton, Select, SelectItem, Switch } from "@carbon/react";
+import { Checkbox, ContentSwitcher, DatePicker, DatePickerInput, IconButton, Select, SelectItem, Switch } from "@carbon/react";
 import { Calendar, ChevronLeft, ChevronRight, Close } from "@carbon/icons-react";
 import { formatDate } from "../domain/fieldKinds";
 import { newId, type Collection } from "../domain/model";
 import type { FilterRule } from "../domain/query";
 import {
   dateFields,
-  parseRange,
+  defaultDateField,
+  offsetFrom,
+  parseRolling,
   periodAround,
   periodKind,
   periodLabel,
   periodRule,
   rangeValue,
+  resolveRange,
+  rollingLabel,
+  rollingValue,
   shiftPeriod,
   type Period,
   type PeriodKind,
@@ -28,38 +33,45 @@ const KINDS: { kind: PeriodKind; text: string; current: string }[] = [
 /**
  * The top of a filter: which day, week, month, year or range the items' date falls in, in as few
  * clicks as there can be (one for this week, then one per week back or on). It goes by the first
- * date or date & time field, or another one picked beside it (Created, Updated too), and is kept
- * as the filter's one "between" rule (domain/datePeriod.ts), which the rule list doesn't show.
+ * date or date & time field (none: Updated), or another one picked beside it (Created, Updated
+ * too), and is kept as the filter's one "between" rule (domain/datePeriod.ts), which the rule list
+ * doesn't show. "Rolling" keeps it counted from today (this week stays this week), not fixed days.
  */
 export function DatePeriodFilter({ collection, filters, onChange }: { collection: Collection; filters: FilterRule[]; onChange(filters: FilterRule[]): void }) {
   const uid = useId();
   const fields = dateFields(collection);
   const rule = periodRule(filters);
-  const period = rule ? parseRange(rule.value) : null;
-  // The field and "Range" before a period is set (no rule yet), and "Range" for a period that is
-  // also a whole month (say), so the switcher doesn't jump to "Month" while start and end are chosen.
+  const today = formatDate(new Date());
+  const rolling = rule ? parseRolling(rule.value) : null;
+  const period = rule ? resolveRange(rule.value, today) : null;
+  // The field, "Rolling" and "Range" before a period is set (no rule yet), and "Range" for a period
+  // that is also a whole month (say), so the switcher doesn't jump to "Month" while start and end are chosen.
   const [chosenField, setChosenField] = useState<string>();
   const [rangeChosen, setRangeChosen] = useState(false);
-  const fieldId = rule?.fieldId ?? (fields.some((f) => f.id === chosenField) ? chosenField! : fields[0]?.id);
-  const kind: PeriodKind | null = rangeChosen ? "range" : period ? periodKind(period) : null;
+  const [rollingChosen, setRollingChosen] = useState(false);
+  const fieldId = rule?.fieldId ?? (fields.some((f) => f.id === chosenField) ? chosenField! : defaultDateField(collection));
+  const kind: PeriodKind | null = rangeChosen ? "range" : rolling ? rolling.kind : period ? periodKind(period) : null;
+  const isRolling = rule ? !!rolling : rollingChosen;
   const spec = KINDS.find((k) => k.kind === kind);
 
-  const write = (next: Period | null) => {
+  /** Stores a period: as days counted from today while rolling (a range never rolls), else as its days. */
+  const write = (next: Period | null, roll = isRolling, nextKind = kind) => {
     if (!next) return onChange(filters.filter((r) => r !== rule));
-    const written: FilterRule = { id: rule?.id ?? newId(), fieldId, operator: "between", value: rangeValue(next) };
+    const value = roll && nextKind && nextKind !== "range" ? rollingValue({ kind: nextKind, offset: offsetFrom(nextKind, next, today) }) : rangeValue(next);
+    const written: FilterRule = { id: rule?.id ?? newId(), fieldId, operator: "between", value };
     onChange(rule ? filters.map((r) => (r === rule ? written : r)) : [written, ...filters]);
   };
-  const today = formatDate(new Date());
   const pick = (next: PeriodKind) => {
     setRangeChosen(next === "range");
-    // A range starts as the period shown (its two days to change); the others around today, or
-    // around the period shown when that isn't now (a month of last year → that week).
-    if (next === "range") return;
+    // A range starts as the period shown (its two days to change; fixed days, never rolling); the
+    // others around today, or around the period shown when that isn't now (a month of last year →
+    // that week).
+    if (next === "range") return period && rolling && write(period, false, "range");
     const showsToday = period && period.start <= today && today <= period.end;
-    write(periodAround(next, period && !showsToday ? period.start : today));
+    write(periodAround(next, period && !showsToday ? period.start : today), isRolling, next);
   };
+  const label = !period || !kind ? (kind === "range" ? "Choose the first and last day" : "Any date") : rolling ? `${rollingLabel(rolling)} · ${periodLabel(period, kind)}` : periodLabel(period, kind);
 
-  if (!fieldId) return null;
   return (
     <div className="date-period">
       <div className="date-period__kinds">
@@ -89,9 +101,7 @@ export function DatePeriodFilter({ collection, filters, onChange }: { collection
         </Select>
       </div>
       <div className="date-period__nav">
-        <span className="date-period__label">
-          {period && kind ? periodLabel(period, kind) : kind === "range" ? "Choose the first and last day" : "Any date"}
-        </span>
+        <span className="date-period__label">{label}</span>
         <IconButton autoAlign label="Previous" kind="ghost" size="sm" disabled={!period || !kind} onClick={() => period && kind && write(shiftPeriod(period, kind, -1))}>
           <ChevronLeft />
         </IconButton>
@@ -117,12 +127,24 @@ export function DatePeriodFilter({ collection, filters, onChange }: { collection
           disabled={!rule && !rangeChosen}
           onClick={() => {
             setRangeChosen(false);
+            setRollingChosen(isRolling);
             write(null);
           }}
         >
           <Close />
         </IconButton>
       </div>
+      <Checkbox
+        id={`${uid}-date-rolling`}
+        labelText="Rolling: counted from today"
+        helperText={kind === "range" ? "A range keeps its days" : undefined}
+        disabled={kind === "range"}
+        checked={isRolling && kind !== "range"}
+        onChange={(_, { checked }) => {
+          setRollingChosen(checked);
+          if (period && kind) write(period, checked);
+        }}
+      />
       {kind === "range" && (
         <DatePicker
           className="date-period__range"
@@ -131,7 +153,7 @@ export function DatePeriodFilter({ collection, filters, onChange }: { collection
           value={period ? [period.start, period.end] : undefined}
           onChange={(dates) => {
             const [start, end] = dates;
-            if (start && end) write({ start: formatDate(start), end: formatDate(end) });
+            if (start && end) write({ start: formatDate(start), end: formatDate(end) }, false, "range");
           }}
         >
           <DatePickerInput id={`${uid}-date-start`} size="sm" labelText="First day" placeholder="yyyy-mm-dd" />

@@ -4,7 +4,7 @@
 
 import { dollarNames, ERROR_PREFIX, fieldLookup, render, splitWarnings, type RefLabel } from "./components";
 import { checklistItems } from "./checklist";
-import { parseRange } from "./datePeriod";
+import { resolveRange } from "./datePeriod";
 import { formatDate, htmlPlainText } from "./fieldKinds";
 import { markdownPlainText } from "./markdownExcerpt";
 import { fieldValue, itemLabel, pickableFields, type FieldDef, type FieldKind, type FieldValue, type Item, type Collection } from "./model";
@@ -290,7 +290,7 @@ export function filterValueProblem(field: FieldDef, operator: FilterOperator, va
   if (value.startsWith(ERROR_PREFIX)) return value.slice(ERROR_PREFIX.length);
   const v = value.trim();
   if (v === "" || isPageValue(v)) return undefined;
-  if (operator === "between") return (field.kind === "date" || field.kind === "datetime") && parseRange(v) ? undefined : "A period is yyyy-mm-dd..yyyy-mm-dd";
+  if (operator === "between") return (field.kind === "date" || field.kind === "datetime") && resolveRange(v) ? undefined : "A period is yyyy-mm-dd..yyyy-mm-dd, or day, week, month or year +/- a number";
   const compares = operator === "is" || operator === "isNot" || operator === "gt" || operator === "lt" || operator === "before" || operator === "after";
   if (!compares) return undefined;
   if (field.kind === "checkbox" && !/^(true|false)$/i.test(v)) return "A checkbox is true or false";
@@ -380,7 +380,7 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
       return !!dayOf(field, value) && dayOf(field, value) > arg;
     case "between": {
       const day = dayOf(field, value);
-      const period = parseRange(arg);
+      const period = resolveRange(arg);
       return !!day && !!period && day >= period.start && day <= period.end;
     }
   }
