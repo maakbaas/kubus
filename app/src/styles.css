@@ -2343,6 +2343,11 @@ img[data-lightbox] {
   width: 1%; /* shrink to the buttons */
   text-align: right;
 }
+/* A tooltip sits inside its button's cell and would inherit the nowrap: a long label (e.g. "Save
+   Books › Default › Notes as a shared component") ran out of its box instead of wrapping. */
+.row-actions .cds--popover-content {
+  white-space: normal;
+}
 /* Carbon draws the header sort arrows at 20px; every other icon in the app is 16px. */
 .cds--table-sort :is(.cds--table-sort__icon, .cds--table-sort__icon-unsorted) {
   inline-size: 1rem;
