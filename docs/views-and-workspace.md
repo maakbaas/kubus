@@ -24,10 +24,11 @@ Extension points are registries, not special cases in pages:
   to the current one, × clears it; Range shows two date inputs. It goes by the first date or date &
   time field (none: Updated), or one picked beside the switcher (Created and Updated included). It
   is stored as the filter's first `between` rule, which the rule list leaves out (a date & time by
-  its local day). Its value is fixed days (`yyyy-mm-dd..yyyy-mm-dd`, both included; what they are,
-  a week, a month, …, follows from them) or, with "Rolling", counted from today (`week+0` this
-  week, `month-1` last month: `resolveRange` works it out when the filter runs), so a saved "this
-  week" stays this week; a range is always fixed days. `between` isn't in the operator menus
+  its local day). The current day, week, month or year is stored counted from today (`week+0`,
+  `month+0`: `resolveRange` works it out when the filter runs), so a saved "this week" stays this
+  week and the panel says "This week · …"; any other period is stored as its days
+  (`yyyy-mm-dd..yyyy-mm-dd`, both included; what they are, a week, a month, …, follows from them).
+  The current period can't be kept as fixed days, by design. `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,

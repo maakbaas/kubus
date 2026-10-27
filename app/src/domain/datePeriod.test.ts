@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultDateField, weekNumber, offsetFrom, parseRange, parseRolling, periodAround, periodKind, periodLabel, rangeValue, resolveRange, rollingLabel, rollingValue, shiftPeriod } from "./datePeriod";
+import { defaultDateField, weekNumber, parseRange, parseRolling, periodAround, periodKind, periodLabel, rangeValue, resolveRange, rollingLabel, rollingValue, shiftPeriod } from "./datePeriod";
 
 describe("date periods", () => {
   it("finds the day, week (Sunday first), month and year around a day", () => {
@@ -52,9 +52,7 @@ describe("rolling periods", () => {
     expect(resolveRange("fortnight+0", today)).toBeNull();
   });
 
-  it("round-trip through their offset and read in words", () => {
-    expect(offsetFrom("month", { start: "2025-12-01", end: "2025-12-31" }, today)).toBe(-10);
-    expect(offsetFrom("week", { start: "2026-11-01", end: "2026-11-07" }, today)).toBe(1);
+  it("read and write their value, and read in words", () => {
     expect(parseRolling(rollingValue({ kind: "week", offset: -2 }))).toEqual({ kind: "week", offset: -2 });
     expect(rollingLabel({ kind: "month", offset: -1 })).toBe("Last month");
     expect(rollingLabel({ kind: "day", offset: 3 })).toBe("In 3 days");

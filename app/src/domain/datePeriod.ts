@@ -119,22 +119,6 @@ const shiftBy = (period: Period, kind: PeriodKind, steps: number): Period => {
   return p;
 };
 
-/** How many days, weeks, months or years a day, week, month or year is from today's. */
-export function offsetFrom(kind: Rolling["kind"], period: Period, today: string): number {
-  const a = toDate(today);
-  const b = toDate(period.start);
-  switch (kind) {
-    case "day":
-      return daysBetween(today, period.start);
-    case "week":
-      return Math.round(daysBetween(weekStart(today), weekStart(period.start)) / 7);
-    case "month":
-      return (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth();
-    case "year":
-      return b.getFullYear() - a.getFullYear();
-  }
-}
-
 const UNITS = { day: ["Today", "Yesterday", "Tomorrow"], week: ["This week", "Last week", "Next week"], month: ["This month", "Last month", "Next month"], year: ["This year", "Last year", "Next year"] };
 /** A rolling period in words: "This week", "Last month", "3 days ago", "In 2 years". */
 export function rollingLabel({ kind, offset }: Rolling): string {
