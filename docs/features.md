@@ -110,7 +110,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
     (`mixed`): the component editor refuses to save it. Pickers offer only what fits (component
     fields: field components, AI ones only for AI fields; "Add block" and Block settings: block and
     static); one that doesn't fit where it is used (edited since) shows "⚠ … use it as a block /
-    field" there, never an empty result. The Components page has a Kind column ("AI" tag for those
+    field" there, never an empty result. The Components page has a Kind column ("AI field" for those
     asking AI); the editor says the kind under the code as it is typed. A block on an item page gets
     no `$item`: its filter takes the page's item instead.
   - Fields can also be added from every field picker ("Add field": table columns, card fields,

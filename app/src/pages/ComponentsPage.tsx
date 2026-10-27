@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { Checkbox, Dropdown, IconButton, InlineNotification, Link, Modal, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Tag, Tile } from "@carbon/react";
+import { Checkbox, Dropdown, IconButton, InlineNotification, Link, Modal, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Tile } from "@carbon/react";
 import { Copy, Share, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
@@ -17,9 +17,10 @@ import { RowActions, rowButtonProps } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
 
 /** A component's kind as the list shows it (Field, Block, Static), from what its code uses. */
+/** Its kind; asking AI makes it a kind of its own ("AI field": only a field can ask AI). */
 function kindLabel(x: ComponentCode): string {
   const uses = componentUses(x.code);
-  return uses.mixed ? "Mixed: fix it" : COMPONENT_KINDS[uses.kind];
+  return uses.mixed ? "Mixed: fix it" : x.ai ? "AI field" : COMPONENT_KINDS[uses.kind];
 }
 
 const SCOPES = ["all", "shared", "local"] as const;
@@ -139,11 +140,6 @@ export function ComponentsPage() {
                     <TableCell data-label="Kind">
                       <span className="component-choice">
                         <span className="component-choice__name">{kindLabel(code)}</span>
-                        {code.ai && (
-                          <Tag size="sm" type="purple">
-                            AI
-                          </Tag>
-                        )}
                       </span>
                     </TableCell>
                     <TableCell data-label="Where">{r.shared ? "Shared" : "Local"}</TableCell>
