@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// GUI stress suite runner: `npm run test:gui [-- options]`. Not part of `npm test` / CI.
+// GUI stress suite runner: `npm run test:gui [-- options]`. Not part of `npm test`; CI runs its smoke tests.
 //
 // Each test runs through `playwright-cli run-code` in one of several parallel browser sessions,
 // in a fresh browser context (its own database). The app is a bundled build (`vite build` with
@@ -25,6 +25,8 @@
 //                      --browser); WebKit needs `playwright install webkit` for playwright-cli's own
 //                      Playwright (and no PLAYWRIGHT_MCP_CONFIG naming another browser)
 //   --smoke            only the tests marked { smoke: true } (~25: a quick check; the full run before larger pushes)
+//   --changed [ref]    only the suites covering the files changed since ref (default origin/main), committed
+//                      or not (areas.mjs maps paths to suites); with --smoke their smoke tests
 //   --update-baselines store the screenshot baselines (t.baseline) taken by this run in
 //                      gui-tests/baselines/ instead of comparing with them
 //   --recycle <n>      restart each browser after n tests (default 8), to drop what it accumulated
@@ -51,6 +53,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { PNG } from "pngjs";
 import pixelmatch from "pixelmatch";
+import { suitesFor } from "./areas.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -112,6 +115,25 @@ function listTests(file) {
 let tests = suiteFiles.flatMap(listTests);
 if (grep) tests = tests.filter((t) => grep.test(`${t.suite} › ${t.name}`));
 if (flag("smoke")) tests = tests.filter((t) => t.opts.smoke);
+if (flag("changed")) {
+  const next = args[args.indexOf("--changed") + 1];
+  const ref = next && !next.startsWith("--") ? next : "origin/main";
+  const git = (...a) => execFileSync("git", a, { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
+  let files;
+  try {
+    files = [...new Set([...git("diff", "--name-only", `${ref}...HEAD`), ...git("diff", "--name-only", "HEAD"), ...git("ls-files", "--others", "--exclude-standard")])];
+  } catch {
+    console.error(`--changed: git can't compare with ${ref} (fetch it, or name another: --changed <ref>)`);
+    process.exit(1);
+  }
+  const covered = suitesFor(files);
+  if (covered !== "all") tests = tests.filter((t) => covered.includes(Number(t.suite.slice(0, 2))));
+  console.log(`--changed: ${files.length} files changed since ${ref}; suites: ${covered === "all" ? "all" : covered.join(", ") || "none"}`);
+  if (tests.length === 0 && !flag("list")) {
+    console.log("Nothing the GUI shows changed: no tests to run.");
+    process.exit(0);
+  }
+}
 // Perf tests only run in a perf run.
 tests = tests.filter((t) => !!t.opts.perf === perfMode);
 // Each test `repeat` times: the same test (looked up by `name`), reported as "name #k".

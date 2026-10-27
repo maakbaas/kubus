@@ -1,0 +1,93 @@
+name: Test
+
+# On every push, on Linux, beside build.yml (the Windows installers, which also runs the unit tests):
+# - unit: both typechecks and every vitest project, the server's tests against a real Postgres and
+#   the headless device (a few minutes);
+# - gui: the GUI suite's smoke tests (gui-tests/), only those of the suites covering the files this
+#   branch changed (gui-tests/areas.mjs), all of them on main; skipped when nothing the GUI shows
+#   changed. The full GUI suite (an hour) stays a local run before larger changes.
+# docs/testing.md says which suite covers what.
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  IBM_TELEMETRY_DISABLED: 'true'
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # server/test/postgres.ts; in CI a missing database fails the tests instead of skipping them.
+      KUBUS_TEST_POSTGRES: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      # The server's Node (it runs its TypeScript directly).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - run: npm ci
+      - run: npm ci --prefix server
+
+      - name: Type check (app)
+        run: npm run typecheck
+      - name: Type check (server)
+        run: npm run typecheck --prefix server
+
+      # /api/v1 answers from it: the server's HTTP tests use it.
+      - name: Build the headless device
+        run: npm run build:headless
+
+      - name: Test
+        run: npm test
+
+  gui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # --changed compares with origin/main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      # The runner's Chrome is the browser.
+      - run: npm install -g @playwright/cli@0.1.22
+
+      - name: GUI smoke tests
+        run: npm run test:gui:smoke -- ${{ github.ref == 'refs/heads/main' && '' || '--changed origin/main' }}
+
+      - name: Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-report
+          path: gui-tests/report/
+          retention-days: 14

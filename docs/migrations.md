@@ -6,8 +6,8 @@ mechanisms, each with a test that fails when a change skips it:
 
 | Where | What | Code | Test |
 |---|---|---|---|
-| A device (SQLite) | numbered migrations from the first release's schema | `app/src/data/migrations.ts`, `sqlite/engine.ts` | `data/migrations.test.ts`, `sqlite/engine.test.ts` |
-| The server (Postgres) | added tables / columns by themselves; anything else a numbered migration | `server/src/schema.ts`, `server/src/migrations.ts` | `data/sync/server.test.ts` (with `KUBUS_TEST_POSTGRES`) |
+| A device (SQLite) | numbered migrations from the first release's schema | `app/src/data/migrations.ts`, `sqlite/engine.ts` | `data/migrations.test.ts` (also: `fixture-v1.sql` migrated keeps every row), `sqlite/engine.test.ts` |
+| The server (Postgres) | added tables / columns by themselves; anything else a numbered migration | `server/src/schema.ts`, `server/src/migrations.ts` | `server/test/database.test.ts` (with `KUBUS_TEST_POSTGRES`: `docs/testing.md`) |
 | Between versions (sync) | `SYNC_VERSION` / `SYNC_COMPATIBLE`; rows written in the columns they have | `shared/sync.ts`, `server/src/sync.ts`, `SyncEngine.applyStatement` | `data/sync/spec.test.ts`, `versions.test.ts`, `outbox.test.ts` |
 
 There was no ready-made way: SQLite has only `PRAGMA user_version`, and a migration library for

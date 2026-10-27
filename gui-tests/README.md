@@ -1,11 +1,14 @@
 # GUI stress suite
 
 A browser test suite that clicks through the whole app and checks layout rules on every page, at
-many window sizes and with content of every shape. Not part of `npm test` or CI: run it by hand.
+many window sizes and with content of every shape. Not part of `npm test`; CI runs only the smoke tests
+of the suites a branch's changes reach (`--smoke --changed`, `.github/workflows/test.yml`): run the rest by hand.
 
 ```
 npm run test:gui                                  # everything (~265 tests, about an hour; browsers in parallel by free memory)
-npm run test:gui:smoke                            # the smoke subset (~22 tests, ~10 minutes): quick checks
+npm run test:gui:smoke                            # the smoke subset (~23 tests, ~10 minutes): quick checks
+npm run test:gui -- --changed --smoke             # smoke tests of the suites covering what changed since origin/main (areas.mjs)
+npm run test:gui -- --changed                     # …all their tests
 npm run test:gui -- --grep "elsewhere" --repeat 20 # each test 20 times: how flaky is it?
 npm run test:gui -- --suite 21 --update-baselines # store new screenshot baselines (a deliberate commit)
 npm run test:gui -- --browser webkit --suite "01|02|10|14|20" # WebKit (see below)

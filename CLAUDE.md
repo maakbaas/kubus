@@ -22,6 +22,8 @@ is what this split avoids. Keep them current when behaviour changes.
   connectors, the HTTP API (headless device) and webhooks, iOS home-screen app, known sync limits.
 - `docs/migrations.md`: schema changes: the device's and the server's migrations, sync between versions
   (`SYNC_VERSION` / `SYNC_COMPATIBLE`), the steps of a change.
+- `docs/testing.md`: the test suites (vitest projects `domain`, `storage`, `sync`, `api`, `app`, `connectors`,
+  `server`; the GUI suites), what each covers and needs (Postgres), what to run for a change, and CI.
 - `docs/vision.md`: the "one hub" vision (native + remote sources, capabilities), the roadmap and
   every open item, numbered (other docs refer to them as "roadmap #n"; keep the list there only).
 
@@ -128,13 +130,16 @@ stale peer range.
 
 - `npm run dev`: Tauri desktop app with hot reload (runs `dev:web` on port 1420).
 - `npm run dev:web`: same app in a normal browser at http://localhost:1420.
-- `npm run typecheck`, `npm test`, `npm run build:web` (to `app/dist`), `npm run build` (desktop bundle).
+- `npm run typecheck`, `npm run build:web` (to `app/dist`), `npm run build` (desktop bundle).
+- `npm test`: every vitest project; `npm test -- --project sync` one part, `npm run test:changed` the tests reaching
+  files changed since origin/main. The server's projects need `npm ci --prefix server` and Postgres
+  (`KUBUS_TEST_POSTGRES`): `docs/testing.md`. Run the projects of what a change touches before pushing.
 - `npm run build:headless`: the headless device for the server (`server/headless`, git-ignored); without it the
   server's `/api/v1` answers 503. Rebuild it after app changes when running the server locally.
-- `npm run test:gui`: the GUI stress suite (not in CI; `gui-tests/README.md`): every page, size and content shape through
+- `npm run test:gui`: the GUI stress suite (CI runs only smoke tests; `gui-tests/README.md`): every page, size and content shape through
   `playwright-cli` against a development-mode build it makes and serves itself (`--dev`: the dev server), layout rules
-  as pass/fail criteria, HTML report with screenshots in `gui-tests/report/`. `npm run test:gui:smoke`: its ~22-test smoke
-  subset; `--repeat n`; `--perf`: the perf tests only (suite 23, each once; `perf-summary.json`, `--perf-compare`); screenshot baselines in `gui-tests/baselines/` (`--update-baselines` after a
+  as pass/fail criteria, HTML report with screenshots in `gui-tests/report/`. `npm run test:gui:smoke`: its ~23-test smoke
+  subset; `--changed`: the suites covering the files changed since origin/main (`gui-tests/areas.mjs`); `--repeat n`; `--perf`: the perf tests only (suite 23, each once; `perf-summary.json`, `--perf-compare`); screenshot baselines in `gui-tests/baselines/` (`--update-baselines` after a
   deliberate visual change).
 - Server: `docker compose up -d` (change the passwords in `docker-compose.yml` first; it starts its own Postgres and pulls the image that `.github/workflows/image.yml` publishes to ghcr.io); or `cd server && npm install && npm run dev` with `DATABASE_URL` and `KUBUS_TOKEN` set.
 - Browser automation (playwright-cli) runs in a subagent on the cheapest model (`model: "haiku"`).
