@@ -25,7 +25,7 @@ import type { SyncEnvironment } from "../sync/environment";
 import { acceptedStatement, editedStatement, generatedStatement } from "./generated";
 import { decodeAiInput } from "../../domain/ai";
 import { draftProblem } from "../../domain/collectionDraft";
-import { columnKinds, firstShownFields, isRemote } from "../../domain/sources";
+import { firstShownFields, isRemote } from "../../domain/sources";
 import type { SqlClient, Statement } from "./protocol";
 
 interface CollectionRow {
@@ -330,10 +330,10 @@ export class SqliteRepository implements Repository {
         // Kind, target and an AI field's output are immutable once created (values would need
         // conversion); a component field's component may change (its values are computed, not
         // stored), and so may an AI field's prompt (its values turn stale, see domain/ai.ts). A
-        // remote collection stores no values: its column fields may change between the kinds that
-        // read the same values (text as Markdown, domain/sources.ts).
+        // remote collection stores no values: its column fields follow their column (text shown
+        // as Markdown, a column whose type changed: domain/sources.ts).
         const [code, output, frameRatio] = local(f, old);
-        const kind = draft.source && old.source_column && columnKinds(old.kind).includes(f.kind) ? f.kind : old.kind;
+        const kind = draft.source && old.source_column && f.column === old.source_column ? f.kind : old.kind;
         if (
           old.kind !== kind ||
           old.name !== f.name ||

@@ -101,6 +101,8 @@ Component values run on the server, without Node's globals, and each section get
 | `DELETE /collections/{c}/fields/{f}` | remove a field (a collection keeps at least one) |
 | `PUT /collections/{c}/fields/order` | set the field order from a list of names; fields left out keep their order, after these |
 
+A remote collection (read from a database of the server, made in the app) is listed too, but its rows aren't items here: it has none in the API, and adding or changing items in it is refused.
+
 For spaces, give a list of spaces, or null for every space.
 
 ### Describing a field

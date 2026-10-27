@@ -141,6 +141,8 @@ export function sourceQuery(
     const field = byId.get(rule.fieldId);
     if (!field?.column || !fieldOperators(collection, field).some((o) => o.id === rule.operator || rule.operator === "between")) continue;
     const value = rule.value.trim();
+    // A rule still without its value (just added) doesn't filter yet.
+    if (value === "" && operatorsFor(field.kind).find((o) => o.id === rule.operator)?.needsValue) continue;
     if (filterValueProblem(field, rule.operator, value)) return null;
     if (rule.operator === "between") {
       const period = resolveRange(value);

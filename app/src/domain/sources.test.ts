@@ -66,6 +66,7 @@ describe("remote collections", () => {
           { id: "1", fieldId: "f-born", operator: "between", value: "2026-01-01..2026-01-31" },
           { id: "2", fieldId: "f-calc", operator: "is", value: "3" }, // a component field: left out
           { id: "3", fieldId: "f-name", operator: "contains", value: " ad " },
+          { id: "4", fieldId: "f-name", operator: "is", value: "" }, // no value yet: doesn't filter
         ],
         sort: [{ fieldId: TITLE, direction: "desc" }, { fieldId: "f-data", direction: "asc" }],
         groupBy: "f-tags",
