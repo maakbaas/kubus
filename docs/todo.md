@@ -84,20 +84,21 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
 ## Local components
 
 6. **Local components: code owned by its place, promoted to shared on demand.** Proposed earlier,
-   never built (fcef991 took the other route: no inline code in Markdown blocks and item values;
-   "Save as component" makes a shared static component). Design it together with items 1–2.
-   - A component may be *local*: owned by one place (a component field, a component block, a
-     Markdown block if inline code comes back there) instead of shared. Same table, same code
-     language and kinds, same editor; an owner reference (e.g. `components.owner_id` + what it is)
-     marks it local. Deleting the owner deletes it.
-   - Written in place: the field modal / block settings edit a local component's code directly
-     (a one-off AI prompt or formula needs no trip to the Components page and no name), instead of
-     only picking a shared one. `NewComponentModal` and the "New component" button become this.
+   never built (fcef991 took the other route: Markdown blocks are plain GFM; "Save as component"
+   makes a shared component, static since the text uses no `$` names). Design it together with
+   items 1–2.
+   - **Item values never hold `{{ }}`**: removed on purpose, stays that way.
+   - A component may be *local*: owned by one place instead of shared. Same table, code language,
+     editor; an owner reference (e.g. `components.owner_id` + what it is) marks it local. Deleting
+     the owner deletes it. Where:
+     - **Markdown blocks** (inline code in a block's text): **static only** (no `$item`, no block
+       names); the static kind is enforced, as `placeProblem` does per place.
+     - **Component fields** (to confirm): a one-off formula or AI prompt over `$item` (a field
+       component), written in the field modal with no name and no trip to the Components page;
+       `NewComponentModal` and the "New component" button become this. Without it, item 2's
+       one-off AI prompts need a shared component each.
    - The Components page lists local ones too, with where they are used ("Used in: Books ›
      Reading time", "Dune › Notes"), filterable apart from the shared ones.
    - **Promote to shared** (the general form of today's "Save as component"): gives it a name, and
      it can then be picked elsewhere. Editing a shared one asks first (applies everywhere; for AI
      components: regenerates everywhere); editing a local one doesn't.
-   - Open: whether Markdown blocks and item values get inline `{{ }}` back as local components
-     (CLAUDE.md "code lives only in components" would still hold), or local stays limited to
-     component fields and blocks.
