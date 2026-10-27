@@ -38,6 +38,8 @@ export interface ViewState {
   filters: FilterRule[];
   /** At least one. */
   blocks: ViewBlock[];
+  /** Field values are edited in place in its blocks ("Fields are editable", like an item view's). */
+  editable: boolean;
 }
 
 /**
@@ -113,7 +115,7 @@ export function newBlock(kind: BlockKind, options: unknown, id = newId()): ViewB
 
 /** The unsaved starting view of every collection: a table of all items, sorted by title. */
 export function defaultViewState(defaultOptions: unknown): ViewState {
-  return { filters: [], blocks: [newBlock("table", defaultOptions, MAIN_BLOCK)] };
+  return { filters: [], blocks: [newBlock("table", defaultOptions, MAIN_BLOCK)], editable: true };
 }
 
 /** Id of the first block of a view stored before blocks (and of the default view's block). */
@@ -134,7 +136,7 @@ export function withQuery(block: ViewBlock, query: ViewQuery): ViewBlock {
 
 /** Whether two view states show the same thing (used to tell if a saved view was changed). */
 export function sameView(a: ViewState, b: ViewState): boolean {
-  return JSON.stringify(a.filters) === JSON.stringify(b.filters) && JSON.stringify(a.blocks) === JSON.stringify(b.blocks);
+  return JSON.stringify(a.filters) === JSON.stringify(b.filters) && JSON.stringify(a.blocks) === JSON.stringify(b.blocks) && a.editable === b.editable;
 }
 
 const array = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
@@ -160,7 +162,7 @@ export function parseBlock(raw: unknown): ViewBlock | null {
 }
 
 /**
- * A view's stored config (JSON `{ filters, blocks, collapsed }`). Views stored before blocks hold
+ * A view's stored config (JSON `{ filters, blocks, editable, collapsed }`). Views stored before blocks hold
  * `{ query, options }` plus their kind (the row's): read as one block, whose fields come out of
  * the old options (a table's columns, the cards' fields, labels and empty-field choice).
  */
@@ -175,6 +177,7 @@ export function parseViewConfig(json: string, kind: string): ViewState & { colla
     return {
       filters: array<FilterRule>(o.filters),
       blocks: o.blocks.map(parseBlock).filter((b): b is ViewBlock => b !== null),
+      editable: o.editable !== false,
       collapsed: parseCollapsed(o.collapsed),
     };
   }
@@ -184,5 +187,5 @@ export function parseViewConfig(json: string, kind: string): ViewState & { colla
     kind === "cards" ? { fields: options.fields, hiddenLabels: options.hiddenLabels, hideEmpty: options.hideEmpty } : { fields: options.columns },
   ) ?? BLOCK_LAYOUT;
   const block = withQuery({ ...newBlock(kind, options, MAIN_BLOCK), layout }, query);
-  return { filters: array<FilterRule>(query.filters), blocks: [block], collapsed: NOTHING_COLLAPSED };
+  return { filters: array<FilterRule>(query.filters), blocks: [block], editable: true, collapsed: NOTHING_COLLAPSED };
 }

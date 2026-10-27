@@ -1,4 +1,4 @@
-import { useContext, type ComponentType } from "react";
+import { useContext, type ComponentType, type MouseEvent } from "react";
 import {
   AiGenerate,
   Calendar,
@@ -39,9 +39,9 @@ export const FIELD_KIND_ICONS: Record<FieldKind, Icon> = {
   ai: AiGenerate,
 };
 
-function IconLabel({ icon: Icon, children }: { icon: Icon; children: string }) {
+function IconLabel({ icon: Icon, children, onClick }: { icon: Icon; children: string; onClick?(e: MouseEvent): void }) {
   return (
-    <span className="icon-label">
+    <span className={onClick ? "icon-label section-header__toggle" : "icon-label"} onClick={onClick}>
       <Icon size={16} aria-hidden="true" />
       {/* A long name is cut with "…": its whole text on hover. */}
       <span className="icon-label__text" title={children}>
@@ -55,7 +55,19 @@ function IconLabel({ icon: Icon, children }: { icon: Icon; children: string }) {
 export function FieldLabel({ field }: { field: FieldDef }) {
   const collapse = useContext(FieldCollapse);
   // An AI field edited as text (see editableField) keeps its own icon: only AI fields have an output.
-  const label = <IconLabel icon={FIELD_KIND_ICONS[field.aiOutput ? "ai" : field.kind]}>{field.name}</IconLabel>;
+  // The name toggles too, like a block's (the caret is its keyboard control); inside an editor's
+  // <label> the click doesn't also focus the input.
+  const toggle = collapse
+    ? (e: MouseEvent) => {
+        e.preventDefault();
+        collapse.onToggle();
+      }
+    : undefined;
+  const label = (
+    <IconLabel icon={FIELD_KIND_ICONS[field.aiOutput ? "ai" : field.kind]} onClick={toggle}>
+      {field.name}
+    </IconLabel>
+  );
   return collapse ? (
     <>
       <CollapseCaret {...collapse} />

@@ -17,12 +17,14 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   key of `TOGGLE_ICONS` in `ui/ToggleInput.tsx`: heart, star, flag, bookmark, checkmark, thumbs up,
   faces; outlined when off, filled when on; null = Carbon's checkbox). Every place that toggles
   such a value uses `ToggleInput`, never `Checkbox` directly. Markdown task boxes stay GFM boxes.
+  A checked one's text is greyed, and struck through with the field's "Strike through when checked"
+  (`fields.strike_through`, synced).
 - **Markdown is strictly GitHub Flavored Markdown.** The Milkdown editor (`app/src/ui/MarkdownEditor.tsx`)
   loads only the CommonMark + GFM presets (plus non-syntax utilities: history, listener,
   clipboard, upload, prism). Don't add syntax plugins (math, emoji, diagrams, frontmatter, Crepe, …),
   and any future renderer must also be GFM-only. Behaviour-only additions are fine: clickable task
   checkboxes, typed `[text](url)` links, link hover popover (open/edit/remove), code coloring
-  (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs. `{{ }}` sections (JavaScript, see Components) are kept out of the editor: swapped for tokens before loading, shown as chips (an inline atom node) edited from a code dialog, written back raw (`ui/markdownSections.ts`; typed or pasted `{{ … }}` become chips), so Markdown never reads or escapes the code.
+  (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs. A Markdown value is data: `{{ }}` in it is plain text, never run (code lives only in components).
 - **Collections have a singular and plural name** ("Author" / "Authors"): singular for one item
   ("New Author"), plural for lists, navigation and counts (`countLabel`).
 - **Items are edited in place**: `#/collections/<id>/items/<itemId>` shows every field in the
@@ -49,31 +51,37 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   `params`), plus the built-ins `$now` / `$item` (the item itself, n8n style) and, in a block,
   `$items` / `$groups` / `$fields` / `$all` (details in the header of `components.ts`). A Component field picks one (`fields.component_id`) and maps each
   variable to a field of its collection or a fixed text/number (`fields.component_args`, `ComponentArg`),
-  so one component serves any collection. A component that is only `{{ … }}` yields that raw value
+  so one component serves any collection. **Code lives only in components** (and AI prompts): item values
+  (string, number, Markdown, HTML), Markdown blocks and filter values are data, never run. A component that is only `{{ … }}` yields that raw value
   (numbers sort as numbers); otherwise rendered Markdown (rendered on item pages, plain text in
   tables/cards). Results are computed whenever items are shown (`withComputed`, before queries
   run) and never stored; failing sections show `⚠ message`. One concept on purpose: the same
   components are fields and blocks (see Blocks). The code runs in the app with the
   user's rights (`new Function`); it must move to a sandbox once components can come from others
-  (sync, sharing).
-  - `{{ }}` sections also work inside an item's own string, markdown, HTML and number values
-    (`withComputed` renders them when shown and keeps the typed source in `item.sources`, which
-    editors use). A number field holding sections stores that text in `value_text`, so its input
-    is a Carbon TextInput with a decimal keyboard (NumberInput takes no braces).
+  (sync, sharing). The editor previews the result as you type, with a test value per variable and only
+  the choices the code calls for: a collection when it reads items, an item for `$item`, a field to group
+  by for `$groups`, the fields for `$fields` (`CollectionPreview` in `ComponentEditorPage.tsx`).
   - HTML output renders in a sandboxed frame that sizes itself, one component for every place
     (`HtmlFrame` in `ui/ComponentValue.tsx`, which documents flow/fill sizing, `frame_ratio`, the
     `<meta name="frame">` override and the zero-specificity base styles).
   - Components see an image field as its src, `files/<sha256>`: Markdown and image outputs (and
     card covers) resolve it to the stored file; HTML frames get each file embedded as a data URL.
-  - A component field on an item page is edited in place like any field: clicking it edits its
-    component's code (`ui/ComponentFieldEditor.tsx`); saving asks first, as the change applies
-    everywhere the component is used (Change component /
-    Discard changes, which reverts / Keep editing, also on × or Escape).
-  - What a component uses decides where it can go (`componentUses`): `$item` = needs an item
-    (a field, a block on an item page; never offered on a collection view); `$items` / `$groups` /
-    `$fields` = lists a block's items (its block then offers filter, sort, fields); neither = static
-    content. A block's variables take a fixed value or a field of the block's collection, passed
-    as the field's name (which field to use), not a value.
+  - **Click to edit only what belongs to the place** (field values, Markdown blocks). A component
+    field's value is computed, so clicking it does nothing; "Edit component" (code icon in its label
+    row, in the "⋮" when its name is hidden) edits its component's code in place
+    (`ui/ComponentFieldEditor.tsx`); saving asks first, as the change applies everywhere the component
+    is used (Change component / Discard changes, which reverts / Keep editing, also on × or Escape).
+    A component block's Block settings link to the component's page.
+  - **Kinds** (`componentUses`, `placeProblem`, `componentsFor`): what a component uses makes it a
+    *field* component (`$item`: a component field), a *block* component (`$items` / `$groups` /
+    `$fields` / `$all`: a block, which then offers filter, sort, fields as its code needs) or a
+    *static* one (neither: either place). Never both (`mixed`): the component editor refuses to save
+    it. Pickers offer only what fits (component fields: field and static; "Add block" and Block
+    settings: block and static); one that doesn't fit where it is used (edited since) shows
+    "⚠ … use it as a block / field" there, never an empty result. The Components page has a Kind
+    column; the editor says the kind under the code as it is typed. A block on an item page gets no
+    `$item`: its filter takes the page's item instead. A block's variables take a fixed value or a
+    field of the block's collection, passed as the field's name (which field to use), not a value.
   - Fields can also be added from every field picker ("Add field": table columns, card fields,
     item page layout; `ui/FieldModal.tsx`, which also edits component fields). They are ordinary
     fields of the collection, shown in the picker's own view; adding asks for confirmation (the field
@@ -101,7 +109,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   prompt, opening the app on a pile of them) stops everything until a modal asks "Generate N AI values?" ("Not now"
   drops them for the session); a pause switch in Settings → AI sends no request at all. Results are stored via
   `Repository.setGenerated` (which leaves the item's `updatedAt` alone). Without a model everything waits; failures
-  show their reason in place and "Retry" in the banner (`ui/AiBanner.tsx`, along the bottom of the window); items have
+  show their reason in place and "Retry" in the AI icon's popover (`AiStatusButton` in `ui/AiBanner.tsx`, left of the
+  sync icon and only there while something needs saying: not set up, paused, writing many, failed); items have
   a "Generate again" button in the label row whose popover shows when the value was generated (or edited) and takes
   a nudge for that value, sent once and not kept. AI fields are skipped by duplicate and the new-item form.
   **Values can be typed over** (item page, table cells for text and numbers; `editableField` edits an AI field as its
@@ -138,8 +147,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   name or "Table" / "Cards"; set under Block settings), a collapse caret after it (clicking the name
   collapses too), and its menus at the right; blocks are separated by a line, like item fields. In a
   collection view the header can be hidden (tag icon in View settings' block list,
-  `ViewBlock.hideHeader`, stored right away), as is that of a Markdown block without a name on an
-  item page: the header row goes and its menus become a "⋮" (`OverflowBar` with `menu`, the dark
+  `ViewBlock.hideHeader`, stored right away), on an item page with the layout's name toggle (a
+  Markdown block too: unnamed, it is headed "Markdown" like any block): the header row goes and its menus become a "⋮" (`OverflowBar` with `menu`, the dark
   popover phones get; always, even for a single button; a narrow button, 1rem wide) to the right
   of the block's content; the block can't collapse. A field shown without its name does the same with its
   label row's buttons ("Generate again"), also while it is edited. The line between fields and
@@ -155,7 +164,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   copy of the last; a view keeps one). Item pages hold blocks too, among the
   fields (`ItemLayout.blocks`, their ids in `fields`): a block there may list another collection
   (`ViewBlock.collectionId`) and filter on the page's item (rule values `$item` = this item,
-  `$item.<fieldId>` = what one of its reference fields points to; `resolvePageValues`), so
+  `$item.<fieldId>` = one of its values: what a reference field points to, or a value of the same
+  kind to compare with, picked by name, "This Book's Year"; `resolvePageValues`), so
   "Books by this Author" is a table on the Author's pages; a new item added there gets the
   filter's references (`filterPreset`). On item pages the same split holds: arranging the page
   (its layout: fields and blocks and their order, names shown, editable, hide empty) is stored
@@ -175,7 +185,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   shown, also for a single view (hiding them was confusing and hid the bookmark button); a changed
   view's tab shows " *"; bookmarking or starring the virtual "All" view stores it first. When a layout hides
   fields or isn't editable, an edit icon switches to the standard page (all fields, editable)
-  for the time being. Every labelled field collapses like a block: a caret before its label
+  for the time being. Every labelled field collapses like a block: a caret before its label (clicking the name collapses too)
   (`FieldCollapse` context, read by `FieldLabel`, so view and edit mode look alike), stored right
   away with the item view's `Collapsed` (field ids among the block ids). The layout's name toggle
   (tag icon, `hiddenLabels`) also covers blocks there: it hides the block's header (its menus move to a "⋮" beside it).
@@ -210,11 +220,11 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   href tried once per editor); one that names nothing stays as written and is resolved when clicked. `?block=` /
   `?field=` scroll to the target and flash it (`ui/useLinkTarget.ts`; blocks carry `data-block-id`, item page
   fields are found by their place among the page's entries).
-- **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's items, substring match over string, markdown, HTML and
-  list-of-strings values (ASCII case-insensitive; an FTS index can come later).
+- **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's items, substring match over string, markdown, HTML, AI,
+  list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; an FTS index can come later).
 - **Local first.** The app works fully offline on the device's own SQLite database. Every asset is part of the build (IBM Plex included, `app/src/fonts.css`; nothing from a
   CDN) and the service worker caches all of it, so offline it looks exactly as online.
-- **Future:** a block's own unnamed component code ("Save as component"), chart block types,
+- **Future:** chart block types,
   blocks side by side (a grid), embedding one item's field elsewhere (deliberately left out for now).
 - **Sync.** The local SQLite is an offline-first replica of a Postgres-backed server (see "Sync with Postgres").
 - **One codebase, many shells.** Desktop runs in Tauri; iOS (and anything else) runs the same web

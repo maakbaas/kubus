@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { Heading, IconButton, InlineNotification, Search, Tab, TabList, Tabs, TextInput } from "@carbon/react";
-import { Add, Filter, Save, Search as SearchIcon, SettingsAdjust, Star, StarFilled, TrashCan, Undo } from "@carbon/icons-react";
+import { Checkbox, Heading, IconButton, InlineNotification, Search, Tab, TabList, Tabs, TextInput } from "@carbon/react";
+import { Add, Filter, Save, Search as SearchIcon, SettingsAdjust, Star, StarFilled, TrashCan } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { newName, now, newId, type Collection } from "../domain/model";
@@ -31,7 +31,7 @@ export function CollectionPage() {
 }
 
 /** A view state valid for this collection (stored blocks may be outdated). */
-const normalized = (collection: Collection, state: ViewState): ViewState => normalizeView(collection, { filters: state.filters, blocks: state.blocks });
+const normalized = (collection: Collection, state: ViewState): ViewState => normalizeView(collection, { filters: state.filters, blocks: state.blocks, editable: state.editable });
 
 /** Id of the virtual "All" view of a space that has no stored view of the collection. */
 const VIRTUAL_VIEW = "default";
@@ -306,20 +306,16 @@ function CollectionContent({ collection }: { collection: Collection }) {
           {/* "+" takes the menu arrow's place; with the arrow it joins the icons at the right edge. */}
           {!clippedTabs && <span className="tab-menu">{addButton}</span>}
           <span className="views-bar__spacer" />
+          {/* Always in the bar, left of the other buttons (never in the "⋮" menu); held while a panel
+              is open, so it appears once the panel closes. Unsaved changes are dropped by opening
+              the view again (its tab) or another one. */}
+          {panels.hold("changed", changed) && active && (
+            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Save changes to view" onClick={() => updateActive().catch((e) => setError(errorMessage(e)))}>
+              <Save />
+            </IconButton>
+          )}
           <OverflowBar>
           {clippedTabs && addButton}
-          {/* Held while a panel is open: on phones these share the "⋮" menu with the panels'
-              buttons, and appearing there (the first change made in a panel) moved them. */}
-          {panels.hold("changed", changed) && active && (
-            <>
-              <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Discard changes" onClick={() => selectView(active.id)}>
-                <Undo />
-              </IconButton>
-              <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Save changes to view" onClick={() => updateActive().catch((e) => setError(errorMessage(e)))}>
-                <Save />
-              </IconButton>
-            </>
-          )}
           {/* The last view can't be deleted: a collection always keeps one. */}
           {active && views.length > 1 && (
             <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Delete view" onClick={() => deleteActive().catch((e) => setError(errorMessage(e)))}>
@@ -397,6 +393,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
                   onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                 />
               )}
+              <Checkbox id={`${uid}-view-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
               <BlockListEditor
                 blocks={view.blocks}
                 onMove={moveBlocks}
@@ -443,6 +440,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
             search={search}
             place="collection"
             page={null}
+            editable={view.editable}
             collapsed={active?.collapsed ?? NOTHING_COLLAPSED}
             onCollapse={(next) => setCollapsed(next).catch((e) => setError(errorMessage(e)))}
             onChange={setBlock}

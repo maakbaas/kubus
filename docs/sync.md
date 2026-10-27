@@ -16,7 +16,13 @@ sync API at `/api` and the built web app at `/`, so the phone installs the app f
 (same origin, no CORS). Auth is one shared bearer token (`KUBUS_TOKEN`); the app's
 Settings (`#/settings?section=sync`, the Sync tab, `ui/SyncSettings.tsx`; reached from the "Configure sync" button in the
 popover of the status icon ending the top-right tab strip, `ui/SyncStatusButton.tsx`, which itself only shows the state) holds server URL + token + on/off + Disconnect (forgets the server; the
-device keeps its data and the next connection is a first one), per device (localStorage
+device keeps its data and the next connection is a first one) + Wipe local database (`Repository.wipeLocal`:
+pauses sync with `SyncControl.pause`, which keeps URL and token but forgets the server so switching it on again is a
+first connection; then the worker drops every table and creates the schema afresh, and the app reloads) + Wipe server
+database (while connected; `POST /api/wipe` with `{"confirm":"wipe"}`, `server/src/wipe.ts`: drops every table and sequence in
+the server's schema, whatever they are, and applies `schema.sql` again, in one transaction; then this device pauses sync, so
+switching it on again uploads its data). A server whose database doesn't fit `schema.sql` still starts: sync answers with that
+error until the database is wiped. Per device (localStorage
 `kubus.sync`). A readable Postgres replica (not end-to-end encrypted) was chosen, as the hub
 vision wants server-side queries and remote sources later.
 
@@ -39,6 +45,20 @@ vision wants server-side queries and remote sources later.
   holds data, that replaces everything on the device (one local transaction, nothing is sent; the
   Sync settings ask for confirmation first, `isNewServer`). Only an empty server takes the device's data
   instead: all local rows are queued and uploaded.
+- *Which database*: the server's database has an id (`server_meta`: a `gen_random_uuid()` and its
+  creation time, inserted `ON CONFLICT DO NOTHING`, so a restart keeps it and a wipe, a new volume or
+  another database gives a new one). Every response carries it (`SyncResponse.database`); the device
+  keeps it in `meta` (`sync_database`) and sends it with every sync. When the server holds another
+  one, it writes nothing and answers 409 (`SyncMismatch`, with whether the new database is empty):
+  the outbox only holds what changed since the last sync, which would land there as fragments (and
+  a non-empty server would then replace the data of the device that meant to fill it). The device
+  pauses, keeping URL and token, and forgets the server; `SyncStatus.replaced` (kept in
+  `kubus.syncReplaced` across reloads) turns the sync icon red, and its popover and the sync settings
+  (`ui/ServerReplaced.tsx`) offer connecting again (`reconnect`): a first connection to the new
+  database (download, after a confirmation; or upload when it is empty). A device or server from
+  before ids skips the check (no id sent or none to compare). Not caught: tables emptied by hand
+  (the id stays) and a restored backup (same id, older data: devices ahead of the server pull
+  everything again); delete the `server_meta` rows after such a restore to make it count as new.
 - *When*: 2 s after a local write, every 30 s, on `online`, when the app becomes visible, and when the
   server signals a change (`GET /api/events`, server-sent events read with `fetch` so the token goes
   in a header; reconnects with backoff). Applied changes are announced as `DataChange`s, so every

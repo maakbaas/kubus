@@ -32,8 +32,7 @@ interface Need {
 
 /**
  * The items each reference field of `collection` can point to, from the shared cache: labels alone
- * (a light query) unless the target's items are needed: for a field's choice filter, or for
- * labels with {{ }} sections, which show rendered (as on the item's own page). Options are
+ * (a light query) unless the target's items are needed: for a field's choice filter. Options are
  * rebuilt only for a target whose data changed, so what hangs on them (computed values, rows)
  * isn't invalidated by edits elsewhere.
  */
@@ -42,9 +41,9 @@ export function useReferenceOptions(collection: Collection): RefOptions {
   const targets = referenceTargets(collection);
   const cacheOf = (kind: Need["kind"]) => (kind === "o" ? cache.items : cache.labels);
   /** Whether a target's options are built from its items rather than its labels. */
-  const isFull = (t: Target) => isFullTarget(t, cache.labels.snapshot(t.id).items);
-  // What is watched. A target's labels tell whether they hold sections (one with a choice filter
-  // needs its items anyway); rendering items shows their own references by label.
+  const isFull = (t: Target) => isFullTarget(t);
+  // What is watched: a target's labels, or its items (for a choice filter); rendering items shows
+  // their own references by label.
   const needs: Need[] = [];
   const add = (kind: Need["kind"], id: string) => {
     if (!needs.some((n) => n.kind === kind && n.id === id)) needs.push({ kind, id });

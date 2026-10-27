@@ -48,6 +48,7 @@ export function ComponentCodeEditor({
   id,
   labelText,
   helperText,
+  invalidText,
   placeholder,
   value,
   html = false,
@@ -57,6 +58,8 @@ export function ComponentCodeEditor({
   id: string;
   labelText: ReactNode;
   helperText?: ReactNode;
+  /** What is wrong with the code (shown instead of the helper text, as Carbon shows invalid input). */
+  invalidText?: ReactNode;
   placeholder?: string;
   value: string;
   /** The text around the sections is HTML (else Markdown). */
@@ -153,7 +156,13 @@ export function ComponentCodeEditor({
           </div>
         </div>
       </div>
-      {helperText && <div className="cds--form__helper-text">{helperText}</div>}
+      {invalidText ? (
+        <div className="cds--form-requirement code-editor__invalid" role="alert">
+          {invalidText}
+        </div>
+      ) : (
+        helperText && <div className="cds--form__helper-text">{helperText}</div>
+      )}
     </div>
   );
 }

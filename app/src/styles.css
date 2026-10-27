@@ -1143,11 +1143,12 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   letter-spacing: var(--cds-body-compact-01-letter-spacing);
   cursor: pointer;
 }
-.item-field--no-label .checkbox-field__name {
-  display: none;
-}
 .checklist-row__done {
   color: var(--cds-text-secondary);
+}
+/* The field's "Strike through when checked". */
+.checklist-row__done--struck {
+  text-decoration: line-through;
 }
 /* A toggle icon (Checkbox / Checklist fields) in place of the box: its 1rem icon sits where the
    box's glyph would, so the 2rem button reaches 0.5rem past it on each side. */
@@ -2022,6 +2023,12 @@ img[data-lightbox] {
   gap: var(--cds-spacing-03);
   align-items: center;
 }
+/* A rule's value on an item page: where it comes from (a value, or one of the page's item's), and the value. */
+.query-editor__value {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-03);
+}
 .query-editor__pair,
 .view-options {
   align-self: stretch;
@@ -2130,11 +2137,17 @@ img[data-lightbox] {
 }
 
 /* Checkbox fields are toggled right in the table / cards. */
+/* Centred on the line (the box and a toggle icon's 2rem button alike, at the same height), and the
+   box where a toggle icon would be: Carbon draws it 3px in and 1px below its label's middle. */
 .cell-checkbox {
   display: inline-flex;
+  vertical-align: middle;
 }
 .cell-checkbox .cds--form-item {
   margin: 0;
+}
+.cell-checkbox .cds--checkbox-wrapper {
+  transform: translate(-3px, -1px);
 }
 /* Inline-editable table cells fill their cell, so empty values can be clicked too. */
 .cell-editable {
@@ -2728,9 +2741,10 @@ img[data-lightbox] {
 .item-field--no-label > :not(.image-input, .view-field--image) {
   margin-inline-start: calc(-1 * var(--cds-spacing-05));
 }
+/* The page's own fields only: a block's content (cards' labels, tables) keeps its own insets. */
 .item-fields > :not(.form-actions, .image-input, .view-field--image, .block) .cds--label,
-.item-fields .checkbox-field,
-.item-fields .checklist-box {
+.item-fields > :not(.block) .checkbox-field,
+.item-fields > :not(.block) .checklist-box {
   padding-inline-start: var(--cds-spacing-05);
 }
 /* A line between fields (and blocks) on item pages, centred in the stack's gap. It runs from the
@@ -2777,9 +2791,9 @@ img[data-lightbox] {
   .item-field--no-label > :not(.image-input, .view-field--image) {
     margin-inline: calc(-0.5 * var(--cds-spacing-05));
   }
-  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image) .cds--label,
-  .item-fields:not(.item-fields--form) .checkbox-field,
-  .item-fields:not(.item-fields--form) .checklist-box {
+  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .block) .cds--label,
+  .item-fields:not(.item-fields--form) > :not(.block) .checkbox-field,
+  .item-fields:not(.item-fields--form) > :not(.block) .checklist-box {
     padding-inline-start: calc(0.5 * var(--cds-spacing-05));
   }
 }
@@ -3521,17 +3535,10 @@ body[data-reordering] [data-reorder-row] {
 .markdown-block--editing .md-field > .cds--label {
   display: none;
 }
-/* A {{ }} section in the Markdown editor: a chip, its code edited from a dialog. */
-.md-editor .md-section {
-  display: inline-block;
-  padding: 0 var(--cds-spacing-02);
-  border-radius: 2px;
-  background: var(--cds-layer-accent);
-  font: inherit;
-  cursor: pointer;
-}
-.md-editor .md-section.ProseMirror-selectednode {
-  outline: 2px solid var(--cds-focus);
+/* The code editor's problem (ComponentCodeEditor's invalidText): shown as Carbon shows invalid input. */
+.code-editor__invalid {
+  display: block;
+  color: var(--cds-text-error);
 }
 /* A Markdown block reads like a Markdown field (the field type scale) wherever it is, not like
    the tables and cards around it, which keep the smaller collection page scale. */
@@ -3558,25 +3565,6 @@ body[data-reordering] [data-reorder-row] {
     margin-inline: calc(-0.5 * var(--cds-spacing-05));
   }
 }
-/* The code dialog (opened from a section chip): its label sits at the left, Carbon's room under the
-   content (for a scroll fade) is not needed. It sits inside the item page's fields, whose labels are
-   inset to line up with their inputs' text, so that inset is cancelled (specific enough to beat
-   those rules, also the phone ones). */
-.section-dialog .cds--label {
-  text-align: start;
-  align-self: flex-start;
-}
-.cds--modal.section-dialog.section-dialog .cds--label {
-  padding-inline-start: 0;
-}
-.section-dialog .cds--modal-content {
-  padding-block-end: var(--cds-spacing-05);
-  margin-block-end: 0;
-}
-.section-dialog .cds--modal-content > .cds--form-item {
-  margin-block-end: 0;
-}
-
 /* AI fields (domain/ai.ts). What a value is waiting for, or why it failed, in the place of the value. */
 .ai-status {
   color: var(--cds-text-secondary);
@@ -3605,22 +3593,6 @@ body[data-reordering] [data-reorder-row] {
   gap: var(--cds-spacing-03);
 }
 /* AI values that need the user (ui/AiBanner.tsx): along the bottom, clear of the home indicator. */
-.ai-banner {
-  flex: none;
-  padding-block-end: env(safe-area-inset-bottom);
-  background: var(--cds-layer);
-  border-top: 1px solid var(--cds-border-subtle);
-}
-.ai-banner .cds--actionable-notification {
-  max-inline-size: none;
-  inline-size: 100%;
-}
-/* The action after the text (AiBanner.tsx), centred on its line without making the notification
-   taller: the 2rem button overhangs the 1lh line equally above and below. */
-.ai-banner__action {
-  margin-inline-start: var(--cds-spacing-05);
-  margin-block: calc((1lh - 2rem) / 2);
-}
 .ai-status--compact {
   display: block;
   overflow: hidden;

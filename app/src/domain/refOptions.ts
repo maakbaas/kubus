@@ -4,11 +4,10 @@
 // the background fill of AI fields (app/aiBackfill.ts) directly.
 //
 // Labels come in two forms. Plain: each item's first filled string field, as stored (a light query).
-// Rendered: the items themselves, computed (a label with {{ }} sections shows its result, as on the
-// item's own page), needed too when a field's choice filter must test the target's items. Which
-// one a target gets depends on the data (`isFullTarget`), never on what is on screen.
+// Full: the items themselves, computed, needed when a field's choice filter must test the target's
+// items. Which one a target gets depends on its fields (`isFullTarget`), never on what is on screen.
 
-import { hasSections, withComputed, type Component } from "./components";
+import { withComputed, type Component } from "./components";
 import { isReferenceKind, itemLabel, untitledLabel, type Collection, type FieldDef, type Item, type ItemLabel } from "./model";
 import { filterOf } from "./query";
 
@@ -58,13 +57,8 @@ export function referenceTargets(collection: Collection): Target[] {
   }));
 }
 
-/**
- * Whether a target's options are built from its items rather than its labels: for a field's choice
- * filter, or when a label holds {{ }} sections (shown rendered). `labels`: the target's labels
- * (null while they are not loaded).
- */
-export const isFullTarget = (t: Target, labels: ItemLabel[] | null | undefined): boolean =>
-  t.limited.length > 0 || !!labels?.some((l) => hasSections(l.label));
+/** Whether a target's options are built from its items rather than its labels: for a field's choice filter. */
+export const isFullTarget = (t: Target): boolean => t.limited.length > 0;
 
 /**
  * The options of one target. `items` are its items of the shown space when `full`, else its labels
@@ -89,8 +83,8 @@ export function buildTargetOptions(args: {
       ...(l.spaceId !== spaceId ? { elsewhere: true } : {}),
     }));
   }
-  // Rendered labels, and for fields limiting their choices which items each filter leaves
-  // out (computed values included; the target's own references read by their stored labels).
+  // For fields limiting their choices: which items each filter leaves out (computed values
+  // included; the target's own references read by their stored labels).
   const nestedLabels = new Map<string, Map<string, string>>();
   const refLabel = (f: FieldDef, id: string) => {
     const collectionId = f.targetCollectionId ?? "";

@@ -12,6 +12,7 @@
 //                              choiceFilter?: [{ field: targetFieldKey, operator, value }] }],
 //                   items: [{ key?, space?: spaceKey, values: { fieldKey: value } }],
 //                   views?: [{ name, blocks: [partial ViewBlock with kind/options/layout/groupBy/sort], filters?, isDefault? }],
+//                   (a block filter value "$item.@key": the page item's field by key)
 //                   itemViews?: [{ name, layout }] }],
 //   bookmarks: [{ kind: "item"|"view", collection, item?, view?, label }],
 //   prefs: { localStorageKey: value },
@@ -113,7 +114,7 @@ async function __seedInPage(spec) {
     const fieldId = (k) => (k && k.startsWith("$") ? k : ids.fields[`${c.key}.${k}`] || k);
     const mapLayout = (l) => (l ? { fields: l.fields ? l.fields.map(fieldId) : null, editable: l.editable !== false, hiddenLabels: (l.hiddenLabels || []).map(fieldId), hideEmpty: !!l.hideEmpty } : { fields: null, editable: true, hiddenLabels: [], hideEmpty: false });
     const mapBlock = (b) => ({
-      id: b.id || uid(), title: b.title || "", kind: b.kind || "table", filters: b.filters ? b.filters.map((r) => ({ id: uid(), fieldId: fieldId(r.field), operator: r.operator, value: r.value })) : null,
+      id: b.id || uid(), title: b.title || "", kind: b.kind || "table", filters: b.filters ? b.filters.map((r) => ({ id: uid(), fieldId: fieldId(r.field), operator: r.operator, value: String(r.value).replace(/@([a-z0-9_]+)/gi, (_, k) => fieldId(k)) })) : null,
       sort: b.sort ? b.sort.map((s) => ({ fieldId: fieldId(s.field), direction: s.direction || "asc" })) : [{ fieldId: "$title", direction: "asc" }],
       groupBy: b.groupBy ? fieldId(b.groupBy) : null, layout: mapLayout(b.layout), collectionId: b.collection ? ids.collections[b.collection] : null,
       options: b.options ? JSON.parse(JSON.stringify(b.options).replace(/"@([a-z0-9_]+)"/gi, (_, k) => JSON.stringify(fieldId(k)))) : b.kind === "cards" ? { coverFieldId: null, cardWidth: 16, coverRatio: "auto", showTitle: true, listNarrow: false } : b.kind === "markdown" ? { text: "" } : { titleLink: true, stackNarrow: true, editable: true },

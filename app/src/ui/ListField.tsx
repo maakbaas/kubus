@@ -213,7 +213,7 @@ export function ListField({
               />
             ) : (
               <div
-                className={`view-field__value${readOnly ? "" : " view-field__editable"}${checklist && item.done ? " checklist-row__done" : ""}${(itemList ? labelOf(options, item.text) : item.text) ? "" : " view-field__value--empty"}`}
+                className={`view-field__value${readOnly ? "" : " view-field__editable"}${checklist && item.done ? ` checklist-row__done${field.strikeThrough ? " checklist-row__done--struck" : ""}` : ""}${(itemList ? labelOf(options, item.text) : item.text) ? "" : " view-field__value--empty"}`}
                 {...(readOnly
                   ? {}
                   : {

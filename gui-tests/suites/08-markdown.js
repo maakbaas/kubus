@@ -1,5 +1,5 @@
 // The Markdown editor and view: typing every GFM construct, Ctrl+Enter, height follows the content
-// (no inner scrolling), wide tables and code in narrow panes, links, {{ }} chips, task boxes.
+// (no inner scrolling), wide tables and code in narrow panes, links, braces as text, task boxes.
 
 async function openNotesEditor(t) {
   const v = t.page.getByRole("button", { name: "Edit Notes", exact: true }).first();
@@ -67,13 +67,15 @@ for (const vp of ["desktop", "phone"]) {
     await t.page.keyboard.press("Escape");
   }, { viewport: vp, heavy: true });
 
-  test(`markdown: links, hover popover, {{ }} chips, task boxes @ ${vp}`, async (t) => {
+  test(`markdown: links, hover popover, braces as text, task boxes @ ${vp}`, async (t) => {
     await t.boot();
     const spec = profileSpec("typical", { items: 2 });
-    spec.collections[0].items.push({ key: "links", values: { title: "Links", notes: "A [link to somewhere](https://example.com) and [an app link](books) and a chip {{ 1 + 1 }} here.\n\n- [ ] toggle me\n- [x] done already\n" } });
+    spec.collections[0].items.push({ key: "links", values: { title: "Links", notes: "A [link to somewhere](https://example.com) and [an app link](books) and braces {{ 1 + 1 }} here.\n\n- [ ] toggle me\n- [x] done already\n" } });
     const ids = await t.seed(spec);
     await t.open(t.itemPath(ids.collections.books, ids.items["books/links"]));
-    await t.audit("view with links, chip result and tasks");
+    await t.audit("view with links, braces and tasks");
+    // A value is data: {{ }} in it shows as typed, never run.
+    await t.check("{{ }} in a Markdown value shows as typed", (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("{{ 1 + 1 }}"), "braces changed or run");
     // Task boxes toggle in the view without opening the editor or moving anything.
     const task = t.page.locator(".md-view__task--toggle").first();
     if (await task.count()) {
@@ -84,20 +86,14 @@ for (const vp of ["desktop", "phone"]) {
       await t.check("toggling a task does not open the editor", (await t.count(".ProseMirror")) === 0);
     }
     await openNotesEditor(t);
-    await t.audit("editor with a chip");
+    await t.audit("editor with links and braces");
     const link = t.page.locator(".ProseMirror a").first();
     if (await link.count()) {
       await link.hover();
       await t.wait(500);
       await t.audit("link hover popover");
     }
-    const chip = t.page.locator(".ProseMirror [data-section], .ProseMirror .md-section, .ProseMirror .section-chip").first();
-    if (await chip.count()) {
-      await chip.click();
-      await t.settle();
-      await t.audit("code dialog of a chip");
-      await t.closeAll();
-    }
+    await t.check("{{ }} is plain text in the editor", (await t.page.locator(".ProseMirror").first().innerText()).includes("{{ 1 + 1 }}"), "braces changed");
     await t.page.keyboard.press("Control+Enter");
     await t.settle();
   }, { viewport: vp });

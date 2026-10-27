@@ -35,9 +35,6 @@ import { openModeOf, type OpenMode } from "../workspace/Workspace";
 import type { EditStart } from "./editStart";
 import { cachedFileUrl, fileUrl, IMAGE_TYPES, storeImageFile } from "./images";
 import { errorMessage } from "./useConfirm";
-import { useMountedDialog } from "./useMountedDialog";
-import { ComponentCodeEditor } from "./ComponentCodeEditor";
-import { protectSections, restoreSections, sectionClick, sectionInputRule, sectionNode, sectionTokens } from "./markdownSections";
 
 // Strictly GitHub Flavored Markdown: the CommonMark preset plus the GFM preset
 // (tables, task lists, strikethrough, autolinks, footnotes) and nothing else.
@@ -826,20 +823,13 @@ function EditorSurface({
     return nodes;
   };
 
-  // `{{ }}` sections stay out of the editor (shown as chips): see markdownSections.ts.
-  const seed = useRef<ReturnType<typeof protectSections>>(null as never);
-  seed.current ??= protectSections(value);
-  /** The section being edited (its chip's position and code), else null. */
-  const [section, setSection] = useState<{ pos: number; code: string } | null>(null);
-  const [loading, getEditor] = useInstance();
-
   // Uncontrolled: `value` seeds the editor once; changes flow out via onChange.
   useEditor(
     (root) =>
       Editor.make()
         .config((ctx) => {
           ctx.set(rootCtx, root);
-          ctx.set(defaultValueCtx, seed.current.text);
+          ctx.set(defaultValueCtx, value);
           ctx.update(editorViewOptionsCtx, (prev) => ({
             ...prev,
             attributes: {
@@ -858,13 +848,9 @@ function EditorSurface({
         .use(tabAddsRow)
         .use(linkInputRule)
         .use(linkClick)
-        .use(sectionNode)
-        .use(sectionInputRule)
-        .use(sectionTokens(seed.current.sections))
-        .use(sectionClick(setSection))
         .use(storedImages(repo))
         .use(codeBlockLanguage)
-        .use(changes((markdown) => callbacks.current.onChange(restoreSections(markdown, seed.current.sections))))
+        .use(changes((markdown) => callbacks.current.onChange(markdown)))
         .use(prism)
         .use(upload)
         .use(history)
@@ -872,54 +858,5 @@ function EditorSurface({
     [],
   );
 
-  /** Saves the edited section's code into its chip (empty: the chip goes). */
-  const saveSection = (code: string) => {
-    if (!section || loading) return setSection(null);
-    getEditor()?.action((ctx) => {
-      const view = ctx.get(editorViewCtx);
-      const chip = view.state.doc.nodeAt(section.pos);
-      if (chip?.type.name !== "section") return;
-      view.dispatch(
-        code.trim() === ""
-          ? view.state.tr.delete(section.pos, section.pos + chip.nodeSize)
-          : view.state.tr.setNodeMarkup(section.pos, undefined, { code }),
-      );
-      view.focus();
-    });
-    setSection(null);
-  };
-
-  return (
-    <>
-      <Milkdown />
-      {section && <SectionDialog code={section.code} onSave={saveSection} onClose={() => setSection(null)} />}
-    </>
-  );
-}
-
-/** A section's JavaScript, edited from its chip. */
-function SectionDialog({ code, onSave, onClose }: { code: string; onSave(code: string): void; onClose(): void }) {
-  const [text, setText] = useState(code.trim());
-  const open = useMountedDialog();
-  return (
-    <Modal
-      open={open}
-      size="sm"
-      className="section-dialog"
-      selectorPrimaryFocus=".code-editor__input"
-      modalHeading="Edit code"
-      primaryButtonText="Save"
-      secondaryButtonText="Cancel"
-      onRequestClose={onClose}
-      onRequestSubmit={() => onSave(text)}
-    >
-      <ComponentCodeEditor
-        id="markdown-section-code"
-        labelText="JavaScript"
-        language="javascript"
-        value={text}
-        onChange={setText}
-      />
-    </Modal>
-  );
+  return <Milkdown />;
 }

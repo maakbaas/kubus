@@ -3,7 +3,7 @@ import { aiPromptProblem, aiRequest, aiStaleness, decodeAiInput, encodeAiInput, 
 import type { Collection, FieldDef, Item } from "./model";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], position: number, ai?: Partial<FieldDef>): FieldDef => ({
-  id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null,
+  id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false,
   aiPrompt: null, aiOutput: null, position, ...ai,
 });
 

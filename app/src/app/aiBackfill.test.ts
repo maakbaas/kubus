@@ -5,7 +5,7 @@ import type { AiJob, AiService } from "./ai";
 import { AiBackfill } from "./aiBackfill";
 
 const field = (id: string, collectionId: string, name: string, kind: FieldDef["kind"], extra: Partial<FieldDef> = {}): FieldDef => ({
-  id, collectionId, name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null,
+  id, collectionId, name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false,
   aiPrompt: null, aiOutput: null, position: 0, ...extra,
 });
 const collection = (id: string, name: string, fields: FieldDef[]): Collection => ({
@@ -44,10 +44,11 @@ describe("AiBackfill", () => {
     expect(listItems).not.toHaveBeenCalledWith(author, "default");
   });
 
-  it("reads a referenced item by its rendered label, as the screens do when a label holds {{ }} code", async () => {
-    const { backfill, offered } = setup("Jane {{ 1 + 2 }}");
+  it("reads braces in a label as text: item values are data, never code", async () => {
+    const { backfill, offered, listItems } = setup("Jane {{ 1 + 2 }}");
     backfill.request(undefined, 0);
     await vi.advanceTimersByTimeAsync(10);
-    expect(offered.map((j) => j.request.prompt)).toEqual(["By Jane 3"]);
+    expect(offered.map((j) => j.request.prompt)).toEqual(["By Jane {{ 1 + 2 }}"]);
+    expect(listItems).not.toHaveBeenCalledWith(author, "default");
   });
 });

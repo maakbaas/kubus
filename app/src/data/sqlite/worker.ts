@@ -14,6 +14,7 @@ const POOL_DIR = `.${POOL_NAME}`; // the SAH pool's default directory for this n
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 let db: Db | null = null;
+let sqlite3: Db | null = null;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -100,7 +101,7 @@ async function poolFilesFree(): Promise<boolean> {
 }
 
 async function open(): Promise<OpenResult> {
-  const sqlite3 = await sqlite3InitModule();
+  sqlite3 = await sqlite3InitModule();
   let persistent = false;
   if ("storage" in navigator && "getDirectory" in navigator.storage) {
     // DANGER: if installOpfsSAHPoolVfs() cannot open a pool file (because another
@@ -282,6 +283,22 @@ function select(sql: string, bind?: Statement["bind"]) {
   return db.exec({ sql, bind, rowMode: "object", returnValue: "resultRows" });
 }
 
+/** Every table dropped and the schema created afresh, in the same database file (the pool stays). */
+function wipe() {
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    db.transaction(() => {
+      const tables: string[] = db.selectValues("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'");
+      for (const t of tables) db.exec(`DROP TABLE "${t}"`);
+      db.exec("PRAGMA user_version = 0");
+    });
+    ensureSchema(sqlite3, db);
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+  return null;
+}
+
 /** All statements commit atomically or not at all. */
 function write(statements: Statement[]) {
   db.transaction(() => {
@@ -298,6 +315,8 @@ self.onmessage = async (event: MessageEvent<Request>) => {
       res = { id: req.id, ok: true, result: db ? null : await open() };
     } else if (!db) {
       throw new Error("Database not open");
+    } else if (req.op === "wipe") {
+      res = { id: req.id, ok: true, result: wipe() };
     } else if (req.op === "select") {
       res = { id: req.id, ok: true, result: select(req.sql, req.bind) };
     } else {

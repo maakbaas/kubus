@@ -4,7 +4,7 @@ import { Checkbox, IconButton, InlineNotification, Link, Modal, Table, TableBody
 import { Copy, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { newId, nextName, now } from "../domain/model";
-import type { Component } from "../domain/components";
+import { COMPONENT_KINDS, componentUses, type Component } from "../domain/components";
 import { NewButton } from "../ui/NewButton";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage } from "../ui/useConfirm";
@@ -12,14 +12,25 @@ import { useTableSort } from "../ui/useTableSort";
 import { RowActions, rowButtonProps } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
 
+/** A component's kind as the list shows it (Field, Block, Static), from what its code uses. */
+function kindLabel(x: Component): string {
+  const uses = componentUses(x.code);
+  return uses.mixed ? "Mixed: fix it" : COMPONENT_KINDS[uses.kind];
+}
+
 /**
- * The list of components as a table: name (opens the editor) and the component's start. Creating
- * and editing happen on their own page (ComponentEditorPage).
+ * The list of components as a table: name (opens the editor), kind and the component's start.
+ * Creating and editing happen on their own page (ComponentEditorPage).
  */
 export function ComponentsPage() {
   const { repo, collections, components } = useStore();
   const navigate = useNavigate();
-  const { sort, header } = useTableSort<Component, "name" | "description" | "code">({ name: (x) => x.name, description: (x) => x.description, code: (x) => x.code.split("\n")[0] });
+  const { sort, header } = useTableSort<Component, "name" | "kind" | "description" | "code">({
+    name: (x) => x.name,
+    kind: kindLabel,
+    description: (x) => x.description,
+    code: (x) => x.code.split("\n")[0],
+  });
   const [error, setError] = useState<string>();
   // The component being deleted, and whether the fields using it go too.
   const [deleting, setDeleting] = useState<Component | null>(null);
@@ -43,7 +54,7 @@ export function ComponentsPage() {
     <>
       <PageHeader
         title="Components"
-        subtitle="Reusable code that computes content and values for your items. Use one in any collection through a Component field."
+        subtitle="Reusable code that computes content and values. Field components show one item, as a Component field; block components show a block's items; static ones go in either place."
         actions={<NewButton label="New component" onClick={() => navigate("/components/new")} />}
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
@@ -57,6 +68,7 @@ export function ComponentsPage() {
             <TableHead>
               <TableRow>
                 <TableHeader {...header("name")}>Name</TableHeader>
+                <TableHeader {...header("kind")}>Kind</TableHeader>
                 <TableHeader {...header("description")}>Description</TableHeader>
                 <TableHeader {...header("code")}>Component</TableHeader>
                 <TableHeader aria-label="Actions" />
@@ -68,6 +80,7 @@ export function ComponentsPage() {
                   <TableCell data-label="Name">
                     <Link href={`#/components/${x.id}`}>{x.name}</Link>
                   </TableCell>
+                  <TableCell data-label="Kind">{kindLabel(x)}</TableCell>
                   <TableCell data-label="Description">{x.description}</TableCell>
                   {/* Its first line; the whole component is edited on its page. */}
                   <TableCell data-label="Component" className="components-table__code">

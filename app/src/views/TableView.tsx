@@ -47,8 +47,6 @@ export interface TableOptions {
   titleLink: boolean;
   /** In a narrow pane the rows restack as cards (else the table scrolls sideways). */
   stackNarrow: boolean;
-  /** Values edit in place and rows can be added (checkboxes toggle either way). */
-  editable: boolean;
 }
 
 /** The column that names an item and opens it (the collection's first text field). */
@@ -230,8 +228,7 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
     const editor = (
       <FieldEditor
         field={field}
-        // The typed source when the shown value was rendered from {{ }} sections.
-        value={item.sources?.[field.id] ?? item.values[field.id] ?? null}
+        value={item.values[field.id] ?? null}
         refs={refs}
         compact
         start={editing.start}
@@ -279,8 +276,8 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
   );
 }
 
-/** A table narrower than this restacks as cards (the `data-stacked` rules in styles.css). */
-const STACK_BELOW_REM = 30;
+/** A table narrower than this restacks as cards (the `data-stacked` rules in styles.css); cards with "Show as a list when narrow" turn into a list. */
+export const STACK_BELOW_REM = 30;
 
 /** Each table box's refill, so grouped tables can make their siblings follow a stacking change. */
 const fills = new WeakMap<Element, (fromSibling?: boolean) => void>();
@@ -548,8 +545,7 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
 });
 
 export function TableView(props: BlockProps<TableOptions>) {
-  const { collection, result, fields: shown, options, refs, search, actions, collapsedGroups, onGroupCollapse } = props;
-  const editable = options.editable;
+  const { collection, result, fields: shown, options, editable, refs, search, actions, collapsedGroups, onGroupCollapse } = props;
   // Without the title link the title is an ordinary column (and rows get an open button).
   const titleId = options.titleLink ? titleColumn(collection)?.id : undefined;
   const titleShown = shown.some((f) => f.id === titleId);
@@ -695,12 +691,6 @@ function TableOptionsEditor({ options, onChange }: BlockOptionsProps<TableOption
           onChange={(_, { checked }) => onChange({ ...options, titleLink: checked })}
         />
         <Checkbox
-          id={`${uid}-table-editable`}
-          labelText="Edit values in place"
-          checked={options.editable}
-          onChange={(_, { checked }) => onChange({ ...options, editable: checked })}
-        />
-        <Checkbox
           id={`${uid}-table-stack`}
           labelText="Show rows as cards when narrow"
           checked={options.stackNarrow}
@@ -715,13 +705,13 @@ export const tableView = defineBlockType<TableOptions>({
   kind: "table",
   label: "Table",
   icon: TableIcon,
-  defaultOptions: () => ({ titleLink: true, stackNarrow: true, editable: true }),
+  defaultOptions: () => ({ titleLink: true, stackNarrow: true }),
   normalizeOptions(raw) {
     const o = (raw ?? {}) as Partial<TableOptions>;
-    return { titleLink: o.titleLink !== false, stackNarrow: o.stackNarrow !== false, editable: o.editable !== false };
+    return { titleLink: o.titleLink !== false, stackNarrow: o.stackNarrow !== false };
   },
   // Columns are its fields.
-  uses: () => ({ query: true, fields: { labels: false, hideEmpty: false } }),
+  uses: () => ({ query: true, groups: true, fields: { labels: false, hideEmpty: false } }),
   View: TableView,
   OptionsEditor: TableOptionsEditor,
 });

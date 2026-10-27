@@ -1,14 +1,14 @@
-import { ActionableNotification, Button, InlineNotification, Modal } from "@carbon/react";
+import { Button, Modal } from "@carbon/react";
+import { AiGenerate, WarningAltFilled } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { useAiProgress, useAiSettings } from "../app/useAi";
+import { ToolbarPopover } from "./ToolbarPopover";
 
 /**
- * What needs the user about AI values: a long queue asks for a go-ahead in a modal, and so do values
- * they typed over whose prompt has changed since (they are never replaced without asking); along the
- * bottom of the window, a model that isn't set up yet, pausing, progress while many values are
- * written, and failures (which can be tried again).
+ * What needs the user's answer about AI values, in modals: a long queue asks for a go-ahead, and so
+ * do values they typed over whose prompt has changed since (never replaced without asking).
  */
-export function AiBanner({ onSetup }: { onSetup(): void }) {
+export function AiDialogs() {
   const { ai } = useStore();
   const progress = useAiProgress();
   const { fieldModel } = useAiSettings();
@@ -45,63 +45,79 @@ export function AiBanner({ onSetup }: { onSetup(): void }) {
             : `${progress.overrides} AI values you typed over (such as ${progress.overrideSample}) are made from data that has changed since. Generate them again, replacing what you typed?`}
         </p>
       </Modal>
-      {/* Their actions are tertiary buttons in the text (Carbon's own action button of an inline
-          notification is a ghost one, and text buttons are never borderless here). */}
-      {(progress.held > 0 || progress.failed > 0 || progress.paused || progress.working > 1) && (
-        <div className="ai-banner">
-          {progress.held > 0 && !progress.configured && (
-            <ActionableNotification
-              inline
-              lowContrast
-              kind="info"
-              title="AI isn't set up"
-              subtitle={`${progress.held} AI values wait for a model.`}
-              onCloseButtonClick={() => {
-                ai.dismissHeld();
-                return false;
-              }}
-            >
-              <Button kind="tertiary" size="sm" className="ai-banner__action" onClick={onSetup}>
-                Open settings
-              </Button>
-            </ActionableNotification>
-          )}
-          {progress.paused && progress.working > 0 && (
-            <ActionableNotification
-              inline
-              lowContrast
-              hideCloseButton
-              kind="info"
-              title="AI is paused"
-              subtitle={`${progress.working} AI values wait. No requests are sent.`}
-            >
-              <Button kind="tertiary" size="sm" className="ai-banner__action" onClick={onSetup}>
-                Open settings
-              </Button>
-            </ActionableNotification>
-          )}
-          {!progress.paused && progress.confirm === 0 && progress.working > 1 && (
-            <InlineNotification lowContrast hideCloseButton kind="info" title="Writing AI values" subtitle={`${progress.working} left`} />
-          )}
-          {progress.failed > 0 && (
-            <ActionableNotification
-              inline
-              lowContrast
-              kind="error"
-              title={progress.failed === 1 ? "An AI value failed" : `${progress.failed} AI values failed`}
-              subtitle={progress.lastError}
-              onCloseButtonClick={() => {
-                ai.dismissFailed();
-                return false;
-              }}
-            >
-              <Button kind="tertiary" size="sm" className="ai-banner__action" onClick={() => ai.retryFailed()}>
-                Retry
-              </Button>
-            </ActionableNotification>
-          )}
-        </div>
-      )}
     </>
+  );
+}
+
+/**
+ * The AI state left of the sync icon, shown only while there is something to tell: a model that
+ * isn't set up yet, pausing, progress while many values are written, and failures (which can be
+ * tried again). The icon only shows that (red on a failure); its popover tells more.
+ */
+export function AiStatusButton({ onSetup }: { onSetup(): void }) {
+  const { ai } = useStore();
+  const progress = useAiProgress();
+  const unset = progress.held > 0 && !progress.configured;
+  const paused = progress.paused && progress.working > 0;
+  const writing = !progress.paused && progress.confirm === 0 && progress.working > 1;
+  const failed = progress.failed > 0;
+  if (!unset && !paused && !writing && !failed) return null;
+  const label = failed ? "AI values failed" : unset ? "AI isn't set up" : paused ? "AI is paused" : "Writing AI values";
+  return (
+    <ToolbarPopover label={label} icon={failed ? WarningAltFilled : AiGenerate} className={failed ? "sync-status sync-status--error" : "sync-status"} fit>
+      {(close) => {
+        const setup = () => {
+          close();
+          onSetup();
+        };
+        return (
+          <div className="sync-popover">
+            {unset && (
+              <>
+                <p className="sync-popover__state">AI isn't set up</p>
+                <p className="helper sync-popover__detail">{progress.held} AI values wait for a model.</p>
+                <div>
+                  <Button kind="tertiary" size="sm" onClick={setup}>
+                    Open settings
+                  </Button>{" "}
+                  <Button kind="tertiary" size="sm" onClick={() => ai.dismissHeld()}>
+                    Dismiss
+                  </Button>
+                </div>
+              </>
+            )}
+            {paused && (
+              <>
+                <p className="sync-popover__state">AI is paused</p>
+                <p className="helper sync-popover__detail">{progress.working} AI values wait. No requests are sent.</p>
+                <Button kind="tertiary" size="sm" onClick={setup}>
+                  Open settings
+                </Button>
+              </>
+            )}
+            {writing && (
+              <>
+                <p className="sync-popover__state">Writing AI values</p>
+                <p className="helper sync-popover__detail">{progress.working} left</p>
+              </>
+            )}
+            {failed && (
+              <>
+                <p className="sync-popover__state">{progress.failed === 1 ? "An AI value failed" : `${progress.failed} AI values failed`}</p>
+                {progress.lastError && <p className="helper sync-popover__detail">{progress.lastError}</p>}
+                <div>
+                  <Button kind="tertiary" size="sm" onClick={() => ai.retryFailed()}>
+                    Retry
+                  </Button>{" "}
+                  <Button kind="tertiary" size="sm" onClick={() => ai.dismissFailed()}>
+                    Dismiss
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      }}
+    </ToolbarPopover>
   );
 }

@@ -2,23 +2,23 @@
 // e.g.  **{{ $title }}** has {{ $pages }} pages, about {{ Math.round($pages / 40) }} h of reading.
 // A field of kind "component" (shown as "Component") picks one and maps each $variable to a field
 // of its collection, so one component serves any collection; a component that is just {{ … }} works as a
-// computed value. Later the same components render whole items or query results. Results are
-// computed whenever items are shown and never stored.
+// computed value. A block shows one too: static content, or a summary of the block's items.
+// Results are computed whenever items are shown and never stored. Code lives only here (and in
+// AI prompts, domain/ai.ts): item values are data, never rendered.
 //
 // These $ names are built in rather than variables:
 //   $now    the current Date
 //   $item   the item itself (like n8n's $json): its fields by name, $item.Pages or
 //           $item["Read at"] (case-insensitive), plus $item.id / createdAt / updatedAt.
-//           In a block on an item page: the page's item.
 //   $items  a block's items (filtered, sorted), each like $item
 //   $groups a block's groups: [{ key, label, items }] (one with key "" when not grouped)
 //   $fields a block's shown fields: [{ id, name, kind }]
 //   $all    every item of the block's collection (in the shown space), unfiltered
-// $item needs no mapping, so it also works in {{ }} sections typed into an item's own text,
-// markdown or number values (rendered when shown, the typed source kept for editing).
-// What a component uses decides where it can go (componentUses): with $item it needs an item
-// (a field, a block on an item page); with $items / $groups / $fields it lists items (a block,
-// whose filter, sort and fields then apply); with neither it is static content (a block).
+// What a component uses decides its kind and so where it can go (componentUses): with $item it
+// is a field component (a component field); with $items / $groups / $fields / $all a block
+// component (a block, whose filter, sort and fields then apply); with neither it is static
+// (either place: content that is the same everywhere, or a value from its variables). One
+// component never uses both $item and a block's names (`mixed`): it fits nowhere.
 //
 // The code runs in the app itself (new Function), with the user's own rights. That's fine for a
 // personal, local app; once components can come from someone else (sync, sharing) they must run
@@ -82,18 +82,60 @@ const BUILT_IN = new Set(["now", "item", "items", "groups", "fields", "all"]);
 export const parseParams = (component: string): string[] => dollarNames(component).filter((n) => !BUILT_IN.has(n));
 
 /**
- * Where a component can go, by the built-ins it uses: "item" ($item) needs an item (a component
- * field, a block on an item page); "items" ($items / $groups / $fields) lists a block's items;
- * "static" (neither) is content that shows the same wherever it is.
+ * A component's kind, by the built-ins it uses: "field" ($item) shows one item, as a component
+ * field; "block" ($items / $groups / $fields / $all) shows a block's items; "static" (neither)
+ * goes in either place.
  */
-export type ComponentScope = "item" | "items" | "static";
+export type ComponentKind = "field" | "block" | "static";
+export const COMPONENT_KINDS: Record<ComponentKind, string> = { field: "Field", block: "Block", static: "Static" };
 
-/** What a component's code uses of a block: its items (filter, sort, grouping apply) and its fields. */
-export function componentUses(code: string): { scope: ComponentScope; items: boolean; fields: boolean } {
+/** Where a component is shown: as a component field or as a block. */
+export type ComponentPlace = "field" | "block";
+
+const BLOCK_NAMES = ["items", "groups", "fields", "all"];
+
+/**
+ * What a component's code uses: its kind; `mixed` when it uses $item and a block's names together
+ * (fits nowhere); of a block: its items (filter and sort apply), their groups (grouping applies)
+ * and its fields.
+ */
+export function componentUses(code: string): { kind: ComponentKind; mixed: boolean; items: boolean; groups: boolean; fields: boolean } {
   const names = new Set(dollarNames(code));
-  const items = names.has("items") || names.has("groups");
+  const groups = names.has("groups");
+  const items = names.has("items") || groups;
   const fields = names.has("fields");
-  return { scope: names.has("item") ? "item" : items || fields ? "items" : "static", items, fields };
+  const block = BLOCK_NAMES.some((n) => names.has(n));
+  const item = names.has("item");
+  return { kind: item ? "field" : block ? "block" : "static", mixed: item && block, items, groups, fields };
+}
+
+/** Whether a component of this kind fits the place. */
+export const fitsPlace = (kind: ComponentKind, place: ComponentPlace) => kind === "static" || kind === place;
+
+/** The components that fit a place (the one already chosen stays offered, so it still shows). */
+export const componentsFor = (components: Component[], place: ComponentPlace, chosen?: string | null): Component[] =>
+  components.filter((c) => c.id === chosen || placeProblem(c.code, place) === null);
+
+/** Why a component can't be shown in the place (its code's kind doesn't fit), or null when it can. */
+export function placeProblem(code: string, place: ComponentPlace): string | null {
+  const uses = componentUses(code);
+  if (uses.mixed) return "This component uses both $item and a block's $ names: use one or the other";
+  if (fitsPlace(uses.kind, place)) return null;
+  return place === "field" ? "This component lists items: use it as a block" : "This component shows one item ($item): use it as a field";
+}
+
+/** What a component of this kind does and where it goes, as the component editor says it (mixed: why it can't be saved). */
+export function kindText(code: string): string {
+  const uses = componentUses(code);
+  if (uses.mixed) return "Uses $item and a block's $ names together: one item ($item, a field) or a block's items ($items, $groups, $fields, $all), not both.";
+  switch (uses.kind) {
+    case "field":
+      return "Field component: uses $item, so it shows one item, as a component field of a collection.";
+    case "block":
+      return "Block component: uses a block's items ($items, $groups, $fields or $all), so it is a block on a collection view or an item page.";
+    default:
+      return "Static component: uses neither $item nor a block's items, so it goes anywhere: a component field (from its variables) or a block.";
+  }
 }
 
 /** What a block gives its component: the built-ins beyond $item and $now. */
@@ -320,8 +362,14 @@ export function itemsInput(collection: Collection, refLabel: RefLabel): (item: I
   };
 }
 
-/** The item's fields by name, as $item shows them (for a page's item, given to its blocks). */
+/** The item's fields by name, as $item shows them (the component editor's preview item). */
 export const fieldLookup = (collection: Collection, item: Item, refLabel: RefLabel): FieldLookup => lookupIn(collection, item.values, refLabel);
+
+/** A component field's value: the component rendered for the item, or a warning when it doesn't fit a field. */
+function renderField(component: Component, args: unknown[], item: Item, fields: FieldLookup): FieldValue {
+  const problem = placeProblem(component.code, "field");
+  return problem ? ERROR_PREFIX + problem : render(component, args, item, fields);
+}
 
 /** A block component's variable: a fixed value (a number when it reads as one), or a field's name (which field to use). */
 export function blockArgValue(arg: ComponentArg | undefined, fieldsById: Map<string, { name: string }>): unknown {
@@ -339,33 +387,11 @@ function argValue(arg: ComponentArg | undefined, fieldsById: Map<string, FieldDe
   return s === "" ? null : Number.isFinite(Number(s)) ? Number(s) : arg.value;
 }
 
-/** Field kinds whose values may hold {{ }} sections themselves, and what those render as. */
-const INLINE_OUTPUT: Partial<Record<FieldKind, ComponentOutput>> = { string: "string", markdown: "markdown", html: "html", number: "number" };
-
-/** Whether a value holds a {{ }} section (and is then rendered when shown). */
-export const hasSections = (v: unknown): v is string => typeof v === "string" && /\{\{[\s\S]*?\}\}/.test(v);
-
-/** Markdown escapes inside sections undone: the editor stores a typed `a[0] * 2` as `a\[0] \* 2`. */
-const unescapeSections = (markdown: string) =>
-  markdown.replace(SECTION, (_, code: string) => `{{${code.replace(/\\([!-/:-@[-`{-~])/g, "$1")}}}`);
-
-/** A value with {{ }} sections, rendered as its field kind shows it. */
-function renderInline(source: string, kind: FieldKind, item: Item, fields: FieldLookup): FieldValue {
-  // Sections in a value have no variable mapping (the built-ins $item and $now still work): a
-  // section using another $name shows a short warning instead of quietly rendering it empty.
-  const code = (kind === "markdown" ? unescapeSections(source) : source).replace(SECTION, (section, inner: string) => {
-    const usesVariable = parseParams(`{{${inner}}}`).length > 0;
-    return usesVariable ? `{{ ${JSON.stringify(`${ERROR_PREFIX}variables aren't supported here`)} }}` : section;
-  });
-  return render({ params: [], code, output: INLINE_OUTPUT[kind] }, [], item, fields);
-}
-
 /**
- * Items with their component fields filled in and {{ }} sections in their own values rendered,
- * computed in field order (so a component can use the result of an earlier one). A variable gets
- * its mapped field's value (references as the linked items' labels), or null when unmapped.
- * A rendered value's source is kept in `sources`, for editing. Items with neither are
- * returned as is.
+ * Items with their component fields filled in, computed in field order (so a component can use the
+ * result of an earlier one). A variable gets its mapped field's value (references as the linked
+ * items' labels), or null when unmapped. Without component fields the items are returned as
+ * they are.
  *
  * `memo` keeps each item's result: pass the same map for as long as the collection, the components and
  * the reference labels are the same, and only items that changed (a new instance) are computed
@@ -378,29 +404,18 @@ export function withComputed(
   refLabel: RefLabel,
   memo?: WeakMap<Item, Item>,
 ): Item[] {
-  const hasComponents = collection.fields.some((f) => f.kind === "component");
-  const inline = collection.fields.filter((f) => INLINE_OUTPUT[f.kind]);
-  if (!hasComponents && inline.length === 0) return items;
+  if (!collection.fields.some((f) => f.kind === "component")) return items;
   const byId = new Map(components.map((x) => [x.id, x]));
   const fieldsById = new Map(collection.fields.map((f) => [f.id, f]));
   const compute = (item: Item): Item => {
-    if (!hasComponents && !inline.some((f) => hasSections(item.values[f.id]))) return item;
     const values = { ...item.values };
-    const sources: Record<string, FieldValue> = {};
     const lookup = lookupIn(collection, values, refLabel);
     for (const f of collection.fields) {
-      if (f.kind === "component") {
-        const x = f.componentId ? byId.get(f.componentId) : undefined;
-        values[f.id] = x
-          ? render(x, x.params.map((p) => argValue(f.componentArgs[p], fieldsById, values, refLabel)), item, lookup)
-          : null;
-      } else if (INLINE_OUTPUT[f.kind] && hasSections(values[f.id])) {
-        const source = values[f.id] as string;
-        sources[f.id] = source;
-        values[f.id] = renderInline(source, f.kind, item, lookup);
-      }
+      if (f.kind !== "component") continue;
+      const x = f.componentId ? byId.get(f.componentId) : undefined;
+      values[f.id] = x ? renderField(x, x.params.map((p) => argValue(f.componentArgs[p], fieldsById, values, refLabel)), item, lookup) : null;
     }
-    return Object.keys(sources).length > 0 ? { ...item, values, sources } : { ...item, values };
+    return { ...item, values };
   };
   if (!memo) return items.map(compute);
   return items.map((item) => {

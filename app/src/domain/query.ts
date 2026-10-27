@@ -143,7 +143,8 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     groupKeys: (_, v) => single(str(v) ? localDay(v) : ""),
   },
   checkbox: {
-    operators: [op("isChecked", "is checked", false), op("isNotChecked", "is not checked", false)],
+    // "is" takes true or false, so a value from the page's item can choose.
+    operators: [op("isChecked", "is checked", false), op("isNotChecked", "is not checked", false), op("is", "is")],
     text: (_, v) => (v === true ? "yes" : "no"),
     sortKey: (_, v) => (v === true ? 1 : 0),
     groupKeys: (_, v) => (v === true ? single("yes", "Checked") : single("no", "Not checked")),
@@ -219,24 +220,23 @@ export function groupPreset(collection: Collection, query: ViewQuery, groupKey: 
 
 /**
  * Filter values taken from the page's item, for blocks on item pages ("Author is this item"):
- * the item itself, or the item another of its reference fields points to ("Genre is this item's Genre").
+ * the item itself, or one of its fields' values: what a reference field points to ("Genre is this
+ * item's Genre") or a value to compare with ("Year > this item's Year"). Shown by name, never as code.
  */
 export const PAGE_ITEM = "$item";
 export const pageItemField = (fieldId: string) => `${PAGE_ITEM}.${fieldId}`;
 
-/**
- * Filters with page-item values filled in from the page's item (no page: they match nothing).
- * A value with {{ }} sections ("{{ $item.Name }}") is rendered by `evalText`.
- */
-export function resolvePageValues(filters: FilterRule[], page: Item | null, evalText?: (text: string) => string): FilterRule[] {
-  const sectioned = (r: FilterRule) => r.value.includes("{{");
-  if (!filters.some((r) => r.value.startsWith(PAGE_ITEM) || sectioned(r))) return filters;
+/** Whether a filter value is taken from the page's item. */
+export const isPageValue = (value: string) => value === PAGE_ITEM || value.startsWith(`${PAGE_ITEM}.`);
+
+/** Filters with page-item values filled in from the page's item (no page: they match nothing). */
+export function resolvePageValues(filters: FilterRule[], page: Item | null): FilterRule[] {
+  if (!filters.some((r) => isPageValue(r.value))) return filters;
   return filters.map((r) => {
-    if (sectioned(r)) return { ...r, value: evalText && page ? evalText(r.value) : "" };
     if (r.value === PAGE_ITEM) return { ...r, value: page?.id ?? "" };
-    if (!r.value.startsWith(`${PAGE_ITEM}.`)) return r;
+    if (!isPageValue(r.value)) return r;
     const v = page?.values[r.value.slice(PAGE_ITEM.length + 1)];
-    return { ...r, value: typeof v === "string" ? v : "" };
+    return { ...r, value: typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? String(v) : "" };
   });
 }
 
@@ -305,6 +305,7 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
       else if (field.kind === "item") equal = value === arg;
       else if (field.kind === "item_list") equal = list(value).includes(arg);
       else if (field.kind === "datetime") equal = dayOf(field, value) === arg;
+      else if (field.kind === "checkbox") equal = (value === true) === (arg.toLowerCase() === "true");
       else equal = text() === arg.toLowerCase();
       return rule.operator === "is" ? equal : !equal;
     }

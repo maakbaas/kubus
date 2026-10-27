@@ -2,7 +2,7 @@ import { isEmptyValue as isEmpty } from "../domain/query";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
-import { Add, Checkmark, Edit, Information, Pin, PinFilled, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
+import { Add, Checkmark, Code, Edit, Information, Pin, PinFilled, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
 import { NOTHING_COLLAPSED, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
@@ -33,7 +33,6 @@ import { captureEditStart, type EditStart } from "../ui/editStart";
 import { FieldEditor } from "../ui/FieldEditor";
 import { ComponentFieldEditor } from "../ui/ComponentFieldEditor";
 import { ListField } from "../ui/ListField";
-import { Highlight } from "../ui/Highlight";
 import { ItemLink } from "../ui/ItemLink";
 import { ToggleInput } from "../ui/ToggleInput";
 import { ImageInput, useFileUrl } from "../ui/images";
@@ -86,8 +85,7 @@ function ImageValue({ fileId, alt }: { fileId: string; alt: string }) {
 function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; value: FieldValue; refs: RefOptions; /** HTML: a click on its plain content. */ onFrameClick?(): void }): ReactNode {
   switch (field.kind) {
     case "string":
-      // Through Highlight: a {{ }} section's warning in it shows as a warning.
-      return <Highlight text={String(value)} query="" />;
+      return String(value);
     // Numbers, dates and times read exactly as in their Carbon inputs (same text, same font,
     // same place), so switching to edit mode changes nothing on screen.
     case "number":
@@ -180,7 +178,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
     () => (item ? withComputed(collection, [item], components, refLabelOf(refs))[0] : null),
     [collection, item, components, refs],
   );
-  /** The page's item, for its blocks ($item, filter values "this item"). */
+  /** The page's item, for its blocks (filter values "this item"). */
   const page = useMemo<PageItem | null>(() => (shown ? { collection, item: shown, refLabel: refLabelOf(refs) } : null), [collection, shown, refs]);
   // AI values that have gone stale (another prompt, or an edit it reads) are generated, once what
   // the prompts read (referenced items' labels) is in.
@@ -224,7 +222,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   if (item === undefined && !error) return null;
   if (item === null) return <NotFound />;
 
-  // The title as shown (its {{ }} sections rendered, like in tables); editing it edits the source.
+  // The title as shown ("Untitled …" when empty); editing it edits the field's value.
   const title = shown ? itemLabel(collection, shown) : "";
   // The field shown as the page title is edited there, not repeated among the fields.
   const titleField = shown ? labelField(collection, shown) : undefined;
@@ -545,6 +543,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   key={block.id}
                   block={block}
                   page={page}
+                  editable={layout.editable}
                   headerHidden={layout.hiddenLabels.includes(block.id)}
                   collapsed={collapsed}
                   onCollapse={setCollapsed}
@@ -563,6 +562,9 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
             const regenerateButton = f.kind === "ai" && (
               <RegenerateButton generatedAt={item.aiGeneratedAt?.[f.id]} edited={!!item.aiEdited?.[f.id]} onRegenerate={(hint) => regenerate(f, hint)} />
             );
+            // A component field's "Edit component", in its label row: its value is computed, so a click
+            // on it edits nothing; the component is shared, so editing it is asked for explicitly.
+            const editComponentButton = component && layout.editable && <EditComponentButton name={component.name} onEdit={() => setEditing({ fieldId: f.id })} />;
             const editor = editing?.fieldId === f.id && (
               <FieldEditor
                 key={f.id}
@@ -593,12 +595,11 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                 key={f.id}
                 field={f}
                 value={shown ? fieldValue(shown, f) : null}
-                // A value rendered from its own {{ }} sections: its checkboxes can't be toggled in place.
-                computed={!!shown?.sources && f.id in shown.sources}
                 refs={refs}
                 onEdit={(start) => setEditing({ fieldId: f.id, start })}
                 onSave={(v) => saveField(f, v).catch((e) => setError(errorMessage(e)))}
                 onRegenerate={f.kind === "ai" ? (hint) => regenerate(f, hint) : undefined}
+                componentButton={editComponentButton || undefined}
                 generatedAt={f.kind === "ai" ? item.aiGeneratedAt?.[f.id] : undefined}
                 edited={f.kind === "ai" ? !!item.aiEdited?.[f.id] : undefined}
                 itemId={item.id}
@@ -627,7 +628,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                 {fieldCollapsed ? (
                   // Only the label row, its buttons kept (like a collapsed block's menus).
                   <div className="view-field">
-                    <SectionHeader label={<FieldLabel field={f} />}>{regenerateButton}</SectionHeader>
+                    <SectionHeader label={<FieldLabel field={f} />}>{regenerateButton || editComponentButton}</SectionHeader>
                   </div>
                 ) : (
                   field
@@ -648,7 +649,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
  * place, at the same size and position. Enter or clicking away saves, Escape cancels. The editor
  * is an editable block with the heading's own style (not an input), so a long title wraps over
  * several lines exactly as it does at rest and nothing jumps; the caret starts where it was clicked.
- * A title rendered from {{ }} sections shows its result (`value`) and edits its source.
+ * `value` is what shows (an empty title reads "Untitled …"), `source` what is edited.
  */
 function EditableTitle({ value, source, onSave }: { value: string; source: string; onSave(value: string): void }) {
   const [editing, setEditing] = useState<{ range?: { start: number; end: number } } | null>(null);
@@ -726,6 +727,7 @@ function EditableTitle({ value, source, onSave }: { value: string; source: strin
 function ItemPageBlock({
   block,
   page,
+  editable,
   headerHidden,
   collapsed,
   onCollapse,
@@ -737,6 +739,7 @@ function ItemPageBlock({
 }: {
   block: ViewBlock;
   page: PageItem;
+  editable: boolean;
   headerHidden: boolean;
   collapsed: Collapsed;
   onCollapse(collapsed: Collapsed): void;
@@ -758,6 +761,7 @@ function ItemPageBlock({
       collection={collection}
       block={block}
       page={page}
+      editable={editable}
       headerHidden={headerHidden}
       collapsed={collapsed}
       onCollapse={onCollapse}
@@ -876,7 +880,7 @@ function ItemLayoutSettings({
         onHiddenLabelsChange={(hiddenLabels) => onChange({ hiddenLabels })}
         extra={layout.blocks.map((b) => ({ id: b.id, label: blockLabel(b) }))}
       />
-      <AddBlockButton place="item" className="item-layout__add" onAdd={addBlock} />
+      <AddBlockButton className="item-layout__add" onAdd={addBlock} />
     </div>
   );
 }
@@ -890,8 +894,8 @@ interface ViewFieldProps {
   onSave(value: FieldValue): void;
   /** Shown, not editable (the page's layout). */
   readOnly?: boolean;
-  /** The value was rendered from {{ }} sections in it (the source is what gets edited). */
-  computed?: boolean;
+  /** Component fields: the label row's "Edit component" button (their value can't be clicked to edit). */
+  componentButton?: ReactNode;
   /** AI fields: generate the value again. */
   onRegenerate?(hint: string): void;
   /** AI fields: when the value was generated, if known. */
@@ -922,50 +926,36 @@ function RegenerateButton({ generatedAt, edited, onRegenerate }: { generatedAt?:
   );
 }
 
+/** A component field's "Edit component" button, in its label row. */
+function EditComponentButton({ name, onEdit }: { name: string; onEdit(): void }) {
+  return (
+    <IconButton autoAlign kind="ghost" size="sm" align="left" label={`Edit component “${name}” (used everywhere it is shown)`} onClick={onEdit}>
+      <Code />
+    </IconButton>
+  );
+}
+
 /** One field, laid out like its input in the form: label on top, value in a read-only box. Click to edit. (Exported for the help page, which is shown as an item.) */
-export function ViewField({ field, value, refs, onEdit, onSave, readOnly, computed, onRegenerate, generatedAt, edited, itemId, labelHidden }: ViewFieldProps) {
+export function ViewField({ field, value, refs, onEdit, onSave, readOnly, onRegenerate, componentButton, generatedAt, edited, itemId, labelHidden }: ViewFieldProps) {
   const { components } = useStore();
   const uid = useId();
   if (field.kind === "component") {
     // Computed from the other fields: read-only, laid out like any field, shown by its
     // component's output type (Markdown, text, number, image, HTML in the same width).
     const text = value == null ? "" : String(value);
-    // Clicking it edits its component (shared by every item showing it; saving asks first).
+    // Not clickable: the value is computed, and its component is shared by every item showing it
+    // (it is edited from the label row's "Edit component", which asks before saving).
     const component = components.find((t) => t.id === field.componentId);
-    const editable = !readOnly && !!component;
-    const edit = (e: MouseEvent | KeyboardEvent) => {
-      // Links in the result keep working.
-      if ((e.target as HTMLElement).closest("a")) return;
-      onEdit();
-    };
     return (
       <div className="view-field">
-        <div className="cds--label">
-          <FieldLabel field={field} />
-        </div>
+        <SectionHeader label={<FieldLabel field={field} />} hidden={labelHidden}>
+          {componentButton}
+        </SectionHeader>
         <div
-          className={`view-field__value view-field__value--component${editable ? " view-field__editable" : ""}${text.startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}${text ? "" : " view-field__value--empty"}`}
-          title={editable ? `Rendered from the component “${component.name}”: click to edit it` : "Rendered from a component"}
-          {...(editable && {
-            role: "button",
-            tabIndex: 0,
-            "aria-label": `Edit component ${component.name}`,
-            onClick: edit,
-            onKeyDown: (e: KeyboardEvent) => {
-              if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
-                e.preventDefault();
-                edit(e);
-              }
-            },
-          })}
+          className={`view-field__value view-field__value--component${text.startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}${text ? "" : " view-field__value--empty"}`}
+          title={component ? `Computed by the component “${component.name}”` : "Computed by a component"}
         >
-          <ComponentValue
-            value={value}
-            output={outputOf(field, components)}
-            frameRatio={component?.frameRatio}
-            variant="page"
-            onContentClick={editable ? () => onEdit() : undefined}
-          />
+          <ComponentValue value={value} output={outputOf(field, components)} frameRatio={component?.frameRatio} variant="page" />
         </div>
       </div>
     );
@@ -983,7 +973,7 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, comput
           <span className="checklist-box">
             <ToggleInput icon={field.toggleIcon} id={boxId} label={field.name} checked={value === true} onChange={onSave} />
           </span>
-          <label htmlFor={boxId} className={`checkbox-field__name${value === true ? " checklist-row__done" : ""}`}>
+          <label htmlFor={boxId} className={`checkbox-field__name${value === true ? ` checklist-row__done${field.strikeThrough ? " checklist-row__done--struck" : ""}` : ""}`}>
             {field.name}
           </label>
         </div>
@@ -1069,7 +1059,7 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, comput
         {...editable}
       >
         {!empty &&
-          (field.kind === "markdown" && !computed ? (
+          (field.kind === "markdown" ? (
             // Task checkboxes toggle right here, saving at once.
             <MarkdownView source={String(value)} onChange={onSave} />
           ) : (

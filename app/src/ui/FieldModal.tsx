@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Button, Dropdown, InlineNotification, Modal, Stack, TextInput } from "@carbon/react";
+import { Button, Checkbox, Dropdown, InlineNotification, Modal, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
 import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
 import { isReferenceKind, newId, collectionDraft, type AiOutput, type FieldDef, type FieldKind, type Collection, type ComponentArg } from "../domain/model";
 import { aiPromptProblem } from "../domain/ai";
-import type { Component } from "../domain/components";
+import { componentsFor, type Component } from "../domain/components";
 import { FieldKindLabel } from "./fieldKindIcons";
 import { TOGGLE_CHOICES, TOGGLE_ICONS, ToggleIconLabel } from "./ToggleInput";
 import { CollectionLabel } from "./collectionIcons";
@@ -47,6 +47,7 @@ export function FieldModal({
   const [args, setArgs] = useState<Record<string, ComponentArg>>(field?.componentArgs ?? {});
   const [choiceFilter, setChoiceFilter] = useState<FilterRule[]>(field?.choiceFilter ?? []);
   const [toggleIcon, setToggleIcon] = useState<string | null>(field?.toggleIcon ?? null);
+  const [strikeThrough, setStrikeThrough] = useState(field?.strikeThrough ?? false);
   const [aiPrompt, setAiPrompt] = useState(field?.aiPrompt ?? "");
   const [aiOutput, setAiOutput] = useState<AiOutput>(field?.aiOutput ?? "string");
   const [creatingComponent, setCreatingComponent] = useState(false);
@@ -92,6 +93,7 @@ export function FieldModal({
       componentArgs: kind === "component" ? args : {},
       choiceFilter: isReferenceKind(kind) ? choiceFilter : [],
       toggleIcon: kind === "checkbox" || kind === "checklist" ? toggleIcon : null,
+      strikeThrough: (kind === "checkbox" || kind === "checklist") && strikeThrough,
       aiPrompt: kind === "ai" ? aiPrompt.trim() : null,
       aiOutput: kind === "ai" ? aiOutput : null,
     };
@@ -192,6 +194,9 @@ export function FieldModal({
             onChange={({ selectedItem: i }) => i && setToggleIcon(i === "checkbox" ? null : i)}
           />
         )}
+        {(kind === "checkbox" || kind === "checklist") && (
+          <Checkbox id="field-modal-strike-through" labelText="Strike through when checked" checked={strikeThrough} onChange={(_, { checked }) => setStrikeThrough(checked)} />
+        )}
         {kind === "ai" && <AiOutputSelect id="field-modal-ai-output" value={aiOutput} locked={!!field} onChange={setAiOutput} />}
         {kind === "ai" && <AiPromptEditor id="field-modal-ai-prompt" value={aiPrompt} problem={submitted ? promptProblem : undefined} onChange={setAiPrompt} />}
         {kind === "component" && (
@@ -200,8 +205,9 @@ export function FieldModal({
             size="sm"
             id="field-modal-component"
             titleText="Component"
-            label={components.length ? "Choose…" : "No components yet"}
-            items={components}
+            label={componentsFor(components, "field").length ? "Choose…" : "No field or static components yet"}
+            // Field and static components: a block component lists items, which a field has not.
+            items={componentsFor(components, "field", componentId)}
             // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
             selectedItem={(component ?? null) as Component}
             itemToString={(t) => t?.name ?? ""}

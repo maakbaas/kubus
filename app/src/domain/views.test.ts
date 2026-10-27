@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { componentUses, itemsInput, parseParams, render } from "./components";
+import { componentUses, itemsInput, parseParams, placeProblem, render } from "./components";
 import { parseLayout } from "./fieldLayout";
 import type { Collection, FieldDef, Item } from "./model";
 import { defaultQuery, filterPreset, PAGE_ITEM, pageItemField, resolvePageValues, type FilterRule } from "./query";
 import { blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery } from "./views";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], targetCollectionId: string | null = null): FieldDef => ({
-  id, collectionId: "b", name, kind, targetCollectionId, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null, position: 0,
+  id, collectionId: "b", name, kind, targetCollectionId, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null, position: 0,
 });
 
 const books: Collection = {
@@ -39,7 +39,7 @@ describe("parseViewConfig", () => {
   });
 
   it("reads blocks as stored, and compares equal to what was stored", () => {
-    const state = { filters: [rule("pages", "lt", "50")], blocks: [newBlock("table", {}, "x"), { ...newBlock("cards", {}, "y"), filters: [] }] };
+    const state = { filters: [rule("pages", "lt", "50")], blocks: [newBlock("table", {}, "x"), { ...newBlock("cards", {}, "y"), filters: [] }], editable: false };
     const read = parseViewConfig(JSON.stringify(state), "table");
     expect(sameView(read, state)).toBe(true);
   });
@@ -83,11 +83,28 @@ describe("page item filter values", () => {
 
 describe("components in blocks", () => {
   it("are classed by the built-ins they use", () => {
-    expect(componentUses("{{ $item.Title }}").scope).toBe("item");
-    expect(componentUses("{{ $items.length }} of {{ $all.length }}")).toEqual({ scope: "items", items: true, fields: false });
-    expect(componentUses("{{ $fields.map(f => f.name) }}")).toEqual({ scope: "items", items: false, fields: true });
-    expect(componentUses("Hello {{ $now.getFullYear() }}, '$items' in text").scope).toBe("static");
-    expect(componentUses("Read **$items** carefully").scope).toBe("static");
+    expect(componentUses("{{ $item.Title }}").kind).toBe("field");
+    expect(componentUses("{{ $items.length }} of {{ $all.length }}")).toEqual({ kind: "block", mixed: false, items: true, groups: false, fields: false });
+    expect(componentUses("{{ $groups.length }}")).toEqual({ kind: "block", mixed: false, items: true, groups: true, fields: false });
+    expect(componentUses("{{ $fields.map(f => f.name) }}")).toEqual({ kind: "block", mixed: false, items: false, groups: false, fields: true });
+    expect(componentUses("Hello {{ $now.getFullYear() }}, '$items' in text").kind).toBe("static");
+    expect(componentUses("Read **$items** carefully").kind).toBe("static");
+    expect(componentUses("{{ $all.length }}").kind).toBe("block");
+  });
+
+  it("never mix $item with a block's names", () => {
+    expect(componentUses("{{ $item.Name }}: {{ $items.length }}")).toMatchObject({ kind: "field", mixed: true });
+    expect(placeProblem("{{ $item.Name }}: {{ $all.length }}", "field")).toMatch(/both/);
+    expect(placeProblem("{{ $item.Name }}: {{ $items.length }}", "block")).toMatch(/both/);
+  });
+
+  it("fit their place: field components as fields, block components as blocks, static ones anywhere", () => {
+    expect(placeProblem("{{ $item.Pages }}", "field")).toBeNull();
+    expect(placeProblem("{{ $item.Pages }}", "block")).toMatch(/use it as a field/);
+    expect(placeProblem("{{ $items.length }}", "block")).toBeNull();
+    expect(placeProblem("{{ $items.length }}", "field")).toMatch(/use it as a block/);
+    expect(placeProblem("{{ $pages / 40 }}", "field")).toBeNull();
+    expect(placeProblem("Read me", "block")).toBeNull();
   });
 
   it("don't count the built-ins as variables", () => {

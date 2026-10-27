@@ -1,6 +1,7 @@
 import {
   SYNC_TABLES,
   type ColumnType,
+  type SyncMismatch,
   type SyncRequest,
   type SyncResponse,
   type SyncTable,
@@ -24,11 +25,18 @@ import type { Statement } from "../sqlite/protocol";
 //  * First connection to a server (or a different one): the server is the source of truth, so what
 //    it holds replaces this device's data. Only an empty server takes this device's data instead
 //    (everything local is queued for upload).
+//  * The server's database has an id (server_meta). Every sync sends the one this device synced
+//    with; when the server holds another one (wiped or replaced since), it writes nothing and
+//    answers 409, and this device pauses until the user connects again (a first connection to the
+//    new database) or disconnects: its outbox only holds what changed since the last sync, which
+//    would land on the new database as fragments.
 //  * When: shortly after a local change, every 30 s, when coming online or back to the app, and
 //    when the server signals a change (server-sent events).
 
 const STORAGE_KEY = "kubus.sync";
 const SERVER_KEY = "kubus.syncServer";
+/** `SyncStatus.replaced`, kept across reloads (sync stays paused until the user acts). */
+const REPLACED_KEY = "kubus.syncReplaced";
 const POLL_MS = 30_000;
 const DEBOUNCE_MS = 2_000;
 
@@ -46,6 +54,22 @@ function loadConfig(): SyncConfig {
     // unreadable settings: start over
   }
   return { url: defaultUrl(), token: "", enabled: false };
+}
+
+function loadReplaced(): SyncStatus["replaced"] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(REPLACED_KEY) ?? "null") as SyncStatus["replaced"];
+    return saved && typeof saved.createdAt === "string" ? { createdAt: saved.createdAt, empty: !!saved.empty } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The server holds another database than this device synced with (its 409 answer). */
+class DatabaseReplaced extends Error {
+  constructor(readonly mismatch: SyncMismatch) {
+    super(mismatch.error);
+  }
 }
 
 function toBase64(bytes: Uint8Array): string {
@@ -79,11 +103,15 @@ export function applyStatement(t: SyncTable, row: WireRow): Statement {
   return { sql, bind: cols.map((c) => fromWire(t.columns[c], row[c] ?? null)) };
 }
 
+/** Stores the id of the server's database this device syncs with (an older server sends none). */
+const rememberDatabase = (id: string | undefined): Statement[] =>
+  id ? [{ sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_database', ?1)", bind: [id] }] : [];
+
 export const keyOf = (t: SyncTable) => (t.key.length > 1 ? `json_array(${t.key.join(", ")})` : t.key[0]);
 
 export class SyncEngine implements SyncControl {
   config = loadConfig();
-  status: SyncStatus = { state: "off", lastSync: null, error: null };
+  status: SyncStatus = { state: "off", lastSync: null, error: null, replaced: loadReplaced() };
 
   private listeners = new Set<() => void>();
   private running: Promise<void> | null = null;
@@ -119,6 +147,7 @@ export class SyncEngine implements SyncControl {
 
   async configure(config: SyncConfig): Promise<void> {
     this.config = { ...config, url: config.url.trim().replace(/\/+$/, "") };
+    if (config.enabled) this.setReplaced(null); // switched on again: that is the answer
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
     } catch {
@@ -141,9 +170,77 @@ export class SyncEngine implements SyncControl {
     await this.running; // a sync in flight finishes first
     await this.db.write([
       { sql: "DELETE FROM sync_outbox" },
-      { sql: "DELETE FROM meta WHERE key IN ('sync_server', 'sync_cursor')" },
+      { sql: "DELETE FROM meta WHERE key IN ('sync_server', 'sync_cursor', 'sync_database')" },
     ]);
+    this.setReplaced(null);
     this.setStatus({ state: "off", lastSync: null, error: null });
+  }
+
+  async pause(): Promise<void> {
+    this.config = { ...this.config, enabled: false };
+    clearTimeout(this.debounce);
+    this.listenForChanges(); // closes the change signal
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
+      localStorage.removeItem(SERVER_KEY);
+    } catch {
+      // storage blocked: the settings last until the page closes
+    }
+    await this.running; // a sync in flight finishes first
+    await this.forgetServer();
+    this.setStatus({ state: "off", error: null });
+  }
+
+  async reconnect(): Promise<void> {
+    await this.configure({ ...this.config, enabled: true });
+  }
+
+  /** What sync remembered about the server's database: the next connection is a first one. */
+  private forgetServer() {
+    return this.db.write([{ sql: "DELETE FROM meta WHERE key IN ('sync_server', 'sync_cursor', 'sync_database')" }]);
+  }
+
+  private setReplaced(replaced: SyncStatus["replaced"]) {
+    try {
+      if (replaced) localStorage.setItem(REPLACED_KEY, JSON.stringify(replaced));
+      else localStorage.removeItem(REPLACED_KEY);
+    } catch {
+      // storage blocked: it lasts until the page closes
+    }
+    if (replaced !== this.status.replaced) this.setStatus({ replaced });
+  }
+
+  /** The server holds another database: stop (keeping URL and token) until the user answers. Runs inside a sync. */
+  private async stopForReplaced({ database, empty }: SyncMismatch) {
+    this.config = { ...this.config, enabled: false };
+    clearTimeout(this.debounce);
+    this.listenForChanges(); // closes the change signal
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
+      localStorage.removeItem(SERVER_KEY);
+    } catch {
+      // storage blocked: the settings last until the page closes
+    }
+    await this.forgetServer();
+    this.setReplaced({ createdAt: database.createdAt, empty });
+    this.setStatus({ state: "off", error: null });
+  }
+
+  async wipeServer(): Promise<void> {
+    const { url, token } = this.config;
+    let response: Response;
+    try {
+      response = await fetch(`${url}/api/wipe`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "wipe" }),
+      });
+    } catch {
+      throw new Error(`Cannot reach ${url}`);
+    }
+    if (response.status === 401) throw new Error("The server did not accept the token");
+    if (!response.ok) throw new Error(`Server error ${response.status}`);
+    await this.pause();
   }
 
   /** The repository calls this after every local write. */
@@ -171,7 +268,8 @@ export class SyncEngine implements SyncControl {
           await this.syncOnce();
           this.setStatus({ state: "idle", lastSync: new Date().toISOString(), error: null });
         } catch (e) {
-          this.setStatus({ state: "error", error: e instanceof Error ? e.message : String(e) });
+          if (e instanceof DatabaseReplaced) await this.stopForReplaced(e.mismatch);
+          else this.setStatus({ state: "error", error: e instanceof Error ? e.message : String(e) });
           break;
         }
       } while (this.again);
@@ -193,6 +291,7 @@ export class SyncEngine implements SyncControl {
       throw new Error(`Cannot reach ${url}`);
     }
     if (response.status === 401) throw new Error("The server did not accept the token");
+    if (response.status === 409) throw new DatabaseReplaced((await response.json()) as SyncMismatch);
     if (!response.ok) throw new Error(`Server error ${response.status}`);
     return (await response.json()) as SyncResponse;
   }
@@ -200,12 +299,14 @@ export class SyncEngine implements SyncControl {
   private async syncOnce() {
     if (await this.connectToNewServer(this.config.url)) return;
 
-    const meta = await this.db.select<{ value: string }>("SELECT value FROM meta WHERE key = 'sync_cursor'");
-    const since = Number(meta[0]?.value ?? 0);
+    const meta = await this.db.select<{ key: string; value: string }>("SELECT key, value FROM meta WHERE key IN ('sync_cursor', 'sync_database')");
+    const since = Number(meta.find((m) => m.key === "sync_cursor")?.value ?? 0);
+    // The database synced with (none yet: a device from before ids, or an older server).
+    const database = meta.find((m) => m.key === "sync_database")?.value;
     const upTo = (await this.db.select<{ n: number | null }>("SELECT max(id) AS n FROM sync_outbox"))[0]?.n ?? 0;
-    const request: SyncRequest = { since, changes: await this.readOutbox(upTo) };
+    const request: SyncRequest = { since, changes: await this.readOutbox(upTo), ...(database && { database }) };
 
-    const { cursor, changes } = await this.post(request);
+    const { cursor, changes, database: current } = await this.post(request);
 
     const statements: Statement[] = [
       { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_applying', '1')" },
@@ -216,6 +317,7 @@ export class SyncEngine implements SyncControl {
       { sql: "DELETE FROM sync_outbox WHERE id <= ?1", bind: [upTo] },
       { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_cursor', ?1)", bind: [String(cursor)] },
       { sql: "DELETE FROM meta WHERE key = 'sync_applying'" },
+      ...rememberDatabase(current?.id),
     );
     await this.db.write(statements);
 
@@ -242,7 +344,7 @@ export class SyncEngine implements SyncControl {
     if (known[0]?.value === url) return false;
 
     const remote = await this.post({ since: 0, changes: {} });
-    const remember = [{ sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_server', ?1)", bind: [url] }];
+    const remember = [{ sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_server', ?1)", bind: [url] }, ...rememberDatabase(remote.database?.id)];
     let replaced = false;
     if (SYNC_TABLES.some((t) => (remote.changes[t.name] ?? []).length > 0)) {
       const oldCollections = (await this.db.select<{ id: string }>("SELECT id FROM collections")).map((r) => r.id);

@@ -12,7 +12,6 @@ import {
 import { Add, TrashCan } from "@carbon/icons-react";
 import { itemString, parseItem, type ChecklistItem } from "../domain/checklist";
 import { formatDate, formatTime } from "../domain/fieldKinds";
-import { hasSections } from "../domain/components";
 import type { FieldDef, FieldKind, FieldValue, Collection } from "../domain/model";
 import type { EditStart } from "./editStart";
 import { FieldLabel } from "./fieldKindIcons";
@@ -88,8 +87,6 @@ export function parseInputValue(kind: FieldKind, raw: InputValue): { value: Fiel
     }
     case "number": {
       if (s === "") return { value: null };
-      // {{ }} sections are kept as typed and rendered when shown (a number computed from fields).
-      if (hasSections(s)) return { value: s };
       const n = Number(s);
       return Number.isFinite(n) ? { value: n } : { error: "Not a valid number" };
     }
@@ -177,7 +174,7 @@ export function FieldInput({
           </div>
           <div className="checklist-row">
             <span className="checklist-box">{box}</span>
-            <label htmlFor={id} className={`checkbox-field__name${value === true ? " checklist-row__done" : ""}`}>
+            <label htmlFor={id} className={`checkbox-field__name${value === true ? ` checklist-row__done${field.strikeThrough ? " checklist-row__done--struck" : ""}` : ""}`}>
               {field.name}
             </label>
           </div>
@@ -187,9 +184,8 @@ export function FieldInput({
 
     case "number":
       return (
-        // A text input with a decimal keyboard rather than Carbon's NumberInput: a number field may
-        // also hold {{ }} sections, which a number input can't take (it accepts no braces), and the
-        // text stays exactly as typed (no "4.90" turning into 4.9 mid-typing).
+        // A text input with a decimal keyboard rather than Carbon's NumberInput: the text stays
+        // exactly as typed (no "4.90" turning into 4.9 mid-typing).
         <TextInput size="sm"
           id={id}
           labelText={<FieldLabel field={field} />}
@@ -197,8 +193,8 @@ export function FieldInput({
           autoComplete="off"
           placeholder={placeholder}
           value={String(value)}
-          // The iOS decimal keyboard types a comma where a dot is expected (outside {{ }} code).
-          onChange={(e) => onChange(e.target.value.includes("{{") ? e.target.value : e.target.value.replace(",", "."))}
+          // The iOS decimal keyboard types a comma where a dot is expected.
+          onChange={(e) => onChange(e.target.value.replace(",", "."))}
           {...small}
           {...invalid}
         />

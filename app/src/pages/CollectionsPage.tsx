@@ -55,7 +55,7 @@ const descriptionField = (t: Collection): FieldDef => ({
   componentId: null,
   componentArgs: {},
   choiceFilter: [],
-  toggleIcon: null,
+  toggleIcon: null, strikeThrough: false,
   aiPrompt: null,
   aiOutput: null,
   position: 0,

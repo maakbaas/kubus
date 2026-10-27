@@ -44,7 +44,7 @@ export function normalizeBlock(collection: Collection, block: ViewBlock): ViewBl
 export function normalizeView(collection: Collection, state: ViewState): ViewState {
   // A fixed id: normalizing the same state twice gives the same result.
   const blocks = state.blocks.length > 0 ? state.blocks : [newBlock("table", null, "main")];
-  return { filters: state.filters, blocks: blocks.map((b) => normalizeBlock(collection, b)) };
+  return { filters: state.filters, blocks: blocks.map((b) => normalizeBlock(collection, b)), editable: state.editable };
 }
 
 export type { BlockOptionsProps, BlockPlace, BlockProps, BlockTypeDefinition, BlockUses, ItemActions, PageItem } from "./registry";

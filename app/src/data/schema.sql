@@ -92,6 +92,8 @@ CREATE TABLE fields (
   choice_filter  TEXT,
   -- for 'checkbox' / 'checklist' fields: an icon shown instead of the box (a key of TOGGLE_ICONS in ui/ToggleInput.tsx; null = the box)
   toggle_icon    TEXT,
+  -- for 'checkbox' / 'checklist' fields: 1 = a checked one's text is struck through (null / 0 = not)
+  strike_through INTEGER,
   -- for 'ai' fields: the prompt (Markdown with {{ }} sections over $item, domain/ai.ts) and what the
   -- generated value is: 'string' | 'number' | 'markdown' (AiOutput). The value is stored in
   -- field_values like any other (value_text, or value_number), with a fingerprint of the rendered

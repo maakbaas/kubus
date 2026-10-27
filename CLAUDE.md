@@ -41,6 +41,9 @@ is what this split avoids. Keep them current when behaviour changes.
   database): keep `acquireDbLock` / `poolFilesFree` in `worker.ts`.
 - Changing the app identifier `com.kubus.app`, database / pool names, the lock or `kubus.*` storage
   keys orphans existing data.
+- **Code lives only in components** (and AI prompts): item values, Markdown blocks and filter values
+  are data, never run. A component is a field (`$item`), block (`$items`, `$groups`, `$fields`, `$all`)
+  or static component (neither), never both (`componentUses`, `placeProblem` in `domain/components.ts`).
 - **The Help page text** (`app/src/help/components.md`) documents components and `{{ }}` code (`$` names, outputs, AI
   fields) and is also what "Write with AI" gives the model: update it whenever that language changes.
 - **The language model key stays on the device** (`kubus.ai`, `app/src/app/ai.ts`): never sync it or put it in the database.
@@ -63,7 +66,8 @@ A Collection defines fields and holds its items (Books); an Item is one of them 
 book). "View" is both how a collection's items are listed (collection view: its blocks) and how
 one item's page looks (item view, whose layout is its fields and blocks); say "collection view" /
 "item view" only where both could be meant. A Block shows items one way (table, cards, a
-component) inside a view. A Component is reusable rendering ({{ }} code over $variables).
+component) inside a view. A Component is reusable rendering ({{ }} code over $variables): a field,
+block or static component by the built-ins it uses.
 A Space keeps items apart while sharing collections. A field's own kind is called "Field type" in the UI.
 
 ## Architecture

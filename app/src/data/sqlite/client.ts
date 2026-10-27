@@ -58,6 +58,11 @@ export class SqlClient {
     return this.channel.send({ op: "select", sql, bind }) as Promise<T[]>;
   }
 
+  /** Drops all data: every table empty, as in a new database. */
+  async wipe(): Promise<void> {
+    await this.channel.send({ op: "wipe" });
+  }
+
   /** Executes all statements in a single transaction. */
   async write(statements: Statement[]): Promise<void> {
     if (statements.length > 0) await this.channel.send({ op: "write", statements });

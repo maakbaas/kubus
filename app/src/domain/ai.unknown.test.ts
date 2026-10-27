@@ -3,7 +3,7 @@ import { aiRequest } from "./ai";
 import type { Collection, FieldDef, Item } from "./model";
 
 const f = (id: string, kind: FieldDef["kind"], ai?: Partial<FieldDef>): FieldDef => ({
-  id, collectionId: "t", name: id, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null, position: 0, ...ai,
+  id, collectionId: "t", name: id, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null, position: 0, ...ai,
 });
 const item: Item = { id: "i", collectionId: "t", spaceId: "default", values: {}, createdAt: "", updatedAt: "" };
 

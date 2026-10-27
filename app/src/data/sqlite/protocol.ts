@@ -15,6 +15,8 @@ export interface OpenResult {
 export type Request =
   | { id: number; op: "open" }
   | { id: number; op: "select"; sql: string; bind?: Bind }
-  | { id: number; op: "write"; statements: Statement[] };
+  | { id: number; op: "write"; statements: Statement[] }
+  /** Drops every table and creates the schema afresh (the app reloads after it). */
+  | { id: number; op: "wipe" };
 
 export type Response = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };

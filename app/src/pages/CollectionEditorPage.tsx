@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Button, Dropdown, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
+import { Button, Checkbox, Dropdown, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
@@ -19,7 +19,7 @@ import { aiPromptProblem } from "../domain/ai";
 import { AiOutputSelect, AiPromptEditor } from "../ui/AiFieldEditor";
 import { ChoiceFilterEditor } from "../ui/ChoiceFilterEditor";
 import { ComponentArgInput } from "../ui/ComponentArgInput";
-import type { Component } from "../domain/components";
+import { componentsFor, type Component } from "../domain/components";
 import { IconPicker } from "../ui/IconPicker";
 import { CollectionLabel } from "../ui/collectionIcons";
 import { SpaceLabel } from "../ui/SpaceSwitcher";
@@ -55,7 +55,7 @@ function initialDraft(existing?: Collection): CollectionDraft {
     icon: "Cube",
     description: "",
     spaceIds: null,
-    fields: [{ id: newId(), name: "Name", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null }],
+    fields: [{ id: newId(), name: "Name", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null }],
   };
 }
 
@@ -130,7 +130,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
   const removeField = (id: string) => setDraft((d) => ({ ...d, fields: d.fields.filter((f) => f.id !== id) }));
 
   const addField = () =>
-    setDraft((d) => ({ ...d, fields: [...d.fields, { id: newId(), name: "", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null }] }));
+    setDraft((d) => ({ ...d, fields: [...d.fields, { id: newId(), name: "", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null }] }));
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -292,6 +292,14 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                     onChange={({ selectedItem: i }) => i && updateField(f.id, { toggleIcon: i === "checkbox" ? null : i })}
                   />
                 )}
+                {(f.kind === "checkbox" || f.kind === "checklist") && (
+                  <Checkbox
+                    id={`${uid}-field-strike-through-${f.id}`}
+                    labelText="Strike through when checked"
+                    checked={f.strikeThrough}
+                    onChange={(_, { checked }) => updateField(f.id, { strikeThrough: checked })}
+                  />
+                )}
                 {f.kind === "ai" && (
                   <AiOutputSelect
                     id={`${uid}-field-ai-output-${f.id}`}
@@ -305,8 +313,9 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                     size="sm"
                     id={`${uid}-field-component-${f.id}`}
                     titleText="Component"
-                    label={components.length ? "Choose…" : "No components yet"}
-                    items={components}
+                    label={componentsFor(components, "field").length ? "Choose…" : "No field or static components yet"}
+                    // Field and static components: a block component lists items, which a field has not.
+                    items={componentsFor(components, "field", f.componentId)}
                     // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
                     selectedItem={(components.find((x) => x.id === f.componentId) ?? null) as Component}
                     itemToString={(x) => x?.name ?? ""}

@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { InlineNotification, Modal } from "@carbon/react";
 import { useStore } from "../app/store";
 import { now, type FieldDef } from "../domain/model";
-import { parseParams, type Component } from "../domain/components";
+import { parseParams, placeProblem, type Component } from "../domain/components";
 import { FieldLabel } from "./fieldKindIcons";
 import { ComponentCodeEditor } from "./ComponentCodeEditor";
 import { errorMessage } from "./useConfirm";
@@ -38,6 +38,8 @@ export function ComponentFieldEditor({ field, component, onDone }: { field: Fiel
     if (busy.current) return;
     const next = latest.current;
     if (next === component.code) return onDone();
+    // Code that no longer fits a field (a block's $items, or mixed) isn't saved: the editor says why.
+    if (placeProblem(next, "field")) return;
     busy.current = true;
     try {
       const choice = await ask();
@@ -95,6 +97,7 @@ export function ComponentFieldEditor({ field, component, onDone }: { field: Fiel
         labelText={<FieldLabel field={field} />}
         value={code}
         html={component.output === "html"}
+        invalidText={placeProblem(code, "field") ?? undefined}
         onChange={setCode}
       />
       {error && <InlineNotification kind="error" lowContrast hideCloseButton title={error} />}

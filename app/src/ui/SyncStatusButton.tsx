@@ -3,6 +3,7 @@ import { Button } from "@carbon/react";
 import { CheckmarkOutline, Cloud, Renew, WarningAltFilled } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { ToolbarPopover } from "./ToolbarPopover";
+import { ServerReplaced } from "./ServerReplaced";
 
 const ICONS = { off: Cloud, idle: CheckmarkOutline, syncing: Renew, error: WarningAltFilled } as const;
 const TITLES = { off: "Sync is off", idle: "Up to date", syncing: "Syncing…", error: "Sync failed" } as const;
@@ -16,9 +17,28 @@ export function SyncStatusButton({ onConfigure }: { onConfigure(): void }) {
   const { sync } = repo;
   const status = useSyncExternalStore(sync.subscribe.bind(sync), () => sync.status);
   const lastSync = status.lastSync ? new Date(status.lastSync).toLocaleString() : undefined;
+  // Paused because the server's database is another one: shown as a failure until answered.
+  const replaced = status.replaced;
+  const state = replaced ? "error" : status.state;
   return (
-    <ToolbarPopover label={TITLES[status.state]} icon={ICONS[status.state]} className={`sync-status sync-status--${status.state}`} fit>
-      {(close) => (
+    <ToolbarPopover label={replaced ? "Server database replaced" : TITLES[state]} icon={ICONS[state]} className={`sync-status sync-status--${state}`} fit>
+      {(close) => replaced ? (
+        <div className="sync-popover">
+          <ServerReplaced replaced={replaced} onConnect={close}>
+            {" "}
+            <Button
+              size="sm"
+              kind="tertiary"
+              onClick={() => {
+                close();
+                onConfigure();
+              }}
+            >
+              Configure sync
+            </Button>
+          </ServerReplaced>
+        </div>
+      ) : (
         <div className="sync-popover">
           <p className="sync-popover__state">{TITLES[status.state]}</p>
           {status.error && <p className="helper sync-popover__detail">{status.error}</p>}

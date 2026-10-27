@@ -2,7 +2,7 @@ import { useId, useMemo, useState } from "react";
 import { InlineNotification, Modal, Select, SelectItem, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
 import { newId, now } from "../domain/model";
-import { parseParams, COMPONENT_OUTPUTS, type Component, type ComponentOutput } from "../domain/components";
+import { kindText, parseParams, placeProblem, COMPONENT_OUTPUTS, type Component, type ComponentOutput } from "../domain/components";
 import { ComponentCodeEditor } from "./ComponentCodeEditor";
 import { errorMessage } from "./useConfirm";
 import { useMountedDialog } from "./useMountedDialog";
@@ -24,10 +24,12 @@ export function NewComponentModal({ onClose, onCreated }: { onClose(): void; onC
   const params = useMemo(() => parseParams(code), [code]);
   const taken = components.some((t) => t.name.trim().toLowerCase() === name.trim().toLowerCase());
   const nameError = !name.trim() ? "Give the component a name" : taken ? "Another component has this name" : undefined;
+  // Made for a component field: a block component (or mixed code) can't be one.
+  const codeError = placeProblem(code, "field") ?? undefined;
 
   async function save() {
     setSubmitted(true);
-    if (nameError) return;
+    if (nameError || codeError) return;
     setSaving(true);
     const ts = now();
     const component: Component = { id: newId(), name: name.trim(), description: "", params, code, output, frameRatio: null, createdAt: ts, updatedAt: ts };
@@ -75,7 +77,8 @@ export function NewComponentModal({ onClose, onCreated }: { onClose(): void; onC
           labelText="Component"
           html={output === "html"}
           placeholder={"**{{ $title }}**: {{ Math.round($pages / 40) }} h of reading"}
-          helperText="Markdown or HTML with {{ JavaScript }} sections. Variables start with $; map them to fields afterwards."
+          helperText={`${kindText(code)} Markdown or HTML with {{ JavaScript }} sections. Variables start with $; map them to fields afterwards.`}
+          invalidText={codeError}
           value={code}
           onChange={setCode}
         />
