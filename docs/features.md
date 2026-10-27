@@ -266,7 +266,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   fields are found by their place among the page's entries).
 - **Tags** (`domain/tags.ts`): `#name` anywhere in text (letters, digits, `_`, `-`, `/` for nested
   `#books/to-read`; at least one letter; not inside a word, `##`, `&#1;` or a URL). Not Markdown syntax: a value stays
-  plain GFM and a tag is text in it. Every place that shows text renders it as a Carbon tag (small cool-gray, like the collection pills in search; hovering it shows no hover on the link or result it sits in; `ui/TagChip.tsx`):
+  plain GFM and a tag is text in it. Every place that shows text renders it as a Carbon tag (blue, shaped like the collection pills in search; hovering it shows no hover on the link or result it sits in; `ui/TagChip.tsx`):
   plain text through `Highlight` (cells, cards, titles, lists, checklists, AI text, component text, group titles,
   search results), rendered Markdown (`rehypeTags` in `MarkdownView`; not in code or a link's text), the Markdown
   editor (decorations: the text stays as typed), HTML in its frame (the frame's script wraps the tags in the HTML as

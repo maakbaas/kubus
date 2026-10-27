@@ -734,7 +734,7 @@ body {
 }
 
 /* A #tag in text (TagChip; the Markdown editor's decorations and HTML frames look the same):
-   Carbon's small cool-gray tag, as the collection pills in search results.
+   Carbon's small blue tag, shaped as the collection pills in search results.
    Inline, not Carbon's inline-flex: it wraps with its line, adds no height to it, and is exactly
    the same in the read-only view and the editor, so starting to edit moves nothing. */
 .cds--tag.inline-tag {
@@ -762,7 +762,7 @@ body {
 }
 @media (any-hover: hover) {
   .cds--tag.inline-tag:hover {
-    background-color: var(--cds-tag-hover-cool-gray);
+    background-color: var(--cds-tag-hover-blue);
   }
   /* A hovered tag is its own link: what it sits in (a linked title, a search result) doesn't
      show its hover. */
