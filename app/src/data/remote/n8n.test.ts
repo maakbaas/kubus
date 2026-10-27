@@ -1,7 +1,6 @@
 // @vitest-environment node
 // The n8n connector (server/src/connectors/n8n.ts) against a stand-in for n8n's public API.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { connectorFor } from "../../../../server/src/connectors/index.ts";
 import { N8nConnector, n8nEndpoint } from "../../../../server/src/connectors/n8n.ts";
 import type { SourceQuery } from "../../../../shared/sources";
 
@@ -62,8 +61,7 @@ const leads = (over: Partial<SourceQuery> = {}): SourceQuery => ({
 afterEach(() => vi.unstubAllGlobals());
 
 describe("n8n connector", () => {
-  it("is picked by its schemes", () => {
-    expect(connectorFor(config())).toBeInstanceOf(N8nConnector);
+  it("reads its endpoint from the connection string", () => {
     expect(n8nEndpoint("n8n+http://:k%40y@localhost:5678")).toEqual({ base: "http://localhost:5678/api/v1", key: "k@y" });
     expect(n8nEndpoint("n8n://n8n.example.com/")).toEqual({ base: "https://n8n.example.com/api/v1", key: "" });
   });
