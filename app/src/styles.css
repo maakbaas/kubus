@@ -733,16 +733,17 @@ body {
   padding: 0;
 }
 
-/* A #tag in text (TagChip; the Markdown editor's decorations and HTML frames look the same).
+/* A #tag in text (TagChip; the Markdown editor's decorations and HTML frames look the same):
+   Carbon's small cool-gray tag, as the collection pills in search results.
    Inline, not Carbon's inline-flex: it wraps with its line, adds no height to it, and is exactly
    the same in the read-only view and the editor, so starting to edit moves nothing. */
 .cds--tag.inline-tag {
   display: inline;
   margin: 0;
-  /* Room only at the sides: an inline box's padding never changes the line's height, so with
-     some above and below, tags on wrapped lines would touch. The tag is its type's own height
-     (about 16px at 12px), which leaves a gap in a 20px line (24px on item pages). */
-  padding: 0 var(--cds-spacing-02);
+  /* Carbon's side padding; above and below only what makes an inline box Carbon's 18px (the
+     font's 16px plus 1px each side): an inline box's padding never changes the line's height,
+     and tags on wrapped lines keep a gap in a 20px line (24px on item pages). */
+  padding: 0.0625rem var(--cds-spacing-03);
   font-size: var(--cds-label-01-font-size, 0.75rem);
   line-height: 1rem;
   cursor: pointer;
@@ -754,9 +755,26 @@ body {
   overflow: visible;
   white-space: normal;
 }
+/* A tag in a card sits above the card's link (.item-card__link), as the card's other links do. */
+.item-card .inline-tag {
+  position: relative;
+  z-index: 1;
+}
 @media (any-hover: hover) {
   .cds--tag.inline-tag:hover {
-    background-color: var(--cds-tag-hover-blue);
+    background-color: var(--cds-tag-hover-cool-gray);
+  }
+  /* A hovered tag is its own link: what it sits in (a linked title, a search result) doesn't
+     show its hover. */
+  .cds--link:hover:has(.inline-tag:hover) {
+    color: var(--cds-link-primary);
+    text-decoration: none;
+  }
+  .cell--struck > a:hover:has(.inline-tag:hover) {
+    text-decoration: line-through;
+  }
+  .cds--contained-list-item--clickable .cds--contained-list-item__content:not(:disabled):hover:has(.inline-tag:hover) {
+    background-color: transparent;
   }
 }
 .cds--tag.inline-tag:focus-visible {

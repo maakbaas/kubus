@@ -8,7 +8,7 @@ import { openModeOf, useOpenRelated, type OpenMode } from "../workspace/Workspac
  * Carbon's look for a tag in text (domain/tags.ts): the same classes are put on tags in the
  * Markdown editor (decorations) and HTML frames, which can't render this component.
  */
-export const TAG_TYPE = "blue";
+export const TAG_TYPE = "cool-gray";
 export const TAG_CLASSES = `cds--tag cds--tag--sm cds--layout--size-sm cds--tag--${TAG_TYPE} inline-tag`;
 
 /**
