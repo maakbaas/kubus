@@ -43,7 +43,6 @@ const fromRef = (ref: ComponentRef, local: ComponentCode | null = ref.local): Pa
   frameRatio: local?.frameRatio ?? null,
 });
 
-
 /**
  * The settings of one field beyond its name and type, the same in the collection editor (under
  * the field's row) and in the field dialog: the referenced collection and which of its items can
