@@ -5,9 +5,9 @@ import type { SourceCapabilities, SourceDescription, SourceQuery, SourceResult, 
 // it stays read-only) is inside it. The server picks one per configured source by the scheme of
 // its connection string (connectors/index.ts). Only reading: a connector never writes.
 
-/** One configured source, wherever its configuration came from (today: environment variables). */
+/** One configured source (from the server's settings: server/src/settings.ts). */
 export interface SourceConfig {
-  /** As configured, e.g. "CRM" (KUBUS_SOURCE_CRM). */
+  /** As configured, e.g. "CRM". */
   name: string;
   /** Connection string; its scheme picks the connector (postgres://…). */
   url: string;

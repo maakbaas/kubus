@@ -8,11 +8,13 @@ import type {
   SourceTable,
   SourceTarget,
 } from "../../../../shared/sources";
+import type { ServerSettingsUpdate, ServerSettingsView } from "../../../../shared/settings";
 import type { Item } from "../../domain/model";
 import type { SyncConfig } from "../repository";
 
 // The server's remote sources (shared/sources.ts), asked for over HTTP with the sync token: the
-// server this device syncs with reads them for it (server/src/sources.ts). Nothing is stored or
+// server this device syncs with reads them for it (server/src/sources.ts). Also the server's own
+// settings, which set those sources up (shared/settings.ts). Nothing is stored or
 // kept offline: a remote collection reads its rows whenever it is shown.
 
 const TIMEOUT_MS = 60_000;
@@ -26,13 +28,13 @@ export class SourcesClient {
 
   constructor(private config: () => SyncConfig) {}
 
-  private async call<T>(path: string, body?: unknown): Promise<T> {
+  private async call<T>(path: string, body?: unknown, method?: string): Promise<T> {
     const { url, token } = this.config();
     if (!url || !token) throw new Error("Remote collections are read through a Kubus server: set one up in Settings → Sync.");
     let response: Response;
     try {
-      response = await fetch(`${url}/api/sources${path}`, {
-        method: body === undefined ? "GET" : "POST",
+      response = await fetch(`${url}/api${path}`, {
+        method: method ?? (body === undefined ? "GET" : "POST"),
         headers: { Authorization: `Bearer ${token}`, ...(body !== undefined && { "Content-Type": "application/json" }) },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -46,19 +48,28 @@ export class SourcesClient {
   }
 
   list(): Promise<SourceInfo[]> {
-    return this.call("");
+    return this.call("/sources");
   }
   tables(source: string): Promise<SourceTable[]> {
-    return this.call(`/${encodeURIComponent(source)}/tables`);
+    return this.call(`/sources/${encodeURIComponent(source)}/tables`);
   }
   describe(source: string, target: SourceTarget): Promise<SourceDescription> {
-    return this.call(`/${encodeURIComponent(source)}/describe`, { target });
+    return this.call(`/sources/${encodeURIComponent(source)}/describe`, { target });
   }
   query(source: string, query: SourceQuery): Promise<SourceResult> {
-    return this.call(`/${encodeURIComponent(source)}/query`, query);
+    return this.call(`/sources/${encodeURIComponent(source)}/query`, query);
   }
   async row(source: string, request: SourceRowRequest): Promise<SourceRow | null> {
-    return (await this.call<{ row: SourceRow | null }>(`/${encodeURIComponent(source)}/row`, request)).row;
+    return (await this.call<{ row: SourceRow | null }>(`/sources/${encodeURIComponent(source)}/row`, request)).row;
+  }
+
+  /** The server's own settings (its language model, its sources), secrets left out. */
+  serverSettings(): Promise<ServerSettingsView> {
+    return this.call("/settings");
+  }
+  /** Stores the server's settings as a whole (secrets left out stay where they go: shared/settings.ts). */
+  saveServerSettings(update: ServerSettingsUpdate): Promise<ServerSettingsView> {
+    return this.call("/settings", update, "PUT");
   }
 
   /** Remembers rows as shown (as items), for `shownItem`. */

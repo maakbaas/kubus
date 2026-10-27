@@ -24,7 +24,7 @@ Rules that keep this from becoming three products glued together:
   | | Native Kubus | External / remote |
   |---|---|---|
   | Schema | user-defined | read from the source; only local labels / icons / column choices |
-  | Editing | full | off by default; later only where a primary key allows it |
+  | Editing | full | never: read-only by design |
   | Offline | yes | no (maybe a read-only cached snapshot) |
   | Sync | yes | no, the source is its own truth |
   | Filter / sort / group | in memory (`applyQuery`) | pushed down to the server |
@@ -43,7 +43,8 @@ Rules that keep this from becoming three products glued together:
 
 Roadmap, in order: (1) native Kubus core: item links + backlinks, per-record and query components;
 (2) the server + sync; (3) remote sources, read-only (tables and SQL queries through the server,
-same views/components, links to remote rows); (4) editing remote data (Directus side), only where
-the source allows it; (5) chart / dashboard view types (Metabase side), any time after (3).
+same views/components: built, docs/sync.md "Remote sources"; still to come: links to remote rows,
+connectors beyond Postgres); remote data stays read-only by design (no Directus side); (4) chart /
+dashboard view types (Metabase side), any time after (3).
 Cheap step that can be done any time: introduce the capabilities type with the native source
 declaring everything, and make the UI respect it.

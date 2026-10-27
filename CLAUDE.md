@@ -18,8 +18,8 @@ is what this split avoids. Keep them current when behaviour changes.
 - `docs/data-model.md`: tables, EAV `field_values`, files, references, soft deletes, UUIDs;
   scale limits, SAH-pool VFS danger, storage location, iOS eviction.
 - `docs/sync.md`: server, sync engine (outbox triggers, merge, first connection), files (upload,
-  download, thumbnails, clean-up), the HTTP API (headless device) and webhooks, iOS home-screen app,
-  known sync limits.
+  download, thumbnails, clean-up), the server's settings (Settings → Server), remote sources and their
+  connectors, the HTTP API (headless device) and webhooks, iOS home-screen app, known sync limits.
 - `docs/vision.md`: the "one hub" vision (native + remote sources, capabilities) and the roadmap.
 
 ## Rules that always apply
@@ -53,8 +53,9 @@ is what this split avoids. Keep them current when behaviour changes.
 - **The Help page text** (`app/src/help/components.md`) documents components and `{{ }}` code (`$` names, outputs, Ask
   AI) and is also what "Write with AI" gives the model: update it whenever that language changes.
 - **The language model key stays where it is set**: a device's own on the device (`kubus.ai`, `app/src/app/ai.ts`),
-  the server's in its environment (`KUBUS_AI_KEY`, used only by its proxy `server/src/ai.ts`). Never sync a key, put it
-  in the database or send the server's to a device.
+  the server's in its own settings table (`server_settings`, set in Settings → Server, used only by its proxy
+  `server/src/ai.ts`). Never sync a key, put it in the synced data or send the server's to a device; the same goes for
+  a remote source's password (`server/src/settings.ts`: write-only, dropped when its address changes).
 - Same words in code and UI (see Terminology); no "type", "object", "template", "entry".
 
 ## Terminology
@@ -108,6 +109,10 @@ headless device that answers the server's HTTP API (bundled into `server/headles
 - **The API goes through the headless device's Repository, never into Postgres.** `/api/v1`
   routes (`app/src/headless/api.ts`) are thin translations onto `Repository` methods; the server
   only stores rows and file bytes. Keep `app/src/help/api.md` (Help → API) current with them.
+- **Remote collections are read-only** (`Collection.source`, `domain/sources.ts`): their blocks get rows from
+  the source a page at a time (`useRemoteResult`: it filters, sorts and groups), never from the item cache, and
+  whatever edits items checks `isRemote` (their `ItemActions` have no `remove` / `setValue`). App and server talk
+  connector-neutral (`shared/sources.ts`); everything database-specific stays in `server/src/connectors/`.
 - **Workspace**: every tab renders `AppRoutes` in its own `MemoryRouter`; in-app links are plain
   `href="#/…"` anchors; navigate with `useNavigate()` (this tab) or `useOpenRelated()`.
 

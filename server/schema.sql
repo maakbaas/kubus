@@ -26,3 +26,13 @@ CREATE TABLE IF NOT EXISTS file_bytes (
   stored_at      timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (id)
 );
+
+-- The server's own settings (Settings → Server in the app; server/src/settings.ts): the language
+-- model it offers and the sources it reads, as JSON by key ('ai', 'sources'), secrets included.
+-- Never synced or sent to a device; kept by a wipe (it is the server's, not the devices' data).
+CREATE TABLE IF NOT EXISTS server_settings (
+  key            text NOT NULL,
+  value          jsonb NOT NULL,
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (key)
+);

@@ -28,8 +28,8 @@ export interface Headless {
 export type StartHeadless = (options: HeadlessOptions) => Promise<Headless>;
 
 /**
- * The language model the server offers its devices (GET /api/ai): set by its KUBUS_AI_*
- * variables. Devices call it through the server (/api/ai/chat/completions, /api/ai/models with
+ * The language model the server offers its devices (GET /api/ai): set in the app's Settings →
+ * Server (shared/settings.ts). Devices call it through the server (/api/ai/chat/completions, /api/ai/models with
  * KUBUS_TOKEN), so the provider's key never leaves the server.
  */
 export interface ServerAi {

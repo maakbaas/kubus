@@ -86,8 +86,9 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 - **Scale: native collections are meant for under ~10,000 items.** A collection's items are loaded into
   memory and filtered, sorted and grouped there (`applyQuery`); that is fast at this size, so
   there is deliberately no SQL-side querying of native data. Larger data (time series, logs) is
-  meant for remote tables (roadmap step 3), where the query is pushed down to the server
-  (`serverQuery`); only then does a query engine beyond `applyQuery` pay off. Rendering is not
+  meant for remote collections, whose blocks ask their source for each page of rows (filtered,
+  sorted and grouped there: `useRemoteResult`, docs/sync.md "Remote sources") instead of
+  `applyQuery`. Rendering is not
   virtualized: rows and cards are memoized only. If a 5,000-item collection feels slow, first try
   rendering rows in steps ("show more"), not virtualization (which clashes with `FillTable` /
   `useSharedColumns` measuring every row).

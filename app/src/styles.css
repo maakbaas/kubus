@@ -3776,3 +3776,8 @@ body[data-reordering] [data-reorder-row] {
 .source-query textarea {
   font-family: var(--cds-code-02-font-family);
 }
+/* One of the server's sources in Settings → Server: its settings set apart from the next one's. */
+.server-source {
+  padding-inline-start: var(--cds-spacing-05);
+  border-inline-start: 2px solid var(--cds-border-subtle-01);
+}

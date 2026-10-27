@@ -21,7 +21,7 @@
 // itself: it shows its error, and "Retry" tries again.
 //
 // The provider: this server's (`source: "server"`, the default when the device set none of its own:
-// the server's KUBUS_AI_* variables, called through the server with the sync token, so its key stays
+// the server's settings (Settings → Server), called through the server with the sync token, so its key stays
 // there; see server/src/ai.ts), or the device's own (address, key, models in localStorage `kubus.ai`,
 // never synced: the key must not travel to the server).
 
@@ -192,9 +192,15 @@ export class AiService {
         if (target !== this.offerFor) return;
         if (!res.ok) return this.setOffer({ ai: null, problem: `The server answered ${res.status}.` });
         const ai = (await res.json()) as ServerAi;
-        this.setOffer({ ai, problem: ai.available ? null : "The server offers no language model: set KUBUS_AI_URL and KUBUS_AI_FIELD_MODEL there." });
+        this.setOffer({ ai, problem: ai.available ? null : "The server offers no language model: set one in Settings → Server." });
       })
       .catch(() => target === this.offerFor && this.setOffer({ ai: null, problem: `Can't reach ${url}.` }));
+  }
+
+  /** Asks the server again what it offers (its settings were just changed). */
+  serverChanged() {
+    this.offerFor = "";
+    this.refreshOffer();
   }
 
   /** Where `config` sends requests: the server's model through the server, or its own provider. */

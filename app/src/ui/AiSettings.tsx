@@ -6,8 +6,8 @@ import { createLlmClient } from "../platform/llm";
 import { errorMessage } from "./useConfirm";
 
 /**
- * The language model behind AI fields and "Write with AI": the sync server's (set up on the server
- * with its KUBUS_AI_* variables and used through it, so every device has the same), or this
+ * The language model behind AI fields and "Write with AI": the sync server's (set up in Settings →
+ * Server and used through it, so every device has the same), or this
  * device's own: any OpenAI-style API, its key and a model, kept on this device only (the key is
  * never synced). A section of the settings.
  */

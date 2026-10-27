@@ -3,12 +3,13 @@ import { useSearchParams } from "react-router";
 import { Tab, TabList, TabPanel, TabPanels, Tabs } from "@carbon/react";
 import { AiSettings } from "../ui/AiSettings";
 import { PageHeader } from "../ui/PageHeader";
+import { ServerSettings } from "../ui/ServerSettings";
 import { SyncSettings } from "../ui/SyncSettings";
 
 /** The sections, in order; `?section=` opens one (the sync status's "Configure sync" leads to sync). */
-const SECTIONS = ["sync", "ai"] as const;
+const SECTIONS = ["sync", "ai", "server"] as const;
 
-/** Settings of this device: where it syncs to, and the language model for AI. */
+/** Settings of this device (where it syncs to, the language model for AI), and of the server it syncs with. */
 export function SettingsPage() {
   const uid = useId();
   const [params, setParams] = useSearchParams();
@@ -20,6 +21,7 @@ export function SettingsPage() {
         <TabList aria-label="Settings" id={`${uid}-tabs`}>
           <Tab>Sync</Tab>
           <Tab>AI</Tab>
+          <Tab>Server</Tab>
         </TabList>
         <TabPanels>
           <TabPanel>
@@ -27,6 +29,9 @@ export function SettingsPage() {
           </TabPanel>
           <TabPanel>
             <AiSettings />
+          </TabPanel>
+          <TabPanel>
+            <ServerSettings />
           </TabPanel>
         </TabPanels>
       </Tabs>

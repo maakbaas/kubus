@@ -161,8 +161,11 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   model (the last write wins, they agree after sync); a changed prompt costs one call per item; a model's answer can
   differ each time, so "regenerate" can change a value.
 - **Settings** (`#/settings`, `pages/SettingsPage.tsx`, the last node of the side nav, pinned at its bottom with Help: `NavFooter`): tabs
-  Sync (`ui/SyncSettings.tsx`; `?section=sync`) and AI (`ui/AiSettings.tsx`; `?section=ai`): the language model of this
-  device: "The server's" (the default for a device without its own: the sync server's `KUBUS_AI_*` variables, asked
+  Sync (`ui/SyncSettings.tsx`; `?section=sync`), AI (`ui/AiSettings.tsx`; `?section=ai`) and Server
+  (`ui/ServerSettings.tsx`; `?section=server`: the sync server's own settings, the same for every device: its language
+  model and its remote sources, stored on the server, keys and passwords write-only; docs/sync.md "The server's
+  settings"). AI is the language model of this
+  device: "The server's" (the default for a device without its own: the one set in Settings → Server, asked
   for at `GET /api/ai` and called through the server's proxy `/api/ai/chat/completions` and `/api/ai/models` with the
   sync token, so its key stays on the server: `server/src/ai.ts`, `AiService.providerOf`), or "My own": the address of an OpenAI-style API (any provider: OpenAI, OpenRouter, Ollama, LM Studio, …; nothing is preset), the key and two models, each a combo box over the provider's `/models` (any name can be typed): one for AI fields (runs for every value: fast and cheap) and one for writing components (a stronger one; empty = the field model). `AiService.client("field" | "code")` picks it. Stored per device
   (`kubus.ai` in localStorage), never synced. The sync status icon (tab strip, top right) only shows the state; its
@@ -278,6 +281,22 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; an FTS index can come later).
   Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`); a result with no visible match is left out.
   An item opens at the first field that matched (`?field=`; at the top when its title matched), a Markdown block at the block.
+- **Remote collections** (`domain/sources.ts`, `collections.source`, `fields.source_column`; docs/sync.md
+  "Remote sources"): a table or a query (SQL) of one of the server's sources, shown like any collection
+  but read-only. Made with the database icon beside "New collection" (shown while the server offers a
+  source: `#/collections/new?remote=1`): the collection editor's Source section (`ui/SourceSettings.tsx`)
+  picks the source, a table (or a written query, when the source allows them) and the key column (the
+  primary key by default; assumed unique: a row's item id is its key, base64url); reading the columns
+  makes a field per column (named like it, the collection named after the table), "Read columns again"
+  keeps the fields' names, order and types and adds or drops the columns that came or went. A text
+  column's field can be shown as Markdown or HTML; fields added there are component fields (computed
+  for the rows shown); no AI or reference fields, no Created / Updated. Views, blocks, item views,
+  bookmarks are as for any collection (stored here, synced); filters, sorts and groupings offer only
+  what a column supports (`fieldOperators`, `canSort`, `canGroup`: JSON and the like only "contains" /
+  "is empty"); blocks show 100 rows and "Show more" (`useRemoteResult`). Nothing edits them: no "New",
+  no add row, no in-place editing, no delete or duplicate, checkboxes don't toggle, the item page has
+  no editable fields, pin or space; the repository refuses item writes to them too. "Read again" (the
+  collection page's views bar) reads the rows again. Needs the server online; nothing is kept offline.
 - **Local first.** The app works fully offline on the device's own SQLite database. Every asset is part of the build (IBM Plex included, `app/src/fonts.css`; nothing from a
   CDN) and the service worker caches all of it, so offline it looks exactly as online.
 - **Future:** chart block types,

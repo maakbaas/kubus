@@ -1,47 +1,23 @@
-import { HttpError, json, readJson, Router, type ApiRequest } from "../../shared/router.ts";
+import { HttpError, json, readJson, type ApiRequest, type Router } from "../../shared/router.ts";
 import type { SourceInfo, SourceQuery, SourceRowRequest, SourceTarget } from "../../shared/sources.ts";
 import { SourceError, type Connector, type SourceConfig } from "./connectors/connector.ts";
 import { connectorFor } from "./connectors/index.ts";
 
 // Remote sources: databases the server reads for the devices (shared/sources.ts), one connector
 // each. Devices see their names and what they can do, never their addresses or passwords; they
-// ask through /api/sources/... with KUBUS_TOKEN, like the language model (server/src/ai.ts).
-// Configured by environment variables, any number of them:
-//   KUBUS_SOURCE_<NAME>          its connection string, e.g. postgres://reader:secret@crm-host:5432/crm
-//   KUBUS_SOURCE_<NAME>_SCHEMAS  only these schemas' tables, comma-separated (default: all)
-//   KUBUS_SOURCE_<NAME>_QUERIES  "off": its tables only, no queries written in the app
-//   KUBUS_SOURCE_<NAME>_TIMEOUT  longest a statement may run, in seconds (default 30)
+// ask through /api/sources/... with KUBUS_TOKEN, like the language model (server/src/ai.ts). They
+// are set up in the app (Settings → Server: server/src/settings.ts), and replaced as a whole
+// whenever that changes.
 
-const PREFIX = "KUBUS_SOURCE_";
-const OPTIONS = ["_SCHEMAS", "_QUERIES", "_TIMEOUT"];
 const MAX_BODY = 1024 * 1024;
-
-/** The configured sources, from the environment (one place, so they can come from elsewhere too). */
-export function sourceConfigs(env: Record<string, string | undefined> = process.env): SourceConfig[] {
-  const keys = Object.keys(env).filter((k) => k.startsWith(PREFIX) && k.length > PREFIX.length && (env[k] ?? "").trim());
-  // A key ending in an option's suffix is that option when the shorter key is a source.
-  const isOption = (k: string) => OPTIONS.some((o) => k.endsWith(o) && keys.includes(k.slice(0, -o.length)));
-  return keys
-    .filter((k) => !isOption(k))
-    .sort()
-    .map((k) => {
-      const option = (o: string) => (env[`${k}${o}`] ?? "").trim();
-      const timeout = Number(option("_TIMEOUT") || "30");
-      return {
-        name: k.slice(PREFIX.length),
-        url: env[k]!.trim(),
-        schemas: option("_SCHEMAS").split(",").map((s) => s.trim()).filter(Boolean),
-        queries: !/^(off|false|no|0)$/i.test(option("_QUERIES")),
-        timeoutMs: Math.round((Number.isFinite(timeout) && timeout > 0 ? timeout : 30) * 1000),
-      };
-    });
-}
 
 interface Source {
   config: SourceConfig;
   connector: Connector | null;
   /** Why it can't be read (no connector for it, the last failure to connect). */
   problem?: string;
+  /** What its check found wrong but not blocking (a user that can write). */
+  warnings?: string[];
 }
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -49,33 +25,46 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export class Sources {
   private sources = new Map<string, Source>();
 
-  constructor(configs: SourceConfig[]) {
+  /** These sources from now on (the ones before are closed), each checked once (`log`: what is wrong). */
+  async replace(configs: SourceConfig[], log: (message: string) => void) {
+    const before = [...this.sources.values()];
+    this.sources = new Map();
     for (const config of configs) {
       const connector = connectorFor(config);
       this.sources.set(config.name, "problem" in connector ? { config, connector: null, problem: connector.problem } : { config, connector });
     }
+    await Promise.all(before.map((s) => s.connector?.close().catch(() => undefined)));
+    await this.check(log);
   }
 
-  get size() {
-    return this.sources.size;
+  /** How a source is doing, for the settings (its connector, a problem, warnings). */
+  status(name: string): { connector?: string; problem?: string; warnings?: string[] } {
+    const source = this.sources.get(name);
+    if (!source) return {};
+    return {
+      ...(source.connector && { connector: source.connector.kind }),
+      ...(source.problem && { problem: source.problem }),
+      ...(source.warnings?.length && { warnings: source.warnings }),
+    };
   }
 
   /** Connects to each once, logging what is wrong (a source that fails stays listed, with its problem). */
-  async check(log: (message: string) => void) {
-    for (const source of this.sources.values()) {
+  private async check(log: (message: string) => void) {
+    await Promise.all([...this.sources.values()].map(async (source) => {
       const name = source.config.name;
       if (!source.connector) {
         log(`[source ${name}] ${source.problem}`);
-        continue;
+        return;
       }
       try {
-        for (const warning of await source.connector.check()) log(`[source ${name}] warning: ${warning}`);
+        source.warnings = await source.connector.check();
+        for (const warning of source.warnings) log(`[source ${name}] warning: ${warning}`);
         log(`[source ${name}] ready (${source.connector.kind})`);
       } catch (e) {
         source.problem = `Can't connect: ${messageOf(e)}`;
         log(`[source ${name}] ${source.problem}`);
       }
-    }
+    }));
   }
 
   list(): SourceInfo[] {

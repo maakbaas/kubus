@@ -33,12 +33,8 @@ services:
       # secret (X-Kubus-Signature; see Help → API in the app).
       # KUBUS_WEBHOOK_URL: https://automation.example.com/hooks/kubus
       # KUBUS_WEBHOOK_SECRET: another-long-random-string
-      # Optional: a language model for every device (AI fields, Write with AI), any OpenAI-style
-      # API. Devices use it through this server (Settings → AI → "The server's"); the key stays here.
-      # KUBUS_AI_URL: https://api.openai.com/v1
-      # KUBUS_AI_KEY: sk-...
-      # KUBUS_AI_FIELD_MODEL: gpt-4.1-mini
-      # KUBUS_AI_CODE_MODEL: gpt-4.1        # for writing components; default: the field model
+      # A language model for every device and remote sources (databases read as collections) are
+      # set up in the app: Settings → Server. They are stored in this server's database.
     ports:
       - "8080:8080"
     depends_on:

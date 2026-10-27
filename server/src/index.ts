@@ -4,12 +4,14 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize } from "node:path";
 import { createPool } from "./db.ts";
 import { broadcast, handleEvents, latestCursor } from "./events.ts";
-import { aiInfo, aiProxy } from "./ai.ts";
+import { aiInfo, aiProxy, setAiSettings } from "./ai.ts";
 import { deleteFile, getFile, hasFile, putFile } from "./files.ts";
 import { HeadlessHost } from "./headless.ts";
 import { FILE_ID } from "../../shared/files.ts";
 import { loadSchema } from "./schema.ts";
-import { sourceConfigs, Sources } from "./sources.ts";
+import { Sources } from "./sources.ts";
+import { applyUpdate, loadSettings, NO_SETTINGS, saveSettings, sourceConfigs, viewOf, type Stored } from "./settings.ts";
+import type { ServerSettingsUpdate } from "../../shared/settings.ts";
 import { currentCursor, handleSync } from "./sync.ts";
 import { wipe } from "./wipe.ts";
 import { MAX_FILE_BYTES, type SyncRequest } from "../../shared/sync.ts";
@@ -22,9 +24,8 @@ import { HttpError, json, readJson, Router, type ApiRequest, type ApiResponse } 
 //   PORT          default 8080                      STATIC_DIR   built web app, default ../../app/dist
 //   KUBUS_WEBHOOK_URL     URL(s), comma-separated, called with every change (docs/sync.md)
 //   KUBUS_WEBHOOK_SECRET  signs each webhook request (X-Kubus-Signature)
-//   KUBUS_AI_URL, KUBUS_AI_KEY, KUBUS_AI_FIELD_MODEL, KUBUS_AI_CODE_MODEL  a language model for
-//                         every device, through this server (server/src/ai.ts)
-//   KUBUS_SOURCE_<NAME>   a database the devices read as collections, read-only (server/src/sources.ts)
+// The rest (the language model it offers, the sources it reads) is set in the app, Settings →
+// Server, and stored in its database (server/src/settings.ts).
 
 const databaseUrl = process.env.DATABASE_URL;
 const token = process.env.KUBUS_TOKEN;
@@ -81,7 +82,15 @@ const fitting = () => {
   if (schemaError) throw new HttpError(500, schemaError);
 };
 
-const sources = new Sources(sourceConfigs());
+const sources = new Sources();
+// The server's own settings, applied at start and whenever a device changes them.
+let settings: Stored = NO_SETTINGS;
+async function applySettings(next: Stored) {
+  settings = next;
+  setAiSettings(next.ai);
+  await sources.replace(sourceConfigs(next), (message) => console.log(message));
+}
+const settingsView = () => viewOf(settings, (name) => sources.status(name));
 
 // The devices' endpoints (the token is checked before these run).
 const routes = sources.routes(new Router())
@@ -102,6 +111,17 @@ const routes = sources.routes(new Router())
     const { wrote, ...response } = result;
     if (wrote) broadcast(response.cursor);
     return json(200, response);
+  })
+  .add("GET", "/api/settings", async () => {
+    fitting();
+    return json(200, settingsView());
+  })
+  .add("PUT", "/api/settings", async (req) => {
+    fitting();
+    const next = applyUpdate(settings, (await readJson(req, 256 * 1024)) as ServerSettingsUpdate);
+    await saveSettings(pool, next);
+    await applySettings(next);
+    return json(200, settingsView());
   })
   .add("GET", "/api/ai", aiInfo)
   .add("GET", "/api/ai/models", (req) => aiProxy(req, "/models"))
@@ -214,7 +234,10 @@ createServer(async (req, res) => {
   }
 }).listen(port, () => {
   console.log(`Kubus server on :${port}`);
-  void sources.check((message) => console.log(message));
+  // Connecting to the sources can take a while: the server answers meanwhile.
+  if (!schemaError) {
+    loadSettings(pool).then(applySettings, (e) => console.error("Loading the server's settings failed", e));
+  }
   void headless.start({
     serverUrl: `http://127.0.0.1:${port}`,
     token,

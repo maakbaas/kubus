@@ -123,15 +123,73 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
   rows use a file the server no longer
   has, the answer lists it (`missingFiles`) and a device with the bytes queues it again.
 
+## The server's settings
+
+What a server offers beyond sync is set in the app, Settings → Server (`ui/ServerSettings.tsx`), not
+in environment variables: the language model and the remote sources. `GET` / `PUT /api/settings`
+(`server/src/settings.ts`, types in `shared/settings.ts`) with the sync token; any device with the
+token may change them. They are stored in the server's own table `server_settings` (JSON by key:
+`ai`, `sources`), never synced and kept by a wipe. Secrets (the model's key, a source's password)
+are write-only: a device sees `keySet` / `passwordSet`, never the value. A secret left out of an
+update stays only while it would go to the same place (the same model address; the same scheme,
+host, port and user of a connection string): moved elsewhere it is dropped, so whoever holds the
+token can't send a stored secret to a host of their choosing. A password typed into a connection
+string is split out of it (`splitPassword`). Saving applies at once: the model is used for the next
+request, the sources' connectors are replaced and checked (`Sources.replace`), and the answer
+carries each source's problem and warnings. Only `DATABASE_URL`, `KUBUS_TOKEN`, `PORT`, `STATIC_DIR`
+and the webhooks stay environment variables.
+
 ## The server's language model
 
-`KUBUS_AI_URL`, `KUBUS_AI_KEY`, `KUBUS_AI_FIELD_MODEL`, `KUBUS_AI_CODE_MODEL` (`server/src/ai.ts`) give
-every device the same model. `GET /api/ai` says what is offered (`ServerAi` in `shared/api.ts`: the
-models, never the address or key); `POST /api/ai/chat/completions` and `GET /api/ai/models` forward
-to the provider with the server's key, for any device with the token. In the app, Settings → AI →
-"The server's" (`AiConfig.source`, the default without a device's own) points `createLlmClient` at
-`<server>/api/ai` with the sync token (`AiService.providerOf`); "My own" keeps today's per-device
-provider. The headless device doesn't generate AI values (that stays with the apps).
+Set in Settings → Server (address, key, a model for AI fields and one for writing components):
+`server/src/ai.ts` gives every device the same model. `GET /api/ai` says what is offered (`ServerAi`
+in `shared/api.ts`: the models, never the address or key); `POST /api/ai/chat/completions` and
+`GET /api/ai/models` forward to the provider with the server's key, for any device with the token.
+In the app, Settings → AI → "The server's" (`AiConfig.source`, the default without a device's own)
+points `createLlmClient` at `<server>/api/ai` with the sync token (`AiService.providerOf`; saving the
+server's settings asks again, `serverChanged`); "My own" keeps today's per-device provider. The
+headless device doesn't generate AI values (that stays with the apps).
+
+## Remote sources (remote collections)
+
+Databases the server reads for the devices, read-only, whose tables and queries the app shows as
+collections ("remote collections": `Collection.source`, `domain/sources.ts`). Set up in Settings →
+Server (name, connection string, password, schemas, whether queries written in the app are allowed,
+a time limit); the connection string's scheme picks the connector.
+- *Protocol* (`shared/sources.ts`), connector-neutral, all behind the token:
+  `GET /api/sources` (names, connector, capabilities, problem; never addresses),
+  `GET /api/sources/<name>/tables`, `POST …/describe` (`{ target }`: a table or a query → its
+  columns as Kubus field types, the primary key, the columns not read), `POST …/query` (a page of
+  rows for a view's query: filters with plain values, search, sort, grouping, the device's time zone,
+  offset / limit, and with the first page the total and the groups' sizes), `POST …/row` (one row
+  by its key). The app never sends SQL but for a query collection's own query.
+- *Connectors* (`server/src/connectors/`): `Connector` (check, tables, describe, query, row, close),
+  picked by scheme in `connectors/index.ts`; another kind of source is another file there and
+  nothing else changes. `Sources` (`server/src/sources.ts`) holds one per source and turns a
+  connector's `SourceError` into 400, anything else into 502.
+- *Postgres* (`connectors/postgres.ts`, SQL in `postgresSql.ts`, pure and tested without a
+  database): every statement in a `READ ONLY` transaction with `statement_timeout`, on connections
+  opened with `default_transaction_read_only`, using the extended protocol (one statement per query:
+  a written query can't add another; it is wrapped as a subquery, its trailing `;` dropped). Values
+  are parameters and names quoted. Types map by `pg_type.typcategory` (`pgColumn`): numbers, booleans,
+  `date`, `timestamptz` / `timestamp` (taken as UTC) as their field types; text, enums, `uuid`, `time`,
+  network addresses as text; one-dimensional arrays as lists of strings; JSON, XML, intervals, ranges,
+  composite and geometric values as text that is only filtered by contains / empty (`plain`: not
+  sorted or grouped; JSON and XML hidden in a new collection's view); binary data, search indexes,
+  PostGIS shapes and internals dropped. A filter means what the app's does (`applyQuery`): text
+  case-insensitive, empty values last both ways, a date & time on its day in the device's time zone,
+  comparisons kept to the column (so indexes are used), the key breaking ties so pages never overlap.
+  A list column groups a row under each value. At start (and on every change) `check` warns about a
+  superuser or a user that can write: give it a user that can only read (`GRANT SELECT`); queries
+  written in the app read whatever that user can (turn queries off per source to allow tables only).
+- *App*: a block of a remote collection asks the source for its query (`useRemoteResult`, 100 rows
+  a page, "Show more"; search waits for typing to pause) instead of `applyQuery`; the item page reads
+  its row by key (`rowKey` of the item id, a base64url of the key). Rows become items keeping their
+  identity while unchanged. Nothing is cached offline; the collection page's "Read again" asks again.
+- *Known limits*: text sorts by the source's collation ("Customer 10" before "Customer 9"), not the
+  app's numeric order; counting a heavy query runs it in full; references can't point at remote
+  collections (no links to remote rows yet); global search and the API (`/api/v1`) don't read
+  remote rows.
 
 ## The API (headless device) and webhooks
 
