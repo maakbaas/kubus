@@ -42,3 +42,24 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
    - Existing AI fields (`fields.ai_prompt`, `ai_output`): convert each to a component at open
      (like `RENAMES`), or accept a wipe.
    - "Code lives only in components" then has no exception: update CLAUDE.md and the Help text.
+
+## Collection setup: field settings
+
+3. **Visual hierarchy for a field's own settings** (`pages/CollectionEditorPage.tsx`, the field rows).
+   Today a field with extra settings (reference target, choice filter, toggle icon, component and
+   its variables, AI prompt and output, strike through) just gets more controls appended in its
+   row. Design a clear hierarchy instead: the field's name and type as the row, its settings
+   grouped beneath it as a subordinate, indented part of that field (Carbon only, spacing scale,
+   on the row's left edge rules of the design checks).
+   - Long inputs (an AI prompt, or whatever replaces it after items 1–2) get the full width, not
+     a cell in the row.
+   - Strike through ("Strike through when checked") is misaligned with the other controls: fix it
+     in the same pass.
+
+## Strike through
+
+4. **Strike through the item, not only the checkbox.** A checkbox field with strike through, when
+   checked, should strike the item wherever it is listed: its title on cards and in table rows,
+   and in other collection blocks (component blocks get it as data, e.g. the field is in `$items`;
+   decide whether they show it themselves). Today only the checkbox's own label and checklist
+   rows are struck (`checklist-row__done--struck` in `ui/FieldInput.tsx`, `ui/ListField.tsx`).
