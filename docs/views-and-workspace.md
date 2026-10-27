@@ -10,6 +10,13 @@ Extension points are registries, not special cases in pages:
   `applyQuery()`. Everything field-kind specific (filter operators, sort key, group keys, text for
   search) is in one `KIND_RULES` table: a new field kind or operator is added there. Pseudo fields
   `$title`, `$updated`, `$created` can be sorted on; the default query sorts by `$title`.
+  A filter value may hold `{{ }}` code, typed and shown as raw text (the one place besides
+  components where code runs): `resolveFilterValues` / `filterCodeValue` work it out when the filter
+  runs, as if its result had been typed (`{{ 1 == 1 }}` is "true"), reading `$now` and, on an item
+  page, the page's item as `$item`. A value that can't be compared (failing code, "maybe" for a
+  checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
+  nothing, never the wrong items. The value input is text for every kind (the braces must be typable);
+  under it, what the code works out to ("= true").
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,
   fields with labels / hide empty), the `View` component, optional `OptionsEditor` in

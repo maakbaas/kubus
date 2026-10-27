@@ -221,6 +221,13 @@ export function labelField(collection: Collection, item: Item): FieldDef | undef
   });
 }
 
+/**
+ * Whether an item is struck through where it is listed (its title on cards, in table rows): one of
+ * its checkbox fields with "Strike through the item when checked" is checked.
+ */
+export const isStruckThrough = (collection: Collection, item: Item): boolean =>
+  collection.fields.some((f) => f.kind === "checkbox" && f.strikeThrough && item.values[f.id] === true);
+
 /** The label of an item without a label field value. */
 export const untitledLabel = (collection: Collection): string => collection.name;
 

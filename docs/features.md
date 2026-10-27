@@ -18,8 +18,11 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   key of `TOGGLE_ICONS` in `ui/ToggleInput.tsx`: heart, star, flag, bookmark, checkmark, thumbs up,
   faces; outlined when off, filled when on; null = Carbon's checkbox). Every place that toggles
   such a value uses `ToggleInput`, never `Checkbox` directly. Markdown task boxes stay GFM boxes.
-  A checked one's text is greyed, and struck through with the field's "Strike through when checked"
-  (`fields.strike_through`, synced).
+  A checked one's text is greyed, and struck through with the field's strike through option
+  (`fields.strike_through`, synced): a checklist's checked entries; for a checkbox, "Strike through
+  the item when checked" also strikes the item where it is listed (`isStruckThrough`: its title in
+  table rows, `cell--struck`, and on cards). Component blocks get the checkbox's value in `$items`
+  and show it as their code says.
 - **Markdown is strictly GitHub Flavored Markdown.** The Milkdown editor (`app/src/ui/MarkdownEditor.tsx`)
   loads only the CommonMark + GFM presets (plus non-syntax utilities: history, listener,
   clipboard, upload, prism). Don't add syntax plugins (math, emoji, diagrams, frontmatter, Crepe, …),

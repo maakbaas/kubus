@@ -42,7 +42,8 @@ is what this split avoids. Keep them current when behaviour changes.
   database): keep `acquireDbLock` / `poolFilesFree` in `worker.ts`.
 - Changing the app identifier `com.kubus.app`, database / pool names, the lock or `kubus.*` storage
   keys orphans existing data.
-- **Code lives only in components**: item values are data, never run. A component is shared (table
+- **Code lives only in components** (and filter values, whose `{{ }}` is worked out when the filter
+  runs: `resolveFilterValues` in `domain/query.ts`): item values are data, never run. A component is shared (table
   `components`) or local (written in place, stored with its field or block; a Markdown block's text is
   a static one); there are no `$variables`, only the built-ins. A component is a field (`$item`),
   block (`$items`, `$groups`, `$fields`, `$all`) or static component (neither), never both

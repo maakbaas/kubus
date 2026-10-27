@@ -28,7 +28,7 @@ import {
 import { Add, ArrowRight, Close, Copy, DataTable as TableIcon, Edit, Save, TrashCan } from "@carbon/icons-react";
 import { RowActions, rowButtonProps, TableStacked } from "../ui/RowActions";
 import { useStore } from "../app/store";
-import { itemLabel, labelField, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
+import { isStruckThrough, itemLabel, labelField, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
 import { cellEditStart, type EditStart } from "../ui/editStart";
 import { itemViewOf, FULL_LAYOUT, isRestricted } from "../domain/fieldLayout";
 import { isGrouped } from "../domain/query";
@@ -487,6 +487,8 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
   // text field), so an empty text field before it doesn't repeat the label.
   const titleId = firstTitleId && (labelField(collection, item)?.id ?? firstTitleId);
   const titleShown = titleId === firstTitleId ? firstTitleShown : shown.some((f) => f.id === titleId);
+  // A checked "strike through the item" checkbox strikes the item's title, link or not.
+  const struckId = isStruckThrough(collection, item) ? (titleId ?? labelField(collection, item)?.id ?? titleColumn(collection)?.id) : undefined;
   // Its page's layout holds something back (read-only, fields left out): like the page's
   // own edit icon, an edit button opens it with every field, editable.
   const restricted = isRestricted(collection, item, itemViewOf(collection, item)?.layout ?? FULL_LAYOUT);
@@ -521,7 +523,7 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
       {shown.map((f) => {
         const isEditing = editing?.fieldId === f.id;
         return (
-          <TableCell key={f.id} className={`cell--${f.kind}${isEditing ? " cell--editing" : ""}`} data-label={f.name}>
+          <TableCell key={f.id} className={`cell--${f.kind}${isEditing ? " cell--editing" : ""}${f.id === struckId ? " cell--struck" : ""}`} data-label={f.name}>
             <Cell
               collection={collection}
               isTitle={f.id === titleId}

@@ -1156,6 +1156,13 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
 .checklist-row__done--struck {
   text-decoration: line-through;
 }
+/* An item whose "strike through the item" checkbox is checked: its title where it is listed (a
+   table row's title cell, a card's title), greyed like a done checklist entry. */
+.cell--struck > :is(a, div),
+.item-card__title.item--struck {
+  color: var(--cds-text-secondary);
+  text-decoration: line-through;
+}
 /* A toggle icon (Checkbox / Checklist fields) in place of the box: its 1rem icon sits where the
    box's glyph would, so the 2rem button reaches 0.5rem past it on each side. */
 .toggle-input.cds--btn {

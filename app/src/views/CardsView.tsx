@@ -3,7 +3,7 @@ import { Accordion, AccordionItem, Checkbox, Link, Select, SelectItem, Slider, T
 import { Grid as GridIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { fileIdFromSrc } from "../domain/files";
-import { itemLabel, fieldValue, pickableFields, type FieldDef, type Item, type Collection } from "../domain/model";
+import { isStruckThrough, itemLabel, fieldValue, pickableFields, type FieldDef, type Item, type Collection } from "../domain/model";
 import type { FieldLayout } from "../domain/fieldLayout";
 import { outputOf, type Component } from "../domain/components";
 import { HtmlFrame } from "../ui/ComponentValue";
@@ -217,7 +217,7 @@ const ItemCard = memo(function ItemCard({ collection, item, options, layout, sho
       {hasText && (
         <div className="item-card__body">
       {options.showTitle && (
-        <div className="item-card__title">
+        <div className={isStruckThrough(collection, item) ? "item-card__title item--struck" : "item-card__title"}>
           <Highlight text={itemLabel(collection, item)} query={search} />
         </div>
       )}

@@ -8,7 +8,7 @@ import { placeProblem } from "../domain/components";
 import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
-import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolvePageValues, type FilterRule, type QueryResult } from "../domain/query";
+import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type QueryResult } from "../domain/query";
 import { blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
@@ -286,9 +286,9 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const { confirm, dialog } = useConfirm();
   const type = blockType(block.kind);
   const uses = type.uses(block.options, components);
-  // Page-item values ("this item") filled in from the page's item.
+  // Page-item values ("this item") filled in from the page's item; {{ }} code worked out.
   const base = blockQuery(viewFilters, block);
-  const filters = useMemo(() => resolvePageValues(base.filters, page?.item ?? null), [base.filters, page]);
+  const filters = useMemo(() => resolveFilterValues(base.filters, page ?? null), [base.filters, page]);
   const query = useMemo(() => ({ ...base, filters }), [filters, base.sort, base.groupBy, base.groupOrder]); // eslint-disable-line react-hooks/exhaustive-deps
   const result = useMemo(
     () => (data.items && uses.query ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),
