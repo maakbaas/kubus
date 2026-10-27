@@ -5,11 +5,11 @@ import { extname, join, normalize } from "node:path";
 import { createPool } from "./db.ts";
 import { broadcast, handleEvents, latestCursor } from "./events.ts";
 import { aiInfo, aiProxy } from "./ai.ts";
-import { deleteUnusedFiles, getFile, hasFile, markedFiles, putFile, unmarkFiles } from "./files.ts";
+import { fillFileUses, getFile, hasFile, putFile } from "./files.ts";
 import { HeadlessHost } from "./headless.ts";
 import { FILE_ID } from "../../shared/files.ts";
 import { loadSchema } from "./schema.ts";
-import { currentCursor, handleSync, LOCK_ID } from "./sync.ts";
+import { currentCursor, handleSync } from "./sync.ts";
 import { wipe } from "./wipe.ts";
 import { MAX_FILE_BYTES, type SyncRequest } from "../../shared/sync.ts";
 import { HttpError, json, readJson, Router, type ApiRequest, type ApiResponse } from "../../shared/router.ts";
@@ -33,6 +33,8 @@ if (!databaseUrl || !token) {
 }
 const port = Number(process.env.PORT ?? 8080);
 const staticDir = process.env.STATIC_DIR ?? join(import.meta.dirname, "../../app/dist");
+/** How long a file no item uses is kept before it is deleted. */
+const unusedFileDays = Number(process.env.KUBUS_UNUSED_FILE_DAYS ?? 7);
 /** A sync request's largest body (an app from before /api/files sends files' bytes in it). */
 const MAX_SYNC_BODY = 100 * 1024 * 1024;
 
@@ -43,6 +45,7 @@ const schemaSql = await loadSchema();
 let schemaError: string | null = null;
 try {
   await pool.query(schemaSql);
+  await fillFileUses(pool);
   broadcast(await currentCursor(pool)); // nobody listens yet: what the stored data is up to
 } catch (e) {
   schemaError = `The server's database doesn't fit its schema: ${e instanceof Error ? e.message : String(e)}`;
@@ -94,7 +97,7 @@ const routes = new Router()
     fitting();
     const request = await readJson(req, MAX_SYNC_BODY);
     if (!request || typeof request !== "object") throw new HttpError(400, "Send a sync request");
-    const result = await handleSync(pool, request as SyncRequest);
+    const result = await handleSync(pool, request as SyncRequest, { unusedFileDays });
     if ("mismatch" in result) return json(409, result.mismatch);
     const { wrote, ...response } = result;
     if (wrote) broadcast(response.cursor);
@@ -210,13 +213,6 @@ createServer(async (req, res) => {
     serverUrl: `http://127.0.0.1:${port}`,
     token,
     cursor: latestCursor,
-    files: {
-      marked: (cutoff) => markedFiles(pool, cutoff),
-      unmark: (ids) => unmarkFiles(pool, ids),
-      delete: (ids, cutoff) => deleteUnusedFiles(pool, ids, cutoff, LOCK_ID),
-    },
-    unusedFileDays: Number(process.env.KUBUS_UNUSED_FILE_DAYS ?? 7),
-    cleanUpEveryMs: 60 * 60 * 1000,
     webhooks: {
       urls: (process.env.KUBUS_WEBHOOK_URL ?? "").split(",").map((u) => u.trim()).filter(Boolean),
       secret: process.env.KUBUS_WEBHOOK_SECRET || null,

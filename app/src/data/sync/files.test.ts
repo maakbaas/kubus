@@ -159,6 +159,19 @@ describe("cleaning up unused files", () => {
     expect(await b.unusedFiles([id])).toEqual([id]);
   });
 
+  it("releases a replaced image at once, unless a text still names it", async () => {
+    const repo = await device({ connect: false });
+    const old = await photo(repo, "old");
+    const [collection] = await repo.listCollections();
+    const [item] = await repo.listItems(collection, "default");
+    const [title, image] = collection.fields;
+    // Named in the title (any text counts): still in use when the image field lets go of it.
+    await repo.updateItem(collection, item.id, { [title.id]: `see files/${old}`, [image.id]: await repo.putFile(bytes("new"), "image/png") });
+    expect(await listed(repo, old)).toBe(true);
+    await repo.updateItem(collection, item.id, { [title.id]: "plain" });
+    expect(await listed(repo, old)).toBe(false);
+  });
+
   it("keeps a file another item here still uses", async () => {
     const a = await device();
     const id = await photo(a, "eleven");

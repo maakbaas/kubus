@@ -16,8 +16,6 @@ import { createApi } from "./api";
 import { contextCompiler } from "./compiler";
 import { Webhooks } from "./webhooks";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 export class HeadlessDevice {
   private queue: Promise<unknown> = Promise.resolve();
   readonly webhooks: Webhooks;
@@ -80,32 +78,11 @@ export class HeadlessDevice {
     this.queue = run.catch(() => {});
     return run;
   }
-
-  /**
-   * Deletes the server's files that have been unused for long enough. The server's marks name the
-   * candidates; this device, holding every row, decides with the app's own rule.
-   */
-  async cleanUpFiles(): Promise<string[]> {
-    return this.serial(async () => {
-      await this.refresh();
-      const cutoff = new Date(Date.now() - this.options.unusedFileDays * DAY_MS);
-      const marked = await this.options.files.marked(cutoff);
-      if (marked.length === 0) return [];
-      const unused = await this.repo.unusedFiles(marked);
-      await this.options.files.unmark(marked.filter((id) => !unused.includes(id)));
-      const deleted = await this.options.files.delete(unused, cutoff);
-      if (deleted.length > 0) this.options.log(`Deleted ${deleted.length} unused file(s)`);
-      return deleted;
-    });
-  }
 }
 
 export const startHeadless: StartHeadless = async (options) => {
   const device = await HeadlessDevice.start(options);
   const api = createApi(device.repo);
-  const cleanUp = () => device.cleanUpFiles().catch((e) => options.log(`File clean-up failed: ${e instanceof Error ? e.message : String(e)}`));
-  void cleanUp();
-  setInterval(cleanUp, options.cleanUpEveryMs);
   return {
     handle: (req: ApiRequest): Promise<ApiResponse> =>
       device.serial(async () => {

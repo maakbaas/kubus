@@ -111,17 +111,22 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
   tables (`server/src/files.ts`). Servers from before kept them in `files.data`: moved at start, then
   the column is dropped. An app from before that still pushes bytes in a row (base64) gets them stored.
   `GET /api/files/<id>` sends them with a year-long private cache. Wiping drops them with every table.
-- *Clean-up*. One rule (`liveUse` in `SqliteRepository.ts`): a file is in use when a live item, through
-  a live field, has it as an image value or mentions `files/<id>` in a Markdown or HTML value; a
-  thumbnail through its original. Devices: a local edit releases at once (`releaseFile`), and a sync
-  releases the files its incoming rows stop using (`filesUsedBefore`, read before the apply). Nothing
-  about it is synced: every device reaches the same answer from the same rows. Server: every sync
-  request marks the files a pushed row stops using (`trackUses`: replaced values, deleted items and
-  fields; `unused_since`) and unmarks the ones pushed rows use; an upload starts marked. Hourly, the
-  headless device lists the files marked longer than `KUBUS_UNUSED_FILE_DAYS` (7), checks them with
-  the same rule (`unusedFiles`) on its full copy, unmarks the used ones and deletes the rest (bytes,
-  row, thumbnail link; under the sync lock, only if still marked). The grace period covers late
-  and out-of-order syncs, an offline edit, an undo. When pushed rows use a file the server no longer
+- *Clean-up*. One rule, the same on both sides: a value uses the files it names (an image value,
+  `files/<id>` in its text: `filesUsedBy` in `shared/files.ts`), kept in a `file_uses` table (file,
+  item, field); a file is in use when a live item, through a live field, uses it, a thumbnail through
+  its original (`fileInUse`, one SQL text for SQLite and Postgres). Devices: triggers on
+  `field_values` keep `file_uses` (through the `file_ids()` function the engine defines; filled from
+  the values when the table is new, `FILLS` in `engine.ts`); a local edit releases at once
+  (`releaseFile`, same transaction), and a sync releases the files its incoming rows stop using
+  (`filesUsedBefore`, read before the apply). Nothing about it is synced: every device reaches the
+  same answer from the same rows. Server, inside each sync request (no timer): `trackUses` keeps
+  `file_uses` for the values the request wrote and marks (`unused_since`) or unmarks the files whose
+  uses it changed (replaced values, deleted or restored items and fields); an upload starts marked;
+  `sweepFiles` deletes the files marked longer than `KUBUS_UNUSED_FILE_DAYS` (7) and still unused
+  (bytes, row, thumbnail link), and unmarks the used ones (a thumbnail or file uploaded after its
+  use). Both are a lookup through indexes, near free when nothing changed. The grace period covers
+  late and out-of-order syncs, an offline edit, an undo on a device that already released the file
+  (it fetches it again). When pushed rows use a file the server no longer
   has, the answer lists it (`missingFiles`) and a device with the bytes queues it again.
 
 ## The server's language model

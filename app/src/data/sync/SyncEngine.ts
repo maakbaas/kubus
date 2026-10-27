@@ -8,7 +8,6 @@ import {
   type WireRow,
   type WireValue,
 } from "../../../../shared/sync";
-import { filesUsedBy } from "../../domain/files";
 import { observeStamp } from "../../domain/model";
 import type { DataChange, SyncConfig, SyncControl, SyncStatus } from "../repository";
 import type { SqlClient, Statement } from "../sqlite/protocol";
@@ -383,22 +382,21 @@ export class SyncEngine implements SyncControl {
   }
 
   /**
-   * The files this device's rows use that incoming rows may stop using: the values they replace,
-   * and the values of the items and fields they delete. Read before they are applied.
+   * The files this device's rows use that incoming rows may stop using: the uses of the values they
+   * replace, and of the items and fields they delete. Read before they are applied.
    */
   private async filesUsedBefore(changes: WireChanges): Promise<string[]> {
     const values = (changes.field_values ?? []).map((r) => [r.item_id, r.field_id]);
     const items = (changes.items ?? []).filter((r) => r.deleted_at !== null).map((r) => r.id);
     const fields = (changes.fields ?? []).filter((r) => r.deleted_at !== null).map((r) => r.id);
     if (values.length + items.length + fields.length === 0) return [];
-    const rows = await this.db.select<{ value_file: string | null; value_text: string | null }>(
-      `SELECT value_file, value_text FROM field_values
-        WHERE (value_file IS NOT NULL OR value_text LIKE '%files/%')
-          AND ((item_id, field_id) IN (SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?1))
-               OR item_id IN (SELECT value FROM json_each(?2)) OR field_id IN (SELECT value FROM json_each(?3)))`,
+    const rows = await this.db.select<{ file_id: string }>(
+      `SELECT DISTINCT file_id FROM file_uses
+        WHERE (item_id, field_id) IN (SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?1))
+           OR item_id IN (SELECT value FROM json_each(?2)) OR field_id IN (SELECT value FROM json_each(?3))`,
       [JSON.stringify(values), JSON.stringify(items), JSON.stringify(fields)],
     );
-    return filesUsedBy(rows);
+    return rows.map((r) => r.file_id);
   }
 
   /**

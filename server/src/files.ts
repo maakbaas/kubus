@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type pg from "pg";
-import { filesUsedBy } from "../../shared/files.ts";
-import type { WireChanges } from "../../shared/sync.ts";
+import { fileInUse, filesUsedBy } from "../../shared/files.ts";
+import type { WireChanges, WireRow } from "../../shared/sync.ts";
 
 // File bytes (images), apart from the synced `files` rows that list them (server/schema.sql,
 // file_bytes). Content-addressed: a file's id is the SHA-256 of its bytes, so an upload whose
@@ -29,74 +29,88 @@ export async function putFile(pool: pg.Pool, id: string, mime: string, data: Buf
   return true;
 }
 
-// Clean-up of files no item uses any more (docs/sync.md, "Files").
+// Clean-up of files no item uses any more (docs/sync.md, "Files"), inside sync requests: no timer.
 //
-// Tracking: every sync request marks the files whose use it removes (an image value replaced, an
-// image taken out of Markdown, an item or field deleted): file_bytes.unused_since. A file used
-// again is unmarked; a file uploaded before anything uses it starts out marked. These marks are
-// only candidates: the headless device, which holds every row, decides with the app's own rule
-// (Repository.unusedFiles) before anything is deleted, and only marks older than the grace period
-// count (devices sync late and out of order; an undo puts a use back).
+// Each request keeps file_uses for the values it writes (as a device's triggers do) and then, for
+// the files whose uses it changed (values replaced, items and fields deleted or restored), sets
+// file_bytes.unused_since when no live item uses them any more and clears it when one does. A file
+// uploaded before anything uses it starts out marked. Every request also deletes the files marked
+// for longer than the grace period and still unused: devices sync late and out of order, and an
+// undo on a device that released a file fetches it from here again.
+
+/** The rows a sync request wrote, by table: their keys (JSON arrays of the key values). */
+export type Written = Map<string, Set<string>>;
+
+const rowKey = (row: WireRow, key: string[]) => JSON.stringify(key.map((k) => row[k] ?? null));
 
 /**
- * Inside a sync request, before its rows are written: marks the files the pushed rows stop using,
- * unmarks the ones they use, and returns the used ones whose bytes the server doesn't have.
+ * After a sync request's rows are written: brings file_uses and the files' marks up to date, and
+ * returns the files the pushed rows use whose bytes the server doesn't have.
  */
-export async function trackUses(client: pg.PoolClient, changes: WireChanges): Promise<string[]> {
-  const values = changes.field_values ?? [];
-  const deletedItems = (changes.items ?? []).filter((r) => r.deleted_at !== null).map((r) => String(r.id));
-  const deletedFields = (changes.fields ?? []).filter((r) => r.deleted_at !== null).map((r) => String(r.id));
-  const before = await client.query<{ value_file: string | null; value_text: string | null }>(
-    `SELECT value_file, value_text FROM field_values
-      WHERE (value_file IS NOT NULL OR value_text LIKE '%files/%')
-        AND ((item_id, field_id) IN (SELECT * FROM unnest($1::text[], $2::text[])) OR item_id = ANY($3) OR field_id = ANY($4))`,
-    [values.map((r) => String(r.item_id)), values.map((r) => String(r.field_id)), deletedItems, deletedFields],
-  );
-  const gone = new Set(deletedItems);
-  const live = values.filter((r) => !gone.has(String(r.item_id)));
-  const used = filesUsedBy(live);
-  const freed = filesUsedBy(before.rows).filter((id) => !used.includes(id));
-  // A thumbnail goes with its original.
-  const withThumbnails = "id = ANY($1) OR id IN (SELECT thumb_id FROM thumbnails WHERE file_id = ANY($1))";
-  if (freed.length > 0) await client.query(`UPDATE file_bytes SET unused_since = now() WHERE unused_since IS NULL AND (${withThumbnails})`, [freed]);
+export async function trackUses(client: pg.PoolClient, changes: WireChanges, written: Written): Promise<string[]> {
+  const values = (changes.field_values ?? []).filter((r) => written.get("field_values")?.has(rowKey(r, ["item_id", "field_id"])));
+  const items = (changes.items ?? []).filter((r) => written.get("items")?.has(rowKey(r, ["id"]))).map((r) => String(r.id));
+  const fields = (changes.fields ?? []).filter((r) => written.get("fields")?.has(rowKey(r, ["id"]))).map((r) => String(r.id));
+
+  const touched = new Set<string>();
+  if (values.length > 0) {
+    const old = await client.query<{ file_id: string }>(
+      "DELETE FROM file_uses WHERE (item_id, field_id) IN (SELECT * FROM unnest($1::text[], $2::text[])) RETURNING file_id",
+      [values.map((r) => String(r.item_id)), values.map((r) => String(r.field_id))],
+    );
+    old.rows.forEach((r) => touched.add(r.file_id));
+    const uses = values.flatMap((r) => filesUsedBy([r]).map((file) => [file, String(r.item_id), String(r.field_id)]));
+    if (uses.length > 0) {
+      await client.query("INSERT INTO file_uses SELECT * FROM unnest($1::text[], $2::text[], $3::text[]) ON CONFLICT DO NOTHING", [
+        uses.map((u) => u[0]), uses.map((u) => u[1]), uses.map((u) => u[2]),
+      ]);
+      uses.forEach((u) => touched.add(u[0]));
+    }
+  }
+  if (items.length + fields.length > 0) {
+    const through = await client.query<{ file_id: string }>("SELECT DISTINCT file_id FROM file_uses WHERE item_id = ANY($1) OR field_id = ANY($2)", [items, fields]);
+    through.rows.forEach((r) => touched.add(r.file_id));
+  }
+  if (touched.size > 0) {
+    // A thumbnail goes with its original.
+    await client.query(
+      `UPDATE file_bytes SET unused_since = CASE WHEN ${fileInUse("file_bytes.id")} THEN NULL ELSE coalesce(unused_since, now()) END
+        WHERE id = ANY($1) OR id IN (SELECT thumb_id FROM thumbnails WHERE file_id = ANY($1))`,
+      [[...touched]],
+    );
+  }
+
+  // What the pushed values use (written or not) that the server has no bytes for.
+  const deleted = new Set((changes.items ?? []).filter((r) => r.deleted_at !== null).map((r) => String(r.id)));
+  const used = filesUsedBy((changes.field_values ?? []).filter((r) => !deleted.has(String(r.item_id))));
   if (used.length === 0) return [];
-  await client.query(`UPDATE file_bytes SET unused_since = NULL WHERE unused_since IS NOT NULL AND (${withThumbnails})`, [used]);
   const present = await client.query<{ id: string }>("SELECT id FROM file_bytes WHERE id = ANY($1)", [used]);
   const have = new Set(present.rows.map((r) => r.id));
   return used.filter((id) => !have.has(id));
 }
 
-/** Files marked unused since before `cutoff`. */
-export async function markedFiles(pool: pg.Pool, cutoff: Date): Promise<string[]> {
-  const result = await pool.query<{ id: string }>("SELECT id FROM file_bytes WHERE unused_since < $1", [cutoff]);
-  return result.rows.map((r) => r.id);
-}
-
-/** Clears the marks of files found in use after all. */
-export async function unmarkFiles(pool: pg.Pool, ids: string[]): Promise<void> {
-  if (ids.length > 0) await pool.query("UPDATE file_bytes SET unused_since = NULL WHERE id = ANY($1)", [ids]);
-}
-
 /**
- * Deletes files (bytes, row and thumbnail link) that are still marked since before `cutoff`, under
- * the sync lock: a request that uses one again meanwhile has unmarked it. Returns the deleted ids.
+ * Deletes the files (bytes, row, thumbnail link) unused since before `cutoff`, inside a sync
+ * request. One in use after all (uploaded after the request that used it) only loses its mark.
  */
-export async function deleteUnusedFiles(pool: pg.Pool, ids: string[], cutoff: Date, lockId: number): Promise<string[]> {
-  if (ids.length === 0) return [];
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("SELECT pg_advisory_xact_lock($1)", [lockId]);
-    const deleted = await client.query<{ id: string }>("DELETE FROM file_bytes WHERE id = ANY($1) AND unused_since < $2 RETURNING id", [ids, cutoff]);
-    const gone = deleted.rows.map((r) => r.id);
-    await client.query("DELETE FROM files WHERE id = ANY($1)", [gone]);
-    await client.query("DELETE FROM thumbnails WHERE file_id = ANY($1)", [gone]);
-    await client.query("COMMIT");
-    return gone;
-  } catch (e) {
-    await client.query("ROLLBACK").catch(() => {});
-    throw e;
-  } finally {
-    client.release();
-  }
+export async function sweepFiles(client: pg.PoolClient, cutoff: Date): Promise<void> {
+  await client.query(`UPDATE file_bytes SET unused_since = NULL WHERE unused_since < $1 AND ${fileInUse("file_bytes.id")}`, [cutoff]);
+  const deleted = await client.query<{ id: string }>("DELETE FROM file_bytes WHERE unused_since < $1 RETURNING id", [cutoff]);
+  const gone = deleted.rows.map((r) => r.id);
+  if (gone.length === 0) return;
+  await client.query("DELETE FROM files WHERE id = ANY($1)", [gone]);
+  await client.query("DELETE FROM thumbnails WHERE file_id = ANY($1)", [gone]);
+}
+
+/** Fills file_uses from the stored values when it is empty (a server from before it). */
+export async function fillFileUses(pool: pg.Pool): Promise<void> {
+  if ((await pool.query("SELECT 1 FROM file_uses LIMIT 1")).rowCount) return;
+  const rows = await pool.query<{ item_id: string; field_id: string; value_file: string | null; value_text: string | null }>(
+    "SELECT item_id, field_id, value_file, value_text FROM field_values WHERE value_file IS NOT NULL OR value_text LIKE '%files/%'",
+  );
+  const uses = rows.rows.flatMap((r) => filesUsedBy([r]).map((file) => [file, r.item_id, r.field_id]));
+  if (uses.length === 0) return;
+  await pool.query("INSERT INTO file_uses SELECT * FROM unnest($1::text[], $2::text[], $3::text[]) ON CONFLICT DO NOTHING", [
+    uses.map((u) => u[0]), uses.map((u) => u[1]), uses.map((u) => u[2]),
+  ]);
 }

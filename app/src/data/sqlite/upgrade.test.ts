@@ -4,10 +4,11 @@ import { describe, expect, it } from "vitest";
 import { schema } from "../schema";
 import { ensureSchema } from "./engine";
 
-// What a database from before sync looked like: no outbox and triggers, and (to force a table
-// rebuild, which drops that table's triggers) `items` without its item_view_id column.
+// What a database from before sync looked like: no outbox and triggers, no file_uses, and (to
+// force a table rebuild, which drops that table's triggers) `items` without its item_view_id column.
 const before = schema
   .slice(0, schema.indexOf("-- Sync ("))
+  .replace(/-- Where each file is used[\s\S]*?CREATE TRIGGER file_uses_delete[\s\S]*?END;\n/, "")
   .replace("  item_view_id TEXT,                  -- the item view (collections.item_views) this item is pinned to\n", "");
 
 describe("upgrading a database to the sync schema", () => {
@@ -20,8 +21,14 @@ describe("upgrading a database to the sync schema", () => {
     db.exec(`INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES ('o1', 't1', 'default', 'x', 'x')`);
     db.exec(`INSERT INTO fields (id, collection_id, name, kind, created_at, updated_at) VALUES ('f1', 't1', 'Title', 'string', 'x', 'x')`);
     db.exec(`INSERT INTO field_values (item_id, field_id, value_text, updated_at) VALUES ('o1', 'f1', 'kept', 'x')`);
+    const image = "a".repeat(64);
+    db.exec(`INSERT INTO fields (id, collection_id, name, kind, created_at, updated_at) VALUES ('f2', 't1', 'Notes', 'markdown', 'x', 'x')`);
+    db.exec(`INSERT INTO field_values (item_id, field_id, value_text, updated_at) VALUES ('o1', 'f2', '![](files/${image})', 'x')`);
 
     ensureSchema(sqlite3, db);
+
+    // file_uses, new here, is filled from the values there are
+    expect(db.selectValues("SELECT file_id || ' ' || field_id FROM file_uses")).toEqual([`${image} f2`]);
 
     expect(db.selectValue("SELECT value_text FROM field_values")).toBe("kept");
     expect(db.selectValue("SELECT id FROM items")).toBe("o1");

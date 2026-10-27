@@ -13,9 +13,6 @@ const options = (): HeadlessOptions => ({
   serverUrl: SERVER_URL,
   token: TOKEN,
   cursor: () => server.seq,
-  files: { marked: async () => [], unmark: async () => {}, delete: async () => [] },
-  unusedFileDays: 7,
-  cleanUpEveryMs: 60 * 60 * 1000,
   webhooks: { urls: [], secret: null },
   log: () => {},
 });
@@ -209,33 +206,5 @@ describe("the HTTP API", () => {
     const after = await call("GET", "/collections");
     expect(after.status).toBe(200);
     expect(after.body).toEqual([]);
-  });
-});
-
-describe("the headless device's file clean-up", () => {
-  it("deletes only the marked files no live item uses", async () => {
-    const asked: string[][] = [];
-    const deleted: string[][] = [];
-    let marked: string[] = [];
-    const local = await startHeadless({
-      ...options(),
-      files: {
-        marked: async () => marked,
-        unmark: async (ids) => void asked.push(ids),
-        delete: async (ids) => (deleted.push(ids), ids),
-      },
-    });
-    api = local;
-    await call("POST", "/collections", books);
-    const used = (await call("POST", "/files", bytes("used"), "image/png")).body.id;
-    const unused = (await call("POST", "/files", bytes("unused"), "image/png")).body.id;
-    await call("POST", "/collections/Book/items", { values: { Title: "x", Cover: used } });
-    marked = [used, unused];
-    // The clean-up runs at start and hourly; run it now through a second device sharing the server.
-    const { HeadlessDevice } = await import("./index");
-    const cleaner = await HeadlessDevice.start({ ...options(), files: { marked: async () => marked, unmark: async (ids) => void asked.push(ids), delete: async (ids) => (deleted.push(ids), ids) } });
-    await settled(cleaner.repo);
-    expect(await cleaner.cleanUpFiles()).toEqual([unused]);
-    expect(asked.at(-1)).toEqual([used]);
   });
 });

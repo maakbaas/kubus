@@ -2,7 +2,7 @@
 // place), reads, atomic writes and wiping. The browser runs it in a worker over OPFS (worker.ts);
 // the server's headless device runs it in-process, in memory (direct.ts).
 
-import { schema } from "../schema";
+import { fileIds, schema } from "../schema";
 import type { Bind, Statement } from "./protocol";
 
 // The oo1 API's TypeScript overloads are very strict; we only use a small, stable subset.
@@ -75,6 +75,12 @@ function schemaHash(text: string): number {
 const RENAMES: ({ table: string; to: string } | { table: string; column: string; to: string })[] = [];
 /** Statements updating stored values that name renamed things, run after RENAMES. */
 const RENAMED_VALUES: { table: string; sql: string }[] = [];
+/** Derived tables: how one created in an existing database is filled from what is there. */
+const FILLS: Record<string, string> = {
+  file_uses: `INSERT OR IGNORE INTO file_uses (file_id, item_id, field_id)
+                SELECT j.value, fv.item_id, fv.field_id FROM field_values fv, json_each(file_ids(fv.value_file, fv.value_text)) j
+                 WHERE fv.value_file IS NOT NULL OR instr(fv.value_text, 'files/') > 0`,
+};
 
 function applyRenames(db: Db) {
   const hasTable = (name: string) => db.selectValue("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", [name]) === 1;
@@ -90,7 +96,9 @@ function applyRenames(db: Db) {
   for (const r of RENAMED_VALUES) if (hasTable(r.table)) db.exec(r.sql);
 }
 
+/** Brings the database to the schema; first defines the functions the schema calls (on every open). */
 export function ensureSchema(sqlite3: Db, db: Db) {
+  db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
   const expected = schemaHash(schema);
   if (Number(db.selectValue("PRAGMA user_version")) === expected) return;
   // Renamed values may break the old CHECKs until the tables are rebuilt with the new ones.
@@ -155,11 +163,13 @@ function upgradeInPlace(sqlite3: Db, db: Db): boolean {
     ref.exec(schema);
     const target = objects(ref);
     const statements: string[] = [];
+    const fills: string[] = [];
     const rebuilt = new Set<string>();
     for (const t of target.filter((o) => o.type === "table")) {
       const current = have.get(t.name);
       if (!current) {
         statements.push(t.sql);
+        if (FILLS[t.name]) fills.push(FILLS[t.name]);
         continue;
       }
       if (normalizeSql(current.sql) === normalizeSql(t.sql)) continue;
@@ -198,7 +208,7 @@ function upgradeInPlace(sqlite3: Db, db: Db): boolean {
       if (o.type === "table") statements.push(`DROP TABLE IF EXISTS "${o.name}"`);
       else statements.unshift(`DROP ${o.type.toUpperCase()} IF EXISTS "${o.name}"`);
     }
-    for (const sql of statements) db.exec(sql);
+    for (const sql of [...statements, ...fills]) db.exec(sql);
     return true;
   } finally {
     ref.close();

@@ -30,9 +30,6 @@ const options = (): HeadlessOptions => ({
   serverUrl: SERVER_URL,
   token: TOKEN,
   cursor: () => server.seq,
-  files: { marked: async () => [], unmark: async () => {}, delete: async () => [] },
-  unusedFileDays: 7,
-  cleanUpEveryMs: 60 * 60 * 1000,
   webhooks: { urls: [HOOK], secret: SECRET },
   log: () => {},
 });

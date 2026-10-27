@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { sha256, trackUses } from "./files.ts";
+import { sha256, sweepFiles, trackUses, type Written } from "./files.ts";
 import { PG_TYPE } from "./schema.ts";
 import { SYNC_TABLES, type ColumnType, type DatabaseInfo, type SyncMismatch, type SyncRequest, type SyncResponse, type SyncTable, type WireRow, type WireValue } from "../../shared/sync.ts";
 
@@ -12,7 +12,7 @@ import { SYNC_TABLES, type ColumnType, type DatabaseInfo, type SyncMismatch, typ
 // commit order, and a cursor can never skip a row that commits late.
 // A pushed row only replaces the stored one when its updated_at is newer (last writer wins).
 
-/** Serializes sync requests (and the file clean-up, server/src/files.ts). */
+/** Serializes sync requests. */
 export const LOCK_ID = 7_236_001;
 
 function toDb(type: ColumnType, v: WireValue): unknown {
@@ -35,7 +35,7 @@ const upserts = new Map<string, string>();
 /**
  * One statement that upserts a batch of rows, given as a JSON array ($1) of objects with every
  * column as text (cast to its type here: a JSON value as text is how a device sends it). Returns
- * the sequence numbers of the rows it wrote.
+ * the keys of the rows it wrote.
  */
 function upsertSql(t: SyncTable): string {
   let sql = upserts.get(t.name);
@@ -52,6 +52,7 @@ function upsertSql(t: SyncTable): string {
   } else {
     sql += "DO NOTHING";
   }
+  sql += ` RETURNING ${t.key.join(", ")}`;
   upserts.set(t.name, sql);
   return sql;
 }
@@ -79,7 +80,14 @@ export async function currentCursor(client: pg.Pool | pg.PoolClient): Promise<nu
   return seq.rows[0].is_called ? Number(seq.rows[0].last_value) : 0;
 }
 
-export async function handleSync(pool: pg.Pool, req: SyncRequest): Promise<(SyncResponse & { wrote: boolean }) | { mismatch: SyncMismatch }> {
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** `unusedFileDays`: how long a file no item uses is kept (devices sync late; an undo brings it back). */
+export async function handleSync(
+  pool: pg.Pool,
+  req: SyncRequest,
+  { unusedFileDays }: { unusedFileDays: number },
+): Promise<(SyncResponse & { wrote: boolean }) | { mismatch: SyncMismatch }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -96,20 +104,19 @@ export async function handleSync(pool: pg.Pool, req: SyncRequest): Promise<(Sync
       return { mismatch: { error: "The server's database was wiped or replaced", database, empty: !seq.rows[0].is_called } };
     }
 
-    // Which files lose a use and which gain one, read before the rows are replaced.
-    const missingFiles = await trackUses(client, req.changes);
-
     // Everything below `before` is someone else's; what this request writes comes after it (the
     // lock keeps other requests from taking sequence numbers meanwhile).
     const before = await currentCursor(client);
-    let wrote = false;
+    const written: Written = new Map();
     for (const t of SYNC_TABLES) {
       const rows = unique(t, req.changes[t.name] ?? []);
+      const keys = new Set<string>();
       for (let i = 0; i < rows.length; i += BATCH) {
         const batch = rows.slice(i, i + BATCH).map((row) => toRecord(t, row));
-        const result = await client.query(upsertSql(t), [JSON.stringify(batch)]);
-        if ((result.rowCount ?? 0) > 0) wrote = true;
+        const result = await client.query<Record<string, WireValue>>(upsertSql(t), [JSON.stringify(batch)]);
+        for (const r of result.rows) keys.add(JSON.stringify(t.key.map((k) => r[k])));
       }
+      written.set(t.name, keys);
       // An app from before /api/files sends a file's bytes in the row (base64): kept as uploaded.
       if (t.name === "files") {
         for (const row of rows) {
@@ -123,6 +130,10 @@ export async function handleSync(pool: pg.Pool, req: SyncRequest): Promise<(Sync
         }
       }
     }
+
+    const wrote = [...written.values()].some((keys) => keys.size > 0);
+    const missingFiles = await trackUses(client, req.changes, written);
+    await sweepFiles(client, new Date(Date.now() - unusedFileDays * DAY_MS));
 
     const cursor = await currentCursor(client);
     // A device ahead of the server (the database was reset) starts over.

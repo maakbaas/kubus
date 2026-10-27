@@ -2,7 +2,11 @@
 // follow from their list (shared/sync.ts) so they can't miss a table.
 
 import tables from "./schema.sql?raw";
+import { filesUsedBy } from "../../../shared/files";
 import { SYNC_TABLES, type SyncTable } from "../../../shared/sync";
+
+/** SQL function file_ids(value_file, value_text): the files a value uses, as a JSON array (file_uses' triggers call it). */
+export const fileIds = (file: unknown, text: unknown) => JSON.stringify(filesUsedBy([{ value_file: file, value_text: text }]));
 
 const applied = "WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')";
 

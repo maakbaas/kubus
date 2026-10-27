@@ -185,6 +185,4 @@ export interface Repository {
   putThumbnail(fileId: string, data: Uint8Array, mime: string): Promise<void>;
   /** Deletes these files unless a live item still uses them. Safe to call liberally. */
   releaseFiles(fileIds: string[]): Promise<void>;
-  /** Those of these files no live item uses (a thumbnail: whose original none uses), by the rule of releaseFiles. */
-  unusedFiles(fileIds: string[]): Promise<string[]>;
 }

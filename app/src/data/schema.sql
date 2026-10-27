@@ -140,6 +140,7 @@ CREATE TABLE thumbnails (
   thumb_id   TEXT NOT NULL,      -- the thumbnail
   created_at TEXT NOT NULL
 );
+CREATE INDEX idx_thumbnails_thumb ON thumbnails(thumb_id);
 
 -- Exactly one value_* column is used, determined by the field's kind.
 -- Lists are JSON arrays in value_json (SQLite json_each / Postgres jsonb) and merge as one value.
@@ -159,6 +160,33 @@ CREATE TABLE field_values (
 );
 CREATE INDEX idx_field_values_field ON field_values(field_id);
 CREATE INDEX idx_field_values_ref ON field_values(value_ref);
+
+-- Where each file is used: a row per file a value names (an image value, `files/<id>` in its
+-- text). Local only and derived: the triggers keep it with every value written or applied from a
+-- sync, through file_ids() (the engine defines it: shared/files.ts filesUsedBy). Whether a file is
+-- in use (shared/files.ts fileInUse) is a lookup here, not a scan of the values.
+CREATE TABLE file_uses (
+  file_id  TEXT NOT NULL,
+  item_id  TEXT NOT NULL,
+  field_id TEXT NOT NULL,
+  PRIMARY KEY (file_id, item_id, field_id)
+);
+CREATE INDEX idx_file_uses_value ON file_uses(item_id, field_id);
+CREATE TRIGGER file_uses_insert AFTER INSERT ON field_values BEGIN
+  DELETE FROM file_uses WHERE item_id = NEW.item_id AND field_id = NEW.field_id;
+  INSERT OR IGNORE INTO file_uses (file_id, item_id, field_id)
+    SELECT value, NEW.item_id, NEW.field_id FROM json_each(CASE WHEN NEW.value_file IS NOT NULL OR instr(NEW.value_text, 'files/') > 0
+                                                            THEN file_ids(NEW.value_file, NEW.value_text) ELSE '[]' END);
+END;
+CREATE TRIGGER file_uses_update AFTER UPDATE ON field_values BEGIN
+  DELETE FROM file_uses WHERE item_id = OLD.item_id AND field_id = OLD.field_id;
+  INSERT OR IGNORE INTO file_uses (file_id, item_id, field_id)
+    SELECT value, NEW.item_id, NEW.field_id FROM json_each(CASE WHEN NEW.value_file IS NOT NULL OR instr(NEW.value_text, 'files/') > 0
+                                                            THEN file_ids(NEW.value_file, NEW.value_text) ELSE '[]' END);
+END;
+CREATE TRIGGER file_uses_delete AFTER DELETE ON field_values BEGIN
+  DELETE FROM file_uses WHERE item_id = OLD.item_id AND field_id = OLD.field_id;
+END;
 
 -- Bookmarks in the side nav: a saved view of a collection's items, or an item. `label` is a
 -- snapshot for the nav (refreshed when the bookmarked page is shown), so it reads without loading.

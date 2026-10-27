@@ -14,16 +14,6 @@ export interface HeadlessOptions {
    * skips the sync before a request when it has that already.
    */
   cursor(): number;
-  /** The server's file clean-up (server/src/files.ts); the headless device decides what is unused. */
-  files: {
-    marked(cutoff: Date): Promise<string[]>;
-    unmark(ids: string[]): Promise<void>;
-    /** Deletes those still marked since before `cutoff`; returns the deleted ids. */
-    delete(ids: string[], cutoff: Date): Promise<string[]>;
-  };
-  /** How long a file stays unused before it is deleted, and how often that is checked. */
-  unusedFileDays: number;
-  cleanUpEveryMs: number;
   /** Webhooks: called with every change (docs/sync.md). */
   webhooks: { urls: string[]; secret: string | null };
   log(message: string): void;

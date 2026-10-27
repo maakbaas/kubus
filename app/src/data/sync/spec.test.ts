@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { schema } from "../schema";
 import { SYNC_TABLES } from "../../../../shared/sync";
 
-const LOCAL_ONLY = ["meta", "sync_outbox"];
+const LOCAL_ONLY = ["meta", "sync_outbox", "file_uses"];
 /** Columns of synced tables that stay on the device. */
 const LOCAL_COLUMNS: Record<string, string[]> = { files: ["data"] };
 

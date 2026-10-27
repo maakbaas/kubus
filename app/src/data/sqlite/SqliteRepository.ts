@@ -1,5 +1,5 @@
 import { fieldKinds } from "../../domain/fieldKinds";
-import { fileIdsIn, filesUsedBy } from "../../domain/files";
+import { fileInUse } from "../../../../shared/files";
 import {
   newId,
   now,
@@ -448,28 +448,25 @@ export class SqliteRepository implements Repository {
     if (!current) throw new Error("Item not found");
     const ts = now();
     const writes: Statement[] = [];
-    const replacedFiles: string[] = [];
+    const changed: string[] = [];
     // Only touch changed fields: keeps per-field updated_at meaningful for merges.
     for (const field of collection.fields) {
       if (!(field.id in values)) continue;
       const next = values[field.id] ?? null;
       const prev = current.values[field.id];
       if (valuesEqual(next, prev)) continue;
+      changed.push(field.id);
       if (field.kind === "ai") {
         // Typed over a generated value: kept, and never replaced by itself (the user is asked).
         writes.push(editedStatement(itemId, field.id, field.aiOutput === "number" ? "number" : "text", next as string | number | null, ts));
         continue;
       }
       writes.push(valueStatement(itemId, field, next, ts));
-      if (field.kind === "image" && typeof prev === "string") replacedFiles.push(prev);
-      if ((field.kind === "markdown" || field.kind === "html") && typeof prev === "string") {
-        const kept = new Set(typeof next === "string" ? fileIdsIn(next) : []);
-        replacedFiles.push(...fileIdsIn(prev).filter((id) => !kept.has(id)));
-      }
     }
     if (writes.length === 0) return;
     writes.push({ sql: "UPDATE items SET updated_at = ?1 WHERE id = ?2", bind: [ts, itemId] });
-    writes.push(...replacedFiles.flatMap(releaseFile));
+    // The files the changed values used: deleted unless the new values (or anything else) still use them.
+    writes.push(...(await this.releaseFilesWhere("item_id = ?1 AND field_id IN (SELECT value FROM json_each(?2))", [itemId, JSON.stringify(changed)])));
     await this.db.write(writes);
     this.emit({ scope: "items", collectionId: collection.id, itemId });
   }
@@ -746,24 +743,16 @@ export class SqliteRepository implements Repository {
   /** Those of these files no live item uses (a thumbnail: whose original none uses), by the rule of releaseFile. */
   async unusedFiles(fileIds: string[]): Promise<string[]> {
     if (fileIds.length === 0) return [];
-    const rows = await this.db.select<{ id: string }>(
-      `SELECT value AS id FROM json_each(?1)
-        WHERE NOT ${liveUse("value")}
-          AND NOT EXISTS (SELECT 1 FROM thumbnails t WHERE t.thumb_id = value AND ${liveUse("t.file_id")})`,
-      [JSON.stringify([...new Set(fileIds)])],
-    );
+    const rows = await this.db.select<{ id: string }>(`SELECT value AS id FROM json_each(?1) WHERE NOT ${fileInUse("value")}`, [
+      JSON.stringify([...new Set(fileIds)]),
+    ]);
     return rows.map((r) => r.id);
   }
 
-  /** Release statements for every file referenced by the field_values matching `where`. */
+  /** Release statements for every file the uses matching `where` (on item_id, field_id) name: run after the writes that end them. */
   private async releaseFilesWhere(where: string, bind: string[]): Promise<Statement[]> {
-    const rows = await this.db.select<{ value_file: string | null; value_text: string | null }>(
-      `SELECT fv.value_file, CASE WHEN f.kind IN ('markdown', 'html') THEN fv.value_text END AS value_text
-         FROM field_values fv JOIN fields f ON f.id = fv.field_id
-        WHERE (fv.value_file IS NOT NULL OR f.kind IN ('markdown', 'html')) AND ${where}`,
-      bind,
-    );
-    return filesUsedBy(rows).flatMap(releaseFile);
+    const rows = await this.db.select<{ file_id: string }>(`SELECT DISTINCT file_id FROM file_uses WHERE ${where}`, bind);
+    return rows.flatMap((r) => releaseFile(r.file_id));
   }
 
   async putFile(data: Uint8Array, mime: string): Promise<string> {
@@ -843,31 +832,14 @@ export class SqliteRepository implements Repository {
 }
 
 /**
- * Whether the file `id` (an SQL expression) is in use: a live item, through a live field, has it
- * as an image value or mentions `files/<id>` in a Markdown or HTML value. Rows of soft-deleted
- * items and fields may still name a file; they don't count. A thumbnail is used through its
- * original (see releaseFile).
- */
-const liveUse = (id: string) => `EXISTS (
-    SELECT 1 FROM field_values fv
-      JOIN items o ON o.id = fv.item_id
-      JOIN fields f ON f.id = fv.field_id
-     WHERE o.deleted_at IS NULL AND f.deleted_at IS NULL
-       AND (fv.value_file = ${id} OR (f.kind IN ('markdown', 'html') AND instr(fv.value_text, 'files/' || ${id}) > 0)))`;
-
-/**
  * Deletes a file, with its thumbnail, once no live item uses it. Runs after the statements that
  * drop the use, in the same transaction.
  */
 function releaseFile(fileId: string): Statement[] {
   return [
-    {
-      sql: `DELETE FROM files WHERE id IN (SELECT thumb_id FROM thumbnails WHERE file_id = ?1 AND NOT ${liveUse("?1")})
-              AND NOT ${liveUse("files.id")}`,
-      bind: [fileId],
-    },
-    { sql: `DELETE FROM thumbnails WHERE file_id = ?1 AND NOT ${liveUse("?1")}`, bind: [fileId] },
-    { sql: `DELETE FROM files WHERE id = ?1 AND NOT ${liveUse("?1")}`, bind: [fileId] },
+    { sql: `DELETE FROM files WHERE id IN (SELECT thumb_id FROM thumbnails WHERE file_id = ?1) AND NOT ${fileInUse("files.id")}`, bind: [fileId] },
+    { sql: `DELETE FROM thumbnails WHERE file_id = ?1 AND NOT ${fileInUse("?1")}`, bind: [fileId] },
+    { sql: `DELETE FROM files WHERE id = ?1 AND NOT ${fileInUse("?1")}`, bind: [fileId] },
   ];
 }
 
