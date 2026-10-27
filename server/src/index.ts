@@ -9,6 +9,7 @@ import { deleteFile, getFile, hasFile, putFile } from "./files.ts";
 import { HeadlessHost } from "./headless.ts";
 import { FILE_ID } from "../../shared/files.ts";
 import { loadSchema } from "./schema.ts";
+import { sourceConfigs, Sources } from "./sources.ts";
 import { currentCursor, handleSync } from "./sync.ts";
 import { wipe } from "./wipe.ts";
 import { MAX_FILE_BYTES, type SyncRequest } from "../../shared/sync.ts";
@@ -23,6 +24,7 @@ import { HttpError, json, readJson, Router, type ApiRequest, type ApiResponse } 
 //   KUBUS_WEBHOOK_SECRET  signs each webhook request (X-Kubus-Signature)
 //   KUBUS_AI_URL, KUBUS_AI_KEY, KUBUS_AI_FIELD_MODEL, KUBUS_AI_CODE_MODEL  a language model for
 //                         every device, through this server (server/src/ai.ts)
+//   KUBUS_SOURCE_<NAME>   a database the devices read as collections, read-only (server/src/sources.ts)
 
 const databaseUrl = process.env.DATABASE_URL;
 const token = process.env.KUBUS_TOKEN;
@@ -79,8 +81,10 @@ const fitting = () => {
   if (schemaError) throw new HttpError(500, schemaError);
 };
 
+const sources = new Sources(sourceConfigs());
+
 // The devices' endpoints (the token is checked before these run).
-const routes = new Router()
+const routes = sources.routes(new Router())
   .add("POST", "/api/wipe", async (req) => {
     // Asked for in so many words, so no stray request can do it.
     if ((await readJson(req, 1024) as { confirm?: string } | undefined)?.confirm !== "wipe") return json(400, { error: "Not confirmed" });
@@ -210,6 +214,7 @@ createServer(async (req, res) => {
   }
 }).listen(port, () => {
   console.log(`Kubus server on :${port}`);
+  void sources.check((message) => console.log(message));
   void headless.start({
     serverUrl: `http://127.0.0.1:${port}`,
     token,
