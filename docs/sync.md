@@ -180,9 +180,12 @@ tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 - Last writer wins per field; concurrent offline edits to the *same markdown field* lose one side
   (upgrade path: a text CRDT such as Yjs for markdown). Equal timestamps on two devices don't converge.
 - A pull is not paged. Webhooks are best effort (lost on a restart). A device never frees space by
-  dropping originals it has. A file unused for a week (on the device that sweeps first) and then used
-  again by a device that only had its metadata is lost (shown as missing). A device that sweeps
-  while sync is off keeps the server's copy (another device's sweep deletes it).
+  dropping originals it has. A device that still shows an image deleted elsewhere
+  only lacks it until its next sync brings the edit that removed it. An image is lost only when a
+  device offline for over a week adds a use of it itself (a paste, or an edit of an old copy of the
+  text winning last-writer-wins) without having its bytes (possible only with "Full size when
+  opened" and the image never opened); with the bytes, it uploads them again (`missingFiles`). A
+  device that sweeps while sync is off leaves the server's copy (another device's sweep deletes it).
 - One user, one token (the API too; it can also run component code on the server). A device that is not synced can lose its data on a schema wipe; with the
   server the replica re-syncs, so enable sync before putting real notes in. Connecting a device that
   has data of its own to a server that has data too discards the device's data (no merge).
