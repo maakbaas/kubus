@@ -201,11 +201,22 @@ good. To clean them up automatically:
   (read before the merge overwrites them: image values, `fileIdsIn` of Markdown / HTML, the
   fields and items deleted). After the sync it releases those that are now unused, exactly as a
   local edit does today, with their thumbnails and `thumbnails` links.
-- **Server.** Once a day the headless device (it holds every row, so the same SQLite rule runs
-  there) lists the unused files. The server deletes the `files` row and the `file_bytes` of each
-  one whose bytes it received more than 7 days ago (`stored_at`).
-- **The 7 days** cover a file whose use arrives later than its bytes: a sync that ran out of its
-  upload budget, or a device offline with an edit that uses it.
+- **Server: tracked the same way, deleted after a grace period.** The headless device applies
+  every sync with the same candidate tracking. When a file loses its last use it is marked
+  (`file_bytes.unused_since`), and the mark is cleared when a use comes back. A file uploaded
+  before any row uses it starts out marked. An hourly pass deletes the `files` row and
+  `file_bytes` of files marked for more than 7 days. It only reads the marks, it doesn't scan
+  everything.
+- **Why not delete on the server at once:** devices sync late and out of order, so "the last use
+  is gone" on the server is not final. A file's use can arrive after its bytes (a sync that ran out
+  of its upload budget). An offline device can still hold an edit that uses it. An undo or a cut
+  and paste in Markdown removes a use and adds it back moments later. The 7 days cover those cases
+  without a re-upload.
+- **No stored usage index.** Uses in Markdown and HTML are found by parsing text (`fileIdsIn`),
+  which a SQLite trigger can't do. An index would have to be kept up to date by hand on every write
+  path (edits, sync apply, field and collection deletes), and a derived table can drift from the
+  data. Checking only the files that changed rows used, at the moment they change, gives the same
+  "last use removed" behaviour without one.
 - **Back in use after deletion.** A device that brings a deleted file back into use (an old
   offline edit) doesn't lose it. The `/api/sync` answer lists the files used by the pushed rows
   that the server doesn't have (`missingFiles`). The device queues them again and uploads their
@@ -268,7 +279,8 @@ into events and POSTs them to the configured URL(s).
     the per-sync upload budget, thumbnails first, the "when opened" setting, retries);
   - the `files` upgrade (a database with bytes keeps them; `data` becomes nullable);
   - clean-up: the rule (image value, Markdown, HTML, deleted item or field, thumbnail with its
-    original), release after a sync, `missingFiles` and re-upload;
+    original), release after a sync, the server's mark and clear (`unused_since`), `missingFiles`
+    and re-upload;
   - thumbnail choice: when one is made, which size, which places use it, `releaseFile` freeing both;
   - `DirectSqlClient` plus `SqliteRepository` running in Node (the headless device's own path).
 - **Server:** typecheck. A manual run with Postgres (`docker compose up`): create items by API,
@@ -286,8 +298,8 @@ into events and POSTs them to the configured URL(s).
    and download in the engine, the download setting, wipe.
 3. Thumbnails: making them on store and lazily, `thumbnails` table and sync, the places that use
    them, release.
-4. Clean-up: `unusedFiles`, release after a sync, `missingFiles`, the server's daily run (needs the
-   headless device, so its server half lands with step 5).
+4. Clean-up: `unusedFiles`, release after a sync, `missingFiles`, the server's marks and hourly pass
+   (needs the headless device, so its server half lands with step 5).
 5. Headless device: bundle, `DirectSqlClient`, start-up and reset, request queue.
 6. API: values, routes, RPC, shared reference-label function, computed values.
 7. Webhooks.
