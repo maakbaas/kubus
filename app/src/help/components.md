@@ -1,55 +1,130 @@
-# Components and `{{ }}` code
+# Components
 
-A component is text with `{{ … }}` sections. Each section is one JavaScript **expression**; its result replaces it. Code lives only in components: the values of items are plain data, never run.
-
-A component is **shared** (on the Components page, picked by name wherever it fits) or **local**: written in one place only (a Component field, a Component block, a Markdown block's text), listed on the Components page by where it is used, and saved as a shared one with "Save as shared component".
+A component is a piece of text that fills itself in. You write it like any Markdown, and wherever you put code between double curly braces, the result of that code takes its place.
 
 ```
-**{{ $item.Title }}**: about {{ Math.round($item.Pages / 40) }} h of reading
+**{{ $item.Title }}**: about {{ Math.round($item.Pages / 40) }} hours of reading
 ```
 
-- Only one section in the whole text: its value is kept as it is (a number stays a number).
-- Expressions only: use `a ? b : c`, `.map(…).join(", ")` and backtick strings. A failing section shows `⚠ message`.
+For a book of 412 pages this shows: **Dune**: about 10 hours of reading.
 
-## Values
+Code lives only in components. What you type into an item's fields is always plain data and never runs.
 
-- `$item`: the item. Fields by name: `$item.Pages` or `$item["Read at"]` (not case sensitive). Also `$item.id`, `createdAt`, `updatedAt`. An empty field is `null`: `{{ $item.Pages ?? 0 }}`.
-- `$now`: the current `Date`.
-- A block's: `$items` (the block's items, each like `$item`), `$groups` (`[{ key, label, items }]`), `$fields` (`[{ id, name, kind }]`), `$all` (every item of the collection).
-- There are no other `$` names: read a field as `$item.Name`. Any other `$name` is an error.
+## Writing code
 
-What a field is in code: text, a number, a date as `"2026-10-25"`, a date & time as an ISO text, `true`/`false`, an image as its source (`files/…`, usable in `![](…)`), a reference as the linked item's title (a list of titles for several), a list as an array, a checklist as `[{ text, done }]`.
+Each pair of curly braces holds one JavaScript **expression**: something that gives a value, not a series of statements.
 
-## Output
+- To choose between two values, use a condition: `a ? b : c`.
+- To turn a list into text, map and join it: `.map(…).join(", ")`.
+- To mix text and values, use backtick strings: `` `${a} of ${b}` ``.
 
-Choose what the result is: **Markdown** (default), **Text**, **Number**, **Image** (the result is a URL) or **HTML** (shown in a sandboxed frame; scripts work).
+When a whole component is just one section and nothing else, its value is kept as it is: a number stays a number, so it sorts as one.
 
-A `#tag` in the result (`#books`, `#books/to-read`) shows as a tag in every output but code, as it does in any text of the app; clicking it searches for the tag. In HTML only tags in the HTML as written are, not text a script adds.
+When a section fails, it shows a warning (⚠ and the error message) in its place, and the rest still shows.
 
-## Filters
+## What your code can read
 
-A filter's value may hold `{{ }}` code too, typed as it is: it is worked out when the filter runs, as if its result had been typed. `{{ 1 == 1 }}` is `true` (checked items), `{{ new Date().toISOString().slice(0, 10) }}` today's date. It reads `$now`, and in a block on an item page that page's item as `$item`. A value that can't be compared matches nothing.
+Everything the code knows comes from a few built-in names, all starting with a dollar sign.
 
-## Kinds: where it can go
+| Name | What it is | Where |
+|---|---|---|
+| `$item` | the item being shown | fields |
+| `$now` | the current date and time (a JavaScript Date) | anywhere but AI prompts |
+| `$items` | the items of the block, each like `$item` | blocks |
+| `$groups` | the block's groups: a list of key, label and items | blocks |
+| `$fields` | the block's fields: a list of id, name and kind | blocks |
+| `$all` | every item of the collection | blocks |
 
-What a component uses makes it one of three kinds:
+There are no other names: a field is always read through the item, as `$item.Pages`. Any other name with a dollar sign is an error.
 
-- **Field** component, uses `$item`: one item, shown as a Component field of a collection.
-- **Block** component, uses `$items`, `$groups`, `$fields` or `$all`: a block's items, on a collection view or an item's page (where the block's filter can pick the items that belong to the page's item).
-- **Static** component, uses neither: the same content everywhere, as a block or a Markdown block's text (whose `{{ }}` sections may only be static: `$now`, not `$item` or a block's names). Not as a field: it would be the same for every item.
+### Reading fields
 
-Never use `$item` together with a block's names: such a component fits nowhere. A block on an item's page doesn't see the page's item as `$item`; its filter takes it ("Author is this Author").
+Read a field by its name: `$item.Pages`. A name with spaces goes in brackets and quotes: `$item["Read at"]`. Upper and lower case don't matter.
+
+Every item also has its id, and when it was created and last changed: `$item.id`, `$item.createdAt` and `$item.updatedAt`.
+
+An empty field is null. To show something else instead, add a fallback: `{{ $item.Pages ?? 0 }}`.
+
+### What a field's value looks like
+
+| Field type | In code |
+|---|---|
+| String, Markdown, HTML | text |
+| Number | a number |
+| Checkbox | true or false |
+| Date | text such as "2026-10-25" |
+| Date & time | text in ISO form, such as "2026-10-25T09:30:00.000Z" |
+| Image | its source, such as files/… (use it in a Markdown image) |
+| Item | the title of the linked item |
+| List of items | a list of the linked items' titles |
+| List of strings | a list of texts |
+| Checklist | a list of entries, each with text and done |
+
+## What a component shows
+
+Choose the output that fits what your code makes:
+
+- **Markdown** (the default): formatted text.
+- **Text**: plain text, shown as it is.
+- **Number**: a number, which sorts as a number.
+- **Image**: the result is the address of an image.
+- **HTML**: a small web page, shown in a sealed-off frame where scripts work.
+
+A tag such as #books or #books/to-read in the result shows as a tag, as it does in any text of the app, and clicking it searches for that tag. This works in every output except code. In HTML it works for tags in the HTML as written, not for text a script adds later.
+
+## Where a component can go
+
+A component is **shared** or **local**:
+
+- A **shared** component has a name and is listed on the Components page. Pick it wherever it fits; a change to it applies everywhere it is used.
+- A **local** component is written in one place: a Component field, a Component block, or the text of a Markdown block. The Components page lists it by where it is used, and "Save as shared component" turns it into a shared one.
+
+What the code reads decides what kind of component it is, and so where it can go:
+
+| Kind | Reads | Can be |
+|---|---|---|
+| Field | `$item` | a Component field: one value per item |
+| Block | `$items`, `$groups`, `$fields` or `$all` | a block on a collection view or on an item's page |
+| Static | none of these | a block, or the text of a Markdown block: the same everywhere |
+
+A static component can't be a field, as it would be the same for every item. A Markdown block's text may only hold static code: `$now`, but not `$item` or a block's names.
+
+Never use `$item` together with a block's names: such a component fits nowhere.
+
+A block on an item's page doesn't see that page's item as `$item`. Its filter picks the items that belong to it instead, for example "Author is this Author".
 
 ## Examples
+
+Reading time for a book, empty when the page count is missing:
 
 ```
 {{ $item.Pages ? Math.round($item.Pages / 40) : null }}
 ```
 
+A block that lists its items' titles:
+
 ```
 {{ $items.map((i) => "- " + i.Title).join("\n") }}
 ```
 
-## Ask AI
+## Code in filters
 
-A component with **Ask AI** on is a **prompt**: written the same way, it is sent to a language model with the sections filled in for one item, and the model's reply is the value of an AI field (a Component field asking AI), stored for that item: `Artist: {{ $item.Artist }}. Give the last name.` Only `$item` exists in it (no `$now`, no block's names, no other AI fields); `{{ $item }}` passes the whole item as JSON. Its output is Text, Number or Markdown. The value is made again only when the prompt, as it reads for that item, changes.
+A filter's value can hold code too, typed in curly braces like in a component. It is worked out when the filter runs, as if you had typed its result.
+
+- `{{ 1 == 1 }}` is true, which matches checked items.
+- `{{ new Date().toISOString().slice(0, 10) }}` is today's date.
+
+Filter code can read `$now`, and in a block on an item's page also that page's item as `$item`. A value that can't be compared matches nothing.
+
+## Asking AI
+
+Turn on **Ask AI** and a component becomes a **prompt**. You write it the same way. For each item, the sections are filled in and the text is sent to a language model. The model's reply becomes the value of an AI field (a Component field that asks AI) and is stored with the item.
+
+```
+Artist: {{ $item.Artist }}. Give the last name.
+```
+
+- Only `$item` exists in a prompt: no `$now`, no block's names, and no other AI fields.
+- `{{ $item }}` on its own passes the whole item, as JSON.
+- The output is Text, Number or Markdown.
+- A value is only asked for again when the prompt, as it reads for that item, changes.

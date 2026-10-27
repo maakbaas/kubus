@@ -1,27 +1,51 @@
 # The HTTP API
 
-A Kubus server answers an HTTP API at `/api/v1`, for scripts, automation tools and cron jobs: everything the app can do to your data. It goes through the server's own copy of the app (its *headless device*), so it follows the same rules as the app, and a change made through it is on every device as soon as they sync.
+Your Kubus server can be reached by scripts, automation tools and scheduled jobs. Through it they can do everything the app can do with your data: read and change items, set up collections and views, add images, and more.
 
-## Authentication
+The API goes through the server's own copy of the app (its *headless device*). So it follows the same rules as the app, and a change made through it reaches every device the next time it syncs.
 
-Every request carries the server's token, the same `KUBUS_TOKEN` your devices use:
+All addresses below start with /api/v1 on your server.
+
+## Getting started
+
+Every request needs the server's token: the same KUBUS_TOKEN your devices use to sync. Send it as a bearer token. This lists your collections:
 
 ```
 curl -H "Authorization: Bearer $KUBUS_TOKEN" https://notes.example.com/api/v1/collections
 ```
 
-Whoever has the token can read and change everything, and can run component code on the server. Keep it secret.
+And this adds a book:
 
-## Requests and answers
+```
+curl -X POST -H "Authorization: Bearer $KUBUS_TOKEN" -H "Content-Type: application/json" \
+  -d '{"values": {"Title": "Dune", "Pages": 412}}' \
+  https://notes.example.com/api/v1/collections/books/items
+```
 
-- JSON in and out (`Content-Type: application/json`), except for file bytes.
-- Names: a collection by its id, name or plural name; a space, field, component, view or item view by its id or name. Not case sensitive. Without `space`, the default space.
-- Errors are `{ "error": "…" }`: `400` bad input, `404` unknown collection, item, field, …, `405` wrong method, `409` refused by a rule (deleting the only space, a collection others refer to), `413` too large, `415` not an image, `503` the server's device can't sync (or the API isn't built).
-- A write answers once the change is on the server.
+> Whoever has the token can read and change everything, and can run component code on the server. Keep it secret.
+
+## How requests work
+
+- **JSON in, JSON out.** Send bodies as JSON (with the Content-Type header application/json). Only file uploads send raw bytes.
+- **Use names or ids.** A collection can be named by its id, its name or its plural name ("books" above). Spaces, fields, components, views and item views go by id or name. Upper and lower case don't matter.
+- **Spaces.** Without a space given, the default space is used.
+- **Writes are confirmed.** A write answers once the change is stored on the server.
+
+When something goes wrong, the answer is an error message as JSON, `{ "error": "…" }`, with one of these status codes:
+
+| Status | Meaning |
+|---|---|
+| 400 | the request isn't right (a missing or wrong value) |
+| 404 | no such collection, item, field, … |
+| 405 | that method isn't allowed here |
+| 409 | refused by a rule, such as deleting the only space or a collection others refer to |
+| 413 | too large |
+| 415 | not an image |
+| 503 | the server's device can't sync (or the API wasn't built) |
 
 ## Items
 
-An item looks like this:
+An item comes back like this:
 
 ```json
 {
@@ -31,88 +55,104 @@ An item looks like this:
 }
 ```
 
-Values by field name, as stored:
+Its values are listed by field name. An empty field is null.
 
 | Field type | Value |
 |---|---|
 | String, Markdown, HTML | text |
-| Number | number |
-| Checkbox | `true` / `false` |
-| Date | `"2026-10-27"` |
-| Date & time | ISO 8601, e.g. `"2026-10-27T09:00:00.000Z"` |
+| Number | a number |
+| Checkbox | true or false |
+| Date | text such as "2026-10-27" |
+| Date & time | text in ISO 8601 form, such as "2026-10-27T09:00:00.000Z" |
 | Image | a file id (see Files) |
-| Item | an item id; List of items: a list of ids |
+| Item | the id of the linked item |
+| List of items | a list of ids |
 | List of strings | a list of texts |
-| Checklist | `["[x] done", "[ ] to do"]`; also taken as `[{ "text": "…", "done": true }]` |
-| Component | computed, read only |
-| AI | text (or a number); set with the AI route below |
+| Checklist | a list such as ["[x] done", "[ ] to do"]; entries with text and done are taken too |
+| Component | worked out as the app shows it; can't be written |
+| AI | text or a number; written with its own address (below) |
 
-An empty field is `null`. Component values are included, computed as the app shows them; writing one is refused. Component code runs on the server without Node's globals and gets 1 s per section.
+Component values run on the server, without Node's globals, and each section gets one second.
 
-| Method and path | What |
+| Method and address | What it does |
 |---|---|
-| `GET /collections/{c}/items?space=&limit=&offset=` | `{ items, total, limit, offset }`, newest change first; `limit` up to 1000 (default 100) |
-| `POST /collections/{c}/items` `{ space?, values }` | create; returns the item (201) |
+| `GET /collections/{c}/items` | list items, most recently changed first: `{ items, total, limit, offset }`. Optional: space, limit (up to 1000, default 100), offset |
+| `POST /collections/{c}/items` | create an item from `{ space?, values }`; answers with the new item (201) |
 | `GET /items/{id}` | one item |
-| `PATCH /items/{id}` `{ values }` | change only the fields given |
+| `PATCH /items/{id}` | change only the fields given in `{ values }` |
 | `DELETE /items/{id}` | delete |
-| `POST /items/{id}/move` `{ space }` | move to another space |
-| `PUT /items/{id}/item-view` `{ itemView }` | pin an item view (`null`: the collection's default) |
-| `PUT /items/{id}/ai/{field}` `{ value }` | an AI field's generated value (for the prompt as it reads now) |
-| `POST /items/{id}/ai/{field}/accept` | keep a value typed over an AI field |
-| `GET /search?q=&space=&limit=` | search, as the app's search |
-
-```
-curl -X POST -H "Authorization: Bearer $KUBUS_TOKEN" -H "Content-Type: application/json" \
-  -d '{"values": {"Title": "Dune", "Pages": 412}}' https://notes.example.com/api/v1/collections/books/items
-```
+| `POST /items/{id}/move` | move to another space: `{ space }` |
+| `PUT /items/{id}/item-view` | pin an item view: `{ itemView }` (null for the collection's default) |
+| `PUT /items/{id}/ai/{field}` | set an AI field's generated value: `{ value }` (for the prompt as it reads now) |
+| `POST /items/{id}/ai/{field}/accept` | keep a value someone typed over an AI field |
+| `GET /search` | search, as the app does. Takes q, and optionally space and limit |
 
 ## Collections and fields
 
-| Method and path | What |
+| Method and address | What it does |
 |---|---|
-| `GET /collections?space=` | collections with their fields, item views and item counts |
+| `GET /collections` | all collections, with their fields, item views and item counts (optional: space) |
 | `GET /collections/{c}` | one collection |
-| `POST /collections` `{ name, pluralName?, icon?, description?, spaces?, space?, fields }` | create (with its "All" view in `space`) |
-| `PATCH /collections/{c}` `{ name?, pluralName?, icon?, description?, spaces? }` | change its settings |
-| `DELETE /collections/{c}` | delete, with its items |
-| `POST /collections/{c}/fields` `{ name, kind, … }` | add a field |
-| `PATCH /collections/{c}/fields/{f}` `{ name?, … }` | change a field |
+| `POST /collections` | create one from `{ name, pluralName?, icon?, description?, spaces?, space?, fields }`, with its "All" view in that space |
+| `PATCH /collections/{c}` | change its settings: `{ name?, pluralName?, icon?, description?, spaces? }` |
+| `DELETE /collections/{c}` | delete it, with its items |
+| `POST /collections/{c}/fields` | add a field: `{ name, kind, … }` |
+| `PATCH /collections/{c}/fields/{f}` | change a field |
 | `DELETE /collections/{c}/fields/{f}` | remove a field (a collection keeps at least one) |
-| `PUT /collections/{c}/fields/order` `["Title", "Pages", …]` | field order (the ones not named keep their order, after these) |
+| `PUT /collections/{c}/fields/order` | set the field order from a list of names; fields left out keep their order, after these |
 
-A field is `{ name, kind }` plus what its kind needs: `targetCollection` (Item, List of items), for Component and AI fields a shared `component` or their own one (`code`, with `output` and `frameRatio`; an AI field's `code` is its prompt and its `output` `string`, `number` or `markdown`, fixed once saved), and optionally `choiceFilter`, `toggleIcon`, `strikeThrough`. Kinds: `string`, `markdown`, `html`, `number`, `date`, `datetime`, `checkbox`, `image`, `item`, `string_list`, `checklist`, `item_list`, `component`, `ai`. A field's kind and target can't change. `spaces` is a list of spaces, or `null` for every space.
+For spaces, give a list of spaces, or null for every space.
+
+### Describing a field
+
+A field needs a **name** and a **kind**. The kinds are string, markdown, html, number, date, datetime, checkbox, image, item, string_list, checklist, item_list, component and ai. A field's kind and target can't change later.
+
+Some kinds need more:
+
+- **Item** and **List of items**: targetCollection, the collection they point to.
+- **Component**: either a shared component (component), or its own code (code, with output and frameRatio).
+- **AI**: the same, where its code is the prompt and its output is string, number or markdown. The output is fixed once saved.
+
+Any field can also have a choiceFilter, a toggleIcon and strikeThrough.
 
 ## Views
 
-| Method and path | What |
+| Method and address | What it does |
 |---|---|
-| `GET /collections/{c}/views?space=` | collection views |
-| `POST /collections/{c}/views` `{ name, space?, filters?, blocks?, editable? }` | create |
-| `PATCH /collections/{c}/views/{v}?space=` | change |
-| `DELETE /collections/{c}/views/{v}?space=` | delete |
-| `PUT /collections/{c}/default-view` `{ space?, view }` | the default view (`null`: none) |
-| `GET /collections/{c}/item-views` | item views |
-| `PUT /collections/{c}/item-views` `[{ name, isDefault?, layout }]` | replace the item views |
+| `GET /collections/{c}/views` | the collection views (optional: space) |
+| `POST /collections/{c}/views` | create one from `{ name, space?, filters?, blocks?, editable? }` |
+| `PATCH /collections/{c}/views/{v}` | change one (optional: space) |
+| `DELETE /collections/{c}/views/{v}` | delete one (optional: space) |
+| `PUT /collections/{c}/default-view` | set the default view: `{ space?, view }` (null for none) |
+| `GET /collections/{c}/item-views` | the item views |
+| `PUT /collections/{c}/item-views` | replace the item views with a list of `{ name, isDefault?, layout }` |
 
-A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, options? }`, with `kind` `table`, `cards`, `component` or `markdown`. Fields in it are named by id or name: `filters` `[{ fieldId, operator, value }]`, `sort` `[{ fieldId, direction }]`, `layout.fields`.
+A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, options? }`. Its kind is table, cards, component or markdown. Fields in a block can be named by id or by name, in:
 
-## Spaces, bookmarks, components
+- filters, a list of `{ fieldId, operator, value }`;
+- sort, a list of `{ fieldId, direction }`;
+- layout.fields.
 
-| Method and path | What |
+## Spaces, bookmarks and components
+
+| Method and address | What it does |
 |---|---|
-| `GET /spaces`, `POST /spaces` `{ name, icon? }` | spaces |
-| `PATCH /spaces/{s}` `{ name?, icon? }`, `DELETE /spaces/{s}` | rename, delete (with its items) |
-| `GET /bookmarks?space=` | bookmarks |
-| `POST /bookmarks` `{ kind: "item", target }` or `{ kind: "view", collection, target }`, `space?`, `label?` | add |
-| `PATCH /bookmarks/{target}` `{ label }`, `DELETE /bookmarks/{target}?space=` | rename, remove |
-| `GET /components`, `GET /components/{x}` | components with their code |
-| `POST /components` `{ name, code, output?, ai?, description?, frameRatio? }` | create (`ai`: Ask AI, a prompt for AI fields) |
-| `PATCH /components/{x}`, `DELETE /components/{x}?withFields=true` | change, delete (`withFields`: its fields too) |
+| `GET /spaces` | the spaces |
+| `POST /spaces` | create one: `{ name, icon? }` |
+| `PATCH /spaces/{s}` | rename: `{ name?, icon? }` |
+| `DELETE /spaces/{s}` | delete, with its items |
+| `GET /bookmarks` | the bookmarks (optional: space) |
+| `POST /bookmarks` | add one: `{ kind: "item", target }` or `{ kind: "view", collection, target }`, with optional space and label |
+| `PATCH /bookmarks/{target}` | rename: `{ label }` |
+| `DELETE /bookmarks/{target}` | remove (optional: space) |
+| `GET /components`, `GET /components/{x}` | components, with their code |
+| `POST /components` | create one: `{ name, code, output?, ai?, description?, frameRatio? }`; with ai on it is a prompt for AI fields |
+| `PATCH /components/{x}` | change one |
+| `DELETE /components/{x}` | delete one; add ?withFields=true to delete the fields that use it too |
 
 ## Files
 
-Images are stored apart from items and named by the SHA-256 of their bytes:
+Images are stored apart from items, named by a fingerprint of their bytes (SHA-256). Upload one by sending its bytes:
 
 ```
 curl -X POST -H "Authorization: Bearer $KUBUS_TOKEN" -H "Content-Type: image/png" \
@@ -120,11 +160,14 @@ curl -X POST -H "Authorization: Bearer $KUBUS_TOKEN" -H "Content-Type: image/png
 → { "id": "<sha256>", "src": "files/<sha256>" }
 ```
 
-Put the `id` in an image field, or `![](files/<sha256>)` in Markdown. `GET /files/{id}` gives the bytes back. PNG, JPEG, GIF, WebP, AVIF and SVG, up to 20 MB. A file no item uses is deleted a week later (by the apps, the next time one opens or syncs).
+Then put the id in an image field, or use the src in Markdown: `![](files/<sha256>)`. GET /files/{id} gives the bytes back.
+
+- Allowed: PNG, JPEG, GIF, WebP, AVIF and SVG, up to 20 MB.
+- A file that no item uses is deleted a week later (by the apps, the next time one opens or syncs).
 
 ## Webhooks
 
-Set `KUBUS_WEBHOOK_URL` on the server (several URLs separated by commas) and it POSTs every change, made on any device or through the API:
+The server can tell other services about every change, whether it was made on a device or through the API. Set KUBUS_WEBHOOK_URL on the server to one address, or several separated by commas, and it sends them a POST like this:
 
 ```json
 { "database": "…", "cursor": 123, "events": [
@@ -137,7 +180,7 @@ Set `KUBUS_WEBHOOK_URL` on the server (several URLs separated by commas) and it 
 ] }
 ```
 
-- One request per batch of changes the server's device receives: changes close together arrive in one request, and an item created and deleted in between is only `item.deleted`.
-- `item` is as the API returns it, computed values included.
-- With `KUBUS_WEBHOOK_SECRET` set, each request carries `X-Kubus-Signature: sha256=<HMAC-SHA256 of the body with the secret, hex>`: compute it over the raw body and compare.
-- In order, one at a time per URL, retried after 1, 5 and 30 seconds, then dropped. Best effort: a restart loses what was waiting.
+- **Batched.** One request for each batch of changes the server's device receives, so changes close together arrive together. An item created and deleted in between only shows up as item.deleted.
+- **Whole items.** An event's item is as the API returns it, worked-out values included.
+- **Signed.** With KUBUS_WEBHOOK_SECRET set, each request has an X-Kubus-Signature header: sha256= followed by the HMAC-SHA256 of the body with the secret, in hex. Work it out over the raw body and compare.
+- **Delivery.** In order, one at a time per address. A failed request is retried after 1, 5 and 30 seconds, then dropped. This is best effort: a server restart loses what was still waiting.
