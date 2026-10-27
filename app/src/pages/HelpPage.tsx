@@ -41,7 +41,7 @@ export function HelpPage() {
   const [params, setParams] = useSearchParams();
   const selected = Math.max(0, SECTIONS.findIndex((s) => s.id === params.get("section")));
   return (
-    <div className="form-page item-view">
+    <div className="form-page item-view help-page">
       <PageHeader title="Help" />
       <Tabs selectedIndex={selected} onChange={({ selectedIndex }) => setParams({ section: SECTIONS[selectedIndex].id }, { replace: true })}>
         <TabList aria-label="Help" id={`${uid}-tabs`}>

@@ -708,6 +708,10 @@ body {
   max-inline-size: 700px;
   margin-inline: auto;
 }
+/* Help's tabs: the text keeps to the page's left edge (Carbon's tab panels are padded). */
+.help-page .cds--tab-content {
+  padding-inline: 0;
+}
 .name-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -144,6 +144,7 @@ export class SyncEngine implements SyncControl {
   private downloading: Promise<void> | null = null;
   private downloadAgain = false;
   private pulledListeners = new Set<(pulled: Pulled) => void>();
+  private fetching = new Map<string, Promise<{ data: Uint8Array; mime: string } | null>>();
 
   constructor(
     private db: SqlClient,
@@ -443,18 +444,31 @@ export class SyncEngine implements SyncControl {
    * removed its last use, which an undo or a paste then put back): the server keeps unused files
    * for a week.
    */
-  async fetchFile(id: string): Promise<{ data: Uint8Array; mime: string } | null> {
-    if (!this.active) return null;
-    let response: Response;
-    try {
-      response = await this.request(`/api/files/${id}`);
-    } catch {
-      return null;
+  fetchFile(id: string): Promise<{ data: Uint8Array; mime: string } | null> {
+    if (!this.active) return Promise.resolve(null);
+    // One request per file at a time (a download and an image being shown may both ask).
+    let pending = this.fetching.get(id);
+    if (!pending) {
+      pending = this.download(id).finally(() => this.fetching.delete(id));
+      this.fetching.set(id, pending);
     }
-    // Deleted on the server as unused: gone here too, unless something here still uses it.
-    if (response.status === 404) await this.releaseFiles([id]);
-    if (!response.ok) return null;
-    const data = new Uint8Array(await response.arrayBuffer());
+    return pending;
+  }
+
+  private async download(id: string): Promise<{ data: Uint8Array; mime: string } | null> {
+    let response: Response;
+    let data: Uint8Array;
+    try {
+      // Not through the browser's HTTP cache: the bytes are kept in the database (and a cache
+      // that can't take a large file fails the whole response).
+      response = await this.request(`/api/files/${id}`, { cache: "no-store" });
+      // Deleted on the server as unused: gone here too, unless something here still uses it.
+      if (response.status === 404) await this.releaseFiles([id]);
+      if (!response.ok) return null;
+      data = new Uint8Array(await response.arrayBuffer());
+    } catch {
+      return null; // offline, or the connection broke off
+    }
     const mime = response.headers.get("Content-Type") ?? "application/octet-stream";
     if (this.env.keepFiles) {
       await this.db.write([
