@@ -98,7 +98,7 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
           size="sm"
           id={`${uid}-table`}
           titleText="Table"
-          placeholder={tables === null ? "Loading…" : "Choose a table or view"}
+          placeholder={tables === null ? "Loading…" : info?.connector === "influxdb" ? "Choose a measurement" : "Choose a table or view"}
           items={tables ?? []}
           selectedItem={chosenTable}
           itemToString={(t) => (t ? `${tableLabel(t)}${t.type === "view" ? " (view)" : ""}` : "")}
@@ -111,7 +111,7 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
             id={`${uid}-query`}
             className="source-query"
             labelText="Query"
-            helperText="One statement, only read: views filter, sort and page what it returns. Name every column (… AS name)."
+            helperText={info?.capabilities.queryHelp ?? "One statement, only read: views filter, sort and page what it returns. Name every column (… AS name)."}
             rows={6}
             value={query}
             onChange={(e) => setQuery(e.target.value)}

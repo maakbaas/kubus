@@ -1,0 +1,257 @@
+import type { SourceDescription, SourceQuery, SourceResult, SourceRow, SourceRowRequest, SourceShape, SourceTable, SourceTarget } from "../../../shared/sources.ts";
+import { SourceError, type Connector, type SourceConfig } from "./connector.ts";
+import {
+  ALL_START,
+  ALL_STOP,
+  checkFlux,
+  fluxString,
+  groupKey,
+  groupsFlux,
+  ID_COLUMN,
+  influxColumn,
+  influxValue,
+  parseAnnotatedCsv,
+  rowFlux,
+  rowsFlux,
+  sampleFlux,
+  totalFlux,
+  type CsvTable,
+  type InfluxColumn,
+} from "./influxFlux.ts";
+
+// An InfluxDB 2 server, strictly read-only: it is only ever asked Flux that reads (influxFlux.ts),
+// over its HTTP API with the token. Connection string: influxdb://host:8086/org (influxdbs:// for
+// HTTPS), the token as its password. Buckets are its "schemas", their measurements its tables.
+// The real protection is a token that can only read (docs/sync.md): `check` warns when it can write.
+
+/** How long a target's columns are trusted before they are read again (new fields or tags). */
+const COLUMNS_TTL_MS = 60_000;
+
+export class InfluxConnector implements Connector {
+  readonly kind = "influxdb";
+  readonly capabilities;
+  private config: SourceConfig;
+  private base: string;
+  private org: string;
+  private token: string;
+  private columns = new Map<string, { at: number; columns: Promise<Map<string, InfluxColumn>> }>();
+
+  constructor(config: SourceConfig) {
+    this.config = config;
+    this.capabilities = {
+      query: config.queries,
+      ...(config.queries && {
+        queryLanguage: "Flux",
+        queryHelp: "Flux that only reads, ending in its tables (they are put together as one): views filter, sort and page them.",
+      }),
+    };
+    const url = new URL(config.url);
+    const secure = url.protocol === "influxdbs:";
+    this.base = `${secure ? "https" : "http"}://${url.hostname}:${url.port || (secure ? "443" : "8086")}`;
+    this.org = decodeURIComponent(url.pathname.replace(/^\/+|\/+$/g, ""));
+    this.token = decodeURIComponent(url.password);
+    if (!this.org) throw new Error("The connection string names no organization (influxdb://host:8086/org)");
+  }
+
+  private headers(more: Record<string, string> = {}) {
+    return { Authorization: `Token ${this.token}`, ...more };
+  }
+
+  /** Runs a Flux script (one that only reads), with the source's time limit. */
+  private async flux(query: string): Promise<CsvTable[]> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.base}/api/v2/query?org=${encodeURIComponent(this.org)}`, {
+        method: "POST",
+        headers: this.headers({ "Content-Type": "application/json", Accept: "application/csv" }),
+        body: JSON.stringify({
+          query,
+          type: "flux",
+          dialect: { header: true, delimiter: ",", annotations: ["datatype", "group", "default"], commentPrefix: "#", dateTimeFormat: "RFC3339Nano" },
+        }),
+        signal: AbortSignal.timeout(this.config.timeoutMs),
+      });
+    } catch (e) {
+      if ((e as Error).name === "TimeoutError") throw new SourceError("The query took too long (the source's time limit)");
+      throw e;
+    }
+    const text = await response.text();
+    if (!response.ok) {
+      let message = text;
+      try {
+        message = (JSON.parse(text) as { message?: string }).message ?? text;
+      } catch {
+        // Not JSON: the text as it is.
+      }
+      // A mistake in the script (its syntax, an unknown bucket) is the request's; the rest the source's.
+      if (response.status === 400 || response.status === 404) throw new SourceError(message);
+      throw new Error(`InfluxDB answered ${response.status}: ${message}`);
+    }
+    return parseAnnotatedCsv(text);
+  }
+
+  /** The values of one column of every row. */
+  private static values(tables: CsvTable[], name: string): string[] {
+    return tables.flatMap((t) => {
+      const i = t.columns.findIndex((c) => c.name === name);
+      return i < 0 ? [] : t.rows.map((r) => r[i]);
+    });
+  }
+
+  async check(): Promise<string[]> {
+    await this.flux(`buckets()\n  |> keep(columns: ["name"])\n  |> limit(n: 1)`);
+    // Only a token that may read authorizations sees them: then it is likely one that can do more.
+    const response = await fetch(`${this.base}/api/v2/authorizations`, { headers: this.headers(), signal: AbortSignal.timeout(this.config.timeoutMs) });
+    if (!response.ok) return [];
+    const { authorizations = [] } = (await response.json()) as { authorizations?: { token?: string; permissions?: { action: string }[] }[] };
+    const own = authorizations.find((a) => a.token === this.token);
+    if (own?.permissions?.some((p) => p.action === "write")) return ["its token can write: use a token that can only read (docs/sync.md)"];
+    if (authorizations.length) return ["its token can read the server's tokens: use a token that can only read buckets (docs/sync.md)"];
+    return [];
+  }
+
+  async tables(): Promise<SourceTable[]> {
+    const offered = this.config.schemas;
+    const buckets = InfluxConnector.values(await this.flux(`buckets()\n  |> keep(columns: ["name"])`), "name")
+      .filter((b) => !b.startsWith("_") && (!offered.length || offered.includes(b)))
+      .sort();
+    const lists = await Promise.all(
+      buckets.map(async (bucket) => {
+        const measurements = InfluxConnector.values(
+          await this.flux(`import "influxdata/influxdb/schema"\n\nschema.measurements(bucket: ${fluxString(bucket)}, start: ${ALL_START})`),
+          "_value",
+        );
+        return measurements.sort().map((name): SourceTable => ({ schema: bucket, name, type: "measurement" }));
+      }),
+    );
+    return lists.flat();
+  }
+
+  private allowed(target: SourceTarget) {
+    if ("query" in target) {
+      if (!this.config.queries) throw new SourceError(`${this.config.name} doesn't allow queries, only its measurements`);
+      checkFlux(target.query);
+      return;
+    }
+    const bucket = target.table.schema ?? "";
+    if (!bucket) throw new SourceError("A measurement is read from a bucket");
+    if (this.config.schemas.length && !this.config.schemas.includes(bucket)) throw new SourceError(`${this.config.name} doesn't offer the bucket “${bucket}”`);
+  }
+
+  /** The target's columns as read (cached a while; also what every query checks its names against). */
+  private columnsOf(target: SourceTarget): Promise<Map<string, InfluxColumn>> {
+    this.allowed(target);
+    const key = JSON.stringify(target);
+    const cached = this.columns.get(key);
+    if (cached && Date.now() - cached.at < COLUMNS_TTL_MS) return cached.columns;
+    const columns = this.describeColumns(target).then((d) => new Map(d.columns.map((c) => [c.name, c])));
+    columns.catch(() => this.columns.delete(key));
+    this.columns.set(key, { at: Date.now(), columns });
+    return columns;
+  }
+
+  private async describeColumns(target: SourceTarget): Promise<Omit<SourceDescription, "columns"> & { columns: InfluxColumn[] }> {
+    const columns: InfluxColumn[] = [];
+    const dropped: { name: string; type: string }[] = [];
+    const add = (name: string, datatype: string, tag = false) => {
+      if (columns.some((c) => c.name === name)) throw new SourceError(`Two columns are called “${name}”: name them apart`);
+      const column = influxColumn(name, datatype, tag);
+      if (column) columns.push(column);
+      else dropped.push({ name, type: datatype });
+    };
+    if ("query" in target) {
+      const seen = new Map<string, string>();
+      for (const table of await this.flux(sampleFlux(target))) {
+        for (const c of table.columns) if (c.name !== "result" && c.name !== "table" && !seen.has(c.name)) seen.set(c.name, c.datatype);
+      }
+      if (!seen.size) throw new SourceError("The query returned no rows, so its columns can't be read");
+      for (const [name, datatype] of seen) add(name, datatype);
+      return { columns, key: [], dropped };
+    }
+    const bucket = fluxString(target.table.schema ?? "");
+    const measurement = fluxString(target.table.name);
+    const [tags, fields] = await Promise.all([
+      this.flux(`import "influxdata/influxdb/schema"\n\nschema.measurementTagKeys(bucket: ${bucket}, measurement: ${measurement}, start: ${ALL_START})`),
+      // Each field's latest value, for its type.
+      this.flux(`from(bucket: ${bucket})
+  |> range(start: ${ALL_START}, stop: ${ALL_STOP})
+  |> filter(fn: (r) => r._measurement == ${measurement})
+  |> last()
+  |> group(columns: ["_field"])
+  |> limit(n: 1)
+  |> keep(columns: ["_field", "_value"])`),
+    ]);
+    add("_time", "dateTime:RFC3339");
+    for (const tag of InfluxConnector.values(tags, "_value").filter((t) => !t.startsWith("_")).sort()) add(tag, "string", true);
+    const types = fields.flatMap((t) => {
+      const field = t.columns.findIndex((c) => c.name === "_field");
+      const datatype = t.columns.find((c) => c.name === "_value")?.datatype ?? "string";
+      return field < 0 ? [] : t.rows.map((r) => [r[field], datatype] as const);
+    });
+    for (const [field, datatype] of types.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) add(field, datatype);
+    if (columns.length === 1) throw new SourceError(`“${target.table.name}” has no data in “${target.table.schema}”`);
+    columns.push({ name: ID_COLUMN, type: "series and time", kind: "string", read: "string", hidden: true });
+    return { columns, key: [ID_COLUMN], dropped };
+  }
+
+  async describe(target: SourceTarget): Promise<SourceDescription> {
+    this.allowed(target);
+    const description = await this.describeColumns(target);
+    this.columns.set(JSON.stringify(target), { at: Date.now(), columns: Promise.resolve(new Map(description.columns.map((c) => [c.name, c]))) });
+    // What the app needs to know, without how the server reads it.
+    return { ...description, columns: description.columns.map(({ read: _read, tag: _tag, ...c }) => c) };
+  }
+
+  async query(query: SourceQuery): Promise<SourceResult> {
+    const columns = await this.columnsOf(query.target);
+    const group = query.groupBy ? columns.get(query.groupBy) : undefined;
+    // A grouped query's rows are placed by their group's place, so its groups come first.
+    const groups = group
+      ? (await this.flux(groupsFlux(query, columns))).flatMap((t) => {
+          const g = t.columns.findIndex((c) => c.name === "_kubus_g");
+          const n = t.columns.findIndex((c) => c.name === "_kubus_n");
+          return t.rows.map((r) => ({ raw: r[g] ?? "", count: Number(r[n] ?? 0) }));
+        })
+      : [];
+    const [page, total] = await Promise.all([
+      this.flux(rowsFlux(query, columns, groups.map((g) => g.raw))),
+      query.counts ? this.flux(totalFlux(query, columns)) : Promise.resolve(null),
+    ]);
+    const rows = toRows(page, query, group, query.timeZone);
+    const result: SourceResult = { rows: rows.slice(0, query.limit), more: rows.length > query.limit };
+    if (total) result.total = Number(InfluxConnector.values(total, "_kubus_n")[0] ?? 0);
+    if (group && query.counts) result.groups = groups.map((g) => ({ key: groupKey(group, g.raw, query.timeZone), count: g.count }));
+    return result;
+  }
+
+  async row(request: SourceRowRequest): Promise<SourceRow | null> {
+    const columns = await this.columnsOf(request.target);
+    const flux = rowFlux(request, columns);
+    if (!flux) return null;
+    return toRows(await this.flux(flux), request, undefined, "UTC")[0] ?? null;
+  }
+
+  async close() {
+    // Nothing held open: every request is its own.
+  }
+}
+
+/** The rows of an answer, in order: the key's text, the asked columns' values, the group. */
+function toRows(tables: CsvTable[], shape: SourceShape, group: InfluxColumn | undefined, tz: string): SourceRow[] {
+  return tables.flatMap((table) => {
+    const index = new Map(table.columns.map((c, i) => [c.name, i]));
+    const key = index.get(shape.key);
+    const g = index.get("_kubus_g");
+    return table.rows.map((r): SourceRow => {
+      const row: SourceRow = {
+        key: key === undefined ? "" : r[key],
+        values: shape.columns.map((name) => {
+          const i = index.get(name);
+          return i === undefined ? null : influxValue(r[i], table.columns[i].datatype);
+        }),
+      };
+      if (group) row.group = groupKey(group, g === undefined ? "" : r[g], tz);
+      return row;
+    });
+  });
+}

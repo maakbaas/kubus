@@ -89,7 +89,7 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
     if (names.has(name.toLowerCase())) throw new HttpError(400, `Two sources are called “${name}”`);
     names.add(name.toLowerCase());
     const given = splitPassword(text(s.url));
-    if (!placeOf(given.url)) throw new HttpError(400, `${name}: the connection string isn't a URL (e.g. postgres://user@host:5432/database)`);
+    if (!placeOf(given.url)) throw new HttpError(400, `${name}: the connection string isn't a URL (e.g. postgres://user@host:5432/database or influxdb://host:8086/org)`);
     const before = old.sources.find((o) => o.id === s.id);
     const password =
       given.password || (typeof s.password === "string" ? s.password : before && placeOf(before.url) === placeOf(given.url) ? before.password : "");

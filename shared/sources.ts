@@ -1,7 +1,7 @@
 // Remote sources: databases (or other systems) the server connects to read-only, whose tables
 // and queries the app shows as collections (docs/sync.md "Remote sources"). This is what the app
 // and the server say to each other about them: nothing in it is specific to one kind of database.
-// The server answers with a connector per source (server/src/connectors/: Postgres today); the
+// The server answers with a connector per source (server/src/connectors/: Postgres, n8n's data tables, InfluxDB 2, Cloudflare D1); the
 // app never knows which. Types only (no imports, no enums), so the server runs it directly with
 // Node, like shared/sync.ts.
 //
@@ -29,13 +29,15 @@ export interface SourceCapabilities {
   query: boolean;
   /** The language such a query is written in, for people (e.g. "SQL"). */
   queryLanguage?: string;
+  /** What such a query must be, for people (the query box's help); absent: one SQL statement. */
+  queryHelp?: string;
 }
 
 /** A table (or a view of one) of a source. `schema` is null where a source has none. */
 export interface SourceTable {
   schema: string | null;
   name: string;
-  /** "table" or "view", for people. */
+  /** "table", "view" or "measurement", for people. */
   type: string;
 }
 

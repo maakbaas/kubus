@@ -156,7 +156,7 @@ headless device doesn't generate AI values (that stays with the apps).
 Databases the server reads for the devices, read-only, whose tables and queries the app shows as
 collections ("remote collections": `Collection.source`, `domain/sources.ts`). Set up in Settings →
 Server (name, connection string, password, schemas, whether queries written in the app are allowed,
-a time limit); the connection string's scheme picks the connector.
+a time limit); the connection string's scheme picks the connector (`postgres://`, `n8n://`, `influxdb://`, `d1://`).
 - *Protocol* (`shared/sources.ts`), connector-neutral, all behind the token:
   `GET /api/sources` (names, connector, capabilities, problem; never addresses),
   `GET /api/sources/<name>/tables`, `POST …/describe` (`{ target }`: a table or a query → its
@@ -185,6 +185,52 @@ a time limit); the connection string's scheme picks the connector.
   A list column groups a row under each value. At start (and on every change) `check` warns about a
   superuser or a user that can write: give it a user that can only read (`GRANT SELECT`); queries
   written in the app read whatever that user can (turn queries off per source to allow tables only).
+- *n8n* (`connectors/n8n.ts`): n8n's data tables through its public API, `n8n://host[:port][/path]`
+  (https) or `n8n+http://…` (plain http), the API key as the password (header `X-N8N-API-KEY`).
+  Strictly read-only: its one request helper only sends `GET`s (`/data-tables`, `…/<id>/rows`); give
+  it a key with only the read scopes (`dataTable:list`, `dataTableRow:read`) where
+  n8n offers scopes. Tables only (no query language; `schema` null, a name two projects share gets
+  its id: "Notes (<id>)"); "Schemas" lists project ids. Types: string as text, number, boolean as a
+  checkbox, date as a date & time; then n8n's `id` (the key), `createdAt`, `updatedAt`. The API's
+  filter is one flat and / or list with one sort and no counts, so a table is read whole (250 rows a
+  request, by id, at most 100,000 rows; kept 5 s, so a view's pages and counts share a read) and
+  queried in memory (`connectors/memory.ts`, pure: the same meaning as `postgresSql.ts`; text sorts
+  as the app's, "Customer 9" before "Customer 10"). The time limit bounds each request.
+- *InfluxDB 2* (`connectors/influx.ts`, Flux in `influxFlux.ts`, pure and tested without a server):
+  `influxdb://host:8086/org` (`influxdbs://` for HTTPS; port 8086 / 443 by default), the token as the
+  password; Flux over `/api/v2/query` (annotated CSV, `RFC3339Nano` times) with the time limit as the
+  request's. Strictly read-only: the connector only ever sends Flux that reads, and a query written in
+  the app is refused (`checkFlux`, a tokenizer: strings, interpolations, regexes and comments read as
+  such) when it imports anything but packages without side effects (`READ_ONLY_PACKAGES`: no `http`,
+  `sql`, `experimental`, …) or names `to`; `check` warns when the token can write, or can read the
+  server's tokens (likely an all-access one): give it a token that can only read its buckets.
+  "Schemas" are buckets (system buckets `_…` left out); a table is a bucket's measurement, read as
+  InfluxDB's UI shows it: all time (1970–2262), fields pivoted beside the tags, a row per series and
+  time, told apart by the synthetic `_id` (`<time>,tag=value,…`, hidden; its key, read back on its
+  moment alone). Columns: `_time`, the tags (`schema.measurementTagKeys`), the fields by the type of
+  their latest value; CSV datatypes map to field types (`long`, `unsignedLong`, `double` numbers,
+  `boolean`, `dateTime`; `duration` plain text; binary dropped). A written query is a Flux script whose
+  tables are put together as one (`group()`; a trailing `yield()` dropped), its columns read from its
+  first 100 rows. Filters, search, sort, grouping and paging are Flux piped onto the tables; days are
+  worked out on the server, so a filter on `_time` narrows the `range()` read. Flux sorts all columns
+  one way: numbers, times and checkboxes sorted the other way are negated, empty values get a marker
+  column; groups are counted and ordered first and rows placed by their group's place (`dict`).
+  Grouping by day uses `date.truncate` with a `timezone` location (InfluxDB 2.1 or later).
+- *Cloudflare D1* (`connectors/d1.ts`, SQL in `d1Sql.ts`, pure and tested on SQLite itself:
+  `d1Sql.test.ts`): `d1://<account id>/<database id>`, the password an API token, read over
+  Cloudflare's HTTP API (`/raw`, one request per statement). Strictly read-only though D1 has no
+  read-only mode: only statements the connector makes are sent (`SELECT`, `PRAGMA table_xinfo`;
+  anything else is refused before it leaves), a written query is one statement (any `;` outside
+  strings and comments is refused: D1 runs several) inside a subquery, where SQLite allows only a
+  `SELECT`, and a statement D1 reports as changing the database is an error. Still give it a token
+  with D1 Read only (a token's permissions can't be checked from here). No schemas (a source's are
+  ignored, with a warning). Types come from a table's declared types (SQLite's affinity words, plus
+  `BOOL`, `DATE`, `DATETIME` / `TIMESTAMP`, `JSON` like Postgres's; `BLOB` dropped), else from a
+  sample of the values (a query's columns); dates and dates & times may be text SQLite reads or Unix
+  times (seconds or milliseconds), checkboxes 1 / 0 / true / yes. SQLite knows no time zones: a
+  date & time's day in the device's zone uses the zone's offsets from 1990 to 2060 (`zoneOffsets`,
+  computed with `Intl`). The time limit is the request's; filters on dates and numbers go through
+  expressions (no index), text is case-insensitive for ASCII only (SQLite's `LIKE`).
 - *App*: a block of a remote collection asks the source for its query (`useRemoteResult`, 100 rows
   a page, "Show more"; search waits for typing to pause) instead of `applyQuery`; the item page reads
   its row by key (`rowKey` of the item id, a base64url of the key). Rows become items keeping their
@@ -192,7 +238,9 @@ a time limit); the connection string's scheme picks the connector.
 - *Known limits*: text sorts by the source's collation ("Customer 10" before "Customer 9"), not the
   app's numeric order (roadmap #6); counting a heavy query runs it in full (#6); references can't
   point at remote collections (#5); global search and the API (`/api/v1`) don't read remote rows
-  (#1).
+  (#1). InfluxDB: a measurement is read over all time unless filtered on `_time` (keep a
+  `_time` filter on large buckets), two text sorts asked opposite ways sort the second the way of the
+  first, and a field whose type differs between series can't be read with the others.
 
 ## The API (headless device) and webhooks
 
