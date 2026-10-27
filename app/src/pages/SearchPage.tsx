@@ -8,6 +8,8 @@ import type { Repository } from "../data/repository";
 import { markdownExcerpt, type MarkdownExcerpt } from "../domain/markdownExcerpt";
 import { editableField, isReferenceKind, itemLabel, labelField, type FieldDef, type Item, type Collection } from "../domain/model";
 import { Highlight } from "../ui/Highlight";
+import type { CollectionView, ViewBlock } from "../domain/views";
+import type { MarkdownBlockOptions } from "../views/MarkdownBlock";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { MarkdownView } from "../ui/MarkdownView";
 import { PageHeader } from "../ui/PageHeader";
@@ -86,6 +88,24 @@ async function referencedLabels(repo: Repository, collections: Collection[], ite
   return labels;
 }
 
+/**
+ * The Markdown blocks of these views (a collection view's: one place each; an item view's text
+ * is the same on all its items, so it is left out) whose text visibly contains the query.
+ */
+function blockExcerpts(views: CollectionView[], query: string): { view: CollectionView; block: ViewBlock; markdown: MarkdownExcerpt }[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  return views.flatMap((view) =>
+    view.blocks.flatMap((block) => {
+      const text = block.kind === "markdown" ? (block.options as MarkdownBlockOptions | null)?.text : undefined;
+      // Without its backslash escapes, as Markdown fields are matched (SqliteRepository.search).
+      if (typeof text !== "string" || !text.replace(/\\/g, "").toLowerCase().includes(q)) return [];
+      const markdown = markdownExcerpt(text, query);
+      return markdown.markdown ? [{ view, block, markdown }] : [];
+    }),
+  );
+}
+
 export function SearchPage() {
   const { repo, collections, spaceCollections, space } = useStore();
   const navigate = useNavigate();
@@ -94,7 +114,8 @@ export function SearchPage() {
   // The results with the query they are for: shown until the next ones are in, so the list
   // doesn't empty (and a spinner flash) on every keystroke.
   // With the labels of the items they point to (for their item and list-of-items fields' excerpts).
-  const [results, setResults] = useState<{ query: string; items: Item[]; labels: Map<string, string> } | null>(null);
+  // And the collection views of this space, for their Markdown blocks.
+  const [results, setResults] = useState<{ query: string; items: Item[]; labels: Map<string, string>; views: CollectionView[] } | null>(null);
   const query = results?.query ?? "";
   const [error, setError] = useState<string>();
   // The latest collections, read when the search runs (a collection edit alone doesn't search again).
@@ -106,13 +127,16 @@ export function SearchPage() {
     let cancelled = false;
     const timer = window.setTimeout(
       () =>
-        repo
-          .search(typed, collectionsRef.current, space.id)
-          .then(async (items) => ({ items, labels: await referencedLabels(repo, collectionsRef.current, items) }))
-          .then(
-            ({ items, labels }) => !cancelled && setResults({ query: typed, items, labels }),
-            (e) => !cancelled && setError(errorMessage(e)),
-          ),
+        Promise.all([
+          repo
+            .search(typed, collectionsRef.current, space.id)
+            .then(async (items) => ({ items, labels: await referencedLabels(repo, collectionsRef.current, items) })),
+          repo.listAllViews(),
+        ]).then(
+          ([{ items, labels }, views]) =>
+            !cancelled && setResults({ query: typed, items, labels, views: views.filter((v) => v.spaceId === space.id) }),
+          (e) => !cancelled && setError(errorMessage(e)),
+        ),
       150,
     );
     return () => {
@@ -141,11 +165,20 @@ export function SearchPage() {
   const collectionHits = q
     ? spaceCollections.filter((t) => [t.name, t.pluralName, t.description].some((text) => text.toLowerCase().includes(q)))
     : [];
-  const nothingFound = query && results !== null && hits.length === 0 && collectionHits.length === 0;
+  // Markdown blocks of this space's collection views (parsed for excerpts: once per result set).
+  const blockHits = useMemo(
+    () =>
+      blockExcerpts(results?.views ?? [], query).flatMap((hit) => {
+        const collection = spaceCollections.find((c) => c.id === hit.view.collectionId);
+        return collection ? [{ ...hit, collection }] : [];
+      }),
+    [results, spaceCollections, query],
+  );
+  const nothingFound = query && results !== null && hits.length === 0 && collectionHits.length === 0 && blockHits.length === 0;
 
   return (
     <>
-      <PageHeader title="Search" subtitle={typed ? `Results for “${typed}”` : "Type in the search box to find collections and items."} />
+      <PageHeader title="Search" subtitle={typed ? `Results for “${typed}”` : "Type in the search box to find collections, Markdown blocks and items."} />
       {error && <InlineNotification kind="error" title="Search failed" subtitle={error} onClose={() => setError(undefined)} />}
       {nothingFound && <p className="helper">Nothing found.</p>}
       {collectionHits.length > 0 && (
@@ -169,6 +202,36 @@ export function SearchPage() {
                     <Highlight text={t.description} query={query} />
                   </div>
                 )}
+              </div>
+            </ContainedListItem>
+          ))}
+        </ContainedList>
+      )}
+      {blockHits.length > 0 && (
+        <ContainedList label={`${blockHits.length} Markdown ${blockHits.length === 1 ? "block" : "blocks"}`} kind="on-page">
+          {blockHits.map(({ view, block, collection, markdown }) => (
+            <ContainedListItem
+              key={`${view.id}/${block.id}`}
+              onClick={() => navigate(`/collections/${collection.id}/items?view=${view.id}&block=${block.id}`)}
+            >
+              <div className="search-hit">
+                <div className="search-hit__title">
+                  <CollectionIcon name={collection.icon} />
+                  <span>
+                    <Highlight text={block.title || "Markdown"} query={query} />
+                  </span>
+                  <Tag size="sm" type="cool-gray">
+                    {collection.pluralName} › {view.name}
+                  </Tag>
+                </div>
+                <div className="search-hit__excerpt">
+                  <MarkdownView source={markdown.markdown} highlight={query} variant="excerpt" />
+                  {markdown.more > 0 && (
+                    <div className="search-hit__more">
+                      +{markdown.more} more {markdown.more === 1 ? "match" : "matches"}
+                    </div>
+                  )}
+                </div>
               </div>
             </ContainedListItem>
           ))}
