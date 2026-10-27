@@ -6,7 +6,6 @@ many window sizes and with content of every shape. Not part of `npm test` or CI:
 ```
 npm run test:gui                                  # everything (~265 tests, about an hour; browsers in parallel by free memory)
 npm run test:gui:smoke                            # the smoke subset (~22 tests, ~10 minutes): quick checks
-npm run test:gui -- --cpu 4                       # load mode: every page 4× slower (CDP CPU throttling, Chromium)
 npm run test:gui -- --grep "elsewhere" --repeat 20 # each test 20 times: how flaky is it?
 npm run test:gui -- --suite 21 --update-baselines # store new screenshot baselines (a deliberate commit)
 npm run test:gui -- --browser webkit --suite "01|02|10|14|20" # WebKit (see below)
@@ -17,7 +16,7 @@ npm run test:gui -- --skip theme-color,type-style # leave audit rules out
 npm run test:gui -- --list                        # list the tests
 npm run test:gui -- --dev                         # against the dev server (port 1420) instead of a build
 npm run test:gui -- --name b --port 1431          # a second run alongside the first (own browsers, build, report-b/)
-npm run test:gui -- --perf                        # only the perf tests (suite 23), at normal speed and 4× CPU; perf-summary.json
+npm run test:gui -- --perf                        # only the perf tests (suite 23), each once; perf-summary.json
 npm run test:gui -- --perf --perf-compare old.json # …compared per test with an earlier perf-summary.json
 ```
 
@@ -26,8 +25,9 @@ It needs `playwright-cli` on the PATH (`npm install -g @playwright/cli`) and Chr
 `PLAYWRIGHT_MCP_CONFIG`, e.g. `{ "browser": { "browserName": "chromium", "launchOptions":
 { "executablePath": "/path/to/chromium", "chromiumSandbox": false } } }` (no sandbox when running as root).
 
-Smoke for quick checks while working; the full run before larger pushes (and twice in a row green,
-plus suites 04/05/10/12/13 under `--cpu 4`, before calling the GUI stable). A test that fails and then
+Smoke for quick checks while working; the full run before larger pushes (and twice in a row green
+before calling the GUI stable). No test slows the CPU down: it measured the same paths again at
+several times the cost. A test that fails and then
 passes on its retry (`--retries`, default 1) is reported as **flaky** and fails the run; so does a
 test whose `--repeat` runs disagree.
 
@@ -116,7 +116,7 @@ and commit the PNGs.
 playwright-cli's own Playwright (`node <global node_modules>/@playwright/cli/node_modules/playwright-core/cli.js
 install webkit` plus its system packages) and no `PLAYWRIGHT_MCP_CONFIG` pointing at Chromium. The
 iOS rules (sticky tab strip, no filter above floating panels, popover placement, dialogs over the
-strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20. CPU throttling is Chromium only.
+strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 
 ## Suites
 
@@ -154,5 +154,5 @@ A new rule goes into `__audit` in `lib/audit.js` (breakage) or `__design` in `li
 The `run-code` sandbox has no `require`, `setTimeout` or file system: wait with `t.settle()`, and use
 Playwright's API on `t.page`. Wait for a state, not a time: `t.editorReady()` after opening an
 in-place editor, `t.until(label, fn)` for what a save should show (a fixed `t.wait` is outrun on a
-busy machine). Options: `{ viewport, dark, cpu, smoke, heavy }`. When the app changes on purpose (a deliberate
+busy machine). Options: `{ viewport, dark, smoke, heavy, perf }`. When the app changes on purpose (a deliberate
 exception to a rule), exempt it in the rule with a comment saying why, as the existing exemptions do.

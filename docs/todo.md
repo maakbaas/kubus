@@ -149,8 +149,8 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
    tests on representative hot paths (cold start to the first collection page; a 1,000-row table
    loading, scrolling and sorting; computed component fields with filters over many items; an item
    page with many fields, blocks and components edited in place; switching view tabs, workspace tabs
-   and panes; a popover typed in over a large view; search across collections), each at normal speed
-   and at 4× CPU throttling, reporting per-phase timings, long tasks, DOM size and memory, with the
+   and panes; a popover typed in over a large view; search across collections), each run once at
+   normal speed (no CPU throttling, no repeats), reporting per-phase timings, long tasks, DOM size and memory, with the
    suite's own overhead (seeding, settling, audits) apart from the app's. Iterate on it (measure, one
    change, measure) to speed up the app (startup, loading, computation, rendering) and the suite
    (seeding, waits, audit cost) without dropping a check. Stop only after at least 4 iterations in

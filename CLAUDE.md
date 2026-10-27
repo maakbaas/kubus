@@ -114,7 +114,7 @@ stale peer range.
 - `npm run test:gui`: the GUI stress suite (not in CI; `gui-tests/README.md`): every page, size and content shape through
   `playwright-cli` against a development-mode build it makes and serves itself (`--dev`: the dev server), layout rules
   as pass/fail criteria, HTML report with screenshots in `gui-tests/report/`. `npm run test:gui:smoke`: its ~22-test smoke
-  subset; `--cpu 4` load mode, `--repeat n`; screenshot baselines in `gui-tests/baselines/` (`--update-baselines` after a
+  subset; `--repeat n`; `--perf`: the perf tests only (suite 23, each once; `perf-summary.json`, `--perf-compare`); screenshot baselines in `gui-tests/baselines/` (`--update-baselines` after a
   deliberate visual change).
 - Server: `docker compose up -d` (change the passwords in `docker-compose.yml` first; it starts its own Postgres and pulls the image that `.github/workflows/image.yml` publishes to ghcr.io); or `cd server && npm install && npm run dev` with `DATABASE_URL` and `KUBUS_TOKEN` set.
 - Browser automation (playwright-cli) runs in a subagent on the cheapest model (`model: "haiku"`).

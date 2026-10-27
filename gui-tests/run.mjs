@@ -20,7 +20,6 @@
 //   --list             list the tests and exit
 //   --retries <n>      re-run a test that errored or failed up to n times (default 1); one that
 //                      failed and then passed is "flaky" in the report, and counts as a failure
-//   --cpu <n>          slow each test's page down n times (CDP CPU throttling): load / stress mode
 //   --repeat <n>       run each selected test n times (names get " #k"), to measure how flaky it is
 //   --browser <name>   webkit / firefox / chrome / msedge instead of the default (playwright-cli open
 //                      --browser); WebKit needs `playwright install webkit` for playwright-cli's own
@@ -32,9 +31,8 @@
 //   --min-free <gb>    wait before starting a test while less memory is free (default 1.5)
 //   --name <name>      name of this run's browser sessions, build and report folders (default: none), so
 //                      a second run (another --port) can go alongside without ending the first's
-//   --perf             only the perf tests ({ perf: true }, left out of other runs): each at normal speed
-//                      and at 4× CPU throttling (or the --cpu given), one browser (--workers), repeats
-//                      (--repeat) interleaved; per-phase timings in perf-summary.json beside the report
+//   --perf             only the perf tests ({ perf: true }, left out of other runs): each once, one
+//                      browser (--workers); per-phase timings in perf-summary.json beside the report
 //   --perf-compare <file>  with --perf: compare with an earlier perf-summary.json (change per test)
 //
 // Memory: each session is a Chrome (browser, GPU and network processes) plus a test's renderers
@@ -80,8 +78,8 @@ const recycleEvery = Math.max(1, Number(opt("recycle", 8)));
 const grep = opt("grep") ? new RegExp(opt("grep"), "i") : null;
 const suiteFilter = opt("suite");
 const retries = Number(opt("retries", 1));
-const cpu = Math.max(1, Number(opt("cpu", 1)));
-const repeat = Math.max(1, Number(opt("repeat", 1)));
+// Perf runs measure each test once (a change is judged against an earlier run, --perf-compare).
+const repeat = perfMode ? 1 : Math.max(1, Number(opt("repeat", 1)));
 const baselineDir = join(here, "baselines");
 const updateBaselines = flag("update-baselines");
 /** A pixel differs when pixelmatch's colour distance is over this (0…1); a baseline fails when more than BASELINE_SHARE of its pixels differ. */
@@ -114,17 +112,12 @@ function listTests(file) {
 let tests = suiteFiles.flatMap(listTests);
 if (grep) tests = tests.filter((t) => grep.test(`${t.suite} › ${t.name}`));
 if (flag("smoke")) tests = tests.filter((t) => t.opts.smoke);
-// Perf tests only run in a perf run, each at every CPU speed of `perfCpus` (`cpu` per test).
-const perfCpus = opt("cpu") ? [cpu] : [1, 4];
+// Perf tests only run in a perf run.
 tests = tests.filter((t) => !!t.opts.perf === perfMode);
-if (perfMode) tests = tests.flatMap((t) => perfCpus.map((c) => ({ ...t, cpu: c, label: `${t.name} · cpu ${c}×` })));
-// Each test `repeat` times: the same test (looked up by `name`), reported as "name #k". Perf runs
-// take turns (every test once, then again), so a slower spell of the machine hits all alike.
+// Each test `repeat` times: the same test (looked up by `name`), reported as "name #k".
 if (repeat > 1) {
   const runs = (t, k) => ({ ...t, label: `${t.label || t.name} #${k + 1}` });
-  tests = perfMode
-    ? Array.from({ length: repeat }, (_, k) => tests.map((t) => runs(t, k))).flat()
-    : tests.flatMap((t) => Array.from({ length: repeat }, (_, k) => runs(t, k)));
+  tests = tests.flatMap((t) => Array.from({ length: repeat }, (_, k) => runs(t, k)));
 }
 if (flag("list")) {
   for (const t of tests) console.log(`${t.suite} › ${t.label || t.name}`);
@@ -300,7 +293,7 @@ function stopServer() {
 
 // ---- run --------------------------------------------------------------------------------------
 async function runTest(session, t, n) {
-  const opts = { browser: browserName || "chromium", test: t.name, baseUrl, shotDir: shotDir.replace(/\\/g, "/"), skip: skipRules, shotAll: flag("shot-all"), ignoreConsole: IGNORE_CONSOLE, cpu: t.cpu || cpu, shotPrefix: t.label ? `r${n}-` : "" };
+  const opts = { browser: browserName || "chromium", test: t.name, baseUrl, shotDir: shotDir.replace(/\\/g, "/"), skip: skipRules, shotAll: flag("shot-all"), ignoreConsole: IGNORE_CONSOLE, shotPrefix: t.label ? `r${n}-` : "" };
   const code = `async page => {\nconst __OPTS = ${JSON.stringify(opts)};\n${lib}\n${t.src}\nreturn await __main(page);\n}`;
   const file = join(tmpDir, `t${n}.js`);
   writeFileSync(file, code);
@@ -316,7 +309,7 @@ async function runTest(session, t, n) {
   }
   for (const c of result.checkpoints || []) if (c.kind === "baseline") compareBaseline(c);
   if (result.status === "pass" && (result.checkpoints || []).some((c) => !c.pass)) result.status = "fail";
-  return { ...result, name: t.label || result.name, test: t.name, cpu: t.cpu || cpu, suite: t.suite, viewport: result.viewport || t.opts.viewport || "desktop", dark: !!t.opts.dark };
+  return { ...result, name: t.label || result.name, test: t.name, suite: t.suite, viewport: result.viewport || t.opts.viewport || "desktop", dark: !!t.opts.dark };
 }
 
 /**
@@ -355,7 +348,7 @@ async function main() {
   await ensureServer();
 
   const sessions = Array.from({ length: Math.min(workers, tests.length) }, (_, i) => `${SESSION_PREFIX}${i + 1}`);
-  console.log(`${tests.length} tests in ${sessions.length} ${browserName || "chromium"} browser(s) (${(freemem() / GB).toFixed(1)} GB free)${cpu > 1 ? `, CPU slowed ${cpu}×` : ""}`);
+  console.log(`${tests.length} tests in ${sessions.length} ${browserName || "chromium"} browser(s) (${(freemem() / GB).toFixed(1)} GB free)`);
   activeSessions = sessions;
   await Promise.all(sessions.map(openSession));
 
@@ -434,7 +427,7 @@ const median = (xs) => {
 const SUITE_TIMES = ["boot", "seed", "load", "settle", "audit", "screenshot"];
 
 /**
- * perf-summary.json: per perf test and CPU speed, the medians over its runs (--repeat) of the
+ * perf-summary.json: per perf test, from its one run: the
  * app's time (the phases' `ms`, summed: what a person waits for), each phase's measures, and the
  * suite's own time (seeding, loads, settling, audits, screenshots: the test's time minus the
  * phases'). Printed as a table, compared with an earlier summary when --perf-compare names one.
@@ -443,7 +436,7 @@ function perfSummary(results) {
   const byKey = new Map();
   for (const r of results) {
     if (!r.perf) continue;
-    const key = `${r.test} · cpu ${r.cpu}×`;
+    const key = r.test;
     byKey.set(key, [...(byKey.get(key) || []), r]);
   }
   const tests = {};
@@ -475,7 +468,7 @@ function perfSummary(results) {
       phases,
     };
   }
-  const summary = { started: new Date().toISOString(), repeat, tests };
+  const summary = { started: new Date().toISOString(), tests };
   writeFileSync(join(reportDir, "perf-summary.json"), JSON.stringify(summary, null, 1));
   let before = null;
   if (opt("perf-compare")) {
@@ -489,7 +482,6 @@ function perfSummary(results) {
   const rows = Object.entries(tests).map(([key, x]) => ({
     test: key.length > 58 ? key.slice(0, 57) + "…" : key,
     "app ms": Math.round(x.appMs),
-    "(runs)": x.appMsAll.map(Math.round).join("/"),
     ...(before ? { "vs before": pct(x.appMs, before[key]?.appMs) } : {}),
     "done ms": Math.round(x.doneMs),
     "cpu ms": Math.round(x.cpuMs),

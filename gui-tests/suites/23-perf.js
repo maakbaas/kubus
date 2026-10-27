@@ -1,5 +1,4 @@
-// Perf: the app's hot paths, measured (`--perf` only; each test at normal speed and at 4× CPU
-// throttling). Every phase (t.measure) is one thing a person waits for: from the action (a load, a
+// Perf: the app's hot paths, measured (`--perf` only; each test once, at normal speed). Every phase (t.measure) is one thing a person waits for: from the action (a load, a
 // click, a key) to the state it leads to, plus the main thread's busy time, long tasks, elements
 // and heap. Seeding, settling and audits are the suite's time, reported apart (perf-summary.json).
 // The tests still check what they show (audits, checks): a faster app that shows less is no win.
@@ -230,7 +229,7 @@ test("perf: typing in a toolbar popover over a large view", async (t) => {
   const ids = await t.seed(bookTable(1000));
   await t.open("/collections");
   await t.go(t.listPath(ids.collections.books));
-  await t.until("1,000 rows", () => t.page.evaluate(rowsAtLeast, 1000), { timeout: 60000 * t.slow });
+  await t.until("1,000 rows", () => t.page.evaluate(rowsAtLeast, 1000), { timeout: 60000 });
   const bar = t.page.locator(".ws-pane--active .views-bar").first();
   const filterBtn = bar.getByRole("button", { name: /^Filter/ }).first();
   await t.measure("open the view's Filter", () => filterBtn.click(), () => !!document.querySelector(".toolbar-popover.cds--popover--open .toolbar-popover__panel"));

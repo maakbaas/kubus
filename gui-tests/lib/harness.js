@@ -14,9 +14,8 @@
 const __tests = [];
 /**
  * Registers a test. `opts.viewport`: a key of VIEWPORTS (default desktop); `opts.dark`: dark theme;
- * `opts.cpu`: its page n times slower (load mode for this test); `opts.smoke`: in the quick smoke run
- * (--smoke); `opts.heavy`: big data, run last and alone; `opts.perf`: a perf test (--perf only: phases
- * measured with t.measure, run at normal speed and slowed down).
+ * `opts.smoke`: in the quick smoke run (--smoke); `opts.heavy`: big data, run last and alone;
+ * `opts.perf`: a perf test (--perf only: phases measured with t.measure).
  */
 function test(name, fn, opts = {}) {
   __tests.push({ name, fn, opts });
@@ -38,8 +37,6 @@ function __makeT(ctx, pg, name, opts) {
   const base = __OPTS.baseUrl.replace(/\/$/, "");
   const shotDir = __OPTS.shotDir;
   const slug = (__OPTS.shotPrefix || "") + name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 80);
-  // Load mode (--cpu n): the page runs n times slower, so waits for it get longer too.
-  const slow = Math.max(1, opts.cpu || __OPTS.cpu || 1);
   const checkpoints = [];
   const errors = [];
   let shotN = 0;
@@ -124,8 +121,6 @@ function __makeT(ctx, pg, name, opts) {
     viewport: opts.viewport || "desktop",
     vp: VIEWPORTS[opts.viewport || "desktop"],
     phone: (opts.viewport || "desktop").startsWith("phone"),
-    /** How many times slower the page runs (load mode, --cpu / the test's cpu); 1 normally. */
-    slow,
     base,
     checkpoints,
     errors,
@@ -157,8 +152,8 @@ function __makeT(ctx, pg, name, opts) {
       loads += 1;
       await timed("load", async () => {
         await pg.goto(`${base}/?load=${loads}#${path}`);
-        await pg.waitForFunction(() => window.kubus && window.kubus.repo, null, { timeout: opts.perf ? 120000 * slow : 30000 });
-        await pg.waitForSelector(".ws-pane", { timeout: opts.perf ? 120000 * slow : 30000 });
+        await pg.waitForFunction(() => window.kubus && window.kubus.repo, null, { timeout: opts.perf ? 120000 : 30000 });
+        await pg.waitForSelector(".ws-pane", { timeout: opts.perf ? 120000 : 30000 });
       });
       if (settle) await t.settle();
     },
@@ -181,10 +176,8 @@ function __makeT(ctx, pg, name, opts) {
      * Waits until the page stops changing: no DOM mutations for `quiet` ms, fonts and loaders done.
      * Returns when (epoch ms, page clock) the last change it saw happened, null when it saw none.
      */
-    async settle(quiet = 200, max = 5000 * slow) {
-      // In load mode a render takes longer without touching the DOM: a quiet spell must be longer too.
-      quiet *= slow;
-      timing.settles++;
+    async settle(quiet = 200, max = 5000) {
+        timing.settles++;
       const t0 = Date.now();
       const res = await pg
         .evaluate(
@@ -223,7 +216,7 @@ function __makeT(ctx, pg, name, opts) {
      * tasks (over 50ms: count and total), elements and JS heap. The settling after it is the
      * suite's time (timing.settle), not the app's.
      */
-    async measure(name, action, until = null, { arg = null, timeout = 60000 * slow } = {}) {
+    async measure(name, action, until = null, { arg = null, timeout = 60000 } = {}) {
       where = name;
       if (!t.cdp) throw new Error("t.measure is for perf tests ({ perf: true })");
       const m0 = await perfMetrics();
@@ -255,7 +248,7 @@ function __makeT(ctx, pg, name, opts) {
     },
     /** The phases measured so far (t.measure). */
     phases: [],
-    /** The page's CDP session (perf tests): Performance metrics, CPU throttling. */
+    /** The page's CDP session (perf tests): Performance metrics. */
     cdp: null,
 
     async wait(ms) {
@@ -266,7 +259,7 @@ function __makeT(ctx, pg, name, opts) {
      * Waits for an in-place editor opened by a click to be there with focus inside it (instead of
      * a fixed wait, which a slow machine outruns); false when none came within `timeout`.
      */
-    async editorReady(selector = ".field-editor, .item-title--editing", timeout = 5000 * slow) {
+    async editorReady(selector = ".field-editor, .item-title--editing", timeout = 5000) {
       const ok = await pg
         .waitForFunction((sel) => [...document.querySelectorAll(sel)].some((e) => e.contains(document.activeElement)), selector, { timeout, polling: "raf" })
         .then(() => true, () => false);
@@ -279,7 +272,7 @@ function __makeT(ctx, pg, name, opts) {
      * ms; recorded as a check named `label` (a failure with the last value when it never does).
      * Use it for "the page shows the saved value" instead of settling and reading once.
      */
-    async until(label, fn, { timeout = 5000 * slow, interval = 50 } = {}) {
+    async until(label, fn, { timeout = 5000, interval = 50 } = {}) {
       const end = Date.now() + timeout;
       let last;
       for (;;) {
@@ -829,15 +822,12 @@ async function __main(pg) {
     });
   }
   const p = await ctx.newPage();
-  const slow = Math.max(1, opts.cpu || __OPTS.cpu || 1);
   // Perf tests measure how long things take, also when that is long (a slow build before a fix).
-  p.setDefaultTimeout((opts.perf ? 60000 : 8000) * slow);
+  p.setDefaultTimeout(opts.perf ? 60000 : 8000);
   const chromium = /chrom|msedge/.test(__OPTS.browser || "chromium");
-  // Load mode (--cpu n): the page's CPU n times slower (Chromium only: CDP). Perf tests read the
-  // renderer's metrics through the same session.
-  const cdp = chromium && (slow > 1 || opts.perf) ? await ctx.newCDPSession(p) : null;
-  if (cdp && slow > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: slow });
-  if (cdp && opts.perf) await cdp.send("Performance.enable");
+  // Perf tests read the renderer's metrics through a CDP session (Chromium only).
+  const cdp = chromium && opts.perf ? await ctx.newCDPSession(p) : null;
+  if (cdp) await cdp.send("Performance.enable");
   const t = __makeT(ctx, p, entry.name, opts);
   t.cdp = opts.perf ? cdp : null;
   const started = Date.now();
@@ -872,7 +862,7 @@ async function __main(pg) {
       const m = (await cdp.send("Performance.getMetrics")).metrics.find((x) => x.name === "JSHeapUsedSize");
       heapMB = m ? Math.round((m.value / 2 ** 20) * 10) / 10 : null;
     } catch {}
-    perf = { cpu: slow, phases: t.phases, heapMB };
+    perf = { phases: t.phases, heapMB };
   }
   const ms = Date.now() - started;
   await ctx.close().catch(() => {});
