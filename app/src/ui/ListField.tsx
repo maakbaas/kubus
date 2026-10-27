@@ -7,6 +7,7 @@ import type { FieldDef, FieldValue } from "../domain/model";
 import { captureEditStart } from "./editStart";
 import { WrappedTextBox } from "./FieldInput";
 import { FieldLabel } from "./fieldKindIcons";
+import { Highlight } from "./Highlight";
 import { RefCombo } from "./RefCombo";
 import { RelatedLink } from "./RelatedLink";
 import { ToggleInput } from "./ToggleInput";
@@ -232,10 +233,12 @@ export function ListField({
               >
                 {itemList ? (
                   labelOf(options, item.text) !== undefined && (
-                    <RelatedLink path={`/collections/${field.targetCollectionId}/items/${item.text}`}>{labelOf(options, item.text)}</RelatedLink>
+                    <RelatedLink path={`/collections/${field.targetCollectionId}/items/${item.text}`}>
+                      <Highlight text={labelOf(options, item.text) ?? ""} query="" />
+                    </RelatedLink>
                   )
                 ) : (
-                  item.text
+                  <Highlight text={item.text} query="" />
                 )}
               </div>
             )}

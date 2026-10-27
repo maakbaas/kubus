@@ -24,6 +24,8 @@ What a field is in code: text, a number, a date as `"2026-10-25"`, a date & time
 
 Choose what the result is: **Markdown** (default), **Text**, **Number**, **Image** (the result is a URL) or **HTML** (shown in a sandboxed frame; scripts work).
 
+A `#tag` in the result (`#books`, `#books/to-read`) shows as a tag in every output but code, as it does in any text of the app; clicking it searches for the tag. In HTML only tags in the HTML as written are, not text a script adds.
+
 ## Filters
 
 A filter's value may hold `{{ }}` code too, typed as it is: it is worked out when the filter runs, as if its result had been typed. `{{ 1 == 1 }}` is `true` (checked items), `{{ new Date().toISOString().slice(0, 10) }}` today's date. It reads `$now`, and in a block on an item page that page's item as `$item`. A value that can't be compared matches nothing.

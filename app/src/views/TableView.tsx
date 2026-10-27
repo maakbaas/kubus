@@ -661,7 +661,7 @@ export function TableView(props: BlockProps<TableOptions>) {
             onHeadingClick={({ isOpen }) => onGroupCollapse(group.key, !isOpen)}
             title={
               <span className="table-group__title">
-                {group.label}
+                <Highlight text={group.label} query="" />
               </span>
             }
           >

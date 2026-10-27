@@ -33,6 +33,7 @@ import { captureEditStart, type EditStart } from "../ui/editStart";
 import { FieldEditor } from "../ui/FieldEditor";
 import { ComponentFieldEditor } from "../ui/ComponentFieldEditor";
 import { ListField } from "../ui/ListField";
+import { Highlight } from "../ui/Highlight";
 import { ItemLink } from "../ui/ItemLink";
 import { ToggleInput } from "../ui/ToggleInput";
 import { ImageInput, useFileUrl } from "../ui/images";
@@ -85,7 +86,7 @@ function ImageValue({ fileId, alt }: { fileId: string; alt: string }) {
 function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; value: FieldValue; refs: RefOptions; /** HTML: a click on its plain content. */ onFrameClick?(): void }): ReactNode {
   switch (field.kind) {
     case "string":
-      return String(value);
+      return <Highlight text={String(value)} query="" />;
     // Numbers, dates and times read exactly as in their Carbon inputs (same text, same font,
     // same place), so switching to edit mode changes nothing on screen.
     case "number":
@@ -123,7 +124,7 @@ function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; 
     case "component":
       return value == null ? null : <MarkdownView source={String(value)} />;
     case "ai":
-      return value == null ? null : field.output === "markdown" ? <MarkdownView source={String(value)} /> : String(value);
+      return value == null ? null : field.output === "markdown" ? <MarkdownView source={String(value)} /> : <Highlight text={String(value)} query="" />;
     case "checkbox":
     case "string_list":
     case "checklist":
@@ -348,7 +349,9 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
               onSave={(v) => saveField(titleField, v || null).catch((e) => setError(errorMessage(e)))}
             />
           ) : (
-            title
+            <Heading className="page-header__title">
+              <Highlight text={title} query="" />
+            </Heading>
           )
         }
         current={title}
@@ -688,7 +691,7 @@ function EditableTitle({ value, source, onSave }: { value: string; source: strin
         onClick={(e) => start(captureEditStart(e.currentTarget, e).range)}
         onKeyDown={(e) => e.key === "Enter" && start()}
       >
-        {value}
+        <Highlight text={value} query="" />
       </Heading>
     );
   }
@@ -1039,7 +1042,7 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, onRege
           title={readOnly ? "Written by AI from this field's prompt" : "Click to edit. What you type is kept: it is not generated again by itself."}
         >
           <AiStatus itemId={itemId ?? ""} fieldId={field.id}>
-            {!empty && (field.output === "markdown" ? <MarkdownView source={String(value)} /> : String(value))}
+            {!empty && (field.output === "markdown" ? <MarkdownView source={String(value)} /> : <Highlight text={String(value)} query="" />)}
           </AiStatus>
         </div>
       </div>

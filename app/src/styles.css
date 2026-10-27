@@ -733,6 +733,31 @@ body {
   padding: 0;
 }
 
+/* A #tag in text (TagChip; the Markdown editor's decorations and HTML frames look the same).
+   Inline, not Carbon's inline-flex: it wraps with its line, adds no height to it, and is exactly
+   the same in the read-only view and the editor, so starting to edit moves nothing. */
+.cds--tag.inline-tag {
+  display: inline;
+  margin: 0;
+  cursor: pointer;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.inline-tag .cds--tag__label {
+  display: inline;
+  overflow: visible;
+  white-space: normal;
+}
+@media (any-hover: hover) {
+  .cds--tag.inline-tag:hover {
+    background-color: var(--cds-tag-hover-blue);
+  }
+}
+.cds--tag.inline-tag:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: 1px;
+}
+
 /* Read-only markdown (search results): editor styles without the editing chrome.
    Doubled class so these win over .md-editor__content, which is defined later. */
 /* Same text rules as ProseMirror's editable area, so a paragraph wraps identically in

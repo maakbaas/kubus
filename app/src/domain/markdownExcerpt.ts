@@ -2,6 +2,7 @@ import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import type { List, Node, Nodes, RootContent } from "mdast";
+import { containsQuery } from "./tags";
 
 // Search excerpts for markdown fields. Rules:
 //  1. The document is split into top-level blocks by the GFM parser (headings,
@@ -61,10 +62,9 @@ export interface MarkdownExcerpt {
   more: number;
 }
 
-export function markdownExcerpt(source: string, query: string): MarkdownExcerpt {
-  const q = query.trim().toLowerCase();
+export function markdownExcerpt(source: string, query: string, exactTag = false): MarkdownExcerpt {
   const slice = (n: Node) => source.slice(n.position?.start.offset ?? 0, n.position?.end.offset ?? 0);
-  const matches = (n: Node) => visibleText(n as Nodes).toLowerCase().includes(q);
+  const matches = (n: Node) => containsQuery(visibleText(n as Nodes), query, exactTag);
   /** A list reduced to its matching items, as source text. */
   const matchingItems = (list: List) =>
     list.children

@@ -78,6 +78,7 @@ export function markdownPreviewParts(md: string): PreviewPart[] {
         .replace(/&nbsp;/g, " ")
         .replace(/\\$/, "") // backslash hard line break
         .replace(EMPHASIS, "") // emphasis, strike, inline code
+        .replace(/\\([!-/:-@[-`{-~])/g, "$1") // backslash escapes (the editor writes "\#tag" at a line's start)
         .replace(/\|/g, " "), // table cell separators
     )
     .join(" ")

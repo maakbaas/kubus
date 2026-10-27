@@ -182,8 +182,10 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
 - **Blocks** (`app/src/domain/views.ts` `ViewBlock`, `app/src/views/BlockView.tsx`): a collection
   view is a filter plus a list of blocks; each block shows items one way (table, cards, a
   component) with its own sort and grouping, fields (`FieldLayout`) and
-  type options. Its filter is the view's unless it has its own, which replaces it (not stacked;
-  "Same as the view's filter" in its Filter menu; its own starts as a copy). Every block, also a
+  type options. Its filter is the view's until it is made different in its Filter menu (not
+  stacked; `blockFilters`, `withViewFilters` in `domain/views.ts`): a block whose filter is the same as the view's
+  (`null`, or edited back to equal rules) follows the view's when that changes; one that differs keeps its own,
+  and its Filter button is blue ("Own filter"). Every block, also a
   view's only one, has a header (`ui/SectionHeader.tsx`, shared with item fields' label rows): its
   name styled as an item field's label with its block type's icon (its title, else its component's
   name or "Table" / "Cards"; set under Block settings), a collapse caret after it (clicking the name
@@ -262,6 +264,15 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   href tried once per editor); one that names nothing stays as written and is resolved when clicked. `?block=` /
   `?field=` scroll to the target and flash it (`ui/useLinkTarget.ts`; blocks carry `data-block-id`, item page
   fields are found by their place among the page's entries).
+- **Tags** (`domain/tags.ts`): `#name` anywhere in text (letters, digits, `_`, `-`, `/` for nested
+  `#books/to-read`; at least one letter; not inside a word, `##`, `&#1;` or a URL). Not Markdown syntax: a value stays
+  plain GFM and a tag is text in it. Every place that shows text renders it as a Carbon tag (blue, `ui/TagChip.tsx`):
+  plain text through `Highlight` (cells, cards, titles, lists, checklists, AI text, component text, group titles,
+  search results), rendered Markdown (`rehypeTags` in `MarkdownView`; not in code or a link's text), the Markdown
+  editor (decorations: the text stays as typed), HTML in its frame (the frame's script wraps the tags in the HTML as
+  written, not what its scripts draw, and reports clicks). Inline, so view and editor have the same geometry.
+  Clicking one opens `/search?q=%23name&tag=1` (Ctrl/Cmd beside, middle click a new tab): exactly that tag and the
+  tags nested in it; the same text typed in the search box is a text search (`#books` also finds `#bookshelf`).
 - **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's collections
   (name, description), the Markdown blocks of its collection views (their text; an item view's is the same on every item, so not
   searched; a result opens the view at the block) and its items, substring match over string, markdown, HTML, AI,

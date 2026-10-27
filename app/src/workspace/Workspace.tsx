@@ -246,8 +246,9 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
 function InAppLinks({ onNavigate, children }: { onNavigate(path: string, newTab: boolean): void; children: ReactNode }) {
   const handle = (e: MouseEvent) => {
     const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#/"]');
-    // Links marked data-own-click handle navigation themselves (e.g. "open beside").
-    if (!a || a.hasAttribute("data-own-click") || (e.type === "click" && e.button !== 0)) return;
+    // Links marked data-own-click handle navigation themselves (e.g. "open beside"), as does what
+    // is marked so inside a link (a tag in an item's title).
+    if (!a || (e.target as HTMLElement).closest("[data-own-click]") || (e.type === "click" && e.button !== 0)) return;
     e.preventDefault();
     e.stopPropagation();
     onNavigate(a.getAttribute("href")!.slice(1), e.ctrlKey || e.metaKey || e.button === 1);

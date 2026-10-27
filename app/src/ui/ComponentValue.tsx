@@ -4,11 +4,14 @@ import type { FieldValue } from "../domain/model";
 import { useStore } from "../app/store";
 import { fileSrc, fileIdsIn } from "../domain/files";
 import { isComponentError, ratioValue, type ComponentOutput } from "../domain/components";
+import { TAG_SOURCE } from "../domain/tags";
+import { openModeOf } from "../workspace/Workspace";
 import { Highlight } from "./Highlight";
 import { useMediaQuery } from "./useMediaQuery";
 import { fileDataUrl, UrlImage } from "./images";
 import { MarkdownView } from "./MarkdownView";
 import { frameFonts } from "./frameFonts";
+import { useOpenTag } from "./TagChip";
 
 /**
  * App tokens a frame's base styles use: passed in as resolved values (the frame has no Carbon
@@ -29,6 +32,9 @@ const FRAME_TOKENS = [
   "--cds-border-subtle",
   "--cds-border-strong",
   "--cds-layer-accent-01",
+  "--cds-tag-background-blue",
+  "--cds-tag-color-blue",
+  "--cds-tag-hover-blue",
   "--cds-code-02-font-family",
   "--font-sans",
 ];
@@ -72,7 +78,9 @@ html.fonts-pending body{visibility:hidden;}
 :where(table){border-collapse:collapse;max-inline-size:100%;}
 :where(th,td){border:1px solid var(--cds-border-subtle);padding:0.25rem 0.5rem;text-align:left;}
 :where(th){background:var(--cds-layer-accent-01);}
-:where(img,svg,canvas,video){max-width:100%;}`;
+:where(img,svg,canvas,video){max-width:100%;}
+:where(.kubus-tag){padding:0 0.5rem;-webkit-box-decoration-break:clone;box-decoration-break:clone;border-radius:1rem;background:var(--cds-tag-background-blue);color:var(--cds-tag-color-blue);font-size:0.75rem;line-height:1rem;letter-spacing:0.32px;cursor:pointer;}
+:where(.kubus-tag:hover){background:var(--cds-tag-hover-blue);}`;
 }
 
 function frameDocument(html: string, fill: boolean, dark: boolean, tokens: string): string {
@@ -151,6 +159,46 @@ ${frameBaseStyles(tokens, dark)}
   addEventListener("load", watch);
   addEventListener("resize", report);
   watch();
+  // #tags in the text (domain/tags.ts) become tags, as everywhere in the app; a click on one is
+  // the page's (it searches for the tag). Only the HTML as written: what a script draws is its own.
+  const tagSplit = new RegExp("(" + ${JSON.stringify(TAG_SOURCE).replace(/</g, "\\u003c")} + ")", "u");
+  const skip = "a,code,pre,kbd,samp,script,style,textarea,select,option,button,svg,canvas,template,[contenteditable],.kubus-tag";
+  const texts = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) texts.push(walker.currentNode);
+  for (const text of texts) {
+    if (!text.data.includes("#") || text.parentElement?.closest(skip)) continue;
+    const parts = text.data.split(tagSplit);
+    if (parts.length === 1) continue;
+    const pieces = parts.map((part, i) => {
+      if (i % 2 === 0) return document.createTextNode(part);
+      const tag = document.createElement("span");
+      tag.className = "kubus-tag";
+      tag.setAttribute("role", "link");
+      tag.tabIndex = 0;
+      tag.title = "Search for " + part;
+      tag.textContent = part;
+      return tag;
+    });
+    text.replaceWith(...pieces);
+  }
+  const openTag = (e, tag) => {
+    e.preventDefault();
+    e.stopPropagation();
+    parent.postMessage({ kubusTag: tag.textContent, ctrlKey: e.ctrlKey, metaKey: e.metaKey, button: e.button ?? 0 }, "*");
+  };
+  addEventListener("click", (e) => {
+    const tag = e.target instanceof Element && e.target.closest(".kubus-tag");
+    if (tag && e.button === 0) openTag(e, tag);
+  }, true);
+  addEventListener("auxclick", (e) => {
+    const tag = e.target instanceof Element && e.target.closest(".kubus-tag");
+    if (tag && e.button === 1) openTag(e, tag);
+  }, true);
+  addEventListener("keydown", (e) => {
+    const tag = e.key === "Enter" && e.target instanceof Element && e.target.closest(".kubus-tag");
+    if (tag) openTag(e, tag);
+  }, true);
   // A click on plain content (text, an empty area) is the page's: it starts editing the field.
   // Clicks on what is interactive stay here (links, controls, maps and charts drawn in a canvas
   // or svg, elements with handlers), as do clicks a script stopped or that end a selection.
@@ -307,16 +355,23 @@ export function HtmlFrame({
   }, []);
   const contentClick = useRef(onContentClick);
   contentClick.current = onContentClick;
+  // A tag clicked in the frame opens its search (see frameDocument).
+  const latestOpenTag = useOpenTag();
+  const openTag = useRef(latestOpenTag);
+  openTag.current = latestOpenTag;
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.source !== frame.current?.contentWindow) return;
-      const data = e.data as { kubusFrame?: FrameSize; kubusFrameClick?: boolean; kubusFrameReady?: boolean } | null;
+      const data = e.data as
+        | { kubusFrame?: FrameSize; kubusFrameClick?: boolean; kubusFrameReady?: boolean; kubusTag?: string; ctrlKey?: boolean; metaKey?: boolean; button?: number }
+        | null;
       // The frame asks for the app's fonts (it can't load them itself): their bytes, once per frame.
       if (data?.kubusFrameReady) {
         const target = e.source as Window;
         frameFonts().then((fonts) => target.postMessage({ kubusFonts: fonts }, "*"));
       }
       if (data?.kubusFrameClick) contentClick.current?.();
+      if (typeof data?.kubusTag === "string") openTag.current?.(data.kubusTag, openModeOf({ ctrlKey: !!data.ctrlKey, metaKey: !!data.metaKey, button: data.button ?? 0 }));
       const s = data?.kubusFrame;
       if (!fill && s && typeof s.natural === "number") {
         setSize(s);

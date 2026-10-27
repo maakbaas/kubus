@@ -10,8 +10,10 @@ import { safeUrl } from "../platform/openExternal";
 import { useLinks } from "../app/useLinks";
 import { openModeOf } from "../workspace/Workspace";
 import { splitWarnings } from "../domain/components";
+import { splitTags } from "../domain/tags";
 import { matcher, splitMatches } from "./Highlight";
 import { ComponentWarning } from "./ComponentWarning";
+import { TagChip } from "./TagChip";
 import { UrlImage, useFileUrl } from "./images";
 
 // Read-only GFM rendering (remark-gfm, the same parser family Milkdown uses).
@@ -116,10 +118,35 @@ function rehypeWarnings() {
   };
 }
 
+/**
+ * rehype plugin: `#tags` in text become tag spans (TagChip), but not in code (where `#` is code)
+ * or in a link's text (a link is already one thing to click).
+ */
+function rehypeTags() {
+  const SKIP = new Set(["a", "code", "pre"]);
+  return (tree: Root) => {
+    const walk = (children: RootContent[]): RootContent[] =>
+      children.flatMap((child): RootContent[] => {
+        if (child.type === "text") {
+          const parts = splitTags(child.value);
+          if (parts.length === 1) return [child];
+          return parts.map((part, i) =>
+            i % 2 === 1
+              ? { type: "element", tagName: "span", properties: { className: ["inline-tag-source"], dataTag: part }, children: [{ type: "text", value: part }] }
+              : { type: "text", value: part },
+          );
+        }
+        if (child.type === "element" && !SKIP.has(child.tagName)) child.children = walk(child.children) as ElementContent[];
+        return [child];
+      });
+    tree.children = walk(tree.children);
+  };
+}
+
 /** rehype plugin: wraps every match of `query` in text nodes with <mark>. */
-function rehypeMark(query: string) {
+function rehypeMark(query: string, exactTag: boolean) {
   return () => (tree: Root) => {
-    const re = matcher(query);
+    const re = matcher(query, exactTag);
     if (!re) return;
     const walk = (children: RootContent[]): RootContent[] =>
       children.flatMap((child): RootContent[] => {
@@ -188,6 +215,8 @@ const common: Components = {
   span: ({ node: _node, className, children, ...props }) =>
     className === "component-warning-text" ? (
       <ComponentWarning>{children}</ComponentWarning>
+    ) : className === "inline-tag-source" ? (
+      <TagChip tag={String((props as { "data-tag"?: string })["data-tag"] ?? "")}>{children}</TagChip>
     ) : (
       <span className={className} {...props}>
         {children}
@@ -232,13 +261,15 @@ function PageLink({ href, children }: { href: string | undefined; children?: Rea
 interface Props {
   source: string;
   highlight?: string;
+  /** The highlight is a search for exactly that tag (see matcher). */
+  exactTag?: boolean;
   variant?: "full" | "excerpt";
   /** Makes task checkboxes clickable: called with the source, that one checkbox toggled. */
   onChange?(source: string): void;
 }
 
 /** Rendered markdown; only re-rendered when its source or options change (it parses each time). */
-export const MarkdownView = memo(function MarkdownView({ source, highlight = "", variant = "full", onChange }: Props) {
+export const MarkdownView = memo(function MarkdownView({ source, highlight = "", exactTag = false, variant = "full", onChange }: Props) {
   const tasks = useMemo(
     () => ({
       toggle: onChange
@@ -258,7 +289,7 @@ export const MarkdownView = memo(function MarkdownView({ source, highlight = "",
       <TaskContext.Provider value={tasks}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkEditorBreaks]}
-          rehypePlugins={[rehypeSoftBreaks, rehypeWarnings, rehypeCodeColor, rehypeMark(highlight)]}
+          rehypePlugins={[rehypeSoftBreaks, rehypeWarnings, rehypeTags, rehypeCodeColor, rehypeMark(highlight, exactTag)]}
           components={variant === "full" ? fullComponents : excerptComponents}
           // Links to other apps (spotify:, obsidian:, …) are kept; react-markdown's default drops them.
           urlTransform={safeUrl}

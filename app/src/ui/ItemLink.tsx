@@ -13,7 +13,7 @@ export function ItemLink({ field, id, refs, search }: { field: FieldDef; id: str
   if (label === undefined) return options ? <span className="item-view__muted">(deleted)</span> : null;
   return (
     <RelatedLink path={`/collections/${field.targetCollectionId}/items/${id}`}>
-      {search ? <Highlight text={label} query={search} /> : label}
+      <Highlight text={label} query={search ?? ""} />
     </RelatedLink>
   );
 }

@@ -20,7 +20,7 @@ import { upload, uploadConfig, type Uploader } from "@milkdown/kit/plugin/upload
 import { InputRule } from "@milkdown/kit/prose/inputrules";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
-import type { EditorView } from "@milkdown/kit/prose/view";
+import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $inputRule, $prose, callCommand } from "@milkdown/kit/utils";
 import { prism } from "@milkdown/plugin-prism";
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from "@milkdown/react";
@@ -31,10 +31,12 @@ import type { Repository } from "../data";
 import { fileIdFromSrc, fileSrc } from "../domain/files";
 import { useLinks } from "../app/useLinks";
 import { parseNameLink } from "../domain/links";
+import { tagPattern, tagSearchPath } from "../domain/tags";
 import { openModeOf, type OpenMode } from "../workspace/Workspace";
 import type { EditStart } from "./editStart";
 import { cachedFileUrl, fileUrl, IMAGE_TYPES, storeImageFile } from "./images";
 import { errorMessage } from "./useConfirm";
+import { TAG_CLASSES } from "./TagChip";
 
 // Strictly GitHub Flavored Markdown: the CommonMark preset plus the GFM preset
 // (tables, task lists, strikethrough, autolinks, footnotes) and nothing else.
@@ -128,6 +130,56 @@ const linkClick = $prose(
             event.preventDefault();
             // The component around the editor opens it (a page of the app needs its router).
             a.dispatchEvent(new CustomEvent(OPEN_LINK, { bubbles: true, detail: { href: a.getAttribute("href") ?? "", mode: openModeOf(event) } }));
+            return true;
+          },
+        },
+      },
+    }),
+);
+
+/** The `#tags` of a document (domain/tags.ts) as decorations: not in code or a link's text. */
+function tagDecorations(doc: ProseNode): DecorationSet {
+  const decorations: Decoration[] = [];
+  doc.descendants((node, pos) => {
+    if (node.type.spec.code) return false;
+    if (!node.isTextblock) return true;
+    // The block's text, code and link text blanked out (a tag doesn't run into or out of them).
+    let text = "";
+    node.forEach((child) => {
+      const skip = !child.isText || child.marks.some((m) => m.type.name === "link" || m.type.spec.code);
+      text += skip ? " ".repeat(child.nodeSize) : child.text;
+    });
+    for (const m of text.matchAll(tagPattern())) {
+      const from = pos + 1 + m.index;
+      decorations.push(Decoration.inline(from, from + m[0].length, { class: `${TAG_CLASSES} inline-tag--editor`, "data-tag": m[0] }));
+    }
+    return false;
+  });
+  return DecorationSet.create(doc, decorations);
+}
+
+/**
+ * `#tags` look like tags here too, as in all rendered text: decorations only, the text stays as
+ * typed (a tag is not Markdown syntax). A plain click on one searches for it, as a link opens.
+ */
+const tags = $prose(
+  () =>
+    new Plugin<DecorationSet>({
+      state: {
+        init: (_, state) => tagDecorations(state.doc),
+        apply: (tr, set) => (tr.docChanged ? tagDecorations(tr.doc) : set),
+      },
+      props: {
+        decorations(state) {
+          return this.getState(state);
+        },
+        handleDOMEvents: {
+          click(view, event) {
+            const tag = (event.target as HTMLElement).closest?.("[data-tag]");
+            if (!tag || !view.dom.contains(tag) || !view.state.selection.empty) return false;
+            event.preventDefault();
+            const href = `#${tagSearchPath(tag.getAttribute("data-tag") ?? "")}`;
+            tag.dispatchEvent(new CustomEvent(OPEN_LINK, { bubbles: true, detail: { href, mode: openModeOf(event) } }));
             return true;
           },
         },
@@ -848,6 +900,7 @@ function EditorSurface({
         .use(tabAddsRow)
         .use(linkInputRule)
         .use(linkClick)
+        .use(tags)
         .use(storedImages(repo))
         .use(codeBlockLanguage)
         .use(changes((markdown) => callbacks.current.onChange(markdown)))

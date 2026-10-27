@@ -328,7 +328,7 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
               onHeadingClick={({ isOpen }) => onGroupCollapse(group.key, !isOpen)}
               title={
                 <span className="table-group__title">
-                  {group.label}
+                  <Highlight text={group.label} query="" />
                 </span>
               }
             >
