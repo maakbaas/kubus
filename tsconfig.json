@@ -19,5 +19,5 @@
   "include": ["app/src", "app/vite.config.ts", "app/vite.headless.config.ts", "shared"],
   // Tests of server code (vitest runs them): the server's packages and sources aren't there for every
   // typecheck of the app (CI installs the app's alone; the server image's web stage has no server/).
-  "exclude": ["app/src/data/remote/postgres.test.ts", "app/src/data/remote/postgresSql.test.ts", "app/src/data/remote/settings.test.ts"]
+  "exclude": ["app/src/data/remote/postgres.test.ts", "app/src/data/remote/postgresSql.test.ts", "app/src/data/remote/influxFlux.test.ts", "app/src/data/remote/settings.test.ts"]
 }

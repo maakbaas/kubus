@@ -73,7 +73,7 @@ The same server answers an HTTP API at `/api/v1` with the same token, and calls 
 on every change when set (commented in `docker-compose.yml`); Help → API in the app documents both.
 In the app, Settings → Server sets up what the server offers every device: a language model
 (Settings → AI → "The server's", used through the server so the key stays there; a device can still
-set its own instead) and remote sources, databases the server reads (read-only) for remote
+set its own instead) and remote sources, databases the server reads (read-only: Postgres, InfluxDB 2) for remote
 collections. Both are stored on the server only; keys and passwords are never shown again.
 Running the server from the repository instead of the image: `npm run build:headless` first, or the
 API answers 503.

@@ -148,7 +148,7 @@ export function ServerSettings() {
                     id={`${uid}-src-url-${s.id}`}
                     labelText="Connection string"
                     placeholder="postgres://reader@db-host:5432/crm"
-                    helperText={state?.connector ? `Read by its ${state.connector} connector.` : "Postgres for now: postgres://user@host:port/database."}
+                    helperText={state?.connector ? `Read by its ${state.connector} connector.` : "postgres://user@host:port/database, or influxdb://host:8086/org (influxdbs:// for HTTPS; the token as password)."}
                     value={s.url}
                     onChange={(e) => setSource(i, { url: e.target.value })}
                   />
@@ -157,7 +157,7 @@ export function ServerSettings() {
                     id={`${uid}-src-password-${s.id}`}
                     labelText="Password"
                     placeholder={s.passwordSet && s.password === undefined ? "Set: type to replace it" : "None"}
-                    helperText="Kept while left empty (unless the host, port or user changes)."
+                    helperText="InfluxDB: a token that can only read. Kept while left empty (unless the host, port or user changes)."
                     value={s.password ?? ""}
                     onChange={(e) => setSource(i, { password: e.target.value || undefined })}
                   />
@@ -166,7 +166,7 @@ export function ServerSettings() {
                     id={`${uid}-src-schemas-${s.id}`}
                     labelText="Schemas"
                     placeholder="All"
-                    helperText="Only these schemas' tables are offered, comma-separated."
+                    helperText="Only these schemas' tables (InfluxDB: buckets' measurements) are offered, comma-separated."
                     value={s.schemasText}
                     onChange={(e) => setSource(i, { schemasText: e.target.value })}
                   />
