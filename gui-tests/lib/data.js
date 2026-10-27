@@ -83,36 +83,30 @@ async function __seedInPage(spec) {
   }
   const collections = await repo.listCollections();
   const byKey = (key) => collections.find((x) => x.id === ids.collections[key]);
-  const later = [];
-  const convert = (c, values, deferRefs) => {
+  const convert = (c, values) => {
     const out = {};
     for (const [fk, v] of Object.entries(values || {})) {
       const fid = ids.fields[`${c.key}.${fk}`];
       if (!fid) continue;
       if (v && typeof v === "object" && !Array.isArray(v)) {
         if ("image" in v) out[fid] = ids.images[v.image];
-        else if (deferRefs) continue;
         else if ("ref" in v) out[fid] = ids.items[v.ref] || null;
         else if ("refs" in v) out[fid] = v.refs.map((r) => ids.items[r]).filter(Boolean);
       } else out[fid] = v;
     }
     return out;
   };
+  // Every item in one change set (references between them resolve inside it).
+  const entries = [];
   for (const c of spec.collections || []) {
-    const coll = byKey(c.key);
     let n = 0;
     for (const it of c.items || []) {
       const key = `${c.key}/${it.key || "i" + n++}`;
-      ids.items[key] = await repo.createItem(coll, convert(c, it.values, true), ids.spaces[it.space || "default"]);
-      if (Object.values(it.values || {}).some((v) => v && typeof v === "object" && !Array.isArray(v) && ("ref" in v || "refs" in v))) later.push([c, coll, key, it]);
+      ids.items[key] = uid();
+      entries.push([c, key, it]);
     }
   }
-  for (const [c, coll, key, it] of later) {
-    const all = convert(c, it.values, false);
-    const refsOnly = Object.fromEntries(Object.entries(all).filter(([fid]) => coll.fields.find((f) => f.id === fid && (f.kind === "item" || f.kind === "item_list"))));
-    const item = await repo.getItem(coll, ids.items[key]);
-    await repo.updateItem(coll, ids.items[key], { ...item.values, ...refsOnly });
-  }
+  if (entries.length) await repo.createItems(entries.map(([c, key, it]) => ({ collection: byKey(c.key), id: ids.items[key], values: convert(c, it.values), spaceId: ids.spaces[it.space || "default"] })));
   for (const c of spec.collections || []) {
     const fieldId = (k) => (k && k.startsWith("$") ? k : ids.fields[`${c.key}.${k}`] || k);
     const mapLayout = (l) => (l ? { fields: l.fields ? l.fields.map(fieldId) : null, editable: l.editable !== false, hiddenLabels: (l.hiddenLabels || []).map(fieldId), hideEmpty: !!l.hideEmpty } : { fields: null, editable: true, hiddenLabels: [], hideEmpty: false });

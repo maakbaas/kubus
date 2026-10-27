@@ -41,7 +41,7 @@ test("perf: cold start to the first collection page", async (t) => {
   await t.open(list);
   await t.measure("cold start: 300 rows shown", () => goto(t, list), rowsAtLeast, { arg: 300 });
   await t.audit("first collection page");
-  await t.measure("cold start: collections overview", () => goto(t, "/collections"), () => !!document.querySelector(".ws-pane--active .cds--tile, .ws-pane--active .collection-card, .ws-pane--active .cds--contained-list-item") && !document.querySelector(".page-loading"));
+  await t.measure("cold start: collections overview", () => goto(t, "/collections"), () => [...document.querySelectorAll(".ws-pane--active tbody .icon-label__text")].some((e) => e.textContent === "Authors") && !document.querySelector(".page-loading"));
   await t.measure("open the collection from the side nav", () => t.page.locator(".side-nav-tree").getByText("Books", { exact: true }).first().click(), rowsAtLeast, { arg: 300 });
   await t.audit("collection page from the side nav");
 }, { perf: true });
@@ -60,9 +60,9 @@ test("perf: a 1,000-row table loads, scrolls and sorts", async (t) => {
   }
   await pane.evaluate((el) => (el.scrollTop = 0));
   const header = (name) => t.page.locator(".ws-pane--active .items-table thead th").filter({ hasText: name }).first();
-  const sorted = (dir) => () => [...document.querySelectorAll(".ws-pane--active .items-table thead th")].some((th) => th.textContent.includes("Count") && th.getAttribute("aria-sort") === dir);
-  await t.measure("sort by Count", () => header("Count").locator("button").first().click(), sorted("ascending"));
-  await t.measure("sort by Count, descending", () => header("Count").locator("button").first().click(), sorted("descending"));
+  const sorted = (dir) => [...document.querySelectorAll(".ws-pane--active .items-table thead th")].some((th) => th.textContent.includes("Count") && th.getAttribute("aria-sort") === dir);
+  await t.measure("sort by Count", () => header("Count").locator("button").first().click(), sorted, { arg: "ascending" });
+  await t.measure("sort by Count, descending", () => header("Count").locator("button").first().click(), sorted, { arg: "descending" });
   await t.audit("sorted by Count");
   await t.check("still 1,000 rows", await t.page.evaluate(rowsAtLeast, 1000), "rows went missing");
 }, { perf: true });
@@ -201,7 +201,7 @@ test("perf: switching view tabs, workspace tabs and panes", async (t) => {
       { name: "All", blocks: [{ kind: "table", layout: { fields: ["title", "count", "date", "done", "fav", "ref", "tags"] } }] },
       { name: "Cards", blocks: [{ kind: "cards", options: { coverFieldId: null, cardWidth: 14, coverRatio: "auto", showTitle: true, listNarrow: false } }] },
       { name: "Grouped", blocks: [{ kind: "table", groupBy: "done", layout: { fields: ["title", "count", "date", "tags"] } }] },
-      { name: "Blocks", blocks: [{ kind: "markdown", title: "Notes", options: { text: MARKDOWN.long } }, { kind: "table", title: "Table", layout: { fields: ["title", "count", "done"] } }, { kind: "component", componentKey: "double", args: { x: { value: "21" } } }] },
+      { name: "Blocks", blocks: [{ kind: "markdown", title: "Notes", options: { text: MARKDOWN.long } }, { kind: "table", title: "Table", layout: { fields: ["title", "count", "done"] } }, { kind: "component", local: "{{ 21 * 2 }}" }] },
     ],
   });
   const ids = await t.seed(spec);

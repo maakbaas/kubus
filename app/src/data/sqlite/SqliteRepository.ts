@@ -18,7 +18,7 @@ import { parseItemViews, withDefaultItemView, type ItemView } from "../../domain
 import { isComponentOutput, type Component } from "../../domain/components";
 import { DEFAULT_SPACE_ID, withDefaultSpace, type Space } from "../../domain/spaces";
 import { defaultViewState, parseViewConfig, type CollectionView } from "../../domain/views";
-import type { DataChange, Repository } from "../repository";
+import type { DataChange, NewItem, Repository } from "../repository";
 import { SyncEngine } from "../sync/SyncEngine";
 import { SqlClient } from "./client";
 import { acceptedStatement, editedStatement, generatedStatement } from "./generated";
@@ -411,23 +411,32 @@ export class SqliteRepository implements Repository {
   }
 
   async createItem(collection: Collection, values: Record<string, FieldValue>, spaceId: string): Promise<string> {
-    const id = newId();
-    const ts = now();
-    const writes: Statement[] = [
-      {
-        sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES (?1, ?2, ?4, ?3, ?3)",
-        bind: [id, collection.id, ts, spaceId],
-      },
-    ];
+    const [id] = await this.createItems([{ collection, values, spaceId }]);
+    return id;
+  }
+
+  async createItems(entries: NewItem[]): Promise<string[]> {
+    const ids = entries.map((e) => e.id ?? newId());
+    // Each its own time, in order (as if created one by one).
+    const stamps = entries.map(() => now());
+    // Every item before any value, so a reference to another new item finds it.
+    const writes: Statement[] = entries.map((e, i) => ({
+      sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES (?1, ?2, ?4, ?3, ?3)",
+      bind: [ids[i], e.collection.id, stamps[i], e.spaceId],
+    }));
     // Only actual values: an empty field has no row, component fields are computed, never stored,
     // and AI fields are generated (setGenerated), never entered.
-    for (const field of collection.fields) {
-      const value = values[field.id];
-      if (value != null && field.kind !== "component" && field.kind !== "ai") writes.push(valueStatement(id, field, value, ts));
-    }
+    entries.forEach((e, i) => {
+      for (const field of e.collection.fields) {
+        const value = e.values[field.id];
+        if (value != null && field.kind !== "component" && field.kind !== "ai") writes.push(valueStatement(ids[i], field, value, stamps[i]));
+      }
+    });
     await this.db.write(writes);
-    this.emit({ scope: "items", collectionId: collection.id, itemId: id });
-    return id;
+    // One item: that item changed; more: each collection's list is read again once.
+    if (entries.length === 1) this.emit({ scope: "items", collectionId: entries[0].collection.id, itemId: ids[0] });
+    else this.emit(...[...new Set(entries.map((e) => e.collection.id))].map((collectionId) => ({ scope: "items", collectionId }) as const));
+    return ids;
   }
 
   async updateItem(collection: Collection, itemId: string, values: Record<string, FieldValue>): Promise<void> {

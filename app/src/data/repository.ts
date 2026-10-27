@@ -113,6 +113,11 @@ export interface Repository {
   listLabels(collection: Collection, itemIds?: string[]): Promise<ItemLabel[]>;
   /** Returns the id of the created item. */
   createItem(collection: Collection, values: Record<string, FieldValue>, spaceId: string): Promise<string>;
+  /**
+   * Creates many items (of any collections) in one change set, e.g. an import; they may refer to
+   * each other. Returns their ids, in order.
+   */
+  createItems(entries: NewItem[]): Promise<string[]>;
   updateItem(collection: Collection, itemId: string, values: Record<string, FieldValue>): Promise<void>;
   /**
    * Stores what a model generated for an AI field, with the fingerprint of the prompt it answers
@@ -172,4 +177,12 @@ export interface Repository {
   getFile(fileId: string): Promise<{ data: Uint8Array; mime: string } | null>;
   /** Deletes these files unless a live item still uses them. Safe to call liberally. */
   releaseFiles(fileIds: string[]): Promise<void>;
+}
+
+/** An item to create: its values by field id, its space, and its id when the caller has one (else a new one). */
+export interface NewItem {
+  collection: Collection;
+  values: Record<string, FieldValue>;
+  spaceId: string;
+  id?: string;
 }

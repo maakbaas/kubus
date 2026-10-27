@@ -157,8 +157,8 @@ function __makeT(ctx, pg, name, opts) {
       loads += 1;
       await timed("load", async () => {
         await pg.goto(`${base}/?load=${loads}#${path}`);
-        await pg.waitForFunction(() => window.kubus && window.kubus.repo, null, { timeout: 30000 });
-        await pg.waitForSelector(".ws-pane", { timeout: 30000 });
+        await pg.waitForFunction(() => window.kubus && window.kubus.repo, null, { timeout: opts.perf ? 120000 * slow : 30000 });
+        await pg.waitForSelector(".ws-pane", { timeout: opts.perf ? 120000 * slow : 30000 });
       });
       if (settle) await t.settle();
     },
@@ -830,7 +830,8 @@ async function __main(pg) {
   }
   const p = await ctx.newPage();
   const slow = Math.max(1, opts.cpu || __OPTS.cpu || 1);
-  p.setDefaultTimeout(8000 * slow);
+  // Perf tests measure how long things take, also when that is long (a slow build before a fix).
+  p.setDefaultTimeout((opts.perf ? 60000 : 8000) * slow);
   const chromium = /chrom|msedge/.test(__OPTS.browser || "chromium");
   // Load mode (--cpu n): the page's CPU n times slower (Chromium only: CDP). Perf tests read the
   // renderer's metrics through the same session.
