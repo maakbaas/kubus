@@ -76,17 +76,19 @@ export function ComponentForm({
         />
       )}
       {askAi?.help && <p className="helper field-settings__note">{askAi.help}</p>}
-      {/* A few words in, the model writes the code (it changes this editor only, nothing is saved). */}
-      <WriteWithAi
-        id={`${id}-write`}
-        current={{ name: writer?.name ?? "", description: writer?.description ?? "", output: value.output, code: value.code }}
-        focus={writer?.focus}
-        ai={ai}
-        onApply={(s) => {
-          set({ code: s.code, ...(!outputLocked && { output: ai && !isAiOutput(s.output) ? "string" : s.output }) });
-          writer?.onNamed?.(s.name, s.description);
-        }}
-      />
+      {/* A few words in, the model writes the code (it changes this editor only, nothing is saved).
+          Not for a prompt: the model writing a prompt for the model is one layer too many. */}
+      {!ai && (
+        <WriteWithAi
+          id={`${id}-write`}
+          current={{ name: writer?.name ?? "", description: writer?.description ?? "", output: value.output, code: value.code }}
+          focus={writer?.focus}
+          onApply={(s) => {
+            set({ code: s.code, ...(!outputLocked && { output: s.output }) });
+            writer?.onNamed?.(s.name, s.description);
+          }}
+        />
+      )}
       {/* What the result is: how it shows on pages, in tables and cards (and how it sorts). */}
       <Select
         size="sm"

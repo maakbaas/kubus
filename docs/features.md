@@ -88,7 +88,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
     output). A shared component's Ask AI is fixed while fields use it, its output while AI fields
     use it; changing a shared prompt asks first, naming the fields and how many items are asked
     again. The component editor previews a prompt as it reads for an item ("Sent to the model") and
-    "Try" asks the model once (nothing stored); Write with AI writes a prompt for one.
+    "Try" asks the model once (nothing stored); Write with AI isn't offered for a prompt (a model writing
+    a prompt for a model is a layer too many).
   - HTML output renders in a sandboxed frame that sizes itself, one component for every place
     (`HtmlFrame` in `ui/ComponentValue.tsx`, which documents flow/fill sizing, `frame_ratio`, the
     `<meta name="frame">` override and the zero-specificity base styles).

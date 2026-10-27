@@ -43,30 +43,20 @@ export function componentMessages(args: {
   current?: { name: string; description: string; output: ComponentOutput; code: string };
   collections: Collection[];
   focus?: Collection;
-  /** The component asks AI: its text is a prompt for a language model, written for an AI field. */
-  ai?: boolean;
 }): { role: "system" | "user"; content: string }[] {
-  const { help, request, current, collections, focus, ai = false } = args;
+  const { help, request, current, collections, focus } = args;
   const system = [
     "You write components for Kubus, a personal knowledge base. A component is text with {{ JavaScript }} sections. The documentation follows; rely on it, and on nothing else about Kubus.",
     "<documentation>",
     help.trim(),
     "</documentation>",
     "Reply with one JSON object, then the text of the component between <code> and </code>, exactly as it is to be stored (not escaped), and nothing else (no code fence, no comments):",
-    ai
-      ? '{"name": "two to four words", "description": "one short sentence on what the field holds", "output": "string" | "number" | "markdown"}'
-      : '{"name": "two to four words", "description": "one short sentence on what it shows", "output": "markdown" | "string" | "number" | "image" | "html"}',
+    '{"name": "two to four words", "description": "one short sentence on what it shows", "output": "markdown" | "string" | "number" | "image" | "html"}',
     "<code>",
     "the text of the component",
     "</code>",
     "Rules:",
     "- Read an item's fields with $item (for example {{ $item.Pages }}). There are no other variables: any $name but $now, $item, $items, $groups, $fields and $all is an error.",
-    ...(ai
-      ? [
-          "- This component asks AI: its text, with the sections filled in for one item, is a prompt sent to a language model, and the model's reply is the value of an AI field, stored for that item. Write the prompt: short and plain, asking for exactly the value, with what it needs from the item in {{ $item.Name }} sections. The model is told the collection, the field and the shape of the value already.",
-          "- In a prompt only $item is available (no $now, no $items, $groups, $fields or $all), and the output is string, number or markdown.",
-        ]
-      : []),
     "- Never use $item together with $items, $groups, $fields or $all in one component: it is either about one item or about a block's items.",
     "- Each section is one JavaScript expression. Guard for empty fields (null).",
     "- Choose the simplest output that fits: number for a computed number, string for one line of plain text, markdown for formatted text, html only for what Markdown cannot do (charts, maps).",
