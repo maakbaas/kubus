@@ -298,8 +298,8 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   });
   const blockName = useBlockName();
   // Headed like a field (its name as a label, with its type's icon), collapsible. A hidden header
-  // (View settings; Page layout on item pages) leaves only its menus, as a "⋮" beside the content;
-  // such a block can't collapse.
+  // (View settings; Page layout on item pages) goes with its menus; such a block
+  // can't collapse.
   const headless = page ? !!headerHidden : !!block.hideHeader;
   const collapsed = !headless && state.blocks.includes(block.id);
   const toggleCollapsed = () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));

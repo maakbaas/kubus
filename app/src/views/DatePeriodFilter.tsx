@@ -29,9 +29,19 @@ const KINDS: { kind: PeriodKind; text: string; current: string }[] = [
   { kind: "range", text: "Range", current: "" },
 ];
 
+const MONTHS = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString(undefined, { month: "long" }));
+
+/** The years to pick from: a century back and twenty years on from this one, and the year shown if outside. */
+function yearsAround(shown: number, current: number): number[] {
+  const first = Math.min(shown, current - 100);
+  const last = Math.max(shown, current + 20);
+  return Array.from({ length: last - first + 1 }, (_, i) => last - i);
+}
+
 /**
  * The top of a filter: which day, week, month, year or range the items' date falls in, in as few
- * clicks as there can be (one for this week, then one per week back or on). It goes by the first
+ * clicks as there can be (one for this week, then one per week back or on, or any other one picked
+ * straight away: a day of its calendar, its month and year). It goes by the first
  * date or date & time field (none: Updated), or another one picked beside it (Created, Updated
  * too), and is kept as the filter's one "between" rule (domain/datePeriod.ts), which the rule list
  * doesn't show. The current day, week, month or year is kept counted from today ("this week" stays
@@ -132,6 +142,46 @@ export function DatePeriodFilter({ collection, filters, onChange }: { collection
           <Close />
         </IconButton>
       </div>
+      {period && (kind === "day" || kind === "week") && (
+        <div className="date-period__pick">
+          <DatePicker
+            datePickerType="single"
+            dateFormat="Y-m-d"
+            value={period.start}
+            onChange={([day]) => day && write(periodAround(kind, formatDate(day)))}
+          >
+            <DatePickerInput id={`${uid}-date-day`} size="sm" labelText={kind === "day" ? "Day" : "A day of the week"} placeholder="yyyy-mm-dd" />
+          </DatePicker>
+        </div>
+      )}
+      {period && (kind === "month" || kind === "year") && (
+        <div className="date-period__pick">
+          {kind === "month" && (
+            <Select
+              id={`${uid}-date-month`}
+              labelText="Month"
+              size="sm"
+              value={Number(period.start.slice(5, 7))}
+              onChange={(e) => write(periodAround("month", `${period.start.slice(0, 4)}-${e.target.value.padStart(2, "0")}-01`))}
+            >
+              {MONTHS.map((name, i) => (
+                <SelectItem key={name} value={i + 1} text={name} />
+              ))}
+            </Select>
+          )}
+          <Select
+            id={`${uid}-date-year`}
+            labelText="Year"
+            size="sm"
+            value={Number(period.start.slice(0, 4))}
+            onChange={(e) => write(periodAround(kind, `${e.target.value}${period.start.slice(4)}`))}
+          >
+            {yearsAround(Number(period.start.slice(0, 4)), Number(today.slice(0, 4))).map((y) => (
+              <SelectItem key={y} value={y} text={String(y)} />
+            ))}
+          </Select>
+        </div>
+      )}
       {kind === "range" && (
         <DatePicker
           className="date-period__range"

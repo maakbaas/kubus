@@ -1,32 +1,26 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { IconButton } from "@carbon/react";
-import { OverflowMenuHorizontal, OverflowMenuVertical } from "@carbon/icons-react";
+import { OverflowMenuVertical } from "@carbon/icons-react";
 import { useMediaQuery } from "./useMediaQuery";
-import { PANEL_OPENED } from "./ToolbarPopover";
+import { PANEL_OPENED, WINDOW_LEVEL } from "./ToolbarPopover";
 import { visibleArea } from "./panelRoom";
 
 /**
- * A row of icon buttons. On a phone, in a narrow page header (styles.css, `.overflow-bar`) or with
- * `menu`, they collapse into one "⋮" button that opens them in the dark popover the Markdown
+ * A row of icon buttons. On a phone or in a narrow page header (styles.css, `.overflow-bar`) they
+ * collapse into one "⋮" button that opens them in the dark popover the Markdown
  * editor's table menu has. The buttons are the same elements either way (not copies), so toolbar
- * popovers among them keep their state. A hidden header's menu is a "…" (`horizontal`) on a low row.
+ * popovers among them keep their state.
  */
 export function OverflowBar({
   children,
-  menu,
-  horizontal,
 }: {
   children: ReactNode;
-  /** The "⋮" button at any width (a hidden header's buttons). */
-  menu?: boolean;
-  /** "…" rather than "⋮". */
-  horizontal?: boolean;
 }) {
   const narrow = useMediaQuery("(max-width: 42rem)");
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
-  const asMenu = menu || narrow;
+  const asMenu = narrow;
   // Opened near the bottom of the window (a block low on a phone's screen): the menu opens upwards,
   // or it, and the panels opened from it, would run out of the window.
   const [up, setUp] = useState(false);
@@ -49,10 +43,11 @@ export function OverflowBar({
   }, []);
   useEffect(() => {
     if (!open) return;
-    // A dialog opened from a button here is rendered at the window level and counts as inside.
+    // A dialog, or a date picker's calendar in a panel, opened from a button here is rendered at
+    // the window level and counts as inside (a day picked closed the menu with its panel).
     const onPointerDown = (e: PointerEvent) => {
       const t = e.target as Element;
-      if (!root.current?.contains(t) && !t.closest(".cds--modal, .cds--menu")) setOpen(false);
+      if (!root.current?.contains(t) && !t.closest(WINDOW_LEVEL)) setOpen(false);
     };
     // Escape closes the menu (and a panel opened from it) with focus in it or dropped to the body
     // (an input that saved on Enter): focus goes to "⋮", as the button that had it is hidden with
@@ -84,7 +79,7 @@ export function OverflowBar({
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        {horizontal ? <OverflowMenuHorizontal /> : <OverflowMenuVertical />}
+        <OverflowMenuVertical />
       </IconButton>
       {/* A plain button closes it; a toolbar popover's button opens its panel and keeps it. */}
       <div

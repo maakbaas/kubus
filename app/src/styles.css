@@ -137,6 +137,13 @@ body {
 .ws-pane__end--phone {
   display: none;
 }
+/* No hover tooltips on touch screens: a tap would show them (an emulated hover) over what it
+   opened. The buttons say what they do by their icons; panels (Popover, not .cds--tooltip) stay. */
+@media (hover: none) {
+  .cds--tooltip > .cds--popover {
+    display: none !important;
+  }
+}
 /* Carbon's ghost icon button fills the icon's <path> with the icon colour (more specific than
    a rule on the svg), so the status colours go on the path, and the class may sit on the
    button or on its tooltip wrapper. */
@@ -2107,9 +2114,18 @@ img[data-lightbox] {
   align-items: center;
 }
 /* Five switches fit a phone's panel unclipped ("Month" whole) with a step less padding (Carbon's
-   own rule is this specific). */
+   own rule is this specific), their names centred. */
 .date-period .cds--content-switcher:not(.cds--content-switcher--icon-only) .cds--content-switcher-btn {
   padding-inline: var(--cds-spacing-03);
+  justify-content: center;
+}
+/* Square corners, as everywhere: Carbon rounds the switcher and its selected switch's focus ring
+   (an inset shadow on ::after) by 4px, which reads as a thicker border in the corners. */
+.cds--content-switcher,
+.cds--content-switcher-btn,
+.cds--content-switcher-btn::before,
+.cds--content-switcher-btn::after {
+  border-radius: 0 !important;
 }
 .date-period__nav {
   display: flex;
@@ -2119,6 +2135,18 @@ img[data-lightbox] {
 .date-period__label {
   flex: 1;
   min-inline-size: 0;
+}
+/* Going straight to a day, week, month or year: its calendar, or its month and year, on the range's columns. */
+.date-period__pick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--cds-spacing-03);
+}
+.date-period__pick .cds--date-picker,
+.date-period__pick .cds--date-picker-container,
+.date-period__pick .cds--date-picker-input__wrapper > *,
+.date-period__pick .cds--date-picker.cds--date-picker--single .cds--date-picker__input {
+  inline-size: 100%;
 }
 .date-period__range .cds--date-picker--range {
   inline-size: 100%;
@@ -2512,9 +2540,9 @@ img[data-lightbox] {
   flex: none;
   inline-size: 1rem;
 }
-/* OverflowBar: a row of icon buttons; where there is little room (a phone, a narrow page header) or
-   no header row (a hidden header's buttons) a "⋮" button opens them in a dark popover, as the
-   Markdown editor's table menu looks (`.overflow-bar--menu`, set by OverflowBar for phones too).
+/* OverflowBar: a row of icon buttons; where there is little room (a phone, a narrow page header) a
+   "⋮" button opens them in a dark popover, as the Markdown editor's table menu looks
+   (`.overflow-bar--menu`, set by OverflowBar for phones).
    Wide: the wrapper vanishes and the buttons sit in the row as if they were its own. */
 .overflow-bar,
 .overflow-bar__items {
@@ -2668,28 +2696,6 @@ img[data-lightbox] {
   align-items: center;
   block-size: 0;
   margin-inline-start: auto;
-}
-/* A hidden header: a thin row in its place with its buttons as a "…" menu at the right, so the
-   content keeps the full width. The "…" is a low button (2rem wide, 1rem tall), the row only as
-   tall as it: most of a header's height goes. */
-.section-header--hidden {
-  --toggle-height: 1rem;
-  justify-content: flex-end;
-  min-block-size: 0;
-  block-size: var(--toggle-height);
-  margin: 0;
-}
-/* On touch screens tall enough to hit (WCAG 2.5.8: 24px). */
-@media (pointer: coarse) {
-  .section-header--hidden {
-    --toggle-height: 1.5rem;
-  }
-}
-.section-header--hidden .overflow-bar__toggle.cds--btn {
-  block-size: var(--toggle-height);
-  min-block-size: var(--toggle-height);
-  padding: 0;
-  justify-content: center;
 }
 /* Only the buttons, at the right of the label row of what follows (a field being edited, whose
    input brings its own label): the row's height, from the top. */

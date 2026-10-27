@@ -23,6 +23,8 @@ interface Props {
 
 /** Dispatched (bubbling) from a toolbar popover when it opens. */
 export const PANEL_OPENED = "kubus-panel-opened";
+/** What a panel opens at the window level (a dialog, a menu, a date picker's calendar), which counts as part of it. */
+export const WINDOW_LEVEL = ".cds--modal, .cds--menu, .flatpickr-calendar";
 
 /**
  * Whether any of a page's toolbar panels is open (pass `onOpenChange` to each), and `hold`:
@@ -73,7 +75,7 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
   const root = useRef<HTMLSpanElement>(null);
   const pressedOutside = useRef(false);
   // A dialog or a date picker's calendar opened from the panel (rendered at the window level) counts as part of it.
-  const inside = (n: Node | null) => !!n && (!!root.current?.contains(n) || (n instanceof Element && !!n.closest(".cds--modal, .cds--menu, .flatpickr-calendar")));
+  const inside = (n: Node | null) => !!n && (!!root.current?.contains(n) || (n instanceof Element && !!n.closest(WINDOW_LEVEL)));
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {

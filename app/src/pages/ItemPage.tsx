@@ -563,7 +563,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
             const component = f.kind === "component" ? fieldComponent(f, components) : undefined;
             const shared = component && f.code === null ? components.find((t) => t.id === f.componentId) : undefined;
             const labelHidden = layout.hiddenLabels.includes(f.id);
-            // An AI field's "Generate again", in its label row (or "⋮"), also while collapsed or edited.
+            // An AI field's "Generate again", in its label row (none without its name), also while collapsed or edited.
             const regenerateButton = f.kind === "ai" && (
               <RegenerateButton generatedAt={item.aiGeneratedAt?.[f.id]} edited={!!item.aiEdited?.[f.id]} onRegenerate={(hint) => regenerate(f, hint)} />
             );
@@ -585,11 +585,11 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
             editing?.fieldId === f.id && component ? (
               // A component field edits its component (shared: saving asks first).
               <ComponentFieldEditor key={f.id} collection={collection} field={f} component={component} shared={shared} onDone={() => setEditing(null)} />
-            ) : editor && regenerateButton ? (
-              // Its buttons stay where they were while it is edited: over the input's label row, or "⋮" beside it.
+            ) : editor && regenerateButton && !labelHidden ? (
+              // Its buttons stay where they were while it is edited: over the input's label row.
               <div key={f.id} className="view-field">
                 {editor}
-                <SectionHeader label={null} overlay={!labelHidden} hidden={labelHidden}>
+                <SectionHeader label={null} overlay>
                   {regenerateButton}
                 </SectionHeader>
               </div>
@@ -909,7 +909,7 @@ interface ViewFieldProps {
   edited?: boolean;
   /** AI fields: the item the value belongs to (what it is waiting for shows by it). */
   itemId?: string;
-  /** Shown without its name (the layout's choice): its label row's buttons become a "⋮" beside the value. */
+  /** Shown without its name (the layout's choice): its label row goes with its buttons. */
   labelHidden?: boolean;
 }
 
