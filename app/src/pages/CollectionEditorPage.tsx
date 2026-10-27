@@ -279,6 +279,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                         targets={targets}
                         problem={submitted ? targetErrors[f.id] : undefined}
                         itemCount={existing ? (counts[existing.id] ?? 0) : 0}
+                        collection={existing}
                         onChange={(patch) => updateField(f.id, patch)}
                       />
                     </Stack>

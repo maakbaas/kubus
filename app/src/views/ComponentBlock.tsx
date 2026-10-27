@@ -64,13 +64,13 @@ function ComponentBlockView({ collection, result, fields, options, refs, all }: 
 /** Components a block can show: block and static ones. */
 export const blockComponents = (components: Component[], chosen?: string | null) => componentsFor(components, "block", chosen);
 
-function ComponentBlockOptionsEditor({ options, onChange }: BlockOptionsProps<ComponentBlockOptions>) {
+function ComponentBlockOptionsEditor({ collection, options, onChange }: BlockOptionsProps<ComponentBlockOptions>) {
   const uid = useId();
   // Its code is typed here and stored after a pause (each change of a block's options is stored).
   const [draft, update] = useBuffered(options, onChange);
   return (
     <div className="view-options view-options--stack">
-      <ComponentChoice id={`${uid}-block`} place="block" value={draft} onChange={(ref) => update({ componentId: ref.local ? null : ref.componentId, local: ref.local })} />
+      <ComponentChoice id={`${uid}-block`} place="block" collection={collection} value={draft} onChange={(ref) => update({ componentId: ref.local ? null : ref.componentId, local: ref.local })} />
     </div>
   );
 }

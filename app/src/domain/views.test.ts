@@ -99,7 +99,8 @@ describe("components in blocks", () => {
     expect(placeProblem(code("{{ $item.Name }}: {{ $items.length }}"), "block")).toMatch(/both/);
   });
 
-  it("fit their place: field components as fields, block components as blocks, static ones anywhere", () => {
+  it("fit their place: field components as fields, block components as blocks, static ones as blocks", () => {
+    expect(placeProblem(code("Read me {{ $now.getDay() }}"), "field")).toMatch(/same for every item/);
     expect(placeProblem(code("{{ $item.Pages }}"), "field")).toBeNull();
     expect(placeProblem(code("{{ $item.Pages }}"), "block")).toMatch(/use it as a field/);
     expect(placeProblem(code("{{ $items.length }}"), "block")).toBeNull();

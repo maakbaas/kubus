@@ -40,7 +40,7 @@ for (const vp of ["desktop", "phone", "laptop"]) {
       }
       // A component field starts with its own component, written here; AI turns "Ask AI" on.
       if (type === "Component") {
-        await row.getByRole("textbox", { name: "Code" }).fill("{{ 6 * 7 }}");
+        await row.getByRole("textbox", { name: "Code" }).fill("{{ $item.id }}");
         await t.settle(80);
       }
       if (type === "AI") {
@@ -130,7 +130,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.open(t.itemPath(ids.collections.books, ids.items["books/i0"]));
     await t.audit("item page with failing and wide HTML components");
     await t.open("/components/new");
-    const code = t.page.getByRole("textbox", { name: /Component|JavaScript/ }).first();
+    const code = t.page.getByRole("textbox", { name: "Code", exact: true }).first();
     await code.click().catch(() => {});
     await t.page.keyboard.type("**{{ $item.Title }}**: {{ Math.round($pages / 40) }} h {{ syntax error ( }}");
     await t.settle(400);

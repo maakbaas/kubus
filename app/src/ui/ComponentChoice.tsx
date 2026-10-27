@@ -1,26 +1,10 @@
 import { useState } from "react";
-import { Button, Dropdown, Select, SelectItem, Stack, Tag, Toggle } from "@carbon/react";
+import { Button, Dropdown, Stack, Tag, Toggle } from "@carbon/react";
 import { useStore } from "../app/store";
-import {
-  AI_COMPONENT_OUTPUTS,
-  COMPONENT_OUTPUTS,
-  componentsFor,
-  isAiOutput,
-  kindText,
-  placeProblem,
-  type Component,
-  type ComponentCode,
-  type ComponentPlace,
-} from "../domain/components";
-import { ComponentCodeEditor } from "./ComponentCodeEditor";
+import { componentsFor, isAiOutput, placeProblem, type Component, type ComponentCode, type ComponentPlace } from "../domain/components";
+import type { Collection } from "../domain/model";
+import { ComponentForm } from "./ComponentForm";
 import { PromoteComponentModal } from "./PromoteComponentModal";
-
-/** What the code editor says about the built-in $ names (also on the component page). */
-export const CODE_HELP =
-  "Markdown with {{ JavaScript }} sections. Built in: $now (the current date); $item, one item: its fields by name ($item.Pages, $item[\"Read at\"]); a block's $items, $groups, $fields and $all. Help has the rest.";
-/** …and about a prompt, when the component asks AI. */
-export const PROMPT_HELP =
-  "Asked for each item. Put what it needs in with {{ $item.Name }}, e.g. {{ $item.Artist }}; the value is made again only when the prompt, as it reads for that item, changes. Only $item is here: no $now (the value would be stale every moment) and no other AI fields (two reading each other never settle). Keep it short: the model is told the collection, the field and the shape of the value.";
 
 /** A place's component: a shared one it picks, or its own (local), written here. */
 export interface ComponentRef {
@@ -46,6 +30,7 @@ export function ComponentChoice({
   outputLocked = false,
   invalidText,
   suggestedName,
+  collection,
 }: {
   id: string;
   place: ComponentPlace;
@@ -58,6 +43,8 @@ export function ComponentChoice({
   invalidText?: string;
   /** The name "Save as shared component" suggests. */
   suggestedName?: string;
+  /** The collection it is for (Write with AI reads its fields). */
+  collection?: Collection;
 }) {
   const { components } = useStore();
   const [promoting, setPromoting] = useState(false);
@@ -67,7 +54,6 @@ export function ComponentChoice({
   const choices = [LOCAL, ...offered.map((c) => c.id)];
   const nameOf = (choice: string) => (choice === LOCAL ? "Written here" : (components.find((c) => c.id === choice)?.name ?? ""));
   const local = value.local;
-  const outputs = asksAi ? COMPONENT_OUTPUTS.filter((o) => AI_COMPONENT_OUTPUTS.includes(o.value)) : COMPONENT_OUTPUTS;
   const blank = (aiNow: boolean): ComponentCode => ({ code: "", output: aiNow ? "string" : "markdown", frameRatio: null, ai: aiNow });
 
   return (
@@ -110,34 +96,16 @@ export function ComponentChoice({
       />
       {local && (
         <>
-          <Select
-            size="sm"
-            id={`${id}-output`}
-            labelText="Output"
-            value={local.output}
-            disabled={outputLocked}
-            helperText={outputLocked ? "Fixed once saved: the values are stored in this form." : undefined}
-            onChange={(e) => onChange({ componentId: null, local: { ...local, output: e.target.value as ComponentCode["output"] } })}
-          >
-            {outputs.map((o) => (
-              <SelectItem key={o.value} value={o.value} text={o.text} />
-            ))}
-          </Select>
-          <ComponentCodeEditor
-            id={`${id}-code`}
-            labelText={asksAi ? "Prompt" : "Code"}
-            html={local.output === "html"}
-            placeholder={
-              asksAi
-                ? "Album by {{ $item.Artist }}. If these albums were sorted by artist last name in a record store, give that last name."
-                : place === "field"
-                  ? "{{ Math.round($item.Pages / 40) }} h of reading"
-                  : "{{ $items.length }} items"
-            }
-            helperText={asksAi ? PROMPT_HELP : `${kindText(local.code)} ${CODE_HELP}`}
-            invalidText={invalidText ?? (local.code.trim() ? (placeProblem(local, place) ?? undefined) : undefined)}
-            value={local.code}
-            onChange={(code) => onChange({ componentId: null, local: { ...local, code } })}
+          {/* The same editor as on a shared component's page (ComponentForm); Ask AI stays above, with the choice. */}
+          <ComponentForm
+            id={id}
+            value={{ ...local, ai: asksAi }}
+            onChange={(next) => onChange({ componentId: null, local: next })}
+            place={place}
+            outputLocked={outputLocked}
+            outputHelp={outputLocked ? "Fixed once saved: the values are stored in this form." : undefined}
+            invalidText={invalidText}
+            writer={{ focus: collection, name: suggestedName ?? "", description: "" }}
           />
           {/* Always there (in a panel above its button, appearing would move the editor): enabled once there is code that fits. */}
           <div>

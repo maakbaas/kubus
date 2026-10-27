@@ -200,7 +200,7 @@ for (const vp of ["desktop", "phone"]) {
     const write = t.page.getByRole("button", { name: /^Write/ });
     await t.noShift("writing moves nothing above the editor", async () => {
       await write.click();
-      await t.until("the code is written into the editor", async () => (await t.page.getByRole("textbox", { name: "Component" }).inputValue().catch(() => "")).includes("/ 40") || "not yet", { timeout: 10000 });
+      await t.until("the code is written into the editor", async () => (await t.page.getByRole("textbox", { name: "Code", exact: true }).inputValue().catch(() => "")).includes("/ 40") || "not yet", { timeout: 10000 });
     }, { scope: ".ws-pane--active .page-header" });
     await t.check("the description is filled in", (await t.page.getByRole("textbox", { name: "Description" }).inputValue()).includes("Hours to read it"));
     await t.check("the box is emptied for a follow-up", (await box.inputValue()) === "");

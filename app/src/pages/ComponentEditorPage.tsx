@@ -1,34 +1,28 @@
 import { useId, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Button, Form, InlineNotification, MultiSelect, Select, SelectItem, Stack, TextInput, Toggle } from "@carbon/react";
+import { Button, Form, InlineNotification, MultiSelect, Select, SelectItem, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
 import { useAiSettings } from "../app/useAi";
 import { useItems } from "../app/useItems";
 import { parseAiReply, promptRequest } from "../domain/ai";
 import {
-  AI_COMPONENT_OUTPUTS,
   ERROR_PREFIX,
-  FRAME_RATIOS,
   codeProblem,
   dollarNames,
   isAiOutput,
-  kindText,
   placeProblem,
   render,
   withComputed,
   fieldLookup,
   itemsInput,
-  COMPONENT_OUTPUTS,
   type BlockInputs,
   type ComponentOutput,
 } from "../domain/components";
 import { itemLabel, newId, now, pickableFields, type Collection, type FieldDef } from "../domain/model";
 import { applyQuery, defaultQuery, isGroupable } from "../domain/query";
 import { refLabelOf, useReferenceOptions } from "../ui/useReferenceOptions";
-import { CODE_HELP, PROMPT_HELP } from "../ui/ComponentChoice";
-import { ComponentCodeEditor } from "../ui/ComponentCodeEditor";
+import { ComponentForm } from "../ui/ComponentForm";
 import { ComponentValue } from "../ui/ComponentValue";
-import { WriteWithAi } from "../ui/WriteWithAi";
 import { NotFound } from "../ui/NotFound";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
@@ -84,7 +78,6 @@ export function ComponentEditorPage() {
   // Unknown $ names, or one item ($item) and a block's items together: such code fits no place,
   // so it isn't saved; a prompt also mustn't read $now or a block's items.
   const codeError = useMemo(() => (ai ? placeProblem({ code, ai }, "field") : codeProblem(code)) ?? undefined, [code, ai]);
-  const outputs = ai ? COMPONENT_OUTPUTS.filter((o) => AI_COMPONENT_OUTPUTS.includes(o.value)) : COMPONENT_OUTPUTS;
 
   if (componentId && !existing) return <NotFound />;
 
@@ -144,19 +137,6 @@ export function ComponentEditorPage() {
             invalid={submitted && !!nameError}
             invalidText={nameError}
           />
-          {/* A few words in, the model writes the component and its description (it changes this form only). */}
-          <WriteWithAi
-            id={`${uid}-component-write`}
-            current={{ name, description, output, code }}
-            focus={previewCollection}
-            ai={ai}
-            onApply={(s) => {
-              setCode(s.code);
-              setDescription(s.description);
-              if (!outputLocked) setOutput(ai && !isAiOutput(s.output) ? "string" : s.output);
-              if (!name.trim()) setName(s.name);
-            }}
-          />
           <TextInput
             size="sm"
             id={`${uid}-component-description`}
@@ -165,67 +145,33 @@ export function ComponentEditorPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-          {/* Whether its text is a prompt (for AI fields, which store the replies): fixed once fields use it. */}
-          <Toggle
-            size="sm"
-            id={`${uid}-component-ai`}
-            labelText="Ask AI"
-            labelA="Off"
-            labelB="On: the text is a prompt; the language model writes an AI field's value"
-            toggled={ai}
-            disabled={aiLocked}
-            onToggle={(on: boolean) => {
-              setAi(on);
-              if (on && !isAiOutput(output)) setOutput("string");
+          {/* The same editor as where a component is written in place (ComponentForm). Ask AI is
+              fixed while fields use it; an AI component's output while AI fields do. Write with AI
+              also fills in the description (and the name, while empty). */}
+          <ComponentForm
+            id={`${uid}-component`}
+            value={{ code, output, frameRatio, ai }}
+            onChange={(next) => {
+              setCode(next.code);
+              setOutput(next.output);
+              setFrameRatio(next.frameRatio);
+              setAi(next.ai);
+            }}
+            askAi={{ locked: aiLocked }}
+            outputLocked={outputLocked}
+            outputHelp={outputLocked ? "Fixed while AI fields use it: their values are stored in this form." : aiLocked ? "Whether it asks AI is fixed while fields use it." : undefined}
+            invalidText={codeError}
+            fills={fills}
+            writer={{
+              focus: previewCollection,
+              name,
+              description,
+              onNamed: (suggested, described) => {
+                setDescription(described);
+                if (!name.trim()) setName(suggested);
+              },
             }}
           />
-          {/* What the result is: how it shows on pages, in tables and cards (and how it sorts). */}
-          <Select
-            size="sm"
-            id={`${uid}-component-output`}
-            labelText="Output"
-            value={output}
-            disabled={outputLocked}
-            helperText={outputLocked ? "Fixed while AI fields use it: their values are stored in this form." : aiLocked ? "Whether it asks AI is fixed while fields use it." : undefined}
-            onChange={(e) => setOutput(e.target.value as ComponentOutput)}
-          >
-            {outputs.map((o) => (
-              <SelectItem key={o.value} value={o.value} text={o.text} />
-            ))}
-          </Select>
-          {/* Not the Markdown editor: it would escape characters like * and break the JavaScript in {{ }}. */}
-          <ComponentCodeEditor
-            id={`${uid}-component-code`}
-            labelText={ai ? "Prompt" : "Component"}
-            html={output === "html"}
-            placeholder={ai ? "Album by {{ $item.Artist }}. If these albums were sorted by artist last name in a record store, give that last name." : "**{{ $item.Title }}**: {{ Math.round($item.Pages / 40) }} h of reading"}
-            // What the code makes it (a field, block or static component) as it is typed; using
-            // $item and a block's names together is an error.
-            helperText={
-              ai
-                ? `${kindText(code, true)} ${PROMPT_HELP}`
-                : `${kindText(code)} ${CODE_HELP}${output === "image" ? " The result is the image's URL." : ""}${output === "html" ? " It runs in a sandboxed frame: scripts work (maps, charts), the app and its data are out of reach." : ""}`
-            }
-            invalidText={codeError}
-            value={code}
-            onChange={setCode}
-          />
-          {/* Only for HTML that fills its box (a map, a chart): content with its own height
-              is shown at that height, whatever its shape. */}
-          {output === "html" && fills && (
-            <Select
-              size="sm"
-              id={`${uid}-component-frame-ratio`}
-              labelText="Aspect ratio on pages"
-              helperText="This HTML fills its box (like a map or a chart), so it has no height of its own. On card covers it fills the cover."
-              value={frameRatio ?? "16/9"}
-              onChange={(e) => setFrameRatio(e.target.value === "16/9" ? null : e.target.value)}
-            >
-              {FRAME_RATIOS.map((r) => (
-                <SelectItem key={r} value={r} text={r.replace("/", ":")} />
-              ))}
-            </Select>
-          )}
           {/* The collection whose items $item and $items read in the preview (none: they are empty). */}
           {uses.collection && (
             <Select

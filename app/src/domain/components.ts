@@ -22,7 +22,8 @@
 // What a component uses decides its kind and so where it can go (componentUses): with $item it
 // is a field component (a component field); with $items / $groups / $fields / $all a block
 // component (a block, whose filter, sort and fields then apply); with neither it is static
-// (content that is the same everywhere: a block, or a Markdown block's text). One component never
+// (content that is the same everywhere: a block, or a Markdown block's text; not a field, where
+// it would be the same for every item). One component never
 // uses both $item and a block's names (`mixed`): it fits nowhere.
 //
 // The code runs in the app itself (new Function), with the user's own rights. That's fine for a
@@ -139,8 +140,12 @@ export function componentUses(code: string): { kind: ComponentKind; mixed: boole
   return { kind: item ? "field" : block ? "block" : "static", mixed: item && block, items, groups, fields };
 }
 
-/** Whether a component of this kind fits the place. */
-export const fitsPlace = (kind: ComponentKind, place: ComponentPlace) => kind === "static" || kind === place;
+/**
+ * Whether a component of this kind fits the place: a field component a field, a block component a
+ * block, a static one a block or a Markdown block's text (as a field it would be the same for every
+ * item).
+ */
+export const fitsPlace = (kind: ComponentKind, place: ComponentPlace) => kind === place || (kind === "static" && place !== "field");
 
 /** The components that fit a place (the one already chosen stays offered, so it still shows); for a field, only AI ones or only others. */
 export const componentsFor = (components: Component[], place: ComponentPlace, chosen?: string | null, ai = false): Component[] =>
@@ -169,7 +174,8 @@ export function placeProblem(component: Pick<ComponentCode, "code" | "ai">, plac
   const { kind } = componentUses(component.code);
   if (fitsPlace(kind, place)) return null;
   if (place === "static") return kind === "field" ? "Text here is the same everywhere: $item isn't available" : "Text here is the same everywhere: a block's $ names aren't available";
-  return place === "field" ? "This component lists items: use it as a block" : "This component shows one item ($item): use it as a field";
+  if (place === "field") return kind === "block" ? "This component lists items: use it as a block" : "This component doesn't read the item ($item): it would be the same for every item, so use it as a block";
+  return "This component shows one item ($item): use it as a field";
 }
 
 /**
@@ -201,7 +207,7 @@ export function kindText(code: string, ai = false): string {
     case "block":
       return "Block component: uses a block's items ($items, $groups, $fields or $all), so it is a block on a collection view or an item page.";
     default:
-      return "Static component: uses neither $item nor a block's items, so it is the same everywhere: a block, or a field with one value for every item.";
+      return "Static component: uses neither $item nor a block's items, so it is the same everywhere: a block (a field reads its item with $item).";
   }
 }
 

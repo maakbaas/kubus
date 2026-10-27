@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { Checkbox, IconButton, InlineNotification, Link, Modal, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Tag, Tile } from "@carbon/react";
+import { Checkbox, Dropdown, IconButton, InlineNotification, Link, Modal, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Tag, Tile } from "@carbon/react";
 import { Copy, Share, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
@@ -21,6 +21,10 @@ function kindLabel(x: ComponentCode): string {
   const uses = componentUses(x.code);
   return uses.mixed ? "Mixed: fix it" : COMPONENT_KINDS[uses.kind];
 }
+
+const SCOPES = ["all", "shared", "local"] as const;
+type Scope = (typeof SCOPES)[number];
+const SCOPE_TEXT: Record<Scope, string> = { all: "All components", shared: "Shared", local: "Written here" };
 
 /** A row of the list: a shared component, or a local one (written in place) by where it is used. */
 type Row = { shared: Component; local?: undefined } | { local: LocalComponent; shared?: undefined };
@@ -54,6 +58,7 @@ export function ComponentsPage() {
     description: (r) => r.shared?.description ?? "",
     code: (r) => codeOf(r).code.split("\n")[0],
   });
+  const [scope, setScope] = useState<Scope>("all");
   const [error, setError] = useState<string>();
   // The component being deleted, and whether the fields using it go too.
   const [deleting, setDeleting] = useState<Component | null>(null);
@@ -83,6 +88,23 @@ export function ComponentsPage() {
         actions={<NewButton label="New component" onClick={() => navigate("/components/new")} />}
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
+      {/* Shared ones, those written in place, or both. */}
+      {views !== null && rows.length > 0 && (
+        <div className="components-scope">
+          <Dropdown<Scope>
+            autoAlign
+            type="inline"
+            size="sm"
+            id="components-scope"
+            titleText="Show"
+            label="Show"
+            items={[...SCOPES]}
+            selectedItem={scope}
+            itemToString={(s) => (s ? SCOPE_TEXT[s] : "")}
+            onChange={({ selectedItem }) => selectedItem && setScope(selectedItem)}
+          />
+        </div>
+      )}
       {views === null ? null : rows.length === 0 ? (
         <Tile className="empty-state">
           <p>No components yet.</p>
@@ -101,7 +123,7 @@ export function ComponentsPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {sort(rows).map((r) => {
+              {sort(rows.filter((r) => scope === "all" || (scope === "shared") === !!r.shared)).map((r) => {
                 const code = codeOf(r);
                 return (
                   <TableRow key={r.shared ? r.shared.id : r.local.key}>

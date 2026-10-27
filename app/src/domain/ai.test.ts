@@ -57,7 +57,8 @@ describe("aiPromptProblem", () => {
   it("needs a prompt", () => {
     expect(aiPromptProblem(undefined)).toBeDefined();
     expect(aiPromptProblem(prompt("  "))).toBeDefined();
-    expect(aiPromptProblem(prompt("Say hi"))).toBeUndefined();
+    expect(aiPromptProblem(prompt("Say hi to {{ $item.Name }}"))).toBeUndefined();
+    expect(aiPromptProblem(prompt("Say hi"))).toMatch(/same for every item/);
   });
 
   it("allows only $item", () => {

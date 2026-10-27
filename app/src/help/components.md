@@ -34,7 +34,7 @@ What a component uses makes it one of three kinds:
 
 - **Field** component, uses `$item`: one item, shown as a Component field of a collection.
 - **Block** component, uses `$items`, `$groups`, `$fields` or `$all`: a block's items, on a collection view or an item's page (where the block's filter can pick the items that belong to the page's item).
-- **Static** component, uses neither: the same content everywhere, as a block, a field or a Markdown block's text (whose `{{ }}` sections may only be static: `$now`, not `$item` or a block's names).
+- **Static** component, uses neither: the same content everywhere, as a block or a Markdown block's text (whose `{{ }}` sections may only be static: `$now`, not `$item` or a block's names). Not as a field: it would be the same for every item.
 
 Never use `$item` together with a block's names: such a component fits nowhere. A block on an item's page doesn't see the page's item as `$item`; its filter takes it ("Author is this Author").
 

@@ -56,7 +56,7 @@ test("code editor: undo and redo", async (t) => {
   await t.boot();
   const ids = await t.seed(profileSpec("typical", { items: 1 }));
   await t.open(`/components/${ids.components.double}`);
-  const code = t.page.getByRole("textbox", { name: "Component" });
+  const code = t.page.getByRole("textbox", { name: "Code", exact: true });
   const before = await code.inputValue();
   await code.click();
   await t.page.keyboard.press("Control+End");

@@ -133,7 +133,7 @@ export function FieldModal({
             setSubmitted(false);
           }}
         />
-        <FieldSettings id="field-modal" field={draft} persisted={!!field} targets={targets} problem={submitted ? problem : undefined} itemCount={counts[collection.id] ?? 0} onChange={update} />
+        <FieldSettings id="field-modal" field={draft} persisted={!!field} targets={targets} problem={submitted ? problem : undefined} itemCount={counts[collection.id] ?? 0} collection={collection} onChange={update} />
         <p className="helper">
           A field of the collection: it can be shown in other views too, sorted and filtered on, and read by components as $item["
           {name.trim() || "Name"}"].

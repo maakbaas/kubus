@@ -3643,3 +3643,18 @@ body[data-reordering] [data-reorder-row] {
 .helper.field-settings__note {
   margin-bottom: 0;
 }
+/* The Components page's "Show: all / shared / written here": on the page's left edge, its label
+   beside it, a gap above the list. */
+.components-scope {
+  margin-block-end: var(--cds-spacing-05);
+}
+.components-scope .cds--dropdown__wrapper--inline {
+  display: flex;
+  flex-direction: row; /* the app's list boxes stack their label above (see .cds--list-box__wrapper) */
+  justify-content: flex-start;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+}
+.components-scope .cds--dropdown__wrapper--inline .cds--label {
+  margin: 0;
+}

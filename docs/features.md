@@ -74,8 +74,11 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
     to their place; Markdown blocks only when their text has `{{ }}` sections), with "Save as shared
     component" (`PromoteComponentModal`, `ui/promoteLocal.ts`: a shared copy is saved, then the place
     picks it; a Markdown block becomes a component block). The same action sits in the place itself
-    (field settings, block settings). One control chooses (`ui/ComponentChoice.tsx`): a dropdown of
-    "Written here" plus the shared components that fit; written here shows Output and the code editor.
+    (field settings, block settings); "Show" filters the list (all, shared, written here). One
+    control chooses (`ui/ComponentChoice.tsx`): a dropdown of "Written here" plus the shared
+    components that fit; written here shows the same editor as a shared component's page
+    (`ui/ComponentForm.tsx`: Ask AI, Write with AI, Output, the code with its kind and problems, an
+    HTML component's shape), the page adding name, description and the preview around it.
     Editing a shared one asks first (it applies everywhere); a local one doesn't.
   - **Ask AI** (`components.ai`, a local field component's AI-ness is its field's kind `ai`): the
     component's rendered text is a prompt; the model's reply is an AI field's value, stored (see AI
@@ -101,9 +104,10 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   - **Kinds** (`componentUses`, `placeProblem`, `componentsFor`): what a component uses makes it a
     *field* component (`$item`: a component field), a *block* component (`$items` / `$groups` /
     `$fields` / `$all`: a block, which then offers filter, sort, fields as its code needs) or a
-    *static* one (neither: any place, also a Markdown block's text, `"static"` place). Never both
+    *static* one (neither: a block or a Markdown block's text, `"static"` place; not a field, where
+    it would be the same for every item). Never both
     (`mixed`): the component editor refuses to save it. Pickers offer only what fits (component
-    fields: field and static, AI ones only for AI fields; "Add block" and Block settings: block and
+    fields: field components, AI ones only for AI fields; "Add block" and Block settings: block and
     static); one that doesn't fit where it is used (edited since) shows "⚠ … use it as a block /
     field" there, never an empty result. The Components page has a Kind column ("AI" tag for those
     asking AI); the editor says the kind under the code as it is typed. A block on an item page gets

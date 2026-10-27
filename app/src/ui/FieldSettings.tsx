@@ -1,7 +1,7 @@
 import { Checkbox, Dropdown } from "@carbon/react";
 import { useStore } from "../app/store";
 import { fieldComponentProblem, type ComponentCode } from "../domain/components";
-import { isReferenceKind, type FieldDraft } from "../domain/model";
+import { isReferenceKind, type Collection, type FieldDraft } from "../domain/model";
 import { ChoiceFilterEditor } from "./ChoiceFilterEditor";
 import { CollectionLabel } from "./collectionIcons";
 import { ComponentChoice, type ComponentRef } from "./ComponentChoice";
@@ -62,6 +62,7 @@ export function FieldSettings({
   targets,
   problem,
   itemCount,
+  collection,
   onChange,
 }: {
   id: string;
@@ -73,6 +74,8 @@ export function FieldSettings({
   problem?: string;
   /** How many items the collection has (an AI field's prompt is asked for each). */
   itemCount?: number;
+  /** The field's collection, once saved (Write with AI reads its fields). */
+  collection?: Collection;
   onChange(patch: Partial<FieldDraft>): void;
 }) {
   const { collections } = useStore();
@@ -142,6 +145,7 @@ export function FieldSettings({
         outputLocked={persisted && isAi}
         invalidText={problem}
         suggestedName={f.name.trim() || undefined}
+        collection={collection}
       />
       {/* What asking AI costs: a request per item, and the values are stored (made again when the prompt as it reads for an item changes). */}
       {isAi && (

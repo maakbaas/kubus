@@ -67,7 +67,7 @@ export function WriteWithAi({
               Requests are paused: <a href="#/settings?section=ai">Settings → AI</a>.
             </>
           ) : configured ? (
-            `Asks ${model}, which sees the documentation (Help) and the fields${focus ? ` of ${focus.pluralName}` : " of your collections"}. It fills in the description and component below; with a component already there, it changes that.`
+            `Asks ${model}, which sees the documentation (Help) and the fields${focus ? ` of ${focus.pluralName}` : " of your collections"}. It writes the code below; with code already there, it changes that.`
           ) : (
             <>
               No model is set up yet: <a href="#/settings?section=ai">Settings → AI</a>.

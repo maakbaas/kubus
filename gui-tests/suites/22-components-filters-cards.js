@@ -69,7 +69,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.page.getByRole("option", { name: "Component", exact: true }).first().click();
     await t.settle(100);
     await t.audit("a new component field, written here");
-    await row.getByRole("textbox", { name: "Code" }).fill("{{ 40 }}");
+    await row.getByRole("textbox", { name: "Code" }).fill("{{ ($item.Count ?? 0) / 40 }}");
     await t.page.getByRole("button", { name: "Save changes" }).click();
     await t.until("saved: the collection's page", async () => (await t.page.locator(".ws-pane--active .page-header__title").innerText().catch(() => "")).includes("Books"));
     await t.open(t.itemPath(ids.collections.books, ids.items["books/i0"]));
@@ -89,6 +89,14 @@ test("components page: local ones by where they are used, saved as shared", asyn
   const text = await t.page.locator(".ws-pane--active .items-table, .ws-pane--active table").first().innerText();
   for (const where of ["Books › Hours", "Books › Shelf", "Books › All › Count", "Books › All › Notes"]) await t.check(`lists ${where}`, text.includes(where), text.slice(0, 300));
   await t.check("an AI component is tagged", (await t.page.locator(".ws-pane--active .cds--tag", { hasText: "AI" }).count()) >= 2);
+  // Show: shared only, then written here only.
+  const rowCount = () => t.page.locator(".ws-pane--active table tbody tr").count();
+  for (const [choice, n] of [["Shared", 2], ["Written here", 4], ["All components", 6]]) {
+    await t.page.locator(".components-scope .cds--list-box__field").click();
+    await t.settle(100);
+    await t.page.getByRole("option", { name: choice }).click();
+    await t.until(`Show ${choice}: ${n} rows`, async () => (await rowCount()) === n || `${await rowCount()} rows`);
+  }
   // Save the block's own component as a shared one: the block then shows the shared one.
   const row = t.page.locator(".ws-pane--active tr", { hasText: "Books › All › Count" });
   await row.getByRole("button", { name: /as a shared component/ }).click({ force: true }).catch(async () => {
