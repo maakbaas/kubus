@@ -526,7 +526,7 @@ export function localComponents(collections: Collection[], views: ViewLike[]): L
           component: { code: f.code, output: f.output ?? (f.kind === "ai" ? "string" : "markdown"), frameRatio: f.frameRatio, ai: f.kind === "ai" },
           owner: { type: "field", collectionId: c.id, fieldId: f.id },
           where: `${c.pluralName} › ${f.name}`,
-          href: `#/collections/${c.id}/edit`,
+          href: `#/collections/${c.id}/edit?field=${encodeURIComponent(f.id)}`,
         });
       }
     }

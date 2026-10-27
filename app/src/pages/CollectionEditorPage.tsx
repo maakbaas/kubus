@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Button, Dropdown, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
@@ -26,6 +26,7 @@ import { NotFound } from "../ui/NotFound";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { moveBlock, useReorder } from "../ui/useReorder";
+import { useLinkTarget } from "../ui/useLinkTarget";
 
 export function CollectionEditorPage() {
   const { collectionId } = useParams();
@@ -73,6 +74,13 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
   useEffect(() => {
     if (!existing) document.getElementById(`${uid}-collection-name`)?.focus();
   }, [existing, uid]);
+
+  // A link to one of the fields (?field=, e.g. a local component's from the Components page):
+  // scrolled to and flashed.
+  const [params] = useSearchParams();
+  useLinkTarget(params.get("field"), (id) =>
+    [...document.querySelectorAll(`.field-row[data-field-id="${CSS.escape(id)}"]`)].find((el) => !el.closest("[hidden]")),
+  );
 
   const counts = useItemCounts();
   const persisted = useMemo(() => new Set(existing?.fields.map((f) => f.id)), [existing]);
@@ -208,7 +216,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
           <FormGroup legendText="Fields">
             <p className="helper">A field's type cannot change once saved.</p>
             {draft.fields.map((f, i) => (
-              <div className="field-row" key={f.id} {...reorder.row(i)}>
+              <div className="field-row" key={f.id} data-field-id={f.id} {...reorder.row(i)}>
                 <TextInput size="sm"
                   id={`${uid}-field-name-${f.id}`}
                   labelText="Field name"
