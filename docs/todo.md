@@ -63,3 +63,18 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
    and in other collection blocks (component blocks get it as data, e.g. the field is in `$items`;
    decide whether they show it themselves). Today only the checkbox's own label and checklist
    rows are struck (`checklist-row__done--struck` in `ui/FieldInput.tsx`, `ui/ListField.tsx`).
+
+## Filters
+
+5. **`{{ }}` in filter values doesn't work, and fails silently.** Expected: `{{ 1 == 1 }}` as a
+   checkbox filter's value matches checked items (asked for before). Since fcef991 ("Code lives
+   only in components") filter values are data, never run (CLAUDE.md); item pages take a value
+   from the page's item by name instead. And a checkbox "is" compares the text to `true`
+   (`domain/query.ts`, `matches`), so `{{1==1}}` silently matches *unchecked* items.
+   - Decide: bring `{{ }}` back in filter values (an exception to "code lives only in components":
+     update CLAUDE.md, Help, the AI rules; what may it read: `$now`, the page's `$item`?), or
+     cover the cases it was for without code (relative dates like "today" / "in 7 days", the
+     page item's values, which exist already).
+   - Either way: a checkbox "is" value that isn't true / false is a problem shown at the input,
+     never a silent match; better a Carbon dropdown (checked / not checked / a page item's value)
+     than free text.
