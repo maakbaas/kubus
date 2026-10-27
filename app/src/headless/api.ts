@@ -4,9 +4,9 @@
 // Collections are named by id, name or plural name, spaces by id or name (default: the default
 // space), fields, components, views and item views by id or name, all in any case.
 
-import { HttpError, json, Router, type ApiRequest } from "../../../shared/router";
+import { HttpError, json, readJson, Router, type ApiRequest } from "../../../shared/router";
 import { MAX_FILE_BYTES } from "../../../shared/sync";
-import type { SqliteRepository } from "../data/sqlite/SqliteRepository";
+import type { Repository } from "../data/repository";
 import { aiPromptProblem, aiRequest } from "../domain/ai";
 import type { Bookmark } from "../domain/bookmarks";
 import { isComponentOutput, parseParams, placeProblem, type Component } from "../domain/components";
@@ -18,27 +18,20 @@ import type { FilterRule, SortRule } from "../domain/query";
 import { refLabelForSpace } from "../domain/refOptions";
 import { DEFAULT_SPACE_ID, type Space } from "../domain/spaces";
 import { defaultViewState, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
-import { fieldOf, itemOut, valuesIn, type ItemsExist } from "./values";
-import { computeItems, loadWorld, type World } from "./world";
+import { draftProblem } from "../domain/collectionDraft";
+import { computeItems, loadWorld, type World } from "../domain/world";
+import { fieldOf, itemOut, same, valuesIn, type ItemsExist } from "./values";
 
 const MAX_JSON = 5 * 1024 * 1024;
 
 type Body = Record<string, unknown>;
 
+/** A request's body: a JSON object (none: an empty one). */
 async function body(req: ApiRequest): Promise<Body> {
-  const bytes = await req.body(MAX_JSON);
-  if (bytes.byteLength === 0) return {};
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    throw new HttpError(400, "The body isn't valid JSON");
-  }
+  const parsed = (await readJson(req, MAX_JSON)) ?? {};
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new HttpError(400, "The body must be a JSON object");
   return parsed as Body;
 }
-
-const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 /** A text property of a body; `required` refuses an absent or blank one. */
 function text(o: Body, key: string, required: true): string;
@@ -137,7 +130,7 @@ function blockIn(world: World, own: Collection, raw: unknown): ViewBlock {
   return block;
 }
 
-export function createApi(repo: SqliteRepository): Router {
+export function createApi(repo: Repository): Router {
   const world = () => loadWorld(repo);
   const computed = (w: World, collection: Collection, items: Item[], spaceId: string) => computeItems(repo, w, collection, items, spaceId);
 
@@ -152,7 +145,7 @@ export function createApi(repo: SqliteRepository): Router {
 
   /** An item by id with its collection; 404 when there is none (or it was deleted). */
   const itemOf = async (w: World, id: string) => {
-    const collectionId = await repo.collectionOfItem(id);
+    const collectionId = (await repo.collectionsOfItems([id])).get(id);
     const collection = w.collections.find((c) => c.id === collectionId);
     const item = collection && (await repo.getItem(collection, id));
     if (!collection || !item) throw new HttpError(404, `No item ${id}`);
@@ -230,15 +223,8 @@ export function createApi(repo: SqliteRepository): Router {
 
   /** Saves a collection draft after the collection editor's checks. */
   const saveDraft = async (draft: CollectionDraft, spaceId: string) => {
-    if (!draft.name.trim()) throw new HttpError(400, "`name` is required");
-    if (!draft.pluralName.trim()) throw new HttpError(400, "`pluralName` is required");
-    if (draft.fields.length === 0) throw new HttpError(400, "A collection needs at least one field");
-    const seen = new Set<string>();
-    for (const f of draft.fields) {
-      const key = f.name.trim().toLowerCase();
-      if (seen.has(key)) throw new HttpError(400, `Two fields are called “${f.name}”`);
-      seen.add(key);
-    }
+    const problem = draftProblem(draft);
+    if (problem) throw new HttpError(400, problem);
     await rule(repo.saveCollection(draft, spaceId));
   };
 
@@ -425,13 +411,7 @@ export function createApi(repo: SqliteRepository): Router {
         return collectionAnswer(collection.id, 201);
       })
       .add("PUT", "/api/v1/collections/{c}/fields/order", async (req, { c }) => {
-        const bytes = await req.body(MAX_JSON);
-        let order: unknown;
-        try {
-          order = JSON.parse(new TextDecoder().decode(bytes));
-        } catch {
-          throw new HttpError(400, "The body isn't valid JSON");
-        }
+        const order = await readJson(req, MAX_JSON);
         const w = await world();
         const collection = collectionOf(w, c);
         if (!Array.isArray(order)) throw new HttpError(400, "Send the fields as a list (ids or names), in their new order");
@@ -469,9 +449,9 @@ export function createApi(repo: SqliteRepository): Router {
         const space = spaceOf(w, req.query.get("space"));
         const limit = Math.min(Math.max(Number(req.query.get("limit") ?? 100) || 100, 1), 1000);
         const offset = Math.max(Number(req.query.get("offset") ?? 0) || 0, 0);
-        const all = await repo.listItems(collection, space.id);
-        const page = await computed(w, collection, all.slice(offset, offset + limit), space.id);
-        return json(200, { items: page.map((i) => itemOut(collection, i)), total: all.length, limit, offset });
+        const page = await computed(w, collection, await repo.listItems(collection, space.id, { limit, offset }), space.id);
+        const total = (await repo.countItemsByCollection(space.id))[collection.id] ?? 0;
+        return json(200, { items: page.map((i) => itemOut(collection, i)), total, limit, offset });
       })
       .add("POST", "/api/v1/collections/{c}/items", async (req, { c }) => {
         const o = await body(req);
@@ -544,13 +524,13 @@ export function createApi(repo: SqliteRepository): Router {
         const limit = Math.min(Math.max(Number(req.query.get("limit") ?? 50) || 50, 1), 500);
         const shown = w.collections.filter((c) => c.spaceIds === null || c.spaceIds.includes(space.id));
         const hits = await repo.search(req.query.get("q") ?? "", shown, space.id, limit);
-        const out = [];
-        for (const item of hits) {
-          const collection = shown.find((c) => c.id === item.collectionId)!;
-          const [one] = await computed(w, collection, [item], space.id);
-          out.push(itemOut(collection, one));
+        // Computed per collection (not per hit), then back in the order of the hits.
+        const out = new Map<string, ReturnType<typeof itemOut>>();
+        for (const collection of shown) {
+          const own = hits.filter((i) => i.collectionId === collection.id);
+          if (own.length > 0) for (const item of await computed(w, collection, own, space.id)) out.set(item.id, itemOut(collection, item));
         }
-        return json(200, out);
+        return json(200, hits.map((i) => out.get(i.id)!));
       })
 
       // Views
@@ -607,13 +587,7 @@ export function createApi(repo: SqliteRepository): Router {
       })
       .add("GET", "/api/v1/collections/{c}/item-views", async (_req, { c }) => json(200, collectionOf(await world(), c).itemViews))
       .add("PUT", "/api/v1/collections/{c}/item-views", async (req, { c }) => {
-        const bytes = await req.body(MAX_JSON);
-        let list: unknown;
-        try {
-          list = JSON.parse(new TextDecoder().decode(bytes));
-        } catch {
-          throw new HttpError(400, "The body isn't valid JSON");
-        }
+        const list = await readJson(req, MAX_JSON);
         const w = await world();
         const collection = collectionOf(w, c);
         await repo.saveItemViews(collection.id, itemViewsIn(w, collection, list));

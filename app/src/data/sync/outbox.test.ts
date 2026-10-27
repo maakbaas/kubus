@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it } from "vitest";
-import schema from "../schema.sql?raw";
+import { schema } from "../schema";
 import { SYNC_TABLES, type WireRow } from "../../../../shared/sync";
 import { applyStatement, keyOf } from "./SyncEngine";
 

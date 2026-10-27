@@ -15,7 +15,7 @@ import {
 } from "../domain/model";
 import { FieldKindLabel } from "../ui/fieldKindIcons";
 import { TOGGLE_CHOICES, TOGGLE_ICONS, ToggleIconLabel } from "../ui/ToggleInput";
-import { aiPromptProblem } from "../domain/ai";
+import { draftProblems } from "../domain/collectionDraft";
 import { AiOutputSelect, AiPromptEditor } from "../ui/AiFieldEditor";
 import { ChoiceFilterEditor } from "../ui/ChoiceFilterEditor";
 import { ComponentArgInput } from "../ui/ComponentArgInput";
@@ -59,34 +59,6 @@ function initialDraft(existing?: Collection): CollectionDraft {
   };
 }
 
-function validate(draft: CollectionDraft) {
-  const fieldErrors: Record<string, string> = {};
-  const targetErrors: Record<string, string> = {};
-  const seen = new Set<string>();
-  for (const f of draft.fields) {
-    const key = f.name.trim().toLowerCase();
-    if (!key) fieldErrors[f.id] = "Name is required";
-    else if (seen.has(key)) fieldErrors[f.id] = "Duplicate field name";
-    seen.add(key);
-    if (isReferenceKind(f.kind) && !f.targetCollectionId) targetErrors[f.id] = "Choose a collection";
-    if (f.kind === "component" && !f.componentId) targetErrors[f.id] = "Choose a component";
-    if (f.kind === "ai") {
-      const problem = aiPromptProblem(f.aiPrompt);
-      if (problem) targetErrors[f.id] = problem;
-    }
-  }
-  const nameError = draft.name.trim() ? undefined : "Name is required";
-  const pluralError = draft.pluralName.trim() ? undefined : "Plural name is required";
-  // A collection always has a field (the last one can't be removed).
-  const valid =
-    !nameError &&
-    !pluralError &&
-    draft.fields.length > 0 &&
-    Object.keys(fieldErrors).length === 0 &&
-    Object.keys(targetErrors).length === 0;
-  return { nameError, pluralError, fieldErrors, targetErrors, valid };
-}
-
 function CollectionEditor({ existing }: { existing?: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
@@ -106,7 +78,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
   }, [existing, uid]);
 
   const persisted = useMemo(() => new Set(existing?.fields.map((f) => f.id)), [existing]);
-  const { nameError, pluralError, fieldErrors, targetErrors, valid } = validate(draft);
+  const { nameError, pluralError, fieldErrors, targetErrors, valid } = draftProblems(draft);
 
   // Reference targets: all collections, plus this one itself while it is being created.
   const targets: Target[] = existing

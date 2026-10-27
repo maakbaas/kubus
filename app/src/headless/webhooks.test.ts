@@ -29,6 +29,7 @@ beforeEach(() => {
 const options = (): HeadlessOptions => ({
   serverUrl: SERVER_URL,
   token: TOKEN,
+  cursor: () => server.seq,
   files: { marked: async () => [], unmark: async () => {}, delete: async () => [] },
   unusedFileDays: 7,
   cleanUpEveryMs: 60 * 60 * 1000,
@@ -68,6 +69,14 @@ describe("webhooks", () => {
     const raw = JSON.stringify(received[1].body);
     expect(received[1].signature).toBe(`sha256=${createHmac("sha256", SECRET).update(raw).digest("hex")}`);
     expect(received[1].body.database).toBe(server.database.id);
+  });
+
+  it("send what the watched device's own API changes (the server doesn't send its rows back)", async () => {
+    const api = await startHeadless(options());
+    await call(api, "POST", "/collections", { name: "Book", fields: [{ name: "Title", kind: "string" }] });
+    const item = (await call(api, "POST", "/collections/Book/items", { values: { Title: "Dune" } })) as { id: string };
+    await vi.waitFor(() => expect(types()).toContain("item.created"));
+    expect(received.flatMap((r) => r.body.events).find((e) => e.type === "item.created")).toMatchObject({ id: item.id, item: { values: { Title: "Dune" } } });
   });
 
   it("send what other devices change, but not the first download", async () => {

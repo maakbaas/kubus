@@ -36,8 +36,8 @@ is what this split avoids. Keep them current when behaviour changes.
 - **No migration scripts.** `app/src/data/schema.sql` is the schema; simple changes (new tables /
   nullable or defaulted columns, removed columns, changed CHECKs) are applied in place, anything
   else wipes the local DB. Prefer simple changes. Renames go in `RENAMES` / `RENAMED_VALUES` in
-  `sqlite/engine.ts`. A new synced table/column also needs `shared/sync.ts`, `server/schema.sql` and
-  triggers (see `docs/sync.md`).
+  `sqlite/engine.ts`. A new synced table/column also goes in `shared/sync.ts` (the outbox triggers
+  and the server's tables follow from it: `data/schema.ts`, `server/src/schema.ts`; see `docs/sync.md`).
 - **Never install the SAH-pool VFS while another worker may hold its files** (it deletes the
   database): keep `acquireDbLock` / `poolFilesFree` in `worker.ts`.
 - Changing the app identifier `com.kubus.app`, database / pool names, the lock or `kubus.*` storage

@@ -2,8 +2,9 @@
 // tables replicate, their columns and types, and the request / response shapes. Types and
 // constants only (no imports, no enums), so the server can run it directly with Node.
 //
-// Whenever a table or column in app/src/data/schema.sql changes, change this list and
-// server/schema.sql too (app/src/data/sync/spec.test.ts fails until they agree).
+// Whenever a table or column in app/src/data/schema.sql changes, change this list too
+// (app/src/data/sync/spec.test.ts fails until they agree): the device's outbox triggers
+// (app/src/data/schema.ts) and the server's tables (server/src/schema.ts) are made from it.
 
 /** Maps to SQLite / Postgres: text, number = real / double precision, int, bool = 0|1 / boolean,
  *  json = text / jsonb, date = text YYYY-MM-DD / date, timestamp = ISO text / timestamptz,
@@ -134,7 +135,10 @@ export interface SyncRequest {
 export interface SyncResponse {
   /** Pass as `since` next time. */
   cursor: number;
-  /** Rows changed on the server after `since` (including the ones just pushed). */
+  /**
+   * Rows changed on the server after `since`, but for the ones this request wrote: the device
+   * has those already (its own changes), and `cursor` covers them.
+   */
   changes: WireChanges;
   /** The server's database (absent from servers older than it). */
   database?: DatabaseInfo;

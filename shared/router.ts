@@ -43,6 +43,17 @@ export class HttpError extends Error {
 
 export const json = (status: number, body: unknown): ApiResponse => ({ status, json: body });
 
+/** A request's body as JSON (undefined when it is empty); 400 when it isn't JSON, 413 beyond `limit` bytes. */
+export async function readJson(req: ApiRequest, limit: number): Promise<unknown> {
+  const bytes = await req.body(limit);
+  if (bytes.byteLength === 0) return undefined;
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new HttpError(400, "The body isn't valid JSON");
+  }
+}
+
 export class Router {
   private routes: Route[] = [];
 

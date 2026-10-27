@@ -3,15 +3,16 @@ import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { createPool } from "./db.ts";
-import { broadcast, handleEvents } from "./events.ts";
+import { broadcast, handleEvents, latestCursor } from "./events.ts";
 import { aiInfo, aiProxy } from "./ai.ts";
 import { deleteUnusedFiles, getFile, hasFile, markedFiles, putFile, unmarkFiles } from "./files.ts";
 import { HeadlessHost } from "./headless.ts";
 import { FILE_ID } from "../../shared/files.ts";
-import { handleSync, LOCK_ID } from "./sync.ts";
+import { loadSchema } from "./schema.ts";
+import { currentCursor, handleSync, LOCK_ID } from "./sync.ts";
 import { wipe } from "./wipe.ts";
 import { MAX_FILE_BYTES, type SyncRequest } from "../../shared/sync.ts";
-import { HttpError, json, Router, type ApiRequest, type ApiResponse } from "../../shared/router.ts";
+import { HttpError, json, readJson, Router, type ApiRequest, type ApiResponse } from "../../shared/router.ts";
 
 // Kubus server: the sync API (/api), the HTTP API for other tools (/api/v1, answered by the
 // headless device: server/src/headless.ts) and, from the same origin, the web app (so a phone can
@@ -36,12 +37,13 @@ const staticDir = process.env.STATIC_DIR ?? join(import.meta.dirname, "../../app
 const MAX_SYNC_BODY = 100 * 1024 * 1024;
 
 const pool = createPool(databaseUrl);
-const schemaSql = await readFile(join(import.meta.dirname, "../schema.sql"), "utf8");
+const schemaSql = await loadSchema();
 // A database whose tables don't fit the schema doesn't stop the server: sync answers with the
 // error, and wiping the database (which doesn't depend on its tables) can still fix it.
 let schemaError: string | null = null;
 try {
   await pool.query(schemaSql);
+  broadcast(await currentCursor(pool)); // nobody listens yet: what the stored data is up to
 } catch (e) {
   schemaError = `The server's database doesn't fit its schema: ${e instanceof Error ? e.message : String(e)}`;
   console.error(schemaError);
@@ -68,15 +70,6 @@ async function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-const readJson = async (req: ApiRequest, limit = 1024 * 1024): Promise<unknown> => {
-  try {
-    return JSON.parse(Buffer.from(await req.body(limit)).toString("utf8"));
-  } catch (e) {
-    if (e instanceof HttpError) throw e;
-    throw new HttpError(400, "The body isn't valid JSON");
-  }
-};
-
 const fileId = (params: Record<string, string>) => {
   if (!FILE_ID.test(params.id)) throw new HttpError(404, "Not found");
   return params.id;
@@ -91,7 +84,7 @@ const fitting = () => {
 const routes = new Router()
   .add("POST", "/api/wipe", async (req) => {
     // Asked for in so many words, so no stray request can do it.
-    if ((await readJson(req) as { confirm?: string }).confirm !== "wipe") return json(400, { error: "Not confirmed" });
+    if ((await readJson(req, 1024) as { confirm?: string } | undefined)?.confirm !== "wipe") return json(400, { error: "Not confirmed" });
     await wipe(pool, schemaSql);
     schemaError = null;
     broadcast(0);
@@ -99,7 +92,9 @@ const routes = new Router()
   })
   .add("POST", "/api/sync", async (req) => {
     fitting();
-    const result = await handleSync(pool, (await readJson(req, MAX_SYNC_BODY)) as SyncRequest);
+    const request = await readJson(req, MAX_SYNC_BODY);
+    if (!request || typeof request !== "object") throw new HttpError(400, "Send a sync request");
+    const result = await handleSync(pool, request as SyncRequest);
     if ("mismatch" in result) return json(409, result.mismatch);
     const { wrote, ...response } = result;
     if (wrote) broadcast(response.cursor);
@@ -214,6 +209,7 @@ createServer(async (req, res) => {
   void headless.start({
     serverUrl: `http://127.0.0.1:${port}`,
     token,
+    cursor: latestCursor,
     files: {
       marked: (cutoff) => markedFiles(pool, cutoff),
       unmark: (ids) => unmarkFiles(pool, ids),

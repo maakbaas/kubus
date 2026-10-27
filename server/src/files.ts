@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type pg from "pg";
-import { fileIdsIn } from "../../shared/files.ts";
+import { filesUsedBy } from "../../shared/files.ts";
 import type { WireChanges } from "../../shared/sync.ts";
 
 // File bytes (images), apart from the synced `files` rows that list them (server/schema.sql,
@@ -38,16 +38,6 @@ export async function putFile(pool: pg.Pool, id: string, mime: string, data: Buf
 // (Repository.unusedFiles) before anything is deleted, and only marks older than the grace period
 // count (devices sync late and out of order; an undo puts a use back).
 
-/** Files referenced by field values (image values, `files/<id>` in text). */
-function filesIn(rows: { value_file?: unknown; value_text?: unknown }[]): string[] {
-  const ids = new Set<string>();
-  for (const r of rows) {
-    if (typeof r.value_file === "string") ids.add(r.value_file);
-    if (typeof r.value_text === "string" && r.value_text.includes("files/")) fileIdsIn(r.value_text).forEach((id) => ids.add(id));
-  }
-  return [...ids];
-}
-
 /**
  * Inside a sync request, before its rows are written: marks the files the pushed rows stop using,
  * unmarks the ones they use, and returns the used ones whose bytes the server doesn't have.
@@ -62,9 +52,10 @@ export async function trackUses(client: pg.PoolClient, changes: WireChanges): Pr
         AND ((item_id, field_id) IN (SELECT * FROM unnest($1::text[], $2::text[])) OR item_id = ANY($3) OR field_id = ANY($4))`,
     [values.map((r) => String(r.item_id)), values.map((r) => String(r.field_id)), deletedItems, deletedFields],
   );
-  const live = values.filter((r) => !deletedItems.includes(String(r.item_id)));
-  const used = filesIn(live);
-  const freed = filesIn(before.rows).filter((id) => !used.includes(id));
+  const gone = new Set(deletedItems);
+  const live = values.filter((r) => !gone.has(String(r.item_id)));
+  const used = filesUsedBy(live);
+  const freed = filesUsedBy(before.rows).filter((id) => !used.includes(id));
   // A thumbnail goes with its original.
   const withThumbnails = "id = ANY($1) OR id IN (SELECT thumb_id FROM thumbnails WHERE file_id = ANY($1))";
   if (freed.length > 0) await client.query(`UPDATE file_bytes SET unused_since = now() WHERE unused_since IS NULL AND (${withThumbnails})`, [freed]);

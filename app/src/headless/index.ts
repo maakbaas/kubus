@@ -63,9 +63,13 @@ export class HeadlessDevice {
     if (state === "error") throw new HttpError(503, `The server's headless device can't sync: ${error}`);
   }
 
-  /** Brings this device up to date with the server. */
-  async refresh() {
-    await this.repo.sync.syncNow();
+  /**
+   * Brings this device up to date with the server: no request when it is already (the server
+   * says so), unless it has a write of its own to send (`push`).
+   */
+  async refresh(push = false) {
+    if (push) await this.repo.sync.syncNow();
+    else await this.repo.sync.catchUp(this.options.cursor());
     if (this.repo.sync.status.replaced) await this.reset();
     this.check();
   }
@@ -109,7 +113,7 @@ export const startHeadless: StartHeadless = async (options) => {
           await device.refresh(); // reads see the latest data
           const response = await api.handle(req);
           // A write is on the server (and on its way to every device) when the answer arrives.
-          if (req.method !== "GET" && response.status < 400) await device.refresh();
+          if (req.method !== "GET" && response.status < 400) await device.refresh(true);
           return response;
         } catch (e) {
           if (e instanceof HttpError) return json(e.status, { error: e.message });

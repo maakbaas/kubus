@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it } from "vitest";
-import schema from "../schema.sql?raw";
+import { schema } from "../schema";
 import { acceptedStatement, editedStatement, generatedStatement } from "./generated";
 
 const T = "2026-10-21T10:00:00.000Z";

@@ -9,6 +9,11 @@ export interface HeadlessOptions {
   /** The server itself, e.g. http://127.0.0.1:8080: the headless device syncs over HTTP like any device. */
   serverUrl: string;
   token: string;
+  /**
+   * The server's sequence number of its latest write (0: none since a wipe): the headless device
+   * skips the sync before a request when it has that already.
+   */
+  cursor(): number;
   /** The server's file clean-up (server/src/files.ts); the headless device decides what is unused. */
   files: {
     marked(cutoff: Date): Promise<string[]>;

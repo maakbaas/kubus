@@ -5,10 +5,12 @@
 
 import { createHmac } from "node:crypto";
 import type { WireChanges } from "../../../shared/sync";
+import type { Repository } from "../data/repository";
 import type { SqliteRepository } from "../data/sqlite/SqliteRepository";
 import type { Pulled } from "../data/sync/SyncEngine";
+import type { Collection, Item, ItemLabel } from "../domain/model";
+import { computeItems, loadWorld } from "../domain/world";
 import { itemOut, type ApiItem } from "./values";
-import { computeItems, loadWorld } from "./world";
 
 export type WebhookEvent =
   | { type: "item.created" | "item.updated"; id: string; collection: string; collectionId: string; spaceId: string; item: ApiItem }
@@ -27,12 +29,17 @@ const RETRY_MS = [1000, 5000, 30_000];
 
 const ids = (changes: WireChanges, table: string, column = "id") => [...new Set((changes[table] ?? []).map((r) => String(r[column])))];
 
+/** The rows of two change sets together (a sync's pulled and pushed rows). */
+const merged = (a: WireChanges, b: WireChanges): WireChanges =>
+  Object.fromEntries([...new Set([...Object.keys(a), ...Object.keys(b)])].map((t) => [t, [...(a[t] ?? []), ...(b[t] ?? [])]]));
+
 /**
  * The events of one sync. An item is created when the hook first sees it (`known` holds the ids
  * it has seen), deleted when it carries a deletion, otherwise updated (also when only its values
- * changed, an AI value for example).
+ * changed, an AI value for example). Items are read and computed per collection and space, not
+ * one by one.
  */
-export async function buildEvents(repo: SqliteRepository, changes: WireChanges, known: Set<string>): Promise<WebhookEvent[]> {
+export async function buildEvents(repo: Repository, changes: WireChanges, known: Set<string>): Promise<WebhookEvent[]> {
   const events: WebhookEvent[] = [];
   const world = await loadWorld(repo);
   for (const id of new Set([...ids(changes, "collections"), ...ids(changes, "fields", "collection_id")])) events.push({ type: "collection.changed", id });
@@ -43,19 +50,36 @@ export async function buildEvents(repo: SqliteRepository, changes: WireChanges, 
 
   const rows = new Map((changes.items ?? []).map((r) => [String(r.id), r]));
   for (const id of ids(changes, "field_values", "item_id")) if (!rows.has(id)) rows.set(id, { id });
+  const collectionOf = await repo.collectionsOfItems([...rows.keys()].filter((id) => !rows.get(id)!.collection_id));
+  const byCollection = new Map<string, string[]>();
   for (const [id, row] of rows) {
-    const collectionId = row.collection_id ? String(row.collection_id) : await repo.collectionOfItem(id);
+    const collectionId = row.collection_id ? String(row.collection_id) : collectionOf.get(id);
+    if (collectionId) byCollection.set(collectionId, [...(byCollection.get(collectionId) ?? []), id]);
+  }
+
+  const shown = new Map<string, { collection: Collection; item: Item }>();
+  const labels = new Map<string, ItemLabel[]>();
+  for (const [collectionId, itemIds] of byCollection) {
     const collection = world.collections.find((c) => c.id === collectionId);
     if (!collection) continue; // its collection is gone too
+    const items = await repo.getItems(collection, itemIds);
+    for (const spaceId of new Set(items.map((i) => i.spaceId))) {
+      const computed = await computeItems(repo, world, collection, items.filter((i) => i.spaceId === spaceId), spaceId, labels);
+      for (const item of computed) shown.set(item.id, { collection, item });
+    }
+  }
+
+  for (const [id, row] of rows) {
     const isNew = !known.has(id);
     known.add(id);
-    const item = await repo.getItem(collection, id);
-    if (!item) {
-      if (row.deleted_at) events.push({ type: "item.deleted", id, collection: collection.name, collectionId: collection.id, spaceId: String(row.space_id ?? "") });
+    const found = shown.get(id);
+    if (found) {
+      const { collection, item } = found;
+      events.push({ type: isNew ? "item.created" : "item.updated", id, collection: collection.name, collectionId: collection.id, spaceId: item.spaceId, item: itemOut(collection, item) });
       continue;
     }
-    const [shown] = await computeItems(repo, world, collection, [item], item.spaceId);
-    events.push({ type: isNew ? "item.created" : "item.updated", id, collection: collection.name, collectionId: collection.id, spaceId: item.spaceId, item: itemOut(collection, shown) });
+    const collection = world.collections.find((c) => c.id === (row.collection_id ? String(row.collection_id) : collectionOf.get(id)));
+    if (collection && row.deleted_at) events.push({ type: "item.deleted", id, collection: collection.name, collectionId: collection.id, spaceId: String(row.space_id ?? "") });
   }
   return events;
 }
@@ -91,7 +115,8 @@ export class Webhooks {
         return;
       }
       try {
-        const events = await buildEvents(this.repo, pulled.changes, this.known);
+        // What other devices changed and what this one (the API) did.
+        const events = await buildEvents(this.repo, merged(pulled.changes, pulled.pushed), this.known);
         if (events.length > 0) this.send({ database: pulled.database, cursor: pulled.cursor, events });
       } catch (e) {
         this.log(`Webhook events failed: ${e instanceof Error ? e.message : String(e)}`);

@@ -2,7 +2,7 @@
 // place), reads, atomic writes and wiping. The browser runs it in a worker over OPFS (worker.ts);
 // the server's headless device runs it in-process, in memory (direct.ts).
 
-import schema from "../schema.sql?raw";
+import { schema } from "../schema";
 import type { Bind, Statement } from "./protocol";
 
 // The oo1 API's TypeScript overloads are very strict; we only use a small, stable subset.

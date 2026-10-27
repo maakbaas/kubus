@@ -12,6 +12,7 @@ let api: Headless;
 const options = (): HeadlessOptions => ({
   serverUrl: SERVER_URL,
   token: TOKEN,
+  cursor: () => server.seq,
   files: { marked: async () => [], unmark: async () => {}, delete: async () => [] },
   unusedFileDays: 7,
   cleanUpEveryMs: 60 * 60 * 1000,
@@ -74,6 +75,8 @@ describe("the HTTP API", () => {
     const list = await call("GET", "/collections/Books/items?limit=1");
     expect(list.body).toMatchObject({ total: 2, limit: 1, offset: 0 });
     expect(list.body.items).toHaveLength(1);
+    const next = await call("GET", "/collections/Books/items?limit=1&offset=1");
+    expect(next.body.items.map((i: { id: string }) => i.id)).not.toEqual(list.body.items.map((i: { id: string }) => i.id));
   });
 
   it("checks values against their field's kind, and names what is unknown", async () => {
@@ -176,6 +179,28 @@ describe("the HTTP API", () => {
     expect((await call("GET", "/bookmarks?space=Work")).body).toHaveLength(1);
     expect((await call("DELETE", `/items/${item.body.id}`)).status).toBe(200);
     expect((await call("GET", `/items/${item.body.id}`)).status).toBe(404);
+  });
+
+  it("syncs before a request only when the server has news, and once after a write", async () => {
+    await call("POST", "/collections", books);
+    const syncs = () => server.log.filter((r) => r === "POST /api/sync").length;
+    server.log.length = 0;
+    await call("GET", "/collections");
+    await call("GET", "/collections/Book/items");
+    expect(syncs()).toBe(0); // the server's latest write is this device's own
+
+    await call("POST", "/collections/Book/items", { values: { Title: "Dune" } });
+    expect(syncs()).toBe(1); // sending the write
+    await new Promise((resolve) => setTimeout(resolve, 2200)); // the debounce of the local change
+    expect(syncs()).toBe(1); // that sync sent it already
+
+    const phone = await device();
+    const [collection] = await phone.listCollections();
+    await phone.createItem(collection, { [collection.fields[0].id]: "Emma" }, "default");
+    await settled(phone);
+    server.log.length = 0;
+    expect((await call("GET", "/collections/Book/items")).body.total).toBe(2);
+    expect(syncs()).toBe(1); // news from another device
   });
 
   it("starts over when the server's database is replaced", async () => {

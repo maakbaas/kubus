@@ -8,7 +8,7 @@ import {
   type WireRow,
   type WireValue,
 } from "../../../../shared/sync";
-import { fileIdsIn } from "../../domain/files";
+import { filesUsedBy } from "../../domain/files";
 import { observeStamp } from "../../domain/model";
 import type { DataChange, SyncConfig, SyncControl, SyncStatus } from "../repository";
 import type { SqlClient, Statement } from "../sqlite/protocol";
@@ -31,7 +31,8 @@ import type { SyncEnvironment } from "./environment";
 //    new database) or disconnects: its outbox only holds what changed since the last sync, which
 //    would land on the new database as fragments.
 //  * When: shortly after a local change, every 30 s, when coming online or back to the app, and
-//    when the server signals a change (server-sent events).
+//    when the server signals a change (server-sent events) this device doesn't have yet (the
+//    signal carries the server's cursor: a device's own push is not fetched again).
 //  * File bytes don't travel in /api/sync. Before a sync sends a queued `files` row, the engine
 //    uploads its bytes (PUT /api/files/<id>), so the server never lists a file it can't serve; a
 //    sync uploads up to UPLOAD_BYTES / UPLOAD_MS, the rest waits in the outbox for the next one
@@ -120,9 +121,11 @@ const requeueFiles = (ids: string[]): Statement[] =>
 
 export const keyOf = (t: SyncTable) => (t.key.length > 1 ? `json_array(${t.key.join(", ")})` : t.key[0]);
 
-/** Rows a sync brought, after they were applied (the headless device's webhooks). */
+/** Rows a sync brought, after they were applied, and the rows it sent (the headless device's webhooks). */
 export interface Pulled {
   changes: WireChanges;
+  /** This device's own changes the sync sent (the server doesn't send them back). */
+  pushed: WireChanges;
   /** The server's sequence number they bring this device to. */
   cursor: number;
   /** The server database's id. */
@@ -145,6 +148,8 @@ export class SyncEngine implements SyncControl {
   private downloadAgain = false;
   private pulledListeners = new Set<(pulled: Pulled) => void>();
   private fetching = new Map<string, Promise<{ data: Uint8Array; mime: string } | null>>();
+  /** The server's sequence number this device has everything up to (-1: not known yet). */
+  private cursor = -1;
 
   constructor(
     private db: SqlClient,
@@ -173,7 +178,7 @@ export class SyncEngine implements SyncControl {
   }
 
   private pulled(pulled: Pulled) {
-    if (!SYNC_TABLES.some((t) => (pulled.changes[t.name] ?? []).length > 0)) return;
+    if (!SYNC_TABLES.some((t) => (pulled.changes[t.name] ?? []).length + (pulled.pushed[t.name] ?? []).length > 0)) return;
     for (const listener of this.pulledListeners) listener(pulled);
   }
 
@@ -195,26 +200,15 @@ export class SyncEngine implements SyncControl {
   }
 
   async disconnect(): Promise<void> {
-    this.config = { url: this.env.defaultUrl(), token: "", enabled: false, originals: this.config.originals };
-    clearTimeout(this.debounce);
-    this.listenForChanges(); // closes the change signal
-    this.env.storage.set(STORAGE_KEY, JSON.stringify(this.config));
-    this.env.storage.remove(SERVER_KEY);
+    this.stop({ url: this.env.defaultUrl(), token: "", enabled: false, originals: this.config.originals });
     await this.running; // a sync in flight finishes first
-    await this.db.write([
-      { sql: "DELETE FROM sync_outbox" },
-      { sql: "DELETE FROM meta WHERE key IN ('sync_server', 'sync_cursor', 'sync_database')" },
-    ]);
+    await this.forgetServer([{ sql: "DELETE FROM sync_outbox" }]);
     this.setReplaced(null);
     this.setStatus({ state: "off", lastSync: null, error: null });
   }
 
   async pause(): Promise<void> {
-    this.config = { ...this.config, enabled: false };
-    clearTimeout(this.debounce);
-    this.listenForChanges(); // closes the change signal
-    this.env.storage.set(STORAGE_KEY, JSON.stringify(this.config));
-    this.env.storage.remove(SERVER_KEY);
+    this.stop({ ...this.config, enabled: false });
     await this.running; // a sync in flight finishes first
     await this.forgetServer();
     this.setStatus({ state: "off", error: null });
@@ -224,9 +218,19 @@ export class SyncEngine implements SyncControl {
     await this.configure({ ...this.config, enabled: true });
   }
 
-  /** What sync remembered about the server's database: the next connection is a first one. */
-  private forgetServer() {
-    return this.db.write([{ sql: "DELETE FROM meta WHERE key IN ('sync_server', 'sync_cursor', 'sync_database')" }]);
+  /** Stops syncing (saving `config`, which is switched off): no pending sync, no change signal, the server not known any more. */
+  private stop(config: SyncConfig) {
+    this.config = config;
+    clearTimeout(this.debounce);
+    this.listenForChanges(); // closes the change signal
+    this.env.storage.set(STORAGE_KEY, JSON.stringify(this.config));
+    this.env.storage.remove(SERVER_KEY);
+  }
+
+  /** What sync remembered about the server's database (with `also`, in the same transaction): the next connection is a first one. */
+  private forgetServer(also: Statement[] = []) {
+    this.cursor = -1;
+    return this.db.write([...also, { sql: "DELETE FROM meta WHERE key IN ('sync_server', 'sync_cursor', 'sync_database')" }]);
   }
 
   private setReplaced(replaced: SyncStatus["replaced"]) {
@@ -237,11 +241,7 @@ export class SyncEngine implements SyncControl {
 
   /** The server holds another database: stop (keeping URL and token) until the user answers. Runs inside a sync. */
   private async stopForReplaced({ database, empty }: SyncMismatch) {
-    this.config = { ...this.config, enabled: false };
-    clearTimeout(this.debounce);
-    this.listenForChanges(); // closes the change signal
-    this.env.storage.set(STORAGE_KEY, JSON.stringify(this.config));
-    this.env.storage.remove(SERVER_KEY);
+    this.stop({ ...this.config, enabled: false });
     await this.forgetServer();
     this.setReplaced({ createdAt: database.createdAt, empty });
     this.setStatus({ state: "off", error: null });
@@ -290,6 +290,8 @@ export class SyncEngine implements SyncControl {
     this.running = (async () => {
       do {
         this.again = false;
+        // This sync sends every change made so far: a pending debounced one would find nothing.
+        clearTimeout(this.debounce);
         this.setStatus({ state: "syncing" });
         try {
           await this.syncOnce();
@@ -303,6 +305,23 @@ export class SyncEngine implements SyncControl {
       } while (this.again);
     })().finally(() => (this.running = null));
     return this.running;
+  }
+
+  /**
+   * Syncs unless this device already has everything up to `serverCursor`, the server's latest
+   * write (the server's headless device knows it; 0: none since a wipe, so always sync).
+   */
+  async catchUp(serverCursor: number): Promise<void> {
+    await this.running;
+    if (serverCursor > 0 && this.cursor >= serverCursor && this.status.state === "idle") return;
+    await this.syncNow();
+  }
+
+  /** The server signalled a write up to `cursor` (0: a wipe): syncs unless this device has it (its own, mostly). */
+  private async heard(cursor: number) {
+    await this.running;
+    if (cursor > 0 && cursor <= this.cursor) return;
+    await this.syncNow();
   }
 
   /** Resolves once the sync in flight and the downloads after it are done. */
@@ -354,8 +373,9 @@ export class SyncEngine implements SyncControl {
       ...requeueFiles(missingFiles),
     );
     await this.db.write(statements);
+    this.cursor = cursor;
     if (freed.length > 0) await this.releaseFiles(freed);
-    this.pulled({ changes, cursor, database: current?.id ?? database, initial: false });
+    this.pulled({ changes, pushed: outgoing, cursor, database: current?.id ?? database, initial: false });
 
     await this.announce(changes);
     // More to upload, and uploading works (or files to upload again): go on right away.
@@ -378,12 +398,7 @@ export class SyncEngine implements SyncControl {
                OR item_id IN (SELECT value FROM json_each(?2)) OR field_id IN (SELECT value FROM json_each(?3)))`,
       [JSON.stringify(values), JSON.stringify(items), JSON.stringify(fields)],
     );
-    const ids = new Set<string>();
-    for (const r of rows) {
-      if (r.value_file) ids.add(r.value_file);
-      if (r.value_text) fileIdsIn(r.value_text).forEach((id) => ids.add(id));
-    }
-    return [...ids];
+    return filesUsedBy(rows);
   }
 
   /**
@@ -549,8 +564,9 @@ export class SyncEngine implements SyncControl {
         { sql: "DELETE FROM meta WHERE key = 'sync_applying'" },
       );
       await this.db.write(statements);
+      this.cursor = remote.cursor;
       replaced = true;
-      this.pulled({ changes: remote.changes, cursor: remote.cursor, database: remote.database?.id, initial: true });
+      this.pulled({ changes: remote.changes, pushed: {}, cursor: remote.cursor, database: remote.database?.id, initial: true });
       await this.announce(remote.changes, oldCollections);
     } else {
       await this.db.write([
@@ -635,10 +651,18 @@ export class SyncEngine implements SyncControl {
           if (!response.ok || !response.body) throw new Error(String(response.status));
           const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
           delay = 500;
+          let rest = "";
           for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
-            if (value.includes("data:")) void this.syncNow();
+            // Each event is a line `data: <cursor>` (server/src/events.ts); a read may end mid-line.
+            const lines = (rest + value).split("\n");
+            rest = lines.pop() ?? "";
+            for (const line of lines) {
+              if (!line.startsWith("data:")) continue;
+              const cursor = Number(line.slice(5).trim());
+              void this.heard(Number.isFinite(cursor) ? cursor : 0);
+            }
           }
         } catch {
           // offline, or a proxy dropped the stream: try again below (polling covers the gap)

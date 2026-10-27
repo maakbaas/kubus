@@ -12,18 +12,14 @@
 // same fingerprint, for the same data. (They would otherwise take turns regenerating a value.)
 
 import type { Repository } from "../data";
-import { withComputed, type Component } from "../domain/components";
+import { withComputed } from "../domain/components";
 import type { Collection, ItemLabel } from "../domain/model";
 import { refLabelForSpace } from "../domain/refOptions";
-import { inSpace, type Space } from "../domain/spaces";
+import { inSpace } from "../domain/spaces";
+import type { World } from "../domain/world";
 import type { AiService } from "./ai";
 import { scanAiValues } from "./aiScan";
 
-export interface BackfillWorld {
-  collections: Collection[];
-  components: Component[];
-  spaces: Space[];
-}
 
 /** After the collections, components, spaces or model changed: soon, as these come in bursts. */
 export const STRUCTURE_DELAY_MS = 3000;
@@ -41,7 +37,7 @@ export class AiBackfill {
   constructor(
     private repo: Repository,
     private ai: AiService,
-    private world: () => BackfillWorld,
+    private world: () => World,
   ) {}
 
   /** Looks at everything (no id) or at one collection, after `delay` (later requests join the wait). */

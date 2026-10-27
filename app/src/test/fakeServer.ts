@@ -44,6 +44,8 @@ export class FakeServer {
     if (request.database && request.database !== this.database.id) {
       return { error: "The server's database was wiped or replaced", database: this.database, empty: this.seq === 0 };
     }
+    // The rows this request writes come after `before`; they aren't sent back.
+    const before = this.seq;
     for (const t of SYNC_TABLES) {
       const table = this.tables.get(t.name) ?? new Map();
       this.tables.set(t.name, table);
@@ -57,7 +59,7 @@ export class FakeServer {
     const since = request.since > this.seq ? 0 : request.since;
     const changes: Record<string, WireRow[]> = {};
     for (const [name, table] of this.tables) {
-      const rows = [...table.values()].filter((r) => r.seq > since).sort((a, b) => a.seq - b.seq).map((r) => r.row);
+      const rows = [...table.values()].filter((r) => r.seq > since && r.seq <= before).sort((a, b) => a.seq - b.seq).map((r) => r.row);
       if (rows.length > 0) changes[name] = rows;
     }
     return { cursor: this.seq, changes, database: this.database, ...this.extra(request) };

@@ -1,5 +1,5 @@
 import { fieldKinds } from "../../domain/fieldKinds";
-import { fileIdsIn } from "../../domain/files";
+import { fileIdsIn, filesUsedBy } from "../../domain/files";
 import {
   newId,
   now,
@@ -24,6 +24,7 @@ import { SyncEngine } from "../sync/SyncEngine";
 import type { SyncEnvironment } from "../sync/environment";
 import { acceptedStatement, editedStatement, generatedStatement } from "./generated";
 import { decodeAiInput } from "../../domain/ai";
+import { draftProblem } from "../../domain/collectionDraft";
 import type { SqlClient, Statement } from "./protocol";
 
 interface CollectionRow {
@@ -157,9 +158,16 @@ export class SqliteRepository implements Repository {
     for (const change of changes) for (const listener of this.listeners) listener(change);
   }
 
-  /** The collection an item belongs to (also a deleted one's). */
-  async collectionOfItem(itemId: string): Promise<string | undefined> {
-    return (await this.db.select<{ collection_id: string }>("SELECT collection_id FROM items WHERE id = ?1", [itemId]))[0]?.collection_id;
+  async collectionsOfItems(itemIds: string[]): Promise<Map<string, string>> {
+    const rows = await this.db.select<{ id: string; collection_id: string }>(
+      "SELECT id, collection_id FROM items WHERE id IN (SELECT value FROM json_each(?1))",
+      [JSON.stringify(itemIds)],
+    );
+    return new Map(rows.map((r) => [r.id, r.collection_id]));
+  }
+
+  private async collectionOfItem(itemId: string): Promise<string | undefined> {
+    return (await this.collectionsOfItems([itemId])).get(itemId);
   }
 
   /** The repository over an open database, syncing from `env` (the browser, or the headless device). */
@@ -248,6 +256,8 @@ export class SqliteRepository implements Repository {
   }
 
   async saveCollection(draft: CollectionDraft, spaceId: string): Promise<void> {
+    const problem = draftProblem(draft);
+    if (problem) throw new Error(problem);
     const ts = now();
     const writes: Statement[] = [];
     const existing = await this.db.select<{ id: string }>("SELECT id FROM collections WHERE id = ?1", [draft.id]);
@@ -363,28 +373,38 @@ export class SqliteRepository implements Repository {
     return Object.fromEntries(rows.map((r) => [r.collection_id, r.n]));
   }
 
-  async listItems(collection: Collection, spaceId: string): Promise<Item[]> {
+  async listItems(collection: Collection, spaceId: string, page?: { limit: number; offset: number }): Promise<Item[]> {
     const items = await this.db.select<ItemRow>(
-      "SELECT * FROM items WHERE collection_id = ?1 AND space_id = ?2 AND deleted_at IS NULL ORDER BY updated_at DESC",
-      [collection.id, spaceId],
+      `SELECT * FROM items WHERE collection_id = ?1 AND space_id = ?2 AND deleted_at IS NULL
+        ORDER BY updated_at DESC, id ${page ? "LIMIT ?3 OFFSET ?4" : ""}`,
+      page ? [collection.id, spaceId, page.limit, page.offset] : [collection.id, spaceId],
     );
-    const values = await this.db.select<ValueRow>(
-      `SELECT fv.* FROM field_values fv
-         JOIN items o ON o.id = fv.item_id
-        WHERE o.collection_id = ?1 AND o.space_id = ?2 AND o.deleted_at IS NULL`,
-      [collection.id, spaceId],
-    );
+    const values = page
+      ? await this.valuesOf(items.map((o) => o.id))
+      : await this.db.select<ValueRow>(
+          `SELECT fv.* FROM field_values fv
+             JOIN items o ON o.id = fv.item_id
+            WHERE o.collection_id = ?1 AND o.space_id = ?2 AND o.deleted_at IS NULL`,
+          [collection.id, spaceId],
+        );
     return this.assemble(collection, items, values);
   }
 
-  async getItem(collection: Collection, itemId: string): Promise<Item | null> {
+  async getItems(collection: Collection, itemIds: string[]): Promise<Item[]> {
     const items = await this.db.select<ItemRow>(
-      "SELECT * FROM items WHERE id = ?1 AND collection_id = ?2 AND deleted_at IS NULL",
-      [itemId, collection.id],
+      "SELECT * FROM items WHERE id IN (SELECT value FROM json_each(?1)) AND collection_id = ?2 AND deleted_at IS NULL",
+      [JSON.stringify(itemIds), collection.id],
     );
-    if (items.length === 0) return null;
-    const values = await this.db.select<ValueRow>("SELECT * FROM field_values WHERE item_id = ?1", [itemId]);
-    return this.assemble(collection, items, values)[0];
+    return items.length === 0 ? [] : this.assemble(collection, items, await this.valuesOf(items.map((o) => o.id)));
+  }
+
+  async getItem(collection: Collection, itemId: string): Promise<Item | null> {
+    return (await this.getItems(collection, [itemId]))[0] ?? null;
+  }
+
+  /** The stored values of these items. */
+  private valuesOf(itemIds: string[]): Promise<ValueRow[]> {
+    return this.db.select<ValueRow>("SELECT * FROM field_values WHERE item_id IN (SELECT value FROM json_each(?1))", [JSON.stringify(itemIds)]);
   }
 
   async listLabels(collection: Collection, itemIds?: string[]): Promise<ItemLabel[]> {
@@ -707,14 +727,10 @@ export class SqliteRepository implements Repository {
       [q, limit, spaceId],
     );
     if (hits.length === 0) return [];
-    const ids = JSON.stringify(hits.map((h) => h.id));
     const items = await this.db.select<ItemRow>("SELECT * FROM items WHERE id IN (SELECT value FROM json_each(?1))", [
-      ids,
+      JSON.stringify(hits.map((h) => h.id)),
     ]);
-    const values = await this.db.select<ValueRow>(
-      "SELECT * FROM field_values WHERE item_id IN (SELECT value FROM json_each(?1))",
-      [ids],
-    );
+    const values = await this.valuesOf(hits.map((h) => h.id));
     const byId = new Map<string, Item>();
     for (const collection of collections) {
       const own = items.filter((o) => o.collection_id === collection.id);
@@ -741,18 +757,13 @@ export class SqliteRepository implements Repository {
 
   /** Release statements for every file referenced by the field_values matching `where`. */
   private async releaseFilesWhere(where: string, bind: string[]): Promise<Statement[]> {
-    const rows = await this.db.select<{ value_file: string | null; markdown: string | null }>(
-      `SELECT fv.value_file, CASE WHEN f.kind IN ('markdown', 'html') THEN fv.value_text END AS markdown
+    const rows = await this.db.select<{ value_file: string | null; value_text: string | null }>(
+      `SELECT fv.value_file, CASE WHEN f.kind IN ('markdown', 'html') THEN fv.value_text END AS value_text
          FROM field_values fv JOIN fields f ON f.id = fv.field_id
         WHERE (fv.value_file IS NOT NULL OR f.kind IN ('markdown', 'html')) AND ${where}`,
       bind,
     );
-    const ids = new Set<string>();
-    for (const r of rows) {
-      if (r.value_file) ids.add(r.value_file);
-      if (r.markdown) fileIdsIn(r.markdown).forEach((id) => ids.add(id));
-    }
-    return [...ids].flatMap(releaseFile);
+    return filesUsedBy(rows).flatMap(releaseFile);
   }
 
   async putFile(data: Uint8Array, mime: string): Promise<string> {

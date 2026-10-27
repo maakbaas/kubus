@@ -19,7 +19,8 @@ export interface ApiItem {
   values: Record<string, FieldValue>;
 }
 
-const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+/** Names match in any case. */
+export const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 /** A field of `collection` by id or name; 404 when there is none. */
 export function fieldOf(collection: Collection, name: string): FieldDef {

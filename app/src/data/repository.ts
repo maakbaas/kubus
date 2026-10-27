@@ -107,10 +107,14 @@ export interface Repository {
   /** Item counts per collection, of one space, or of all when null. */
   countItemsByCollection(spaceId: string | null): Promise<Record<string, number>>;
 
-  /** A collection's items in one space. */
-  listItems(collection: Collection, spaceId: string): Promise<Item[]>;
+  /** A collection's items in one space, most recently changed first (or one page of them). */
+  listItems(collection: Collection, spaceId: string, page?: { limit: number; offset: number }): Promise<Item[]>;
   /** One item, whichever space it is in. */
   getItem(collection: Collection, itemId: string): Promise<Item | null>;
+  /** These items of a collection, whichever space they are in (deleted ones left out). */
+  getItems(collection: Collection, itemIds: string[]): Promise<Item[]>;
+  /** The collection of each of these items (also of deleted ones), by item id. */
+  collectionsOfItems(itemIds: string[]): Promise<Map<string, string>>;
   /**
    * Just the labels (`labelField`: the first non-empty string value, as stored) of a collection's
    * items in every space, or of the given ones: what pickers and links need, without loading every value.
@@ -181,4 +185,6 @@ export interface Repository {
   putThumbnail(fileId: string, data: Uint8Array, mime: string): Promise<void>;
   /** Deletes these files unless a live item still uses them. Safe to call liberally. */
   releaseFiles(fileIds: string[]): Promise<void>;
+  /** Those of these files no live item uses (a thumbnail: whose original none uses), by the rule of releaseFiles. */
+  unusedFiles(fileIds: string[]): Promise<string[]>;
 }

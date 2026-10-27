@@ -1,7 +1,7 @@
 // @vitest-environment node
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import { describe, expect, it } from "vitest";
-import schema from "../schema.sql?raw";
+import { schema } from "../schema";
 import { ensureSchema } from "./engine";
 
 // What a database from before sync looked like: no outbox and triggers, and (to force a table

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import schema from "../schema.sql?raw";
-import serverSchema from "../../../../server/schema.sql?raw";
+import { schema } from "../schema";
 import { SYNC_TABLES } from "../../../../shared/sync";
 
 const LOCAL_ONLY = ["meta", "sync_outbox"];
@@ -19,7 +18,6 @@ function columnsByTable(sql: string): Map<string, string[]> {
 
 describe("sync spec", () => {
   const local = columnsByTable(schema);
-  const server = columnsByTable(serverSchema);
 
   it("lists every replicated table of schema.sql, with all its columns", () => {
     const names = [...local.keys()].filter((t) => !LOCAL_ONLY.includes(t));
@@ -29,12 +27,6 @@ describe("sync spec", () => {
       expect(Object.keys(t.columns).sort(), t.name).toEqual(synced.sort());
       for (const k of t.key) expect(t.columns[k], `${t.name}.${k}`).toBeDefined();
       if (t.version) expect(t.columns[t.version], t.name).toBe("timestamp");
-    }
-  });
-
-  it("is mirrored by server/schema.sql (plus its seq column)", () => {
-    for (const t of SYNC_TABLES) {
-      expect([...server.get(t.name)!].sort(), t.name).toEqual([...Object.keys(t.columns), "seq"].sort());
     }
   });
 

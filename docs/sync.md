@@ -30,14 +30,16 @@ error until the database is wiped. Per device (localStorage
 vision wants server-side queries and remote sources later.
 
 **Client** (`app/src/data/sync/SyncEngine.ts`, created by `SqliteRepository`, exposed as `repo.sync`):
-- *Outbox by triggers.* `schema.sql` has `AFTER INSERT/UPDATE` triggers on every synced table that
+- *Outbox by triggers.* `AFTER INSERT/UPDATE` triggers on every synced table (made from
+  `SYNC_TABLES` and appended to `schema.sql` by `data/schema.ts`; insert only for `version: null`)
   queue the row's key in `sync_outbox` (local only), in the same transaction as the change; so no
   repository method knows about sync. Rows the engine applies from the server are not queued
   (`meta` row `sync_applying` is set during the apply). `engine.ts` `upgradeInPlace` also
-  (re)creates triggers. A new synced table or column needs: `shared/sync.ts`, `server/schema.sql`
-  (CREATE + ALTER line) and triggers in `schema.sql`; `sync/spec.test.ts` fails until they agree.
+  (re)creates triggers. A new synced table or column goes in `schema.sql` and `shared/sync.ts`
+  (`sync/spec.test.ts` fails until they agree); the triggers and the server's tables follow.
 - *One request does push and pull*: `POST /api/sync { since, changes }` returns `{ cursor, changes }`
-  (rows with server `seq` > since). Applying the response, clearing the sent part of the outbox
+  (rows with server `seq` > since, but not the ones this request wrote: the device has them, and the
+  cursor covers them). Applying the response, clearing the sent part of the outbox
   (`id <= snapshot`; edits made during the request stay queued) and storing `meta.sync_cursor` is
   one local transaction. Pulls are incremental (per row; `field_values` rows are single fields).
 - *Merge*: a row replaces the local one only if its `updated_at` is newer (field-level last writer
@@ -63,15 +65,20 @@ vision wants server-side queries and remote sources later.
   before ids skips the check (no id sent or none to compare). Not caught: tables emptied by hand
   (the id stays) and a restored backup (same id, older data: devices ahead of the server pull
   everything again); delete the `server_meta` rows after such a restore to make it count as new.
-- *When*: 2 s after a local write, every 30 s, on `online`, when the app becomes visible, and when the
-  server signals a change (`GET /api/events`, server-sent events read with `fetch` so the token goes
-  in a header; reconnects with backoff). Applied changes are announced as `DataChange`s, so every
+- *When*: 2 s after a local write (a sync starting meanwhile takes it along and cancels that), every
+  30 s, on `online`, when the app becomes visible, and when the server signals a change this device
+  doesn't have (`GET /api/events`, server-sent events read with `fetch` so the token goes in a
+  header; reconnects with backoff; each event is `data: <cursor>`, so a device's own push, at or
+  below its cursor, doesn't make it sync again; `0` = wiped). Applied changes are announced as `DataChange`s, so every
   view refreshes as for a local write.
 
 **Server** (`server/src`): `sync.ts` runs a request in one transaction under an advisory lock, so
-`seq` (from `sync_seq`, taken per written row) order is commit order and a cursor never skips a row.
-`server/schema.sql` is generated from `shared/sync.ts` (jsonb, timestamptz, …; no foreign
-keys or checks) and applied idempotently at start. `events.ts` is the change signal. Proxies must not
+`seq` (from `sync_seq`, taken per written row) order is commit order and a cursor never skips a row;
+the lock also means the rows a request writes are exactly the ones after the cursor it started at,
+which is how the answer leaves them out. Pushed rows are written a statement per table (and per
+1000 rows: `jsonb_to_recordset`), not one by one. The synced tables are made from `shared/sync.ts`
+(`schema.ts`: jsonb, timestamptz, …; no foreign keys or checks), then `server/schema.sql` (the
+server's own tables), all applied idempotently at start. `events.ts` is the change signal. Proxies must not
 buffer `/api/events` (nginx: `proxy_buffering off`); polling covers a dropped stream. Its routes
 (`index.ts`) go through the shared `Router` (`shared/router.ts`).
 
@@ -138,8 +145,9 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   once uploaded, fetched from the server when asked), syncing over HTTP with `http://127.0.0.1:$PORT`
   and listening to `/api/events`. It starts with a first connection (everything but bytes). After a
   wipe (409) it wipes itself and connects again: it is a cache, it never uploads stale data.
-- *Requests* run one at a time (`HeadlessDevice.serial`); each syncs first (reads see the latest
-  data), and a write syncs again before it answers.
+- *Requests* run one at a time (`HeadlessDevice.serial`); each syncs first unless the device is
+  already at the server's latest write (`HeadlessOptions.cursor`, which the server knows: reads see
+  the latest data without a request), and a write syncs again before it answers.
 - *Routes* (`headless/api.ts`): each a thin translation onto one `Repository` method; names by id or
   name (`values.ts`: values by field name, checked per kind; component values included, read only,
   computed with `refLabelForSpace` as the screens and the AI backfill do). File bytes
@@ -152,8 +160,8 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   `app/src/headless/index.ts` into `server/headless/index.js` (git-ignored; the Dockerfile's web stage
   builds it); sqlite-wasm stays external. The server loads it with a dynamic import
   (`server/src/headless.ts`); without it `/api/v1` answers 503 saying to build it.
-- *Webhooks* (`headless/webhooks.ts`): `SyncEngine.onPulled` reports each sync's applied rows; the
-  device turns them into events (item created / updated / deleted with the item as the API returns
+- *Webhooks* (`headless/webhooks.ts`): `SyncEngine.onPulled` reports each sync's applied rows and
+  the ones it sent (the API's own writes, which the server doesn't send back); the device turns them into events (item created / updated / deleted with the item as the API returns
   it; collection, view, space, component, bookmark changed) and POSTs one payload per sync to each of
   `KUBUS_WEBHOOK_URL` (comma-separated), signed with `KUBUS_WEBHOOK_SECRET` (`X-Kubus-Signature:
   sha256=<HMAC>`). Created = first seen by the hook. In order per URL, retried after 1, 5, 30 s, then

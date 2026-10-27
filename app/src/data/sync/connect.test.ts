@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import schema from "../schema.sql?raw";
+import { schema } from "../schema";
 import type { SyncRequest, SyncResponse } from "../../../../shared/sync";
 import { SyncEngine } from "./SyncEngine";
 import { memoryEnvironment } from "./environment";
