@@ -125,13 +125,32 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
    - Confirm in the app nothing else changes card styling with the setting off (reported as
      "happens anyway").
 
+## Follow-ups
+
+10. **One component editor, on the component page and in place.** Ask AI, Output, Write with AI,
+    the code editor with its help and problems, and the HTML aspect ratio: one shared editor used by
+    the component page, field settings and block settings (they had drifted apart). The page adds
+    what belongs to a shared component around it: name, description, the preview with a
+    collection's items.
+
+11. **Static components are blocks only.** One using neither `$item` nor a block's names isn't
+    offered for fields; an existing field using one shows a warning instead of a value.
+
+12. **A filter on the Components page**: all, shared only, written here only.
+
 ## When the above is done
 
 8. **Full GUI suite updated and green.** Update `gui-tests/` for every change above (new and
    changed suites, baselines after deliberate visual changes) and run the full suite
    (`npm run test:gui`) to a 100% pass rate.
 
-9. **Performance, driven by the smoke suite.** Iterate on `npm run test:gui:smoke` only: measure,
-   find and make performance gains both in the suite (waits, setup, needless reloads) and in the app
-   itself (rendering, data loading, startup), and optimize both for speed. Keep every check
-   meaningful: faster by doing less work, never by checking less.
+9. **Performance, driven by a narrow perf suite.** Not the smoke suite (picked for breakage, ~10
+   minutes, mostly seeding, settling and audits): a `perf` option and `--perf` runner mode with 6–8
+   tests on representative hot paths (cold start to the first collection page; a 1,000-row table
+   loading, scrolling and sorting; computed component fields with filters over many items; an item
+   page with many fields, blocks and components edited in place; switching view tabs, workspace tabs
+   and panes; a popover typed in over a large view; search across collections), each at normal speed
+   and at 4× CPU throttling, reporting per-phase timings, long tasks, DOM size and memory, with the
+   suite's own overhead (seeding, settling, audits) apart from the app's. Iterate on it (measure, one
+   change, measure) to speed up the app (startup, loading, computation, rendering) and the suite
+   (seeding, waits, audit cost) without dropping a check; finish with green smoke and full runs.
