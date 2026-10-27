@@ -80,3 +80,24 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
    - Today a checkbox "is" compares the text to `true` (`domain/query.ts`, `matches`), so
      `{{1==1}}` silently matches *unchecked* items. A value that doesn't fit (not true / false, not
      a number, a failing section) is a problem shown at the input, never a silent match.
+
+## Local components
+
+6. **Local components: code owned by its place, promoted to shared on demand.** Proposed earlier,
+   never built (fcef991 took the other route: no inline code in Markdown blocks and item values;
+   "Save as component" makes a shared static component). Design it together with items 1–2.
+   - A component may be *local*: owned by one place (a component field, a component block, a
+     Markdown block if inline code comes back there) instead of shared. Same table, same code
+     language and kinds, same editor; an owner reference (e.g. `components.owner_id` + what it is)
+     marks it local. Deleting the owner deletes it.
+   - Written in place: the field modal / block settings edit a local component's code directly
+     (a one-off AI prompt or formula needs no trip to the Components page and no name), instead of
+     only picking a shared one. `NewComponentModal` and the "New component" button become this.
+   - The Components page lists local ones too, with where they are used ("Used in: Books ›
+     Reading time", "Dune › Notes"), filterable apart from the shared ones.
+   - **Promote to shared** (the general form of today's "Save as component"): gives it a name, and
+     it can then be picked elsewhere. Editing a shared one asks first (applies everywhere; for AI
+     components: regenerates everywhere); editing a local one doesn't.
+   - Open: whether Markdown blocks and item values get inline `{{ }}` back as local components
+     (CLAUDE.md "code lives only in components" would still hold), or local stays limited to
+     component fields and blocks.
