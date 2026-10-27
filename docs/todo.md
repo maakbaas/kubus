@@ -105,3 +105,16 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
      (applies everywhere; for AI components: regenerates everywhere); editing a local one doesn't.
    - Deciding between picking and writing in place must stay one simple control in the field modal
      and block settings (see item 3's hierarchy), not two parallel sets of inputs.
+
+## Cards
+
+7. **"Show as a list when narrow" only when it is on, and only when narrow** (`views/CardsView.tsx`).
+   Today one card per row happens anyway in a narrow pane (the cards just don't fit), so the
+   setting mostly moves *when* it happens, and the list row (cover beside the text,
+   `item-card--cover-left`) is keyed to `listNarrow && columns === 1`: also in a wide pane when the
+   card width is large, so not about narrow at all.
+   - On: below the narrow width (`STACK_BELOW_REM`, as tables restack) the cards are list rows;
+     above it, the normal grid, whatever the column count.
+   - Off: never list rows, and no forced single column: the grid just follows the card width.
+   - First confirm in the app whether list rows ever show with the setting off (reported as
+     "happens anyway"); the code says they can't, so find what does it if so.
