@@ -108,13 +108,19 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
 
 ## Cards
 
-7. **"Show as a list when narrow" only when it is on, and only when narrow** (`views/CardsView.tsx`).
-   Today one card per row happens anyway in a narrow pane (the cards just don't fit), so the
-   setting mostly moves *when* it happens, and the list row (cover beside the text,
-   `item-card--cover-left`) is keyed to `listNarrow && columns === 1`: also in a wide pane when the
-   card width is large, so not about narrow at all.
-   - On: below the narrow width (`STACK_BELOW_REM`, as tables restack) the cards are list rows;
-     above it, the normal grid, whatever the column count.
-   - Off: never list rows, and no forced single column: the grid just follows the card width.
-   - First confirm in the app whether list rows ever show with the setting off (reported as
-     "happens anyway"); the code says they can't, so find what does it if so.
+7. **"Show as a list when narrow": the only thing that changes a card's layout, and only when on**
+   (`views/CardsView.tsx`, `.item-card*` in `styles.css`). The column count always just follows the
+   card width (one per row is fine when that is what fits).
+   - Today: the setting only moves the cover to the left (`item-card--cover-left`), keyed to
+     `listNarrow && columns === 1` (so also in a wide pane with a large card width: not about
+     narrow), and it forces one column below `STACK_BELOW_REM`. Labels sit beside their values by
+     default either way; separately, any card under 16rem stacks labels above values
+     (`@container (max-width: 16rem)`), setting or not.
+   - Off: the default card (cover on top, labels beside values) at every width and breakpoint: no
+     forced single column, no list rows, and the 16rem stacking goes (or moves under the setting).
+     Without it a very narrow card must still not overflow: labels wrap or ellipsize (readable
+     whole via their title).
+   - On: below the narrow width (`STACK_BELOW_REM`, as tables restack) one card per row as list
+     rows (cover on the left, text beside it); above it, the default card.
+   - Confirm in the app nothing else changes card styling with the setting off (reported as
+     "happens anyway").
