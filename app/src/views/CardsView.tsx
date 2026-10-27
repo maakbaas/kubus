@@ -3,7 +3,7 @@ import { Accordion, AccordionItem, Checkbox, Link, Select, SelectItem, Slider, T
 import { Grid as GridIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { fileIdFromSrc } from "../domain/files";
-import { itemLabel, fieldValue, pickableFields, type FieldDef, type Item, type Collection } from "../domain/model";
+import { isStruckThrough, itemLabel, fieldValue, pickableFields, type FieldDef, type Item, type Collection } from "../domain/model";
 import type { FieldLayout } from "../domain/fieldLayout";
 import { outputOf, type Component } from "../domain/components";
 import { HtmlFrame } from "../ui/ComponentValue";
@@ -172,7 +172,7 @@ interface ItemCardProps {
   search: string;
   actions: ItemActions;
   onRatio(key: string, ratio: number): void;
-  /** Shown as a list row: the cover beside the text (listNarrow, in a one-column pane). */
+  /** Shown as a list row: the cover beside the text ("Show as a list when narrow", in a narrow pane). */
   listed: boolean;
 }
 
@@ -217,7 +217,7 @@ const ItemCard = memo(function ItemCard({ collection, item, options, layout, sho
       {hasText && (
         <div className="item-card__body">
       {options.showTitle && (
-        <div className="item-card__title">
+        <div className={isStruckThrough(collection, item) ? "item-card__title item--struck" : "item-card__title"}>
           <Highlight text={itemLabel(collection, item)} query={search} />
         </div>
       )}
@@ -284,13 +284,16 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
   }, [measuring]);
 
   const grid = useRef<HTMLDivElement>(null);
-  const columns = useCardColumns(grid, options.cardWidth, result.total > 0, options.listNarrow);
+  const { columns, narrow } = useCardColumns(grid, options.cardWidth, result.total > 0);
+  // "Show as a list when narrow": in a narrow pane (where tables restack) one card per row, as list
+  // rows. Otherwise, and always with the option off, the grid just follows the card width.
+  const listed = options.listNarrow && narrow;
 
   if (result.total === 0) return <p className="helper view-empty">No {collection.pluralName} match.</p>;
   const cards = (group: (typeof result.groups)[number]) => (
             <div
               className={options.coverRatio === "auto" ? "item-cards item-cards--auto-ratio" : "item-cards"}
-              style={{ "--card-columns": columns, "--cover-ratio": coverRatio, visibility: measuring ? "hidden" : undefined } as CSSProperties}
+              style={{ "--card-columns": listed ? 1 : columns, "--cover-ratio": coverRatio, visibility: measuring ? "hidden" : undefined } as CSSProperties}
             >
               {group.items.map((item) => (
                 <ItemCard
@@ -305,7 +308,7 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
                   search={search}
                   actions={actions}
                   onRatio={onRatio}
-                  listed={options.listNarrow && columns === 1}
+                  listed={listed}
                 />
               ))}
             </div>
@@ -345,24 +348,25 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
  * by a card plus its gap, rounded to the nearest whole number. Follows the container's width.
  */
 /** `present`: the grid is shown (its element exists); set up again when that changes. */
-/** The cards per row for the target width; with `list`, one in a pane narrower than a table restacks in, whatever the width. */
-function useCardColumns(container: RefObject<HTMLDivElement | null>, targetRem: number, present: boolean, list: boolean): number {
-  const [columns, setColumns] = useState(1);
+/** The cards per row for the target width, and whether the pane is narrower than a table restacks in. */
+function useCardColumns(container: RefObject<HTMLDivElement | null>, targetRem: number, present: boolean): { columns: number; narrow: boolean } {
+  const [state, setState] = useState({ columns: 1, narrow: false });
   useLayoutEffect(() => {
     const el = container.current;
     if (!el) return;
     const measure = () => {
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
       const gap = rem; // the grid's gap is spacing-05 (1rem)
-      if (list && el.clientWidth < STACK_BELOW_REM * rem) return setColumns(1);
-      setColumns(Math.max(1, Math.round((el.clientWidth + gap) / (targetRem * rem + gap))));
+      const columns = Math.max(1, Math.round((el.clientWidth + gap) / (targetRem * rem + gap)));
+      const narrow = el.clientWidth < STACK_BELOW_REM * rem;
+      setState((s) => (s.columns === columns && s.narrow === narrow ? s : { columns, narrow }));
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [container, targetRem, present, list]);
-  return columns;
+  }, [container, targetRem, present]);
+  return state;
 }
 
 function CardOptionsEditor({ collection, options, onChange }: BlockOptionsProps<CardOptions>) {

@@ -99,6 +99,23 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
       document.removeEventListener("keydown", onKeyDown, true);
     };
   }, [open]);
+  // While it is open, what it changes may make the page shorter (a block's filter leaving fewer
+  // rows, a component's result): at the bottom of a scrolled pane that would pull the page, and the
+  // panel with its button, down under the pointer. The page keeps at least its height until the
+  // last panel on it closes (a count on the page: several can be open).
+  useEffect(() => {
+    if (!open) return;
+    const page = root.current?.closest<HTMLElement>(".ws-tab-content");
+    if (!page) return;
+    const held = Number(page.dataset.panelsHeld ?? 0);
+    if (held === 0) page.style.minBlockSize = `${page.offsetHeight}px`;
+    page.dataset.panelsHeld = String(held + 1);
+    return () => {
+      const left = Number(page.dataset.panelsHeld ?? 1) - 1;
+      page.dataset.panelsHeld = String(left);
+      if (left === 0) page.style.minBlockSize = "";
+    };
+  }, [open]);
   // The panel never makes the page scroll and never leaves its pane: it gets at most the room on
   // the roomier side of its button (autoAlign flips to that side) and scrolls inside when taller,
   // is at most as wide as the pane minus a margin, and is shifted back inside when autoAlign
@@ -149,7 +166,20 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
       // The caret is inside the panel: shifted back, so it keeps pointing at the button.
       if (tip) tip.style.translate = `${-dx}px 0`;
     };
+    // While open the panel never gets shorter: one hung above its button would otherwise move
+    // everything in it down when something in it shrinks (a code editor's help giving way to a
+    // one-line problem), under the pointer. It grows as needed; the held height goes on close.
+    let held = 0;
+    const hold = () => {
+      const panel = content()?.querySelector<HTMLElement>(".toolbar-popover__panel");
+      if (!panel) return;
+      const h = panel.getBoundingClientRect().height;
+      if (h <= held) return;
+      held = h;
+      panel.style.minBlockSize = `min(${h}px, var(--popover-room, 100vh))`;
+    };
     const update = () => {
+      hold();
       measure();
       requestAnimationFrame(() => {
         place();
@@ -164,6 +194,8 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
     return () => {
       stop();
       observer?.disconnect();
+      const panel = el?.querySelector<HTMLElement>(".toolbar-popover__panel");
+      if (panel) panel.style.minBlockSize = "";
       if (el) el.style.translate = "";
       const tip = el && caret(el);
       if (tip) tip.style.translate = "";

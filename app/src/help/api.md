@@ -81,7 +81,7 @@ curl -X POST -H "Authorization: Bearer $KUBUS_TOKEN" -H "Content-Type: applicati
 | `DELETE /collections/{c}/fields/{f}` | remove a field (a collection keeps at least one) |
 | `PUT /collections/{c}/fields/order` `["Title", "Pages", …]` | field order (the ones not named keep their order, after these) |
 
-A field is `{ name, kind }` plus what its kind needs: `targetCollection` (Item, List of items), `component` and `componentArgs` (`{ "variable": { "field": "Pages" } }` or `{ "value": "…" }`), `aiPrompt` and `aiOutput` (`string`, `number`, `markdown`), and optionally `choiceFilter`, `toggleIcon`, `strikeThrough`. Kinds: `string`, `markdown`, `html`, `number`, `date`, `datetime`, `checkbox`, `image`, `item`, `string_list`, `checklist`, `item_list`, `component`, `ai`. A field's kind and target can't change. `spaces` is a list of spaces, or `null` for every space.
+A field is `{ name, kind }` plus what its kind needs: `targetCollection` (Item, List of items), for Component and AI fields a shared `component` or their own one (`code`, with `output` and `frameRatio`; an AI field's `code` is its prompt and its `output` `string`, `number` or `markdown`, fixed once saved), and optionally `choiceFilter`, `toggleIcon`, `strikeThrough`. Kinds: `string`, `markdown`, `html`, `number`, `date`, `datetime`, `checkbox`, `image`, `item`, `string_list`, `checklist`, `item_list`, `component`, `ai`. A field's kind and target can't change. `spaces` is a list of spaces, or `null` for every space.
 
 ## Views
 
@@ -107,7 +107,7 @@ A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, o
 | `POST /bookmarks` `{ kind: "item", target }` or `{ kind: "view", collection, target }`, `space?`, `label?` | add |
 | `PATCH /bookmarks/{target}` `{ label }`, `DELETE /bookmarks/{target}?space=` | rename, remove |
 | `GET /components`, `GET /components/{x}` | components with their code |
-| `POST /components` `{ name, code, output?, description?, frameRatio? }` | create |
+| `POST /components` `{ name, code, output?, ai?, description?, frameRatio? }` | create (`ai`: Ask AI, a prompt for AI fields) |
 | `PATCH /components/{x}`, `DELETE /components/{x}?withFields=true` | change, delete (`withFields`: its fields too) |
 
 ## Files

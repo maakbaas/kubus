@@ -88,10 +88,10 @@ describe("the HTTP API", () => {
   });
 
   it("includes computed values, and refuses to write them", async () => {
-    const component = await call("POST", "/components", { name: "Twice", code: "{{ $n * 2 }}", output: "number" });
+    const component = await call("POST", "/components", { name: "Twice", code: "{{ $item.N * 2 }}", output: "number" });
     expect(component.status).toBe(201);
     await call("POST", "/collections", { name: "Thing", fields: [{ name: "Name", kind: "string" }, { name: "N", kind: "number" }] });
-    const withField = await call("POST", "/collections/Thing/fields", { name: "Double", kind: "component", component: "twice", componentArgs: { n: { field: "N" } } });
+    const withField = await call("POST", "/collections/Thing/fields", { name: "Double", kind: "component", component: "twice" });
     expect(withField.status).toBe(201);
     const item = await call("POST", "/collections/Thing/items", { values: { Name: "a", N: 21 } });
     expect(item.body.values.Double).toBe(42);
@@ -99,8 +99,8 @@ describe("the HTTP API", () => {
   });
 
   it("runs component code apart from the server, with a time limit", async () => {
-    await call("POST", "/components", { name: "Env", code: "{{ typeof process }}", output: "string" });
-    await call("POST", "/components", { name: "Forever", code: "{{ (() => { for (;;) {} })() }}", output: "string" });
+    await call("POST", "/components", { name: "Env", code: "{{ $item && typeof process }}", output: "string" });
+    await call("POST", "/components", { name: "Forever", code: "{{ $item && (() => { for (;;) {} })() }}", output: "string" });
     await call("POST", "/collections", {
       name: "Probe",
       fields: [{ name: "Name", kind: "string" }, { name: "Env", kind: "component", component: "Env" }, { name: "Loop", kind: "component", component: "Forever" }],
@@ -154,7 +154,7 @@ describe("the HTTP API", () => {
   it("writes AI values with the fingerprint of the prompt as it reads now", async () => {
     await call("POST", "/collections", {
       name: "Note",
-      fields: [{ name: "Text", kind: "string" }, { name: "Summary", kind: "ai", aiPrompt: "Summarize {{ $item.Text }}" }],
+      fields: [{ name: "Text", kind: "string" }, { name: "Summary", kind: "ai", code: "Summarize {{ $item.Text }}" }],
     });
     const note = await call("POST", "/collections/Note/items", { values: { Text: "long" } });
     const written = await call("PUT", `/items/${note.body.id}/ai/Summary`, { value: "short" });

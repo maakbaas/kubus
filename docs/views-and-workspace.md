@@ -10,6 +10,13 @@ Extension points are registries, not special cases in pages:
   `applyQuery()`. Everything field-kind specific (filter operators, sort key, group keys, text for
   search) is in one `KIND_RULES` table: a new field kind or operator is added there. Pseudo fields
   `$title`, `$updated`, `$created` can be sorted on; the default query sorts by `$title`.
+  A filter value may hold `{{ }}` code, typed and shown as raw text (the one place besides
+  components where code runs): `resolveFilterValues` / `filterCodeValue` work it out when the filter
+  runs, as if its result had been typed (`{{ 1 == 1 }}` is "true"), reading `$now` and, on an item
+  page, the page's item as `$item`. A value that can't be compared (failing code, "maybe" for a
+  checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
+  nothing, never the wrong items. The value input is text for every kind (the braces must be typable);
+  under it, what the code works out to ("= true").
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,
   fields with labels / hide empty), the `View` component, optional `OptionsEditor` in
@@ -24,8 +31,11 @@ Extension points are registries, not special cases in pages:
   selectable per view, the title column too (rows then get an open button); in a narrow pane
   every table restacks as cards, column names as row labels: `.table-wrap` container query) and `cards` (show title, fields, cover = an image or a markdown field rendered in its place, card width (slider: the column count whose width comes closest), cover shape:
   a fixed ratio (image shown whole, the rest filled with its average colour) or the images'
-  average ratio (filled, cropped); with no title and no fields a card is just its cover) and
-  `component` (`views/ComponentBlock.tsx`). `markdown` (`views/MarkdownBlock.tsx`) is a block with its own Markdown text, stored in the block's options (not a reusable component): plain GFM, no `{{ }}` code; it is shown and edited exactly like a Markdown field (same read-only box, `FieldEditor`); "Save as component" in its Block settings stores the text as a new static component (named like the block) and turns the block into a component block showing it: shared text, reusable across views, where code can be added. "Add block" is a menu (`views/AddBlockButton.tsx`): a block of each type and one per block or static component. A block type only
+  average ratio (filled, cropped); with no title and no fields a card is just its cover; a card looks
+  the same at every width (labels beside values, a label wrapping when the card is very narrow), and
+  only "Show as a list when narrow" changes it: in a pane narrower than tables restack in
+  (`STACK_BELOW_REM`), one card per row as list rows, cover beside the text) and
+  `component` (`views/ComponentBlock.tsx`). `markdown` (`views/MarkdownBlock.tsx`) is a block with its own Markdown text, stored in the block's options: a local static component (GFM whose `{{ }}` sections may use `$now`, nothing about items); it is shown (rendered) and edited (as written) exactly like a Markdown field (same read-only box, `FieldEditor`); "Save as shared component" in its Block settings stores the text as a new shared static component (named like the block) and turns the block into a component block showing it. A component block shows a shared component (`options.componentId`) or its own (`options.local`, written in its Block settings, `ui/ComponentChoice.tsx`). "Add block" is a menu (`views/AddBlockButton.tsx`): a block of each type (a component block with its own, empty component) and one per shared block or static component. A block type only
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
 - **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + JSON config

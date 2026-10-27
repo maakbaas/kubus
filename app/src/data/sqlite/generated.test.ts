@@ -18,7 +18,7 @@ beforeEach(() => {
   db.exec(schema);
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(`INSERT INTO collections (id, name, plural_name, created_at, updated_at) VALUES ('t1', 'Album', 'Albums', '${T}', '${T}')`);
-  db.exec(`INSERT INTO fields (id, collection_id, name, kind, ai_prompt, ai_output, created_at, updated_at) VALUES ('f1', 't1', 'Shelf', 'ai', 'x', 'string', '${T}', '${T}')`);
+  db.exec(`INSERT INTO fields (id, collection_id, name, kind, code, output, created_at, updated_at) VALUES ('f1', 't1', 'Shelf', 'ai', 'x', 'string', '${T}', '${T}')`);
   db.exec(`INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES ('o1', 't1', 'default', '${T}', '${T}')`);
 });
 

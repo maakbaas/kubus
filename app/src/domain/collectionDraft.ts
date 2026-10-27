@@ -1,7 +1,7 @@
 // What makes a collection draft savable: the collection editor shows these problems at their
 // inputs, the API answers with the first one. One rule for both.
 
-import { aiPromptProblem } from "./ai";
+import { fieldComponentProblem, type Component } from "./components";
 import { isReferenceKind, type CollectionDraft } from "./model";
 
 export interface DraftProblems {
@@ -9,14 +9,20 @@ export interface DraftProblems {
   pluralError?: string;
   /** By field id: the field's name. */
   fieldErrors: Record<string, string>;
-  /** By field id: what the field points to (a collection, a component) or its prompt. */
+  /** By field id: what the field points to (a collection) or its component (or prompt). */
   targetErrors: Record<string, string>;
   /** A collection always has a field (the last one can't be removed). */
   noFields: boolean;
   valid: boolean;
 }
 
-export function draftProblems(draft: CollectionDraft): DraftProblems {
+/** Why a field's settings beyond its name can't be saved (a reference without a collection, its component), or undefined. */
+export function settingsProblem(f: CollectionDraft["fields"][number], components: Component[]): string | undefined {
+  if (isReferenceKind(f.kind) && !f.targetCollectionId) return "Choose a collection";
+  return fieldComponentProblem(f, components) ?? undefined;
+}
+
+export function draftProblems(draft: CollectionDraft, components: Component[]): DraftProblems {
   const fieldErrors: Record<string, string> = {};
   const targetErrors: Record<string, string> = {};
   const seen = new Set<string>();
@@ -25,12 +31,8 @@ export function draftProblems(draft: CollectionDraft): DraftProblems {
     if (!key) fieldErrors[f.id] = "Name is required";
     else if (seen.has(key)) fieldErrors[f.id] = "Duplicate field name";
     seen.add(key);
-    if (isReferenceKind(f.kind) && !f.targetCollectionId) targetErrors[f.id] = "Choose a collection";
-    if (f.kind === "component" && !f.componentId) targetErrors[f.id] = "Choose a component";
-    if (f.kind === "ai") {
-      const problem = aiPromptProblem(f.aiPrompt);
-      if (problem) targetErrors[f.id] = problem;
-    }
+    const problem = settingsProblem(f, components);
+    if (problem) targetErrors[f.id] = problem;
   }
   const nameError = draft.name.trim() ? undefined : "Name is required";
   const pluralError = draft.pluralName.trim() ? undefined : "Plural name is required";
@@ -40,8 +42,8 @@ export function draftProblems(draft: CollectionDraft): DraftProblems {
 }
 
 /** The first problem of a draft, in a sentence (null: none). */
-export function draftProblem(draft: CollectionDraft): string | null {
-  const p = draftProblems(draft);
+export function draftProblem(draft: CollectionDraft, components: Component[]): string | null {
+  const p = draftProblems(draft, components);
   if (p.valid) return null;
   if (p.nameError) return p.nameError;
   if (p.pluralError) return p.pluralError;

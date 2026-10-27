@@ -10,7 +10,6 @@ import {
   type Collection,
   type CollectionDraft,
   valuesEqual,
-  parseComponentArgs,
 } from "../../domain/model";
 import type { FilterRule } from "../../domain/query";
 import type { Bookmark, BookmarkKind } from "../../domain/bookmarks";
@@ -18,7 +17,7 @@ import { parseItemViews, withDefaultItemView, type ItemView } from "../../domain
 import { isComponentOutput, type Component } from "../../domain/components";
 import { DEFAULT_SPACE_ID, withDefaultSpace, type Space } from "../../domain/spaces";
 import { defaultViewState, parseViewConfig, type CollectionView } from "../../domain/views";
-import type { DataChange, Repository } from "../repository";
+import type { DataChange, NewItem, Repository } from "../repository";
 import { SyncEngine } from "../sync/SyncEngine";
 import type { SyncEnvironment } from "../sync/environment";
 import { acceptedStatement, editedStatement, generatedStatement } from "./generated";
@@ -44,22 +43,22 @@ interface FieldRow {
   kind: FieldKind;
   target_collection_id: string | null;
   component_id: string | null;
-  component_args: string | null;
   choice_filter: string | null;
   toggle_icon: string | null;
   strike_through: number | null;
-  ai_prompt: string | null;
-  ai_output: string | null;
+  code: string | null;
+  output: string | null;
+  frame_ratio: string | null;
   position: number;
 }
 interface ComponentRow {
   id: string;
   name: string;
   description: string;
-  params: string;
   code: string;
   output: string;
   frame_ratio: string | null;
+  ai: number;
   created_at: string;
   updated_at: string;
 }
@@ -104,14 +103,33 @@ const toField = (r: FieldRow): FieldDef => ({
   kind: r.kind,
   targetCollectionId: r.target_collection_id,
   componentId: r.component_id,
-  componentArgs: parseComponentArgs(r.component_args),
+  code: r.code,
+  output: isComponentOutput(r.output) ? r.output : null,
+  frameRatio: r.frame_ratio,
   choiceFilter: parseJson<FilterRule[]>(r.choice_filter, []),
   toggleIcon: r.toggle_icon,
   strikeThrough: r.strike_through === 1,
-  aiPrompt: r.ai_prompt,
-  aiOutput: r.ai_output === "number" || r.ai_output === "markdown" || r.ai_output === "string" ? r.ai_output : null,
   position: r.position,
 });
+
+/** A stored view as a CollectionView (its config parsed and normalized). */
+function toView(r: ViewRow): CollectionView {
+  const { filters, blocks, editable, collapsed } = parseViewConfig(r.config, r.kind);
+  return {
+    id: r.id,
+    collectionId: r.collection_id,
+    spaceId: r.space_id,
+    name: r.name,
+    filters,
+    blocks,
+    editable,
+    collapsed,
+    position: r.position,
+    isDefault: r.is_default === 1,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
 
 /** Stored space_ids: null (every space) or a list of space ids. */
 const spaceIdsOf = (json: string | null): string[] | null => {
@@ -260,7 +278,7 @@ export class SqliteRepository implements Repository {
   }
 
   async saveCollection(draft: CollectionDraft, spaceId: string): Promise<void> {
-    const problem = draftProblem(draft);
+    const problem = draftProblem(draft, await this.listComponents());
     if (problem) throw new Error(problem);
     const ts = now();
     const writes: Statement[] = [];
@@ -290,37 +308,30 @@ export class SqliteRepository implements Repository {
       const old = storedById.get(f.id);
       if (!old) {
         writes.push({
-          sql: "INSERT INTO fields (id, collection_id, name, kind, target_collection_id, component_id, component_args, choice_filter, toggle_icon, ai_prompt, ai_output, strike_through, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?10, ?11, ?12, ?13, ?14, ?8, ?9, ?9)",
-          bind: [f.id, draft.id, f.name, f.kind, f.targetCollectionId, f.componentId, args(f), position, ts, choices(f), f.toggleIcon, aiPrompt(f), aiOutput(f), strike(f)],
+          sql: "INSERT INTO fields (id, collection_id, name, kind, target_collection_id, component_id, code, output, frame_ratio, choice_filter, toggle_icon, strike_through, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14)",
+          bind: [f.id, draft.id, f.name, f.kind, f.targetCollectionId, componentOf(f), ...local(f, null), choices(f), f.toggleIcon, strike(f), position, ts],
         });
-      } else if (
-        old.name !== f.name ||
-        old.position !== position ||
-        old.component_id !== f.componentId ||
-        (old.component_args ?? null) !== args(f) ||
-        (old.choice_filter ?? null) !== choices(f) ||
-        old.toggle_icon !== f.toggleIcon ||
-        (old.strike_through ?? 0) !== strike(f) ||
-        (old.kind === "ai" && old.ai_prompt !== aiPrompt(f))
-      ) {
+      } else {
         // Kind, target and an AI field's output are immutable once created (values would need
         // conversion); a component field's component may change (its values are computed, not
         // stored), and so may an AI field's prompt (its values turn stale, see domain/ai.ts).
-        writes.push({
-          sql: "UPDATE fields SET name = ?1, position = ?2, component_id = ?3, component_args = ?4, updated_at = ?5, choice_filter = ?7, toggle_icon = ?8, ai_prompt = ?9, strike_through = ?10 WHERE id = ?6",
-          bind: [
-            f.name,
-            position,
-            old.kind === "component" ? f.componentId : old.component_id,
-            old.kind === "component" ? args(f) : old.component_args,
-            ts,
-            f.id,
-            choices(f),
-            f.toggleIcon,
-            old.kind === "ai" ? aiPrompt(f) : old.ai_prompt,
-            strike(f),
-          ],
-        });
+        const [code, output, frameRatio] = local(f, old);
+        if (
+          old.name !== f.name ||
+          old.position !== position ||
+          old.component_id !== componentOf(f) ||
+          old.code !== code ||
+          old.output !== output ||
+          old.frame_ratio !== frameRatio ||
+          (old.choice_filter ?? null) !== choices(f) ||
+          old.toggle_icon !== f.toggleIcon ||
+          (old.strike_through ?? 0) !== strike(f)
+        ) {
+          writes.push({
+            sql: "UPDATE fields SET name = ?1, position = ?2, component_id = ?3, code = ?4, output = ?5, frame_ratio = ?6, choice_filter = ?7, toggle_icon = ?8, strike_through = ?9, updated_at = ?10 WHERE id = ?11",
+            bind: [f.name, position, componentOf(f), code, output, frameRatio, choices(f), f.toggleIcon, strike(f), ts, f.id],
+          });
+        }
       }
     }
     const removed = stored.filter((old) => !keep.has(old.id));
@@ -428,23 +439,32 @@ export class SqliteRepository implements Repository {
   }
 
   async createItem(collection: Collection, values: Record<string, FieldValue>, spaceId: string): Promise<string> {
-    const id = newId();
-    const ts = now();
-    const writes: Statement[] = [
-      {
-        sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES (?1, ?2, ?4, ?3, ?3)",
-        bind: [id, collection.id, ts, spaceId],
-      },
-    ];
+    const [id] = await this.createItems([{ collection, values, spaceId }]);
+    return id;
+  }
+
+  async createItems(entries: NewItem[]): Promise<string[]> {
+    const ids = entries.map((e) => e.id ?? newId());
+    // Each its own time, in order (as if created one by one).
+    const stamps = entries.map(() => now());
+    // Every item before any value, so a reference to another new item finds it.
+    const writes: Statement[] = entries.map((e, i) => ({
+      sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES (?1, ?2, ?4, ?3, ?3)",
+      bind: [ids[i], e.collection.id, stamps[i], e.spaceId],
+    }));
     // Only actual values: an empty field has no row, component fields are computed, never stored,
     // and AI fields are generated (setGenerated), never entered.
-    for (const field of collection.fields) {
-      const value = values[field.id];
-      if (value != null && field.kind !== "component" && field.kind !== "ai") writes.push(valueStatement(id, field, value, ts));
-    }
+    entries.forEach((e, i) => {
+      for (const field of e.collection.fields) {
+        const value = e.values[field.id];
+        if (value != null && field.kind !== "component" && field.kind !== "ai") writes.push(valueStatement(ids[i], field, value, stamps[i]));
+      }
+    });
     await this.db.write(writes);
-    this.emit({ scope: "items", collectionId: collection.id, itemId: id });
-    return id;
+    // One item: that item changed; more: each collection's list is read again once.
+    if (entries.length === 1) this.emit({ scope: "items", collectionId: entries[0].collection.id, itemId: ids[0] });
+    else this.emit(...[...new Set(entries.map((e) => e.collection.id))].map((collectionId) => ({ scope: "items", collectionId }) as const));
+    return ids;
   }
 
   async updateItem(collection: Collection, itemId: string, values: Record<string, FieldValue>): Promise<void> {
@@ -462,7 +482,7 @@ export class SqliteRepository implements Repository {
       changed.push(field.id);
       if (field.kind === "ai") {
         // Typed over a generated value: kept, and never replaced by itself (the user is asked).
-        writes.push(editedStatement(itemId, field.id, field.aiOutput === "number" ? "number" : "text", next as string | number | null, ts));
+        writes.push(editedStatement(itemId, field.id, field.output === "number" ? "number" : "text", next as string | number | null, ts));
         continue;
       }
       writes.push(valueStatement(itemId, field, next, ts));
@@ -478,7 +498,7 @@ export class SqliteRepository implements Repository {
   async setGenerated(collection: Collection, itemId: string, field: FieldDef, value: string | number | null, inputHash: string): Promise<void> {
     // Not through updateItem: the item itself doesn't change (its updatedAt stays, so a prompt
     // reading it isn't stale because of this write). Nothing is written for an item gone meanwhile.
-    await this.db.write([generatedStatement(itemId, field.id, field.aiOutput === "number" ? "number" : "text", value, inputHash, now())]);
+    await this.db.write([generatedStatement(itemId, field.id, field.output === "number" ? "number" : "text", value, inputHash, now())]);
     this.emit({ scope: "items", collectionId: collection.id, itemId });
   }
 
@@ -502,23 +522,12 @@ export class SqliteRepository implements Repository {
       "SELECT * FROM views WHERE collection_id = ?1 AND space_id = ?2 AND deleted_at IS NULL ORDER BY position, created_at",
       [collectionId, spaceId],
     );
-    return rows.map((r) => {
-      const { filters, blocks, editable, collapsed } = parseViewConfig(r.config, r.kind);
-      return {
-        id: r.id,
-        collectionId: r.collection_id,
-        spaceId: r.space_id,
-        name: r.name,
-        filters,
-        blocks,
-        editable,
-        collapsed,
-        position: r.position,
-        isDefault: r.is_default === 1,
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-      };
-    });
+    return rows.map(toView);
+  }
+
+  async listAllViews(): Promise<CollectionView[]> {
+    const rows = await this.db.select<ViewRow>("SELECT * FROM views WHERE deleted_at IS NULL ORDER BY collection_id, space_id, position, created_at");
+    return rows.map(toView);
   }
 
   async saveView(view: CollectionView): Promise<void> {
@@ -633,10 +642,10 @@ export class SqliteRepository implements Repository {
       id: r.id,
       name: r.name,
       description: r.description,
-      params: parseJson<string[]>(r.params, []),
       code: r.code,
       output: isComponentOutput(r.output) ? r.output : "markdown",
       frameRatio: r.frame_ratio,
+      ai: r.ai === 1,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
@@ -645,10 +654,10 @@ export class SqliteRepository implements Repository {
   async saveComponent(x: Component): Promise<void> {
     await this.db.write([
       {
-        sql: `INSERT INTO components (id, name, description, params, code, output, frame_ratio, created_at, updated_at) VALUES (?1, ?2, ?8, ?3, ?4, ?6, ?7, ?5, ?5)
-              ON CONFLICT (id) DO UPDATE SET name = excluded.name, description = excluded.description, params = excluded.params, code = excluded.code,
-                output = excluded.output, frame_ratio = excluded.frame_ratio, updated_at = excluded.updated_at`,
-        bind: [x.id, x.name, JSON.stringify(x.params), x.code, now(), x.output, x.frameRatio, x.description],
+        sql: `INSERT INTO components (id, name, description, code, output, frame_ratio, ai, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+              ON CONFLICT (id) DO UPDATE SET name = excluded.name, description = excluded.description, code = excluded.code,
+                output = excluded.output, frame_ratio = excluded.frame_ratio, ai = excluded.ai, updated_at = excluded.updated_at`,
+        bind: [x.id, x.name, x.description, x.code, x.output, x.frameRatio, x.ai ? 1 : 0, now()],
       },
     ]);
     this.emit({ scope: "components" });
@@ -825,7 +834,7 @@ export class SqliteRepository implements Repository {
       const record = byItem.get(v.item_id) ?? {};
       if (field.kind === "ai") {
         // A number is in value_number, text and Markdown in value_text; the prompt it came from in value_json.
-        record[field.id] = field.aiOutput === "number" ? v.value_number : v.value_text;
+        record[field.id] = field.output === "number" ? v.value_number : v.value_text;
         const input = decodeAiInput(v.value_json);
         if (input) inputsByItem.set(v.item_id, { ...inputsByItem.get(v.item_id), [field.id]: input.hash });
         if (input?.edited) editedByItem.set(v.item_id, { ...editedByItem.get(v.item_id), [field.id]: true });
@@ -884,14 +893,20 @@ function releaseFile(fileId: string): Statement[] {
 const choices = (f: CollectionDraft["fields"][number]) =>
   (f.kind === "item" || f.kind === "item_list") && f.choiceFilter.length > 0 ? JSON.stringify(f.choiceFilter) : null;
 
-/** A component field's variable mapping as stored (JSON), or null for other fields / none. */
-const args = (f: CollectionDraft["fields"][number]) =>
-  f.kind === "component" && Object.keys(f.componentArgs).length > 0 ? JSON.stringify(f.componentArgs) : null;
-
-/** An AI field's prompt and output as stored, or null for other fields. */
 const strike = (f: CollectionDraft["fields"][number]) => (f.strikeThrough && (f.kind === "checkbox" || f.kind === "checklist") ? 1 : 0);
-const aiPrompt = (f: CollectionDraft["fields"][number]) => (f.kind === "ai" && f.aiPrompt?.trim() ? f.aiPrompt : null);
-const aiOutput = (f: CollectionDraft["fields"][number]) => (f.kind === "ai" ? (f.aiOutput ?? "string") : null);
+const usesComponent = (kind: FieldKind) => kind === "component" || kind === "ai";
+/** The shared component a component or AI field picks (null: its own, or another kind). */
+const componentOf = (f: CollectionDraft["fields"][number]) => (usesComponent(f.kind) && f.code === null ? f.componentId : null);
+/**
+ * A component or AI field's own component as stored: code, output, frame ratio (nulls for other
+ * fields). An AI field's output is fixed once saved (`old`), and it always has one.
+ */
+function local(f: CollectionDraft["fields"][number], old: FieldRow | null): [string | null, string | null, string | null] {
+  const kind = old?.kind ?? f.kind;
+  if (!usesComponent(kind)) return [null, null, null];
+  const output = kind === "ai" ? (old?.output ?? f.output ?? "string") : f.code !== null ? (f.output ?? "markdown") : null;
+  return [f.code, output, f.code !== null && output === "html" ? f.frameRatio : null];
+}
 
 function valueStatement(itemId: string, field: FieldDef, value: FieldValue, ts: string): Statement {
   const spec = fieldKinds[field.kind];

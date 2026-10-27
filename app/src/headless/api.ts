@@ -7,10 +7,10 @@
 import { HttpError, json, readJson, Router, type ApiRequest } from "../../../shared/router";
 import { MAX_FILE_BYTES } from "../../../shared/sync";
 import type { Repository } from "../data/repository";
-import { aiPromptProblem, aiRequest } from "../domain/ai";
+import { aiRequest } from "../domain/ai";
 import type { Bookmark } from "../domain/bookmarks";
-import { isComponentOutput, parseParams, placeProblem, type Component } from "../domain/components";
-import { fieldKindList } from "../domain/fieldKinds";
+import { isComponentOutput, placeProblem, type Component } from "../domain/components";
+import { fieldKinds } from "../domain/fieldKinds";
 import { fileSrc, IMAGE_TYPES } from "../domain/files";
 import { parseItemViews, type ItemView } from "../domain/fieldLayout";
 import { collectionDraft, isReferenceKind, newId, suggestPlural, type Collection, type CollectionDraft, type FieldDef, type FieldDraft, type Item } from "../domain/model";
@@ -162,7 +162,8 @@ export function createApi(repo: Repository): Router {
   /** A field as given, as the collection editor would make it (`existing`: the field it changes). */
   const fieldIn = (w: World, collection: Collection | null, o: Body, existing?: FieldDraft): FieldDraft => {
     const kind = (o.kind ?? existing?.kind) as FieldDef["kind"] | undefined;
-    if (!kind || !fieldKindList.includes(kind)) throw new HttpError(400, `\`kind\` must be one of ${fieldKindList.join(", ")}`);
+    const kinds = Object.keys(fieldKinds);
+    if (!kind || !kinds.includes(kind)) throw new HttpError(400, `\`kind\` must be one of ${kinds.join(", ")}`);
     if (existing && kind !== existing.kind) throw new HttpError(400, "A field's kind can't be changed");
     const name = (text(o, "name") ?? existing?.name ?? "").trim();
     if (!name) throw new HttpError(400, "`name` is required");
@@ -172,58 +173,53 @@ export function createApi(repo: Repository): Router {
       if (!target) throw new HttpError(400, `A ${kind} field needs \`targetCollection\` (a collection's id or name)`);
       targetCollectionId = target === collection?.id || (collection && (same(target, collection.name) || same(target, collection.pluralName))) ? collection!.id : collectionOf(w, target).id;
     }
+    // A component or AI field's component: a shared one (`component`) or its own (`code`, `output`, `frameRatio`).
     let componentId = existing?.componentId ?? null;
-    if (kind === "component") {
+    let code = existing?.code ?? null;
+    let output = existing?.output ?? null;
+    let frameRatio = existing?.frameRatio ?? null;
+    if (kind === "component" || kind === "ai") {
       const given = text(o, "component");
-      if (given) componentId = componentOf(w, given).id;
-      const component = w.components.find((c) => c.id === componentId);
-      if (!component) throw new HttpError(400, "A component field needs `component` (a component's id or name)");
-      const problem = placeProblem(component.code, "field");
-      if (problem) throw new HttpError(400, problem);
-    }
-    let componentArgs = existing?.componentArgs ?? {};
-    if (o.componentArgs !== undefined) {
-      if (!o.componentArgs || typeof o.componentArgs !== "object") throw new HttpError(400, "`componentArgs` must be an object");
-      componentArgs = Object.fromEntries(
-        Object.entries(o.componentArgs as Record<string, unknown>).map(([param, arg]) => {
-          const a = (arg ?? {}) as Body;
-          if (typeof a.value === "string") return [param, { value: a.value }];
-          if (typeof a.field === "string") {
-            const field = collection ? fieldOf(collection, a.field) : undefined;
-            return [param, { field: field?.id ?? a.field }];
-          }
-          throw new HttpError(400, "Each of `componentArgs` is { field } (a field's id or name) or { value }");
-        }),
-      );
+      if (given) {
+        const component = componentOf(w, given);
+        if (component.ai !== (kind === "ai")) throw new HttpError(400, kind === "ai" ? "An AI field needs a component asking AI" : "A component asking AI fills an AI field");
+        componentId = component.id;
+        code = null;
+      } else if (o.code !== undefined) {
+        code = text(o, "code") ?? "";
+        componentId = null;
+      }
+      const shared = w.components.find((c) => c.id === componentId);
+      if (o.output !== undefined) {
+        if (existing && kind === "ai") throw new HttpError(400, "An AI field's `output` can't be changed");
+        if (!isComponentOutput(o.output)) throw new HttpError(400, "`output` must be markdown, string, number, image or html");
+        output = o.output;
+      } else if (!existing || (code !== null && output === null)) {
+        output = kind === "ai" ? (shared?.output ?? "string") : code !== null ? "markdown" : null;
+      }
+      if (o.frameRatio !== undefined) frameRatio = text(o, "frameRatio") ?? null;
     }
     const target = w.collections.find((c) => c.id === targetCollectionId);
     const choiceFilter =
       o.choiceFilter === undefined ? (existing?.choiceFilter ?? []) : target ? resolveRules<FilterRule>(target, o.choiceFilter, "choiceFilter") : [];
-    const aiPrompt = o.aiPrompt === undefined ? (existing?.aiPrompt ?? null) : (text(o, "aiPrompt") ?? null);
-    if (kind === "ai") {
-      const problem = aiPromptProblem(aiPrompt);
-      if (problem) throw new HttpError(400, problem);
-    }
-    const aiOutput = existing?.aiOutput ?? (kind === "ai" ? ((text(o, "aiOutput") ?? "string") as FieldDef["aiOutput"]) : null);
-    if (kind === "ai" && !["string", "number", "markdown"].includes(aiOutput ?? "")) throw new HttpError(400, "`aiOutput` must be string, number or markdown");
     return {
       id: existing?.id ?? newId(),
       name,
       kind,
       targetCollectionId,
       componentId,
-      componentArgs,
+      code,
+      output,
+      frameRatio,
       choiceFilter,
       toggleIcon: o.toggleIcon === undefined ? (existing?.toggleIcon ?? null) : (text(o, "toggleIcon") ?? null),
       strikeThrough: o.strikeThrough === undefined ? (existing?.strikeThrough ?? false) : o.strikeThrough === true,
-      aiPrompt,
-      aiOutput,
     };
   };
 
   /** Saves a collection draft after the collection editor's checks. */
   const saveDraft = async (draft: CollectionDraft, spaceId: string) => {
-    const problem = draftProblem(draft);
+    const problem = draftProblem(draft, (await world()).components);
     if (problem) throw new HttpError(400, problem);
     await rule(repo.saveCollection(draft, spaceId));
   };
@@ -302,16 +298,17 @@ export function createApi(repo: Repository): Router {
 
   const componentIn = (o: Body, existing?: Component): Component => {
     const code = o.code === undefined ? (existing?.code ?? "") : (text(o, "code") ?? "");
-    const output = o.output === undefined ? (existing?.output ?? "markdown") : o.output;
+    const ai = o.ai === undefined ? (existing?.ai ?? false) : o.ai === true;
+    const output = o.output === undefined ? (existing?.output ?? (ai ? "string" : "markdown")) : o.output;
     if (!isComponentOutput(output)) throw new HttpError(400, "`output` must be markdown, string, number, image or html");
     const ts = new Date().toISOString();
     return {
       id: existing?.id ?? newId(),
       name: (o.name === undefined ? (existing?.name ?? "") : text(o, "name", true)).trim(),
       description: o.description === undefined ? (existing?.description ?? "") : (text(o, "description") ?? ""),
-      params: parseParams(code),
       code,
       output,
+      ai,
       frameRatio: o.frameRatio === undefined ? (existing?.frameRatio ?? null) : (text(o, "frameRatio") ?? null),
       createdAt: existing?.createdAt ?? ts,
       updatedAt: ts,
@@ -325,7 +322,7 @@ export function createApi(repo: Repository): Router {
     const field = fieldOf(collection, name);
     if (field.kind !== "ai") throw new HttpError(400, `“${field.name}” isn't an AI field`);
     const refLabel = await refLabelForSpace(repo, collection, item.spaceId, w);
-    const request = aiRequest(collection, field, item, refLabel);
+    const request = aiRequest(collection, field, item, refLabel, w.components);
     if ("problem" in request) throw new HttpError(409, request.problem);
     return { collection, item, field, hash: request.hash };
   };
@@ -505,7 +502,7 @@ export function createApi(repo: Repository): Router {
         const raw = o.value;
         let value: string | number | null;
         if (raw === null || raw === undefined) value = null;
-        else if (field.aiOutput === "number") {
+        else if (field.output === "number") {
           if (typeof raw !== "number" || !Number.isFinite(raw)) throw new HttpError(400, `“${field.name}” takes a number`);
           value = raw;
         } else if (typeof raw === "string") value = raw;
@@ -647,9 +644,10 @@ export function createApi(repo: Repository): Router {
         const w = await world();
         const old = componentOf(w, x);
         const component = componentIn(o, old);
-        // Fields showing it need a field component still (as the component editor keeps it).
+        // Fields showing it need a field component still, asking AI or not as before (as the component editor keeps it).
         const used = w.collections.some((c) => c.fields.some((f) => f.componentId === old.id));
-        const problem = used ? placeProblem(component.code, "field") : null;
+        if (used && component.ai !== old.ai) throw new HttpError(409, "Fields show this component: whether it asks AI can't change");
+        const problem = used ? placeProblem(component, "field") : null;
         if (problem) throw new HttpError(409, `Fields show this component: ${problem}`);
         await repo.saveComponent(component);
         return json(200, componentOf(await world(), component.id));

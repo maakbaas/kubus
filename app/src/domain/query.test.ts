@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { FieldDef, Item, Collection } from "./model";
-import { applyQuery, defaultQuery, type QueryContext } from "./query";
+import { applyQuery, defaultQuery, filterCodeValue, filterValueProblem, resolveFilterValues, type FilterRule, type QueryContext } from "./query";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], position: number): FieldDef => ({
-  id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null, position,
+  id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position,
 });
 
 const collection: Collection = {
@@ -44,5 +44,34 @@ describe("applyQuery", () => {
     const is = (value: string) => ids(applyQuery(withRead, items, { ...defaultQuery(), filters: [{ id: "f", fieldId: "read", operator: "is" as const, value }] }, ctx));
     expect(is("true")).toEqual(["1"]);
     expect(is(" False ")).toEqual(["2", "3"]);
+  });
+});
+
+describe("{{ }} code in filter values", () => {
+  const done = field("done", "Done", "checkbox", 0);
+  const pages = field("pages", "Pages", "number", 1);
+  const tasks: Collection = { id: "t", name: "Task", pluralName: "Tasks", icon: null, description: "", fields: [done, pages], itemViews: [], spaceIds: null, createdAt: "", updatedAt: "" };
+  const task = (id: string, d: boolean, p: number): Item => ({ id, collectionId: "t", spaceId: "default", values: { done: d, pages: p }, createdAt: "", updatedAt: "" });
+  const items = [task("a", true, 10), task("b", false, 300)];
+  const ids = (filters: FilterRule[], page: Parameters<typeof resolveFilterValues>[1] = null) =>
+    applyQuery(tasks, items, { ...defaultQuery(), filters: resolveFilterValues(filters, page) }, { refLabel: () => "" }).groups.flatMap((g) => g.items.map((i) => i.id));
+
+  it("is worked out as if its result had been typed", () => {
+    expect(ids([{ id: "r", fieldId: "done", operator: "is", value: "{{ 1 == 1 }}" }])).toEqual(["a"]);
+    expect(ids([{ id: "r", fieldId: "done", operator: "is", value: "{{ 1 == 2 }}" }])).toEqual(["b"]);
+    expect(ids([{ id: "r", fieldId: "pages", operator: "gt", value: "{{ 10 * 10 }}" }])).toEqual(["b"]);
+  });
+
+  it("matches nothing when it can't be compared, never the wrong items", () => {
+    expect(ids([{ id: "r", fieldId: "done", operator: "is", value: "maybe" }])).toEqual([]);
+    expect(ids([{ id: "r", fieldId: "done", operator: "is", value: "{{ nope() }}" }])).toEqual([]);
+    expect(ids([{ id: "r", fieldId: "done", operator: "is", value: "{{ $items.length }}" }])).toEqual([]);
+    expect(filterCodeValue("{{ $item.Pages }}", null)).toMatch(/^⚠ \$item is the page's item/);
+    expect(filterValueProblem(done, "is", "maybe")).toMatch(/true or false/);
+  });
+
+  it("reads the page's item as $item on an item page", () => {
+    const page = { collection: tasks, item: task("p", false, 50), refLabel: () => "" };
+    expect(ids([{ id: "r", fieldId: "pages", operator: "gt", value: "{{ $item.Pages }}" }], page)).toEqual(["b"]);
   });
 });

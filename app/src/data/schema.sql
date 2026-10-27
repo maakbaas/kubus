@@ -58,17 +58,18 @@ CREATE TABLE views (
 );
 CREATE INDEX idx_views_collection ON views(collection_id);
 
--- Reusable Markdown with {{ JavaScript }} sections over named variables (src/domain/components.ts).
--- A field of kind 'component' maps each variable to a field of its collection and shows the result
--- (computed, never stored).
+-- Shared components: Markdown with {{ JavaScript }} sections over the built-in $ names
+-- (src/domain/components.ts). A field of kind 'component' shows the result (computed, never
+-- stored); one of kind 'ai' sends it to a language model and stores the reply. Local components
+-- (written in place) are stored with their place instead: fields.code, a block's options.
 CREATE TABLE components (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
-  params      TEXT NOT NULL DEFAULT '[]',  -- JSON array of variable names the code uses
   code        TEXT NOT NULL DEFAULT '',        -- Markdown with {{ JavaScript }} sections; $item is the current item
   output      TEXT NOT NULL DEFAULT 'markdown',  -- markdown | string | number | image | html (ComponentOutput)
   frame_ratio TEXT,                              -- html that fills its box: the box's shape on pages, e.g. '4/3' (null = 16/9)
+  ai          INTEGER NOT NULL DEFAULT 0,        -- 1 = "Ask AI": the result is a prompt, for 'ai' fields
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   deleted_at  TEXT
@@ -83,22 +84,23 @@ CREATE TABLE fields (
                    'item', 'string_list', 'checklist', 'item_list', 'component', 'ai')),
   -- for reference kinds: the collection whose items can be referenced
   target_collection_id TEXT REFERENCES collections(id),
-  -- for 'component' fields: the component whose result the field shows
+  -- for 'component' / 'ai' fields: the shared component whose result the field shows (null: its own, in code)
   component_id   TEXT REFERENCES components(id),
-  -- for 'component' fields: JSON { variable: {"field": id} | {"value": text} } feeding the component's variables
-  component_args TEXT,
   -- for reference kinds: JSON filter rules over the target's items limiting the choices (null = any)
   choice_filter  TEXT,
   -- for 'checkbox' / 'checklist' fields: an icon shown instead of the box (a key of TOGGLE_ICONS in ui/ToggleInput.tsx; null = the box)
   toggle_icon    TEXT,
   -- for 'checkbox' / 'checklist' fields: 1 = a checked one's text is struck through (null / 0 = not)
   strike_through INTEGER,
-  -- for 'ai' fields: the prompt (Markdown with {{ }} sections over $item, domain/ai.ts) and what the
-  -- generated value is: 'string' | 'number' | 'markdown' (AiOutput). The value is stored in
-  -- field_values like any other (value_text, or value_number), with a fingerprint of the rendered
-  -- prompt it came from in value_json: it is stale when that no longer matches.
-  ai_prompt      TEXT,
-  ai_output      TEXT,
+  -- for 'component' / 'ai' fields: its own (local) component, written in place: code, output and
+  -- frame_ratio as in components (null code: the shared component_id). An 'ai' field always has an
+  -- output: 'string' | 'number' | 'markdown', what its values are. Its component's rendered text is the
+  -- prompt (domain/ai.ts); the value is stored in field_values like any other (value_text, or
+  -- value_number), with a fingerprint of the prompt it came from in value_json: it is stale when that
+  -- no longer matches.
+  code           TEXT,
+  output         TEXT,
+  frame_ratio    TEXT,
   position       INTEGER NOT NULL DEFAULT 0,
   created_at     TEXT NOT NULL,
   updated_at     TEXT NOT NULL,

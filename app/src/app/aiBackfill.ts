@@ -86,7 +86,7 @@ export class AiBackfill {
       if (!inSpace(collection, space.id)) continue;
       const refLabel = await refLabelForSpace(this.repo, collection, space.id, { collections, components }, labels);
       const items = withComputed(collection, await this.repo.listItems(collection, space.id), components, refLabel);
-      const scan = scanAiValues(collection, items, refLabel);
+      const scan = scanAiValues(collection, items, refLabel, components);
       this.ai.offerBackground(scan.generate);
       this.ai.adopt(scan.adopt);
       this.ai.offerOverrides(scan.ask, scan.settled);

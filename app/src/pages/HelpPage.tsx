@@ -3,25 +3,12 @@ import { useSearchParams } from "react-router";
 import { Stack, Tab, TabList, TabPanel, TabPanels, Tabs } from "@carbon/react";
 import components from "../help/components.md?raw";
 import api from "../help/api.md?raw";
-import type { FieldDef } from "../domain/model";
+import { blankField, type FieldDef } from "../domain/model";
 import { PageHeader } from "../ui/PageHeader";
 import { ViewField } from "./ItemPage";
 
 /** The help text as the one field of a (made up) item: a Markdown field. */
-const HELP: FieldDef = {
-  id: "help",
-  collectionId: "",
-  name: "Help",
-  kind: "markdown",
-  targetCollectionId: null,
-  componentId: null,
-  componentArgs: {},
-  choiceFilter: [],
-  toggleIcon: null, strikeThrough: false,
-  aiPrompt: null,
-  aiOutput: null,
-  position: 0,
-};
+const HELP: FieldDef = blankField("help", "Help", "markdown");
 
 const nothing = () => undefined;
 

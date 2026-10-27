@@ -79,7 +79,7 @@ describe("webhooks", () => {
   it("send what other devices change, but not the first download", async () => {
     const phone = await device();
     await phone.saveCollection(
-      { id: "c1", name: "Note", pluralName: "Notes", icon: null, description: "", spaceIds: null, fields: [{ id: "f1", name: "Text", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null }] },
+      { id: "c1", name: "Note", pluralName: "Notes", icon: null, description: "", spaceIds: null, fields: [{ id: "f1", name: "Text", kind: "string", targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false }] },
       "default",
     );
     const [collection] = await phone.listCollections();

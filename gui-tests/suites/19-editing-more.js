@@ -56,7 +56,7 @@ test("code editor: undo and redo", async (t) => {
   await t.boot();
   const ids = await t.seed(profileSpec("typical", { items: 1 }));
   await t.open(`/components/${ids.components.double}`);
-  const code = t.page.getByRole("textbox", { name: "Component" });
+  const code = t.page.getByRole("textbox", { name: "Code", exact: true });
   const before = await code.inputValue();
   await code.click();
   await t.page.keyboard.press("Control+End");
@@ -78,7 +78,7 @@ test("a reference field's choice filter limits what it offers", async (t) => {
   const ids = await t.seed(spec);
   // The editor shows the filter under the field.
   await t.open(`/collections/${ids.collections.books}/edit`);
-  await t.check("the collection editor shows the field's choice filter", (await t.page.locator(".ws-pane--active").innerText()).includes("Choices"));
+  await t.until("the collection editor shows the field's choice filter", async () => (await t.page.locator(".ws-pane--active").innerText()).includes("Choices"));
   await t.audit("collection editor with a choice filter");
   // The item page offers only matching authors.
   await t.open(t.itemPath(ids.collections.books, ids.items["books/i1"]));
@@ -204,7 +204,7 @@ test("a component field: not edited by a click; Edit component, and Change compo
   };
   await openCode();
   await t.audit("component field's code");
-  await t.page.locator(".field-editor textarea").first().fill("{{ ($x ?? 0) * 3 }}");
+  await t.page.locator(".field-editor textarea").first().fill("{{ ($item.Count ?? 0) * 3 }}");
   await away();
   const modal = t.page.locator(".cds--modal.is-visible");
   await t.until("saving a changed component asks first", async () => (await modal.innerText().catch(() => "")).includes("Change component"));
@@ -216,7 +216,7 @@ test("a component field: not edited by a click; Edit component, and Change compo
   await modal.getByRole("button", { name: "Discard changes" }).click();
   await t.until("Discard closes the editor, the value as before", async () => (await t.count(".field-editor")) === 0 && (await computed().innerText()).includes(valueBefore));
   await openCode();
-  await t.page.locator(".field-editor textarea").first().fill("{{ ($x ?? 0) * 3 }}");
+  await t.page.locator(".field-editor textarea").first().fill("{{ ($item.Count ?? 0) * 3 }}");
   await away();
   await modal.getByRole("button", { name: "Change component" }).click();
   await t.until("Change component saves it: the value is computed anew", async () => (await t.count(".field-editor")) === 0 && !(await computed().innerText()).includes(valueBefore) || (await computed().innerText()));
@@ -243,6 +243,7 @@ for (const vp of ["desktop", "phone"]) {
     // The card's link is stretched over it: a click anywhere on the card's title area is on it.
     const title = card.locator(".item-card__title");
     const at = async () => {
+      await title.scrollIntoViewIfNeeded();
       const b = await title.boundingBox();
       return [b.x + 8, b.y + b.height / 2];
     };

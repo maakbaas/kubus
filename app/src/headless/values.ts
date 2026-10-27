@@ -78,7 +78,7 @@ async function valueIn(collection: Collection, field: FieldDef, raw: unknown, ex
       return typeof raw === "string" && FILE_ID.test(raw) ? raw : bad("a file id (from POST /api/v1/files)");
     case "ai":
       // Typed over the generated value, as in the app (it is then not made again by itself).
-      if (field.aiOutput === "number") return typeof raw === "number" && Number.isFinite(raw) ? raw : bad("a number");
+      if (field.output === "number") return typeof raw === "number" && Number.isFinite(raw) ? raw : bad("a number");
       return typeof raw === "string" ? raw : bad("text");
     case "string_list":
       return Array.isArray(raw) && raw.every((x) => typeof x === "string") ? raw : bad("a list of texts");

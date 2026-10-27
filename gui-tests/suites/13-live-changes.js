@@ -84,7 +84,7 @@ for (const vp of ["desktop", "phone"]) {
     // Column names: the header of a table, the line labels (data-label) of a stacked one.
     const names = () => t.page.locator(".ws-pane--active .items-table").first().evaluate((el) => [...el.querySelectorAll("th, td[data-label]")].map((c) => c.getAttribute("data-label") || c.textContent).join("|"));
     await t.check("the column shows the new name", (await names()).includes("Count renamed"));
-    await edit(`(fs) => [...fs, { id: crypto.randomUUID(), name: "Added field", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, aiPrompt: null, aiOutput: null }]`);
+    await edit(`(fs) => [...fs, { id: crypto.randomUUID(), name: "Added field", kind: "string", targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false }]`);
     await t.audit("a field added");
     await edit(`(fs) => fs.filter((f) => f.name !== "Date" && f.name !== "Tags")`);
     await t.audit("two fields removed");

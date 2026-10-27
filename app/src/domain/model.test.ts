@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextName, parseComponentArgs, valuesEqual } from "./model";
+import { nextName, valuesEqual } from "./model";
 import { orderFields } from "./fieldLayout";
 
 describe("valuesEqual", () => {
@@ -18,17 +18,6 @@ describe("nextName", () => {
     expect(nextName("View", ["View"])).toBe("View 2");
     expect(nextName("View", ["View", "View 2"])).toBe("View 3");
     expect(nextName("View 2", ["View", "View 2"])).toBe("View 3");
-  });
-});
-
-describe("parseComponentArgs", () => {
-  it("reads fields and values, and survives bad JSON", () => {
-    expect(parseComponentArgs('{"b":{"field":"f2"},"c":{"value":"x"}}')).toEqual({
-      b: { field: "f2" },
-      c: { value: "x" },
-    });
-    expect(parseComponentArgs("{oops")).toEqual({});
-    expect(parseComponentArgs(null)).toEqual({});
   });
 });
 

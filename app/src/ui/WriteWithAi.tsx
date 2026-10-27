@@ -18,6 +18,7 @@ export function WriteWithAi({
   id,
   current,
   focus,
+  ai: asksAi = false,
   onApply,
 }: {
   id: string;
@@ -25,6 +26,8 @@ export function WriteWithAi({
   current: ComponentSuggestion;
   /** The collection the component is for (the preview's), when chosen. */
   focus?: Collection;
+  /** The component asks AI: the model writes a prompt. */
+  ai?: boolean;
   /** The suggestion to put into the editor. */
   onApply(suggestion: ComponentSuggestion): void;
 }) {
@@ -40,7 +43,7 @@ export function WriteWithAi({
     setWriting(true);
     setError(undefined);
     try {
-      const reply = await ai.client("code").complete(componentMessages({ help, request, current, collections, focus }));
+      const reply = await ai.client("code").complete(componentMessages({ help, request, current, collections, focus, ai: asksAi }));
       const suggestion = parseComponentReply(reply);
       if ("error" in suggestion) throw new Error(suggestion.error);
       onApply(suggestion);
@@ -64,7 +67,7 @@ export function WriteWithAi({
               Requests are paused: <a href="#/settings?section=ai">Settings → AI</a>.
             </>
           ) : configured ? (
-            `Asks ${model}, which sees the documentation (Help) and the fields${focus ? ` of ${focus.pluralName}` : " of your collections"}. It fills in the description and component below; with a component already there, it changes that.`
+            `Asks ${model}, which sees the documentation (Help) and the fields${focus ? ` of ${focus.pluralName}` : " of your collections"}. It writes the code below; with code already there, it changes that.`
           ) : (
             <>
               No model is set up yet: <a href="#/settings?section=ai">Settings → AI</a>.

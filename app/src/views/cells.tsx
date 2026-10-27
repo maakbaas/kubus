@@ -99,7 +99,7 @@ export function FieldCell({ field, item, refs, search, actions }: Props) {
   }
   // Generated values: as their output type reads; until there is one, what it is waiting for.
   if (field.kind === "ai") {
-    const shown = value == null || value === "" ? null : typeof value === "string" && field.aiOutput === "markdown" ? <MarkdownPreview source={value} search={search} /> : <Highlight text={String(value)} query={search} />;
+    const shown = value == null || value === "" ? null : typeof value === "string" && field.output === "markdown" ? <MarkdownPreview source={value} search={search} /> : <Highlight text={String(value)} query={search} />;
     return (
       <AiStatus itemId={item.id} fieldId={field.id} compact>
         {shown}

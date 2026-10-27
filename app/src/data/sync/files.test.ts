@@ -9,8 +9,8 @@ beforeEach(() => {
 });
 
 const fieldsOf = (name: string): Collection["fields"] => [
-  { id: newId(), collectionId: "", name: "Title", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null, position: 0 },
-  { id: newId(), collectionId: "", name, kind: "image", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null, position: 1 },
+  { id: newId(), collectionId: "", name: "Title", kind: "string", targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position: 0 },
+  { id: newId(), collectionId: "", name, kind: "image", targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position: 1 },
 ];
 
 /** A Photos collection with one item showing an image with these bytes; returns the file id. */

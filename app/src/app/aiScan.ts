@@ -2,7 +2,7 @@
 // backfill (aiBackfill.ts), so they judge a value the same way.
 
 import { aiRequest, aiStaleness, type AiRequest } from "../domain/ai";
-import type { RefLabel } from "../domain/components";
+import type { Component, RefLabel } from "../domain/components";
 import { itemLabel, type Collection, type Item } from "../domain/model";
 import type { AiJob } from "./ai";
 
@@ -23,7 +23,7 @@ export interface AiScan {
 export type RequestCache = WeakMap<Item, Map<string, AiRequest | { problem: string }>>;
 
 /** Sorts the AI values of `items` (computed items) by what they need. */
-export function scanAiValues(collection: Collection, items: Item[], refLabel: RefLabel, cache: RequestCache = new WeakMap()): AiScan {
+export function scanAiValues(collection: Collection, items: Item[], refLabel: RefLabel, components: Component[], cache: RequestCache = new WeakMap()): AiScan {
   const scan: AiScan = { generate: [], adopt: [], ask: [], settled: [], problems: [] };
   const aiFields = collection.fields.filter((f) => f.kind === "ai");
   for (const item of items) {
@@ -31,7 +31,7 @@ export function scanAiValues(collection: Collection, items: Item[], refLabel: Re
     if (!own) cache.set(item, (own = new Map()));
     for (const field of aiFields) {
       let request = own.get(field.id);
-      if (!request) own.set(field.id, (request = aiRequest(collection, field, item, refLabel)));
+      if (!request) own.set(field.id, (request = aiRequest(collection, field, item, refLabel, components)));
       // A prompt that can't be made is reported where the value would be, never skipped silently.
       scan.problems.push([item.id, field.id, "problem" in request ? request.problem : null]);
       if ("problem" in request) continue;

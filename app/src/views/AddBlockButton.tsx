@@ -10,8 +10,8 @@ export interface NewBlockSpec {
 }
 
 /**
- * The "Add block" button: a menu of what to add. A block of each type, one per block or static
- * component.
+ * The "Add block" button: a menu of what to add. A block of each type (a component block with
+ * its own component), one per shared block or static component.
  */
 export function AddBlockButton({
   className,
@@ -24,15 +24,16 @@ export function AddBlockButton({
   const ComponentIcon = blockType("component").icon;
   return (
     <MenuButton label="Add block" kind="tertiary" size="sm" menuAlignment="bottom-start" className={className}>
-      {BLOCK_TYPES.filter((t) => t.kind !== "component").map((t) => (
-        <MenuItem key={t.kind} label={t.label} renderIcon={t.icon} onClick={() => onAdd({ kind: t.kind })} />
+      {/* A component block from here starts with its own component, written in its settings. */}
+      {BLOCK_TYPES.map((t) => (
+        <MenuItem key={t.kind} label={t.kind === "component" ? "Component (local)" : t.label} renderIcon={t.icon} onClick={() => onAdd({ kind: t.kind })} />
       ))}
       {blockComponents(components).map((c) => (
         <MenuItem
           key={c.id}
           label={c.name}
           renderIcon={ComponentIcon}
-          onClick={() => onAdd({ kind: "component", options: { componentId: c.id, args: {} } satisfies ComponentBlockOptions })}
+          onClick={() => onAdd({ kind: "component", options: { componentId: c.id, local: null } satisfies ComponentBlockOptions })}
         />
       ))}
     </MenuButton>

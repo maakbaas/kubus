@@ -28,6 +28,7 @@
 import type { ServerAi } from "../../../shared/api";
 import type { Repository } from "../data";
 import { parseAiReply, type AiRequest } from "../domain/ai";
+import { isAiOutput } from "../domain/components";
 import type { Collection, FieldDef } from "../domain/model";
 import { createLlmClient, DEFAULT_LLM_SETTINGS } from "../platform/llm";
 import { readPref, writePref } from "../ui/localPrefs";
@@ -430,7 +431,7 @@ export class AiService {
           { role: "system", content: job.request.system },
           { role: "user", content: prompt },
         ]);
-        const parsed = parseAiReply(job.field.aiOutput ?? "string", reply);
+        const parsed = parseAiReply(job.field.output && isAiOutput(job.field.output) ? job.field.output : "string", reply);
         if ("error" in parsed) throw new Error(parsed.error);
         this.recent.add(job.itemId);
         setTimeout(() => this.recent.delete(job.itemId), RECENT_MS);
