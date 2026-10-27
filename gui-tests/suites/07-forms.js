@@ -116,7 +116,7 @@ for (const vp of ["desktop", "phone"]) {
     const spec = profileSpec("typical", { items: 3 });
     spec.components.push(
       { key: "broken", name: "Broken component", code: "{{ $item.nope.deeper }} and {{ throw new Error('boom') }}" },
-      { key: "html", name: "HTML output", code: "{{ '<div style=\"height:900px;width:3000px\">wide</div>' }}", output: "html" },
+      { key: "html", name: "HTML output", code: "{{ '<div style=\"height:900px;width:3000px\">' + $item.Title + '</div>' }}", output: "html" },
       ...Array.from({ length: 20 }, (_, i) => ({ key: `k${i}`, name: i % 4 ? `Component ${i}` : `Component ${i} with a very long name that goes on`, description: i % 3 ? "" : TEXT.long[0], code: `{{ ${i} }}`, ai: i === 5 })),
     );
     spec.collections[0].fields.push({ key: "broken", name: "Broken", kind: "component", component: "broken" }, { key: "htmlc", name: "Wide HTML", kind: "component", component: "html" });
