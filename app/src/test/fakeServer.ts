@@ -4,7 +4,7 @@
 import { createHash } from "node:crypto";
 import { vi } from "vitest";
 import type { ServerAi } from "../../../shared/api";
-import { SYNC_TABLES, type SyncMismatch, type SyncRequest, type SyncResponse, type WireRow } from "../../../shared/sync";
+import { SYNC_COMPATIBLE, SYNC_TABLES, SYNC_VERSION, type SyncMismatch, type SyncOutdated, type SyncRequest, type SyncResponse, type WireRow } from "../../../shared/sync";
 import { DirectSqlClient } from "../data/sqlite/direct";
 import { SqliteRepository } from "../data/sqlite/SqliteRepository";
 import { memoryEnvironment } from "../data/sync/environment";
@@ -25,6 +25,9 @@ export class FakeServer {
   /** The language model it offers (GET /api/ai); null: none set up. Requests to it, by body. */
   ai: ServerAi | null = null;
   aiRequests: { model: string; authorization: string | null }[] = [];
+  /** Its SYNC_VERSION and SYNC_COMPATIBLE (another version's server). */
+  version = SYNC_VERSION;
+  compatible = SYNC_COMPATIBLE;
   /** Answers a sync gives on top of the protocol's (tests of later additions). */
   extra: (request: SyncRequest) => Partial<SyncResponse> = () => ({});
 
@@ -40,7 +43,16 @@ export class FakeServer {
     return [...(this.tables.get(table)?.values() ?? [])].map((r) => r.row);
   }
 
-  sync(request: SyncRequest): SyncResponse | SyncMismatch {
+  /** Why it refuses a device of another version (server/src/sync.ts `refusal`), or null. */
+  refusal(request: SyncRequest): SyncOutdated | null {
+    if (!(request.version >= this.compatible)) return { error: "Update the app", update: "app" };
+    if (request.compatible > this.version) return { error: "Update the server", update: "server" };
+    return null;
+  }
+
+  sync(request: SyncRequest): SyncResponse | SyncMismatch | SyncOutdated {
+    const outdated = this.refusal(request);
+    if (outdated) return outdated;
     if (request.database && request.database !== this.database.id) {
       return { error: "The server's database was wiped or replaced", database: this.database, empty: this.seq === 0 };
     }
@@ -53,7 +65,8 @@ export class FakeServer {
         const key = t.key.map((k) => row[k]).join("|");
         const old = table.get(key);
         if (old && (!t.version || String(old.row[t.version]) >= String(row[t.version]))) continue;
-        table.set(key, { row, seq: ++this.seq });
+        // In the columns the row has: an older device leaves the others as they are.
+        table.set(key, { row: { ...old?.row, ...row }, seq: ++this.seq });
       }
     }
     const since = request.since > this.seq ? 0 : request.since;
@@ -79,7 +92,7 @@ export class FakeServer {
     }
     if (path === "/api/sync") {
       const answer = this.sync(JSON.parse(String(init.body)) as SyncRequest);
-      return Response.json(answer, { status: "error" in answer ? 409 : 200 });
+      return Response.json(answer, { status: "update" in answer ? 426 : "error" in answer ? 409 : 200 });
     }
     const file = /^\/api\/files\/(\w+)$/.exec(path);
     if (file) {

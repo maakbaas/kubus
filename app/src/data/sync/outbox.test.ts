@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it } from "vitest";
 import { fileIds, schema } from "../schema";
-import { SYNC_TABLES, type WireRow } from "../../../../shared/sync";
+import { SYNC_TABLES, type SyncTable, type WireRow } from "../../../../shared/sync";
 import { applyStatement, keyOf } from "./SyncEngine";
 
 const T1 = "2026-10-21T10:00:00.000Z";
@@ -9,8 +9,8 @@ const T2 = "2026-10-21T10:05:00.000Z";
 
 let db: DatabaseSync;
 const outbox = () => db.prepare("SELECT tbl, pk FROM sync_outbox ORDER BY id").all() as { tbl: string; pk: string }[];
-const apply = (table: string, row: WireRow) => {
-  const s = applyStatement(SYNC_TABLES.find((t) => t.name === table)!, row);
+const apply = (table: string | SyncTable, row: WireRow) => {
+  const s = applyStatement(typeof table === "string" ? SYNC_TABLES.find((t) => t.name === table)! : table, row);
   // node:sqlite binds numbered parameters (?1, ?2) only by name.
   db.prepare(s.sql).run(Object.fromEntries((s.bind ?? []).map((v, i) => [`?${i + 1}`, v])) as never);
 };
@@ -72,5 +72,20 @@ describe("applying rows from the server", () => {
     const row = db.prepare("SELECT mime, data FROM files").get() as { mime: string; data: Uint8Array };
     expect(row.mime).toBe("image/png");
     expect([...row.data]).toEqual([1, 2, 3]);
+  });
+
+  it("writes only the columns a row has (an older server's), and leaves out the ones this device doesn't know", () => {
+    apply("items", { ...item(T1), item_view_id: "v1" });
+    const { item_view_id: _, ...older } = item(T2, T2);
+    apply("items", { ...older, mood: "newer server's column" });
+    expect(db.prepare("SELECT item_view_id, deleted_at FROM items").get()).toEqual({ item_view_id: "v1", deleted_at: T2 });
+  });
+
+  it("gives a row written before a column the list's default for it", () => {
+    const items = { ...SYNC_TABLES.find((t) => t.name === "items")!, defaults: { item_view_id: "standard" } };
+    apply(items, item(T1));
+    expect(db.prepare("SELECT item_view_id FROM items").get()).toEqual({ item_view_id: "standard" });
+    apply(items, { ...item(T2), item_view_id: "v2" });
+    expect(db.prepare("SELECT item_view_id FROM items").get()).toEqual({ item_view_id: "v2" });
   });
 });

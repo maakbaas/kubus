@@ -20,6 +20,8 @@ is what this split avoids. Keep them current when behaviour changes.
 - `docs/sync.md`: server, sync engine (outbox triggers, merge, first connection), files (upload,
   download, thumbnails, clean-up), the server's settings (Settings → Server), remote sources and their
   connectors, the HTTP API (headless device) and webhooks, iOS home-screen app, known sync limits.
+- `docs/migrations.md`: schema changes: the device's and the server's migrations, sync between versions
+  (`SYNC_VERSION` / `SYNC_COMPATIBLE`), the steps of a change.
 - `docs/vision.md`: the "one hub" vision (native + remote sources, capabilities), the roadmap and
   every open item, numbered (other docs refer to them as "roadmap #n"; keep the list there only).
 
@@ -34,12 +36,14 @@ is what this split avoids. Keep them current when behaviour changes.
   OPFS). Every asset is bundled, nothing from a CDN (IBM Plex: `app/src/fonts.css`, Carbon's CDN
   `@font-face` rules are dropped in `vite.config.ts`): the app looks the same offline. Tauri is only a window (only plugin: `opener`); native capabilities go behind an interface
   in `app/src/platform/` with a web fallback.
-- **No migrations, no compatibility code** (pre-alpha: the user starts a clean client and a clean
-  database after a schema change). `app/src/data/schema.sql` is the schema; when it changes the
-  local DB is made afresh. Never write code that upgrades, renames or reads old data or old
-  versions of the app or server. A new synced table/column also goes in `shared/sync.ts` (the
-  outbox triggers and the server's tables follow from it: `data/schema.ts`, `server/src/schema.ts`;
-  see `docs/sync.md`).
+- **Every schema change is a migration; no data is ever lost** (`docs/migrations.md`, read it first).
+  `app/src/data/schema.sql` is the newest schema; with it goes the next migration in
+  `app/src/data/migrations.ts` (from the first release's `schema-v1.sql`, never edited, nor are released
+  migrations). A synced table/column also goes in `shared/sync.ts` with `SYNC_VERSION` raised (and
+  `SYNC_COMPATIBLE` when older devices would get the new data wrong); the outbox triggers and the server's
+  added tables/columns follow from it (`data/schema.ts`, `server/src/schema.ts`), anything else on the server
+  is a migration in `server/src/migrations.ts`. Devices and servers of other versions keep syncing: never
+  drop a column or value a side doesn't know.
 - **Never install the SAH-pool VFS while another worker may hold its files** (it deletes the
   database): keep `acquireDbLock` / `poolFilesFree` in `worker.ts`.
 - Changing the app identifier `com.kubus.app`, database / pool names, the lock or `kubus.*` storage

@@ -306,6 +306,6 @@ What the app does, feature by feature (read the part you work on).
 - **Responsive UI** built strictly with the Carbon Design System (`@carbon/react`): use Carbon
   components for every control (DatePicker/TimePicker, NumberInput, ComboBox, …), never native
   inputs or hand-rolled widgets.
-- **Pre-alpha: no migrations.** When `app/src/data/schema.sql` changes, the local database is
-  made afresh (a synced device downloads everything again); the server's database is wiped by hand
-  (Settings → Sync). No compatibility code for old data, old apps or old servers.
+- **Schema changes keep the data.** A device's database and the server's are migrated when the app or
+  the server is updated; devices and a server of different versions keep syncing, or say which one to
+  update (`docs/migrations.md`).

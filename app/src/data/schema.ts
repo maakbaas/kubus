@@ -20,4 +20,8 @@ function outboxTriggers(t: SyncTable): string[] {
   );
 }
 
-export const schema = tables + SYNC_TABLES.flatMap(outboxTriggers).join("");
+/** The outbox triggers alone: made afresh after every migration (engine.ts), so they follow the list. */
+export const outboxTriggerSql = SYNC_TABLES.flatMap(outboxTriggers).join("");
+
+/** The whole schema of a new database. */
+export const schema = tables + outboxTriggerSql;

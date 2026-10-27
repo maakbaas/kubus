@@ -1,8 +1,10 @@
 import type pg from "pg";
+import { migrate } from "./migrations.ts";
 
 // Wiping the server's database (POST /api/wipe, "Wipe server database" in a device's sync
 // settings): every table and sequence in its schema is dropped, whatever they are (also when they
-// don't match what this server expects), and the schema is created afresh. One transaction: it
+// don't match what this server expects), and the schema is created afresh (migrate: a new database
+// records every migration as done). One transaction: it
 // happens completely or not at all. The server's own settings stay (server_settings: they are the
 // server's, not the devices' data).
 
@@ -20,7 +22,7 @@ export async function wipe(pool: pg.Pool, schemaSql: string): Promise<void> {
       "SELECT sequence_name AS name FROM information_schema.sequences WHERE sequence_schema = current_schema()",
     );
     for (const s of sequences.rows) await client.query(`DROP SEQUENCE IF EXISTS ${quote(s.name)} CASCADE`);
-    await client.query(schemaSql);
+    await migrate(client, schemaSql);
     await client.query("COMMIT");
   } catch (e) {
     await client.query("ROLLBACK");

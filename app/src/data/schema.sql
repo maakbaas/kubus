@@ -1,8 +1,8 @@
 -- Kubus database schema.
 --
--- PRE-ALPHA: there are no migrations. When this file changes, the worker detects it (hash
--- stored in PRAGMA user_version) and creates the database afresh (local data is gone; a synced
--- device downloads it again).
+-- What a new database gets (at the newest version, PRAGMA user_version). Every change here goes
+-- with a migration in migrations.ts that brings an older database to it, keeping its data
+-- (docs/migrations.md; migrations.test.ts fails until they agree).
 --
 -- Sync-readiness conventions (see CLAUDE.md):
 --  * primary keys are client-generated UUIDs, never autoincrement

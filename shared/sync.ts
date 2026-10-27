@@ -5,6 +5,23 @@
 // Whenever a table or column in app/src/data/schema.sql changes, change this list too
 // (app/src/data/sync/spec.test.ts fails until they agree): the device's outbox triggers
 // (app/src/data/schema.ts) and the server's tables (server/src/schema.ts) are made from it.
+// Every change to it (or to what a synced value may hold) raises SYNC_VERSION: see docs/migrations.md.
+
+/**
+ * The version of the synced data's shape: this list and what its values may hold. Raised with
+ * every change to them (app/src/data/sync/spec.test.ts fails until it is). Devices send it with every
+ * sync; the server turns away those older than its SYNC_COMPATIBLE.
+ */
+export const SYNC_VERSION = 1;
+/**
+ * The oldest SYNC_VERSION that still reads and writes this version's data correctly: unchanged by
+ * an added column or table (an older device leaves what it doesn't know as it is), raised to
+ * SYNC_VERSION by a change older devices would get wrong (a value's meaning or format, a value an
+ * older device's CHECK refuses, a renamed or dropped column). The server then turns them away until
+ * they are updated; a device whose SYNC_COMPATIBLE is newer than the server's SYNC_VERSION is turned away too
+ * (the server's data isn't converted yet: update the server first).
+ */
+export const SYNC_COMPATIBLE = 1;
 
 /** Maps to SQLite / Postgres: text, number = real / double precision, int, bool = 0|1 / boolean,
  *  json = text / jsonb, date = text YYYY-MM-DD / date, timestamp = ISO text / timestamptz,
@@ -19,6 +36,12 @@ export interface SyncTable {
   /** Newest `updated_at` wins. null = immutable rows, insert only (content-addressed files). */
   version: "updated_at" | null;
   columns: Record<string, ColumnType>;
+  /**
+   * The value of a column added after the first release (SYNC_VERSION 1) for rows written without it
+   * (by older devices, or before it existed): the server's column default, and what a device stores
+   * for such a row's null when its own column is NOT NULL. Not needed for a nullable column.
+   */
+  defaults?: Record<string, WireValue>;
 }
 
 const stamps = { created_at: "timestamp", updated_at: "timestamp", deleted_at: "timestamp" } as const;
@@ -132,6 +155,9 @@ export interface SyncRequest {
    * Another one there: nothing is written and the server answers 409 with a `SyncMismatch`.
    */
   database?: string;
+  /** The device's SYNC_VERSION and SYNC_COMPATIBLE (missing: a device from before versions, 0). */
+  version: number;
+  compatible: number;
 }
 export interface SyncResponse {
   /** Pass as `since` next time. */
@@ -155,6 +181,17 @@ export interface SyncMismatch {
   database: DatabaseInfo;
   /** The server holds no rows at all (as after a wipe). */
   empty: boolean;
+}
+
+/**
+ * The 426 answer: this device and the server can't sync until one is updated (nothing was written).
+ * `app`: the device is older than the server's SYNC_COMPATIBLE. `server`: the device's data needs a
+ * newer server (its SYNC_COMPATIBLE is newer than the server's SYNC_VERSION, or it sends a table or
+ * column the server doesn't have).
+ */
+export interface SyncOutdated {
+  error: string;
+  update: "app" | "server";
 }
 
 /** The largest file a device stores and the server accepts (PUT /api/files/<id>). */

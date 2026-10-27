@@ -24,7 +24,7 @@ pauses sync with `SyncControl.pause`, which keeps URL and token but forgets the 
 first connection; then the worker drops every table and creates the schema afresh, and the app reloads) + Wipe server
 database (while connected; `POST /api/wipe` with `{"confirm":"wipe"}`, `server/src/wipe.ts`: drops every table and sequence in
 the server's schema, whatever they are, and applies `schema.sql` again, in one transaction; then this device pauses sync, so
-switching it on again uploads its data). A server whose database doesn't fit `schema.sql` still starts: sync answers with that
+switching it on again uploads its data). A server whose database can't be migrated (`docs/migrations.md`: one migrated by a newer server, a synced column of another type) still starts: sync answers with that
 error until the database is wiped. Per device (localStorage
 `kubus.sync`). The replica in Postgres is readable (not end-to-end encrypted): the hub vision
 needs server-side queries (docs/vision.md).
@@ -75,8 +75,9 @@ needs server-side queries (docs/vision.md).
 the lock also means the rows a request writes are exactly the ones after the cursor it started at,
 which is how the answer leaves them out. Pushed rows are written a statement per table (and per
 1000 rows: `jsonb_to_recordset`), not one by one. The synced tables are made from `shared/sync.ts`
-(`schema.ts`: jsonb, timestamptz, …; no foreign keys or checks), then `server/schema.sql` (the
-server's own tables), all applied idempotently at start. `events.ts` is the change signal. Proxies must not
+(`schema.ts`: jsonb, timestamptz, …; no foreign keys or checks; added columns added), then `server/schema.sql` (the
+server's own tables), all applied idempotently at start after the migrations (`server/src/migrations.ts`). Devices of
+other versions: `SYNC_VERSION`, 426 and rows written in the columns they have (`docs/migrations.md`). `events.ts` is the change signal. Proxies must not
 buffer `/api/events` (nginx: `proxy_buffering off`); polling covers a dropped stream. Its routes
 (`index.ts`) go through the shared `Router` (`shared/router.ts`).
 

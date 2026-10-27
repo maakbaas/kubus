@@ -1,6 +1,8 @@
 -- Kubus server schema (Postgres): the server's own tables. The synced tables come from
 -- shared/sync.ts (server/src/schema.ts makes them and runs this after them); all of it is applied,
--- idempotently, at every start.
+-- idempotently, at every start, after the migrations (server/src/migrations.ts, recorded in its
+-- table schema_migrations). A change to a table here is a migration (CREATE ... IF NOT EXISTS
+-- doesn't change one that exists).
 -- seq orders changes for pulling: every write takes the next value of sync_seq (server/src/sync.ts).
 
 CREATE SEQUENCE IF NOT EXISTS sync_seq;

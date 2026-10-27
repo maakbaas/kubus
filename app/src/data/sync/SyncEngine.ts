@@ -1,6 +1,9 @@
 import {
+  SYNC_COMPATIBLE,
   SYNC_TABLES,
+  SYNC_VERSION,
   type SyncMismatch,
+  type SyncOutdated,
   type SyncRequest,
   type SyncResponse,
   type SyncTable,
@@ -29,6 +32,11 @@ import type { SyncEnvironment } from "./environment";
 //    answers 409, and this device pauses until the user connects again (a first connection to the
 //    new database) or disconnects: its outbox only holds what changed since the last sync, which
 //    would land on the new database as fragments.
+//  * Versions (docs/migrations.md): every request carries this device's SYNC_VERSION; a server
+//    that can't take its data, or that has data this device is too old for, answers 426 and
+//    writes nothing (the outbox keeps everything until one of them is updated). Rows are applied
+//    in the columns they have (a server without a column leaves it as it is here), and a column
+//    this device doesn't know is left out.
 //  * When: shortly after a local change, every 30 s, when coming online or back to the app, and
 //    when the server signals a change (server-sent events) this device doesn't have yet (the
 //    signal carries the server's cursor: a device's own push is not fetched again).
@@ -84,20 +92,34 @@ class DatabaseReplaced extends Error {
   }
 }
 
+/** What every request says about this device's data (shared/sync.ts). */
+const VERSION = { version: SYNC_VERSION, compatible: SYNC_COMPATIBLE };
+
 const toWire = (t: SyncTable, row: Record<string, unknown>): WireRow =>
   Object.fromEntries(Object.keys(t.columns).map((c) => [c, (row[c] ?? null) as WireValue]));
 
-/** SQL that inserts a row from the server, replacing the local one only if it is newer. */
+/**
+ * SQL that inserts a row from the server, replacing the local one only if it is newer: in the
+ * columns the row has (others keep their value; a new row's get their default), and a null where
+ * the list gives a default (a row written before that column) taking it.
+ */
 export function applyStatement(t: SyncTable, row: WireRow): Statement {
-  const cols = Object.keys(t.columns);
-  let sql = `INSERT INTO ${t.name} (${cols.join(", ")}) VALUES (${cols.map((_, i) => `?${i + 1}`).join(", ")}) `;
-  if (t.version) {
-    const set = cols.filter((c) => !t.key.includes(c)).map((c) => `${c} = excluded.${c}`);
+  const cols = Object.keys(t.columns).filter((c) => t.key.includes(c) || c in row);
+  const bind = cols.map((c) => row[c] ?? null);
+  const value = (c: string, i: number) => {
+    const fallback = t.defaults?.[c];
+    if (fallback === undefined) return `?${i + 1}`;
+    bind.push(fallback);
+    return `coalesce(?${i + 1}, ?${bind.length})`;
+  };
+  let sql = `INSERT INTO ${t.name} (${cols.join(", ")}) VALUES (${cols.map(value).join(", ")}) `;
+  const set = cols.filter((c) => !t.key.includes(c)).map((c) => `${c} = excluded.${c}`);
+  if (t.version && set.length > 0) {
     sql += `ON CONFLICT (${t.key.join(", ")}) DO UPDATE SET ${set.join(", ")} WHERE excluded.${t.version} > ${t.name}.${t.version}`;
   } else {
     sql += "ON CONFLICT DO NOTHING";
   }
-  return { sql, bind: cols.map((c) => row[c] ?? null) };
+  return { sql, bind };
 }
 
 /** Stores the id of the server's database this device syncs with. */
@@ -338,6 +360,7 @@ export class SyncEngine implements SyncControl {
       body: JSON.stringify(request),
     });
     if (response.status === 409) throw new DatabaseReplaced((await response.json()) as SyncMismatch);
+    if (response.status === 426) throw new Error(((await response.json()) as SyncOutdated).error);
     if (!response.ok) throw new Error(`Server error ${response.status}`);
     return (await response.json()) as SyncResponse;
   }
@@ -354,7 +377,7 @@ export class SyncEngine implements SyncControl {
     const outgoing = await this.readOutbox(upTo);
     const held = new Set([...waiting, ...unsendable]);
     if (outgoing.files) outgoing.files = outgoing.files.filter((r) => !held.has(String(r.id)));
-    const request: SyncRequest = { since, changes: outgoing, ...(database && { database }) };
+    const request: SyncRequest = { since, changes: outgoing, ...(database && { database }), ...VERSION };
 
     const { cursor, changes, database: current, missingFiles = [] } = await this.post(request);
     const freed = await this.filesUsedBefore(changes);
@@ -558,7 +581,7 @@ export class SyncEngine implements SyncControl {
     const known = await this.db.select<{ value: string }>("SELECT value FROM meta WHERE key = 'sync_server'");
     if (known[0]?.value === url) return false;
 
-    const remote = await this.post({ since: 0, changes: {} });
+    const remote = await this.post({ since: 0, changes: {}, ...VERSION });
     const remember = [{ sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_server', ?1)", bind: [url] }, rememberDatabase(remote.database.id)];
     let replaced = false;
     if (SYNC_TABLES.some((t) => (remote.changes[t.name] ?? []).length > 0)) {

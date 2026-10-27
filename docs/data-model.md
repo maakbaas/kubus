@@ -42,9 +42,9 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 - **Domain model** (`app/src/domain`) is storage-agnostic. `fieldKinds.ts` is the registry of field
   kinds (DB column, codec, formatting); `ui/FieldInput.tsx` holds the matching editors.
 - **Schema** is one file, `app/src/data/schema.sql` (plus the outbox triggers `data/schema.ts` makes
-  from `shared/sync.ts`). The worker stores a hash of it in `PRAGMA user_version`; on mismatch every
-  table is dropped and the schema created afresh (`ensureSchema` in `engine.ts`). No migrations or
-  renames: pre-alpha, a schema change means a clean database (a synced device downloads again).
+  from `shared/sync.ts`): what a new database gets. `PRAGMA user_version` is its version; an older
+  database is migrated (`app/src/data/migrations.ts`, `ensureSchema` in `engine.ts`), one of a newer
+  version is not opened. See `docs/migrations.md`.
 
 ## Data model (sync-ready conventions)
 

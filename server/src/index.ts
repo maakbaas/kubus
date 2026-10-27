@@ -8,6 +8,7 @@ import { aiInfo, aiProxy, setAiSettings } from "./ai.ts";
 import { deleteFile, getFile, hasFile, putFile } from "./files.ts";
 import { HeadlessHost } from "./headless.ts";
 import { FILE_ID } from "../../shared/files.ts";
+import { applySchema } from "./migrations.ts";
 import { loadSchema } from "./schema.ts";
 import { Sources } from "./sources.ts";
 import { applyUpdate, loadSettings, NO_SETTINGS, saveSettings, sourceConfigs, viewOf, type Stored } from "./settings.ts";
@@ -40,11 +41,12 @@ const MAX_SYNC_BODY = 100 * 1024 * 1024;
 
 const pool = createPool(databaseUrl);
 const schemaSql = await loadSchema();
-// A database whose tables don't fit the schema doesn't stop the server: sync answers with the
-// error, and wiping the database (which doesn't depend on its tables) can still fix it.
+// Migrations, then the schema (server/src/migrations.ts). A database that can't be brought to it
+// (migrated by a newer server, columns that don't fit) doesn't stop the server: sync answers with
+// the error, and wiping the database (which doesn't depend on its tables) can still fix it.
 let schemaError: string | null = null;
 try {
-  await pool.query(schemaSql);
+  await applySchema(pool, schemaSql);
   broadcast(await currentCursor(pool)); // nobody listens yet: what the stored data is up to
 } catch (e) {
   schemaError = `The server's database doesn't fit its schema: ${e instanceof Error ? e.message : String(e)}`;
@@ -108,6 +110,7 @@ const routes = sources.routes(new Router())
     if (!request || typeof request !== "object") throw new HttpError(400, "Send a sync request");
     const result = await handleSync(pool, request as SyncRequest);
     if ("mismatch" in result) return json(409, result.mismatch);
+    if ("outdated" in result) return json(426, result.outdated);
     const { wrote, ...response } = result;
     if (wrote) broadcast(response.cursor);
     return json(200, response);
