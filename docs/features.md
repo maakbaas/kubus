@@ -263,6 +263,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   fields are found by their place among the page's entries).
 - **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's items, substring match over string, markdown, HTML, AI,
   list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; an FTS index can come later).
+  Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`); a result with no visible match is left out.
 - **Local first.** The app works fully offline on the device's own SQLite database. Every asset is part of the build (IBM Plex included, `app/src/fonts.css`; nothing from a
   CDN) and the service worker caches all of it, so offline it looks exactly as online.
 - **Future:** chart block types,

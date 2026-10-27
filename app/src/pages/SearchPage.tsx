@@ -4,8 +4,9 @@ import { htmlPlainText } from "../domain/fieldKinds";
 import { useNavigate, useSearchParams } from "react-router";
 import { ContainedList, ContainedListItem, InlineNotification, Tag } from "@carbon/react";
 import { useStore } from "../app/store";
+import type { Repository } from "../data/repository";
 import { markdownExcerpt, type MarkdownExcerpt } from "../domain/markdownExcerpt";
-import { itemLabel, labelField, type FieldDef, type Item, type Collection } from "../domain/model";
+import { editableField, isReferenceKind, itemLabel, labelField, type FieldDef, type Item, type Collection } from "../domain/model";
 import { Highlight } from "../ui/Highlight";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { MarkdownView } from "../ui/MarkdownView";
@@ -23,15 +24,22 @@ function textExcerpt(text: string, query: string): string {
 }
 
 /**
- * An excerpt for every field whose value contains the query, in field order.
+ * An excerpt for every field whose value contains the query, in field order: an AI field as its
+ * output, an item or list-of-items field by the labels of the items it points to (`labels`).
  * The label field is skipped: it is already shown (highlighted) as the result's title.
  */
-function excerpts(collection: Collection, item: Item, query: string): Excerpt[] {
+function excerpts(collection: Collection, item: Item, query: string, labels: Map<string, string>): Excerpt[] {
   const q = query.toLowerCase();
   const title = labelField(collection, item);
-  return collection.fields.flatMap((field): Excerpt[] => {
-    if (field.id === title?.id) return [];
+  return collection.fields.flatMap((def): Excerpt[] => {
+    if (def.id === title?.id) return [];
+    const field = editableField(def);
     const v = item.values[field.id];
+    if (isReferenceKind(field.kind)) {
+      const ids = Array.isArray(v) ? v : typeof v === "string" ? [v] : [];
+      const found = ids.flatMap((id) => labels.get(id) ?? []).filter((label) => label.toLowerCase().includes(q));
+      if (found.length > 0) return [{ field, text: found.map((label) => textExcerpt(label, query)).join(", ") }];
+    }
     if (field.kind === "markdown" && typeof v === "string" && v.toLowerCase().includes(q)) {
       const markdown = markdownExcerpt(v, query);
       // Empty when the match is only in syntax spanning blocks (e.g. a URL); nothing useful to show.
@@ -57,6 +65,27 @@ function excerpts(collection: Collection, item: Item, query: string): Excerpt[] 
   });
 }
 
+/** The labels of the items the results' item and list-of-items fields point to, by item id. */
+async function referencedLabels(repo: Repository, collections: Collection[], items: Item[]): Promise<Map<string, string>> {
+  const ids = new Map<string, Set<string>>();
+  for (const item of items) {
+    for (const field of collections.find((c) => c.id === item.collectionId)?.fields ?? []) {
+      const v = item.values[field.id];
+      if (!isReferenceKind(field.kind) || !field.targetCollectionId) continue;
+      const set = ids.get(field.targetCollectionId) ?? new Set<string>();
+      ids.set(field.targetCollectionId, set);
+      for (const id of Array.isArray(v) ? v : [v]) if (typeof id === "string") set.add(id);
+    }
+  }
+  const labels = new Map<string, string>();
+  for (const [collectionId, set] of ids) {
+    const target = collections.find((c) => c.id === collectionId);
+    if (!target || set.size === 0) continue;
+    for (const l of await repo.listLabels(target, [...set])) if (l.label) labels.set(l.id, l.label);
+  }
+  return labels;
+}
+
 export function SearchPage() {
   const { repo, collections, spaceCollections, space } = useStore();
   const navigate = useNavigate();
@@ -64,7 +93,8 @@ export function SearchPage() {
   const typed = params.get("q") ?? "";
   // The results with the query they are for: shown until the next ones are in, so the list
   // doesn't empty (and a spinner flash) on every keystroke.
-  const [results, setResults] = useState<{ query: string; items: Item[] } | null>(null);
+  // With the labels of the items they point to (for their item and list-of-items fields' excerpts).
+  const [results, setResults] = useState<{ query: string; items: Item[]; labels: Map<string, string> } | null>(null);
   const query = results?.query ?? "";
   const [error, setError] = useState<string>();
   // The latest collections, read when the search runs (a collection edit alone doesn't search again).
@@ -76,10 +106,13 @@ export function SearchPage() {
     let cancelled = false;
     const timer = window.setTimeout(
       () =>
-        repo.search(typed, collectionsRef.current, space.id).then(
-          (items) => !cancelled && setResults({ query: typed, items }),
-          (e) => !cancelled && setError(errorMessage(e)),
-        ),
+        repo
+          .search(typed, collectionsRef.current, space.id)
+          .then(async (items) => ({ items, labels: await referencedLabels(repo, collectionsRef.current, items) }))
+          .then(
+            ({ items, labels }) => !cancelled && setResults({ query: typed, items, labels }),
+            (e) => !cancelled && setError(errorMessage(e)),
+          ),
       150,
     );
     return () => {
@@ -96,7 +129,7 @@ export function SearchPage() {
       (results?.items ?? []).flatMap((item) => {
         const collection = collections.find((t) => t.id === item.collectionId);
         if (!collection) return [];
-        const matches = excerpts(collection, item, query);
+        const matches = excerpts(collection, item, query, results!.labels);
         const titleMatches = itemLabel(collection, item).toLowerCase().includes(query.trim().toLowerCase());
         return titleMatches || matches.length > 0 ? [{ item, collection, matches }] : [];
       }),
