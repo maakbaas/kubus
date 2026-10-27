@@ -513,7 +513,7 @@ export function filterFlux(c: InfluxColumn, rule: SourceFilter, tz: string): str
 }
 
 /** The rules every row a condition keeps must meet: those not under an `or` (of more than one). */
-function requiredRules(c: SourceCondition): SourceFilter[] {
+export function requiredRules(c: SourceCondition): SourceFilter[] {
   if ("and" in c) return c.and.flatMap(requiredRules);
   if ("or" in c) return c.or.length === 1 ? requiredRules(c.or[0]) : [];
   return [c];

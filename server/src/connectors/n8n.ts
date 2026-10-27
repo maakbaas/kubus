@@ -1,5 +1,6 @@
-import type { SourceColumn, SourceDescription, SourceQuery, SourceResult, SourceRow, SourceRowRequest, SourceTable, SourceTarget } from "../../../shared/sources.ts";
+import type { SourceColumn, SourceDescription, SourceFilter, SourceQuery, SourceResult, SourceRow, SourceRowRequest, SourceTable, SourceTarget } from "../../../shared/sources.ts";
 import { SourceError, type Connector, type SourceConfig } from "./connector.ts";
+import { dayStart, requiredRules } from "./influxFlux.ts";
 import { findRow, queryRows, type MemoryRow } from "./memory.ts";
 
 // n8n's data tables, read-only, through n8n's public API (/api/v1/data-tables, header
@@ -8,16 +9,19 @@ import { findRow, queryRows, type MemoryRow } from "./memory.ts";
 // only requests are GETs (`get`): it never writes, whatever the key could do. Give it a key with
 // only the read scopes (dataTable:list, dataTableRow:read) where n8n offers scopes.
 //
-// The API filters with one flat and / or list, sorts by one column and doesn't count, so a table is
-// read whole (a page of 250 at a time, by id) and queried in memory (memory.ts); a read is kept a
-// few seconds, so a view's pages and counts come from one read. n8n caps a data table's size, so
-// tables stay small; MAX_ROWS bounds one anyway. There is no query language: tables only.
+// The API filters with one flat and / or list, sorts by one column and doesn't count, so the rows
+// a query could keep are read (a page of 250 at a time, by id) and queried in memory (memory.ts):
+// n8n is sent the rules every kept row meets (`n8nFilter`, looser where n8n compares differently)
+// and the search where it can, memory.ts then filters exactly. A read is kept a few seconds, so a
+// view's pages and counts come from one read. n8n caps a data table's size, so tables stay small;
+// MAX_ROWS bounds one anyway. There is no query language: tables only.
 
 const PAGE = 250;
 /** The most rows a table may have to be read. */
 const MAX_ROWS = 100_000;
-/** How long a table's rows are kept (one view's pages, its counts, its item pages). */
+/** How long a read is kept (one view's pages, its counts, its item pages). */
 const ROWS_TTL_MS = 5_000;
+const DAY_MS = 86_400_000;
 /** How long the list of tables (and so their columns) is kept. */
 const TABLES_TTL_MS = 60_000;
 
@@ -92,6 +96,85 @@ export function n8nRow(raw: Record<string, unknown>, columns: SourceColumn[]): M
   return row;
 }
 
+/** A rule as n8n's API filters rows (`filter={"type":"and","filters":[…]}`). */
+export interface N8nRule {
+  columnName: string;
+  condition: "eq" | "neq" | "ilike" | "gt" | "gte" | "lt" | "isEmpty" | "isNotEmpty";
+  value: string | number | null;
+}
+
+/** What a read asks n8n for: rules all rows meet, and a search ("" for none). */
+interface N8nRead {
+  filters: N8nRule[];
+  search: string;
+}
+
+/**
+ * Text n8n matches as the app does: printable ASCII (n8n's SQLite UPPER folds only ASCII, so other
+ * letters could miss rows the app finds).
+ */
+const ASCII = /^[\x20-\x7e]+$/;
+
+/** An ilike containing the text. n8n wraps a value without % itself; a % in the text is a wildcard there (more rows, never fewer). */
+const containing = (text: string) => `%${text}%`;
+
+/**
+ * One filter rule as n8n's rules, keeping at least every row the rule keeps (memory.ts then
+ * filters exactly), or null when n8n can't narrow it. Dates: n8n on SQLite stores
+ * "yyyy-mm-dd hh:mm:ss" but compares it as text with the ISO time it is sent ("…T…Z"), so on the
+ * bound's own UTC day a stored time is always less: an upper bound then keeps that day (more rows),
+ * a lower bound is moved to the start of the UTC day before (exact on Postgres, looser on both).
+ */
+export function n8nRules(c: SourceColumn, rule: SourceFilter, timeZone: string): N8nRule[] | null {
+  const value = rule.value.trim();
+  const op = rule.operator;
+  const r = (condition: N8nRule["condition"], v: N8nRule["value"]): N8nRule => ({ columnName: c.name, condition, value: v });
+  if (c.kind === "string") {
+    if (op === "isEmpty" || op === "isNotEmpty") return [r(op, null)];
+    if ((op === "contains" || op === "is") && ASCII.test(value)) return [r("ilike", containing(value))];
+    return null;
+  }
+  if (c.kind === "number") {
+    if (op === "isEmpty") return [r("eq", null)];
+    if (op === "isNotEmpty") return [r("neq", null)];
+    const n = Number(value);
+    if (value === "" || !Number.isFinite(n)) return null;
+    const condition = ({ is: "eq", isNot: "neq", gt: "gt", lt: "lt" } as const)[op as "is" | "isNot" | "gt" | "lt"];
+    return condition ? [r(condition, n)] : null;
+  }
+  if (c.kind !== "datetime") return null;
+  if (op === "isEmpty") return [r("eq", null)];
+  if (op === "isNotEmpty") return [r("neq", null)];
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  let from: number | undefined;
+  let to: number | undefined;
+  if (op === "between") {
+    const [start, end] = value.split("..");
+    if (!DAY.test(start ?? "") || !DAY.test(end ?? "")) return null;
+    [from, to] = [dayStart(start, timeZone), dayStart(end, timeZone, 1)];
+  } else if (DAY.test(value) && (op === "is" || op === "before" || op === "after")) {
+    if (op !== "before") from = dayStart(value, timeZone, op === "after" ? 1 : 0);
+    if (op !== "after") to = dayStart(value, timeZone, op === "is" ? 1 : 0);
+  } else return null;
+  const rules: N8nRule[] = [];
+  if (from !== undefined) rules.push(r("gte", new Date(Math.floor(from / DAY_MS) * DAY_MS - DAY_MS).toISOString()));
+  if (to !== undefined) rules.push(r("lt", new Date(to).toISOString()));
+  return rules;
+}
+
+/** What to ask n8n for a query: its required rules n8n can narrow by, and its search where n8n's finds at least the same rows. */
+export function n8nRead(query: Pick<SourceQuery, "filter" | "search" | "columns" | "timeZone">, columns: Map<string, SourceColumn>): N8nRead {
+  const filters = requiredRules(query.filter).flatMap((rule) => {
+    const c = columns.get(rule.column);
+    return (c && n8nRules(c, rule, query.timeZone)) ?? [];
+  });
+  // n8n looks in every one of the table's own columns as text, so it finds at least what the app
+  // does in its text columns; a % there would be a pattern rather than text.
+  const needle = query.search.trim();
+  const search = needle && ASCII.test(needle) && !needle.includes("%") && query.columns.every((name) => columns.get(name)?.kind === "string") ? needle : "";
+  return { filters, search };
+}
+
 export class N8nConnector implements Connector {
   readonly kind = "n8n";
   readonly capabilities = { query: false };
@@ -163,17 +246,22 @@ export class N8nConnector implements Connector {
     return table;
   }
 
-  private async rowsOf(table: N8nTable): Promise<{ rows: MemoryRow[]; columns: Map<string, SourceColumn> }> {
-    const columns = n8nColumns(table);
-    const cached = this.rows.get(table.id);
-    if (!cached || Date.now() - cached.at >= ROWS_TTL_MS) {
-      const rows = this.all<Record<string, unknown>>(`/data-tables/${encodeURIComponent(table.id)}/rows`, { sortBy: "id:asc" }, MAX_ROWS).then((raw) =>
+  /** The rows n8n has for a read (kept a moment, by table and read). */
+  private async rowsOf(table: N8nTable, columns: SourceColumn[], read: N8nRead): Promise<MemoryRow[]> {
+    const params: Record<string, string> = { sortBy: "id:asc" };
+    if (read.filters.length) params.filter = JSON.stringify({ type: "and", filters: read.filters });
+    if (read.search) params.search = read.search;
+    const key = `${table.id} ${params.filter ?? ""} ${params.search ?? ""}`;
+    const now = Date.now();
+    for (const [k, c] of this.rows) if (now - c.at >= ROWS_TTL_MS) this.rows.delete(k);
+    if (!this.rows.has(key)) {
+      const rows = this.all<Record<string, unknown>>(`/data-tables/${encodeURIComponent(table.id)}/rows`, params, MAX_ROWS).then((raw) =>
         raw.map((r) => n8nRow(r, columns)),
       );
-      rows.catch(() => this.rows.delete(table.id));
-      this.rows.set(table.id, { at: Date.now(), rows });
+      rows.catch(() => this.rows.delete(key));
+      this.rows.set(key, { at: now, rows });
     }
-    return { rows: await this.rows.get(table.id)!.rows, columns: new Map(columns.map((c) => [c.name, c])) };
+    return this.rows.get(key)!.rows;
   }
 
   async check(): Promise<string[]> {
@@ -194,13 +282,18 @@ export class N8nConnector implements Connector {
   }
 
   async query(query: SourceQuery): Promise<SourceResult> {
-    const { rows, columns } = await this.rowsOf(await this.table(query.target));
-    return queryRows(rows, columns, query);
+    const table = await this.table(query.target);
+    const list = n8nColumns(table);
+    const columns = new Map(list.map((c) => [c.name, c]));
+    return queryRows(await this.rowsOf(table, list, n8nRead(query, columns)), columns, query);
   }
 
   async row(request: SourceRowRequest): Promise<SourceRow | null> {
-    const { rows, columns } = await this.rowsOf(await this.table(request.target));
-    return findRow(rows, columns, request);
+    const table = await this.table(request.target);
+    const list = n8nColumns(table);
+    // By id, n8n finds the one row.
+    const filters: N8nRule[] = request.key === "id" && /^\d+$/.test(request.keyValue) ? [{ columnName: "id", condition: "eq", value: Number(request.keyValue) }] : [];
+    return findRow(await this.rowsOf(table, list, { filters, search: "" }), new Map(list.map((c) => [c.name, c])), request);
   }
 
   async close() {

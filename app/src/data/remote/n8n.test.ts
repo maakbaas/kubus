@@ -1,7 +1,7 @@
 // @vitest-environment node
 // The n8n connector (server/src/connectors/n8n.ts) against a stand-in for n8n's public API.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { N8nConnector, n8nEndpoint } from "../../../../server/src/connectors/n8n.ts";
+import { N8nConnector, n8nEndpoint, n8nRules, type N8nRule } from "../../../../server/src/connectors/n8n.ts";
 import type { SourceQuery } from "../../../../shared/sources";
 
 const TABLES = [
@@ -19,6 +19,32 @@ const LEADS = Array.from({ length: 300 }, (_, i) => ({
   won: i % 2 === 0,
 }));
 
+/** n8n's row filter and search (as on Postgres: ilike's only wildcard is %, neq keeps nulls). */
+function n8nFilters(rows: Record<string, unknown>[], url: URL): Record<string, unknown>[] {
+  const filter = url.searchParams.get("filter");
+  const search = url.searchParams.get("search");
+  const like = (pattern: string) => new RegExp(`^${pattern.split("%").map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "is");
+  const cmp = (a: unknown, b: unknown) => (typeof b === "string" && typeof a === "string" ? Date.parse(a) - Date.parse(b) : Number(a) - Number(b));
+  return rows.filter((row) => {
+    for (const f of filter ? (JSON.parse(filter) as { filters: N8nRule[] }).filters : []) {
+      const v = row[f.columnName] ?? null;
+      const ok = {
+        eq: () => (f.value === null ? v === null : v !== null && cmp(v, f.value) === 0),
+        neq: () => (f.value === null ? v !== null : v === null || cmp(v, f.value) !== 0),
+        ilike: () => v !== null && like(String(f.value)).test(String(v)),
+        gt: () => v !== null && cmp(v, f.value) > 0,
+        gte: () => v !== null && cmp(v, f.value) >= 0,
+        lt: () => v !== null && cmp(v, f.value) < 0,
+        isEmpty: () => v === null || v === "",
+        isNotEmpty: () => v !== null && v !== "",
+      }[f.condition]();
+      if (!ok) return false;
+    }
+    const own = TABLES[0].columns.map((c) => c.name);
+    return !search || own.some((name) => row[name] !== null && like(`%${search}%`).test(String(row[name])));
+  });
+}
+
 /** n8n's API: offset cursors, 250 a page at most. */
 function stub() {
   const requests: { url: URL; method: string; key: string | null }[] = [];
@@ -33,7 +59,7 @@ function stub() {
     requests.push({ url, method: init.method ?? "GET", key: new Headers(init.headers).get("X-N8N-API-KEY") });
     if (new Headers(init.headers).get("X-N8N-API-KEY") !== "secret") return new Response(JSON.stringify({ message: "unauthorized" }), { status: 401 });
     if (url.pathname === "/n8n/api/v1/data-tables") return Response.json(page(TABLES, url));
-    if (url.pathname === "/n8n/api/v1/data-tables/aaaaaaaaaaaaaaaa/rows") return Response.json(page(LEADS, url));
+    if (url.pathname === "/n8n/api/v1/data-tables/aaaaaaaaaaaaaaaa/rows") return Response.json(page(n8nFilters(LEADS, url), url));
     return new Response(JSON.stringify({ message: "Not found" }), { status: 404 });
   });
   return requests;
@@ -86,10 +112,55 @@ describe("n8n connector", () => {
     expect(result.total).toBe(150);
     expect(result.rows[0]).toEqual({ key: "9", values: ["lead9@example.com", 8, null, true] });
     expect(result.rows.every((r) => r.values[1] === 8)).toBe(true);
-    expect(await connector.row({ ...leads(), keyValue: "1" })).toEqual({ key: "1", values: ["lead1@example.com", 0, "2026-03-01T10:00:00.000Z", true] });
-    // One read of the rows (two pages) serves both, kept a moment.
+    await connector.query(leads({ filter: { and: [{ column: "won", operator: "isChecked", value: "" }] }, offset: 10 }));
+    // One read of the rows (two pages) serves both pages, kept a moment.
     expect(requests.filter((r) => r.url.pathname.endsWith("/rows")).length).toBe(2);
     expect(requests.every((r) => r.method === "GET" && r.key === "secret")).toBe(true);
+  });
+  it("asks n8n only for the rows a filter could keep, and filters them exactly", async () => {
+    const requests = stub();
+    const connector = new N8nConnector(config());
+    const result = await connector.query(
+      leads({
+        filter: { and: [{ column: "score", operator: "is", value: "4" }, { column: "email", operator: "contains", value: "LEAD1" }, { or: [{ column: "won", operator: "isChecked", value: "" }, { column: "score", operator: "gt", value: "5" }] }] },
+      }),
+    );
+    // Score 4 (and so won): lead15, lead105, lead115 … lead195.
+    expect(result.total).toBe(11);
+    expect(result.rows.slice(0, 3).map((r) => r.values[0])).toEqual(["lead15@example.com", "lead105@example.com", "lead115@example.com"]);
+    const rowsRequests = requests.filter((r) => r.url.pathname.endsWith("/rows"));
+    expect(rowsRequests.length).toBe(1);
+    expect(JSON.parse(rowsRequests[0].url.searchParams.get("filter")!)).toEqual({
+      type: "and",
+      filters: [{ columnName: "score", condition: "eq", value: 4 },{ columnName: "email", condition: "ilike", value: "%LEAD1%" }],
+    });
+  });
+  it("passes a search on when every searched column is text, and finds one row by its id", async () => {
+    const requests = stub();
+    const connector = new N8nConnector(config());
+    expect((await connector.query(leads({ columns: ["email"], search: " lead29@ " }))).total).toBe(1);
+    expect(requests.at(-1)!.url.searchParams.get("search")).toBe("lead29@");
+    expect((await connector.query(leads({ search: "lead29@" }))).total).toBe(1);
+    expect(requests.at(-1)!.url.searchParams.has("search")).toBe(false);
+    expect(await connector.row({ ...leads(), keyValue: "1" })).toEqual({ key: "1", values: ["lead1@example.com", 0, "2026-03-01T10:00:00.000Z", true] });
+    expect(JSON.parse(requests.at(-1)!.url.searchParams.get("filter")!).filters).toEqual([{ columnName: "id", condition: "eq", value: 1 }]);
+    // One page each, but two for the search not sent (the whole table).
+    expect(requests.filter((r) => r.url.pathname.endsWith("/rows")).length).toBe(4);
+  });
+  it("narrows dates by day loosely enough for n8n on SQLite", async () => {
+    const met = { name: "met", type: "date", kind: "datetime" } as const;
+    expect(n8nRules(met, { column: "met", operator: "is", value: "2026-03-01" }, "Europe/Amsterdam")).toEqual([
+      { columnName: "met", condition: "gte", value: "2026-02-27T00:00:00.000Z" },
+      { columnName: "met", condition: "lt", value: "2026-03-01T23:00:00.000Z" },
+    ]);
+    // As text, SQLite's "2026-03-01 10:00:00" is above the lower bound and below the upper.
+    expect("2026-03-01 10:00:00.000" >= "2026-02-27T00:00:00.000Z" && "2026-03-01 10:00:00.000" < "2026-03-01T23:00:00.000Z").toBe(true);
+    stub();
+    const result = await new N8nConnector(config()).query(leads({ filter: { and: [{ column: "met", operator: "is", value: "2026-03-01" }] }, timeZone: "Europe/Amsterdam" }));
+    expect(result.rows.map((r) => r.key)).toEqual(["1"]);
+    // Rules n8n can't narrow by aren't sent.
+    expect(n8nRules({ name: "email", type: "string", kind: "string" }, { column: "email", operator: "contains", value: "café" }, "UTC")).toBeNull();
+    expect(n8nRules({ name: "won", type: "boolean", kind: "checkbox" }, { column: "won", operator: "isChecked", value: "" }, "UTC")).toBeNull();
   });
   it("tells a wrong key from a wrong request", async () => {
     stub();
