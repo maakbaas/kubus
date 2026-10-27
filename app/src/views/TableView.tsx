@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "@carbon/react";
 import { Add, ArrowRight, Close, Copy, DataTable as TableIcon, Edit, Save, TrashCan } from "@carbon/icons-react";
-import { RowActions, rowButtonProps, TableStacked } from "../ui/RowActions";
+import { RowActions, rowButtonProps, RowIconButton, TableStacked } from "../ui/RowActions";
 import { useStore } from "../app/store";
 import { isStruckThrough, itemLabel, labelField, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
 import { cellEditStart, type EditStart } from "../ui/editStart";
@@ -498,24 +498,24 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
       <>
         {/* Without the title column (its link opens the item), each row gets an open button. */}
         {!titleShown && (
-          <IconButton {...props} label={`Open ${collection.name}`} onClick={(e) => actions.open(item, openModeOf(e))}>
+          <RowIconButton {...props} label={`Open ${collection.name}`} onClick={(e) => actions.open(item, openModeOf(e))}>
             <ArrowRight />
-          </IconButton>
+          </RowIconButton>
         )}
         {restricted && (
-          <IconButton {...props} label="Edit all fields" onClick={(e) => actions.open(item, openModeOf(e), { edit: true })}>
+          <RowIconButton {...props} label="Edit all fields" onClick={(e) => actions.open(item, openModeOf(e), { edit: true })}>
             <Edit />
-          </IconButton>
+          </RowIconButton>
         )}
         {actions.duplicate && (
-          <IconButton {...props} label="Duplicate" onClick={() => actions.duplicate?.(item)}>
+          <RowIconButton {...props} label="Duplicate" onClick={() => actions.duplicate?.(item)}>
             <Copy />
-          </IconButton>
+          </RowIconButton>
         )}
         {actions.remove && (
-          <IconButton {...props} label="Delete" onClick={() => actions.remove?.(item)}>
+          <RowIconButton {...props} label="Delete" onClick={() => actions.remove?.(item)}>
             <TrashCan />
-          </IconButton>
+          </RowIconButton>
         )}
       </>
     );
