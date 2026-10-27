@@ -156,3 +156,9 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
    (seeding, waits, audit cost) without dropping a check. Stop only after at least 4 iterations in
    a row in which no test improved by 1% or more; then finish with green smoke and full runs (the
    full run only once everything, perf work included, is done).
+   - Status (stopped on request before the iterations): the perf suite exists (`--perf`, suite
+     23-perf, `perf-summary.json`, `--perf-compare`), and seeding stores all items in one change set
+     (`Repository.createItems`: 1,000 items went from about 4.5 minutes to one transaction). Left
+     out: placing table row buttons' tooltips only once the row is entered (fewer page measurements
+     while a big table opens) lost a click arriving with the pointer (05-table "Duplicate adds a
+     row"); it needs another way to defer them. The measured iterations themselves are still to do.
