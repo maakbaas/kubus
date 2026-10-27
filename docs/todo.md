@@ -153,4 +153,6 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
    and at 4× CPU throttling, reporting per-phase timings, long tasks, DOM size and memory, with the
    suite's own overhead (seeding, settling, audits) apart from the app's. Iterate on it (measure, one
    change, measure) to speed up the app (startup, loading, computation, rendering) and the suite
-   (seeding, waits, audit cost) without dropping a check; finish with green smoke and full runs.
+   (seeding, waits, audit cost) without dropping a check. Stop only after at least 4 iterations in
+   a row in which no test improved by 1% or more; then finish with green smoke and full runs (the
+   full run only once everything, perf work included, is done).

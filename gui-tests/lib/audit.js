@@ -415,6 +415,9 @@ function __audit(opts) {
             }
             return false;
           })() ||
+          // A card's link is stretched under the whole card on purpose: the card's own controls
+          // (a checkbox, a link in a field) sit above it, and the rest of the card is the link.
+          (el.matches(".item-card__link") && hit.closest(".item-card") === el.closest(".item-card")) ||
           // Carbon puts a visual twin over some inputs (checkbox / toggle labels, date icons).
           el.matches("input") && (hit.closest(".cds--form-item, .cds--checkbox-wrapper, .cds--toggle, .cds--date-picker, .cds--search, .cds--list-box, .cds--number, .cds--slider-container") === el.closest(".cds--form-item, .cds--checkbox-wrapper, .cds--toggle, .cds--date-picker, .cds--search, .cds--list-box, .cds--number, .cds--slider-container"));
         if (!legit) report("occluded", el, `covered at its centre by ${describe(hit)}`);
