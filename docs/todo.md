@@ -124,3 +124,14 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
      rows (cover on the left, text beside it); above it, the default card.
    - Confirm in the app nothing else changes card styling with the setting off (reported as
      "happens anyway").
+
+## When the above is done
+
+8. **Full GUI suite updated and green.** Update `gui-tests/` for every change above (new and
+   changed suites, baselines after deliberate visual changes) and run the full suite
+   (`npm run test:gui`) to a 100% pass rate.
+
+9. **Performance, driven by the smoke suite.** Iterate on `npm run test:gui:smoke` only: measure,
+   find and make performance gains both in the suite (waits, setup, needless reloads) and in the app
+   itself (rendering, data loading, startup), and optimize both for speed. Keep every check
+   meaningful: faster by doing less work, never by checking less.
