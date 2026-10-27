@@ -3634,6 +3634,10 @@ img[data-lightbox] {
   background: var(--cds-layer-selected);
   box-shadow: inset 2px 0 0 var(--cds-border-interactive);
 }
+/* Carbon's link blue is 3.8:1 on the selected grey; its hover blue has AA contrast (both themes). */
+[data-selected] :is(a, .cds--link):not(.cds--btn) {
+  color: var(--cds-link-primary-hover);
+}
 /* The rows being dragged follow the pointer (inline transform), lifted above the others. */
 [data-dragging] {
   z-index: 2;
