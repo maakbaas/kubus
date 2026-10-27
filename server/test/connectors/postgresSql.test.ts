@@ -1,8 +1,8 @@
 // @vitest-environment node
 // The Postgres connector's SQL without a database (postgres.test.ts runs it on one).
 import { describe, expect, it } from "vitest";
-import { cleanQuery, filterSql, Params, pgColumn, querySql, rowSql, type PgColumn } from "../../../../server/src/connectors/postgresSql.ts";
-import type { SourceQuery } from "../../../../shared/sources";
+import { cleanQuery, filterSql, Params, pgColumn, querySql, rowSql, type PgColumn } from "../../src/connectors/postgresSql.ts";
+import type { SourceQuery } from "../../../shared/sources.ts";
 
 const type = (name: string, category: string, element: { name: string; category: string } | null = null) => ({ name, display: name, category, element });
 

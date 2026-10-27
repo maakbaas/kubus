@@ -1,53 +1,27 @@
 // @vitest-environment node
-// The server's migrations and its side of syncing between versions, against a real database: only
-// when KUBUS_TEST_POSTGRES names one (a superuser's connection string, e.g.
-// postgres://postgres@localhost:5432/postgres). It makes its own database and drops it again. The
-// server's packages (pg) load only then: CI installs the app's alone.
-import { createRequire } from "node:module";
+// The server's migrations and its side of syncing between versions, against a real database
+// (KUBUS_TEST_POSTGRES: ./postgres.ts).
+import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { ServerMigration } from "../../../../server/src/migrations.ts";
-import { SYNC_VERSION, type SyncRequest, type WireRow } from "../../../../shared/sync";
+import { migrate, type ServerMigration } from "../src/migrations.ts";
+import { loadSchema } from "../src/schema.ts";
+import { handleSync } from "../src/sync.ts";
+import { wipe } from "../src/wipe.ts";
+import { ADMIN, createDatabase, dropDatabase } from "./postgres.ts";
+import { SYNC_VERSION, type SyncRequest, type WireRow } from "../../shared/sync.ts";
 
-// What the test uses of pg (its types are the server's: not installed for the app).
-interface Client {
-  query<R = Record<string, unknown>>(sql: string, values?: unknown[]): Promise<{ rows: R[] }>;
-  release(): void;
-}
-interface Pool {
-  connect(): Promise<Client>;
-  query<R = Record<string, unknown>>(sql: string, values?: unknown[]): Promise<{ rows: R[] }>;
-  end(): Promise<void>;
-}
-interface Pg {
-  Client: new (options: { connectionString: string }) => { connect(): Promise<void>; query(sql: string): Promise<unknown>; end(): Promise<void> };
-  Pool: new (options: { connectionString: string }) => Pool;
-}
-
-const ADMIN = process.env.KUBUS_TEST_POSTGRES;
 const DB = "kubus_migrations_test";
 
 describe.skipIf(!ADMIN)("the server's database", () => {
-  let pg: Pg;
-  let pool: Pool;
+  let pool: pg.Pool;
   let schemaSql: string;
-  let server: {
-    migrate: typeof import("../../../../server/src/migrations.ts").migrate;
-    handleSync: typeof import("../../../../server/src/sync.ts").handleSync;
-    wipe: typeof import("../../../../server/src/wipe.ts").wipe;
-  };
-  const admin = async (sql: string) => {
-    const c = new pg.Client({ connectionString: ADMIN! });
-    await c.connect();
-    await c.query(sql);
-    await c.end();
-  };
 
   /** Runs migrate (with these migrations) in a transaction, as the server's start does. */
   async function start(migrations: ServerMigration[] = []) {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await server.migrate(client as never, schemaSql, migrations);
+      await migrate(client, schemaSql, migrations);
       await client.query("COMMIT");
     } catch (e) {
       await client.query("ROLLBACK");
@@ -58,26 +32,16 @@ describe.skipIf(!ADMIN)("the server's database", () => {
   }
   const applied = async () => (await pool.query<{ version: number }>("SELECT version FROM schema_migrations ORDER BY version")).rows.map((r) => r.version);
   const sync = (changes: Record<string, WireRow[]>, over: Partial<SyncRequest> = {}) =>
-    server.handleSync(pool as never, { since: 0, changes, version: SYNC_VERSION, compatible: SYNC_VERSION, ...over });
+    handleSync(pool, { since: 0, changes, version: SYNC_VERSION, compatible: SYNC_VERSION, ...over });
 
   beforeAll(async () => {
-    pg = createRequire(new URL("../../../../server/package.json", import.meta.url))("pg") as Pg;
-    const { migrate } = await import("../../../../server/src/migrations.ts");
-    const { handleSync } = await import("../../../../server/src/sync.ts");
-    const { wipe } = await import("../../../../server/src/wipe.ts");
-    const { loadSchema } = await import("../../../../server/src/schema.ts");
-    server = { migrate, handleSync, wipe };
     schemaSql = await loadSchema();
-    await admin(`DROP DATABASE IF EXISTS ${DB}`);
-    await admin(`CREATE DATABASE ${DB}`);
-    const url = new URL(ADMIN!);
-    url.pathname = `/${DB}`;
-    pool = new pg.Pool({ connectionString: url.toString() });
+    pool = new pg.Pool({ connectionString: await createDatabase(DB) });
   });
 
   afterAll(async () => {
     await pool?.end();
-    await admin(`DROP DATABASE IF EXISTS ${DB} WITH (FORCE)`);
+    await dropDatabase(DB);
   });
 
   beforeEach(async () => {
@@ -141,7 +105,7 @@ describe.skipIf(!ADMIN)("the server's database", () => {
 
   it("records every migration again after a wipe", async () => {
     await pool.query(schemaSql);
-    await server.wipe(pool as never, schemaSql);
+    await wipe(pool, schemaSql);
     expect(await applied()).toEqual([]);
     expect((await pool.query("SELECT count(*)::int AS n FROM server_meta")).rows).toEqual([{ n: 2 }]);
   });

@@ -10,7 +10,8 @@
     "build:web": "tsc --noEmit && vite build --config app/vite.config.ts",
     "build:headless": "vite build --config app/vite.headless.config.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --config app/vite.config.ts",
+    "test": "vitest run",
+    "test:changed": "vitest run --changed origin/main",
     "test:gui": "node gui-tests/run.mjs",
     "test:gui:smoke": "node gui-tests/run.mjs --smoke",
     "tauri": "tauri"

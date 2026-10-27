@@ -123,11 +123,14 @@ export class FakeServer {
   }
 }
 
-/** A device (in-memory database, settings in memory) syncing with SERVER_URL, connected and synced once. */
-export async function device(options: { keepFiles?: boolean; originals?: "always" | "opened"; connect?: boolean } = {}) {
+/**
+ * A device (in-memory database, settings in memory) syncing with SERVER_URL (or `url` with `token`:
+ * a real server), connected and synced once.
+ */
+export async function device(options: { keepFiles?: boolean; originals?: "always" | "opened"; connect?: boolean; url?: string; token?: string } = {}) {
   const repo = await SqliteRepository.open(await DirectSqlClient.open(), memoryEnvironment({ keepFiles: options.keepFiles }));
   if (options.connect !== false) {
-    await repo.sync.configure({ url: SERVER_URL, token: TOKEN, enabled: true, originals: options.originals ?? "always" });
+    await repo.sync.configure({ url: options.url ?? SERVER_URL, token: options.token ?? TOKEN, enabled: true, originals: options.originals ?? "always" });
     await settled(repo);
   }
   return repo;

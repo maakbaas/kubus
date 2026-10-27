@@ -1,8 +1,8 @@
 // @vitest-environment node
 // Queries answered in memory (server/src/connectors/memory.ts): the same meaning as postgresSql.ts.
 import { describe, expect, it } from "vitest";
-import { findRow, queryRows, type MemoryRow } from "../../../../server/src/connectors/memory.ts";
-import type { SourceColumn, SourceFilter, SourceQuery } from "../../../../shared/sources";
+import { findRow, queryRows, type MemoryRow } from "../../src/connectors/memory.ts";
+import type { SourceColumn, SourceFilter, SourceQuery } from "../../../shared/sources.ts";
 
 const columns = new Map<string, SourceColumn>(
   [

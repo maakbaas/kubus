@@ -1,8 +1,8 @@
 // @vitest-environment node
 // The server's settings: secrets are kept only where they were given for (server/src/settings.ts).
 import { describe, expect, it } from "vitest";
-import { applyUpdate, NO_SETTINGS, sourceConfigs, splitPassword, viewOf, type Stored } from "../../../../server/src/settings.ts";
-import type { ServerSettingsUpdate } from "../../../../shared/settings";
+import { applyUpdate, NO_SETTINGS, sourceConfigs, splitPassword, viewOf, type Stored } from "../src/settings.ts";
+import type { ServerSettingsUpdate } from "../../shared/settings.ts";
 
 const stored: Stored = {
   ai: { url: "https://api.example.com/v1", key: "sk-secret", fieldModel: "small", codeModel: "" },

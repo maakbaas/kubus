@@ -5,9 +5,13 @@
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import { describe, expect, it } from "vitest";
 import firstRelease from "./schema-v1.sql?raw";
+import firstReleaseData from "./fixture-v1.sql?raw";
+import { DirectSqlClient } from "./sqlite/direct";
+import { SqliteRepository } from "./sqlite/SqliteRepository";
+import { memoryEnvironment } from "./sync/environment";
 import { MIGRATIONS, type Db } from "./migrations";
 import { ensureSchema, FIRST_RELEASE_HASHES, latestVersion } from "./sqlite/engine";
-import { outboxTriggerSql, schema } from "./schema";
+import { fileIds, outboxTriggerSql, schema } from "./schema";
 
 /** 32-bit FNV-1a hash of the schema text, as a signed int: what pre-release versions kept in user_version. */
 function schemaHash(text: string): number {
@@ -66,5 +70,54 @@ describe("migrations", () => {
     expect(shape(migrated)).toEqual(shape(made));
     migrated.close();
     made.close();
+  });
+
+  it("keep every row of a first-release database, which the app then reads as it was", async () => {
+    const counts = (rows: { name: string; n: number }[]) => Object.fromEntries(rows.map((r) => [r.name, r.n]));
+    const countSql = (db: Db) =>
+      (db.selectValues("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'sync_outbox'") as string[])
+        .map((t) => `SELECT '${t}' AS name, count(*) AS n FROM "${t}"`)
+        .join(" UNION ALL ");
+    let before: Record<string, number> = {};
+    // Opened as the app opens it: the engine migrates it.
+    const client = await DirectSqlClient.open((db) => {
+      db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
+      db.exec(firstRelease);
+      db.exec(firstReleaseData);
+      db.exec("PRAGMA user_version = 1");
+      before = counts(db.exec({ sql: countSql(db), rowMode: "object", returnValue: "resultRows" }));
+    });
+    expect(before.field_values).toBeGreaterThan(10);
+    // A migration that moves rows to another table says so here.
+    const after = counts(await client.select(`SELECT name, n FROM (${Object.keys(before).map((t) => `SELECT '${t}' AS name, count(*) AS n FROM "${t}"`).join(" UNION ALL ")})`));
+    expect(after).toEqual(before);
+
+    const repo = await SqliteRepository.open(client, memoryEnvironment());
+    expect((await repo.listSpaces()).map((s) => [s.id, s.name, s.icon])).toEqual([["default", "Space", null], ["space-work", "Work", "Briefcase"]]);
+    const collections = await repo.listCollections();
+    const book = collections.find((c) => c.id === "collection-book")!;
+    expect(book).toMatchObject({ name: "Book", pluralName: "Books", icon: "Book", spaceIds: ["default", "space-work"] });
+    expect(book.fields.map((f) => f.kind)).toEqual(["string", "markdown", "number", "date", "datetime", "checkbox", "image", "item", "string_list", "checklist", "item_list", "component", "component", "ai", "html"]);
+    expect(book.fields.find((f) => f.id === "field-author")?.choiceFilter).toEqual([{ id: "rule-writers", fieldId: "field-name", operator: "contains", value: "Herbert" }]);
+    expect(book.itemViews.map((v) => v.name)).toEqual(["Compact"]);
+    const cover = "e06cc5dc61902f1ec01216ae3298216b218ad494ca253a85557ed4e44a23994b";
+    const dune = await repo.getItem(book, "item-dune");
+    expect(dune).toMatchObject({
+      spaceId: "default",
+      itemViewId: "itemview-compact",
+      aiInputs: { "field-summary": "hash-1" },
+      values: {
+        "field-title": "Dune", "field-notes": `# Notes\n\nA *desert* planet. ![](files/${cover})`, "field-pages": 412.5, "field-published": "1965-08-01",
+        "field-finished": "2026-03-01T10:00:00.000Z", "field-read": true, "field-cover": cover, "field-author": "item-herbert", "field-tags": ["sf", "classic"],
+        "field-todo": ["[x] read", "[ ] reread"], "field-also": ["item-emma"], "field-summary": "A desert epic", "field-html": "<b>bold</b>",
+      },
+    });
+    expect((await repo.listItems(book, "space-work")).map((i) => i.values["field-title"])).toEqual(["Emma"]);
+    expect((await repo.listItems(book, "default")).map((i) => i.id)).toEqual(["item-dune"]); // the deleted one stays deleted
+    expect(await repo.getFile(cover)).toEqual({ data: new TextEncoder().encode("cover bytes"), mime: "image/png" });
+    expect(await repo.getFile(cover, { small: true })).toMatchObject({ mime: "image/webp", small: true });
+    expect((await repo.listViews(book.id, "default")).map((v) => [v.name, v.isDefault, v.filters.length])).toEqual([["All", false, 0], ["Unread", true, 1]]);
+    expect((await repo.listBookmarks("default")).map((b) => b.label)).toEqual(["Dune", "Unread books"]);
+    expect((await repo.listComponents()).map((c) => [c.name, c.ai])).toEqual([["Badge", false], ["Summary", true]]);
   });
 });

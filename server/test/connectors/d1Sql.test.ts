@@ -2,8 +2,8 @@
 // The D1 connector's SQL without a database: run here on SQLite itself (node:sqlite), as D1 would.
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { cleanQuery, d1Column, dayStart, querySql, rowSql, zoneOffsets, type D1Column } from "../../../../server/src/connectors/d1Sql.ts";
-import type { SourceQuery } from "../../../../shared/sources";
+import { cleanQuery, d1Column, dayStart, querySql, rowSql, zoneOffsets, type D1Column } from "../../src/connectors/d1Sql.ts";
+import type { SourceQuery } from "../../../shared/sources.ts";
 
 describe("d1Column", () => {
   it("reads declared types as field types", () => {

@@ -19,8 +19,8 @@ import {
   rowsFlux,
   totalFlux,
   type InfluxColumn,
-} from "../../../../server/src/connectors/influxFlux.ts";
-import type { SourceQuery } from "../../../../shared/sources";
+} from "../../src/connectors/influxFlux.ts";
+import type { SourceQuery } from "../../../shared/sources.ts";
 
 const columns = new Map<string, InfluxColumn>(
   [

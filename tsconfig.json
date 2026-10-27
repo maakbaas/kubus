@@ -6,6 +6,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
@@ -16,8 +17,5 @@
     "skipLibCheck": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["app/src", "app/vite.config.ts", "app/vite.headless.config.ts", "shared"],
-  // Tests of server code (vitest runs them): the server's packages and sources aren't there for every
-  // typecheck of the app (CI installs the app's alone; the server image's web stage has no server/).
-  "exclude": ["app/src/data/remote/postgres.test.ts", "app/src/data/remote/postgresSql.test.ts", "app/src/data/remote/settings.test.ts", "app/src/data/remote/memory.test.ts", "app/src/data/remote/n8n.test.ts", "app/src/data/remote/influxFlux.test.ts", "app/src/data/remote/d1Sql.test.ts", "app/src/data/sync/server.test.ts"]
+  "include": ["vitest.config.ts", "app/src", "server/test/devices.test.ts", "app/vite.config.ts", "app/vite.headless.config.ts", "shared"]
 }

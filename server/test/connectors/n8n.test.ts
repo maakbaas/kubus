@@ -1,8 +1,8 @@
 // @vitest-environment node
 // The n8n connector (server/src/connectors/n8n.ts) against a stand-in for n8n's public API.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { N8nConnector, n8nEndpoint } from "../../../../server/src/connectors/n8n.ts";
-import type { SourceQuery } from "../../../../shared/sources";
+import { N8nConnector, n8nEndpoint } from "../../src/connectors/n8n.ts";
+import type { SourceQuery } from "../../../shared/sources.ts";
 
 const TABLES = [
   { id: "aaaaaaaaaaaaaaaa", name: "Leads", projectId: "p1", columns: [{ name: "score", type: "number", index: 1 }, { name: "email", type: "string", index: 0 }, { name: "met", type: "date", index: 2 }, { name: "won", type: "boolean", index: 3 }] },

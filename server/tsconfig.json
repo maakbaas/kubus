@@ -13,5 +13,7 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src", "../shared"]
+  "include": ["src", "test", "../shared"],
+  // Runs the app's code (devices syncing through this server): in the app's typecheck.
+  "exclude": ["test/devices.test.ts"]
 }

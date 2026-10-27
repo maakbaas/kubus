@@ -1,4 +1,5 @@
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
+import type { Db } from "../migrations";
 import { SqliteEngine } from "./engine";
 import type { Bind, OpenResult, SqlClient, Statement } from "./protocol";
 
@@ -9,9 +10,12 @@ export class DirectSqlClient implements SqlClient {
     readonly info: OpenResult,
   ) {}
 
-  static async open(): Promise<DirectSqlClient> {
+  /** `before`: what the database holds before the app opens it (tests: an older version's, to migrate). */
+  static async open(before?: (db: Db) => void): Promise<DirectSqlClient> {
     const sqlite3 = await sqlite3InitModule();
-    const engine = new SqliteEngine(sqlite3, new sqlite3.oo1.DB(":memory:", "c"));
+    const db = new sqlite3.oo1.DB(":memory:", "c");
+    before?.(db);
+    const engine = new SqliteEngine(sqlite3, db);
     return new DirectSqlClient(engine, { persistent: false, sqliteVersion: engine.version });
   }
 

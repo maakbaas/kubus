@@ -1,21 +1,12 @@
 // @vitest-environment node
-// The Postgres connector against a real database: only when KUBUS_TEST_POSTGRES names one
-// (a superuser's connection string, e.g. postgres://postgres@localhost:5432/postgres). It makes
-// its own database and read-only user, and drops them again. The server's packages (pg) load
-// only then: CI installs the app's alone.
-import { createRequire } from "node:module";
+// The Postgres connector against a real database (KUBUS_TEST_POSTGRES: ../postgres.ts), with a
+// read-only user of its own, dropped again afterwards.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Connector, SourceConfig } from "../../../../server/src/connectors/connector.ts";
-import type { SourceFilter, SourceQuery } from "../../../../shared/sources";
+import type { Connector } from "../../src/connectors/connector.ts";
+import { PostgresConnector } from "../../src/connectors/postgres.ts";
+import { admin, ADMIN, createDatabase, dropDatabase, urlFor } from "../postgres.ts";
+import type { SourceFilter, SourceQuery } from "../../../shared/sources.ts";
 
-// What the test uses of pg (its types are the server's: not installed for the app).
-interface Pg {
-  Client: new (options: { connectionString: string }) => { connect(): Promise<void>; query(sql: string): Promise<unknown>; end(): Promise<void> };
-}
-let pg: Pg;
-let PostgresConnector: new (config: SourceConfig) => Connector;
-
-const ADMIN = process.env.KUBUS_TEST_POSTGRES;
 const DB = "kubus_source_test";
 
 const FIXTURE = `
@@ -70,38 +61,17 @@ const base = (over: Partial<SourceQuery> = {}): SourceQuery => ({
 
 describe.skipIf(!ADMIN)("Postgres connector", () => {
   let connector: Connector;
-  const admin = () => new pg.Client({ connectionString: ADMIN! });
-  const urlFor = (user: string, password: string) => {
-    const url = new URL(ADMIN!);
-    url.username = user;
-    url.password = password;
-    url.pathname = `/${DB}`;
-    return url.toString();
-  };
-
   beforeAll(async () => {
-    pg = createRequire(new URL("../../../../server/package.json", import.meta.url))("pg") as Pg;
-    ({ PostgresConnector } = await import("../../../../server/src/connectors/postgres.ts"));
-    const c = admin();
-    await c.connect();
-    await c.query(`DROP DATABASE IF EXISTS ${DB}`);
-    await c.query("DROP ROLE IF EXISTS kubus_reader");
-    await c.query(`CREATE DATABASE ${DB}`);
-    await c.end();
-    const d = new pg.Client({ connectionString: urlFor(new URL(ADMIN!).username, new URL(ADMIN!).password) });
-    await d.connect();
-    await d.query(FIXTURE);
-    await d.end();
-    connector = new PostgresConnector({ name: "TEST", url: urlFor("kubus_reader", "reader"), schemas: [], queries: true, timeoutMs: 5000 });
+    await createDatabase(DB);
+    await admin("DROP ROLE IF EXISTS kubus_reader");
+    await admin(FIXTURE, DB);
+    connector = new PostgresConnector({ name: "TEST", url: urlFor(DB, { name: "kubus_reader", password: "reader" }), schemas: [], queries: true, timeoutMs: 5000 });
   });
 
   afterAll(async () => {
     await connector?.close();
-    const c = admin();
-    await c.connect();
-    await c.query(`DROP DATABASE IF EXISTS ${DB} WITH (FORCE)`);
-    await c.query("DROP ROLE IF EXISTS kubus_reader");
-    await c.end();
+    await dropDatabase(DB);
+    await admin("DROP ROLE IF EXISTS kubus_reader");
   });
 
   it("checks its user", async () => {
@@ -225,7 +195,7 @@ describe.skipIf(!ADMIN)("Postgres connector", () => {
   });
 
   it("warns about a user that can write", async () => {
-    const writer = new PostgresConnector({ name: "W", url: urlFor(new URL(ADMIN!).username, new URL(ADMIN!).password), schemas: [], queries: false, timeoutMs: 5000 });
+    const writer = new PostgresConnector({ name: "W", url: urlFor(DB), schemas: [], queries: false, timeoutMs: 5000 });
     expect((await writer.check()).join()).toMatch(/superuser/);
     await expect(writer.describe({ query: "SELECT 1" })).rejects.toThrow(/doesn't allow queries/);
     await writer.close();
