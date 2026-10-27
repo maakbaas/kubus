@@ -4,7 +4,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize } from "node:path";
 import { createPool } from "./db.ts";
 import { broadcast, handleEvents } from "./events.ts";
-import { FILE_ID, getFile, hasFile, putFile } from "./files.ts";
+import { getFile, hasFile, putFile } from "./files.ts";
+import { FILE_ID } from "../../shared/files.ts";
 import { handleSync } from "./sync.ts";
 import { wipe } from "./wipe.ts";
 import { MAX_FILE_BYTES, type SyncRequest } from "../../shared/sync.ts";

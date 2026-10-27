@@ -200,8 +200,12 @@ CREATE TABLE IF NOT EXISTS file_bytes (
   mime           text NOT NULL,
   data           bytea NOT NULL,
   stored_at      timestamptz NOT NULL DEFAULT now(),
+  -- When the file lost its last use (or was uploaded without one); NULL while in use. Only a
+  -- candidate for deletion: see server/src/files.ts.
+  unused_since   timestamptz DEFAULT now(),
   PRIMARY KEY (id)
 );
+ALTER TABLE file_bytes ADD COLUMN IF NOT EXISTS unused_since timestamptz DEFAULT now();
 -- Servers from before file_bytes kept the bytes in files.data: moved here, then the column goes.
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.columns

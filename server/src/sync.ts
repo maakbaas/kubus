@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { sha256 } from "./files.ts";
+import { sha256, trackUses } from "./files.ts";
 import { SYNC_TABLES, type ColumnType, type DatabaseInfo, type SyncMismatch, type SyncRequest, type SyncResponse, type SyncTable, type WireRow, type WireValue } from "../../shared/sync.ts";
 
 // Server side of the sync protocol (see shared/sync.ts and CLAUDE.md, "Sync").
@@ -10,7 +10,8 @@ import { SYNC_TABLES, type ColumnType, type DatabaseInfo, type SyncMismatch, typ
 // commit order, and a cursor can never skip a row that commits late.
 // A pushed row only replaces the stored one when its updated_at is newer (last writer wins).
 
-const LOCK_ID = 7_236_001;
+/** Serializes sync requests (and the file clean-up, server/src/files.ts). */
+export const LOCK_ID = 7_236_001;
 
 const PG_TYPE: Record<ColumnType, string> = {
   text: "text", number: "double precision", int: "integer", bool: "boolean",
@@ -67,6 +68,9 @@ export async function handleSync(pool: pg.Pool, req: SyncRequest): Promise<(Sync
       return { mismatch: { error: "The server's database was wiped or replaced", database, empty: !seq.rows[0].is_called } };
     }
 
+    // Which files lose a use and which gain one, read before the rows are replaced.
+    const missingFiles = await trackUses(client, req.changes);
+
     let wrote = false;
     for (const t of SYNC_TABLES) {
       for (const row of req.changes[t.name] ?? []) {
@@ -98,7 +102,7 @@ export async function handleSync(pool: pg.Pool, req: SyncRequest): Promise<(Sync
       changes[t.name] = result.rows.map((r) => Object.fromEntries(cols.map((c) => [c, fromDb(t.columns[c], r[c])])));
     }
     await client.query("COMMIT");
-    return { cursor, changes, database, wrote };
+    return { cursor, changes, database, wrote, ...(missingFiles.length > 0 && { missingFiles }) };
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
     throw e;

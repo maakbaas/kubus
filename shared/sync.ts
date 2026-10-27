@@ -138,6 +138,11 @@ export interface SyncResponse {
   changes: WireChanges;
   /** The server's database (absent from servers older than it). */
   database?: DatabaseInfo;
+  /**
+   * Files the pushed rows use whose bytes the server doesn't have (deleted as unused meanwhile):
+   * a device that has them queues them again.
+   */
+  missingFiles?: string[];
 }
 /** The 409 answer when the device synced with another database than the server holds now. */
 export interface SyncMismatch {

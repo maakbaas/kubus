@@ -139,7 +139,7 @@ export class SqliteRepository implements Repository {
     private db: SqlClient,
     env: SyncEnvironment,
   ) {
-    this.sync = new SyncEngine(db, (...changes) => this.emit(...changes), env);
+    this.sync = new SyncEngine(db, (...changes) => this.emit(...changes), env, (fileIds) => this.releaseFiles(fileIds));
     this.subscribe(() => this.sync.localChange());
   }
 
@@ -726,6 +726,18 @@ export class SqliteRepository implements Repository {
     await this.db.write([...new Set(fileIds)].flatMap(releaseFile));
   }
 
+  /** Those of these files no live item uses (a thumbnail: whose original none uses), by the rule of releaseFile. */
+  async unusedFiles(fileIds: string[]): Promise<string[]> {
+    if (fileIds.length === 0) return [];
+    const rows = await this.db.select<{ id: string }>(
+      `SELECT value AS id FROM json_each(?1)
+        WHERE NOT ${liveUse("value")}
+          AND NOT EXISTS (SELECT 1 FROM thumbnails t WHERE t.thumb_id = value AND ${liveUse("t.file_id")})`,
+      [JSON.stringify([...new Set(fileIds)])],
+    );
+    return rows.map((r) => r.id);
+  }
+
   /** Release statements for every file referenced by the field_values matching `where`. */
   private async releaseFilesWhere(where: string, bind: string[]): Promise<Statement[]> {
     const rows = await this.db.select<{ value_file: string | null; markdown: string | null }>(
@@ -766,10 +778,10 @@ export class SqliteRepository implements Repository {
       fileId,
     ]);
     const file = rows[0];
-    if (!file) return null;
-    // Known from a sync, bytes not here yet: fetched from the server now (null offline).
-    const data = file.data ?? (await this.sync.fetchFile(fileId));
-    return data && { data, mime: file.mime };
+    if (file?.data) return { data: file.data, mime: file.mime };
+    // Known from a sync but not downloaded yet, or released here: from the server (null offline).
+    const fetched = await this.sync.fetchFile(fileId);
+    return fetched && { data: fetched.data, mime: file?.mime ?? fetched.mime };
   }
 
   async putThumbnail(fileId: string, data: Uint8Array, mime: string): Promise<void> {

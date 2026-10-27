@@ -8,6 +8,7 @@ import {
   type WireRow,
   type WireValue,
 } from "../../../../shared/sync";
+import { fileIdsIn } from "../../domain/files";
 import { observeStamp } from "../../domain/model";
 import type { DataChange, SyncConfig, SyncControl, SyncStatus } from "../repository";
 import type { SqlClient, Statement } from "../sqlite/protocol";
@@ -37,6 +38,10 @@ import type { SyncEnvironment } from "./environment";
 //    (other rows don't wait: nothing refers to a file by foreign key). Rows from the server come
 //    without bytes (files.data NULL); after each sync they are downloaded in the background, all
 //    of them or, with `originals: "opened"`, only thumbnails (an original then when it is shown).
+//  * Files a sync stops using (another device replaced an image, deleted an item, …) are released
+//    as a local edit would, so every device cleans up the same files. The server deletes unused
+//    files itself, a week later (server/src/files.ts); if a pushed row uses one it no longer has,
+//    it says so (`missingFiles`) and a device that has the bytes uploads them again.
 
 const STORAGE_KEY = "kubus.sync";
 const SERVER_KEY = "kubus.syncServer";
@@ -99,6 +104,20 @@ export function applyStatement(t: SyncTable, row: WireRow): Statement {
 const rememberDatabase = (id: string | undefined): Statement[] =>
   id ? [{ sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_database', ?1)", bind: [id] }] : [];
 
+/** Queues files (with their thumbnails) for upload again: the server lost them, this device has their bytes. */
+const requeueFiles = (ids: string[]): Statement[] =>
+  ids.length === 0
+    ? []
+    : [
+        {
+          sql: `INSERT INTO sync_outbox (tbl, pk)
+                  SELECT 'files', id FROM files WHERE data IS NOT NULL
+                     AND (id IN (SELECT value FROM json_each(?1)) OR id IN (SELECT thumb_id FROM thumbnails WHERE file_id IN (SELECT value FROM json_each(?1))))`,
+          bind: [JSON.stringify(ids)],
+        },
+        { sql: "INSERT INTO sync_outbox (tbl, pk) SELECT 'thumbnails', file_id FROM thumbnails WHERE file_id IN (SELECT value FROM json_each(?1))", bind: [JSON.stringify(ids)] },
+      ];
+
 export const keyOf = (t: SyncTable) => (t.key.length > 1 ? `json_array(${t.key.join(", ")})` : t.key[0]);
 
 export class SyncEngine implements SyncControl {
@@ -118,6 +137,8 @@ export class SyncEngine implements SyncControl {
     private db: SqlClient,
     private emit: (...changes: DataChange[]) => void,
     private env: SyncEnvironment,
+    /** Deletes those of these files no live item uses (Repository.releaseFiles). */
+    private releaseFiles: (fileIds: string[]) => Promise<void> = async () => {},
   ) {
     this.config = loadConfig(env);
     this.status = { state: "off", lastSync: null, error: null, replaced: loadReplaced(env) };
@@ -292,7 +313,8 @@ export class SyncEngine implements SyncControl {
     if (outgoing.files) outgoing.files = outgoing.files.filter((r) => !held.has(String(r.id)));
     const request: SyncRequest = { since, changes: outgoing, ...(database && { database }) };
 
-    const { cursor, changes, database: current } = await this.post(request);
+    const { cursor, changes, database: current, missingFiles = [] } = await this.post(request);
+    const freed = await this.filesUsedBefore(changes);
 
     const statements: Statement[] = [
       { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_applying', '1')" },
@@ -305,12 +327,38 @@ export class SyncEngine implements SyncControl {
       { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_cursor', ?1)", bind: [String(cursor)] },
       { sql: "DELETE FROM meta WHERE key = 'sync_applying'" },
       ...rememberDatabase(current?.id),
+      ...requeueFiles(missingFiles),
     );
     await this.db.write(statements);
+    if (freed.length > 0) await this.releaseFiles(freed);
 
     await this.announce(changes);
-    // More to upload, and uploading works: go on right away.
-    if (waiting.length > 0 && uploaded > 0) this.again = true;
+    // More to upload, and uploading works (or files to upload again): go on right away.
+    if ((waiting.length > 0 && uploaded > 0) || missingFiles.length > 0) this.again = true;
+  }
+
+  /**
+   * The files this device's rows use that incoming rows may stop using: the values they replace,
+   * and the values of the items and fields they delete. Read before they are applied.
+   */
+  private async filesUsedBefore(changes: WireChanges): Promise<string[]> {
+    const values = (changes.field_values ?? []).map((r) => [r.item_id, r.field_id]);
+    const items = (changes.items ?? []).filter((r) => r.deleted_at !== null).map((r) => r.id);
+    const fields = (changes.fields ?? []).filter((r) => r.deleted_at !== null).map((r) => r.id);
+    if (values.length + items.length + fields.length === 0) return [];
+    const rows = await this.db.select<{ value_file: string | null; value_text: string | null }>(
+      `SELECT value_file, value_text FROM field_values
+        WHERE (value_file IS NOT NULL OR value_text LIKE '%files/%')
+          AND ((item_id, field_id) IN (SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?1))
+               OR item_id IN (SELECT value FROM json_each(?2)) OR field_id IN (SELECT value FROM json_each(?3)))`,
+      [JSON.stringify(values), JSON.stringify(items), JSON.stringify(fields)],
+    );
+    const ids = new Set<string>();
+    for (const r of rows) {
+      if (r.value_file) ids.add(r.value_file);
+      if (r.value_text) fileIdsIn(r.value_text).forEach((id) => ids.add(id));
+    }
+    return [...ids];
   }
 
   /**
@@ -366,10 +414,12 @@ export class SyncEngine implements SyncControl {
   }
 
   /**
-   * A file's bytes from the server (null when it hasn't got them or can't be reached), kept on
-   * this device unless it keeps no bytes.
+   * A file from the server (null when it hasn't got it or can't be reached), kept on this device
+   * unless it keeps no bytes. Also a file this device no longer lists (released when an edit
+   * removed its last use, which an undo or a paste then put back): the server keeps unused files
+   * for a week.
    */
-  async fetchFile(id: string): Promise<Uint8Array | null> {
+  async fetchFile(id: string): Promise<{ data: Uint8Array; mime: string } | null> {
     if (!this.active) return null;
     let response: Response;
     try {
@@ -377,10 +427,21 @@ export class SyncEngine implements SyncControl {
     } catch {
       return null;
     }
+    // Deleted on the server as unused: gone here too, unless something here still uses it.
+    if (response.status === 404) await this.releaseFiles([id]);
     if (!response.ok) return null;
     const data = new Uint8Array(await response.arrayBuffer());
-    if (this.env.keepFiles) await this.db.write([{ sql: "UPDATE files SET data = ?1 WHERE id = ?2 AND data IS NULL", bind: [data, id] }]);
-    return data;
+    const mime = response.headers.get("Content-Type") ?? "application/octet-stream";
+    if (this.env.keepFiles) {
+      await this.db.write([
+        {
+          sql: `INSERT INTO files (id, mime, size, data, created_at) VALUES (?1, ?2, ?3, ?4, ?5)
+                ON CONFLICT (id) DO UPDATE SET data = excluded.data WHERE files.data IS NULL`,
+          bind: [id, mime, data.byteLength, data, new Date().toISOString()],
+        },
+      ]);
+    }
+    return { data, mime };
   }
 
   /** Downloads the bytes this device lacks (see the top of this file), a few at a time. */

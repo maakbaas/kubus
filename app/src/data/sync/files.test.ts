@@ -32,6 +32,10 @@ const localBytes = async (repo: Awaited<ReturnType<typeof device>>, id: string) 
     [id],
   ))[0]?.data ?? null;
 
+/** Whether the device has a row for the file (with or without its bytes). */
+const listed = async (repo: Awaited<ReturnType<typeof device>>, id: string) =>
+  (await (repo as unknown as { db: { select<T>(sql: string, bind: unknown[]): Promise<T[]> } }).db.select("SELECT 1 FROM files WHERE id = ?1", [id])).length > 0;
+
 describe("files and sync", () => {
   it("uploads a file's bytes before its row, and not inside /api/sync", async () => {
     const a = await device();
@@ -134,5 +138,77 @@ describe("thumbnails", () => {
       "SELECT (SELECT count(*) FROM thumbnails) + (SELECT count(*) FROM files) AS n",
     );
     expect(thumbs[0].n).toBe(0);
+  });
+});
+
+describe("cleaning up unused files", () => {
+  it("releases files on other devices once a sync removes their last use", async () => {
+    const a = await device();
+    const id = await photo(a, "ten");
+    await a.putThumbnail(id, bytes("10"), "image/webp");
+    await settled(a);
+    const b = await device();
+    expect(await localBytes(b, id)).toEqual(bytes("ten"));
+
+    const collection = (await a.listCollections()).find((c) => c.name === "Photo")!;
+    const [item] = await a.listItems(collection, "default");
+    await a.deleteItem(item.id);
+    await settled(a);
+    await settled(b);
+    expect(await listed(b, id)).toBe(false);
+    expect(await b.unusedFiles([id])).toEqual([id]);
+  });
+
+  it("keeps a file another item here still uses", async () => {
+    const a = await device();
+    const id = await photo(a, "eleven");
+    await settled(a);
+    const b = await device();
+    await photo(b, "eleven"); // the same image in a second item, on b only for now
+    const collection = (await a.listCollections()).find((c) => c.name === "Photo")!;
+    const [first] = await a.listItems(collection, "default");
+    await a.deleteItem(first.id);
+    await settled(a);
+    await settled(b);
+    expect((await b.getFile(id))?.data).toEqual(bytes("eleven"));
+  });
+
+  it("uploads a file again when the server says it lacks it", async () => {
+    const a = await device();
+    const id = await photo(a, "twelve");
+    await settled(a);
+    server.files.delete(id); // deleted as unused (say, a week after the item using it was)
+    let told = false;
+    server.extra = (request) => {
+      if (told || !(request.changes.field_values ?? []).some((r) => r.value_file === id)) return {};
+      told = true;
+      return { missingFiles: [id] };
+    };
+    await photo(a, "twelve"); // used again, by a new item
+    await settled(a);
+    expect(told).toBe(true);
+    expect(server.files.get(id)?.data).toEqual(bytes("twelve"));
+  });
+
+  it("gets a file it released back from the server when an edit uses it again", async () => {
+    const a = await device();
+    const id = await photo(a, "twelve and a half");
+    await settled(a);
+    const collection = (await a.listCollections()).find((c) => c.name === "Photo")!;
+    const [item] = await a.listItems(collection, "default");
+    await a.updateItem(collection, item.id, { [collection.fields[1].id]: "" });
+    expect(await localBytes(a, id)).toBeNull(); // released here
+    await a.updateItem(collection, item.id, { [collection.fields[1].id]: id }); // undone
+    expect((await a.getFile(id))?.data).toEqual(bytes("twelve and a half"));
+    expect(await localBytes(a, id)).toEqual(bytes("twelve and a half"));
+  });
+
+  it("finds a file unused when no live item uses it, and a thumbnail through its original", async () => {
+    const a = await device({ connect: false });
+    const id = await photo(a, "thirteen");
+    await a.putThumbnail(id, bytes("13"), "image/webp");
+    const thumb = (await a.getFile(id, { small: true }))!;
+    expect(thumb.small).toBe(true);
+    expect(await a.unusedFiles([id])).toEqual([]);
   });
 });
