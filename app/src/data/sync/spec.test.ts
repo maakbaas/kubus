@@ -4,7 +4,7 @@ import { SYNC_TABLES } from "../../../../shared/sync";
 
 const LOCAL_ONLY = ["meta", "sync_outbox", "file_uses"];
 /** Columns of synced tables that stay on the device. */
-const LOCAL_COLUMNS: Record<string, string[]> = { files: ["data"] };
+const LOCAL_COLUMNS: Record<string, string[]> = { files: ["data", "unused_since"] };
 
 /** Column names of every CREATE TABLE in an SQL file. */
 function columnsByTable(sql: string): Map<string, string[]> {

@@ -432,11 +432,7 @@ export const cardsView = defineBlockType<CardOptions>({
     const o = (raw ?? {}) as Partial<CardOptions>;
     const ids = new Set(pickableFields(collection).map((f) => f.id));
     return {
-      coverFieldId: (() => {
-        // Stored views from before the rename call it imageFieldId.
-        const id = o.coverFieldId ?? (o as { imageFieldId?: string | null }).imageFieldId;
-        return id && ids.has(id) ? id : null;
-      })(),
+      coverFieldId: o.coverFieldId && ids.has(o.coverFieldId) ? o.coverFieldId : null,
       cardWidth:
         typeof o.cardWidth === "number"
           ? Math.min(CARD_WIDTH.max, Math.max(CARD_WIDTH.min, Math.round(o.cardWidth)))

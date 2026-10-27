@@ -1,5 +1,4 @@
 import { fieldKinds } from "../../domain/fieldKinds";
-import { fileInUse } from "../../../../shared/files";
 import {
   newId,
   now,
@@ -140,7 +139,10 @@ export class SqliteRepository implements Repository {
     private db: SqlClient,
     env: SyncEnvironment,
   ) {
-    this.sync = new SyncEngine(db, (...changes) => this.emit(...changes), env, (fileIds) => this.releaseFiles(fileIds));
+    this.sync = new SyncEngine(db, (...changes) => this.emit(...changes), env, {
+      release: (fileIds) => this.releaseFiles(fileIds),
+      sweep: () => this.sweepFiles(),
+    });
     this.subscribe(() => this.sync.localChange());
   }
 
@@ -174,7 +176,9 @@ export class SqliteRepository implements Repository {
   static async open(db: SqlClient, env: SyncEnvironment): Promise<SqliteRepository> {
     // Stable identity of this replica, needed once sync exists.
     await db.write([{ sql: "INSERT OR IGNORE INTO meta (key, value) VALUES ('replica_id', ?1)", bind: [newId()] }]);
-    return new SqliteRepository(db, env);
+    const repo = new SqliteRepository(db, env);
+    void repo.sweepFiles().catch((e) => console.warn("File clean-up failed", e)); // also on devices that don't sync
+    return repo;
   }
 
   get storage() {
@@ -749,6 +753,22 @@ export class SqliteRepository implements Repository {
     return rows.map((r) => r.id);
   }
 
+  /**
+   * Deletes the files no live item has used for FILE_GRACE_MS (`before`: marked before then), with
+   * their thumbnails, and the server's copies (SyncEngine.deleteFromServer); a marked one used
+   * again only loses its mark. Runs when the app opens and after each sync.
+   */
+  async sweepFiles(before = new Date(Date.now() - FILE_GRACE_MS).toISOString()): Promise<void> {
+    await this.db.write([{ sql: `UPDATE files SET unused_since = NULL WHERE unused_since < ?1 AND ${fileInUse("files.id")}`, bind: [before] }]);
+    const expired = (await this.db.select<{ id: string }>("SELECT id FROM files WHERE unused_since < ?1", [before])).map((r) => r.id);
+    if (expired.length === 0) return;
+    const gone = JSON.stringify(await this.sync.deleteFromServer(expired));
+    await this.db.write([
+      { sql: `DELETE FROM thumbnails WHERE file_id IN (SELECT value FROM json_each(?1)) AND NOT ${fileInUse("file_id")}`, bind: [gone] },
+      { sql: `DELETE FROM files WHERE id IN (SELECT value FROM json_each(?1)) AND NOT ${fileInUse("files.id")}`, bind: [gone] },
+    ]);
+  }
+
   /** Release statements for every file the uses matching `where` (on item_id, field_id) name: run after the writes that end them. */
   private async releaseFilesWhere(where: string, bind: string[]): Promise<Statement[]> {
     const rows = await this.db.select<{ file_id: string }>(`SELECT DISTINCT file_id FROM file_uses WHERE ${where}`, bind);
@@ -832,14 +852,31 @@ export class SqliteRepository implements Repository {
 }
 
 /**
- * Deletes a file, with its thumbnail, once no live item uses it. Runs after the statements that
- * drop the use, in the same transaction.
+ * Whether the file `id` (an SQL expression) is in use: a live item uses it through a live field
+ * (file_uses), or it is the thumbnail of such a file.
+ */
+const fileInUse = (id: string) => {
+  const used = (file: string) => `EXISTS (SELECT 1 FROM file_uses u
+      JOIN items o ON o.id = u.item_id AND o.deleted_at IS NULL
+      JOIN fields f ON f.id = u.field_id AND f.deleted_at IS NULL
+     WHERE u.file_id = ${file})`;
+  return `(${used(id)} OR EXISTS (SELECT 1 FROM thumbnails t WHERE t.thumb_id = ${id} AND ${used("t.file_id")}))`;
+};
+
+/** How long a file no live item uses is kept: an undo or a paste may bring it back, other devices sync late. */
+const FILE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Marks a file (with its thumbnail) unused once no live item uses it; sweepFiles deletes it after
+ * FILE_GRACE_MS. Runs after the statements that drop the use, in the same transaction.
  */
 function releaseFile(fileId: string): Statement[] {
   return [
-    { sql: `DELETE FROM files WHERE id IN (SELECT thumb_id FROM thumbnails WHERE file_id = ?1) AND NOT ${fileInUse("files.id")}`, bind: [fileId] },
-    { sql: `DELETE FROM thumbnails WHERE file_id = ?1 AND NOT ${fileInUse("?1")}`, bind: [fileId] },
-    { sql: `DELETE FROM files WHERE id = ?1 AND NOT ${fileInUse("?1")}`, bind: [fileId] },
+    {
+      sql: `UPDATE files SET unused_since = ?2
+             WHERE (id = ?1 OR id IN (SELECT thumb_id FROM thumbnails WHERE file_id = ?1)) AND NOT ${fileInUse("files.id")}`,
+      bind: [fileId, now()],
+    },
   ];
 }
 

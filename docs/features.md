@@ -130,7 +130,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   device: "The server's" (the default for a device without its own: the sync server's `KUBUS_AI_*` variables, asked
   for at `GET /api/ai` and called through the server's proxy `/api/ai/chat/completions` and `/api/ai/models` with the
   sync token, so its key stays on the server: `server/src/ai.ts`, `AiService.providerOf`), or "My own": the address of an OpenAI-style API (any provider: OpenAI, OpenRouter, Ollama, LM Studio, …; nothing is preset), the key and two models, each a combo box over the provider's `/models` (any name can be typed): one for AI fields (runs for every value: fast and cheap) and one for writing components (a stronger one; empty = the field model). `AiService.client("field" | "code")` picks it. Stored per device
-  (`kubus.ai` in localStorage), never synced. A device from before keeps its own when it has an address. The sync status icon (tab strip, top right) only shows the state; its
+  (`kubus.ai` in localStorage), never synced. The sync status icon (tab strip, top right) only shows the state; its
   popover tells more and has "Configure sync".
 - **Help** (`#/help`, `pages/HelpPage.tsx`, above Settings in the side nav): tabs along the top like Settings
   (`?section=components|api`), each shown exactly like an item page (one Markdown field with its name hidden; it
@@ -241,10 +241,6 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
 - **Responsive UI** built strictly with the Carbon Design System (`@carbon/react`): use Carbon
   components for every control (DatePicker/TimePicker, NumberInput, ComboBox, …), never native
   inputs or hand-rolled widgets.
-- **Pre-alpha, but data is kept where possible.** No migration scripts: when `app/src/data/schema.sql`
-  changes, simple changes (new tables, indexes, nullable or defaulted columns; removed plain
-  columns; changed CHECKs, e.g. a new field kind: the table is rebuilt with its rows) are applied
-  in place and the data is kept; anything else (retyped columns, new NOT NULL columns without
-  default) still wipes the local database; tables schema.sql no longer has are dropped. Prefer such
-  simple schema changes. For big breaking changes the user starts from a fresh database (no
-  compatibility code; the 2026-10 rename to collections / items / components was done that way).
+- **Pre-alpha: no migrations.** When `app/src/data/schema.sql` changes, the local database is
+  made afresh (a synced device downloads everything again); the server's database is wiped by hand
+  (Settings → Sync). No compatibility code for old data, old apps or old servers.

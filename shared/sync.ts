@@ -127,7 +127,7 @@ export interface SyncRequest {
   /** Rows changed on the device since its last successful sync. */
   changes: WireChanges;
   /**
-   * The id of the server database this device synced with (absent: none yet, or an older app).
+   * The id of the server database this device synced with (absent: none yet).
    * Another one there: nothing is written and the server answers 409 with a `SyncMismatch`.
    */
   database?: string;
@@ -140,8 +140,8 @@ export interface SyncResponse {
    * has those already (its own changes), and `cursor` covers them.
    */
   changes: WireChanges;
-  /** The server's database (absent from servers older than it). */
-  database?: DatabaseInfo;
+  /** The server's database. */
+  database: DatabaseInfo;
   /**
    * Files the pushed rows use whose bytes the server doesn't have (deleted as unused meanwhile):
    * a device that has them queues them again.

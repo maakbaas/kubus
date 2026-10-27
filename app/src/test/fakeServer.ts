@@ -86,6 +86,10 @@ export class FakeServer {
       const id = file[1];
       const failure = this.failures.get(`${method} ${id}`);
       if (failure) return Response.json({ error: "failed" }, { status: failure });
+      if (method === "DELETE") {
+        this.files.delete(id);
+        return Response.json({ ok: true });
+      }
       if (method === "PUT") {
         const data = new Uint8Array(init.body as Uint8Array);
         if (createHash("sha256").update(data).digest("hex") !== id) return Response.json({ error: "mismatch" }, { status: 400 });

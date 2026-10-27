@@ -23,8 +23,6 @@ export function AppRoutes() {
       <Route path="/bookmarks" element={<BookmarksPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/help" element={<HelpPage />} />
-      {/* Sync's page from before the settings (tabs restored from then). */}
-      <Route path="/sync" element={<Navigate to="/settings?section=sync" replace />} />
       <Route path="/spaces" element={<SpacesPage />} />
       <Route path="/components" element={<ComponentsPage />} />
       <Route path="/components/new" element={<ComponentEditorPage />} />

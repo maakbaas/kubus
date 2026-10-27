@@ -66,11 +66,9 @@ export type AiPurpose = "field" | "code";
 
 const DEFAULT_CONFIG: AiConfig = { source: "server", baseUrl: DEFAULT_LLM_SETTINGS.baseUrl, apiKey: "", fieldModel: "", codeModel: "", paused: false };
 
-/** The stored settings; from before `source` existed, a device with its own address keeps it. */
+/** The stored settings. */
 function loadConfig(): AiConfig {
-  const saved = readPref<Partial<AiConfig>>(SETTINGS_KEY, {});
-  const source = saved.source === "server" || saved.source === "own" ? saved.source : saved.baseUrl?.trim() ? "own" : "server";
-  return { ...DEFAULT_CONFIG, ...saved, source };
+  return { ...DEFAULT_CONFIG, ...readPref<Partial<AiConfig>>(SETTINGS_KEY, {}) };
 }
 
 /** Where requests go and which models they ask for (the server's or the device's own). */
@@ -191,7 +189,6 @@ export class AiService {
     fetch(`${url}/api/ai`, { headers: { Authorization: `Bearer ${token}` } })
       .then(async (res) => {
         if (target !== this.offerFor) return;
-        if (res.status === 404) return this.setOffer({ ai: null, problem: "The server is older than this app: it offers no language model." });
         if (!res.ok) return this.setOffer({ ai: null, problem: `The server answered ${res.status}.` });
         const ai = (await res.json()) as ServerAi;
         this.setOffer({ ai, problem: ai.available ? null : "The server offers no language model: set KUBUS_AI_URL and KUBUS_AI_FIELD_MODEL there." });

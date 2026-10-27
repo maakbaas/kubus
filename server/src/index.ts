@@ -5,7 +5,7 @@ import { extname, join, normalize } from "node:path";
 import { createPool } from "./db.ts";
 import { broadcast, handleEvents, latestCursor } from "./events.ts";
 import { aiInfo, aiProxy } from "./ai.ts";
-import { fillFileUses, getFile, hasFile, putFile } from "./files.ts";
+import { deleteFile, getFile, hasFile, putFile } from "./files.ts";
 import { HeadlessHost } from "./headless.ts";
 import { FILE_ID } from "../../shared/files.ts";
 import { loadSchema } from "./schema.ts";
@@ -21,7 +21,6 @@ import { HttpError, json, readJson, Router, type ApiRequest, type ApiResponse } 
 //   PORT          default 8080                      STATIC_DIR   built web app, default ../../app/dist
 //   KUBUS_WEBHOOK_URL     URL(s), comma-separated, called with every change (docs/sync.md)
 //   KUBUS_WEBHOOK_SECRET  signs each webhook request (X-Kubus-Signature)
-//   KUBUS_UNUSED_FILE_DAYS  how long a file no item uses is kept, default 7
 //   KUBUS_AI_URL, KUBUS_AI_KEY, KUBUS_AI_FIELD_MODEL, KUBUS_AI_CODE_MODEL  a language model for
 //                         every device, through this server (server/src/ai.ts)
 
@@ -33,9 +32,7 @@ if (!databaseUrl || !token) {
 }
 const port = Number(process.env.PORT ?? 8080);
 const staticDir = process.env.STATIC_DIR ?? join(import.meta.dirname, "../../app/dist");
-/** How long a file no item uses is kept before it is deleted. */
-const unusedFileDays = Number(process.env.KUBUS_UNUSED_FILE_DAYS ?? 7);
-/** A sync request's largest body (an app from before /api/files sends files' bytes in it). */
+/** A sync request's largest body (a first upload sends every row at once). */
 const MAX_SYNC_BODY = 100 * 1024 * 1024;
 
 const pool = createPool(databaseUrl);
@@ -45,7 +42,6 @@ const schemaSql = await loadSchema();
 let schemaError: string | null = null;
 try {
   await pool.query(schemaSql);
-  await fillFileUses(pool);
   broadcast(await currentCursor(pool)); // nobody listens yet: what the stored data is up to
 } catch (e) {
   schemaError = `The server's database doesn't fit its schema: ${e instanceof Error ? e.message : String(e)}`;
@@ -97,7 +93,7 @@ const routes = new Router()
     fitting();
     const request = await readJson(req, MAX_SYNC_BODY);
     if (!request || typeof request !== "object") throw new HttpError(400, "Send a sync request");
-    const result = await handleSync(pool, request as SyncRequest, { unusedFileDays });
+    const result = await handleSync(pool, request as SyncRequest);
     if ("mismatch" in result) return json(409, result.mismatch);
     const { wrote, ...response } = result;
     if (wrote) broadcast(response.cursor);
@@ -123,6 +119,11 @@ const routes = new Router()
     const mime = req.headers["content-type"] || "application/octet-stream";
     const data = Buffer.from(await req.body(MAX_FILE_BYTES));
     if (!(await putFile(pool, id, mime, data))) return json(400, { error: "The bytes don't match the file's id (SHA-256)" });
+    return json(200, { ok: true });
+  })
+  .add("DELETE", "/api/files/{id}", async (_req, params) => {
+    fitting();
+    await deleteFile(pool, fileId(params));
     return json(200, { ok: true });
   });
 

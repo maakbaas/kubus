@@ -134,14 +134,13 @@ export const collectionDraft = ({ id, name, pluralName, icon, description, space
   fields: fields.map(({ collectionId: _collectionId, position: _position, ...field }) => field),
 });
 
-/** A component field's stored variable mapping (JSON): field ids (older form) or ComponentArgs. */
+/** A component field's stored variable mapping (JSON): ComponentArgs. */
 export function parseComponentArgs(json: string | null): Record<string, ComponentArg> {
   if (!json) return {};
   try {
     const out: Record<string, ComponentArg> = {};
     for (const [k, v] of Object.entries(JSON.parse(json) as Record<string, unknown>)) {
-      if (typeof v === "string") out[k] = { field: v };
-      else if (v && typeof v === "object" && "field" in v && typeof v.field === "string") out[k] = { field: v.field };
+      if (v && typeof v === "object" && "field" in v && typeof v.field === "string") out[k] = { field: v.field };
       else if (v && typeof v === "object" && "value" in v && typeof v.value === "string") out[k] = { value: v.value };
     }
     return out;

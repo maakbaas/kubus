@@ -1,9 +1,8 @@
 -- Kubus database schema.
 --
--- PRE-ALPHA: there are no migrations. When this file changes, the worker detects
--- it (hash stored in PRAGMA user_version) and upgrades the local database in place
--- (new tables, columns, indexes, changed CHECKs); only an incompatible change
--- recreates it from scratch, deleting all local data.
+-- PRE-ALPHA: there are no migrations. When this file changes, the worker detects it (hash
+-- stored in PRAGMA user_version) and creates the database afresh (local data is gone; a synced
+-- device downloads it again).
 --
 -- Sync-readiness conventions (see CLAUDE.md):
 --  * primary keys are client-generated UUIDs, never autoincrement
@@ -121,16 +120,19 @@ CREATE TABLE items (
 CREATE INDEX idx_items_collection ON items(collection_id);
 
 -- Binary content (images), content-addressed: id = SHA-256 of data, rows are immutable.
--- A file is deleted once no live item uses it (releaseFile in SqliteRepository.ts).
--- `data` is local only (not a synced column): NULL means this device knows the file from a sync
--- but hasn't downloaded its bytes yet (the sync engine fetches them; see docs/sync.md).
+-- `data` and `unused_since` are local only (not synced columns). `data` NULL: this device knows
+-- the file from a sync but hasn't downloaded its bytes yet (the sync engine fetches them; see
+-- docs/sync.md). `unused_since`: when no live item used it any more (releaseFile in
+-- SqliteRepository.ts); deleted a week later, here and on the server (sweepFiles).
 CREATE TABLE files (
-  id         TEXT PRIMARY KEY,
-  mime       TEXT NOT NULL,
-  size       INTEGER NOT NULL,
-  data       BLOB,
-  created_at TEXT NOT NULL
+  id           TEXT PRIMARY KEY,
+  mime         TEXT NOT NULL,
+  size         INTEGER NOT NULL,
+  data         BLOB,
+  created_at   TEXT NOT NULL,
+  unused_since TEXT
 );
+CREATE INDEX idx_files_unused ON files(unused_since) WHERE unused_since IS NOT NULL;
 
 -- A small version of an image file (shortest side 512 px), shown in table cells and cards; both
 -- are `files` rows. Insert only, like files: the first link a server receives stays (another
@@ -164,7 +166,7 @@ CREATE INDEX idx_field_values_ref ON field_values(value_ref);
 -- Where each file is used: a row per file a value names (an image value, `files/<id>` in its
 -- text). Local only and derived: the triggers keep it with every value written or applied from a
 -- sync, through file_ids() (the engine defines it: shared/files.ts filesUsedBy). Whether a file is
--- in use (shared/files.ts fileInUse) is a lookup here, not a scan of the values.
+-- in use (fileInUse in SqliteRepository.ts) is a lookup here, not a scan of the values.
 CREATE TABLE file_uses (
   file_id  TEXT NOT NULL,
   item_id  TEXT NOT NULL,

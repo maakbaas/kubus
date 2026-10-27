@@ -34,8 +34,7 @@ vision wants server-side queries and remote sources later.
   `SYNC_TABLES` and appended to `schema.sql` by `data/schema.ts`; insert only for `version: null`)
   queue the row's key in `sync_outbox` (local only), in the same transaction as the change; so no
   repository method knows about sync. Rows the engine applies from the server are not queued
-  (`meta` row `sync_applying` is set during the apply). `engine.ts` `upgradeInPlace` also
-  (re)creates triggers. A new synced table or column goes in `schema.sql` and `shared/sync.ts`
+  (`meta` row `sync_applying` is set during the apply). A new synced table or column goes in `schema.sql` and `shared/sync.ts`
   (`sync/spec.test.ts` fails until they agree); the triggers and the server's tables follow.
 - *One request does push and pull*: `POST /api/sync { since, changes }` returns `{ cursor, changes }`
   (rows with server `seq` > since, but not the ones this request wrote: the device has them, and the
@@ -61,8 +60,7 @@ vision wants server-side queries and remote sources later.
   pauses, keeping URL and token, and forgets the server; `SyncStatus.replaced` (kept in
   `kubus.syncReplaced` across reloads) turns the sync icon red, and its popover and the sync settings
   (`ui/ServerReplaced.tsx`) offer connecting again (`reconnect`): a first connection to the new
-  database (download, after a confirmation; or upload when it is empty). A device or server from
-  before ids skips the check (no id sent or none to compare). Not caught: tables emptied by hand
+  database (download, after a confirmation; or upload when it is empty). Not caught: tables emptied by hand
   (the id stays) and a restored backup (same id, older data: devices ahead of the server pull
   everything again); delete the `server_meta` rows after such a restore to make it count as new.
 - *When*: 2 s after a local write (a sync starting meanwhile takes it along and cancels that), every
@@ -97,36 +95,32 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
 - *Download*: after each sync, in the background, three at a time (`downloadFiles`): thumbnails first,
   then originals; with the Sync setting "Download images: Full size when opened" (`SyncConfig.originals`
   = "opened") only thumbnails, an original then when `getFile` is first asked for it (and kept).
-  `getFile` fetches missing bytes from the server, also for a file this device released (an undo or a
-  paste put its use back: the server keeps unused files a week).
+  `getFile` fetches missing bytes from the server. Files marked unused aren't downloaded.
 - *Thumbnails* (`ui/thumbnails.ts`, `Repository.putThumbnail`): a copy with its shortest side 512 px
   (longest at most 2048), WebP, else JPEG or PNG, made in the browser when an image is stored or the
-  first time one without a thumbnail is shown small (images from before, or from the API: Node can't
-  draw). Not for images already small (≤ 512 px or ≤ 100 KB), SVG or GIF. Stored as an ordinary file
+  first time one without a thumbnail is shown small (an image from the API: Node can't draw). Not for images already small (≤ 512 px or ≤ 100 KB), SVG or GIF. Stored as an ordinary file
   plus a row of the synced, insert-only `thumbnails` table (`file_id` → `thumb_id`; the first link the
   server gets stays, another device's own is as good). Used only by table cells, cards and compact
   component images (`useFileUrl(id, true)`); item pages, Markdown and the Lightbox (`data-file`) show
   the original. Released with the original.
-- *On the server* the bytes are `file_bytes` (id, mime, data, stored_at, unused_since), out of the sync
-  tables (`server/src/files.ts`). Servers from before kept them in `files.data`: moved at start, then
-  the column is dropped. An app from before that still pushes bytes in a row (base64) gets them stored.
-  `GET /api/files/<id>` sends them with a year-long private cache. Wiping drops them with every table.
-- *Clean-up*. One rule, the same on both sides: a value uses the files it names (an image value,
-  `files/<id>` in its text: `filesUsedBy` in `shared/files.ts`), kept in a `file_uses` table (file,
-  item, field); a file is in use when a live item, through a live field, uses it, a thumbnail through
-  its original (`fileInUse`, one SQL text for SQLite and Postgres). Devices: triggers on
-  `field_values` keep `file_uses` (through the `file_ids()` function the engine defines; filled from
-  the values when the table is new, `FILLS` in `engine.ts`); a local edit releases at once
-  (`releaseFile`, same transaction), and a sync releases the files its incoming rows stop using
-  (`filesUsedBefore`, read before the apply). Nothing about it is synced: every device reaches the
-  same answer from the same rows. Server, inside each sync request (no timer): `trackUses` keeps
-  `file_uses` for the values the request wrote and marks (`unused_since`) or unmarks the files whose
-  uses it changed (replaced values, deleted or restored items and fields); an upload starts marked;
-  `sweepFiles` deletes the files marked longer than `KUBUS_UNUSED_FILE_DAYS` (7) and still unused
-  (bytes, row, thumbnail link), and unmarks the used ones (a thumbnail or file uploaded after its
-  use). Both are a lookup through indexes, near free when nothing changed. The grace period covers
-  late and out-of-order syncs, an offline edit, an undo on a device that already released the file
-  (it fetches it again). When pushed rows use a file the server no longer
+- *On the server* the bytes are `file_bytes` (id, mime, data, stored_at), out of the sync tables
+  (`server/src/files.ts`). `GET /api/files/<id>` sends them with a year-long private cache;
+  `DELETE /api/files/<id>` drops them. Wiping drops them with every table. The server decides
+  nothing about files: it stores, serves and deletes when a device says so.
+- *Clean-up*, by the devices only. A value uses the files it names (an image value, `files/<id>` in
+  its text, any field: `filesUsedBy` in `shared/files.ts`); triggers on `field_values` keep that in
+  the local `file_uses` table (through the `file_ids()` function the engine defines). A file is in
+  use when a live item, through a live field, uses it, a thumbnail through its original (`fileInUse`
+  in `SqliteRepository.ts`). When an edit or a sync drops a file's last use, it is marked
+  (`files.unused_since`, local only; `releaseFile`, same transaction; for a sync `filesUsedBefore`,
+  read before the apply). `sweepFiles`, when the app opens and after each sync, unmarks the marked
+  files used again and deletes those marked more than a week ago (`FILE_GRACE_MS`), with their
+  thumbnail: first on the server (`SyncEngine.deleteFromServer`; one that fails stays for the next
+  sweep), then here. A device that doesn't sync deletes only its own; the server's headless device
+  (it keeps no files) never deletes the server's. Every synced device reaches the same answer from
+  the same rows; the first to sweep deletes the server's copy, the others find it gone. The week
+  covers a cut and paste across a save, late and out-of-order syncs, an offline edit. When pushed
+  rows use a file the server no longer
   has, the answer lists it (`missingFiles`) and a device with the bytes queues it again.
 
 ## The server's language model
@@ -186,8 +180,9 @@ tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 - Last writer wins per field; concurrent offline edits to the *same markdown field* lose one side
   (upgrade path: a text CRDT such as Yjs for markdown). Equal timestamps on two devices don't converge.
 - A pull is not paged. Webhooks are best effort (lost on a restart). A device never frees space by
-  dropping originals it has. A file unused for a week and then used again by a device that only had
-  its metadata is lost (shown as missing).
+  dropping originals it has. A file unused for a week (on the device that sweeps first) and then used
+  again by a device that only had its metadata is lost (shown as missing). A device that sweeps
+  while sync is off keeps the server's copy (another device's sweep deletes it).
 - One user, one token (the API too; it can also run component code on the server). A device that is not synced can lose its data on a schema wipe; with the
   server the replica re-syncs, so enable sync before putting real notes in. Connecting a device that
   has data of its own to a server that has data too discards the device's data (no merge).

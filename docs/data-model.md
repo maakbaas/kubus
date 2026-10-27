@@ -40,14 +40,10 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   re-rendering; keep new actions delegating the same way.
 - **Domain model** (`app/src/domain`) is storage-agnostic. `fieldKinds.ts` is the registry of field
   kinds (DB column, codec, formatting); `ui/FieldInput.tsx` holds the matching editors.
-- **Renames** of tables, columns or stored values go in `RENAMES` / `RENAMED_VALUES` in
-  `engine.ts`: applied before the upgrade (with CHECKs ignored until the rebuild), so renaming
-  keeps the data. (Expressions → templates was done this way; the later rename to
-  collections / items / components wasn't: the user started fresh.)
-- **Schema** is one file, `app/src/data/schema.sql`. The worker stores a hash of it in
-  `PRAGMA user_version`; on mismatch it builds the new schema in an in-memory database, compares,
-  adds missing tables/columns/indexes and drops removed columns in place (`upgradeInPlace`
-  in `engine.ts`). Only an incompatible change drops and recreates everything.
+- **Schema** is one file, `app/src/data/schema.sql` (plus the outbox triggers `data/schema.ts` makes
+  from `shared/sync.ts`). The worker stores a hash of it in `PRAGMA user_version`; on mismatch every
+  table is dropped and the schema created afresh (`ensureSchema` in `engine.ts`). No migrations or
+  renames: pre-alpha, a schema change means a clean database (a synced device downloads again).
 
 ## Data model (sync-ready conventions)
 
@@ -57,12 +53,11 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 - Images live in `files` (content-addressed: id = SHA-256, immutable; the bytes in the local-only,
   nullable BLOB `data`: NULL until downloaded from the server) and are referenced from
   `field_values.value_file` (no foreign key: a file's row can arrive after its use) or from markdown
-  as `files/<sha256>`. `thumbnails` links an image to its small copy (another `files` row). Files are stored as soon as they're picked and
-  released (`releaseFile` in `SqliteRepository.ts`, with their thumbnail) in the same transaction as any write that drops
-  a reference (changed/removed image, deleted item/field), and after a sync that drops one; the item editor releases
-  unsaved uploads when it closes. A file is only deleted when no live item uses it. Bytes travel
-  apart from the rows (`/api/files`); the server keeps them in Postgres (`file_bytes`) and deletes
-  unused ones after a week. See `docs/sync.md`, "Files".
+  as `files/<sha256>` (`file_uses`, kept by triggers, records which values name which files). `thumbnails` links an image to its small copy (another `files` row). Files are stored as soon as they're picked and
+  released (`releaseFile` in `SqliteRepository.ts`: marked `unused_since`, with their thumbnail) in the same transaction as any write that drops
+  the last reference (changed/removed image, deleted item/field), and after a sync that drops one; the item editor releases
+  unsaved uploads when it closes. A week later `sweepFiles` deletes them, here and on the server, unless used again. Bytes travel
+  apart from the rows (`/api/files`); the server keeps them in Postgres (`file_bytes`) until a device deletes them. See `docs/sync.md`, "Files".
 - Reference fields (`item`, `item_list`) carry `fields.target_collection_id`, and optionally
   `fields.choice_filter` (JSON filter rules over the target, edited with the views' filter editor:
   `ui/ChoiceFilterEditor.tsx`): pickers offer only matching items (`choicesFor`); a value

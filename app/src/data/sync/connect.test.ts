@@ -53,14 +53,14 @@ const value = (itemId: string, fieldId: string, text: string) => ({
 
 let requests: SyncRequest[];
 /** Makes fetch answer like a server: `respond` gets each request. */
-function server(respond: (request: SyncRequest) => SyncResponse) {
+function server(respond: (request: SyncRequest) => Omit<SyncResponse, "database"> & Partial<SyncResponse>) {
   requests = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (_url: string, init: { body: string }) => {
       const request = JSON.parse(init.body) as SyncRequest;
       requests.push(request);
-      return { ok: true, status: 200, json: async () => respond(request) };
+      return { ok: true, status: 200, json: async () => ({ database: { id: "db-1", createdAt: T }, ...respond(request) }) };
     }),
   );
 }
@@ -179,20 +179,6 @@ describe("the server's database id", () => {
     await engine.syncNow();
     expect(requests.at(-1)?.database).toBe("db-a");
     expect(engine.status.replaced).toBeNull();
-  });
-
-  it("is adopted by a device that synced before ids", async () => {
-    server(() => ({ cursor: 1, changes: { collections: [collection("t1")] } })); // an older server: no id
-    const db = await localDevice();
-    const engine = new SyncEngine(db as never, () => {}, env);
-    await engine.configure(config);
-    expect(stored(db)).toBeUndefined();
-    expect(requests.at(-1)?.database).toBeUndefined();
-
-    holding(A); // the server is updated
-    await engine.syncNow();
-    expect(requests.at(-1)?.database).toBeUndefined(); // nothing to compare yet
-    expect(stored(db)).toBe("db-a");
   });
 
   it("changed: pauses without writing, keeps the local data, and asks", async () => {

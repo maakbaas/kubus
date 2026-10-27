@@ -33,8 +33,6 @@ services:
       # secret (X-Kubus-Signature; see Help → API in the app).
       # KUBUS_WEBHOOK_URL: https://automation.example.com/hooks/kubus
       # KUBUS_WEBHOOK_SECRET: another-long-random-string
-      # Days a file (image) no item uses is kept before it is deleted; default 7.
-      # KUBUS_UNUSED_FILE_DAYS: 7
       # Optional: a language model for every device (AI fields, Write with AI), any OpenAI-style
       # API. Devices use it through this server (Settings → AI → "The server's"); the key stays here.
       # KUBUS_AI_URL: https://api.openai.com/v1

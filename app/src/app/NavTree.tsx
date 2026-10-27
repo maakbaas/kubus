@@ -135,7 +135,7 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
  */
 export function NavFooter({ activePath, navigate, openTab }: { activePath: string; navigate(path: string): void; openTab(path: string): void }) {
   const [pathname] = activePath.split("?");
-  const selected = pathname === "/help" ? "help" : pathname === "/settings" || pathname === "/sync" ? "settings" : undefined;
+  const selected = pathname === "/help" ? "help" : pathname === "/settings" ? "settings" : undefined;
   const paths: Record<string, string> = { help: "/help", settings: "/settings" };
   const nodePath = (e: MouseEvent) => paths[(e.target as HTMLElement).closest("li[id]")?.id ?? ""];
   return (

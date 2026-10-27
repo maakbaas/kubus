@@ -26,6 +26,9 @@ async function photo(repo: Awaited<ReturnType<typeof device>>, content: string) 
   return fileId;
 }
 
+/** Sweeps as if the grace period were over for every file marked until now. */
+const later = () => new Date(Date.now() + 1000).toISOString();
+
 const localBytes = async (repo: Awaited<ReturnType<typeof device>>, id: string) =>
   (await (repo as unknown as { db: { select<T>(sql: string, bind: unknown[]): Promise<T[]> } }).db.select<{ data: Uint8Array | null }>(
     "SELECT data FROM files WHERE id = ?1",
@@ -133,7 +136,11 @@ describe("thumbnails", () => {
     const collection = (await a.listCollections()).find((c) => c.name === "Photo")!;
     const [item] = await a.listItems(collection, "default");
     await a.deleteItem(item.id);
-    expect(await a.getFile(id)).toBeNull();
+    await settled(a);
+    expect((await a.getFile(id))?.data).toEqual(bytes("nine")); // kept for the grace period
+    await a.sweepFiles(later());
+    expect(await a.getFile(id)).toBeNull(); // and gone on the server too
+    expect(server.files.size).toBe(0);
     const thumbs = await (a as unknown as { db: { select<T>(sql: string): Promise<T[]> } }).db.select<{ n: number }>(
       "SELECT (SELECT count(*) FROM thumbnails) + (SELECT count(*) FROM files) AS n",
     );
@@ -155,11 +162,14 @@ describe("cleaning up unused files", () => {
     await a.deleteItem(item.id);
     await settled(a);
     await settled(b);
-    expect(await listed(b, id)).toBe(false);
     expect(await b.unusedFiles([id])).toEqual([id]);
+    expect(await listed(b, id)).toBe(true); // kept for the grace period
+    await b.sweepFiles(later());
+    expect(await listed(b, id)).toBe(false);
+    expect(server.files.has(id)).toBe(false);
   });
 
-  it("releases a replaced image at once, unless a text still names it", async () => {
+  it("deletes a replaced image after the grace period, unless a text still names it", async () => {
     const repo = await device({ connect: false });
     const old = await photo(repo, "old");
     const [collection] = await repo.listCollections();
@@ -167,9 +177,28 @@ describe("cleaning up unused files", () => {
     const [title, image] = collection.fields;
     // Named in the title (any text counts): still in use when the image field lets go of it.
     await repo.updateItem(collection, item.id, { [title.id]: `see files/${old}`, [image.id]: await repo.putFile(bytes("new"), "image/png") });
+    await repo.sweepFiles(later());
     expect(await listed(repo, old)).toBe(true);
     await repo.updateItem(collection, item.id, { [title.id]: "plain" });
+    expect(await listed(repo, old)).toBe(true);
+    await repo.sweepFiles(later());
     expect(await listed(repo, old)).toBe(false);
+  });
+
+  it("keeps a file here until the server's copy is deleted too", async () => {
+    const a = await device();
+    const id = await photo(a, "ten and a half");
+    await settled(a);
+    const collection = (await a.listCollections()).find((c) => c.name === "Photo")!;
+    const [item] = await a.listItems(collection, "default");
+    await a.deleteItem(item.id);
+    server.failures.set(`DELETE ${id}`, 503);
+    await a.sweepFiles(later());
+    expect(await listed(a, id)).toBe(true); // the server failed: next sweep
+    server.failures.clear();
+    await a.sweepFiles(later());
+    expect(await listed(a, id)).toBe(false);
+    expect(server.files.has(id)).toBe(false);
   });
 
   it("keeps a file another item here still uses", async () => {
@@ -203,16 +232,16 @@ describe("cleaning up unused files", () => {
     expect(server.files.get(id)?.data).toEqual(bytes("twelve"));
   });
 
-  it("gets a file it released back from the server when an edit uses it again", async () => {
-    const a = await device();
+  it("keeps a file it released for a while: used again (a paste), it is still here", async () => {
+    const a = await device({ connect: false });
     const id = await photo(a, "twelve and a half");
-    await settled(a);
     const collection = (await a.listCollections()).find((c) => c.name === "Photo")!;
     const [item] = await a.listItems(collection, "default");
     await a.updateItem(collection, item.id, { [collection.fields[1].id]: "" });
-    expect(await localBytes(a, id)).toBeNull(); // released here
-    await a.updateItem(collection, item.id, { [collection.fields[1].id]: id }); // undone
-    expect((await a.getFile(id))?.data).toEqual(bytes("twelve and a half"));
+    await a.updateItem(collection, item.id, { [collection.fields[1].id]: id }); // pasted back
+    await a.sweepFiles(later()); // in use: only loses its mark
+    expect(await localBytes(a, id)).toEqual(bytes("twelve and a half"));
+    await a.sweepFiles(later());
     expect(await localBytes(a, id)).toEqual(bytes("twelve and a half"));
   });
 

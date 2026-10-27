@@ -33,11 +33,12 @@ is what this split avoids. Keep them current when behaviour changes.
   OPFS). Every asset is bundled, nothing from a CDN (IBM Plex: `app/src/fonts.css`, Carbon's CDN
   `@font-face` rules are dropped in `vite.config.ts`): the app looks the same offline. Tauri is only a window (only plugin: `opener`); native capabilities go behind an interface
   in `app/src/platform/` with a web fallback.
-- **No migration scripts.** `app/src/data/schema.sql` is the schema; simple changes (new tables /
-  nullable or defaulted columns, removed columns, changed CHECKs) are applied in place, anything
-  else wipes the local DB. Prefer simple changes. Renames go in `RENAMES` / `RENAMED_VALUES` in
-  `sqlite/engine.ts`. A new synced table/column also goes in `shared/sync.ts` (the outbox triggers
-  and the server's tables follow from it: `data/schema.ts`, `server/src/schema.ts`; see `docs/sync.md`).
+- **No migrations, no compatibility code** (pre-alpha: the user starts a clean client and a clean
+  database after a schema change). `app/src/data/schema.sql` is the schema; when it changes the
+  local DB is made afresh. Never write code that upgrades, renames or reads old data or old
+  versions of the app or server. A new synced table/column also goes in `shared/sync.ts` (the
+  outbox triggers and the server's tables follow from it: `data/schema.ts`, `server/src/schema.ts`;
+  see `docs/sync.md`).
 - **Never install the SAH-pool VFS while another worker may hold its files** (it deletes the
   database): keep `acquireDbLock` / `poolFilesFree` in `worker.ts`.
 - Changing the app identifier `com.kubus.app`, database / pool names, the lock or `kubus.*` storage

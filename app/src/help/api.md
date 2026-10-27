@@ -120,7 +120,7 @@ curl -X POST -H "Authorization: Bearer $KUBUS_TOKEN" -H "Content-Type: image/png
 → { "id": "<sha256>", "src": "files/<sha256>" }
 ```
 
-Put the `id` in an image field, or `![](files/<sha256>)` in Markdown. `GET /files/{id}` gives the bytes back. PNG, JPEG, GIF, WebP, AVIF and SVG, up to 20 MB. A file no item uses is deleted a week later (`KUBUS_UNUSED_FILE_DAYS`).
+Put the `id` in an image field, or `![](files/<sha256>)` in Markdown. `GET /files/{id}` gives the bytes back. PNG, JPEG, GIF, WebP, AVIF and SVG, up to 20 MB. A file no item uses is deleted a week later (by the apps, the next time one opens or syncs).
 
 ## Webhooks
 

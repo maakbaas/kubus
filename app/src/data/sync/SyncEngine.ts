@@ -100,9 +100,8 @@ export function applyStatement(t: SyncTable, row: WireRow): Statement {
   return { sql, bind: cols.map((c) => row[c] ?? null) };
 }
 
-/** Stores the id of the server's database this device syncs with (an older server sends none). */
-const rememberDatabase = (id: string | undefined): Statement[] =>
-  id ? [{ sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_database', ?1)", bind: [id] }] : [];
+/** Stores the id of the server's database this device syncs with. */
+const rememberDatabase = (id: string): Statement => ({ sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_database', ?1)", bind: [id] });
 
 /** Queues files (with their thumbnails) for upload again: the server lost them, this device has their bytes. */
 const requeueFiles = (ids: string[]): Statement[] =>
@@ -154,8 +153,8 @@ export class SyncEngine implements SyncControl {
     private db: SqlClient,
     private emit: (...changes: DataChange[]) => void,
     private env: SyncEnvironment,
-    /** Deletes those of these files no live item uses (Repository.releaseFiles). */
-    private releaseFiles: (fileIds: string[]) => Promise<void> = async () => {},
+    /** The repository's file clean-up: marks unused files (Repository.releaseFiles), deletes long unused ones. */
+    private files: { release(fileIds: string[]): Promise<void>; sweep(): Promise<void> } = { release: async () => {}, sweep: async () => {} },
   ) {
     this.config = loadConfig(env);
     this.status = { state: "off", lastSync: null, error: null, replaced: loadReplaced(env) };
@@ -295,6 +294,8 @@ export class SyncEngine implements SyncControl {
         try {
           await this.syncOnce();
           this.setStatus({ state: "idle", lastSync: new Date().toISOString(), error: null });
+          // With what other devices did applied: files unused long enough go (here and on the server).
+          await this.files.sweep().catch((e) => console.warn("File clean-up failed", e));
           void this.downloadFiles();
         } catch (e) {
           if (e instanceof DatabaseReplaced) await this.stopForReplaced(e.mismatch);
@@ -346,7 +347,7 @@ export class SyncEngine implements SyncControl {
 
     const meta = await this.db.select<{ key: string; value: string }>("SELECT key, value FROM meta WHERE key IN ('sync_cursor', 'sync_database')");
     const since = Number(meta.find((m) => m.key === "sync_cursor")?.value ?? 0);
-    // The database synced with (none yet: a device from before ids, or an older server).
+    // The database synced with (set by the first connection).
     const database = meta.find((m) => m.key === "sync_database")?.value;
     const upTo = (await this.db.select<{ n: number | null }>("SELECT max(id) AS n FROM sync_outbox"))[0]?.n ?? 0;
     const { waiting, unsendable, uploaded } = await this.uploadFiles(upTo);
@@ -368,13 +369,13 @@ export class SyncEngine implements SyncControl {
       { sql: "DELETE FROM sync_outbox WHERE id <= ?1 AND NOT (tbl = 'files' AND pk IN (SELECT value FROM json_each(?2)))", bind: [upTo, JSON.stringify(waiting)] },
       { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_cursor', ?1)", bind: [String(cursor)] },
       { sql: "DELETE FROM meta WHERE key = 'sync_applying'" },
-      ...rememberDatabase(current?.id),
+      rememberDatabase(current.id),
       ...requeueFiles(missingFiles),
     );
     await this.db.write(statements);
     this.cursor = cursor;
-    if (freed.length > 0) await this.releaseFiles(freed);
-    this.pulled({ changes, pushed: outgoing, cursor, database: current?.id ?? database, initial: false });
+    if (freed.length > 0) await this.files.release(freed);
+    this.pulled({ changes, pushed: outgoing, cursor, database: current.id, initial: false });
 
     await this.announce(changes);
     // More to upload, and uploading works (or files to upload again): go on right away.
@@ -446,6 +447,25 @@ export class SyncEngine implements SyncControl {
     return { waiting, unsendable, uploaded };
   }
 
+  /**
+   * Deletes the server's copies of files this device found unused for long enough (devices decide;
+   * the server only stores). Returns the ones this device may delete now: all when it doesn't sync
+   * or keeps no files (the server's headless device: a cache, it leaves deciding to the apps), else
+   * those the server let go of (the rest wait for the next sweep, offline say).
+   */
+  async deleteFromServer(ids: string[]): Promise<string[]> {
+    if (!this.active || !this.env.keepFiles) return ids;
+    const gone: string[] = [];
+    for (const id of ids) {
+      try {
+        if ((await this.request(`/api/files/${id}`, { method: "DELETE" })).ok) gone.push(id);
+      } catch {
+        break; // offline
+      }
+    }
+    return gone;
+  }
+
   /** A device that keeps no file bytes (the headless device) lets go of them once the server has them. */
   private async dropBytes(id: string) {
     if (!this.env.keepFiles) await this.db.write([{ sql: "UPDATE files SET data = NULL WHERE id = ?1", bind: [id] }]);
@@ -476,7 +496,7 @@ export class SyncEngine implements SyncControl {
       // that can't take a large file fails the whole response).
       response = await this.request(`/api/files/${id}`, { cache: "no-store" });
       // Deleted on the server as unused: gone here too, unless something here still uses it.
-      if (response.status === 404) await this.releaseFiles([id]);
+      if (response.status === 404) await this.files.release([id]);
       if (!response.ok) return null;
       data = new Uint8Array(await response.arrayBuffer());
     } catch {
@@ -507,7 +527,7 @@ export class SyncEngine implements SyncControl {
         this.downloadAgain = false;
         const missing = (await this.db.select<{ id: string }>(
           // Thumbnails first (they are what lists and cards show); only them with "opened".
-          `SELECT id FROM files WHERE data IS NULL ${this.config.originals === "opened" ? "AND id IN (SELECT thumb_id FROM thumbnails)" : ""}
+          `SELECT id FROM files WHERE data IS NULL AND unused_since IS NULL ${this.config.originals === "opened" ? "AND id IN (SELECT thumb_id FROM thumbnails)" : ""}
             ORDER BY id IN (SELECT thumb_id FROM thumbnails) DESC, created_at DESC`,
         )).map((r) => r.id);
         let failed = false;
@@ -539,7 +559,7 @@ export class SyncEngine implements SyncControl {
     if (known[0]?.value === url) return false;
 
     const remote = await this.post({ since: 0, changes: {} });
-    const remember = [{ sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_server', ?1)", bind: [url] }, ...rememberDatabase(remote.database?.id)];
+    const remember = [{ sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_server', ?1)", bind: [url] }, rememberDatabase(remote.database.id)];
     let replaced = false;
     if (SYNC_TABLES.some((t) => (remote.changes[t.name] ?? []).length > 0)) {
       const oldCollections = (await this.db.select<{ id: string }>("SELECT id FROM collections")).map((r) => r.id);
@@ -564,7 +584,7 @@ export class SyncEngine implements SyncControl {
       await this.db.write(statements);
       this.cursor = remote.cursor;
       replaced = true;
-      this.pulled({ changes: remote.changes, pushed: {}, cursor: remote.cursor, database: remote.database?.id, initial: true });
+      this.pulled({ changes: remote.changes, pushed: {}, cursor: remote.cursor, database: remote.database.id, initial: true });
       await this.announce(remote.changes, oldCollections);
     } else {
       await this.db.write([

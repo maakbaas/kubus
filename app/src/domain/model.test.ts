@@ -22,9 +22,8 @@ describe("nextName", () => {
 });
 
 describe("parseComponentArgs", () => {
-  it("accepts both stored forms and survives bad JSON", () => {
-    expect(parseComponentArgs('{"a":"f1","b":{"field":"f2"},"c":{"value":"x"}}')).toEqual({
-      a: { field: "f1" },
+  it("reads fields and values, and survives bad JSON", () => {
+    expect(parseComponentArgs('{"b":{"field":"f2"},"c":{"value":"x"}}')).toEqual({
       b: { field: "f2" },
       c: { value: "x" },
     });
