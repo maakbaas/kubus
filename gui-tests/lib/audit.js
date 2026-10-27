@@ -415,6 +415,9 @@ function __audit(opts) {
             }
             return false;
           })() ||
+          // A card's link is stretched under the whole card on purpose: the card's own controls
+          // (a checkbox, a link in a field) sit above it, and the rest of the card is the link.
+          (el.matches(".item-card__link") && hit.closest(".item-card") === el.closest(".item-card")) ||
           // Carbon puts a visual twin over some inputs (checkbox / toggle labels, date icons).
           el.matches("input") && (hit.closest(".cds--form-item, .cds--checkbox-wrapper, .cds--toggle, .cds--date-picker, .cds--search, .cds--list-box, .cds--number, .cds--slider-container") === el.closest(".cds--form-item, .cds--checkbox-wrapper, .cds--toggle, .cds--date-picker, .cds--search, .cds--list-box, .cds--number, .cds--slider-container"));
         if (!legit) report("occluded", el, `covered at its centre by ${describe(hit)}`);
@@ -786,6 +789,8 @@ function __audit(opts) {
       const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
       if (!hasText || srOnly(el)) continue;
       if (el.closest("[disabled], [aria-disabled=true], .cds--btn--disabled, .cds--label--disabled, .cds--text-input--disabled, iframe, .cm-editor, .token, .lightbox, .item-card__cover, .image-input, [role=tooltip]")) continue;
+      // A disabled Carbon toggle: its label and state text are siblings of the disabled switch.
+      if (el.closest(".cds--toggle:has(.cds--toggle__button:disabled), .cds--select--disabled")) continue;
       if (el.matches("input, textarea, select, option")) continue; // their placeholders are exempt; values are checked as text elsewhere
       const s = cs(el);
       if (parseFloat(s.opacity) === 0) continue;

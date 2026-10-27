@@ -1013,10 +1013,6 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   outline: 2px solid var(--cds-border-interactive);
   outline-offset: -2px;
 }
-/* Reference fields get an extra "Refers to" column. */
-.field-row--reference {
-  grid-template-columns: minmax(0, 1fr) 13rem 13rem auto;
-}
 .field-row__actions {
   display: flex;
   padding-top: var(--cds-spacing-06); /* align with inputs below their labels */
@@ -1024,11 +1020,21 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
 .add-field {
   margin-top: var(--cds-spacing-05);
 }
-/* A narrow form (a phone, a narrow pane): one input per line. A reference row's four columns
-   need about 44rem. */
-@container form-page (max-width: 46rem) {
-  .field-row,
-  .field-row--reference {
+/* A field's own settings (its target, icon, component): under its name and type, a part of that
+   field, one control per line. Set in from the row's left edge behind a rule, so they read as
+   belonging to the field above, not as fields of their own. */
+.field-row__settings {
+  grid-column: 1 / -1;
+  border-inline-start: 2px solid var(--cds-border-subtle);
+  padding-inline-start: var(--cds-spacing-05);
+}
+/* A checkbox among them sits on their left edge like the inputs (Carbon's form item adds none). */
+.field-settings__check.cds--form-item {
+  margin: 0;
+}
+/* A narrow form (a phone, a narrow pane): one input per line (name and type need about 30rem). */
+@container form-page (max-width: 30rem) {
+  .field-row {
     grid-template-columns: minmax(0, 1fr);
   }
   .field-row__actions {
@@ -1148,6 +1154,13 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
 }
 /* The field's "Strike through when checked". */
 .checklist-row__done--struck {
+  text-decoration: line-through;
+}
+/* An item whose "strike through the item" checkbox is checked: its title where it is listed (a
+   table row's title cell, a card's title), greyed like a done checklist entry. */
+.cell--struck > :is(a, div),
+.item-card__title.item--struck {
+  color: var(--cds-text-secondary);
   text-decoration: line-through;
 }
 /* A toggle icon (Checkbox / Checklist fields) in place of the box: its 1rem icon sits where the
@@ -1873,10 +1886,12 @@ img[data-lightbox] {
   margin-bottom: var(--cds-spacing-03);
   overflow-wrap: anywhere;
 }
-/* Label and value side by side, labels in a fixed column. */
+/* Label and value side by side, labels in a column of 6rem, at most two fifths of a narrow card
+   (a label then wraps, readable whole, rather than stacking above its value: a card looks the same
+   at every width unless its view asks for list rows). */
 .item-card__fields {
   display: grid;
-  grid-template-columns: 6rem minmax(0, 1fr);
+  grid-template-columns: minmax(0, min(6rem, 40%)) minmax(0, 1fr);
   gap: var(--cds-spacing-02) var(--cds-spacing-05);
   align-items: baseline;
 }
@@ -1891,8 +1906,8 @@ img[data-lightbox] {
   margin: 0;
   overflow-wrap: anywhere;
 }
-/* Nothing may overflow a card, however narrow the card width setting makes it: the card is a
-   size container; below 16rem labels stack above their values, and every child can shrink. */
+/* Nothing may overflow a card, however narrow the card width setting makes it: every child can
+   shrink (and long words wrap). */
 .item-card {
   container-type: inline-size;
   min-inline-size: 0;
@@ -1931,15 +1946,6 @@ img[data-lightbox] {
 .item-card__field dd > * {
   min-inline-size: 0;
   max-inline-size: 100%;
-}
-@container (max-width: 16rem) {
-  .item-card__fields {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: 0;
-  }
-  .item-card__field dd {
-    margin-block-end: var(--cds-spacing-03);
-  }
 }
 
 /* Collection page: view tabs (with the view's own tools at their right), the search bar the
@@ -2826,8 +2832,7 @@ img[data-lightbox] {
 .components-table__code,
 .component-code :is(input, textarea),
 .component-test code,
-.component-test__value,
-.field-row__param {
+.component-test__value {
   font-family: var(--cds-code-02-font-family);
   letter-spacing: var(--cds-code-02-letter-spacing);
 }
@@ -2884,16 +2889,17 @@ img[data-lightbox] {
   fill: #161616;
   opacity: 1;
 }
-/* Collection editor: a component field's variable → field mapping, under its row. */
-.field-row__mapping {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-  gap: var(--cds-spacing-05);
+/* A component choice's entry: its name, and an "AI" tag for one that asks AI. */
+.component-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+  min-inline-size: 0;
 }
-/* The choice filter editor isn't a mapping cell: its rules fill the whole row. */
-.field-row__mapping > .query-editor {
-  grid-column: 1 / -1;
+.component-choice__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* A checkbox below a dialog's text gets a paragraph's distance from it (Carbon zeroes form-item
    margins inside a modal, hence the specificity). */
@@ -2987,18 +2993,21 @@ img[data-lightbox] {
   }
 }
 /* A dialog with dropdowns / combo boxes: their menus may extend past the dialog instead of being
-   clipped by it (Carbon clips the dialog's content). */
-.cds--modal.modal--menus .cds--modal-container,
-.cds--modal.modal--menus .cds--modal-content {
+   clipped by it. They are positioned fixed (autoAlign), relative to the dialog's box at most, so
+   only the box itself must not clip; its content scrolls (once the dialog reaches the bottom of
+   the window: a component's code can be long), which doesn't clip them. */
+.cds--modal.modal--menus .cds--modal-container {
   overflow: visible;
 }
-/* Carbon caps the dialog's height and scrolls its content; without that clipping, content that
-   grows (a field type's extra inputs) would spill out of the capped box. The dialog grows with its
-   content instead. */
+.cds--modal.modal--menus .cds--modal-content {
+  overflow-y: auto;
+}
+/* On wide windows the dialog grows with its content (Carbon would give it a share of the window)
+   down to the window's bottom edge, then scrolls. */
 @media (min-width: 42rem) {
   .cds--modal.modal--menus .cds--modal-container {
     block-size: auto;
-    max-block-size: none;
+    max-block-size: calc(100% - var(--modal-top) - var(--cds-spacing-05));
   }
   .cds--modal.modal--menus .cds--modal-content {
     max-block-size: none;
@@ -3628,4 +3637,24 @@ body[data-reordering] [data-reorder-row] {
   border-block-end-color: var(--cds-border-strong);
   outline: 2px solid var(--cds-focus);
   outline-offset: -2px;
+}
+/* A note under a field's settings (what asking AI costs) sits right under them, without the
+   helper paragraph's own bottom margin (the settings' gap is between them). */
+.helper.field-settings__note {
+  margin-bottom: 0;
+}
+/* The Components page's "Show: all / shared / local": on the page's left edge, its label
+   beside it, a gap above the list. */
+.components-scope {
+  margin-block-end: var(--cds-spacing-05);
+}
+.components-scope .cds--dropdown__wrapper--inline {
+  display: flex;
+  flex-direction: row; /* the app's list boxes stack their label above (see .cds--list-box__wrapper) */
+  justify-content: flex-start;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+}
+.components-scope .cds--dropdown__wrapper--inline .cds--label {
+  margin: 0;
 }

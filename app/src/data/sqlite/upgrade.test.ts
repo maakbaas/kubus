@@ -44,3 +44,25 @@ describe("upgrading a database to the sync schema", () => {
     db.close();
   });
 });
+
+describe("upgrading a database from before local components (2026-10)", () => {
+  it("keeps an AI field's prompt as its own component and drops variables", async () => {
+    const old = (await import("./schema-2026-10.test.sql?raw")).default;
+    const sqlite3 = await sqlite3InitModule();
+    const db = new sqlite3.oo1.DB(":memory:", "c");
+    db.exec(old);
+    db.exec("PRAGMA user_version = 1");
+    db.exec(`INSERT INTO collections (id, name, plural_name, created_at, updated_at) VALUES ('t1', 'Album', 'Albums', 'x', 'x')`);
+    db.exec(`INSERT INTO components (id, name, params, code, created_at, updated_at) VALUES ('c1', 'Hours', '["pages"]', '{{ $pages / 40 }}', 'x', 'x')`);
+    db.exec(`INSERT INTO fields (id, collection_id, name, kind, ai_prompt, ai_output, created_at, updated_at) VALUES ('f1', 't1', 'Shelf', 'ai', 'Artist: {{ $item.Artist }}', 'number', 'x', 'x')`);
+    db.exec(`INSERT INTO fields (id, collection_id, name, kind, component_id, component_args, created_at, updated_at) VALUES ('f2', 't1', 'Hours', 'component', 'c1', '{"pages":{"field":"f1"}}', 'x', 'x')`);
+
+    ensureSchema(sqlite3, db);
+
+    expect(db.selectArray("SELECT code, output, component_id FROM fields WHERE id = 'f1'")).toEqual(["Artist: {{ $item.Artist }}", "number", null]);
+    expect(db.selectArray("SELECT code, component_id FROM fields WHERE id = 'f2'")).toEqual([null, "c1"]);
+    expect(db.selectValue("SELECT count(*) FROM pragma_table_info('fields') WHERE name IN ('component_args', 'ai_prompt', 'ai_output')")).toBe(0);
+    expect(db.selectArray("SELECT code, ai FROM components WHERE id = 'c1'")).toEqual(["{{ $pages / 40 }}", 0]);
+    db.close();
+  });
+});

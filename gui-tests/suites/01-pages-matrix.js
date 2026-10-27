@@ -79,7 +79,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.boot();
     const ids = await t.seed({
       images: IMAGES,
-      components: [{ key: "double", name: "Double", code: "{{ ($x ?? 0) * 2 }}", params: ["x"] }],
+      components: [{ key: "double", name: "Double", code: "{{ ($item.Count ?? 0) * 2 }}" }],
       collections: [
         { key: "bare", name: "Thing", plural: "Things", fields: [{ key: "name", name: "Name", kind: "string" }], items: [] },
         { key: "blank", name: "Blank", plural: "Blanks", fields: allKindFields({ target: "bare", component: "double" }), items: allKindItems(4, "typical", { empty: true }) },

@@ -135,6 +135,8 @@ export interface Repository {
 
   /** Saved views of a collection's items in one space, in their display order. */
   listViews(collectionId: string, spaceId: string): Promise<CollectionView[]>;
+  /** Every view, of every collection and space (what the Components page lists local components from). */
+  listAllViews(): Promise<CollectionView[]>;
   /** Creates or updates a view (by id). */
   saveView(view: CollectionView): Promise<void>;
   deleteView(viewId: string): Promise<void>;

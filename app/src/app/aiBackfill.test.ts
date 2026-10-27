@@ -5,8 +5,7 @@ import type { AiJob, AiService } from "./ai";
 import { AiBackfill } from "./aiBackfill";
 
 const field = (id: string, collectionId: string, name: string, kind: FieldDef["kind"], extra: Partial<FieldDef> = {}): FieldDef => ({
-  id, collectionId, name, kind, targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false,
-  aiPrompt: null, aiOutput: null, position: 0, ...extra,
+  id, collectionId, name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position: 0, ...extra,
 });
 const collection = (id: string, name: string, fields: FieldDef[]): Collection => ({
   id, name, pluralName: `${name}s`, icon: null, description: "", itemViews: [], spaceIds: null, fields, createdAt: "", updatedAt: "",
@@ -16,7 +15,7 @@ const author = collection("author", "Author", [field("aname", "author", "Name", 
 const book = collection("book", "Book", [
   field("btitle", "book", "Title", "string"),
   field("bauthor", "book", "Author", "item", { targetCollectionId: "author" }),
-  field("bbio", "book", "Bio", "ai", { aiPrompt: "By {{ $item.Author }}", aiOutput: "string" }),
+  field("bbio", "book", "Bio", "ai", { code: "By {{ $item.Author }}", output: "string" }),
 ]);
 const item = (id: string, collectionId: string, values: Item["values"]): Item => ({ id, collectionId, spaceId: "default", values, createdAt: "", updatedAt: "" });
 

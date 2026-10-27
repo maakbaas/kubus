@@ -1,40 +1,31 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Button, Checkbox, Dropdown, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
+import { Button, Dropdown, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
-import { fieldKindList, fieldKinds } from "../domain/fieldKinds";
+import { useItemCounts } from "../app/useItemCounts";
+import { fieldKindList, fieldKinds, offeredKind } from "../domain/fieldKinds";
 import {
+  blankField,
   isReferenceKind,
   newId,
   suggestPlural,
   collectionDraft,
   type FieldKind,
+  type FieldDraft,
   type Collection,
   type CollectionDraft,
 } from "../domain/model";
+import type { Component } from "../domain/components";
 import { FieldKindLabel } from "../ui/fieldKindIcons";
-import { TOGGLE_CHOICES, TOGGLE_ICONS, ToggleIconLabel } from "../ui/ToggleInput";
-import { aiPromptProblem } from "../domain/ai";
-import { AiOutputSelect, AiPromptEditor } from "../ui/AiFieldEditor";
-import { ChoiceFilterEditor } from "../ui/ChoiceFilterEditor";
-import { ComponentArgInput } from "../ui/ComponentArgInput";
-import { componentsFor, type Component } from "../domain/components";
+import { FieldSettings, hasSettings, newKindPatch, settingsProblem, type Target } from "../ui/FieldSettings";
 import { IconPicker } from "../ui/IconPicker";
-import { CollectionLabel } from "../ui/collectionIcons";
 import { SpaceLabel } from "../ui/SpaceSwitcher";
 import type { Space } from "../domain/spaces";
 import { NotFound } from "../ui/NotFound";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { moveBlock, useReorder } from "../ui/useReorder";
-
-/** A collection a reference field can point at (including the one being created). */
-interface Target {
-  id: string;
-  name: string;
-  icon: string | null;
-}
 
 export function CollectionEditorPage() {
   const { collectionId } = useParams();
@@ -44,6 +35,12 @@ export function CollectionEditorPage() {
 }
 
 type DraftField = CollectionDraft["fields"][number];
+
+/** A new field in a draft: a string field without a name. */
+export function draftField(name = "", kind: FieldKind = "string"): FieldDraft {
+  const { collectionId: _c, position: _p, ...field } = blankField(newId(), name, kind);
+  return field;
+}
 
 function initialDraft(existing?: Collection): CollectionDraft {
   if (existing) return collectionDraft(existing);
@@ -55,11 +52,11 @@ function initialDraft(existing?: Collection): CollectionDraft {
     icon: "Cube",
     description: "",
     spaceIds: null,
-    fields: [{ id: newId(), name: "Name", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null }],
+    fields: [draftField("Name")],
   };
 }
 
-function validate(draft: CollectionDraft) {
+function validate(draft: CollectionDraft, components: Component[]) {
   const fieldErrors: Record<string, string> = {};
   const targetErrors: Record<string, string> = {};
   const seen = new Set<string>();
@@ -68,12 +65,8 @@ function validate(draft: CollectionDraft) {
     if (!key) fieldErrors[f.id] = "Name is required";
     else if (seen.has(key)) fieldErrors[f.id] = "Duplicate field name";
     seen.add(key);
-    if (isReferenceKind(f.kind) && !f.targetCollectionId) targetErrors[f.id] = "Choose a collection";
-    if (f.kind === "component" && !f.componentId) targetErrors[f.id] = "Choose a component";
-    if (f.kind === "ai") {
-      const problem = aiPromptProblem(f.aiPrompt);
-      if (problem) targetErrors[f.id] = problem;
-    }
+    const problem = settingsProblem(f, components);
+    if (problem) targetErrors[f.id] = problem;
   }
   const nameError = draft.name.trim() ? undefined : "Name is required";
   const pluralError = draft.pluralName.trim() ? undefined : "Plural name is required";
@@ -105,8 +98,9 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
     if (!existing) document.getElementById(`${uid}-collection-name`)?.focus();
   }, [existing, uid]);
 
+  const counts = useItemCounts();
   const persisted = useMemo(() => new Set(existing?.fields.map((f) => f.id)), [existing]);
-  const { nameError, pluralError, fieldErrors, targetErrors, valid } = validate(draft);
+  const { nameError, pluralError, fieldErrors, targetErrors, valid } = validate(draft, components);
 
   // Reference targets: all collections, plus this one itself while it is being created.
   const targets: Target[] = existing
@@ -130,7 +124,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
   const removeField = (id: string) => setDraft((d) => ({ ...d, fields: d.fields.filter((f) => f.id !== id) }));
 
   const addField = () =>
-    setDraft((d) => ({ ...d, fields: [...d.fields, { id: newId(), name: "", kind: "string", targetCollectionId: null, componentId: null, componentArgs: {}, choiceFilter: [], toggleIcon: null, strikeThrough: false, aiPrompt: null, aiOutput: null }] }));
+    setDraft((d) => ({ ...d, fields: [...d.fields, draftField()] }));
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -238,7 +232,7 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
           <FormGroup legendText="Fields">
             <p className="helper">A field's type cannot change once saved.</p>
             {draft.fields.map((f, i) => (
-              <div className={isReferenceKind(f.kind) || f.kind === "component" || f.kind === "ai" || f.kind === "checkbox" || f.kind === "checklist" ? "field-row field-row--reference" : "field-row"} key={f.id} {...reorder.row(i)}>
+              <div className="field-row" key={f.id} {...reorder.row(i)}>
                 <TextInput size="sm"
                   id={`${uid}-field-name-${f.id}`}
                   labelText="Field name"
@@ -253,77 +247,13 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                   titleText="Field type"
                   label="Field type"
                   items={fieldKindList}
-                  selectedItem={f.kind}
+                  selectedItem={offeredKind(f.kind)}
                   disabled={persisted.has(f.id)}
                   itemToString={(k) => (k ? fieldKinds[k].label : "")}
                   itemToElement={(k) => <FieldKindLabel kind={k} />}
                   renderSelectedItem={(k) => <FieldKindLabel kind={k} />}
-                  onChange={({ selectedItem: k }) => k && updateField(f.id, { kind: k, ...(k === "ai" && { aiOutput: f.aiOutput ?? "string" }) })}
+                  onChange={({ selectedItem: k }) => k && updateField(f.id, newKindPatch(k))}
                 />
-                {isReferenceKind(f.kind) && (
-                  <Dropdown<Target> autoAlign
-                    size="sm"
-                    id={`${uid}-field-target-${f.id}`}
-                    titleText="Refers to"
-                    label="Choose…"
-                    items={targets}
-                    // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
-                    selectedItem={(targets.find((t) => t.id === f.targetCollectionId) ?? null) as Target}
-                    disabled={persisted.has(f.id)}
-                    itemToString={(t) => t?.name ?? ""}
-                    itemToElement={(t) => <CollectionLabel collection={t} />}
-                    renderSelectedItem={(t) => <CollectionLabel collection={t} />}
-                    onChange={({ selectedItem: t }) => updateField(f.id, { targetCollectionId: t?.id ?? null })}
-                    invalid={submitted && !!targetErrors[f.id]}
-                    invalidText={targetErrors[f.id]}
-                  />
-                )}
-                {(f.kind === "checkbox" || f.kind === "checklist") && (
-                  <Dropdown<string> autoAlign
-                    size="sm"
-                    id={`${uid}-field-toggle-icon-${f.id}`}
-                    titleText="Icon"
-                    label="Icon"
-                    items={TOGGLE_CHOICES}
-                    selectedItem={f.toggleIcon ?? "checkbox"}
-                    itemToString={(i) => (i ? (TOGGLE_ICONS[i]?.label ?? "Checkbox") : "")}
-                    itemToElement={(i) => <ToggleIconLabel id={i} />}
-                    renderSelectedItem={(i) => <ToggleIconLabel id={i} />}
-                    onChange={({ selectedItem: i }) => i && updateField(f.id, { toggleIcon: i === "checkbox" ? null : i })}
-                  />
-                )}
-                {(f.kind === "checkbox" || f.kind === "checklist") && (
-                  <Checkbox
-                    id={`${uid}-field-strike-through-${f.id}`}
-                    labelText="Strike through when checked"
-                    checked={f.strikeThrough}
-                    onChange={(_, { checked }) => updateField(f.id, { strikeThrough: checked })}
-                  />
-                )}
-                {f.kind === "ai" && (
-                  <AiOutputSelect
-                    id={`${uid}-field-ai-output-${f.id}`}
-                    value={f.aiOutput}
-                    locked={persisted.has(f.id)}
-                    onChange={(aiOutput) => updateField(f.id, { aiOutput })}
-                  />
-                )}
-                {f.kind === "component" && (
-                  <Dropdown<Component> autoAlign
-                    size="sm"
-                    id={`${uid}-field-component-${f.id}`}
-                    titleText="Component"
-                    label={componentsFor(components, "field").length ? "Choose…" : "No field or static components yet"}
-                    // Field and static components: a block component lists items, which a field has not.
-                    items={componentsFor(components, "field", f.componentId)}
-                    // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
-                    selectedItem={(components.find((x) => x.id === f.componentId) ?? null) as Component}
-                    itemToString={(x) => x?.name ?? ""}
-                    onChange={({ selectedItem: x }) => updateField(f.id, { componentId: x?.id ?? null, componentArgs: {} })}
-                    invalid={submitted && !!targetErrors[f.id]}
-                    invalidText={targetErrors[f.id]}
-                  />
-                )}
                 <div className="field-row__actions">
                   <IconButton
                     autoAlign
@@ -338,51 +268,23 @@ function CollectionEditor({ existing }: { existing?: Collection }) {
                   {/* The drag handle is always a row's last icon. */}
                   {reorder.handle(i)}
                 </div>
-                {/* A reference field can limit which items it offers (filters over the target). */}
-                {isReferenceKind(f.kind) && (() => {
-                  const target = collections.find((t) => t.id === f.targetCollectionId);
-                  return target ? (
-                    <div className="field-row__mapping">
-                      <ChoiceFilterEditor target={target} filters={f.choiceFilter} onChange={(choiceFilter) => updateField(f.id, { choiceFilter })} />
-                    </div>
-                  ) : null;
-                })()}
-                {/* An AI field's prompt, over $item. */}
-                {f.kind === "ai" && (
-                  <div className="field-row__mapping">
-                    <AiPromptEditor
-                      id={`${uid}-field-ai-prompt-${f.id}`}
-                      value={f.aiPrompt ?? ""}
-                      problem={submitted ? targetErrors[f.id] : undefined}
-                      onChange={(aiPrompt) => updateField(f.id, { aiPrompt })}
-                    />
+                {/* What the field's type brings (its target, icon, component): a part of the field, under it. */}
+                {hasSettings(f.kind) && (
+                  <div className="field-row__settings">
+                    <Stack gap={5}>
+                      <FieldSettings
+                        id={`${uid}-field-${f.id}`}
+                        field={f}
+                        persisted={persisted.has(f.id)}
+                        targets={targets}
+                        problem={submitted ? targetErrors[f.id] : undefined}
+                        itemCount={existing ? (counts[existing.id] ?? 0) : 0}
+                        collection={existing}
+                        onChange={(patch) => updateField(f.id, patch)}
+                      />
+                    </Stack>
                   </div>
                 )}
-                {/* Each of the component's variables takes the value of a field of this collection, or a fixed value. */}
-                {f.kind === "component" && (() => {
-                  const x = components.find((e) => e.id === f.componentId);
-                  if (!x) return null;
-                  const sources = draft.fields.filter((o) => o.id !== f.id && o.name.trim());
-                  return (
-                    <div className="field-row__mapping">
-                      {x.params.map((p) => (
-                        <ComponentArgInput
-                          key={`${x.id}-${p}`}
-                          id={`${uid}-field-arg-${f.id}-${p}`}
-                          param={p}
-                          fields={sources}
-                          value={f.componentArgs[p]}
-                          onChange={(arg) => {
-                            const next = { ...f.componentArgs };
-                            if (arg) next[p] = arg;
-                            else delete next[p];
-                            updateField(f.id, { componentArgs: next });
-                          }}
-                        />
-                      ))}
-                    </div>
-                  );
-                })()}
               </div>
             ))}
             <Button kind="tertiary" size="sm" renderIcon={Add} iconDescription="Add field" onClick={addField} className="add-field">

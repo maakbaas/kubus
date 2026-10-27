@@ -2,7 +2,11 @@ import { useId } from "react";
 import { Button, Heading, IconButton, Select, SelectItem, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import { newId, pickableFields, type FieldDef, type FieldKind, type Collection } from "../domain/model";
+import { dollarNames } from "../domain/components";
 import {
+  filterCodeValue,
+  filterValueProblem,
+  hasSections,
   isGroupable,
   isPageValue,
   operatorsFor,
@@ -42,9 +46,24 @@ function comparablePageFields(kind: FieldKind, page: Collection): FieldDef[] {
 const FIXED = "fixed";
 
 /**
- * Value input for a filter rule, by field kind (a date input, an item picker, plain text…). On an
- * item page the value can also be one of the page's item's values, picked by name ("This Book's
- * Year"), never typed as code.
+ * What a typed value says under its input: what its {{ }} code works out to now ("= true"), or why
+ * it can't be compared (failing code, "maybe" for a checkbox), shown as invalid.
+ */
+function valueNote(field: FieldDef, rule: FilterRule, page?: Collection): { helper?: string; problem?: string } {
+  const code = hasSections(rule.value);
+  // On an item page, code reading $item is worked out for each page's item, not here.
+  if (code && page && dollarNames(rule.value).includes("item")) return { helper: `Worked out for each ${page.name}'s page` };
+  const value = code ? filterCodeValue(rule.value, null) : rule.value;
+  const problem = filterValueProblem(field, rule.operator, value);
+  if (problem) return { problem };
+  return code ? { helper: `= ${value || "(empty)"}` } : {};
+}
+
+/**
+ * Value input for a filter rule, by field kind (an item picker, text otherwise). The text may hold
+ * {{ }} code, worked out when the filter runs ($now; on an item page also $item, the page's item).
+ * On an item page the value can also be one of the page's item's values, picked by name ("This
+ * Book's Year").
  */
 function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; field: FieldDef; rule: FilterRule; refs: RefOptions; page?: Collection; onChange(value: string): void }) {
   if (field.kind === "item" || field.kind === "item_list") {
@@ -63,16 +82,21 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
       </Select>
     );
   }
-  const type = field.kind === "number" ? "number" : field.kind === "date" || field.kind === "datetime" ? "date" : "text";
+  // Text for every kind, so {{ }} code can be typed (a number or date input would refuse the braces).
+  const date = field.kind === "date" || field.kind === "datetime";
+  const note = valueNote(field, rule, page);
   const input = (
     <TextInput
       id={id}
       labelText="Value"
       hideLabel
       size="sm"
-      type={type}
-      placeholder={field.kind === "checkbox" ? "true or false" : type === "date" ? "yyyy-mm-dd" : "Value"}
+      inputMode={field.kind === "number" ? "decimal" : undefined}
+      placeholder={field.kind === "checkbox" ? "true or false" : date ? "yyyy-mm-dd" : "Value"}
       value={rule.value}
+      helperText={note.helper}
+      invalid={!!note.problem}
+      invalidText={note.problem}
       onChange={(e) => onChange(e.target.value)}
     />
   );

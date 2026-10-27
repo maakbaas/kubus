@@ -13,7 +13,8 @@ export function useBlockName() {
   return (block: ViewBlock) => {
     if (block.title) return block.title;
     const type = blockType(block.kind);
-    const component = type.kind === "component" ? components.find((c) => c.id === (block.options as ComponentBlockOptions).componentId) : undefined;
+    const options = block.options as ComponentBlockOptions;
+    const component = type.kind === "component" && !options.local ? components.find((c) => c.id === options.componentId) : undefined;
     return component?.name ?? type.label;
   };
 }

@@ -12,13 +12,17 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   and elements with handlers keep their clicks), Number, Date, Date & time, Checkbox, Image, Item (reference
   to an item of another collection, e.g. Book → Author), List of strings, Checklist (items with a
   checkbox, stored as GFM task lines "[x] text", `domain/checklist.ts`; tables show "2/5"),
-  List of items, Component (computed from a component), AI (written by a language model from a prompt).
+  List of items, Component (computed from a component, or with "Ask AI" on written by a language
+  model from the component as a prompt: an AI field, kind `ai`).
 - **Checkbox and Checklist fields can show an icon instead of the box** (`fields.toggle_icon`, a
   key of `TOGGLE_ICONS` in `ui/ToggleInput.tsx`: heart, star, flag, bookmark, checkmark, thumbs up,
   faces; outlined when off, filled when on; null = Carbon's checkbox). Every place that toggles
   such a value uses `ToggleInput`, never `Checkbox` directly. Markdown task boxes stay GFM boxes.
-  A checked one's text is greyed, and struck through with the field's "Strike through when checked"
-  (`fields.strike_through`, synced).
+  A checked one's text is greyed, and struck through with the field's strike through option
+  (`fields.strike_through`, synced): a checklist's checked entries; for a checkbox, "Strike through
+  the item when checked" also strikes the item where it is listed (`isStruckThrough`: its title in
+  table rows, `cell--struck`, and on cards). Component blocks get the checkbox's value in `$items`
+  and show it as their code says.
 - **Markdown is strictly GitHub Flavored Markdown.** The Milkdown editor (`app/src/ui/MarkdownEditor.tsx`)
   loads only the CommonMark + GFM presets (plus non-syntax utilities: history, listener,
   clipboard, upload, prism). Don't add syntax plugins (math, emoji, diagrams, frontmatter, Crepe, …),
@@ -47,20 +51,44 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
 - The Milkdown editor reports changes synchronously (`changes` plugin); don't switch back to the
   debounced listener plugin, which lost text typed right before saving.
 - **Components** (`#/components`, `app/src/domain/components.ts`, table `components`, field kind
-  `component`): Markdown with `{{ … }}` sections of JavaScript over `$variables` (stored as
-  `params`), plus the built-ins `$now` / `$item` (the item itself, n8n style) and, in a block,
-  `$items` / `$groups` / `$fields` / `$all` (details in the header of `components.ts`). A Component field picks one (`fields.component_id`) and maps each
-  variable to a field of its collection or a fixed text/number (`fields.component_args`, `ComponentArg`),
-  so one component serves any collection. **Code lives only in components** (and AI prompts): item values
-  (string, number, Markdown, HTML), Markdown blocks and filter values are data, never run. A component that is only `{{ … }}` yields that raw value
+  `component`): Markdown with `{{ … }}` sections of JavaScript over the built-ins `$now` / `$item`
+  (the item itself, n8n style) and, in a block, `$items` / `$groups` / `$fields` / `$all` (details in
+  the header of `components.ts`). There are no variables: fields are read as `$item.Name`, and any
+  other `$name` is an error (`unknownNames`, `codeProblem`). **Code lives only in components**: item
+  values (string, number, Markdown, HTML) are data, never run. A component that is only `{{ … }}` yields that raw value
   (numbers sort as numbers); otherwise rendered Markdown (rendered on item pages, plain text in
   tables/cards). Results are computed whenever items are shown (`withComputed`, before queries
   run) and never stored; failing sections show `⚠ message`. One concept on purpose: the same
   components are fields and blocks (see Blocks). The code runs in the app with the
   user's rights (`new Function`); it must move to a sandbox once components can come from others
-  (sync, sharing). The editor previews the result as you type, with a test value per variable and only
-  the choices the code calls for: a collection when it reads items, an item for `$item`, a field to group
-  by for `$groups`, the fields for `$fields` (`CollectionPreview` in `ComponentEditorPage.tsx`).
+  (sync, sharing). The editor previews the result as you type, with only the choices the code calls
+  for: a collection when it reads items, an item for `$item`, a field to group by for `$groups`, the
+  fields for `$fields` (`CollectionPreview` in `ComponentEditorPage.tsx`).
+  - **Shared or local** (one paradigm for every place that takes a component): a place either picks
+    a shared component (a row of `components`, by name) or has one written in place, a *local*
+    component owned by that place and stored with it: a Component / AI field's `fields.code` /
+    `output` / `frame_ratio` (`componentId` null), a component block's `options.local`, a Markdown
+    block's text (static only: `$now`, nothing about items). `fieldComponent` / `blockComponent`
+    resolve either. Deleting the place deletes it; nothing else refers to it. The Components page
+    lists local ones too (`localComponents`: by where they are used, "Books › Reading time", linked
+    to their place; Markdown blocks only when their text has `{{ }}` sections), with "Save as shared
+    component" (`PromoteComponentModal`, `ui/promoteLocal.ts`: a shared copy is saved, then the place
+    picks it; a Markdown block becomes a component block). The same action sits in the place itself
+    (field settings, block settings); "Show" filters the list (all, shared, local). One
+    control chooses (`ui/ComponentChoice.tsx`): a dropdown of "Local" plus the shared
+    components that fit; Local shows the same editor as a shared component's page
+    (`ui/ComponentForm.tsx`: Ask AI, Write with AI, Output, the code with its kind and problems, an
+    HTML component's shape), the page adding name, description and the preview around it.
+    Editing a shared one asks first (it applies everywhere); a local one doesn't.
+  - **Ask AI** (`components.ai`, a local field component's AI-ness is its field's kind `ai`): the
+    component's rendered text is a prompt; the model's reply is an AI field's value, stored (see AI
+    fields). Output is then Text, Number or Markdown (`AI_COMPONENT_OUTPUTS`), and an AI component
+    only fits a field (`placeProblem`: not a block, no `$now`). An AI field is a Component field with
+    "Ask AI" on (`fieldKindList` doesn't offer `ai`; the kind is fixed once saved, like an AI field's
+    output). A shared component's Ask AI is fixed while fields use it, its output while AI fields
+    use it; changing a shared prompt asks first, naming the fields and how many items are asked
+    again. The component editor previews a prompt as it reads for an item ("Sent to the model") and
+    "Try" asks the model once (nothing stored); Write with AI writes a prompt for one.
   - HTML output renders in a sandboxed frame that sizes itself, one component for every place
     (`HtmlFrame` in `ui/ComponentValue.tsx`, which documents flow/fill sizing, `frame_ratio`, the
     `<meta name="frame">` override and the zero-specificity base styles).
@@ -69,26 +97,32 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   - **Click to edit only what belongs to the place** (field values, Markdown blocks). A component
     field's value is computed, so clicking it does nothing; "Edit component" (code icon in its label
     row, in the "⋮" when its name is hidden) edits its component's code in place
-    (`ui/ComponentFieldEditor.tsx`); saving asks first, as the change applies everywhere the component
-    is used (Change component / Discard changes, which reverts / Keep editing, also on × or Escape).
-    A component block's Block settings link to the component's page.
+    (`ui/ComponentFieldEditor.tsx`): its own is saved with the field; a shared one asks first, as the
+    change applies everywhere the component is used (Change component / Discard changes, which reverts
+    / Keep editing, also on × or Escape). A component block's Block settings edit its own component,
+    or link to the shared one's page.
   - **Kinds** (`componentUses`, `placeProblem`, `componentsFor`): what a component uses makes it a
     *field* component (`$item`: a component field), a *block* component (`$items` / `$groups` /
     `$fields` / `$all`: a block, which then offers filter, sort, fields as its code needs) or a
-    *static* one (neither: either place). Never both (`mixed`): the component editor refuses to save
-    it. Pickers offer only what fits (component fields: field and static; "Add block" and Block
-    settings: block and static); one that doesn't fit where it is used (edited since) shows
-    "⚠ … use it as a block / field" there, never an empty result. The Components page has a Kind
-    column; the editor says the kind under the code as it is typed. A block on an item page gets no
-    `$item`: its filter takes the page's item instead. A block's variables take a fixed value or a
-    field of the block's collection, passed as the field's name (which field to use), not a value.
+    *static* one (neither: a block or a Markdown block's text, `"static"` place; not a field, where
+    it would be the same for every item). Never both
+    (`mixed`): the component editor refuses to save it. Pickers offer only what fits (component
+    fields: field components, AI ones only for AI fields; "Add block" and Block settings: block and
+    static); one that doesn't fit where it is used (edited since) shows "⚠ … use it as a block /
+    field" there, never an empty result. The Components page has a Kind column ("AI" tag for those
+    asking AI); the editor says the kind under the code as it is typed. A block on an item page gets
+    no `$item`: its filter takes the page's item instead.
   - Fields can also be added from every field picker ("Add field": table columns, card fields,
     item page layout; `ui/FieldModal.tsx`, which also edits component fields). They are ordinary
     fields of the collection, shown in the picker's own view; adding asks for confirmation (the field
-    belongs to the collection, not the view).
-- **AI fields** (`app/src/domain/ai.ts`, field kind `ai`, `fields.ai_prompt` / `ai_output`; model plumbing in
-  `app/src/app/ai.ts`, `platform/llm.ts`): a field whose value a language model writes per item. The prompt is written
-  like a component (`{{ $item.Artist }}`); only `$item` exists in it (no `$now`, variables or block
+    belongs to the collection, not the view). The field dialog and the collection editor show the
+    same settings (`ui/FieldSettings.tsx`): name and type in the row, what the type brings (target
+    and choice filter, a checkbox's icon and strike through, the component) under it, one control
+    per line, set in behind a rule as a part of that field.
+- **AI fields** (`app/src/domain/ai.ts`, field kind `ai`: a Component field with "Ask AI" on, its prompt
+  its own component in `fields.code` or a shared AI component, its value's form in `fields.output`; model plumbing in
+  `app/src/app/ai.ts`, `platform/llm.ts`): a field whose value a language model writes per item. The prompt is a
+  component (`{{ $item.Artist }}`); only `$item` exists in it (no `$now` or block
   values, and AI fields are left out of `$item`, as a field reading itself or two reading each other never settle).
   The field's value (text, number or Markdown; the output type is fixed once saved) is stored with the item
   (`value_text` / `value_number`) next to a fingerprint of the *rendered* prompt it came from (`value_json`),
@@ -155,7 +189,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   blocks stays either way: a hidden header or name never joins two sections. What
   arranges a view is stored right away, applied to the shown and the saved view alike, so it never
   marks the view changed: adding, removing (asks first) and reordering blocks, a block's type
-  ("Show as"), its type options (incl. the component and its variables), name and, on item
+  ("Show as"), its type options (incl. the component), name and, on item
   pages, its collection; collapsed blocks and groups (`Collapsed`, in the view's config / the item
   view; groups per grouped-by field). What changes which items show, and how, waits for Save
   changes: filters, sort, grouping and fields (`onChange` vs `onSet` in `BlockView`; `arrange` in

@@ -54,7 +54,7 @@ function IconLabel({ icon: Icon, children, onClick }: { icon: Icon; children: st
 /** A field's label: its kind's icon and its name (form labels, item page labels), after a collapse caret on item pages. */
 export function FieldLabel({ field }: { field: FieldDef }) {
   const collapse = useContext(FieldCollapse);
-  // An AI field edited as text (see editableField) keeps its own icon: only AI fields have an output.
+  // An AI field edited as text (see editableField) keeps its own icon.
   // The name toggles too, like a block's (the caret is its keyboard control); inside an editor's
   // <label> the click doesn't also focus the input.
   const toggle = collapse
@@ -64,7 +64,7 @@ export function FieldLabel({ field }: { field: FieldDef }) {
       }
     : undefined;
   const label = (
-    <IconLabel icon={FIELD_KIND_ICONS[field.aiOutput ? "ai" : field.kind]} onClick={toggle}>
+    <IconLabel icon={FIELD_KIND_ICONS[field.editedAi ? "ai" : field.kind]} onClick={toggle}>
       {field.name}
     </IconLabel>
   );

@@ -30,14 +30,15 @@ export function useAiCellState(itemId: string, fieldId: string): string {
  * referenced items) is still loading, so a half-rendered prompt is never sent.
  */
 export function useAiFill(collection: Collection, items: Item[] | null, refLabel: RefLabel, ready = true) {
-  const { ai } = useStore();
-  const requests = useMemo<RequestCache>(() => new WeakMap(), [collection, refLabel]);
+  const { ai, components } = useStore();
+  // Rendered prompts are kept per item while the collection, the labels and the components stay.
+  const requests = useMemo<RequestCache>(() => new WeakMap(), [collection, refLabel, components]);
   useEffect(() => {
     if (!items || !ready || !collection.fields.some((f) => f.kind === "ai")) return;
-    const scan = scanAiValues(collection, items, refLabel, requests);
+    const scan = scanAiValues(collection, items, refLabel, components, requests);
     ai.setProblems(scan.problems);
     ai.offer(scan.generate);
     ai.adopt(scan.adopt);
     ai.offerOverrides(scan.ask, scan.settled);
-  }, [ai, collection, items, ready, refLabel, requests]);
+  }, [ai, collection, items, ready, refLabel, components, requests]);
 }

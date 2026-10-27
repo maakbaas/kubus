@@ -1,40 +1,38 @@
-import { useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useId, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Button, Form, MultiSelect, Select, SelectItem, Stack, TextInput } from "@carbon/react";
+import { Button, Form, InlineNotification, MultiSelect, Select, SelectItem, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
+import { useAiSettings } from "../app/useAi";
 import { useItems } from "../app/useItems";
+import { parseAiReply, promptRequest } from "../domain/ai";
 import {
   ERROR_PREFIX,
-  FRAME_RATIOS,
-  componentUses,
+  codeProblem,
   dollarNames,
-  kindText,
-  parseParams,
+  isAiOutput,
+  placeProblem,
   render,
   withComputed,
   fieldLookup,
   itemsInput,
-  COMPONENT_OUTPUTS,
   type BlockInputs,
   type ComponentOutput,
 } from "../domain/components";
 import { itemLabel, newId, now, pickableFields, type Collection, type FieldDef } from "../domain/model";
 import { applyQuery, defaultQuery, isGroupable } from "../domain/query";
 import { refLabelOf, useReferenceOptions } from "../ui/useReferenceOptions";
-import { ComponentCodeEditor } from "../ui/ComponentCodeEditor";
+import { ComponentForm } from "../ui/ComponentForm";
 import { ComponentValue } from "../ui/ComponentValue";
-import { WriteWithAi } from "../ui/WriteWithAi";
 import { NotFound } from "../ui/NotFound";
 import { PageHeader } from "../ui/PageHeader";
-import { errorMessage } from "../ui/useConfirm";
-
-/** A test value as typed: a number when it reads as one, else text (empty = null). */
-const testValue = (s: string): unknown => (s.trim() === "" ? null : !Number.isNaN(Number(s)) ? Number(s) : s);
+import { errorMessage, useConfirm } from "../ui/useConfirm";
+import { useItemCounts } from "../app/useItemCounts";
 
 /**
- * Creates (`/components/new`) or edits (`/components/:id`) a component: name, the component (Markdown
- * with {{ }} JavaScript sections over $variables), and a test value per variable with the rendered
- * result as you type.
+ * Creates (`/components/new`) or edits (`/components/:id`) a shared component: name, the component
+ * (Markdown with {{ }} JavaScript sections over the built-in $ names), whether it asks AI, and the
+ * rendered result as you type (with a collection's items, when the code reads them). A component
+ * that asks AI previews the prompt as it reads for an item, and "Try" asks the model once.
  */
 export function ComponentEditorPage() {
   // Element ids unique per instance: the same page can be open in several tabs.
@@ -42,15 +40,17 @@ export function ComponentEditorPage() {
   const { componentId } = useParams();
   const { repo, components, collections } = useStore();
   const navigate = useNavigate();
+  const { confirm, dialog } = useConfirm();
+  const counts = useItemCounts();
   const existing = components.find((x) => x.id === componentId);
   const [name, setName] = useState(existing?.name ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
   const [code, setCode] = useState(existing?.code ?? "");
   const [output, setOutput] = useState<ComponentOutput>(existing?.output ?? "markdown");
   const [frameRatio, setFrameRatio] = useState<string | null>(existing?.frameRatio ?? null);
+  const [ai, setAi] = useState(existing?.ai ?? false);
   /** The preview's HTML fills its box (no height of its own): then its shape can be chosen. */
   const [fills, setFills] = useState(false);
-  const [tests, setTests] = useState<Record<string, string>>({});
   /** The collection (and one of its items) the preview is rendered with: what $item and $items read. */
   const [previewCollectionId, setPreviewCollectionId] = useState("");
   const [previewItemId, setPreviewItemId] = useState("");
@@ -58,7 +58,15 @@ export function ComponentEditorPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
-  const params = useMemo(() => parseParams(code), [code]);
+  // The fields using it: they fix whether it asks AI (computed or stored values), and an AI
+  // field's output (its stored values' form).
+  const users = useMemo(
+    () => (existing ? collections.flatMap((c) => c.fields.filter((f) => f.code === null && f.componentId === existing.id)) : []),
+    [collections, existing],
+  );
+  const aiLocked = users.length > 0;
+  const outputLocked = users.some((f) => f.kind === "ai");
+
   // The built-ins the code uses decide which preview choices show: a collection only when it reads
   // items ($item, $items, $groups, $fields, $all), an item only for $item, and so on.
   const uses = useMemo(() => {
@@ -67,29 +75,28 @@ export function ComponentEditorPage() {
   }, [code]);
   const previewCollection = uses.collection ? collections.find((c) => c.id === previewCollectionId) : undefined;
   const nameError = name.trim() ? undefined : "Give the component a name";
-  // One item ($item) or a block's items, never both: such code fits no place, so it isn't saved.
-  const codeError = useMemo(() => (componentUses(code).mixed ? kindText(code) : undefined), [code]);
+  // Unknown $ names, or one item ($item) and a block's items together: such code fits no place,
+  // so it isn't saved; a prompt also mustn't read $now or a block's items.
+  const codeError = useMemo(() => (ai ? placeProblem({ code, ai }, "field") : codeProblem(code)) ?? undefined, [code, ai]);
 
   if (componentId && !existing) return <NotFound />;
-
-  // A test value per $variable (the preview's result follows them).
-  const paramInputs = params.map((p) => (
-    <TextInput
-      key={p}
-      size="sm"
-      id={`${uid}-component-test-${p}`}
-      labelText={<code>${p}</code>}
-      placeholder="test value"
-      className="component-code"
-      value={tests[p] ?? ""}
-      onChange={(e) => setTests((t) => ({ ...t, [p]: e.target.value }))}
-    />
-  ));
 
   async function save(e: FormEvent) {
     e.preventDefault();
     setSubmitted(true);
     if (nameError || codeError) return;
+    // A changed prompt makes every value of the AI fields using it stale: they are all asked again.
+    const aiUsers = users.filter((f) => f.kind === "ai");
+    if (existing && aiUsers.length > 0 && existing.code !== code) {
+      const n = aiUsers.reduce((sum, f) => sum + (counts[f.collectionId] ?? 0), 0);
+      const ok = await confirm({
+        title: "Change the prompt everywhere?",
+        body: `${aiUsers.length === 1 ? "An AI field uses" : `${aiUsers.length} AI fields use`} it (${aiUsers.map((f) => `“${f.name}”`).join(", ")}): their values are made again by the language model, for up to ${n === 1 ? "1 item" : `${n} items`}.`,
+        confirmLabel: "Change prompt",
+        danger: false,
+      });
+      if (!ok) return;
+    }
     setSaving(true);
     try {
       const ts = now();
@@ -97,10 +104,10 @@ export function ComponentEditorPage() {
         id: existing?.id ?? newId(),
         name: name.trim(),
         description: description.trim(),
-        params,
         code,
         output,
         frameRatio: output === "html" ? frameRatio : null,
+        ai,
         createdAt: existing?.createdAt ?? ts,
         updatedAt: ts,
       });
@@ -130,18 +137,6 @@ export function ComponentEditorPage() {
             invalid={submitted && !!nameError}
             invalidText={nameError}
           />
-          {/* A few words in, the model writes the component and its description (it changes this form only). */}
-          <WriteWithAi
-            id={`${uid}-component-write`}
-            current={{ name, description, output, code }}
-            focus={previewCollection}
-            onApply={(s) => {
-              setCode(s.code);
-              setDescription(s.description);
-              setOutput(s.output);
-              if (!name.trim()) setName(s.name);
-            }}
-          />
           <TextInput
             size="sm"
             id={`${uid}-component-description`}
@@ -150,43 +145,33 @@ export function ComponentEditorPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-          {/* A plain (monospace) text area: the Markdown editor would escape characters like * and
-              break the JavaScript in {{ }}. */}
-          {/* What the result is: how it shows on pages, in tables and cards (and how it sorts). */}
-          <Select size="sm" id={`${uid}-component-output`} labelText="Output" value={output} onChange={(e) => setOutput(e.target.value as ComponentOutput)}>
-            {COMPONENT_OUTPUTS.map((o) => (
-              <SelectItem key={o.value} value={o.value} text={o.text} />
-            ))}
-          </Select>
-          {/* Not the Markdown editor: it would escape characters like * and break the JavaScript in {{ }}. */}
-          <ComponentCodeEditor
-            id={`${uid}-component-code`}
-            labelText="Component"
-            html={output === "html"}
-            placeholder={"**{{ $title }}**: {{ Math.round($pages / 40) }} h of reading"}
-            // What the code makes it (a field, block or static component) as it is typed; using
-            // $item and a block's names together is an error.
-            helperText={`${kindText(code)} ${output === "html" ? "HTML" : "Markdown"} with {{ JavaScript }} sections. Built in: $now (the current date); $item, one item: its fields by name ($item.Pages, or $item["Read at"]) and $item.id, createdAt, updatedAt; a block's $items, $groups, $fields and $all. Any other $name is a variable, given a value where the component is used (a field's value, or a fixed one).${output === "image" ? " The result is the image's URL." : ""}${output === "html" ? " It runs in a sandboxed frame: scripts work (maps, charts), the app and its data are out of reach." : ""}`}
+          {/* The same editor as where a component is written in place (ComponentForm). Ask AI is
+              fixed while fields use it; an AI component's output while AI fields do. Write with AI
+              also fills in the description (and the name, while empty). */}
+          <ComponentForm
+            id={`${uid}-component`}
+            value={{ code, output, frameRatio, ai }}
+            onChange={(next) => {
+              setCode(next.code);
+              setOutput(next.output);
+              setFrameRatio(next.frameRatio);
+              setAi(next.ai);
+            }}
+            askAi={{ locked: aiLocked }}
+            outputLocked={outputLocked}
+            outputHelp={outputLocked ? "Fixed while AI fields use it: their values are stored in this form." : aiLocked ? "Whether it asks AI is fixed while fields use it." : undefined}
             invalidText={codeError}
-            value={code}
-            onChange={setCode}
+            fills={fills}
+            writer={{
+              focus: previewCollection,
+              name,
+              description,
+              onNamed: (suggested, described) => {
+                setDescription(described);
+                if (!name.trim()) setName(suggested);
+              },
+            }}
           />
-          {/* Only for HTML that fills its box (a map, a chart): content with its own height
-              is shown at that height, whatever its shape. */}
-          {output === "html" && fills && (
-            <Select
-              size="sm"
-              id={`${uid}-component-frame-ratio`}
-              labelText="Aspect ratio on pages"
-              helperText="This HTML fills its box (like a map or a chart), so it has no height of its own. On card covers it fills the cover."
-              value={frameRatio ?? "16/9"}
-              onChange={(e) => setFrameRatio(e.target.value === "16/9" ? null : e.target.value)}
-            >
-              {FRAME_RATIOS.map((r) => (
-                <SelectItem key={r} value={r} text={r.replace("/", ":")} />
-              ))}
-            </Select>
-          )}
           {/* The collection whose items $item and $items read in the preview (none: they are empty). */}
           {uses.collection && (
             <Select
@@ -206,7 +191,7 @@ export function ComponentEditorPage() {
               ))}
             </Select>
           )}
-          {/* Try the formula: a value per $variable, the result right away. */}
+          {/* Try it: the result right away. */}
           {previewCollection ? (
             <CollectionPreview
               key={previewCollection.id}
@@ -214,24 +199,17 @@ export function ComponentEditorPage() {
               uses={uses}
               itemId={previewItemId}
               onItem={setPreviewItemId}
-              params={params}
               code={code}
               output={output}
-              tests={tests}
+              ai={ai}
+              name={name}
               frameRatio={frameRatio}
               onFill={setFills}
-              inputs={paramInputs}
             />
+          ) : ai ? (
+            <p className="helper">Choose a collection to preview the prompt for one of its items.</p>
           ) : (
-            <div className="component-test">
-              {paramInputs}
-              <PreviewResult
-                result={render({ params, code, output }, params.map((p) => testValue(tests[p] ?? "")))}
-                output={output}
-                frameRatio={frameRatio}
-                onFill={setFills}
-              />
-            </div>
+            <PreviewResult result={render({ code, output })} output={output} frameRatio={frameRatio} onFill={setFills} />
           )}
           {error && <p className="cds--form-requirement">{error}</p>}
           <div className="form-actions">
@@ -244,15 +222,16 @@ export function ComponentEditorPage() {
           </div>
         </Stack>
       </Form>
+      {dialog}
     </div>
   );
 }
 
 /** The rendered result, in the same markup as a component field on an item page, so it renders identically. */
-function PreviewResult({ result, output, frameRatio, onFill }: { result: unknown; output: ComponentOutput; frameRatio: string | null; onFill(fills: boolean): void }) {
+function PreviewResult({ result, output, frameRatio, onFill, label = "Result" }: { result: unknown; output: ComponentOutput; frameRatio: string | null; onFill?(fills: boolean): void; label?: string }) {
   return (
     <div className="component-test__result">
-      <div className="cds--label">Result</div>
+      <div className="cds--label">{label}</div>
       <div className="item-fields item-fields--form component-test__preview">
         <div className="view-field">
           <div className={`view-field__value view-field__value--component${String(result ?? "").startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}`}>
@@ -267,33 +246,31 @@ function PreviewResult({ result, output, frameRatio, onFill }: { result: unknown
 /**
  * The preview with a collection's items, and the choices the code calls for: an item ($item, else
  * the first), a field to group by ($groups) and the fields ($fields); $items / $all = all items.
- * Then the test values and the result.
+ * Then the result; for a component that asks AI, the prompt as it reads for the item, and "Try".
  */
 function CollectionPreview({
   collection,
   uses,
   itemId,
   onItem,
-  params,
   code,
   output,
-  tests,
+  ai,
+  name,
   frameRatio,
   onFill,
-  inputs,
 }: {
   collection: Collection;
   uses: { item: boolean; groups: boolean; fields: boolean };
   itemId: string;
   onItem(id: string): void;
-  params: string[];
   code: string;
   output: ComponentOutput;
-  tests: Record<string, string>;
+  ai: boolean;
+  /** The component's name: what the model is told the field is called, in "Try". */
+  name: string;
   frameRatio: string | null;
   onFill(fills: boolean): void;
-  /** The test value inputs, shown before the result. */
-  inputs: ReactNode;
 }) {
   const uid = useId();
   const { components } = useStore();
@@ -305,6 +282,7 @@ function CollectionPreview({
   const items = useMemo(() => (stored ? withComputed(collection, stored, components, refLabelOf(refs)) : []), [stored, collection, components, refs]);
   const item = items.find((i) => i.id === itemId) ?? items[0];
   const result = useMemo(() => {
+    if (ai) return null;
     const refLabel = refLabelOf(refs);
     const input = itemsInput(collection, refLabel);
     const all = items.map(input);
@@ -315,8 +293,13 @@ function CollectionPreview({
       fields: chosenFields.map((f) => ({ id: f.id, name: f.name, kind: f.kind })),
       all,
     };
-    return render({ params, code, output }, params.map((p) => testValue(tests[p] ?? "")), item, item && fieldLookup(collection, item, refLabel), block);
-  }, [collection, items, item, refs, params, code, output, tests, groupBy, chosenFields]);
+    return render({ code, output }, item, item && fieldLookup(collection, item, refLabel), block);
+  }, [ai, collection, items, item, refs, code, output, groupBy, chosenFields]);
+  // A prompt as it reads for the item (what would be sent), or why none would be.
+  const request = useMemo(
+    () => (ai && item ? promptRequest(collection, name.trim() || "Value", { code, output, frameRatio: null, ai: true }, isAiOutput(output) ? output : "string", item, refLabelOf(refs)) : null),
+    [ai, item, collection, name, code, output, refs],
+  );
   return (
     <>
       {uses.item && (
@@ -327,7 +310,7 @@ function CollectionPreview({
           ))}
         </Select>
       )}
-      {uses.groups && (
+      {!ai && uses.groups && (
         <Select size="sm" id={`${uid}-preview-group`} labelText="Preview grouped by" value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
           <SelectItem value="" text="No grouping" />
           {fieldChoices
@@ -337,7 +320,7 @@ function CollectionPreview({
             ))}
         </Select>
       )}
-      {uses.fields && (
+      {!ai && uses.fields && (
         <MultiSelect<FieldDef>
           autoAlign
           size="sm"
@@ -350,10 +333,50 @@ function CollectionPreview({
           onChange={({ selectedItems }) => setChosenFields(fieldChoices.filter((f) => selectedItems?.some((s) => s.id === f.id)))}
         />
       )}
-      <div className="component-test">
-        {inputs}
+      {ai ? (
+        request && <PromptPreview request={request} output={isAiOutput(output) ? output : "string"} />
+      ) : (
         <PreviewResult result={result} output={output} frameRatio={frameRatio} onFill={onFill} />
+      )}
+    </>
+  );
+}
+
+/** A prompt as it reads for the preview's item ("Sent to the model"), and "Try": the model's reply, once (nothing is stored). */
+function PromptPreview({ request, output }: { request: ReturnType<typeof promptRequest>; output: "string" | "number" | "markdown" }) {
+  const { ai } = useStore();
+  const { paused } = useAiSettings(); // re-renders when the settings change
+  const configured = ai.isConfigured("field") && !paused;
+  const [reply, setReply] = useState<{ value: unknown } | { error: string } | null>(null);
+  const [asking, setAsking] = useState(false);
+  if ("problem" in request) return <PreviewResult result={ERROR_PREFIX + request.problem} output="string" frameRatio={null} label="Sent to the model" />;
+  const tryIt = async () => {
+    setAsking(true);
+    setReply(null);
+    try {
+      const text = await ai.client("field").complete([
+        { role: "system", content: request.system },
+        { role: "user", content: request.prompt },
+      ]);
+      const parsed = parseAiReply(output, text);
+      setReply("error" in parsed ? parsed : { value: parsed.value });
+    } catch (e) {
+      setReply({ error: errorMessage(e) });
+    } finally {
+      setAsking(false);
+    }
+  };
+  return (
+    <>
+      <PreviewResult result={request.prompt} output="string" frameRatio={null} label="Sent to the model" />
+      <div>
+        <Button size="sm" kind="tertiary" disabled={!configured || asking} onClick={tryIt}>
+          {asking ? "Asking…" : "Try"}
+        </Button>
       </div>
+      {!configured && <p className="helper">Set up a language model in Settings to try the prompt.</p>}
+      {reply && "error" in reply && <InlineNotification kind="error" lowContrast hideCloseButton title="The model's reply doesn't fit" subtitle={reply.error} />}
+      {reply && "value" in reply && <PreviewResult result={reply.value} output={output} frameRatio={null} label="The model's reply (not stored)" />}
     </>
   );
 }

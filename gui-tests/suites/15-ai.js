@@ -64,7 +64,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.until("the item page shows the value", async () => (await t.page.locator(".ws-pane--active .item-fields").innerText()).includes("AI summary of"));
     fake.answer = (body) => (promptOf(body).includes("the second edition") ? "AI summary, nudged" : summaryReply(body));
     const before = fake.calls.length;
-    await t.openPanel(t.page.locator(".ws-pane--active .item-fields"), "Generate again");
+    await t.openPanel(t.page.locator(".ws-pane--active .item-fields > *", { hasText: "Summary" }).first(), "Generate again");
     await t.audit("generate again popover");
     const nudge = t.page.locator(".toolbar-popover.cds--popover--open").getByRole("textbox", { name: /Nudge/ });
     await nudge.click();
@@ -189,7 +189,7 @@ test("no model set up: the AI icon says so and leads to the settings", async (t)
 for (const vp of ["desktop", "phone"]) {
   test(`write a component with AI @ ${vp}`, async (t) => {
     await t.boot();
-    const fake = await fakeModel(t, () => JSON.stringify({ name: "Reading time", description: "Hours to read it", output: "markdown", code: "{{ ($count ?? 0) / 40 }} hours" }));
+    const fake = await fakeModel(t, () => JSON.stringify({ name: "Reading time", description: "Hours to read it", output: "markdown", code: "{{ ($item.Count ?? 0) / 40 }} hours" }));
     const spec = profileSpec("typical", { items: 2 });
     spec.prefs = AI_PREFS;
     await t.seed(spec);
@@ -200,7 +200,7 @@ for (const vp of ["desktop", "phone"]) {
     const write = t.page.getByRole("button", { name: /^Write/ });
     await t.noShift("writing moves nothing above the editor", async () => {
       await write.click();
-      await t.until("the code is written into the editor", async () => (await t.page.getByRole("textbox", { name: "Component" }).inputValue().catch(() => "")).includes("/ 40") || "not yet", { timeout: 10000 });
+      await t.until("the code is written into the editor", async () => (await t.page.getByRole("textbox", { name: "Code", exact: true }).inputValue().catch(() => "")).includes("/ 40") || "not yet", { timeout: 10000 });
     }, { scope: ".ws-pane--active .page-header" });
     await t.check("the description is filled in", (await t.page.getByRole("textbox", { name: "Description" }).inputValue()).includes("Hours to read it"));
     await t.check("the box is emptied for a follow-up", (await box.inputValue()) === "");

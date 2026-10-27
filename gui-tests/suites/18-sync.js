@@ -30,10 +30,16 @@ async function fakeServer(t, url, rows = {}) {
   return fake;
 }
 
-/** The rows the fake server holds, latest per key (good enough: rows are whole). */
+/**
+ * The rows the fake server holds, the latest per key. A row sent twice (a second sync right after
+ * connecting) is stored twice; kept both, the unchanged copy could be applied after a changed one.
+ */
 function serverRows(fake) {
+  const keyOf = (table, row) => (table === "field_values" ? `${row.item_id}/${row.field_id}` : String(row.id));
+  const latest = new Map();
+  for (const e of fake.store) latest.set(`${e.table}:${keyOf(e.table, e.row)}`, e);
   const out = {};
-  for (const e of fake.store) (out[e.table] ||= []).push(e.row);
+  for (const e of latest.values()) (out[e.table] ||= []).push(e.row);
   return out;
 }
 
@@ -119,7 +125,8 @@ test("sync: a server that holds data replaces this device's data, after asking",
   await t.until("the data is uploaded", () => first.requests.some((r) => (r.tables.items || 0) >= 3), { timeout: 10000 });
   const rows = serverRows(first);
   // The server's copy differs: one title was changed there.
-  const title = (rows.field_values || []).find((r) => typeof r.value_text === "string" && /Wizard|Hand|Foundation|Neuromancer|Dispossessed/.test(r.value_text));
+  // A book's title (authors' names are titles of books too, and aren't on the Books page).
+  const title = (rows.field_values || []).find((r) => r.field_id === ids.fields["books.title"] && typeof r.value_text === "string");
   await t.require("a title is among the uploaded rows", !!title, `${(rows.field_values || []).length} field values`);
   title.value_text = "Changed on the server";
   await fakeServer(t, "https://second.test", rows);

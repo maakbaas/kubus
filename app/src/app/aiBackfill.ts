@@ -117,7 +117,7 @@ export class AiBackfill {
       }
       const refLabel = refLabelOf(options);
       const items = withComputed(collection, await this.repo.listItems(collection, space.id), components, refLabel);
-      const scan = scanAiValues(collection, items, refLabel);
+      const scan = scanAiValues(collection, items, refLabel, components);
       this.ai.offerBackground(scan.generate);
       this.ai.adopt(scan.adopt);
       this.ai.offerOverrides(scan.ask, scan.settled);

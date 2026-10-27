@@ -2,6 +2,7 @@
 // UI-free. Everything kind-specific lives in KIND_RULES, so a new field kind (or operator)
 // is added in one place.
 
+import { dollarNames, ERROR_PREFIX, fieldLookup, render, splitWarnings, type RefLabel } from "./components";
 import { checklistItems } from "./checklist";
 import { formatDate, htmlPlainText } from "./fieldKinds";
 import { markdownPlainText } from "./markdownExcerpt";
@@ -240,6 +241,58 @@ export function resolvePageValues(filters: FilterRule[], page: Item | null): Fil
   });
 }
 
+/** Whether a filter value holds {{ }} code (raw text, worked out when the filter runs: resolveFilterValues). */
+export const hasSections = (value: string) => /\{\{[\s\S]*?\}\}/.test(value);
+
+/** The page a block is on, for its filter values: its item, as $item in {{ }} code. */
+export interface FilterPage {
+  collection: Collection;
+  item: Item;
+  refLabel: RefLabel;
+}
+
+/**
+ * A filter value's {{ }} sections worked out, as if the result had been typed: `{{ 1 == 1 }}`
+ * gives "true", `{{ new Date().toISOString().slice(0, 10) }}` today. They read $now, and on an
+ * item page that page's item as $item; not a block's names. A failing section, or one reading
+ * what isn't there, gives "⚠ message" (ERROR_PREFIX), which matches nothing.
+ */
+export function filterCodeValue(value: string, page: FilterPage | null): string {
+  if (!hasSections(value)) return value;
+  const names = dollarNames(value);
+  const unknown = names.find((n) => n !== "now" && n !== "item");
+  if (unknown) return `${ERROR_PREFIX}$${unknown} isn't available in a filter: only $now, and $item on an item page`;
+  if (names.includes("item") && !page) return `${ERROR_PREFIX}$item is the page's item: only in a block on an item page`;
+  const result = render({ code: value, output: "string" }, page?.item, page ? fieldLookup(page.collection, page.item, page.refLabel) : undefined);
+  const text = result == null ? "" : String(result);
+  const warning = splitWarnings(text);
+  return warning.length > 1 ? ERROR_PREFIX + warning[1] : text.trim();
+}
+
+/** Filters with page-item values and {{ }} code worked out for the page (none: a collection view). */
+export function resolveFilterValues(filters: FilterRule[], page: FilterPage | null): FilterRule[] {
+  const resolved = resolvePageValues(filters, page?.item ?? null);
+  if (!resolved.some((r) => hasSections(r.value))) return resolved;
+  return resolved.map((r) => (hasSections(r.value) ? { ...r, value: filterCodeValue(r.value, page) } : r));
+}
+
+/**
+ * Why a rule's value (as typed, or as its code works out) can't be compared, or undefined: a
+ * checkbox takes true or false, a number a number, a date yyyy-mm-dd. Shown at the input; such a
+ * rule matches nothing (never silently the wrong items).
+ */
+export function filterValueProblem(field: FieldDef, operator: FilterOperator, value: string): string | undefined {
+  if (value.startsWith(ERROR_PREFIX)) return value.slice(ERROR_PREFIX.length);
+  const v = value.trim();
+  if (v === "" || isPageValue(v)) return undefined;
+  const compares = operator === "is" || operator === "isNot" || operator === "gt" || operator === "lt" || operator === "before" || operator === "after";
+  if (!compares) return undefined;
+  if (field.kind === "checkbox" && !/^(true|false)$/i.test(v)) return "A checkbox is true or false";
+  if (field.kind === "number" && !Number.isFinite(Number(v))) return "Not a number";
+  if ((field.kind === "date" || field.kind === "datetime") && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return "A date is yyyy-mm-dd";
+  return undefined;
+}
+
 /**
  * The values a new item needs to pass the reference rules of a filter ("Author is X" sets X), so
  * an item added to a filtered list shows up in it.
@@ -282,6 +335,8 @@ export function isEmptyValue(v: FieldValue | undefined) {
 
 function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: QueryContext): boolean {
   const arg = rule.value.trim();
+  // A value that can't be compared (failing code, "maybe" for a checkbox) matches nothing.
+  if (filterValueProblem(field, rule.operator, arg)) return false;
   // The value as text, only computed by the operators that compare text.
   let cached: string | undefined;
   const text = () => (cached ??= KIND_RULES[field.kind].text(field, value, ctx).toLowerCase());
@@ -341,7 +396,8 @@ function compareKeys(a: string | number | null, b: string | number | null): numb
  */
 export function filterOf(collection: Collection, filters: FilterRule[], ctx: QueryContext): (item: Item) => boolean {
   const byId = new Map(pickableFields(collection).map((f) => [f.id, f]));
-  const rules = filters.flatMap((rule) => {
+  // {{ }} code not worked out yet (a reference field's choice filter: no page) is worked out here.
+  const rules = resolveFilterValues(filters, null).flatMap((rule) => {
     const field = byId.get(rule.fieldId);
     return field ? [{ rule, field }] : [];
   });

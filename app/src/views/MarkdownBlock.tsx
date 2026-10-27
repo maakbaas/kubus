@@ -1,40 +1,37 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { ERROR_PREFIX, placeProblem, render } from "../domain/components";
 import { Document } from "@carbon/icons-react";
-import type { FieldDef } from "../domain/model";
+import { blankField, type FieldDef } from "../domain/model";
 import { captureEditStart, type EditStart } from "../ui/editStart";
 import { ComponentValue } from "../ui/ComponentValue";
 import { FieldEditor } from "../ui/FieldEditor";
 import { defineBlockType, type BlockProps } from "./registry";
 
-// A block with its own Markdown, kept in the view (or item view) it is in, not in a reusable
-// component: plain GFM, no {{ }} code (code lives in components; "Save as component" in its
-// Block settings turns the text into a static component, reusable and open to code). It behaves
-// exactly like a Markdown field: the same read-only box, the same in-place editor (FieldEditor),
-// so nothing moves when editing starts.
+// A block with its own Markdown, kept in the view (or item view) it is in: its text is a local
+// static component (domain/components.ts): GFM whose {{ }} sections may use $now but nothing about
+// items (the same content wherever it is shown). "Save as shared component" in its Block settings
+// promotes it to a shared component, which the block then shows as a component block. It behaves
+// exactly like a Markdown field: the same read-only box (the text rendered), the same in-place
+// editor (FieldEditor, on the text as written), so nothing moves when editing starts.
 
 export interface MarkdownBlockOptions {
   text: string;
 }
 
+const SECTION_START = /\{\{/;
+
 /** The field the block's text is edited as. */
-const TEXT_FIELD: FieldDef = {
-  id: "text",
-  collectionId: "",
-  name: "Markdown",
-  kind: "markdown",
-  targetCollectionId: null,
-  componentId: null,
-  componentArgs: {},
-  choiceFilter: [],
-  toggleIcon: null, strikeThrough: false,
-  aiPrompt: null,
-  aiOutput: null,
-  position: 0,
-};
+const TEXT_FIELD: FieldDef = blankField("text", "Markdown", "markdown");
 
 function MarkdownBlockView({ options, refs, onOptions }: BlockProps<MarkdownBlockOptions>) {
   /** Being edited, and where the text was clicked. */
   const [editing, setEditing] = useState<{ start?: EditStart } | null>(null);
+  // Its sections run as a static component's (only $now); text without any is shown as written.
+  const rendered = useMemo(() => {
+    if (!SECTION_START.test(options.text)) return options.text;
+    const problem = placeProblem({ code: options.text, ai: false }, "static");
+    return problem ? ERROR_PREFIX + problem : render({ code: options.text, output: "markdown" });
+  }, [options.text]);
 
   if (editing) {
     return (
@@ -77,7 +74,7 @@ function MarkdownBlockView({ options, refs, onOptions }: BlockProps<MarkdownBloc
             }
           }}
         >
-          {!empty && <ComponentValue value={options.text} output="markdown" variant="page" />}
+          {!empty && <ComponentValue value={rendered} output="markdown" variant="page" />}
         </div>
       </div>
     </div>
