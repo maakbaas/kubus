@@ -122,11 +122,13 @@ CREATE INDEX idx_items_collection ON items(collection_id);
 
 -- Binary content (images), content-addressed: id = SHA-256 of data, rows are immutable.
 -- A file is deleted once no live item uses it (releaseFile in SqliteRepository.ts).
+-- `data` is local only (not a synced column): NULL means this device knows the file from a sync
+-- but hasn't downloaded its bytes yet (the sync engine fetches them; see docs/sync.md).
 CREATE TABLE files (
   id         TEXT PRIMARY KEY,
   mime       TEXT NOT NULL,
   size       INTEGER NOT NULL,
-  data       BLOB NOT NULL,
+  data       BLOB,
   created_at TEXT NOT NULL
 );
 
@@ -141,7 +143,7 @@ CREATE TABLE field_values (
   value_datetime TEXT,     -- ISO 8601 UTC
   value_bool     INTEGER,
   value_ref      TEXT REFERENCES items(id),
-  value_file     TEXT REFERENCES files(id),
+  value_file     TEXT,     -- files.id; no foreign key: a file's row can arrive later than its use
   value_json     TEXT,
   updated_at     TEXT NOT NULL,
   PRIMARY KEY (item_id, field_id)

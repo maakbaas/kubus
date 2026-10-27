@@ -7,8 +7,9 @@
 
 /** Maps to SQLite / Postgres: text, number = real / double precision, int, bool = 0|1 / boolean,
  *  json = text / jsonb, date = text YYYY-MM-DD / date, timestamp = ISO text / timestamptz,
- *  bytes = blob / bytea. On the wire: text, number, 0|1, JSON text, base64. */
-export type ColumnType = "text" | "number" | "int" | "bool" | "json" | "date" | "timestamp" | "bytes";
+ *  On the wire: text, number, 0|1, JSON text. File bytes don't travel as rows: see /api/files
+ *  (server/src/files.ts) and the sync engine. */
+export type ColumnType = "text" | "number" | "int" | "bool" | "json" | "date" | "timestamp";
 
 export interface SyncTable {
   name: string;
@@ -74,7 +75,8 @@ export const SYNC_TABLES: SyncTable[] = [
     name: "files",
     key: ["id"],
     version: null,
-    columns: { id: "text", mime: "text", size: "int", data: "bytes", created_at: "timestamp" },
+    // The bytes are the local-only column `data` on a device, `file_bytes` on the server.
+    columns: { id: "text", mime: "text", size: "int", created_at: "timestamp" },
   },
   {
     name: "field_values",
@@ -98,7 +100,7 @@ export const SYNC_TABLES: SyncTable[] = [
 ];
 
 export type WireValue = string | number | null;
-/** One row on the wire: column name to value (bool as 0 / 1, json as text, bytes as base64). */
+/** One row on the wire: column name to value (bool as 0 / 1, json as text). */
 export type WireRow = Record<string, WireValue>;
 /** Rows by table name. */
 export type WireChanges = Record<string, WireRow[]>;
@@ -138,3 +140,6 @@ export interface SyncMismatch {
   /** The server holds no rows at all (as after a wipe). */
   empty: boolean;
 }
+
+/** The largest file a device stores and the server accepts (PUT /api/files/<id>). */
+export const MAX_FILE_BYTES = 20 * 1024 * 1024;

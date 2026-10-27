@@ -747,7 +747,9 @@ export class SqliteRepository implements Repository {
     const id = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
     await this.db.write([
       {
-        sql: "INSERT OR IGNORE INTO files (id, mime, size, data, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        // Known from a sync but not downloaded yet: now this device has the bytes.
+        sql: `INSERT INTO files (id, mime, size, data, created_at) VALUES (?1, ?2, ?3, ?4, ?5)
+              ON CONFLICT (id) DO UPDATE SET data = excluded.data WHERE files.data IS NULL`,
         bind: [id, mime, data.byteLength, data, now()],
       },
     ]);
@@ -755,10 +757,14 @@ export class SqliteRepository implements Repository {
   }
 
   async getFile(fileId: string): Promise<{ data: Uint8Array; mime: string } | null> {
-    const rows = await this.db.select<{ data: Uint8Array; mime: string }>("SELECT mime, data FROM files WHERE id = ?1", [
+    const rows = await this.db.select<{ data: Uint8Array | null; mime: string }>("SELECT mime, data FROM files WHERE id = ?1", [
       fileId,
     ]);
-    return rows[0] ?? null;
+    const file = rows[0];
+    if (!file) return null;
+    // Known from a sync, bytes not here yet: fetched from the server now (null offline).
+    const data = file.data ?? (await this.sync.fetchFile(fileId));
+    return data && { data, mime: file.mime };
   }
 
   private assemble(collection: Collection, items: ItemRow[], values: ValueRow[]): Item[] {
@@ -801,31 +807,20 @@ export class SqliteRepository implements Repository {
 }
 
 /**
- * Deletes a file once no live item uses it. Runs after the statements that drop
- * the reference, in the same transaction. Rows of soft-deleted items/fields
- * still point at their files (and the FK forbids dangling ones), so those links
- * are cleared first — only when no live reference remains.
+ * Whether file ?1 is in use: a live item, through a live field, has it as an image value or
+ * mentions `files/<id>` in a Markdown or HTML value. Rows of soft-deleted items and fields may
+ * still name a file; they don't count.
  */
+const LIVE_USE = `EXISTS (
+    SELECT 1 FROM field_values fv
+      JOIN items o ON o.id = fv.item_id
+      JOIN fields f ON f.id = fv.field_id
+     WHERE o.deleted_at IS NULL AND f.deleted_at IS NULL
+       AND (fv.value_file = ?1 OR (f.kind IN ('markdown', 'html') AND instr(fv.value_text, 'files/' || ?1) > 0)))`;
+
+/** Deletes a file once no live item uses it. Runs after the statements that drop the use, in the same transaction. */
 function releaseFile(fileId: string): Statement[] {
-  // A live use is an image field value, or a markdown or HTML value mentioning `files/<id>`.
-  const liveUse = `EXISTS (
-      SELECT 1 FROM field_values fv
-        JOIN items o ON o.id = fv.item_id
-        JOIN fields f ON f.id = fv.field_id
-       WHERE o.deleted_at IS NULL AND f.deleted_at IS NULL
-         AND (fv.value_file = ?1 OR (f.kind IN ('markdown', 'html') AND instr(fv.value_text, 'files/' || ?1) > 0)))`;
-  return [
-    {
-      sql: `UPDATE field_values SET value_file = NULL WHERE value_file = ?1 AND NOT ${liveUse}`,
-      bind: [fileId],
-    },
-    {
-      sql: `DELETE FROM files WHERE id = ?1
-              AND NOT EXISTS (SELECT 1 FROM field_values WHERE value_file = ?1)
-              AND NOT ${liveUse}`,
-      bind: [fileId],
-    },
-  ];
+  return [{ sql: `DELETE FROM files WHERE id = ?1 AND NOT ${LIVE_USE}`, bind: [fileId] }];
 }
 
 /** A reference field's choice filters as stored (JSON), or null for other fields / none. */

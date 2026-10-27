@@ -1,6 +1,5 @@
 import {
   SYNC_TABLES,
-  type ColumnType,
   type SyncMismatch,
   type SyncRequest,
   type SyncResponse,
@@ -32,6 +31,12 @@ import type { SyncEnvironment } from "./environment";
 //    would land on the new database as fragments.
 //  * When: shortly after a local change, every 30 s, when coming online or back to the app, and
 //    when the server signals a change (server-sent events).
+//  * File bytes don't travel in /api/sync. Before a sync sends a queued `files` row, the engine
+//    uploads its bytes (PUT /api/files/<id>), so the server never lists a file it can't serve; a
+//    sync uploads up to UPLOAD_BYTES / UPLOAD_MS, the rest waits in the outbox for the next one
+//    (other rows don't wait: nothing refers to a file by foreign key). Rows from the server come
+//    without bytes (files.data NULL); after each sync they are downloaded in the background, all
+//    of them or, with `originals: "opened"`, only thumbnails (an original then when it is shown).
 
 const STORAGE_KEY = "kubus.sync";
 const SERVER_KEY = "kubus.syncServer";
@@ -39,15 +44,23 @@ const SERVER_KEY = "kubus.syncServer";
 const REPLACED_KEY = "kubus.syncReplaced";
 const POLL_MS = 30_000;
 const DEBOUNCE_MS = 2_000;
+/** How much one sync uploads at most (it goes on with the next file while under both). */
+const UPLOAD_BYTES = 50 * 1024 * 1024;
+const UPLOAD_MS = 30_000;
+/** Files downloaded at the same time. */
+const DOWNLOADS = 3;
 
 function loadConfig(env: SyncEnvironment): SyncConfig {
   try {
     const saved = JSON.parse(env.storage.get(STORAGE_KEY) ?? "null") as Partial<SyncConfig> | null;
-    if (saved) return { url: saved.url ?? env.defaultUrl(), token: saved.token ?? "", enabled: !!saved.enabled };
+    if (saved) {
+      const originals = saved.originals === "opened" ? "opened" : "always";
+      return { url: saved.url ?? env.defaultUrl(), token: saved.token ?? "", enabled: !!saved.enabled, originals };
+    }
   } catch {
     // unreadable settings: start over
   }
-  return { url: env.defaultUrl(), token: "", enabled: false };
+  return { url: env.defaultUrl(), token: "", enabled: false, originals: "always" };
 }
 
 function loadReplaced(env: SyncEnvironment): SyncStatus["replaced"] {
@@ -66,23 +79,8 @@ class DatabaseReplaced extends Error {
   }
 }
 
-function toBase64(bytes: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-const fromBase64 = (text: string): Uint8Array => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
-
 const toWire = (t: SyncTable, row: Record<string, unknown>): WireRow =>
-  Object.fromEntries(
-    Object.keys(t.columns).map((c) => {
-      const v = row[c];
-      return [c, v instanceof Uint8Array ? toBase64(v) : ((v ?? null) as WireValue)];
-    }),
-  );
-
-const fromWire = (type: ColumnType, v: WireValue): string | number | Uint8Array | null =>
-  v !== null && type === "bytes" ? fromBase64(String(v)) : v;
+  Object.fromEntries(Object.keys(t.columns).map((c) => [c, (row[c] ?? null) as WireValue]));
 
 /** SQL that inserts a row from the server, replacing the local one only if it is newer. */
 export function applyStatement(t: SyncTable, row: WireRow): Statement {
@@ -94,7 +92,7 @@ export function applyStatement(t: SyncTable, row: WireRow): Statement {
   } else {
     sql += "ON CONFLICT DO NOTHING";
   }
-  return { sql, bind: cols.map((c) => fromWire(t.columns[c], row[c] ?? null)) };
+  return { sql, bind: cols.map((c) => row[c] ?? null) };
 }
 
 /** Stores the id of the server's database this device syncs with (an older server sends none). */
@@ -113,6 +111,8 @@ export class SyncEngine implements SyncControl {
   private applying = false;
   private debounce: ReturnType<typeof setTimeout> | undefined;
   private events: AbortController | undefined;
+  private downloading: Promise<void> | null = null;
+  private downloadAgain = false;
 
   constructor(
     private db: SqlClient,
@@ -142,7 +142,7 @@ export class SyncEngine implements SyncControl {
   }
 
   async configure(config: SyncConfig): Promise<void> {
-    this.config = { ...config, url: config.url.trim().replace(/\/+$/, "") };
+    this.config = { ...config, url: config.url.trim().replace(/\/+$/, ""), originals: config.originals === "opened" ? "opened" : "always" };
     if (config.enabled) this.setReplaced(null); // switched on again: that is the answer
     this.env.storage.set(STORAGE_KEY, JSON.stringify(this.config));
     this.listenForChanges();
@@ -150,7 +150,7 @@ export class SyncEngine implements SyncControl {
   }
 
   async disconnect(): Promise<void> {
-    this.config = { url: this.env.defaultUrl(), token: "", enabled: false };
+    this.config = { url: this.env.defaultUrl(), token: "", enabled: false, originals: this.config.originals };
     clearTimeout(this.debounce);
     this.listenForChanges(); // closes the change signal
     this.env.storage.set(STORAGE_KEY, JSON.stringify(this.config));
@@ -202,19 +202,25 @@ export class SyncEngine implements SyncControl {
     this.setStatus({ state: "off", error: null });
   }
 
-  async wipeServer(): Promise<void> {
+  /** A request to the server with the token; network failures and a refused token throw. */
+  private async request(path: string, init: RequestInit = {}): Promise<Response> {
     const { url, token } = this.config;
     let response: Response;
     try {
-      response = await fetch(`${url}/api/wipe`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ confirm: "wipe" }),
-      });
+      response = await fetch(`${url}${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, ...init.headers } });
     } catch {
       throw new Error(`Cannot reach ${url}`);
     }
     if (response.status === 401) throw new Error("The server did not accept the token");
+    return response;
+  }
+
+  async wipeServer(): Promise<void> {
+    const response = await this.request("/api/wipe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: "wipe" }),
+    });
     if (!response.ok) throw new Error(`Server error ${response.status}`);
     await this.pause();
   }
@@ -243,6 +249,7 @@ export class SyncEngine implements SyncControl {
         try {
           await this.syncOnce();
           this.setStatus({ state: "idle", lastSync: new Date().toISOString(), error: null });
+          void this.downloadFiles();
         } catch (e) {
           if (e instanceof DatabaseReplaced) await this.stopForReplaced(e.mismatch);
           else this.setStatus({ state: "error", error: e instanceof Error ? e.message : String(e) });
@@ -253,20 +260,19 @@ export class SyncEngine implements SyncControl {
     return this.running;
   }
 
+  /** Resolves once the sync in flight and the downloads after it are done. */
+  async idle(): Promise<void> {
+    await this.running;
+    await this.downloading;
+  }
+
   /** One request to the server: sends rows, receives the ones changed since the cursor. */
   private async post(request: SyncRequest): Promise<SyncResponse> {
-    const { url, token } = this.config;
-    let response: Response;
-    try {
-      response = await fetch(`${url}/api/sync`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-      });
-    } catch {
-      throw new Error(`Cannot reach ${url}`);
-    }
-    if (response.status === 401) throw new Error("The server did not accept the token");
+    const response = await this.request("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
     if (response.status === 409) throw new DatabaseReplaced((await response.json()) as SyncMismatch);
     if (!response.ok) throw new Error(`Server error ${response.status}`);
     return (await response.json()) as SyncResponse;
@@ -280,7 +286,11 @@ export class SyncEngine implements SyncControl {
     // The database synced with (none yet: a device from before ids, or an older server).
     const database = meta.find((m) => m.key === "sync_database")?.value;
     const upTo = (await this.db.select<{ n: number | null }>("SELECT max(id) AS n FROM sync_outbox"))[0]?.n ?? 0;
-    const request: SyncRequest = { since, changes: await this.readOutbox(upTo), ...(database && { database }) };
+    const { waiting, unsendable, uploaded } = await this.uploadFiles(upTo);
+    const outgoing = await this.readOutbox(upTo);
+    const held = new Set([...waiting, ...unsendable]);
+    if (outgoing.files) outgoing.files = outgoing.files.filter((r) => !held.has(String(r.id)));
+    const request: SyncRequest = { since, changes: outgoing, ...(database && { database }) };
 
     const { cursor, changes, database: current } = await this.post(request);
 
@@ -290,7 +300,8 @@ export class SyncEngine implements SyncControl {
     ];
     for (const t of SYNC_TABLES) for (const row of changes[t.name] ?? []) statements.push(applyStatement(t, row));
     statements.push(
-      { sql: "DELETE FROM sync_outbox WHERE id <= ?1", bind: [upTo] },
+      // Files whose bytes aren't uploaded yet stay queued for the next sync.
+      { sql: "DELETE FROM sync_outbox WHERE id <= ?1 AND NOT (tbl = 'files' AND pk IN (SELECT value FROM json_each(?2)))", bind: [upTo, JSON.stringify(waiting)] },
       { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_cursor', ?1)", bind: [String(cursor)] },
       { sql: "DELETE FROM meta WHERE key = 'sync_applying'" },
       ...rememberDatabase(current?.id),
@@ -298,6 +309,104 @@ export class SyncEngine implements SyncControl {
     await this.db.write(statements);
 
     await this.announce(changes);
+    // More to upload, and uploading works: go on right away.
+    if (waiting.length > 0 && uploaded > 0) this.again = true;
+  }
+
+  /**
+   * Uploads the bytes of the queued files the server doesn't have yet, within this sync's budget.
+   * Returns the files to hold back from this sync: `waiting` (not uploaded yet, they stay queued)
+   * and `unsendable` (no bytes anywhere, or refused by the server: their rows are never sent).
+   */
+  private async uploadFiles(upTo: number): Promise<{ waiting: string[]; unsendable: string[]; uploaded: number }> {
+    const queued = await this.db.select<{ id: string; local: number }>(
+      `SELECT id, data IS NOT NULL AS local FROM files
+        WHERE id IN (SELECT pk FROM sync_outbox WHERE tbl = 'files' AND id <= ?1) ORDER BY created_at`,
+      [upTo],
+    );
+    const waiting: string[] = [];
+    const unsendable: string[] = [];
+    const deadline = Date.now() + UPLOAD_MS;
+    let uploaded = 0;
+    for (const { id, local } of queued) {
+      if (waiting.length > 0 || uploaded > UPLOAD_BYTES || Date.now() > deadline) {
+        waiting.push(id);
+        continue;
+      }
+      if ((await this.request(`/api/files/${id}`, { method: "HEAD" })).ok) {
+        await this.dropBytes(id);
+        continue;
+      }
+      const file = local ? (await this.db.select<{ mime: string; data: Uint8Array }>("SELECT mime, data FROM files WHERE id = ?1", [id]))[0] : undefined;
+      if (!file?.data) {
+        unsendable.push(id); // known only from a server that no longer has it: nobody can serve it
+        continue;
+      }
+      const response = await this.request(`/api/files/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": file.mime },
+        body: file.data as Uint8Array<ArrayBuffer>,
+      });
+      if (response.ok) {
+        uploaded += file.data.byteLength;
+        await this.dropBytes(id);
+      } else if (response.status === 400 || response.status === 413) {
+        console.warn(`The server refused file ${id} (${response.status})`);
+        unsendable.push(id);
+      } else {
+        waiting.push(id); // the server failed: try again next sync
+      }
+    }
+    return { waiting, unsendable, uploaded };
+  }
+
+  /** A device that keeps no file bytes (the headless device) lets go of them once the server has them. */
+  private async dropBytes(id: string) {
+    if (!this.env.keepFiles) await this.db.write([{ sql: "UPDATE files SET data = NULL WHERE id = ?1", bind: [id] }]);
+  }
+
+  /**
+   * A file's bytes from the server (null when it hasn't got them or can't be reached), kept on
+   * this device unless it keeps no bytes.
+   */
+  async fetchFile(id: string): Promise<Uint8Array | null> {
+    if (!this.active) return null;
+    let response: Response;
+    try {
+      response = await this.request(`/api/files/${id}`);
+    } catch {
+      return null;
+    }
+    if (!response.ok) return null;
+    const data = new Uint8Array(await response.arrayBuffer());
+    if (this.env.keepFiles) await this.db.write([{ sql: "UPDATE files SET data = ?1 WHERE id = ?2 AND data IS NULL", bind: [data, id] }]);
+    return data;
+  }
+
+  /** Downloads the bytes this device lacks (see the top of this file), a few at a time. */
+  private downloadFiles(): Promise<void> {
+    if (!this.env.keepFiles) return Promise.resolve();
+    if (this.downloading) {
+      this.downloadAgain = true;
+      return this.downloading;
+    }
+    this.downloading = (async () => {
+      do {
+        this.downloadAgain = false;
+        const missing = (await this.db.select<{ id: string }>(
+          `SELECT id FROM files WHERE data IS NULL ${this.config.originals === "opened" ? "AND 0" : ""} ORDER BY created_at DESC`,
+        )).map((r) => r.id);
+        let failed = false;
+        const next = async (): Promise<void> => {
+          const id = missing.shift();
+          if (!id || failed || !this.active) return;
+          if (!(await this.fetchFile(id))) failed = true; // offline or refused: the next sync tries again
+          return next();
+        };
+        await Promise.all(Array.from({ length: DOWNLOADS }, next));
+      } while (this.downloadAgain);
+    })().finally(() => (this.downloading = null));
+    return this.downloading;
   }
 
   /** True when this device has not synced with `url` yet: connecting replaces its data (see below). */
@@ -324,8 +433,13 @@ export class SyncEngine implements SyncControl {
         { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_applying', '1')" },
         { sql: "PRAGMA defer_foreign_keys = ON" },
         { sql: "DELETE FROM sync_outbox" },
-        // Children first: foreign keys point from field values and files' users to what they reference.
-        ...[...SYNC_TABLES].reverse().map((t) => ({ sql: `DELETE FROM ${t.name}` })),
+        // Children first: foreign keys point from field values to what they reference. Files the
+        // server lists too keep their bytes (content-addressed: the same id is the same file).
+        ...[...SYNC_TABLES].reverse().map((t) =>
+          t.name === "files"
+            ? { sql: "DELETE FROM files WHERE id NOT IN (SELECT value FROM json_each(?1))", bind: [JSON.stringify((remote.changes.files ?? []).map((r) => r.id))] }
+            : { sql: `DELETE FROM ${t.name}` },
+        ),
       ];
       for (const t of SYNC_TABLES) for (const row of remote.changes[t.name] ?? []) statements.push(applyStatement(t, row));
       statements.push(

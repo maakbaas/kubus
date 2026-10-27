@@ -1,5 +1,5 @@
 import { useId, useState, useSyncExternalStore } from "react";
-import { Button, Form, InlineNotification, PasswordInput, Stack, TextInput, Toggle } from "@carbon/react";
+import { Button, Form, InlineNotification, PasswordInput, Select, SelectItem, Stack, TextInput, Toggle } from "@carbon/react";
 import { useStore } from "../app/store";
 import { useConfirm } from "./useConfirm";
 import { ServerReplaced } from "./ServerReplaced";
@@ -119,6 +119,21 @@ export function SyncSettings() {
             toggled={draft.enabled}
             onToggle={(enabled) => setDraft((d) => ({ ...d, enabled }))}
           />
+          <Select
+            size="sm"
+            id={`${uid}-originals`}
+            labelText="Download images"
+            helperText={
+              draft.originals === "opened"
+                ? "Thumbnails after each sync; a full-size image when it is first shown (then kept for offline use)."
+                : "Every image, full size, after each sync: all of them are available offline."
+            }
+            value={draft.originals}
+            onChange={(e) => setDraft((d) => ({ ...d, originals: e.target.value === "opened" ? "opened" : "always" }))}
+          >
+            <SelectItem value="always" text="All, full size" />
+            <SelectItem value="opened" text="Full size when opened" />
+          </Select>
           <p className="helper">
             {STATE_TEXT[status.state]}
             {status.lastSync && `, last synced ${new Date(status.lastSync).toLocaleString()}`}

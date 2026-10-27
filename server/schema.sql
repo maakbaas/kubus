@@ -173,16 +173,34 @@ CREATE TABLE IF NOT EXISTS files (
   id             text NOT NULL,
   mime           text,
   size           integer,
-  data           bytea,
   created_at     timestamptz,
   seq            bigint NOT NULL DEFAULT 0,
   PRIMARY KEY (id)
 );
 ALTER TABLE files ADD COLUMN IF NOT EXISTS mime text;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS size integer;
-ALTER TABLE files ADD COLUMN IF NOT EXISTS data bytea;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS created_at timestamptz;
 CREATE INDEX IF NOT EXISTS idx_files_seq ON files(seq);
+
+-- File bytes, not synced as rows: devices upload them (PUT /api/files/<id>) before the `files`
+-- row that lists them, and download them separately (server/src/files.ts). id = SHA-256 of data.
+CREATE TABLE IF NOT EXISTS file_bytes (
+  id             text NOT NULL,
+  mime           text NOT NULL,
+  data           bytea NOT NULL,
+  stored_at      timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (id)
+);
+-- Servers from before file_bytes kept the bytes in files.data: moved here, then the column goes.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = current_schema() AND table_name = 'files' AND column_name = 'data') THEN
+    INSERT INTO file_bytes (id, mime, data)
+      SELECT id, coalesce(mime, 'application/octet-stream'), data FROM files WHERE data IS NOT NULL
+      ON CONFLICT (id) DO NOTHING;
+    ALTER TABLE files DROP COLUMN data;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS field_values (
   item_id        text NOT NULL,

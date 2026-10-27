@@ -4,6 +4,8 @@ import serverSchema from "../../../../server/schema.sql?raw";
 import { SYNC_TABLES } from "../../../../shared/sync";
 
 const LOCAL_ONLY = ["meta", "sync_outbox"];
+/** Columns of synced tables that stay on the device. */
+const LOCAL_COLUMNS: Record<string, string[]> = { files: ["data"] };
 
 /** Column names of every CREATE TABLE in an SQL file. */
 function columnsByTable(sql: string): Map<string, string[]> {
@@ -23,7 +25,8 @@ describe("sync spec", () => {
     const names = [...local.keys()].filter((t) => !LOCAL_ONLY.includes(t));
     expect(SYNC_TABLES.map((t) => t.name).sort()).toEqual(names.sort());
     for (const t of SYNC_TABLES) {
-      expect(Object.keys(t.columns).sort(), t.name).toEqual([...local.get(t.name)!].sort());
+      const synced = local.get(t.name)!.filter((c) => !LOCAL_COLUMNS[t.name]?.includes(c));
+      expect(Object.keys(t.columns).sort(), t.name).toEqual(synced.sort());
       for (const k of t.key) expect(t.columns[k], `${t.name}.${k}`).toBeDefined();
       if (t.version) expect(t.columns[t.version], t.name).toBe("timestamp");
     }

@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { sha256 } from "./files.ts";
 import { SYNC_TABLES, type ColumnType, type DatabaseInfo, type SyncMismatch, type SyncRequest, type SyncResponse, type SyncTable, type WireRow, type WireValue } from "../../shared/sync.ts";
 
 // Server side of the sync protocol (see shared/sync.ts and CLAUDE.md, "Sync").
@@ -13,13 +14,12 @@ const LOCK_ID = 7_236_001;
 
 const PG_TYPE: Record<ColumnType, string> = {
   text: "text", number: "double precision", int: "integer", bool: "boolean",
-  json: "jsonb", date: "date", timestamp: "timestamptz", bytes: "bytea",
+  json: "jsonb", date: "date", timestamp: "timestamptz",
 };
 
 function toDb(type: ColumnType, v: WireValue): unknown {
   if (v === null) return null;
   if (type === "bool") return v === 1;
-  if (type === "bytes") return Buffer.from(String(v), "base64");
   return v;
 }
 
@@ -27,7 +27,6 @@ function fromDb(type: ColumnType, v: unknown): WireValue {
   if (v === null || v === undefined) return null;
   if (type === "bool") return v ? 1 : 0;
   if (type === "json") return JSON.stringify(v);
-  if (type === "bytes") return (v as Buffer).toString("base64");
   return v as WireValue;
 }
 
@@ -74,6 +73,15 @@ export async function handleSync(pool: pg.Pool, req: SyncRequest): Promise<(Sync
         const params = Object.entries(t.columns).map(([c, type]) => toDb(type, row[c] ?? null));
         const result = await client.query(upsertSql(t), params);
         if ((result.rowCount ?? 0) > 0) wrote = true;
+        // An app from before /api/files sends a file's bytes in the row (base64): kept as uploaded.
+        if (t.name === "files" && typeof row.data === "string") {
+          const data = Buffer.from(row.data, "base64");
+          if (sha256(data) === row.id) {
+            await client.query("INSERT INTO file_bytes (id, mime, data) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING", [
+              row.id, row.mime ?? "application/octet-stream", data,
+            ]);
+          }
+        }
       }
     }
 

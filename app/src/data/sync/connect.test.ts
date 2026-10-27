@@ -37,7 +37,7 @@ class FakeClient {
 }
 
 const T = "2026-10-21T10:00:00.000Z";
-const config = { url: "https://notes.example.com", token: "t", enabled: true };
+const config = { url: "https://notes.example.com", token: "t", enabled: true, originals: "always" as const };
 
 const collection = (id: string) => ({ id, name: id, plural_name: id, icon: null, description: "", item_views: null, created_at: T, updated_at: T, deleted_at: null });
 const field = (id: string, collectionId: string) => ({

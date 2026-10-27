@@ -41,3 +41,24 @@ describe("upgrading a database to the sync schema", () => {
     db.close();
   });
 });
+
+describe("upgrading files to nullable bytes", () => {
+  it("keeps every file's bytes and drops the foreign key on image values", async () => {
+    const sqlite3 = await sqlite3InitModule();
+    const db = new sqlite3.oo1.DB(":memory:", "c");
+    const old = schema
+      .replace("  data       BLOB,\n", "  data       BLOB NOT NULL,\n")
+      .replace(/ {2}value_file {5}TEXT,.*\n/, "  value_file     TEXT REFERENCES files(id),\n");
+    expect(old).not.toBe(schema);
+    db.exec(old);
+    db.exec("PRAGMA user_version = 1");
+    db.exec(`INSERT INTO files (id, mime, size, data, created_at) VALUES ('f', 'image/png', 3, x'010203', 'x')`);
+
+    ensureSchema(sqlite3, db);
+
+    expect([...(db.selectValue("SELECT data FROM files") as Uint8Array)]).toEqual([1, 2, 3]);
+    expect(db.selectValue("SELECT \"notnull\" FROM pragma_table_info('files') WHERE name = 'data'")).toBe(0);
+    expect(db.selectValue("SELECT count(*) FROM pragma_foreign_key_list('field_values') WHERE \"from\" = 'value_file'")).toBe(0);
+    db.close();
+  });
+});

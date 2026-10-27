@@ -12,6 +12,11 @@ export interface SyncEnvironment {
   defaultUrl(): string;
   /** Calls `sync` whenever syncing now is worthwhile (back online, the app shown again). */
   watch(sync: () => void): void;
+  /**
+   * Whether this device keeps file bytes. The app does (offline first); the headless device lets
+   * go of them once uploaded and fetches them from the server when asked.
+   */
+  keepFiles: boolean;
 }
 
 /** The app: settings in localStorage, syncing when the device comes online or the app is shown. */
@@ -48,10 +53,11 @@ export const browserEnvironment: SyncEnvironment = {
     addEventListener("online", sync);
     document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && sync());
   },
+  keepFiles: true,
 };
 
-/** Settings in memory only, nothing to watch (the server's headless device). */
-export function memoryEnvironment(): SyncEnvironment {
+/** Settings in memory only, nothing to watch (the server's headless device; tests). */
+export function memoryEnvironment({ keepFiles = true } = {}): SyncEnvironment {
   const values = new Map<string, string>();
   return {
     storage: {
@@ -61,5 +67,6 @@ export function memoryEnvironment(): SyncEnvironment {
     },
     defaultUrl: () => "",
     watch: () => {},
+    keepFiles,
   };
 }

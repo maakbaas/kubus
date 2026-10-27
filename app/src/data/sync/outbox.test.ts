@@ -62,9 +62,11 @@ describe("applying rows from the server", () => {
     expect(db.prepare("SELECT deleted_at FROM items").get()).toEqual({ deleted_at: T2 });
   });
 
-  it("keeps files as they are and stores their bytes", () => {
-    const file = { id: "abc", mime: "image/png", size: 3, data: btoa("\u0001\u0002\u0003"), created_at: T1 };
+  it("keeps files as they are, and their bytes (which aren't synced as rows)", () => {
+    const file = { id: "abc", mime: "image/png", size: 3, created_at: T1 };
     apply("files", file);
+    expect(db.prepare("SELECT data FROM files").get()).toEqual({ data: null }); // known, not downloaded
+    db.prepare("UPDATE files SET data = x'010203'").run();
     apply("files", { ...file, mime: "other" });
     const row = db.prepare("SELECT mime, data FROM files").get() as { mime: string; data: Uint8Array };
     expect(row.mime).toBe("image/png");

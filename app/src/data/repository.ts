@@ -23,6 +23,11 @@ export interface SyncConfig {
   url: string;
   token: string;
   enabled: boolean;
+  /**
+   * Which file bytes this device downloads after a sync: every file ("always"), or only
+   * thumbnails ("opened": an original is fetched, and then kept, when it is first shown).
+   */
+  originals: "always" | "opened";
 }
 export interface SyncStatus {
   state: "off" | "idle" | "syncing" | "error";
