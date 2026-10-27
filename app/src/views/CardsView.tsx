@@ -111,7 +111,7 @@ function CardCover({ fileId: ownFileId, src: srcProp, onRatio }: { fileId?: stri
   // A component's result may name a stored file (`files/<sha256>`): then it is that file.
   const fileId = ownFileId ?? (srcProp ? fileIdFromSrc(srcProp) ?? undefined : undefined);
   const src = fileId ? undefined : srcProp;
-  const fileUrl = useFileUrl(fileId ?? null);
+  const fileUrl = useFileUrl(fileId ?? null, true);
   // A stored image, or one by URL (a component's result); measured under its id or URL.
   const url = src ?? fileUrl;
   const key = fileId ?? src ?? "";

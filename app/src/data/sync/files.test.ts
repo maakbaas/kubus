@@ -98,3 +98,41 @@ describe("files and sync", () => {
     expect(server.log.filter((l) => l === `GET /api/files/${id}`)).toHaveLength(0);
   });
 });
+
+describe("thumbnails", () => {
+  it("are given for small places, synced, and downloaded first (alone with originals when opened)", async () => {
+    const a = await device();
+    const id = await photo(a, "seven");
+    await a.putThumbnail(id, bytes("7"), "image/webp");
+    expect(await a.getFile(id, { small: true })).toEqual({ data: bytes("7"), mime: "image/webp", small: true });
+    expect((await a.getFile(id))?.data).toEqual(bytes("seven"));
+    await settled(a);
+    expect(server.rows("thumbnails")).toHaveLength(1);
+
+    const b = await device({ originals: "opened" });
+    const thumbId = String(server.rows("thumbnails")[0].thumb_id);
+    expect(await localBytes(b, thumbId)).toEqual(bytes("7"));
+    expect(await localBytes(b, id)).toBeNull();
+    expect((await b.getFile(id, { small: true }))?.small).toBe(true);
+  });
+
+  it("an image without one is given whole", async () => {
+    const a = await device();
+    const id = await photo(a, "eight");
+    expect(await a.getFile(id, { small: true })).toEqual({ data: bytes("eight"), mime: "image/png" });
+  });
+
+  it("goes with its original once no item uses it", async () => {
+    const a = await device();
+    const id = await photo(a, "nine");
+    await a.putThumbnail(id, bytes("9"), "image/webp");
+    const collection = (await a.listCollections()).find((c) => c.name === "Photo")!;
+    const [item] = await a.listItems(collection, "default");
+    await a.deleteItem(item.id);
+    expect(await a.getFile(id)).toBeNull();
+    const thumbs = await (a as unknown as { db: { select<T>(sql: string): Promise<T[]> } }).db.select<{ n: number }>(
+      "SELECT (SELECT count(*) FROM thumbnails) + (SELECT count(*) FROM files) AS n",
+    );
+    expect(thumbs[0].n).toBe(0);
+  });
+});

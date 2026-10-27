@@ -172,7 +172,13 @@ export interface Repository {
 
   /** Stores binary content (deduplicated by hash) and returns its file id. */
   putFile(data: Uint8Array, mime: string): Promise<string>;
-  getFile(fileId: string): Promise<{ data: Uint8Array; mime: string } | null>;
+  /**
+   * A file's bytes (fetched from the server when this device doesn't have them yet; null when
+   * that fails). `small`: its thumbnail when it has one (then `small` is true in the answer).
+   */
+  getFile(fileId: string, options?: { small?: boolean }): Promise<{ data: Uint8Array; mime: string; small?: boolean } | null>;
+  /** Stores a small version of an image file (made by the UI: ui/thumbnails.ts), used where it is shown small. */
+  putThumbnail(fileId: string, data: Uint8Array, mime: string): Promise<void>;
   /** Deletes these files unless a live item still uses them. Safe to call liberally. */
   releaseFiles(fileIds: string[]): Promise<void>;
 }

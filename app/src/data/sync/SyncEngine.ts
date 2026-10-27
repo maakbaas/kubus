@@ -394,7 +394,9 @@ export class SyncEngine implements SyncControl {
       do {
         this.downloadAgain = false;
         const missing = (await this.db.select<{ id: string }>(
-          `SELECT id FROM files WHERE data IS NULL ${this.config.originals === "opened" ? "AND 0" : ""} ORDER BY created_at DESC`,
+          // Thumbnails first (they are what lists and cards show); only them with "opened".
+          `SELECT id FROM files WHERE data IS NULL ${this.config.originals === "opened" ? "AND id IN (SELECT thumb_id FROM thumbnails)" : ""}
+            ORDER BY id IN (SELECT thumb_id FROM thumbnails) DESC, created_at DESC`,
         )).map((r) => r.id);
         let failed = false;
         const next = async (): Promise<void> => {

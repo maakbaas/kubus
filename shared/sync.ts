@@ -79,6 +79,12 @@ export const SYNC_TABLES: SyncTable[] = [
     columns: { id: "text", mime: "text", size: "int", created_at: "timestamp" },
   },
   {
+    name: "thumbnails",
+    key: ["file_id"],
+    version: null,
+    columns: { file_id: "text", thumb_id: "text", created_at: "timestamp" },
+  },
+  {
     name: "field_values",
     key: ["item_id", "field_id"],
     version: "updated_at",

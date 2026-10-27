@@ -5,40 +5,68 @@ import { useStore } from "../app/store";
 import type { Repository } from "../data";
 import { fileIdFromSrc } from "../domain/files";
 import { errorMessage } from "./useConfirm";
+import { makeThumbnail } from "./thumbnails";
 
 export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/svg+xml"];
 const MAX_BYTES = 20 * 1024 * 1024;
 
-/** Validates and stores an image file; returns its file id. Throws a user-facing error. */
+/** Validates and stores an image file (and its thumbnail, in the background); returns its file id. Throws a user-facing error. */
 export async function storeImageFile(repo: Repository, file: File): Promise<string> {
   if (!IMAGE_TYPES.includes(file.type)) throw new Error(`Unsupported image type: ${file.name}`);
   if (file.size > MAX_BYTES) throw new Error(`Images can be at most 20 MB: ${file.name}`);
-  return repo.putFile(new Uint8Array(await file.arrayBuffer()), file.type);
+  const data = new Uint8Array(await file.arrayBuffer());
+  const fileId = await repo.putFile(data, file.type);
+  void storeThumbnail(repo, fileId, data, file.type);
+  return fileId;
 }
 
-// Item URLs per file id, shared by every component and the markdown editor for the
-// whole session. Files are immutable (content-addressed), so a URL never goes stale,
-// and reusing it means switching between view and edit never makes an image blink.
+const thumbnailsMade = new Set<string>();
+
+/** Makes and stores an image's thumbnail, once per session (none for a small image). */
+async function storeThumbnail(repo: Repository, fileId: string, data: Uint8Array, mime: string) {
+  if (thumbnailsMade.has(fileId)) return;
+  thumbnailsMade.add(fileId);
+  try {
+    const thumbnail = await makeThumbnail(data, mime);
+    if (thumbnail) await repo.putThumbnail(fileId, thumbnail.data, thumbnail.mime);
+  } catch (e) {
+    console.error("Making a thumbnail failed", e);
+  }
+}
+
+// Item URLs per file id (and per file id + "#small" for thumbnails), shared by every component
+// and the markdown editor for the whole session. Files are immutable (content-addressed), so a
+// URL never goes stale, and reusing it means switching between view and edit never makes an
+// image blink.
 const loadedUrls = new Map<string, string>();
 const pendingUrls = new Map<string, Promise<string | null>>();
+const cacheKey = (fileId: string, small: boolean) => (small ? `${fileId}#small` : fileId);
 
 /** Synchronous lookup: the URL if this file was already loaded. */
-export const cachedFileUrl = (fileId: string) => loadedUrls.get(fileId);
+export const cachedFileUrl = (fileId: string, small = false) => loadedUrls.get(cacheKey(fileId, small));
 
-/** Loads a stored file once per session and returns its item URL. */
-export function fileUrl(repo: Repository, fileId: string): Promise<string | null> {
-  const loaded = loadedUrls.get(fileId);
+/**
+ * Loads a stored file once per session and returns its item URL. `small`: its thumbnail, for
+ * table cells and cards; an image that has none yet shows whole and gets one made.
+ */
+export function fileUrl(repo: Repository, fileId: string, small = false): Promise<string | null> {
+  const key = cacheKey(fileId, small);
+  const loaded = loadedUrls.get(key);
   if (loaded) return Promise.resolve(loaded);
-  let pending = pendingUrls.get(fileId);
+  let pending = pendingUrls.get(key);
   if (!pending) {
-    pending = repo.getFile(fileId).then((file) => {
-      pendingUrls.delete(fileId);
+    pending = repo.getFile(fileId, { small }).then((file) => {
+      pendingUrls.delete(key);
       if (!file) return null;
       const url = URL.createObjectURL(new Blob([file.data as Uint8Array<ArrayBuffer>], { type: file.mime }));
-      loadedUrls.set(fileId, url);
+      loadedUrls.set(key, url);
+      if (small && !file.small) {
+        loadedUrls.set(fileId, url); // it is the original
+        void storeThumbnail(repo, fileId, file.data, file.mime);
+      }
       return url;
     });
-    pendingUrls.set(fileId, pending);
+    pendingUrls.set(key, pending);
   }
   return pending;
 }
@@ -68,32 +96,33 @@ export function fileDataUrl(repo: Repository, fileId: string): Promise<string | 
   return pending;
 }
 
-/** Item URL for a stored file (from the session cache when possible). */
-export function useFileUrl(fileId: string | null): string | undefined {
+/** Item URL for a stored file (from the session cache when possible); `small`: its thumbnail (see fileUrl). */
+export function useFileUrl(fileId: string | null, small = false): string | undefined {
   const { repo } = useStore();
-  const [url, setUrl] = useState<string | undefined>(() => (fileId ? cachedFileUrl(fileId) : undefined));
+  const [url, setUrl] = useState<string | undefined>(() => (fileId ? cachedFileUrl(fileId, small) : undefined));
 
   useEffect(() => {
     if (!fileId) return setUrl(undefined);
-    const cached = cachedFileUrl(fileId);
+    const cached = cachedFileUrl(fileId, small);
     if (cached) return setUrl(cached);
     let cancelled = false;
-    fileUrl(repo, fileId).then(
+    fileUrl(repo, fileId, small).then(
       (u) => !cancelled && setUrl(u ?? undefined),
       (e) => console.error("Loading file failed", e),
     );
     return () => {
       cancelled = true;
     };
-  }, [repo, fileId]);
+  }, [repo, fileId, small]);
 
   return url;
 }
 
+/** A stored image in a table cell: its thumbnail (the Lightbox shows the original, `data-file`). */
 export function ImageThumb({ fileId, alt }: { fileId: string; alt: string }) {
-  const url = useFileUrl(fileId);
+  const url = useFileUrl(fileId, true);
   // Its box while it loads, so the row and column don't change size when it arrives.
-  return url ? <img className="image-thumb" src={url} alt={alt} data-lightbox /> : <span className="image-thumb" aria-hidden />;
+  return url ? <img className="image-thumb" src={url} alt={alt} data-lightbox data-file={fileId} /> : <span className="image-thumb" aria-hidden />;
 }
 
 interface Props {
@@ -181,7 +210,7 @@ export function UrlImage({ url, className, compact = false }: { url: string; cla
   useEffect(() => setFailed(false), [url]);
   // A stored image (`files/<sha256>`, e.g. an image field passed through a component).
   const fileId = fileIdFromSrc(url);
-  const stored = useFileUrl(fileId);
+  const stored = useFileUrl(fileId, compact);
   // In a cell: its box while it loads (as ImageThumb).
   if (fileId && !stored) return compact ? <span className={className} aria-hidden /> : null;
   if (failed) {
@@ -195,5 +224,5 @@ export function UrlImage({ url, className, compact = false }: { url: string; cla
       </span>
     );
   }
-  return <img className={className} src={stored ?? url} alt="" onError={() => setFailed(true)} data-lightbox />;
+  return <img className={className} src={stored ?? url} alt="" onError={() => setFailed(true)} data-lightbox data-file={compact ? (fileId ?? undefined) : undefined} />;
 }

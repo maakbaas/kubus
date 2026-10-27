@@ -132,6 +132,15 @@ CREATE TABLE files (
   created_at TEXT NOT NULL
 );
 
+-- A small version of an image file (shortest side 512 px), shown in table cells and cards; both
+-- are `files` rows. Insert only, like files: the first link a server receives stays (another
+-- device's own thumbnail of the same image is just as good). Released with its original.
+CREATE TABLE thumbnails (
+  file_id    TEXT PRIMARY KEY,   -- the original
+  thumb_id   TEXT NOT NULL,      -- the thumbnail
+  created_at TEXT NOT NULL
+);
+
 -- Exactly one value_* column is used, determined by the field's kind.
 -- Lists are JSON arrays in value_json (SQLite json_each / Postgres jsonb) and merge as one value.
 CREATE TABLE field_values (
@@ -202,6 +211,8 @@ CREATE TRIGGER sync_items_update AFTER UPDATE ON items WHEN NOT EXISTS (SELECT 1
 BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('items', NEW.id); END;
 CREATE TRIGGER sync_files_insert AFTER INSERT ON files WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
 BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('files', NEW.id); END;
+CREATE TRIGGER sync_thumbnails_insert AFTER INSERT ON thumbnails WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
+BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('thumbnails', NEW.file_id); END;
 CREATE TRIGGER sync_field_values_insert AFTER INSERT ON field_values WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')
 BEGIN INSERT INTO sync_outbox (tbl, pk) VALUES ('field_values', json_array(NEW.item_id, NEW.field_id)); END;
 CREATE TRIGGER sync_field_values_update AFTER UPDATE ON field_values WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying')

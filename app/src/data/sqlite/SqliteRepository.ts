@@ -756,7 +756,12 @@ export class SqliteRepository implements Repository {
     return id;
   }
 
-  async getFile(fileId: string): Promise<{ data: Uint8Array; mime: string } | null> {
+  async getFile(fileId: string, options: { small?: boolean } = {}): Promise<{ data: Uint8Array; mime: string; small?: boolean } | null> {
+    if (options.small) {
+      const thumb = (await this.db.select<{ thumb_id: string }>("SELECT thumb_id FROM thumbnails WHERE file_id = ?1", [fileId]))[0];
+      const file = thumb && (await this.getFile(thumb.thumb_id));
+      if (file) return { ...file, small: true };
+    }
     const rows = await this.db.select<{ data: Uint8Array | null; mime: string }>("SELECT mime, data FROM files WHERE id = ?1", [
       fileId,
     ]);
@@ -765,6 +770,13 @@ export class SqliteRepository implements Repository {
     // Known from a sync, bytes not here yet: fetched from the server now (null offline).
     const data = file.data ?? (await this.sync.fetchFile(fileId));
     return data && { data, mime: file.mime };
+  }
+
+  async putThumbnail(fileId: string, data: Uint8Array, mime: string): Promise<void> {
+    const thumbId = await this.putFile(data, mime);
+    await this.db.write([
+      { sql: "INSERT OR IGNORE INTO thumbnails (file_id, thumb_id, created_at) VALUES (?1, ?2, ?3)", bind: [fileId, thumbId, now()] },
+    ]);
   }
 
   private assemble(collection: Collection, items: ItemRow[], values: ValueRow[]): Item[] {
@@ -807,20 +819,32 @@ export class SqliteRepository implements Repository {
 }
 
 /**
- * Whether file ?1 is in use: a live item, through a live field, has it as an image value or
- * mentions `files/<id>` in a Markdown or HTML value. Rows of soft-deleted items and fields may
- * still name a file; they don't count.
+ * Whether the file `id` (an SQL expression) is in use: a live item, through a live field, has it
+ * as an image value or mentions `files/<id>` in a Markdown or HTML value. Rows of soft-deleted
+ * items and fields may still name a file; they don't count. A thumbnail is used through its
+ * original (see releaseFile).
  */
-const LIVE_USE = `EXISTS (
+const liveUse = (id: string) => `EXISTS (
     SELECT 1 FROM field_values fv
       JOIN items o ON o.id = fv.item_id
       JOIN fields f ON f.id = fv.field_id
      WHERE o.deleted_at IS NULL AND f.deleted_at IS NULL
-       AND (fv.value_file = ?1 OR (f.kind IN ('markdown', 'html') AND instr(fv.value_text, 'files/' || ?1) > 0)))`;
+       AND (fv.value_file = ${id} OR (f.kind IN ('markdown', 'html') AND instr(fv.value_text, 'files/' || ${id}) > 0)))`;
 
-/** Deletes a file once no live item uses it. Runs after the statements that drop the use, in the same transaction. */
+/**
+ * Deletes a file, with its thumbnail, once no live item uses it. Runs after the statements that
+ * drop the use, in the same transaction.
+ */
 function releaseFile(fileId: string): Statement[] {
-  return [{ sql: `DELETE FROM files WHERE id = ?1 AND NOT ${LIVE_USE}`, bind: [fileId] }];
+  return [
+    {
+      sql: `DELETE FROM files WHERE id IN (SELECT thumb_id FROM thumbnails WHERE file_id = ?1 AND NOT ${liveUse("?1")})
+              AND NOT ${liveUse("files.id")}`,
+      bind: [fileId],
+    },
+    { sql: `DELETE FROM thumbnails WHERE file_id = ?1 AND NOT ${liveUse("?1")}`, bind: [fileId] },
+    { sql: `DELETE FROM files WHERE id = ?1 AND NOT ${liveUse("?1")}`, bind: [fileId] },
+  ];
 }
 
 /** A reference field's choice filters as stored (JSON), or null for other fields / none. */

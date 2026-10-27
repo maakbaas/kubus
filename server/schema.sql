@@ -182,6 +182,17 @@ ALTER TABLE files ADD COLUMN IF NOT EXISTS size integer;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS created_at timestamptz;
 CREATE INDEX IF NOT EXISTS idx_files_seq ON files(seq);
 
+CREATE TABLE IF NOT EXISTS thumbnails (
+  file_id        text NOT NULL,
+  thumb_id       text,
+  created_at     timestamptz,
+  seq            bigint NOT NULL DEFAULT 0,
+  PRIMARY KEY (file_id)
+);
+ALTER TABLE thumbnails ADD COLUMN IF NOT EXISTS thumb_id text;
+ALTER TABLE thumbnails ADD COLUMN IF NOT EXISTS created_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_thumbnails_seq ON thumbnails(seq);
+
 -- File bytes, not synced as rows: devices upload them (PUT /api/files/<id>) before the `files`
 -- row that lists them, and download them separately (server/src/files.ts). id = SHA-256 of data.
 CREATE TABLE IF NOT EXISTS file_bytes (

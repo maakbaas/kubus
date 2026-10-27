@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "@carbon/react";
+import { useStore } from "../app/store";
+import { fileUrl } from "./images";
 
 /**
  * The image lightbox: a click on any image marked `data-lightbox` (field images, images in
@@ -7,9 +9,11 @@ import { Modal } from "@carbon/react";
  * in a Carbon modal (Escape, the close button or a click outside closes it). One for the app,
  * listening at the document: the click goes no further, so it doesn't also start editing the
  * field or open the item the image belongs to. Card covers and excerpts aren't marked or are
- * left out: there a click opens the item.
+ * left out: there a click opens the item. A thumbnail (`data-file`: the stored file it shows
+ * small) is replaced by the full-size image once that is loaded.
  */
 export function Lightbox() {
+  const { repo } = useStore();
   const [image, setImage] = useState<{ src: string; alt: string } | null>(null);
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -19,10 +23,14 @@ export function Lightbox() {
       e.preventDefault();
       e.stopPropagation();
       setImage({ src: img.currentSrc, alt: img.alt });
+      const fileId = img.dataset.file;
+      if (fileId) {
+        void fileUrl(repo, fileId).then((src) => src && setImage((shown) => (shown?.src === img.currentSrc ? { ...shown, src } : shown)));
+      }
     };
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
-  }, []);
+  }, [repo]);
   return (
     <Modal
       open={image !== null}
