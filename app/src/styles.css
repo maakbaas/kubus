@@ -2993,18 +2993,21 @@ img[data-lightbox] {
   }
 }
 /* A dialog with dropdowns / combo boxes: their menus may extend past the dialog instead of being
-   clipped by it (Carbon clips the dialog's content). */
-.cds--modal.modal--menus .cds--modal-container,
-.cds--modal.modal--menus .cds--modal-content {
+   clipped by it. They are positioned fixed (autoAlign), relative to the dialog's box at most, so
+   only the box itself must not clip; its content scrolls (once the dialog reaches the bottom of
+   the window: a component's code can be long), which doesn't clip them. */
+.cds--modal.modal--menus .cds--modal-container {
   overflow: visible;
 }
-/* Carbon caps the dialog's height and scrolls its content; without that clipping, content that
-   grows (a field type's extra inputs) would spill out of the capped box. The dialog grows with its
-   content instead. */
+.cds--modal.modal--menus .cds--modal-content {
+  overflow-y: auto;
+}
+/* On wide windows the dialog grows with its content (Carbon would give it a share of the window)
+   down to the window's bottom edge, then scrolls. */
 @media (min-width: 42rem) {
   .cds--modal.modal--menus .cds--modal-container {
     block-size: auto;
-    max-block-size: none;
+    max-block-size: calc(100% - var(--modal-top) - var(--cds-spacing-05));
   }
   .cds--modal.modal--menus .cds--modal-content {
     max-block-size: none;

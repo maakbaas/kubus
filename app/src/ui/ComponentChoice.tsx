@@ -17,7 +17,7 @@ import { PromoteComponentModal } from "./PromoteComponentModal";
 
 /** What the code editor says about the built-in $ names (also on the component page). */
 export const CODE_HELP =
-  "Markdown with {{ JavaScript }} sections. Built in: $now (the current date); $item, one item: its fields by name ($item.Pages, or $item[\"Read at\"]) and $item.id, createdAt, updatedAt; a block's $items, $groups, $fields and $all.";
+  "Markdown with {{ JavaScript }} sections. Built in: $now (the current date); $item, one item: its fields by name ($item.Pages, $item[\"Read at\"]); a block's $items, $groups, $fields and $all. Help has the rest.";
 /** …and about a prompt, when the component asks AI. */
 export const PROMPT_HELP =
   "Asked for each item. Put what it needs in with {{ $item.Name }}, e.g. {{ $item.Artist }}; the value is made again only when the prompt, as it reads for that item, changes. Only $item is here: no $now (the value would be stale every moment) and no other AI fields (two reading each other never settle). Keep it short: the model is told the collection, the field and the shape of the value.";
@@ -28,8 +28,8 @@ export interface ComponentRef {
   local: ComponentCode | null;
 }
 
-/** The dropdown's entry for writing the component here. */
-const LOCAL = "";
+/** The dropdown's entry for writing the component here (not "": Carbon takes that for nothing chosen). */
+const LOCAL = "local";
 
 /**
  * Chooses a place's component (a component field, a component block): written here (a local
@@ -93,7 +93,7 @@ export function ComponentChoice({
         autoAlign
         size="sm"
         id={`${id}-component`}
-        titleText={asksAi ? "Prompt" : "Component"}
+        titleText="Component"
         label="Choose…"
         helperText={local ? `Written here: only this ${place === "field" ? "field" : "block"} uses it.` : shared ? "Shared: a change applies everywhere it is used." : undefined}
         items={choices}
@@ -139,6 +139,7 @@ export function ComponentChoice({
             value={local.code}
             onChange={(code) => onChange({ componentId: null, local: { ...local, code } })}
           />
+          {/* Always there (in a panel above its button, appearing would move the editor): enabled once there is code that fits. */}
           <div>
             <Button size="sm" kind="tertiary" disabled={!local.code.trim() || !!placeProblem(local, place)} onClick={() => setPromoting(true)}>
               Save as shared component

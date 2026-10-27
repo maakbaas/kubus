@@ -786,6 +786,8 @@ function __audit(opts) {
       const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
       if (!hasText || srOnly(el)) continue;
       if (el.closest("[disabled], [aria-disabled=true], .cds--btn--disabled, .cds--label--disabled, .cds--text-input--disabled, iframe, .cm-editor, .token, .lightbox, .item-card__cover, .image-input, [role=tooltip]")) continue;
+      // A disabled Carbon toggle: its label and state text are siblings of the disabled switch.
+      if (el.closest(".cds--toggle:has(.cds--toggle__button:disabled), .cds--select--disabled")) continue;
       if (el.matches("input, textarea, select, option")) continue; // their placeholders are exempt; values are checked as text elsewhere
       const s = cs(el);
       if (parseFloat(s.opacity) === 0) continue;

@@ -4,14 +4,16 @@
 //
 // A spec: {
 //   spaces: [{ key, name }],
-//   components: [{ key, name, code, params?, output?, description? }],
+//   components: [{ key, name, code, output?, description?, ai? }],          // shared components
 //   images: [{ key, w, h }],                      // generated PNGs (putFile)
 //   collections: [{ key, name, plural?, icon?, description?, spaces?: [spaceKey],
-//                   fields: [{ key, name, kind, target?: collectionKey, component?: key,
-//                              args?: { var: { field: fieldKey } | { value } }, toggleIcon?, aiPrompt?, aiOutput?,
+//                   fields: [{ key, name, kind, target?: collectionKey, component?: key (a shared one),
+//                              code?, output? (its own component: a component field's code, an AI field's prompt),
+//                              toggleIcon?, strikeThrough?,
 //                              choiceFilter?: [{ field: targetFieldKey, operator, value }] }],
 //                   items: [{ key?, space?: spaceKey, values: { fieldKey: value } }],
-//                   views?: [{ name, blocks: [partial ViewBlock with kind/options/layout/groupBy/sort], filters?, isDefault? }],
+//                   views?: [{ name, blocks: [partial ViewBlock with kind/options/layout/groupBy/sort;
+//                              componentKey (a shared component) or local: code (its own)], filters?, isDefault? }],
 //                   (a block filter value "$item.@key": the page item's field by key)
 //                   itemViews?: [{ name, layout }] }],
 //   bookmarks: [{ kind: "item"|"view", collection, item?, view?, label }],
@@ -34,8 +36,7 @@ async function __seedInPage(spec) {
   }
   for (const c of spec.components || []) {
     ids.components[c.key] = uid();
-    const params = c.params || [...new Set([...c.code.matchAll(/\$([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]))].filter((p) => !["now", "item", "items", "groups", "fields", "all"].includes(p));
-    await repo.saveComponent({ id: ids.components[c.key], name: c.name, description: c.description || "", params, code: c.code, output: c.output || "markdown", frameRatio: c.frameRatio || null, createdAt: stamp(), updatedAt: stamp() });
+    await repo.saveComponent({ id: ids.components[c.key], name: c.name, description: c.description || "", code: c.code, output: c.output || (c.ai ? "string" : "markdown"), frameRatio: c.frameRatio || null, ai: !!c.ai, createdAt: stamp(), updatedAt: stamp() });
   }
   for (const img of spec.images || []) {
     const canvas = document.createElement("canvas");
@@ -67,12 +68,14 @@ async function __seedInPage(spec) {
       kind: f.kind,
       targetCollectionId: f.target ? ids.collections[f.target] : null,
       componentId: f.component ? ids.components[f.component] : null,
-      componentArgs: Object.fromEntries(Object.entries(f.args || {}).map(([k, v]) => [k, v.field ? { field: ids.fields[`${c.key}.${v.field}`] || v.field } : v])),
+      // Its own component (written in place): a component field's code, an AI field's prompt.
+      code: f.code ?? null,
+      output: f.output || (f.kind === "ai" ? "string" : f.code != null ? "markdown" : null),
+      frameRatio: null,
       // { field: a field key of the target collection, operator, value }: which items it offers.
       choiceFilter: (f.choiceFilter || []).map((r) => ({ id: uid(), fieldId: ids.fields[`${f.target}.${r.field}`], operator: r.operator, value: r.value })),
       toggleIcon: f.toggleIcon || null,
-      aiPrompt: f.aiPrompt || null,
-      aiOutput: f.aiOutput || (f.kind === "ai" ? "string" : null),
+      strikeThrough: !!f.strikeThrough,
     }));
     const plural = c.plural || c.name + "s";
     const draft = { id: ids.collections[c.key], name: c.name, pluralName: plural, icon: c.icon === undefined ? "Cube" : c.icon, description: c.description || "", spaceIds: c.spaces ? c.spaces.map((s) => ids.spaces[s]) : null, fields };
@@ -119,7 +122,8 @@ async function __seedInPage(spec) {
       groupBy: b.groupBy ? fieldId(b.groupBy) : null, layout: mapLayout(b.layout), collectionId: b.collection ? ids.collections[b.collection] : null,
       options: b.options ? JSON.parse(JSON.stringify(b.options).replace(/"@([a-z0-9_]+)"/gi, (_, k) => JSON.stringify(fieldId(k)))) : b.kind === "cards" ? { coverFieldId: null, cardWidth: 16, coverRatio: "auto", showTitle: true, listNarrow: false } : b.kind === "markdown" ? { text: "" } : { titleLink: true, stackNarrow: true, editable: true },
       ...(b.hideHeader ? { hideHeader: true } : {}),
-      ...(b.componentKey ? { options: { componentId: ids.components[b.componentKey], args: b.args || {} } } : {}),
+      ...(b.componentKey ? { kind: "component", options: { componentId: ids.components[b.componentKey], local: null } } : {}),
+      ...(b.local != null ? { kind: "component", options: { componentId: null, local: { code: b.local, output: b.output || "markdown", frameRatio: null, ai: false } } } : {}),
     });
     const existing = c.views ? await repo.listViews(ids.collections[c.key], ids.spaces[c.space || "default"]) : [];
     for (const [i, v] of (c.views || []).entries()) {
@@ -220,8 +224,8 @@ function allKindFields({ target = null, component = null, ai = false, namePrefix
     f.push({ key: "ref", name: n("Related"), kind: "item", target });
     f.push({ key: "refs", name: n("Links"), kind: "item_list", target });
   }
-  if (component) f.push({ key: "comp", name: n("Computed"), kind: "component", component, args: { x: { field: "count" } } });
-  if (ai) f.push({ key: "ai", name: n("Summary"), kind: "ai", aiPrompt: "Summarise {{ $item.Title }}", aiOutput: "string" });
+  if (component) f.push({ key: "comp", name: n("Computed"), kind: "component", component });
+  if (ai) f.push({ key: "ai", name: n("Summary"), kind: "ai", code: `Summarise {{ $item[${JSON.stringify(n("Title"))}] }}`, output: "string" });
   return f;
 }
 
@@ -283,7 +287,8 @@ function profileSpec(style, { items = 12, authors = 6, fieldsExtra = 0, longName
   }));
   return {
     images: IMAGES,
-    components: [{ key: "double", name: style === "long" ? "Double the count component with a long name" : "Double", code: "{{ ($x ?? 0) * 2 }}", params: ["x"], output: "markdown" }],
+    // Reads the books' Count field by its name (which the long-names variant makes long).
+    components: [{ key: "double", name: style === "long" ? "Double the count component with a long name" : "Double", code: `{{ ($item[${JSON.stringify(allKindFields({ longNames }).find((f) => f.key === "count").name)}] ?? 0) * 2 }}`, output: "markdown" }],
     collections: [books, authorsColl, ...more],
   };
 }
@@ -302,7 +307,7 @@ function matrixSpec(style, opts = {}) {
         { kind: "markdown", title: "Notes", options: { text: MARKDOWN[style] || MARKDOWN.typical } },
         { kind: "table", title: style === "long" ? TEXT.long[0] : "Table", layout: { fields: ["title", "count", "date", "done", "tags"] } },
         { kind: "cards", title: "Cards", options: { coverFieldId: "@cover", cardWidth: 10, coverRatio: "1/1", showTitle: true, listNarrow: false } },
-        { kind: "component", componentKey: "double", args: { x: { value: "21" } } },
+        { kind: "component", local: "{{ 21 * 2 }}" },
       ],
     },
   ];

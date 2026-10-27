@@ -204,7 +204,7 @@ test("a component field: not edited by a click; Edit component, and Change compo
   };
   await openCode();
   await t.audit("component field's code");
-  await t.page.locator(".field-editor textarea").first().fill("{{ ($x ?? 0) * 3 }}");
+  await t.page.locator(".field-editor textarea").first().fill("{{ ($item.Count ?? 0) * 3 }}");
   await away();
   const modal = t.page.locator(".cds--modal.is-visible");
   await t.until("saving a changed component asks first", async () => (await modal.innerText().catch(() => "")).includes("Change component"));
@@ -216,7 +216,7 @@ test("a component field: not edited by a click; Edit component, and Change compo
   await modal.getByRole("button", { name: "Discard changes" }).click();
   await t.until("Discard closes the editor, the value as before", async () => (await t.count(".field-editor")) === 0 && (await computed().innerText()).includes(valueBefore));
   await openCode();
-  await t.page.locator(".field-editor textarea").first().fill("{{ ($x ?? 0) * 3 }}");
+  await t.page.locator(".field-editor textarea").first().fill("{{ ($item.Count ?? 0) * 3 }}");
   await away();
   await modal.getByRole("button", { name: "Change component" }).click();
   await t.until("Change component saves it: the value is computed anew", async () => (await t.count(".field-editor")) === 0 && !(await computed().innerText()).includes(valueBefore) || (await computed().innerText()));

@@ -2,12 +2,13 @@
 // new item form, components (with failing code), spaces, bookmarks, settings, the collections
 // overview's inline editing, the icon picker.
 
+// "AI" is a Component field with "Ask AI" on (no field type of its own).
 const FIELD_TYPES = ["String", "Markdown", "HTML", "Number", "Date", "Date & time", "Checkbox", "Image", "Item", "List of strings", "Checklist", "List of items", "Component", "AI"];
 
 for (const vp of ["desktop", "phone", "laptop"]) {
   test(`create a collection with every field type @ ${vp}`, async (t) => {
     await t.boot();
-    await t.seed({ collections: [{ key: "authors", name: "Author", plural: "Authors", fields: [{ key: "name", name: "Name", kind: "string" }], items: [{ values: { name: "Ursula" } }] }], components: [{ key: "c", name: "Echo", code: "{{ $x }}", params: ["x"] }] });
+    await t.seed({ collections: [{ key: "authors", name: "Author", plural: "Authors", fields: [{ key: "name", name: "Name", kind: "string" }], items: [{ values: { name: "Ursula" } }] }], components: [{ key: "c", name: "Echo", code: "{{ $item.Name }}" }] });
     await t.open("/collections/new");
     await t.audit("new collection form");
     const name = t.page.getByRole("textbox", { name: "Name" }).first();
@@ -25,21 +26,28 @@ for (const vp of ["desktop", "phone", "laptop"]) {
       await kind.click();
       await t.settle(100);
       if (i === 0) await t.audit("field type menu");
-      await t.page.getByRole("option", { name: type, exact: true }).first().click().catch(async () => {
+      await t.page.getByRole("option", { name: type === "AI" ? "Component" : type, exact: true }).first().click().catch(async () => {
         await t.fail(`field type "${type}" can be chosen`, "option not found");
         await t.page.keyboard.press("Escape");
       });
       await t.settle(100);
-      // Reference and component fields ask for more: pick the first choice.
+      // Reference fields ask for more: pick the first choice.
       const choose = row.getByRole("combobox").nth(1);
-      if (["Item", "List of items", "Component"].includes(type) && (await choose.count())) {
+      if (["Item", "List of items"].includes(type) && (await choose.count())) {
         await choose.click().catch(() => {});
         await t.settle(80);
         await t.page.getByRole("option").first().click().catch(() => {});
       }
+      // A component field starts with its own component, written here; AI turns "Ask AI" on.
+      if (type === "Component") {
+        await row.getByRole("textbox", { name: "Code" }).fill("{{ 6 * 7 }}");
+        await t.settle(80);
+      }
       if (type === "AI") {
-        const prompt = row.getByRole("textbox", { name: /Prompt/ });
-        if (await prompt.count()) await prompt.fill("Summarise {{ $item.Title }}");
+        await row.locator(".cds--toggle__switch").first().click();
+        await t.settle(80);
+        await row.getByRole("textbox", { name: "Prompt" }).fill("Summarise {{ $item.Title }}");
+        await t.settle(80);
       }
     }
     await t.audit("every field type added");
@@ -107,9 +115,9 @@ for (const vp of ["desktop", "phone"]) {
     await t.boot();
     const spec = profileSpec("typical", { items: 3 });
     spec.components.push(
-      { key: "broken", name: "Broken component", code: "{{ $item.nope.deeper }} and {{ throw new Error('boom') }}", params: [] },
-      { key: "html", name: "HTML output", code: "{{ '<div style=\"height:900px;width:3000px\">wide</div>' }}", output: "html", params: [] },
-      ...Array.from({ length: 20 }, (_, i) => ({ key: `k${i}`, name: i % 4 ? `Component ${i}` : `Component ${i} with a very long name that goes on`, description: i % 3 ? "" : TEXT.long[0], code: `{{ ${i} }}`, params: [] })),
+      { key: "broken", name: "Broken component", code: "{{ $item.nope.deeper }} and {{ throw new Error('boom') }}" },
+      { key: "html", name: "HTML output", code: "{{ '<div style=\"height:900px;width:3000px\">wide</div>' }}", output: "html" },
+      ...Array.from({ length: 20 }, (_, i) => ({ key: `k${i}`, name: i % 4 ? `Component ${i}` : `Component ${i} with a very long name that goes on`, description: i % 3 ? "" : TEXT.long[0], code: `{{ ${i} }}`, ai: i === 5 })),
     );
     spec.collections[0].fields.push({ key: "broken", name: "Broken", kind: "component", component: "broken" }, { key: "htmlc", name: "Wide HTML", kind: "component", component: "html" });
     const ids = await t.seed(spec);
@@ -124,7 +132,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.open("/components/new");
     const code = t.page.getByRole("textbox", { name: /Component|JavaScript/ }).first();
     await code.click().catch(() => {});
-    await t.page.keyboard.type("**{{ $title }}**: {{ Math.round($pages / 40) }} h {{ syntax error ( }}");
+    await t.page.keyboard.type("**{{ $item.Title }}**: {{ Math.round($pages / 40) }} h {{ syntax error ( }}");
     await t.settle(400);
     await t.audit("typing code with a syntax error");
     await t.page.getByRole("textbox", { name: "Name" }).first().fill("A new component with a long name for the header");

@@ -15,6 +15,7 @@ import {
 } from "../domain/components";
 import { ComponentChoice } from "../ui/ComponentChoice";
 import { ComponentValue } from "../ui/ComponentValue";
+import { useBuffered } from "../ui/useBuffered";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
@@ -65,9 +66,11 @@ export const blockComponents = (components: Component[], chosen?: string | null)
 
 function ComponentBlockOptionsEditor({ options, onChange }: BlockOptionsProps<ComponentBlockOptions>) {
   const uid = useId();
+  // Its code is typed here and stored after a pause (each change of a block's options is stored).
+  const [draft, update] = useBuffered(options, onChange);
   return (
     <div className="view-options view-options--stack">
-      <ComponentChoice id={`${uid}-block`} place="block" value={options} onChange={(ref) => onChange({ componentId: ref.local ? null : ref.componentId, local: ref.local })} />
+      <ComponentChoice id={`${uid}-block`} place="block" value={draft} onChange={(ref) => update({ componentId: ref.local ? null : ref.componentId, local: ref.local })} />
     </div>
   );
 }

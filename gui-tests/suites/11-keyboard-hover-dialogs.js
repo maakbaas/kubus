@@ -226,7 +226,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.dialogStep("typing the field's name", () => t.page.keyboard.type("A new field", { delay: 20 }), { target: name });
     // Every field type: the dialog grows or shrinks below, never moves.
     const type = modal.locator(".cds--dropdown, .cds--list-box").first();
-    for (const kind of ["Item", "Component", "AI", "Checkbox", "List of items", "Number", "String"]) {
+    for (const kind of ["Item", "Component", "Checkbox", "List of items", "Number", "String"]) {
       await type.click();
       await t.settle(100);
       const opt = t.page.getByRole("option", { name: kind, exact: true }).first();

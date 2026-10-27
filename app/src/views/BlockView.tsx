@@ -228,8 +228,9 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           />
           {type.OptionsEditor && <type.OptionsEditor collection={collection} options={block.options} place={place} onChange={(options) => onSet({ options })} />}
-          {markdownLocal && (
-            <Button kind="tertiary" size="sm" renderIcon={Save} disabled={!markdownLocal.code.trim() || !!placeProblem(markdownLocal, "static")} onClick={() => setPromoting(true)}>
+          {/* Offered while the text can be one (not empty, nothing a static component can't read). */}
+          {markdownLocal && markdownLocal.code.trim() && !placeProblem(markdownLocal, "static") && (
+            <Button kind="tertiary" size="sm" renderIcon={Save} onClick={() => setPromoting(true)}>
               Save as shared component
             </Button>
           )}
