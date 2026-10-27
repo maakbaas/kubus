@@ -16,7 +16,8 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   Do not add Tauri-only APIs to the core; if a native capability is ever needed, put it behind an
   interface with a web fallback.
 - **SQLite runs in the browser** via `@sqlite.org/sqlite-wasm` inside a dedicated worker
-  (`app/src/data/sqlite/worker.ts`), stored with the `opfs-sahpool` VFS (no COOP/COEP headers needed;
+  (`app/src/data/sqlite/worker.ts`: the lock and OPFS; the schema, reads and writes are
+  `SqliteEngine` in `engine.ts`, which the server's headless device runs in memory), stored with the `opfs-sahpool` VFS (no COOP/COEP headers needed;
   Safari 16.4+). Without OPFS it falls back to an in-memory DB and the UI shows a warning.
 - **Repository boundary.** The UI only talks to `Repository` (`app/src/data/repository.ts`). A
   sync-aware implementation slots in here later without touching the UI.
@@ -40,13 +41,13 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 - **Domain model** (`app/src/domain`) is storage-agnostic. `fieldKinds.ts` is the registry of field
   kinds (DB column, codec, formatting); `ui/FieldInput.tsx` holds the matching editors.
 - **Renames** of tables, columns or stored values go in `RENAMES` / `RENAMED_VALUES` in
-  `worker.ts`: applied before the upgrade (with CHECKs ignored until the rebuild), so renaming
+  `engine.ts`: applied before the upgrade (with CHECKs ignored until the rebuild), so renaming
   keeps the data. (Expressions → templates was done this way; the later rename to
   collections / items / components wasn't: the user started fresh.)
 - **Schema** is one file, `app/src/data/schema.sql`. The worker stores a hash of it in
   `PRAGMA user_version`; on mismatch it builds the new schema in an in-memory database, compares,
-  adds missing tables/columns/indexes and drops removed columns in place (`upgradeAdditively`
-  in `worker.ts`). Only an incompatible change drops and recreates everything.
+  adds missing tables/columns/indexes and drops removed columns in place (`upgradeInPlace`
+  in `engine.ts`). Only an incompatible change drops and recreates everything.
 
 ## Data model (sync-ready conventions)
 

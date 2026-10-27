@@ -35,7 +35,7 @@ is what this split avoids. Keep them current when behaviour changes.
 - **No migration scripts.** `app/src/data/schema.sql` is the schema; simple changes (new tables /
   nullable or defaulted columns, removed columns, changed CHECKs) are applied in place, anything
   else wipes the local DB. Prefer simple changes. Renames go in `RENAMES` / `RENAMED_VALUES` in
-  `worker.ts`. A new synced table/column also needs `shared/sync.ts`, `server/schema.sql` and
+  `sqlite/engine.ts`. A new synced table/column also needs `shared/sync.ts`, `server/schema.sql` and
   triggers (see `docs/sync.md`).
 - **Never install the SAH-pool VFS while another worker may hold its files** (it deletes the
   database): keep `acquireDbLock` / `poolFilesFree` in `worker.ts`.
@@ -85,7 +85,7 @@ Repo layout: `app/` the web app (what Tauri and the phone run), `desktop/` the T
   `repo.subscribe`; anything that shows data refreshes through `useDataChanges`
   (`app/src/app/useDataChanges.ts`), not via whoever made the edit. Sync emits the same changes.
 - **Writes are change sets**: each mutating repository method commits its statements in one
-  transaction (`SqlClient.write`).
+  transaction (`SqlClient.write`; `WorkerSqlClient` in the browser, `DirectSqlClient` in Node).
 - **Items are loaded once and shared** (`app/src/app/itemCache.ts`, `useItems`). Unchanged items
   keep their identity, which memoized rows (`ItemRow` / `ItemCard`) and `withComputed` rely on:
   don't copy or rebuild items needlessly. Reference pickers use `Repository.listLabels`. Stable

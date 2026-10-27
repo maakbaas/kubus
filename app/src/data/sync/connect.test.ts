@@ -3,13 +3,10 @@ import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema.sql?raw";
 import type { SyncRequest, SyncResponse } from "../../../../shared/sync";
+import { SyncEngine } from "./SyncEngine";
+import { memoryEnvironment } from "./environment";
 
-const store = new Map<string, string>();
-vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) });
-vi.stubGlobal("document", { addEventListener() {}, visibilityState: "visible" });
-vi.stubGlobal("addEventListener", () => {});
-vi.stubGlobal("location", { protocol: "http:", hostname: "localhost", origin: "http://localhost" });
-const { SyncEngine } = await import("./SyncEngine");
+let env = memoryEnvironment();
 
 /** node:sqlite binds numbered parameters (?1, ?2) only by name. */
 const params = (bind: unknown[]) => [Object.fromEntries(bind.map((v, i) => [`?${i + 1}`, v]))] as never[];
@@ -78,7 +75,7 @@ async function localDevice() {
   return db;
 }
 
-beforeEach(() => store.clear());
+beforeEach(() => void (env = memoryEnvironment()));
 
 describe("first connection to a server", () => {
   it("replaces the local data with the server's when the server has data", async () => {
@@ -88,7 +85,7 @@ describe("first connection to a server", () => {
     }));
     const db = await localDevice();
     const emitted: unknown[] = [];
-    const engine = new SyncEngine(db as never, (...c) => void emitted.push(...c));
+    const engine = new SyncEngine(db as never, (...c) => void emitted.push(...c), env);
     expect(engine.isNewServer(config.url)).toBe(true);
 
     await engine.configure(config);
@@ -109,7 +106,7 @@ describe("first connection to a server", () => {
   it("uploads the local data when the server is empty", async () => {
     server((request) => ({ cursor: Object.keys(request.changes).length > 0 ? 4 : 0, changes: {} }));
     const db = await localDevice();
-    const engine = new SyncEngine(db as never, () => {});
+    const engine = new SyncEngine(db as never, () => {}, env);
 
     await engine.configure(config);
 
@@ -124,7 +121,7 @@ describe("first connection to a server", () => {
   it("does not ask again for the same server", async () => {
     server(() => ({ cursor: 1, changes: { collections: [collection("t1")] } }));
     const db = await localDevice();
-    const engine = new SyncEngine(db as never, () => {});
+    const engine = new SyncEngine(db as never, () => {}, env);
     await engine.configure(config);
     await engine.syncNow();
     // later syncs are ordinary: they send what changed since the cursor
@@ -134,7 +131,7 @@ describe("first connection to a server", () => {
   it("forgets the server on disconnect, keeping the local data", async () => {
     server(() => ({ cursor: 1, changes: { collections: [collection("t1")] } }));
     const db = await localDevice();
-    const engine = new SyncEngine(db as never, () => {});
+    const engine = new SyncEngine(db as never, () => {}, env);
     await engine.configure(config);
     expect(engine.isNewServer(config.url)).toBe(false);
 
@@ -175,7 +172,7 @@ describe("the server's database id", () => {
   it("is remembered on the first connection and sent with every sync", async () => {
     holding(A);
     const db = await localDevice();
-    const engine = new SyncEngine(db as never, () => {});
+    const engine = new SyncEngine(db as never, () => {}, env);
     await engine.configure(config);
     expect(stored(db)).toBe("db-a");
     await engine.syncNow();
@@ -186,7 +183,7 @@ describe("the server's database id", () => {
   it("is adopted by a device that synced before ids", async () => {
     server(() => ({ cursor: 1, changes: { collections: [collection("t1")] } })); // an older server: no id
     const db = await localDevice();
-    const engine = new SyncEngine(db as never, () => {});
+    const engine = new SyncEngine(db as never, () => {}, env);
     await engine.configure(config);
     expect(stored(db)).toBeUndefined();
     expect(requests.at(-1)?.database).toBeUndefined();
@@ -200,7 +197,7 @@ describe("the server's database id", () => {
   it("changed: pauses without writing, keeps the local data, and asks", async () => {
     holding(A);
     const db = await localDevice();
-    const engine = new SyncEngine(db as never, () => {});
+    const engine = new SyncEngine(db as never, () => {}, env);
     await engine.configure(config);
     await db.write([{ sql: `UPDATE field_values SET value_text = 'edited', updated_at = '2026-10-22T00:00:00.000Z'` }]);
 
@@ -217,13 +214,13 @@ describe("the server's database id", () => {
     expect(requests).toHaveLength(1); // stays paused
 
     // A new engine (the app reloaded) still shows it.
-    expect(new SyncEngine(db as never, () => {}).status.replaced).toEqual({ createdAt: B.createdAt, empty: true });
+    expect(new SyncEngine(db as never, () => {}, env).status.replaced).toEqual({ createdAt: B.createdAt, empty: true });
   });
 
   it("connecting again to an empty new database uploads everything", async () => {
     holding(A);
     const db = await localDevice();
-    const engine = new SyncEngine(db as never, () => {});
+    const engine = new SyncEngine(db as never, () => {}, env);
     await engine.configure(config);
     holding(B, { empty: true });
     await engine.syncNow();
@@ -241,7 +238,7 @@ describe("the server's database id", () => {
   it("connecting again to a new database with data replaces the local data", async () => {
     holding(A);
     const db = await localDevice();
-    const engine = new SyncEngine(db as never, () => {});
+    const engine = new SyncEngine(db as never, () => {}, env);
     await engine.configure(config);
     await db.write([{ sql: `INSERT INTO collections (id, name, plural_name, created_at, updated_at) VALUES ('extra', 'Extra', 'Extra', '${T}', '${T}')` }]);
     holding(B);

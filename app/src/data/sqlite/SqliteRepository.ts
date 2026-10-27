@@ -21,10 +21,10 @@ import { DEFAULT_SPACE_ID, withDefaultSpace, type Space } from "../../domain/spa
 import { defaultViewState, parseViewConfig, type CollectionView } from "../../domain/views";
 import type { DataChange, Repository } from "../repository";
 import { SyncEngine } from "../sync/SyncEngine";
-import { SqlClient } from "./client";
+import type { SyncEnvironment } from "../sync/environment";
 import { acceptedStatement, editedStatement, generatedStatement } from "./generated";
 import { decodeAiInput } from "../../domain/ai";
-import type { Statement } from "./protocol";
+import type { SqlClient, Statement } from "./protocol";
 
 interface CollectionRow {
   id: string;
@@ -135,8 +135,11 @@ function parseJson<T>(text: string | null, fallback: T): T {
  * future sync outbox would record).
  */
 export class SqliteRepository implements Repository {
-  private constructor(private db: SqlClient) {
-    this.sync = new SyncEngine(db, (...changes) => this.emit(...changes));
+  private constructor(
+    private db: SqlClient,
+    env: SyncEnvironment,
+  ) {
+    this.sync = new SyncEngine(db, (...changes) => this.emit(...changes), env);
     this.subscribe(() => this.sync.localChange());
   }
 
@@ -158,11 +161,11 @@ export class SqliteRepository implements Repository {
     return (await this.db.select<{ collection_id: string }>("SELECT collection_id FROM items WHERE id = ?1", [itemId]))[0]?.collection_id;
   }
 
-  static async open(): Promise<SqliteRepository> {
-    const db = await SqlClient.open();
+  /** The repository over an open database, syncing from `env` (the browser, or the headless device). */
+  static async open(db: SqlClient, env: SyncEnvironment): Promise<SqliteRepository> {
     // Stable identity of this replica, needed once sync exists.
     await db.write([{ sql: "INSERT OR IGNORE INTO meta (key, value) VALUES ('replica_id', ?1)", bind: [newId()] }]);
-    return new SqliteRepository(db);
+    return new SqliteRepository(db, env);
   }
 
   get storage() {

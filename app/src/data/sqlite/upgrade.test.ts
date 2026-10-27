@@ -1,11 +1,8 @@
 // @vitest-environment node
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import schema from "../schema.sql?raw";
-
-// The worker file sets `self.onmessage` when loaded.
-vi.stubGlobal("self", globalThis);
-const { ensureSchema } = await import("./worker");
+import { ensureSchema } from "./engine";
 
 // What a database from before sync looked like: no outbox and triggers, and (to force a table
 // rebuild, which drops that table's triggers) `items` without its item_view_id column.

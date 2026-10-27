@@ -30,7 +30,7 @@ vision wants server-side queries and remote sources later.
 - *Outbox by triggers.* `schema.sql` has `AFTER INSERT/UPDATE` triggers on every synced table that
   queue the row's key in `sync_outbox` (local only), in the same transaction as the change; so no
   repository method knows about sync. Rows the engine applies from the server are not queued
-  (`meta` row `sync_applying` is set during the apply). `worker.ts` `upgradeInPlace` also
+  (`meta` row `sync_applying` is set during the apply). `engine.ts` `upgradeInPlace` also
   (re)creates triggers. A new synced table or column needs: `shared/sync.ts`, `server/schema.sql`
   (CREATE + ALTER line) and triggers in `schema.sql`; `sync/spec.test.ts` fails until they agree.
 - *One request does push and pull*: `POST /api/sync { since, changes }` returns `{ cursor, changes }`

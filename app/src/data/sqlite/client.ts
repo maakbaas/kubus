@@ -1,4 +1,4 @@
-import type { Bind, OpenResult, Request, Response, Statement } from "./protocol";
+import type { Bind, OpenResult, Request, Response, SqlClient, Statement } from "./protocol";
 
 type Pending = { resolve(v: unknown): void; reject(e: Error): void };
 type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
@@ -42,16 +42,16 @@ class WorkerChannel {
 }
 
 /** Handle on the SQLite database living in the worker. */
-export class SqlClient {
+export class WorkerSqlClient implements SqlClient {
   private constructor(
     private channel: WorkerChannel,
     readonly info: OpenResult,
   ) {}
 
-  static async open(): Promise<SqlClient> {
+  static async open(): Promise<WorkerSqlClient> {
     const channel = new WorkerChannel();
     const info = (await channel.send({ op: "open" })) as OpenResult;
-    return new SqlClient(channel, info);
+    return new WorkerSqlClient(channel, info);
   }
 
   select<T>(sql: string, bind?: Bind): Promise<T[]> {

@@ -1,6 +1,7 @@
 import type { Repository } from "./repository";
-import { terminateWorkers } from "./sqlite/client";
+import { terminateWorkers, WorkerSqlClient } from "./sqlite/client";
 import { SqliteRepository } from "./sqlite/SqliteRepository";
+import { browserEnvironment } from "./sync/environment";
 
 export type { Repository } from "./repository";
 
@@ -14,7 +15,7 @@ export function openRepository(): Promise<Repository> {
   opening ??= (async () => {
     // Ask the browser not to evict our storage (matters most on iOS Safari).
     await navigator.storage?.persist?.().catch(() => false);
-    return SqliteRepository.open();
+    return SqliteRepository.open(await WorkerSqlClient.open(), browserEnvironment);
   })();
   opening.catch(() => (opening = null)); // allow a retry (e.g. after closing another tab)
   return opening;

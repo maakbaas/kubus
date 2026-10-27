@@ -11,8 +11,8 @@ import {
 } from "../../../../shared/sync";
 import { observeStamp } from "../../domain/model";
 import type { DataChange, SyncConfig, SyncControl, SyncStatus } from "../repository";
-import type { SqlClient } from "../sqlite/client";
-import type { Statement } from "../sqlite/protocol";
+import type { SqlClient, Statement } from "../sqlite/protocol";
+import type { SyncEnvironment } from "./environment";
 
 // Keeps this device's database in step with the Kubus server (server/src/sync.ts).
 //
@@ -40,25 +40,19 @@ const REPLACED_KEY = "kubus.syncReplaced";
 const POLL_MS = 30_000;
 const DEBOUNCE_MS = 2_000;
 
-/** The server serving this very page is the natural default (the installed home-screen app). */
-function defaultUrl(): string {
-  const web = location.protocol.startsWith("http") && !location.hostname.endsWith("tauri.localhost") && !import.meta.env.DEV;
-  return web ? location.origin : "";
-}
-
-function loadConfig(): SyncConfig {
+function loadConfig(env: SyncEnvironment): SyncConfig {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<SyncConfig> | null;
-    if (saved) return { url: saved.url ?? defaultUrl(), token: saved.token ?? "", enabled: !!saved.enabled };
+    const saved = JSON.parse(env.storage.get(STORAGE_KEY) ?? "null") as Partial<SyncConfig> | null;
+    if (saved) return { url: saved.url ?? env.defaultUrl(), token: saved.token ?? "", enabled: !!saved.enabled };
   } catch {
     // unreadable settings: start over
   }
-  return { url: defaultUrl(), token: "", enabled: false };
+  return { url: env.defaultUrl(), token: "", enabled: false };
 }
 
-function loadReplaced(): SyncStatus["replaced"] {
+function loadReplaced(env: SyncEnvironment): SyncStatus["replaced"] {
   try {
-    const saved = JSON.parse(localStorage.getItem(REPLACED_KEY) ?? "null") as SyncStatus["replaced"];
+    const saved = JSON.parse(env.storage.get(REPLACED_KEY) ?? "null") as SyncStatus["replaced"];
     return saved && typeof saved.createdAt === "string" ? { createdAt: saved.createdAt, empty: !!saved.empty } : null;
   } catch {
     return null;
@@ -110,8 +104,8 @@ const rememberDatabase = (id: string | undefined): Statement[] =>
 export const keyOf = (t: SyncTable) => (t.key.length > 1 ? `json_array(${t.key.join(", ")})` : t.key[0]);
 
 export class SyncEngine implements SyncControl {
-  config = loadConfig();
-  status: SyncStatus = { state: "off", lastSync: null, error: null, replaced: loadReplaced() };
+  config: SyncConfig;
+  status: SyncStatus;
 
   private listeners = new Set<() => void>();
   private running: Promise<void> | null = null;
@@ -123,10 +117,12 @@ export class SyncEngine implements SyncControl {
   constructor(
     private db: SqlClient,
     private emit: (...changes: DataChange[]) => void,
+    private env: SyncEnvironment,
   ) {
+    this.config = loadConfig(env);
+    this.status = { state: "off", lastSync: null, error: null, replaced: loadReplaced(env) };
     setInterval(() => void this.syncNow(), POLL_MS);
-    addEventListener("online", () => void this.syncNow());
-    document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void this.syncNow());
+    env.watch(() => void this.syncNow());
     this.listenForChanges();
     void this.syncNow();
   }
@@ -148,25 +144,17 @@ export class SyncEngine implements SyncControl {
   async configure(config: SyncConfig): Promise<void> {
     this.config = { ...config, url: config.url.trim().replace(/\/+$/, "") };
     if (config.enabled) this.setReplaced(null); // switched on again: that is the answer
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
-    } catch {
-      // storage blocked: the settings last until the page closes
-    }
+    this.env.storage.set(STORAGE_KEY, JSON.stringify(this.config));
     this.listenForChanges();
     await this.syncNow();
   }
 
   async disconnect(): Promise<void> {
-    this.config = { url: defaultUrl(), token: "", enabled: false };
+    this.config = { url: this.env.defaultUrl(), token: "", enabled: false };
     clearTimeout(this.debounce);
     this.listenForChanges(); // closes the change signal
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
-      localStorage.removeItem(SERVER_KEY);
-    } catch {
-      // storage blocked: nothing to forget
-    }
+    this.env.storage.set(STORAGE_KEY, JSON.stringify(this.config));
+    this.env.storage.remove(SERVER_KEY);
     await this.running; // a sync in flight finishes first
     await this.db.write([
       { sql: "DELETE FROM sync_outbox" },
@@ -180,12 +168,8 @@ export class SyncEngine implements SyncControl {
     this.config = { ...this.config, enabled: false };
     clearTimeout(this.debounce);
     this.listenForChanges(); // closes the change signal
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
-      localStorage.removeItem(SERVER_KEY);
-    } catch {
-      // storage blocked: the settings last until the page closes
-    }
+    this.env.storage.set(STORAGE_KEY, JSON.stringify(this.config));
+    this.env.storage.remove(SERVER_KEY);
     await this.running; // a sync in flight finishes first
     await this.forgetServer();
     this.setStatus({ state: "off", error: null });
@@ -201,12 +185,8 @@ export class SyncEngine implements SyncControl {
   }
 
   private setReplaced(replaced: SyncStatus["replaced"]) {
-    try {
-      if (replaced) localStorage.setItem(REPLACED_KEY, JSON.stringify(replaced));
-      else localStorage.removeItem(REPLACED_KEY);
-    } catch {
-      // storage blocked: it lasts until the page closes
-    }
+    if (replaced) this.env.storage.set(REPLACED_KEY, JSON.stringify(replaced));
+    else this.env.storage.remove(REPLACED_KEY);
     if (replaced !== this.status.replaced) this.setStatus({ replaced });
   }
 
@@ -215,12 +195,8 @@ export class SyncEngine implements SyncControl {
     this.config = { ...this.config, enabled: false };
     clearTimeout(this.debounce);
     this.listenForChanges(); // closes the change signal
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
-      localStorage.removeItem(SERVER_KEY);
-    } catch {
-      // storage blocked: the settings last until the page closes
-    }
+    this.env.storage.set(STORAGE_KEY, JSON.stringify(this.config));
+    this.env.storage.remove(SERVER_KEY);
     await this.forgetServer();
     this.setReplaced({ createdAt: database.createdAt, empty });
     this.setStatus({ state: "off", error: null });
@@ -326,11 +302,7 @@ export class SyncEngine implements SyncControl {
 
   /** True when this device has not synced with `url` yet: connecting replaces its data (see below). */
   isNewServer(url: string): boolean {
-    try {
-      return localStorage.getItem(SERVER_KEY) !== url.trim().replace(/\/+$/, "");
-    } catch {
-      return true;
-    }
+    return this.env.storage.get(SERVER_KEY) !== url.trim().replace(/\/+$/, "");
   }
 
   /**
@@ -372,11 +344,7 @@ export class SyncEngine implements SyncControl {
         ...remember,
       ]);
     }
-    try {
-      localStorage.setItem(SERVER_KEY, url);
-    } catch {
-      // storage blocked: the page just asks again next time
-    }
+    this.env.storage.set(SERVER_KEY, url);
     return replaced;
   }
 
