@@ -184,6 +184,21 @@ a time limit); the connection string's scheme picks the connector.
   A list column groups a row under each value. At start (and on every change) `check` warns about a
   superuser or a user that can write: give it a user that can only read (`GRANT SELECT`); queries
   written in the app read whatever that user can (turn queries off per source to allow tables only).
+- *Cloudflare D1* (`connectors/d1.ts`, SQL in `d1Sql.ts`, pure and tested on SQLite itself:
+  `d1Sql.test.ts`): `d1://<account id>/<database id>`, the password an API token, read over
+  Cloudflare's HTTP API (`/raw`, one request per statement). Strictly read-only though D1 has no
+  read-only mode: only statements the connector makes are sent (`SELECT`, `PRAGMA table_xinfo`;
+  anything else is refused before it leaves), a written query is one statement (any `;` outside
+  strings and comments is refused: D1 runs several) inside a subquery, where SQLite allows only a
+  `SELECT`, and a statement D1 reports as changing the database is an error. Still give it a token
+  with D1 Read only (a token's permissions can't be checked from here). No schemas (a source's are
+  ignored, with a warning). Types come from a table's declared types (SQLite's affinity words, plus
+  `BOOL`, `DATE`, `DATETIME` / `TIMESTAMP`, `JSON` like Postgres's; `BLOB` dropped), else from a
+  sample of the values (a query's columns); dates and dates & times may be text SQLite reads or Unix
+  times (seconds or milliseconds), checkboxes 1 / 0 / true / yes. SQLite knows no time zones: a
+  date & time's day in the device's zone uses the zone's offsets from 1990 to 2060 (`zoneOffsets`,
+  computed with `Intl`). The time limit is the request's; filters on dates and numbers go through
+  expressions (no index), text is case-insensitive for ASCII only (SQLite's `LIKE`).
 - *App*: a block of a remote collection asks the source for its query (`useRemoteResult`, 100 rows
   a page, "Show more"; search waits for typing to pause) instead of `applyQuery`; the item page reads
   its row by key (`rowKey` of the item id, a base64url of the key). Rows become items keeping their

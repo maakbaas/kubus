@@ -148,7 +148,7 @@ export function ServerSettings() {
                     id={`${uid}-src-url-${s.id}`}
                     labelText="Connection string"
                     placeholder="postgres://reader@db-host:5432/crm"
-                    helperText={state?.connector ? `Read by its ${state.connector} connector.` : "Postgres for now: postgres://user@host:port/database."}
+                    helperText={state?.connector ? `Read by its ${state.connector} connector.` : "Postgres: postgres://user@host:port/database; Cloudflare D1: d1://account-id/database-id (an API token with D1 Read as the password)."}
                     value={s.url}
                     onChange={(e) => setSource(i, { url: e.target.value })}
                   />
