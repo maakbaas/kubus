@@ -739,9 +739,10 @@ body {
 .cds--tag.inline-tag {
   display: inline;
   margin: 0;
-  /* Even room around the text (12px, Carbon's smallest type), no taller than a 20px line of
-     body text: an inline box's padding never changes the line's height, so it must fit it. */
-  padding: var(--cds-spacing-01) var(--cds-spacing-02);
+  /* Room only at the sides: an inline box's padding never changes the line's height, so with
+     some above and below, tags on wrapped lines would touch. The tag is its type's own height
+     (about 16px at 12px), which leaves a gap in a 20px line (24px on item pages). */
+  padding: 0 var(--cds-spacing-02);
   font-size: var(--cds-label-01-font-size, 0.75rem);
   line-height: 1rem;
   cursor: pointer;

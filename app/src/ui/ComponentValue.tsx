@@ -80,7 +80,7 @@ html.fonts-pending body{visibility:hidden;}
 :where(th,td){border:1px solid var(--cds-border-subtle);padding:0.25rem 0.5rem;text-align:left;}
 :where(th){background:var(--cds-layer-accent-01);}
 :where(img,svg,canvas,video){max-width:100%;}
-:where(.kubus-tag){padding:0.125rem 0.25rem;-webkit-box-decoration-break:clone;box-decoration-break:clone;border-radius:1rem;background:var(--cds-tag-background-blue);color:var(--cds-tag-color-blue);font-size:0.75rem;line-height:1rem;letter-spacing:0.32px;cursor:pointer;}
+:where(.kubus-tag){padding:0 0.25rem;-webkit-box-decoration-break:clone;box-decoration-break:clone;border-radius:1rem;background:var(--cds-tag-background-blue);color:var(--cds-tag-color-blue);font-size:0.75rem;line-height:1rem;letter-spacing:0.32px;cursor:pointer;}
 :where(.kubus-tag:hover){background:var(--cds-tag-hover-blue);}`;
 }
 
