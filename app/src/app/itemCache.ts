@@ -1,8 +1,7 @@
 // One loaded copy of each collection's items in the current space (and of their labels, in every
 // space), shared by every pane and page.
 //
-// Pages used to load a collection's items themselves, so the same items could be in memory several
-// times and every pane re-read them on its own. Here a collection's list is loaded once while
+// A collection's list is loaded once while
 // anything shows it, kept up to date from the repository's change feed (one changed item is
 // re-read, not the whole list), and dropped shortly after the last viewer leaves. Items that didn't
 // change keep their identity, so what is derived from them (computed values, memoized rows) stays

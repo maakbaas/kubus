@@ -27,8 +27,7 @@
 // uses both $item and a block's names (`mixed`): it fits nowhere.
 //
 // The code runs in the app itself (new Function), with the user's own rights. That's fine for a
-// personal, local app; once components can come from someone else (sync, sharing) they must run
-// in a sandbox (a worker or an iframe without access to the app). On the server (the headless
+// personal, local app. On the server (the headless
 // device computing values for the API) it runs in a separate V8 context with a time limit
 // (headless/compiler.ts, through setCompiler).
 

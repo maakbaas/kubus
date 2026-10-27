@@ -59,7 +59,7 @@ export function keepFocusInView(scroller: HTMLElement | null | undefined) {
  * Calls `update` whenever the window or its visible part (an on-screen keyboard) changes size;
  * returns the clean-up. Before Floating UI's own resize handler (capture runs first at the
  * window), so a panel shrunk there synchronously (`setRoom`) is placed with its new height: placed
- * with the old one, it flipped to the other side of its button for a frame and stayed there.
+ * with the old one, it would flip to the other side of its button for a frame and stay there.
  */
 export function onViewportChange(update: () => void): () => void {
   const vv = window.visualViewport;

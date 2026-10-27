@@ -62,8 +62,8 @@ the server: it syncs through a Postgres database and also serves the web app.
    (in both `POSTGRES_PASSWORD` and `DATABASE_URL`).
 3. Run `docker compose up -d`. The server listens on port 8080. Update later with
    `docker compose pull && docker compose up -d`.
-4. In the app, open the Sync page (the status icon at the top right), enter the server's address
-   and the token, and turn sync on.
+4. In the app, open Settings → Sync (or "Configure sync" under the status icon at the top right),
+   enter the server's address and the token, and turn sync on.
 
 To use an existing Postgres instead, remove the `db` service and point `DATABASE_URL` at it. For
 the phone (an installable home-screen app) and the desktop app, put the server behind HTTPS, for

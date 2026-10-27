@@ -1,7 +1,7 @@
 // Thumbnails: a small version of a stored image, shown where images are small (table cells and
 // cards), so a list of large photos doesn't decode megapixels per row. Made in the browser when an
-// image is stored, or the first time an image without one is shown small (images stored before
-// thumbnails existed, or through the API: the server can't draw). Stored with putThumbnail, which
+// image is stored, or the first time an image without one is shown small (an image stored
+// through the API: the server can't draw). Stored with putThumbnail, which
 // syncs it like any file.
 
 /** The thumbnail's shortest side, in pixels; the longest is capped (panoramas). */

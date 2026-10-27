@@ -49,7 +49,6 @@ CREATE TABLE views (
   collection_id TEXT NOT NULL REFERENCES collections(id),
   space_id   TEXT NOT NULL,            -- the space it is listed in (spaces.id; 'default' needs no row)
   name       TEXT NOT NULL,
-  kind       TEXT NOT NULL,            -- its first block's type, e.g. 'table', 'cards' (read for views stored before blocks)
   config     TEXT NOT NULL,            -- JSON { filters, blocks } (domain/views.ts); block options validated by the block type
   position   INTEGER NOT NULL DEFAULT 0,
   is_default INTEGER NOT NULL DEFAULT 0,  -- the starred view, opened instead of "All" (at most one per collection and space)

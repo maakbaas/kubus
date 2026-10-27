@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { codeProblem, componentUses, itemsInput, localComponents, placeProblem, render, unknownNames } from "./components";
 import { parseLayout } from "./fieldLayout";
 import type { Collection, FieldDef, Item } from "./model";
-import { defaultQuery, filterPreset, PAGE_ITEM, pageItemField, resolvePageValues, type FilterRule } from "./query";
+import { filterPreset, PAGE_ITEM, pageItemField, resolvePageValues, type FilterRule } from "./query";
 import { blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery } from "./views";
 
 const code = (text: string) => ({ code: text, ai: false });
@@ -21,27 +21,9 @@ const book = (id: string, title: string, pages: number, author: string | null): 
 const rule = (fieldId: string, operator: FilterRule["operator"], value: string): FilterRule => ({ id: fieldId, fieldId, operator, value });
 
 describe("parseViewConfig", () => {
-  it("reads a view stored before blocks as one block", () => {
-    const table = parseViewConfig(
-      JSON.stringify({ query: { filters: [rule("pages", "gt", "100")], sort: [{ fieldId: "pages", direction: "desc" }], groupBy: "author" }, options: { columns: ["title"], titleLink: false } }),
-      "table",
-    );
-    expect(table.filters).toEqual([rule("pages", "gt", "100")]);
-    expect(table.blocks).toHaveLength(1);
-    const [b] = table.blocks;
-    expect(b).toMatchObject({ kind: "table", filters: null, sort: [{ fieldId: "pages", direction: "desc" }], groupBy: "author" });
-    expect(b.layout.fields).toEqual(["title"]);
-    expect((b.options as { titleLink: boolean }).titleLink).toBe(false);
-  });
-
-  it("takes the cards' fields, labels and empty-field choice into the block's layout", () => {
-    const cards = parseViewConfig(JSON.stringify({ query: defaultQuery(), options: { fields: ["pages"], hiddenLabels: ["pages"], hideEmpty: true } }), "cards");
-    expect(cards.blocks[0].layout).toEqual({ fields: ["pages"], editable: true, hiddenLabels: ["pages"], hideEmpty: true });
-  });
-
   it("reads blocks as stored, and compares equal to what was stored", () => {
     const state = { filters: [rule("pages", "lt", "50")], blocks: [newBlock("table", {}, "x"), { ...newBlock("cards", {}, "y"), filters: [] }], editable: false };
-    const read = parseViewConfig(JSON.stringify(state), "table");
+    const read = parseViewConfig(JSON.stringify(state));
     expect(sameView(read, state)).toBe(true);
   });
 });
@@ -170,9 +152,9 @@ describe("collapsed blocks and groups", () => {
   it("are stored with the view and read back", () => {
     let c = withBlockCollapsed(NOTHING_COLLAPSED, "x", true);
     c = withGroupCollapsed(c, "y", "author", "a1", true);
-    const read = parseViewConfig(JSON.stringify({ filters: [], blocks: [newBlock("table", {}, "x")], collapsed: c }), "table");
+    const read = parseViewConfig(JSON.stringify({ filters: [], blocks: [newBlock("table", {}, "x")], collapsed: c }));
     expect(read.collapsed).toEqual({ blocks: ["x"], groups: { y: ["author/a1"] } });
-    expect(parseViewConfig(JSON.stringify({ filters: [], blocks: [] }), "table").collapsed).toEqual(NOTHING_COLLAPSED);
+    expect(parseViewConfig(JSON.stringify({ filters: [], blocks: [] })).collapsed).toEqual(NOTHING_COLLAPSED);
   });
 
   it("keep groups per grouped-by field, and drop what is expanded again", () => {

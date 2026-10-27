@@ -72,7 +72,6 @@ interface ViewRow {
   collection_id: string;
   space_id: string;
   name: string;
-  kind: string;
   config: string;
   position: number;
   is_default: number;
@@ -120,7 +119,7 @@ const toField = (r: FieldRow): FieldDef => ({
 
 /** A stored view as a CollectionView (its config parsed and normalized). */
 function toView(r: ViewRow): CollectionView {
-  const { filters, blocks, editable, collapsed } = parseViewConfig(r.config, r.kind);
+  const { filters, blocks, editable, collapsed } = parseViewConfig(r.config);
   return {
     id: r.id,
     collectionId: r.collection_id,
@@ -307,8 +306,8 @@ export class SqliteRepository implements Repository {
       // was made in: a table of all items sorted by title; its options are filled in by the block
       // type's normalizeOptions. Other spaces show that unsaved table until a view is saved there.
       writes.push({
-        sql: `INSERT INTO views (id, collection_id, space_id, name, kind, config, position, is_default, created_at, updated_at)
-              VALUES (?1, ?2, ?5, 'All', 'table', ?3, 0, 0, ?4, ?4)`,
+        sql: `INSERT INTO views (id, collection_id, space_id, name, config, position, is_default, created_at, updated_at)
+              VALUES (?1, ?2, ?5, 'All', ?3, 0, 0, ?4, ?4)`,
         bind: [newId(), draft.id, JSON.stringify(defaultViewState(null, firstShownFields(draft), !draft.source)), ts, spaceId],
       });
     }
@@ -557,13 +556,12 @@ export class SqliteRepository implements Repository {
     const config = JSON.stringify({ filters: view.filters, blocks: view.blocks, editable: view.editable, collapsed: view.collapsed });
     await this.db.write([
       {
-        sql: `INSERT INTO views (id, collection_id, space_id, name, kind, config, position, created_at, updated_at)
-              VALUES (?1, ?2, ?8, ?3, ?4, ?5, ?6, ?7, ?7)
+        sql: `INSERT INTO views (id, collection_id, space_id, name, config, position, created_at, updated_at)
+              VALUES (?1, ?2, ?7, ?3, ?4, ?5, ?6, ?6)
               ON CONFLICT (id) DO UPDATE SET
-                name = excluded.name, kind = excluded.kind, config = excluded.config,
+                name = excluded.name, config = excluded.config,
                 position = excluded.position, updated_at = excluded.updated_at`,
-        // `kind` is the first block's (views stored before blocks are read by it).
-        bind: [view.id, view.collectionId, view.name, view.blocks[0]?.kind ?? "table", config, view.position, ts, view.spaceId],
+        bind: [view.id, view.collectionId, view.name, config, view.position, ts, view.spaceId],
       },
     ]);
     this.emit({ scope: "views", collectionId: view.collectionId });

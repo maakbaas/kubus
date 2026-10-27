@@ -1,6 +1,6 @@
 # Kubus features
 
-What the app does, feature by feature (moved out of CLAUDE.md; read the part you work on).
+What the app does, feature by feature (read the part you work on).
 
 ## Goals
 
@@ -24,8 +24,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   table rows, `cell--struck`, and on cards). Component blocks get the checkbox's value in `$items`
   and show it as their code says.
 - **Markdown is strictly GitHub Flavored Markdown.** The Milkdown editor (`app/src/ui/MarkdownEditor.tsx`)
-  loads only the CommonMark + GFM presets (plus non-syntax utilities: history, listener,
-  clipboard, upload, prism). Don't add syntax plugins (math, emoji, diagrams, frontmatter, Crepe, …),
+  loads only the CommonMark + GFM presets (plus non-syntax utilities: history, clipboard, upload,
+  prism, and its own `changes` plugin). Don't add syntax plugins (math, emoji, diagrams, frontmatter, Crepe, …),
   and any future renderer must also be GFM-only. Behaviour-only additions are fine: clickable task
   checkboxes, typed `[text](url)` links, link hover popover (open/edit/remove), code coloring
   (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs. A Markdown value is data: `{{ }}` in it is plain text, never run (code lives only in components).
@@ -48,8 +48,8 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   box over a grid of matches. App icon: `app/public/favicon.svg` (isometric cube, three shades of Carbon blue, transparent background),
   rendered to `desktop/icons` with `tauri icon` (`--ios-color '#d0e2ff'`); the PWA's icon-1024, the apple-touch-icon (iOS home screen) and the Tauri iOS icons are the cube at 70% on #d0e2ff (a blue lighter than the cube's lightest), rendered from `favicon.svg`. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
   names, the lock or the `kubus.*` storage keys, orphans existing data).
-- The Milkdown editor reports changes synchronously (`changes` plugin); don't switch back to the
-  debounced listener plugin, which lost text typed right before saving.
+- The Milkdown editor reports changes synchronously (`changes` plugin); don't use Milkdown's
+  debounced listener plugin: it loses text typed right before saving.
 - **Components** (`#/components`, `app/src/domain/components.ts`, table `components`, field kind
   `component`): Markdown with `{{ … }}` sections of JavaScript over the built-ins `$now` / `$item`
   (the item itself, n8n style) and, in a block, `$items` / `$groups` / `$fields` / `$all` (details in
@@ -60,8 +60,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   tables/cards). Results are computed whenever items are shown (`withComputed`, before queries
   run) and never stored; failing sections show `⚠ message`. One concept on purpose: the same
   components are fields and blocks (see Blocks). The code runs in the app with the
-  user's rights (`new Function`); it must move to a sandbox once components can come from others
-  (sync, sharing). The editor previews the result as you type, with only the choices the code calls
+  user's rights (`new Function`). The editor previews the result as you type, with only the choices the code calls
   for: a collection when it reads items, an item for `$item`, a field to group by for `$groups`, the
   fields for `$fields` (`CollectionPreview` in `ComponentEditorPage.tsx`).
   - **Shared or local** (one paradigm for every place that takes a component): a place either picks
@@ -227,7 +226,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   new view of what is shown, unsaved changes included). A collection always has at least one item view:
   without stored ones it is a virtual "Default" (`withDefaultItemView`, id `default`), stored once
   changed; the last view can't be deleted. Both tab bars (collection page, item pages) are always
-  shown, also for a single view (hiding them was confusing and hid the bookmark button); a changed
+  shown, also for a single view (the bookmark button lives there); a changed
   view's tab shows " *"; bookmarking or starring the virtual "All" view stores it first. When a layout hides
   fields or isn't editable, an edit icon switches to the standard page (all fields, editable)
   for the time being. Every labelled field collapses like a block: a caret before its label (clicking the name collapses too)
@@ -277,7 +276,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
 - **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's collections
   (name, description), the Markdown blocks of its collection views (their text; an item view's is the same on every item, so not
   searched; a result opens the view at the block) and its items, substring match over string, markdown, HTML, AI,
-  list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; an FTS index can come later).
+  list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; a full-text index is roadmap #1).
   Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`); a result with no visible match is left out.
   An item opens at the first field that matched (`?field=`; at the top when its title matched), a Markdown block at the block.
 - **Remote collections** (`domain/sources.ts`, `collections.source`, `fields.source_column`; docs/sync.md
@@ -298,8 +297,7 @@ What the app does, feature by feature (moved out of CLAUDE.md; read the part you
   collection page's views bar) reads the rows again. Needs the server online; nothing is kept offline.
 - **Local first.** The app works fully offline on the device's own SQLite database. Every asset is part of the build (IBM Plex included, `app/src/fonts.css`; nothing from a
   CDN) and the service worker caches all of it, so offline it looks exactly as online.
-- **Future:** chart block types,
-  blocks side by side (a grid), embedding one item's field elsewhere (deliberately left out for now).
+- **Future:** every open item is numbered in `docs/vision.md`, "Open items".
 - **Sync.** The local SQLite is an offline-first replica of a Postgres-backed server (see "Sync with Postgres").
 - **HTTP API and webhooks.** The server answers `/api/v1` (same token) for other tools, through its own copy of the
   app (the headless device), and can call webhooks on every change (`docs/sync.md`, Help → API).

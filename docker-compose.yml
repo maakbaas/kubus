@@ -26,15 +26,13 @@ services:
     pull_policy: always
     environment:
       DATABASE_URL: postgres://kubus:change-me-too@db:5432/kubus
-      # Shared secret of all your devices; enter it with the server URL on the app's Sync page.
+      # Shared secret of all your devices; enter it with the server URL in the app's Settings → Sync.
       # Any long random string, e.g. node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
       KUBUS_TOKEN: change-me
       # Optional: a URL (or several, comma-separated) called with every change, signed with the
       # secret (X-Kubus-Signature; see Help → API in the app).
       # KUBUS_WEBHOOK_URL: https://automation.example.com/hooks/kubus
       # KUBUS_WEBHOOK_SECRET: another-long-random-string
-      # A language model for every device and remote sources (databases read as collections) are
-      # set up in the app: Settings → Server. They are stored in this server's database.
     ports:
       - "8080:8080"
     depends_on:

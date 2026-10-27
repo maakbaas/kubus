@@ -48,7 +48,7 @@ Extension points are registries, not special cases in pages:
   fields with labels / hide empty), the `View` component, optional `OptionsEditor` in
   the block's "Block settings" menu (gear icon), below "Show as") registered in `BLOCK_TYPES` (`app/src/views/index.ts`). What
   every type shares (filter, sort and group, fields) is the block's, never in options, so
-  it carries over when the type is switched. Today: `table` (title column links to the item; string,
+  it carries over when the type is switched. The types: `table` (title column links to the item; string,
   number, date(time) and item cells edit in place via the shared `ui/FieldEditor` (the view’s "Fields are editable" in View settings, `ViewState.editable`, a view change like its filter; an item view’s own for blocks on item pages; it also gives the add row; checkboxes toggle either way, in every block type); the last row is empty but for a "+" in the title column, which turns it into an add row
   with inputs per editable column (text aligned with the column); header sorting; grouping = one table per
   group in a collapsible Carbon Accordion; columns as wide as their content on one line while
@@ -65,8 +65,7 @@ Extension points are registries, not special cases in pages:
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
 - **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + JSON config
-  `{ filters, blocks }` (`views.kind` = the first block's; views stored before blocks, as
-  `{ query, options }`, are read as one block by `parseViewConfig`).
+  `{ filters, blocks, editable, collapsed }` (`parseViewConfig`).
   Every new collection gets an ordinary "All" view (table, all items, sorted by title) in the space it is made in, created
   with the collection in `saveCollection`; it can be renamed (view settings), edited, starred or deleted like
   any other; "+" adds one ("New", then "New 2", …) as a copy of what is shown, unsaved changes

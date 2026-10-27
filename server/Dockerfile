@@ -3,8 +3,8 @@
 # the headless device that answers its HTTP API (/api/v1).
 
 # The web app is the same files on every platform: build it once, natively on the build machine
-# ($BUILDPLATFORM), not again under QEMU for arm64, where npm ci + vite (esbuild) took minutes and
-# sometimes hung.
+# ($BUILDPLATFORM), not again under QEMU for arm64, where npm ci + vite (esbuild) take minutes and
+# can hang.
 FROM --platform=$BUILDPLATFORM node:24 AS web
 ENV IBM_TELEMETRY_DISABLED=true
 WORKDIR /build

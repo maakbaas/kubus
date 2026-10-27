@@ -26,8 +26,8 @@ database (while connected; `POST /api/wipe` with `{"confirm":"wipe"}`, `server/s
 the server's schema, whatever they are, and applies `schema.sql` again, in one transaction; then this device pauses sync, so
 switching it on again uploads its data). A server whose database doesn't fit `schema.sql` still starts: sync answers with that
 error until the database is wiped. Per device (localStorage
-`kubus.sync`). A readable Postgres replica (not end-to-end encrypted) was chosen, as the hub
-vision wants server-side queries and remote sources later.
+`kubus.sync`). The replica in Postgres is readable (not end-to-end encrypted): the hub vision
+needs server-side queries (docs/vision.md).
 
 **Client** (`app/src/data/sync/SyncEngine.ts`, created by `SqliteRepository`, exposed as `repo.sync`):
 - *Outbox by triggers.* `AFTER INSERT/UPDATE` triggers on every synced table (made from
@@ -125,8 +125,8 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
 
 ## The server's settings
 
-What a server offers beyond sync is set in the app, Settings → Server (`ui/ServerSettings.tsx`), not
-in environment variables: the language model and the remote sources. `GET` / `PUT /api/settings`
+What a server offers beyond sync is set in the app, Settings → Server (`ui/ServerSettings.tsx`): the
+language model and the remote sources. `GET` / `PUT /api/settings`
 (`server/src/settings.ts`, types in `shared/settings.ts`) with the sync token; any device with the
 token may change them. They are stored in the server's own table `server_settings` (JSON by key:
 `ai`, `sources`), never synced and kept by a wipe. Secrets (the model's key, a source's password)
@@ -136,8 +136,8 @@ host, port and user of a connection string): moved elsewhere it is dropped, so w
 token can't send a stored secret to a host of their choosing. A password typed into a connection
 string is split out of it (`splitPassword`). Saving applies at once: the model is used for the next
 request, the sources' connectors are replaced and checked (`Sources.replace`), and the answer
-carries each source's problem and warnings. Only `DATABASE_URL`, `KUBUS_TOKEN`, `PORT`, `STATIC_DIR`
-and the webhooks stay environment variables.
+carries each source's problem and warnings. The server's environment variables: `DATABASE_URL`,
+`KUBUS_TOKEN`, `PORT`, `STATIC_DIR`, `KUBUS_WEBHOOK_URL` and `KUBUS_WEBHOOK_SECRET`.
 
 ## The server's language model
 
@@ -147,7 +147,7 @@ in `shared/api.ts`: the models, never the address or key); `POST /api/ai/chat/co
 `GET /api/ai/models` forward to the provider with the server's key, for any device with the token.
 In the app, Settings → AI → "The server's" (`AiConfig.source`, the default without a device's own)
 points `createLlmClient` at `<server>/api/ai` with the sync token (`AiService.providerOf`; saving the
-server's settings asks again, `serverChanged`); "My own" keeps today's per-device provider. The
+server's settings asks again, `serverChanged`); "My own" uses the device's own provider. The
 headless device doesn't generate AI values (that stays with the apps).
 
 ## Remote sources (remote collections)
@@ -189,9 +189,9 @@ a time limit); the connection string's scheme picks the connector.
   its row by key (`rowKey` of the item id, a base64url of the key). Rows become items keeping their
   identity while unchanged. Nothing is cached offline; the collection page's "Read again" asks again.
 - *Known limits*: text sorts by the source's collation ("Customer 10" before "Customer 9"), not the
-  app's numeric order; counting a heavy query runs it in full; references can't point at remote
-  collections (no links to remote rows yet); global search and the API (`/api/v1`) don't read
-  remote rows.
+  app's numeric order (roadmap #6); counting a heavy query runs it in full (#6); references can't
+  point at remote collections (#5); global search and the API (`/api/v1`) don't read remote rows
+  (#1).
 
 ## The API (headless device) and webhooks
 
@@ -236,19 +236,17 @@ web builds only) that caches the app shell, so it starts offline. iOS needs HTTP
 service workers: put the container behind a TLS proxy or tunnel (Caddy, Tailscale serve, Cloudflare
 tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 
-**Known limits / next steps:**
+**Known limits** (the planned ones are numbered in docs/vision.md, "Open items"):
 - Last writer wins per field; concurrent offline edits to the *same markdown field* lose one side
-  (upgrade path: a text CRDT such as Yjs for markdown). Equal timestamps on two devices don't converge.
-- A pull is not paged. Webhooks are best effort (lost on a restart). A device never frees space by
-  dropping originals it has. A device that still shows an image deleted elsewhere
+  (roadmap #11). Equal timestamps on two devices don't converge (#11).
+- A pull is not paged (#12). Webhooks are best effort, lost on a restart (#12). A device never frees
+  space by dropping originals it has (#12). A device that still shows an image deleted elsewhere
   only lacks it until its next sync brings the edit that removed it. An image is lost only when a
   device offline for over a week adds a use of it itself (a paste, or an edit of an old copy of the
   text winning last-writer-wins) without having its bytes (possible only with "Full size when
   opened" and the image never opened); with the bytes, it uploads them again (`missingFiles`). A
   device that sweeps while sync is off leaves the server's copy (another device's sweep deletes it).
-- One user, one token (the API too; it can also run component code on the server). A device that is not synced can lose its data on a schema wipe; with the
-  server the replica re-syncs, so enable sync before putting real notes in. Connecting a device that
-  has data of its own to a server that has data too discards the device's data (no merge).
-- Not built: hybrid logical clocks, Merkle-trie diffing (Actual Budget style), end-to-end encryption,
-  Postgres `LISTEN/NOTIFY` for several server instances. Consider ElectricSQL / PowerSync / cr-sqlite
-  before growing this.
+- One user, one token (the API too; it can also run component code on the server). A device
+  that is not synced can lose its data on a schema wipe; with the server the replica re-syncs, so
+  enable sync before putting real notes in. Connecting a device that has data of its own to a
+  server that has data too discards the device's data, no merge (#11).

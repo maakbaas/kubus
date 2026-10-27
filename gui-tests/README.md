@@ -26,8 +26,8 @@ It needs `playwright-cli` on the PATH (`npm install -g @playwright/cli`) and Chr
 { "executablePath": "/path/to/chromium", "chromiumSandbox": false } } }` (no sandbox when running as root).
 
 Smoke for quick checks while working; the full run before larger pushes (and twice in a row green
-before calling the GUI stable). No test slows the CPU down: it measured the same paths again at
-several times the cost. A test that fails and then
+before calling the GUI stable). No test throttles the CPU: that would only measure the same
+paths again at several times the cost. A test that fails and then
 passes on its retry (`--retries`, default 1) is reported as **flaky** and fails the run; so does a
 test whose `--repeat` runs disagree.
 
@@ -143,8 +143,8 @@ strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 | `19-editing-more` | undo / redo and pasting in Markdown, undo in the code editor, a reference field's choice filter, moving an item to another space, item views pinned / starred / deleted, a component field's Change component? dialog, cards, search results |
 | `20-mobile-keyboard` | a field in a popover (block settings, view settings, icon picker) on phones with the on-screen keyboard coming up the Android way (shorter window) and the iOS way (shorter visual viewport, `t.keyboardUp`): it stays open and focused, keeps its side of its button, fits above the keyboard with the field in sight, typing works |
 | `21-baselines` | screenshot baselines of 9 key states (pages of typical content, a popover, a dialog) at desktop and phone, light and dark |
-| `23-perf` | perf tests, run only with `--perf` (left out of other runs): the app's hot paths, each phase (a load, a click, a key, to the state it leads to) timed with main-thread busy time, long tasks, elements and heap; seeding, settling and audits reported apart |
 | `22-components-filters-cards` | a field's settings under its name and type; local components (fields, blocks, Markdown code) and saved as shared from the Components page; AI prompt in the field dialog; strike through the item on tables and cards; `{{ }}` code in a filter value and an invalid value; card list rows only with "Show as a list when narrow" in a narrow pane |
+| `23-perf` | perf tests, run only with `--perf` (left out of other runs): the app's hot paths, each phase (a load, a click, a key, to the state it leads to) timed with main-thread busy time, long tasks, elements and heap; seeding, settling and audits reported apart |
 
 ## Adding to it
 

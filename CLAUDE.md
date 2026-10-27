@@ -20,14 +20,15 @@ is what this split avoids. Keep them current when behaviour changes.
 - `docs/sync.md`: server, sync engine (outbox triggers, merge, first connection), files (upload,
   download, thumbnails, clean-up), the server's settings (Settings → Server), remote sources and their
   connectors, the HTTP API (headless device) and webhooks, iOS home-screen app, known sync limits.
-- `docs/vision.md`: the "one hub" vision (native + remote sources, capabilities) and the roadmap.
+- `docs/vision.md`: the "one hub" vision (native + remote sources, capabilities), the roadmap and
+  every open item, numbered (other docs refer to them as "roadmap #n"; keep the list there only).
 
 ## Rules that always apply
 
 - **Carbon only** (`@carbon/react`): Carbon components for every control, never native inputs or
   hand-rolled widgets; theme tokens (`var(--cds-…)`), no custom colors.
 - **Markdown is strictly GFM**: Milkdown loads only CommonMark + GFM presets; no syntax plugins.
-  The editor reports changes synchronously (`changes` plugin); don't switch back to the debounced
+  The editor reports changes synchronously (`changes` plugin); don't use Milkdown's debounced
   listener plugin.
 - **Local first, one codebase**: all logic and storage in the web frontend (SQLite WASM in a worker,
   OPFS). Every asset is bundled, nothing from a CDN (IBM Plex: `app/src/fonts.css`, Carbon's CDN

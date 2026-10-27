@@ -19,16 +19,17 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   (`app/src/data/sqlite/worker.ts`: the lock and OPFS; the schema, reads and writes are
   `SqliteEngine` in `engine.ts`, which the server's headless device runs in memory), stored with the `opfs-sahpool` VFS (no COOP/COEP headers needed;
   Safari 16.4+). Without OPFS it falls back to an in-memory DB and the UI shows a warning.
-- **Repository boundary.** The UI only talks to `Repository` (`app/src/data/repository.ts`). A
-  sync-aware implementation slots in here later without touching the UI.
+- **Repository boundary.** The UI only talks to `Repository` (`app/src/data/repository.ts`); sync
+  (`repo.sync`) lives behind it, so the UI knows nothing about it.
 - **Change feed.** After every committed write the repository emits a `DataChange`
   (`spaces`, `collections`, `items` of a collection / item, `views` of a collection, `components`,
   `bookmarks`) via `repo.subscribe`. Anything that
   shows data refreshes through `useDataChanges` (app/src/app/useDataChanges.ts) rather than relying
   on whoever made the edit: item lists, item pages, reference labels, counts and the store's
-  collections all do. A sync layer must emit the same changes for data arriving from the server.
+  collections all do. Sync emits the same changes for data arriving from the server.
 - **Writes are change sets.** Each mutating repository method collects its statements and commits
-  them in one transaction (`SqlClient.write`). This is the natural unit for a future sync outbox.
+  them in one transaction (`SqlClient.write`); the sync outbox's triggers queue its rows in the same
+  transaction.
 - **Items are loaded once and shared** (`app/src/app/itemCache.ts`, hook `useItems`): while any
   pane shows a collection, its items (of the shown space) live in one cache, kept current from the change feed (a changed
   item is re-read alone; a collection whose fields changed is reloaded; switching spaces reloads
@@ -69,7 +70,7 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   `string` | `number` | `markdown`, also with a shared prompt) store their generated value in
   `value_text` (`value_number` for numbers) and, in `value_json`, the fingerprint (a JSON string) of the rendered
   prompt it answers (`domain/ai.ts`: JSON `{ "hash": …, "edited": true }`, `edited` when the user typed the value); `Repository.setGenerated` writes both without touching `items.updated_at`, `updateItem` stores a typed value as edited. The
-  fingerprint rides along in sync, so no new synced column was needed for it.
+  fingerprint syncs with the value.
 - Items have no title field; their label (e.g. in reference pickers) is the first non-empty
   String field (`itemLabel`).
 - A collection can't be deleted while another collection has a reference field pointing at it.
@@ -89,9 +90,9 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   meant for remote collections, whose blocks ask their source for each page of rows (filtered,
   sorted and grouped there: `useRemoteResult`, docs/sync.md "Remote sources") instead of
   `applyQuery`. Rendering is not
-  virtualized: rows and cards are memoized only. If a 5,000-item collection feels slow, first try
-  rendering rows in steps ("show more"), not virtualization (which clashes with `FillTable` /
-  `useSharedColumns` measuring every row).
+  virtualized: rows and cards are memoized only. If a 5,000-item collection feels slow, render rows
+  in steps (roadmap #10), not virtualization (which clashes with `FillTable` / `useSharedColumns`
+  measuring every row).
 - **Never install the SAH-pool VFS while another worker may hold its files.** If
   `installOpfsSAHPoolVfs()` fails to open a pool file, its error path calls `removeVfs()`, which
   deletes the pool directory, i.e. the database (this happened on reload-after-save). The worker
@@ -101,11 +102,10 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 - **Typed columns map to Postgres** as `text`, `double precision`, `date`, `timestamptz`,
   `boolean`, `uuid`, `jsonb`; markdown is `text`, and images reference a files table.
 - **Single connection per origin:** the SAH-pool VFS locks the DB, so a second browser tab can't open
-  it (shows an error). Fine for Tauri/PWA; for multi-tab web use, coordinate via a SharedWorker or
-  Web Locks leader election later.
+  it (shows an error). Fine for Tauri/PWA; several tabs are roadmap #9.
 - **Storage lives in the web view, not a visible file.** On desktop the DB is inside the WebView2
-  profile (`%LOCALAPPDATA%\com.kubus.app\EBWebView`). Export/import (sqlite file or JSON) is needed for
-  backups. Changing the app identifier or `useHttpsScheme` changes the origin and orphans the data.
+  profile (`%LOCALAPPDATA%\com.kubus.app\EBWebView`). Without sync there is no backup yet
+  (export / import: roadmap #8). Changing the app identifier or `useHttpsScheme` changes the origin and orphans the data.
 - **iOS eviction:** Safari can evict storage under pressure; home-screen apps are exempt from the
-  7-day rule and we request `navigator.storage.persist()`. Once sync exists the server is the backup.
-- macOS/Linux Tauri builds use WKWebView/WebKitGTK; OPFS support there is not yet verified.
+  7-day rule and we request `navigator.storage.persist()`. With sync on, the server is the backup.
+- macOS/Linux Tauri builds use WKWebView/WebKitGTK; OPFS support there is not verified (roadmap #9).

@@ -125,7 +125,7 @@ export function defaultViewState(defaultOptions: unknown, fields: string[] | nul
   return { filters: [], blocks: [fields ? { ...block, layout: { ...block.layout, fields } } : block], editable };
 }
 
-/** Id of the first block of a view stored before blocks (and of the default view's block). */
+/** Id of the default view's block. */
 const MAIN_BLOCK = "main";
 
 /**
@@ -191,31 +191,18 @@ export function parseBlock(raw: unknown): ViewBlock | null {
   return o.groupOrder === "desc" || o.groupOrder === "count" ? { ...block, groupOrder: o.groupOrder } : block;
 }
 
-/**
- * A view's stored config (JSON `{ filters, blocks, editable, collapsed }`). Views stored before blocks hold
- * `{ query, options }` plus their kind (the row's): read as one block, whose fields come out of
- * the old options (a table's columns, the cards' fields, labels and empty-field choice).
- */
-export function parseViewConfig(json: string, kind: string): ViewState & { collapsed: Collapsed } {
+/** A view's stored config (JSON `{ filters, blocks, editable, collapsed }`); unreadable: no filter, no blocks. */
+export function parseViewConfig(json: string): ViewState & { collapsed: Collapsed } {
   let o: Record<string, unknown> = {};
   try {
     o = (JSON.parse(json) ?? {}) as Record<string, unknown>;
   } catch {
-    // unreadable: the default below
+    // unreadable: the empty view below
   }
-  if (Array.isArray(o.blocks)) {
-    return {
-      filters: array<FilterRule>(o.filters),
-      blocks: o.blocks.map(parseBlock).filter((b): b is ViewBlock => b !== null),
-      editable: o.editable !== false,
-      collapsed: parseCollapsed(o.collapsed),
-    };
-  }
-  const query = { ...defaultQuery(), ...((o.query ?? {}) as Partial<ViewQuery>) };
-  const options = (o.options ?? {}) as Record<string, unknown>;
-  const layout = parseFieldLayout(
-    kind === "cards" ? { fields: options.fields, hiddenLabels: options.hiddenLabels, hideEmpty: options.hideEmpty } : { fields: options.columns },
-  ) ?? BLOCK_LAYOUT;
-  const block = withQuery({ ...newBlock(kind, options, MAIN_BLOCK), layout }, query);
-  return { filters: array<FilterRule>(query.filters), blocks: [block], editable: true, collapsed: NOTHING_COLLAPSED };
+  return {
+    filters: array<FilterRule>(o.filters),
+    blocks: array<unknown>(o.blocks).map(parseBlock).filter((b): b is ViewBlock => b !== null),
+    editable: o.editable !== false,
+    collapsed: parseCollapsed(o.collapsed),
+  };
 }
