@@ -3,7 +3,7 @@ import { codeProblem, componentUses, itemsInput, localComponents, placeProblem, 
 import { parseLayout } from "./fieldLayout";
 import type { Collection, FieldDef, Item } from "./model";
 import { defaultQuery, filterPreset, PAGE_ITEM, pageItemField, resolvePageValues, type FilterRule } from "./query";
-import { blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery } from "./views";
+import { blockFilters, blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery, withViewFilters } from "./views";
 
 const code = (text: string) => ({ code: text, ai: false });
 const field = (id: string, name: string, kind: FieldDef["kind"], targetCollectionId: string | null = null): FieldDef => ({
@@ -181,5 +181,26 @@ describe("collapsed blocks and groups", () => {
     c = withGroupCollapsed(c, "y", "author", "a1", false);
     expect(c.groups).toEqual({});
     expect(withBlockCollapsed(withBlockCollapsed(NOTHING_COLLAPSED, "x", true), "x", false).blocks).toEqual([]);
+  });
+});
+
+describe("block filters and the view's", () => {
+  const rule = (id: string, value: string): FilterRule => ({ id, fieldId: "f1", operator: "is", value });
+  const view = (filters: FilterRule[], blocks: (FilterRule[] | null)[]) => ({
+    filters,
+    blocks: blocks.map((f, i) => ({ ...newBlock("table", null, `b${i}`), filters: f })),
+  });
+
+  it("a block filter edited to the view's follows the view again", () => {
+    expect(blockFilters([rule("x", "a")], [rule("y", "a")])).toBeNull();
+    expect(blockFilters([rule("x", "b")], [rule("y", "a")])).toEqual([rule("x", "b")]);
+    // Item pages have no view filter: the block's is kept as it is.
+    expect(blockFilters([], null)).toEqual([]);
+  });
+
+  it("a changed view filter takes the blocks that were the same along, not the ones that differ", () => {
+    const next = withViewFilters(view([rule("v", "a")], [null, [rule("c", "a")], [rule("d", "b")]]), [rule("v", "z")]);
+    expect(next.filters).toEqual([rule("v", "z")]);
+    expect(next.blocks.map((b) => b.filters)).toEqual([null, null, [rule("d", "b")]]);
   });
 });

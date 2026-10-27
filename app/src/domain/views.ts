@@ -121,6 +121,28 @@ export function defaultViewState(defaultOptions: unknown): ViewState {
 /** Id of the first block of a view stored before blocks (and of the default view's block). */
 const MAIN_BLOCK = "main";
 
+/** Whether two filters are the same rules (their ids aside). */
+export function sameFilters(a: FilterRule[], b: FilterRule[]): boolean {
+  const rules = (f: FilterRule[]) => JSON.stringify(f.map(({ fieldId, operator, value }) => [fieldId, operator, value]));
+  return rules(a) === rules(b);
+}
+
+/**
+ * A block's filter as edited: null (the view's, following it) when it is the same as the view's,
+ * so a block differs from the view only while its filter does.
+ */
+export const blockFilters = (filters: FilterRule[], viewFilters: FilterRule[] | null): FilterRule[] | null =>
+  viewFilters !== null && sameFilters(filters, viewFilters) ? null : filters;
+
+/**
+ * The view with a new filter: the blocks whose filter was the same as the view's follow it (also
+ * a copy stored equal); the ones that differ keep theirs.
+ */
+export function withViewFilters<T extends { filters: FilterRule[]; blocks: ViewBlock[] }>(view: T, filters: FilterRule[]): T {
+  const follows = (b: ViewBlock) => b.filters !== null && sameFilters(b.filters, view.filters);
+  return { ...view, filters, blocks: view.blocks.map((b) => (follows(b) ? { ...b, filters: null } : b)) };
+}
+
 /** The query a block runs: its own filter, else the view's (none on item pages). */
 export function blockQuery(viewFilters: FilterRule[] | null, block: ViewBlock): ViewQuery {
   const query: ViewQuery = { filters: block.filters ?? viewFilters ?? [], sort: block.sort, groupBy: block.groupBy };

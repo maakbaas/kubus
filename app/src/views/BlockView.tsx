@@ -9,7 +9,7 @@ import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
 import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type QueryResult } from "../domain/query";
-import { blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
+import { blockFilters, blockQuery, collapsedGroups, newBlock, sameFilters, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { ToolbarPopover } from "../ui/ToolbarPopover";
@@ -87,40 +87,30 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
   const type = blockType(block.kind);
   const uses = type.uses(block.options, components);
   const query = blockQuery(viewFilters, block);
-  const own = block.filters !== null && viewFilters !== null;
-  const filterCount = (block.filters ?? []).length;
+  // A collection view's block filters as the view does until its filter is made different (then
+  // it keeps its own, marked blue); on item pages there is no view filter, only the block's.
+  const differs = block.filters !== null && (viewFilters === null ? block.filters.length > 0 : !sameFilters(block.filters, viewFilters));
+  const filterCount = query.filters.length;
   return (
     <>
       {uses.query && (
         <ToolbarPopover
-          label={own ? `Own filter (${filterCount})` : viewFilters === null && filterCount > 0 ? `Filter (${filterCount})` : "Filter"}
+          label={differs ? `Own filter (${filterCount})` : filterCount > 0 ? `Filter (${filterCount})` : "Filter"}
           icon={Filter}
           width="wide"
-          active={own || (viewFilters === null && filterCount > 0)}
+          active={differs}
           onOpenChange={onOpenChange}
         >
           <div className="view-settings">
-            {viewFilters !== null && (
-              <Checkbox
-                id={`${uid}-same-filter`}
-                labelText="Same as the view's filter"
-                helperText={own ? "Its own filter replaces the view's: changes to the view's filter don't apply here." : undefined}
-                checked={!own}
-                // Its own filter starts as a copy of the view's.
-                onChange={(_, { checked }) => onChange({ ...block, filters: checked ? null : viewFilters.map((r) => ({ ...r, id: newId() })) })}
-              />
-            )}
-            {(own || viewFilters === null) && (
-              <QueryEditor
-                collection={collection}
-                query={query}
-                refs={refs}
-                part="filter"
-                page={page}
-                title={viewFilters === null ? "Filter" : "Own filter"}
-                onChange={(q) => onChange({ ...block, filters: q.filters })}
-              />
-            )}
+            <QueryEditor
+              collection={collection}
+              query={query}
+              refs={refs}
+              part="filter"
+              page={page}
+              title="Filter"
+              onChange={(q) => onChange({ ...block, filters: blockFilters(q.filters, viewFilters) })}
+            />
           </div>
         </ToolbarPopover>
       )}
