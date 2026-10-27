@@ -20,9 +20,12 @@
 // Without a model set up everything waits, and runs once one is. A failed value is not retried by
 // itself: it shows its error, and "Retry" tries again.
 //
-// The provider settings (address, key, models) are per device (localStorage `kubus.ai`), never
-// synced: the key must not travel to the server.
+// The provider: this server's (`source: "server"`, the default when the device set none of its own:
+// the server's KUBUS_AI_* variables, called through the server with the sync token, so its key stays
+// there; see server/src/ai.ts), or the device's own (address, key, models in localStorage `kubus.ai`,
+// never synced: the key must not travel to the server).
 
+import type { ServerAi } from "../../../shared/api";
 import type { Repository } from "../data";
 import { parseAiReply, type AiRequest } from "../domain/ai";
 import type { Collection, FieldDef } from "../domain/model";
@@ -45,6 +48,8 @@ const RECENT_MS = 30_000;
 
 /** The language model settings of this device: one provider, and a model per kind of work. */
 export interface AiConfig {
+  /** Whose model: the sync server's (set on the server), or the device's own below. */
+  source: "server" | "own";
   /** The API's root, e.g. https://api.openai.com/v1. */
   baseUrl: string;
   apiKey: string;
@@ -59,7 +64,31 @@ export interface AiConfig {
 /** What a model is asked for: the value of an AI field, or the code of a component. */
 export type AiPurpose = "field" | "code";
 
-const DEFAULT_CONFIG: AiConfig = { baseUrl: DEFAULT_LLM_SETTINGS.baseUrl, apiKey: "", fieldModel: "", codeModel: "", paused: false };
+const DEFAULT_CONFIG: AiConfig = { source: "server", baseUrl: DEFAULT_LLM_SETTINGS.baseUrl, apiKey: "", fieldModel: "", codeModel: "", paused: false };
+
+/** The stored settings; from before `source` existed, a device with its own address keeps it. */
+function loadConfig(): AiConfig {
+  const saved = readPref<Partial<AiConfig>>(SETTINGS_KEY, {});
+  const source = saved.source === "server" || saved.source === "own" ? saved.source : saved.baseUrl?.trim() ? "own" : "server";
+  return { ...DEFAULT_CONFIG, ...saved, source };
+}
+
+/** Where requests go and which models they ask for (the server's or the device's own). */
+export interface AiProvider {
+  baseUrl: string;
+  apiKey: string;
+  fieldModel: string;
+  codeModel: string;
+}
+
+/** What the sync server offers: its models, or why there are none (no server, not reachable, not set up). */
+export interface ServerOffer {
+  ai: ServerAi | null;
+  problem: string | null;
+}
+
+/** How long a failed look at the server's offer is not repeated. */
+const SERVER_RETRY_MS = 30_000;
 
 export interface AiJob {
   collection: Collection;
@@ -103,7 +132,11 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const isRateLimit = (message: string) => /^429\b/.test(message) || /rate.?limit|too many requests/i.test(message);
 
 export class AiService {
-  private current: AiConfig = { ...DEFAULT_CONFIG, ...readPref<Partial<AiConfig>>(SETTINGS_KEY, {}) };
+  private current: AiConfig = loadConfig();
+  private offer_: ServerOffer = { ai: null, problem: null };
+  /** The server and token the offer is for, and when it was last asked for. */
+  private offerFor = "";
+  private offerAsked = 0;
   private listeners = new Set<() => void>();
   /** Values for what is shown, and the backfill's, each in the order found; shown ones run first. */
   private queued = new Map<string, AiJob>();
@@ -130,6 +163,50 @@ export class AiService {
 
   constructor(private repo: Repository) {
     this.progress = this.measure();
+    // The server's offer follows the sync settings (and is asked for again after a failure).
+    repo.sync.subscribe(() => this.refreshOffer());
+    this.refreshOffer();
+  }
+
+  /** What the sync server offers (a new object whenever it changes). */
+  get serverOffer(): ServerOffer {
+    return this.offer_;
+  }
+
+  private setOffer(offer: ServerOffer) {
+    this.offer_ = offer;
+    if (this.configured) this.admit([...this.held.values()], false, true);
+    this.pump();
+  }
+
+  /** Asks the sync server what model it offers (GET /api/ai), when its address or token changed. */
+  private refreshOffer() {
+    const { url, token } = this.repo.sync.config;
+    const target = `${url}\n${token}`;
+    const failed = this.offer_.problem !== null && !this.offer_.ai;
+    if (target === this.offerFor && !(failed && Date.now() - this.offerAsked > SERVER_RETRY_MS)) return;
+    this.offerFor = target;
+    this.offerAsked = Date.now();
+    if (!url || !token) return this.setOffer({ ai: null, problem: "No server is set up (Settings → Sync)." });
+    fetch(`${url}/api/ai`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (res) => {
+        if (target !== this.offerFor) return;
+        if (res.status === 404) return this.setOffer({ ai: null, problem: "The server is older than this app: it offers no language model." });
+        if (!res.ok) return this.setOffer({ ai: null, problem: `The server answered ${res.status}.` });
+        const ai = (await res.json()) as ServerAi;
+        this.setOffer({ ai, problem: ai.available ? null : "The server offers no language model: set KUBUS_AI_URL and KUBUS_AI_FIELD_MODEL there." });
+      })
+      .catch(() => target === this.offerFor && this.setOffer({ ai: null, problem: `Can't reach ${url}.` }));
+  }
+
+  /** Where `config` sends requests: the server's model through the server, or its own provider. */
+  providerOf(config: AiConfig): AiProvider {
+    if (config.source === "own") return config;
+    const { ai } = this.offer_;
+    const { url, token } = this.repo.sync.config;
+    return ai?.available
+      ? { baseUrl: `${url}/api/ai`, apiKey: token, fieldModel: ai.fieldModel, codeModel: ai.codeModel }
+      : { baseUrl: "", apiKey: "", fieldModel: "", codeModel: "" };
   }
 
   readonly subscribe = (listener: () => void) => {
@@ -144,13 +221,13 @@ export class AiService {
 
   /** The model for a kind of work (the code model falls back to the field model). */
   modelFor(purpose: AiPurpose): string {
-    const { fieldModel, codeModel } = this.current;
+    const { fieldModel, codeModel } = this.providerOf(this.current);
     return (purpose === "code" ? codeModel.trim() || fieldModel : fieldModel).trim();
   }
 
   /** A model is chosen for this kind of work (and there is a provider): it can be asked. */
   isConfigured(purpose: AiPurpose): boolean {
-    return this.modelFor(purpose) !== "" && this.current.baseUrl.trim() !== "";
+    return this.modelFor(purpose) !== "" && this.providerOf(this.current).baseUrl.trim() !== "";
   }
 
   /** AI values can be generated. */
@@ -168,7 +245,8 @@ export class AiService {
   }
 
   client(purpose: AiPurpose) {
-    return createLlmClient({ baseUrl: this.current.baseUrl, apiKey: this.current.apiKey, model: this.modelFor(purpose) });
+    const { baseUrl, apiKey } = this.providerOf(this.current);
+    return createLlmClient({ baseUrl, apiKey, model: this.modelFor(purpose) });
   }
 
   getProgress = () => this.progress;

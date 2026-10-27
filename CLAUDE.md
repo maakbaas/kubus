@@ -47,7 +47,9 @@ is what this split avoids. Keep them current when behaviour changes.
   or static component (neither), never both (`componentUses`, `placeProblem` in `domain/components.ts`).
 - **The Help page text** (`app/src/help/components.md`) documents components and `{{ }}` code (`$` names, outputs, AI
   fields) and is also what "Write with AI" gives the model: update it whenever that language changes.
-- **The language model key stays on the device** (`kubus.ai`, `app/src/app/ai.ts`): never sync it or put it in the database.
+- **The language model key stays where it is set**: a device's own on the device (`kubus.ai`, `app/src/app/ai.ts`),
+  the server's in its environment (`KUBUS_AI_KEY`, used only by its proxy `server/src/ai.ts`). Never sync a key, put it
+  in the database or send the server's to a device.
 - Same words in code and UI (see Terminology); no "type", "object", "template", "entry".
 
 ## Terminology

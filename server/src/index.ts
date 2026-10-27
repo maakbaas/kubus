@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize } from "node:path";
 import { createPool } from "./db.ts";
 import { broadcast, handleEvents } from "./events.ts";
+import { aiInfo, aiProxy } from "./ai.ts";
 import { deleteUnusedFiles, getFile, hasFile, markedFiles, putFile, unmarkFiles } from "./files.ts";
 import { HeadlessHost } from "./headless.ts";
 import { FILE_ID } from "../../shared/files.ts";
@@ -20,6 +21,8 @@ import { HttpError, json, Router, type ApiRequest, type ApiResponse } from "../.
 //   KUBUS_WEBHOOK_URL     URL(s), comma-separated, called with every change (docs/sync.md)
 //   KUBUS_WEBHOOK_SECRET  signs each webhook request (X-Kubus-Signature)
 //   KUBUS_UNUSED_FILE_DAYS  how long a file no item uses is kept, default 7
+//   KUBUS_AI_URL, KUBUS_AI_KEY, KUBUS_AI_FIELD_MODEL, KUBUS_AI_CODE_MODEL  a language model for
+//                         every device, through this server (server/src/ai.ts)
 
 const databaseUrl = process.env.DATABASE_URL;
 const token = process.env.KUBUS_TOKEN;
@@ -102,6 +105,9 @@ const routes = new Router()
     if (wrote) broadcast(response.cursor);
     return json(200, response);
   })
+  .add("GET", "/api/ai", aiInfo)
+  .add("GET", "/api/ai/models", (req) => aiProxy(req, "/models"))
+  .add("POST", "/api/ai/chat/completions", (req) => aiProxy(req, "/chat/completions"))
   .add("HEAD", "/api/files/{id}", async (_req, params) => {
     fitting();
     return { status: (await hasFile(pool, fileId(params))) ? 200 : 404 };

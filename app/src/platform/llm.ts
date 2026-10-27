@@ -4,8 +4,9 @@
 // the provider is a base URL, a key and a model name in the settings, and a different API would be
 // another implementation of the interface, not a change in its callers.
 //
-// Called straight from the browser (the app has no backend of its own), so the key lives on this
-// device only (domain-free settings in localStorage, see app/ai.ts) and a provider must allow CORS.
+// Called straight from the browser: a device's own provider (its key on this device only, in
+// localStorage, see app/ai.ts; the provider must allow CORS), or the sync server's proxy for the
+// model it offers (server/src/ai.ts: the base URL is <server>/api/ai and the key the sync token).
 
 export interface LlmSettings {
   /** The API's root, e.g. https://api.openai.com/v1 (the client adds /chat/completions and /models). */

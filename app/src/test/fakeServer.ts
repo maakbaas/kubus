@@ -3,6 +3,7 @@
 // through it as through the real one (server/src).
 import { createHash } from "node:crypto";
 import { vi } from "vitest";
+import type { ServerAi } from "../../../shared/api";
 import { SYNC_TABLES, type SyncMismatch, type SyncRequest, type SyncResponse, type WireRow } from "../../../shared/sync";
 import { DirectSqlClient } from "../data/sqlite/direct";
 import { SqliteRepository } from "../data/sqlite/SqliteRepository";
@@ -21,6 +22,9 @@ export class FakeServer {
   log: string[] = [];
   /** Answers for file requests to fail on purpose: "PUT <id>" → status. */
   failures = new Map<string, number>();
+  /** The language model it offers (GET /api/ai); null: none set up. Requests to it, by body. */
+  ai: ServerAi | null = null;
+  aiRequests: { model: string; authorization: string | null }[] = [];
   /** Answers a sync gives on top of the protocol's (tests of later additions). */
   extra: (request: SyncRequest) => Partial<SyncResponse> = () => ({});
 
@@ -66,6 +70,11 @@ export class FakeServer {
     const headers = new Headers(init.headers);
     if (headers.get("Authorization") !== `Bearer ${TOKEN}`) return Response.json({ error: "Wrong token" }, { status: 401 });
     if (path === "/api/events") return new Response(new ReadableStream({ start() {} }));
+    if (path === "/api/ai") return Response.json(this.ai ?? { available: false, fieldModel: "", codeModel: "" });
+    if (path === "/api/ai/chat/completions") {
+      this.aiRequests.push({ model: (JSON.parse(String(init.body)) as { model: string }).model, authorization: headers.get("Authorization") });
+      return Response.json({ choices: [{ message: { content: "42" } }] });
+    }
     if (path === "/api/sync") {
       const answer = this.sync(JSON.parse(String(init.body)) as SyncRequest);
       return Response.json(answer, { status: "error" in answer ? 409 : 200 });

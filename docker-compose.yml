@@ -35,6 +35,12 @@ services:
       # KUBUS_WEBHOOK_SECRET: another-long-random-string
       # Days a file (image) no item uses is kept before it is deleted; default 7.
       # KUBUS_UNUSED_FILE_DAYS: 7
+      # Optional: a language model for every device (AI fields, Write with AI), any OpenAI-style
+      # API. Devices use it through this server (Settings → AI → "The server's"); the key stays here.
+      # KUBUS_AI_URL: https://api.openai.com/v1
+      # KUBUS_AI_KEY: sk-...
+      # KUBUS_AI_FIELD_MODEL: gpt-4.1-mini
+      # KUBUS_AI_CODE_MODEL: gpt-4.1        # for writing components; default: the field model
     ports:
       - "8080:8080"
     depends_on:

@@ -117,6 +117,16 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
   and out-of-order syncs, an offline edit, an undo. When pushed rows use a file the server no longer
   has, the answer lists it (`missingFiles`) and a device with the bytes queues it again.
 
+## The server's language model
+
+`KUBUS_AI_URL`, `KUBUS_AI_KEY`, `KUBUS_AI_FIELD_MODEL`, `KUBUS_AI_CODE_MODEL` (`server/src/ai.ts`) give
+every device the same model. `GET /api/ai` says what is offered (`ServerAi` in `shared/api.ts`: the
+models, never the address or key); `POST /api/ai/chat/completions` and `GET /api/ai/models` forward
+to the provider with the server's key, for any device with the token. In the app, Settings → AI →
+"The server's" (`AiConfig.source`, the default without a device's own) points `createLlmClient` at
+`<server>/api/ai` with the sync token (`AiService.providerOf`); "My own" keeps today's per-device
+provider. The headless device doesn't generate AI values (that stays with the apps).
+
 ## The API (headless device) and webhooks
 
 `/api/v1` (documented for users in `app/src/help/api.md`, the Help page's API tab) is answered by the

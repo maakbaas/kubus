@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type { RefLabel } from "../domain/components";
 import type { Collection, Item } from "../domain/model";
-import type { AiConfig, AiProgress } from "./ai";
+import type { AiConfig, AiProgress, ServerOffer } from "./ai";
 import { scanAiValues, type RequestCache } from "./aiScan";
 import { useStore } from "./store";
 
@@ -9,6 +9,12 @@ import { useStore } from "./store";
 export function useAiSettings(): AiConfig {
   const { ai } = useStore();
   return useSyncExternalStore(ai.subscribe, () => ai.settings);
+}
+
+/** The language model the sync server offers (see AiService.serverOffer). */
+export function useServerAi(): ServerOffer {
+  const { ai } = useStore();
+  return useSyncExternalStore(ai.subscribe, () => ai.serverOffer);
 }
 
 /** How many AI values wait, work or failed. */

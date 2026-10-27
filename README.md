@@ -71,5 +71,8 @@ example with Caddy, Tailscale Serve or a Cloudflare tunnel.
 
 The same server answers an HTTP API at `/api/v1` with the same token, and calls `KUBUS_WEBHOOK_URL`
 on every change when set (commented in `docker-compose.yml`); Help → API in the app documents both.
+With `KUBUS_AI_URL`, `KUBUS_AI_KEY`, `KUBUS_AI_FIELD_MODEL` and `KUBUS_AI_CODE_MODEL` set, it offers every
+device the same language model (Settings → AI → "The server's"), used through the server so the key
+stays there; a device can still set its own instead.
 Running the server from the repository instead of the image: `npm run build:headless` first, or the
 API answers 503.
