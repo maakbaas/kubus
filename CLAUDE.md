@@ -20,6 +20,7 @@ is what this split avoids. Keep them current when behaviour changes.
 - `docs/sync.md`: server, sync engine (outbox triggers, merge, first connection), iOS home-screen app,
   known sync limits.
 - `docs/vision.md`: the "one hub" vision (native + remote sources, capabilities) and the roadmap.
+- `docs/todo.md`: planned changes agreed on but not done yet.
 
 ## Rules that always apply
 
