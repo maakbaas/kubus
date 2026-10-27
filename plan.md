@@ -76,38 +76,117 @@ devices ──────/api/sync, /api/files──> server ──> Postgres (
   `{ "Field name": value }` and back. It resolves fields by name or id and checks each value
   against its kind (`fieldKinds`).
 - **API routes:** one table of `{ method, path pattern, handler }`, so `/api/v1` has a single
-  router. The RPC endpoint is one more table entry that maps a method name to argument decoders.
+  router, used by the devices' endpoints too. Shared decoders resolve names (collection, space,
+  field, component) and turn the API's shapes into `Repository` arguments.
+- **Field and collection edits:** `saveCollection` takes the whole collection. One helper
+  (`headless/schema.ts`) loads the collection, applies one change (add, change, remove or reorder
+  a field, change a setting) and saves it, so each route stays a few lines.
 
 ## 2. The HTTP API (`/api/v1`, `Authorization: Bearer $KUBUS_TOKEN`)
 
-Resources, JSON in and out. A collection can be named by its id, name or plural name (any case);
-a space by id or name (default: the default space). A field can be named by its id or name.
+Resources, JSON in and out, with plain routes for everything the GUI can do (no generic RPC
+endpoint). Each route is a thin translation onto one `Repository` method, so the rules stay in one
+place. The shapes are the API's own, documented on the Help page, and they don't change when an
+internal signature does.
 
-| Method + path | What |
-|---|---|
-| `GET /spaces` | spaces |
-| `GET /collections`, `GET /collections/{c}` | collections with their fields |
-| `GET /collections/{c}/items?space=&limit=&offset=` | items with `values` by field name, computed fields included |
-| `POST /collections/{c}/items` `{ space?, values }` | create; returns the item |
-| `GET /items/{id}` | one item |
-| `PATCH /items/{id}` `{ values }` | update only the fields given |
-| `DELETE /items/{id}` | soft delete |
-| `POST /items/{id}/move` `{ space }` | move to another space |
-| `GET /search?q=&space=` | global search |
-| `POST /files` (raw body, `Content-Type`) | store a file; returns `{ id }` for an image field or `files/<id>` in Markdown |
-| `GET /files/{id}` | the bytes |
-| `POST /rpc/{method}` `{ args: [...] }` | any `Repository` data method, so schema edits, views, item views, bookmarks, components, AI values (`setGenerated`) and so on are all reachable. Collection and field arguments are given by id or name. |
+Names: a collection can be given by its id, name or plural name (any case); a space by id or name
+(default: the default space); a field by id or name; a component by id or name.
+
+**Spaces**
+
+| Method + path | What | Repository |
+|---|---|---|
+| `GET /spaces` | spaces | `listSpaces` |
+| `POST /spaces` `{ name, icon? }` | create | `saveSpace` |
+| `PATCH /spaces/{s}` `{ name?, icon? }` | rename, change icon | `saveSpace` |
+| `DELETE /spaces/{s}` | delete with its items, views and bookmarks | `deleteSpace` |
+
+**Collections and fields** (the schema-change policy applies exactly as in the GUI)
+
+| Method + path | What | Repository |
+|---|---|---|
+| `GET /collections?space=` | collections with their fields and item counts | `listCollections`, `countItemsByCollection` |
+| `GET /collections/{c}` | one collection | `listCollections` |
+| `POST /collections` `{ name, pluralName, icon?, description?, spaces?, fields: [{ name, kind, … }] }` | create; it gets its "All" view | `saveCollection` |
+| `PATCH /collections/{c}` `{ name?, pluralName?, icon?, description?, spaces? }` | change the collection's own settings | `saveCollection` |
+| `DELETE /collections/{c}` | delete (refused while other collections refer to it, as in the GUI) | `deleteCollection` |
+| `POST /collections/{c}/fields` `{ name, kind, … }` | add a field | `saveCollection` |
+| `PATCH /collections/{c}/fields/{f}` `{ name?, … }` | change a field (rename, options, AI prompt…) | `saveCollection` |
+| `DELETE /collections/{c}/fields/{f}` | remove a field (its images are released) | `saveCollection` |
+| `PUT /collections/{c}/fields/order` `[f, …]` | field order | `saveCollection` |
+
+**Items**
+
+| Method + path | What | Repository |
+|---|---|---|
+| `GET /collections/{c}/items?space=&limit=&offset=` | items with `values` by field name, computed fields included | `listItems` |
+| `POST /collections/{c}/items` `{ space?, values }` | create; returns the item | `createItem` |
+| `GET /items/{id}` | one item | `getItem` |
+| `PATCH /items/{id}` `{ values }` | update only the fields given | `updateItem` |
+| `DELETE /items/{id}` | soft delete | `deleteItem` |
+| `POST /items/{id}/move` `{ space }` | move to another space | `moveItem` |
+| `PUT /items/{id}/item-view` `{ itemView }` (null: the collection's default) | pin an item view | `pinItemView` |
+| `PUT /items/{id}/ai/{f}` `{ value }` | write an AI field's generated value; the input hash is worked out from the current inputs, as the backfill does | `setGenerated` |
+| `POST /items/{id}/ai/{f}/accept` | keep a typed-over AI value | `acceptEdit` |
+| `GET /search?q=&space=&limit=` | global search | `search` |
+
+**Views**
+
+| Method + path | What | Repository |
+|---|---|---|
+| `GET /collections/{c}/views?space=` | collection views, the default marked | `listViews` |
+| `POST /collections/{c}/views` `{ name, space?, blocks }` | create | `saveView` |
+| `PATCH /views/{id}` `{ name?, blocks? }` | change | `saveView` |
+| `DELETE /views/{id}` | delete | `deleteView` |
+| `PUT /collections/{c}/default-view` `{ space?, view }` (null: none) | set the default | `setDefaultView` |
+| `GET /collections/{c}/item-views` | item views with their layouts | `listCollections` |
+| `PUT /collections/{c}/item-views` `[…]` | replace the item views | `saveItemViews` |
+
+Blocks and layouts are the stored shapes (`ViewBlock`, `ItemLayout`), with fields given by id or
+name; the Help page documents them.
+
+**Bookmarks and components**
+
+| Method + path | What | Repository |
+|---|---|---|
+| `GET /bookmarks?space=` | bookmarks | `listBookmarks` |
+| `POST /bookmarks` `{ space?, kind, collection, target, label }` | add | `addBookmark` |
+| `PATCH /bookmarks/{target}` `{ label }` | rename | `relabelBookmark` |
+| `DELETE /bookmarks/{target}?space=` | remove | `removeBookmark` |
+| `GET /components`, `GET /components/{id}` | components with their code | `listComponents` |
+| `POST /components`, `PATCH /components/{id}` | create, change (the same checks as the editor: `placeProblem`) | `saveComponent` |
+| `DELETE /components/{id}?withFields=` | delete | `deleteComponent` |
+
+**Files**
+
+| Method + path | What | Repository |
+|---|---|---|
+| `POST /files` (raw body, `Content-Type`) | store; returns `{ id }` for an image field or `files/<id>` in Markdown | `putFile` |
+| `GET /files/{id}` | the bytes | the same handler as the devices' `GET /api/files/{id}` |
 
 How values look:
-- **Item item:** `{ id, collection, collectionId, spaceId, itemViewId, label, createdAt, updatedAt, values }`.
+- **Item:** `{ id, collection, collectionId, spaceId, itemViewId, label, createdAt, updatedAt, values }`.
 - **Value types:** the stored types (`FieldValue`): string, number, boolean, `YYYY-MM-DD`, ISO
   datetime, string arrays, item ids for references, a file id for an image.
 - **Computed values:** component values appear in `values` as well, but are read-only. Writing
   one is refused.
-- **Errors:** `{ error }` with 400 (bad input), 404 (unknown collection, item or field) or
-  503 (sync not reachable).
+- **Errors:** `{ error }` with 400 (bad input), 404 (unknown collection, item, field, view…),
+  409 (refused by a rule, e.g. deleting a collection others refer to) or 503 (sync not reachable).
 
-Not exposed: the sync controls, `wipeLocal`, `subscribe`. Server wipe stays `POST /api/wipe`.
+Not exposed: the sync controls, `wipeLocal`, `subscribe`, `listLabels` (item labels are in every
+item), `releaseFiles` (clean-up is automatic, §3). Server wipe stays `POST /api/wipe`.
+
+**Devices keep their own protocol.** The API is not used for device sync, on purpose:
+- A device replicates rows (outbox, cursor, a merge per field, tombstones) so that it works offline
+  and merges later. API calls are operations that need the server at the moment they are made.
+- Syncing through the API would mean recording every offline edit as an operation and replaying
+  it in order: a different, more fragile sync design.
+- The reuse is one level down: the API calls the same `Repository` as the GUI, and the headless
+  device turns its writes into rows through the same sync.
+
+Shared between both: the router table, the token check, the `{ error }` format and the file
+bytes handler. `/api/sync`, `/api/events` and `/api/files` stay outside `/api/v1`: they are the
+devices' internal protocol, not a public API, and change with the app.
 
 ## 3. Files: their own transfer, thumbnails, originals when needed
 
@@ -273,7 +352,8 @@ into events and POSTs them to the configured URL(s).
 
 - **Unit (vitest):**
   - `values.ts` (by name, validation, computed fields read-only);
-  - the router and RPC argument decoding;
+  - the router, name resolution and the field / collection edit helper;
+  - one test per route against the headless device in Node (status codes, shapes, refusals);
   - webhook event building (created / updated / deleted);
   - the sync engine's file upload and download against a fake fetch (upload before the row,
     the per-sync upload budget, thumbnails first, the "when opened" setting, retries);
@@ -301,7 +381,8 @@ into events and POSTs them to the configured URL(s).
 4. Clean-up: `unusedFiles`, release after a sync, `missingFiles`, the server's marks and hourly pass
    (needs the headless device, so its server half lands with step 5).
 5. Headless device: bundle, `DirectSqlClient`, start-up and reset, request queue.
-6. API: values, routes, RPC, shared reference-label function, computed values.
+6. API: values, router, the routes table by table (items, collections and fields, views, bookmarks,
+   components, spaces, AI values), shared reference-label function, computed values.
 7. Webhooks.
 8. Help tabs and `api.md`; compose, docs, CLAUDE.md.
 
