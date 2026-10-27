@@ -83,9 +83,16 @@ for (const vp of ["desktop", "phone"]) {
       collections: [
         { key: "bare", name: "Thing", plural: "Things", fields: [{ key: "name", name: "Name", kind: "string" }], items: [] },
         { key: "blank", name: "Blank", plural: "Blanks", fields: allKindFields({ target: "bare", component: "double" }), items: allKindItems(4, "typical", { empty: true }) },
-        { key: "nofields", name: "Fieldless", plural: "Fieldless", fields: [], items: [{ values: {} }, { values: {} }] },
+        { key: "nofields", name: "Fieldless", plural: "Fieldless", fields: [{ key: "gone", name: "Gone", kind: "string" }], items: [{ values: {} }, { values: {} }] },
       ],
     });
+    // The app saves no collection without fields, but one can arrive so from another device (its
+    // last field deleted there): its field is deleted underneath, as a sync would.
+    await t.page.evaluate(async (id) => {
+      const { repo } = window.kubus;
+      await repo.db.write([{ sql: "UPDATE fields SET deleted_at = ?1 WHERE collection_id = ?2", bind: [new Date().toISOString(), id] }]);
+      repo.emit({ scope: "collections" });
+    }, ids.collections.nofields);
     for (const [label, path] of [
       ["no items: table", t.listPath(ids.collections.bare)],
       ["empty items: table", t.listPath(ids.collections.blank)],

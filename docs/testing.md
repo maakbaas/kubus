@@ -61,7 +61,7 @@ can't drift apart unnoticed: a change to the sync protocol changes both and runs
 | `app/src/pages/ItemPage.tsx`, `ui/FieldInput.tsx` and the editors | – | 04, 12, 19 (Markdown 08) |
 | `app/src/styles.css`, `ui/PageHeader.tsx`, anything every page uses | – | all |
 
-Before pushing: `npm run typecheck` (and `npm run typecheck --prefix server` for server code),
+Before pushing: `npm run typecheck` (and `npm run typecheck --prefix server`, `npm run typecheck:test --prefix server` for server code),
 the vitest projects above, and `npm run test:gui -- --changed --smoke` for a change the GUI shows.
 
 ## Writing tests

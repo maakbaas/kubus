@@ -55,8 +55,8 @@ jobs:
 
       - name: Type check (app)
         run: npm run typecheck
-      - name: Type check (server)
-        run: npm run typecheck --prefix server
+      - name: Type check (server, and its tests)
+        run: npm run typecheck --prefix server && npm run typecheck:test --prefix server
 
       # /api/v1 answers from it: the server's HTTP tests use it.
       - name: Build the headless device

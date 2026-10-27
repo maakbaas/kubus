@@ -1,0 +1,8 @@
+{
+  // The server's tests (test/), which also need the repository's packages (vitest): checked where
+  // both are installed (`npm run typecheck:test`; CI's unit job, .github/workflows/test.yml).
+  "extends": "./tsconfig.json",
+  "include": ["src", "test", "../shared"],
+  // Runs the app's code (devices syncing through this server): in the app's typecheck.
+  "exclude": ["test/devices.test.ts"]
+}
