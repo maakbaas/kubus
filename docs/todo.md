@@ -66,15 +66,17 @@ Planned changes, roughly in order. Remove an item once it is done (the docs then
 
 ## Filters
 
-5. **`{{ }}` in filter values doesn't work, and fails silently.** Expected: `{{ 1 == 1 }}` as a
-   checkbox filter's value matches checked items (asked for before). Since fcef991 ("Code lives
-   only in components") filter values are data, never run (CLAUDE.md); item pages take a value
-   from the page's item by name instead. And a checkbox "is" compares the text to `true`
-   (`domain/query.ts`, `matches`), so `{{1==1}}` silently matches *unchecked* items.
-   - Decide: bring `{{ }}` back in filter values (an exception to "code lives only in components":
-     update CLAUDE.md, Help, the AI rules; what may it read: `$now`, the page's `$item`?), or
-     cover the cases it was for without code (relative dates like "today" / "in 7 days", the
-     page item's values, which exist already).
-   - Either way: a checkbox "is" value that isn't true / false is a problem shown at the input,
-     never a silent match; better a Carbon dropdown (checked / not checked / a page item's value)
-     than free text.
+5. **`{{ }}` in filter values, as raw text.** Expected: `{{ 1 == 1 }}` as a checkbox filter's value
+   matches checked items (asked for before). Decided: filter values may hold `{{ }}` sections, typed
+   and shown as raw text (no chips/pills). This is an exception to "code lives only in components":
+   update CLAUDE.md, `docs/features.md`, the Help text and the AI rules.
+   - History: before fcef991 a filter value's `{{ }}` ran only for blocks on item pages, over the
+     page's item (`resolvePageValues` with `evalText`); fcef991 removed it (filter values became
+     data) and added page-item values by name ("This Book's Year"). Bring the rendering back for
+     every filter, not only on item pages.
+   - What a section can read: `$now` (relative dates); on an item page the page's item as `$item`
+     (elsewhere `$item` is null, or a problem shown at the input). A section's result is the
+     value as if typed (`true` / a number / a date text), compared by the field's operator.
+   - Today a checkbox "is" compares the text to `true` (`domain/query.ts`, `matches`), so
+     `{{1==1}}` silently matches *unchecked* items. A value that doesn't fit (not true / false, not
+     a number, a failing section) is a problem shown at the input, never a silent match.
