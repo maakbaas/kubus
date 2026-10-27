@@ -1886,10 +1886,12 @@ img[data-lightbox] {
   margin-bottom: var(--cds-spacing-03);
   overflow-wrap: anywhere;
 }
-/* Label and value side by side, labels in a fixed column. */
+/* Label and value side by side, labels in a fixed column (narrower only when the card is: a label
+   then wraps, readable whole, rather than stacking above its value: a card looks the same at every
+   width unless its view asks for list rows). */
 .item-card__fields {
   display: grid;
-  grid-template-columns: 6rem minmax(0, 1fr);
+  grid-template-columns: minmax(0, 6rem) minmax(0, 1fr);
   gap: var(--cds-spacing-02) var(--cds-spacing-05);
   align-items: baseline;
 }
@@ -1904,8 +1906,8 @@ img[data-lightbox] {
   margin: 0;
   overflow-wrap: anywhere;
 }
-/* Nothing may overflow a card, however narrow the card width setting makes it: the card is a
-   size container; below 16rem labels stack above their values, and every child can shrink. */
+/* Nothing may overflow a card, however narrow the card width setting makes it: every child can
+   shrink (and long words wrap). */
 .item-card {
   container-type: inline-size;
   min-inline-size: 0;
@@ -1944,15 +1946,6 @@ img[data-lightbox] {
 .item-card__field dd > * {
   min-inline-size: 0;
   max-inline-size: 100%;
-}
-@container (max-width: 16rem) {
-  .item-card__fields {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: 0;
-  }
-  .item-card__field dd {
-    margin-block-end: var(--cds-spacing-03);
-  }
 }
 
 /* Collection page: view tabs (with the view's own tools at their right), the search bar the
