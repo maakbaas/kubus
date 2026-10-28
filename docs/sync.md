@@ -302,8 +302,8 @@ file release, AI fields, the "All" view, soft deletes, change sets).
 - *Auth* (`server/src/tokens.ts`, types in `shared/tokens.ts`): the devices' `KUBUS_TOKEN` reaches everything, `/api/v1`
   too; other tools get an API token, made in Settings → Server (`ui/ApiTokens.tsx`, shown once in a dialog with a copy
   button): `kubus_` + 32 random bytes (base64url), with a name and an access, `read` or `write` (read & write). The server
-  keeps only its SHA-256 (hex), in its own table `api_tokens` (`server/schema.sql`; server migration 1 adds it to older
-  databases), never synced, kept by a wipe (a tool keeps its access to the new data). An API token reaches only `/api/v1`
+  keeps only its SHA-256 (hex), in its own table `api_tokens` (`server/schema.sql`; the schema adds it to older
+  databases, no migration), never synced, kept by a wipe (a tool keeps its access to the new data). An API token reaches only `/api/v1`
   (and the MCP endpoint, roadmap #19): anything else under `/api` (sync, events, files, settings, the model, sources,
   `/api/tokens`, wipe) answers 403; a read token only `GET` / `HEAD`, every write (AI fields included) another method,
   403 saying so. A token's last use is written at most once a minute (per server process). Devices list, make and
