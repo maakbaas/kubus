@@ -170,7 +170,7 @@ kinds and their fields (`server/src/connectors/kinds.ts`; `ConnectionKind` in `s
 /api/settings` → `kinds`), so the app knows no database: PostgreSQL (host, port, database, user, TLS), n8n data tables
 (address), InfluxDB 2 (address, organization), Cloudflare D1 (account ID, database ID), MySQL and MariaDB (host, port,
 database, user, TLS), Actual Budget (address, budget sync ID), Calendar (ICS) (address), JSON and CSV over HTTP
-(address, rows at, header name). Addresses are stored and shown as typed: a secret in one (a calendar's secret
+(address, rows at, query parameter, header name). Addresses are stored and shown as typed: a secret in one (a calendar's secret
 path, a key in a query string, a published sheet's id) is written `{secret}` there and given as the source's
 password, which fills it in. A kind can mark a field secret (`ConnectionField.secret`: a second secret, a budget's
 encryption password): it is stored with the source's secrets (`StoredSource.secrets`, encrypted like the password),
@@ -258,6 +258,24 @@ takes the new one when its settings are opened. A source's name: letters, digits
   date & time's day in the device's zone uses the zone's offsets from 1990 to 2060 (`zoneOffsets`,
   computed with `Intl`). The time limit is the request's; filters on dates and numbers go through
   expressions (no index), text is case-insensitive for ASCII only (SQLite's `LIKE`).
+- *JSON and CSV over HTTP* (`connectors/json.ts`, `csv.ts`, what both share in `httpTable.ts`; pure parts tested,
+  the connectors against a stand-in server): one table per source (JSON: named by "Rows at"'s last token, else `rows`;
+  CSV: `rows`; any name is read, so a collection reads on when "Rows at" changes), read through `httpDocument.ts`
+  (redirects followed: a published Google Sheet's CSV address answers with one) and its next pages by
+  `Link: rel="next"` (at most 100 pages, 20 MB in all, `MAX_ROWS` 100,000 rows), queried in memory (`memory.ts`). The
+  address is clear text; a secret in it is written `{secret}` and is the password (`withSecret`, URL-encoded). Else the
+  password goes in the query under "Query parameter", under "Header name", or as `Authorization: Bearer`; only to the
+  address's origin (a next page elsewhere is read without it). JSON: the rows at "Rows at" (a JSON Pointer, RFC 6901;
+  empty: the top level), or NDJSON (by its content type, or a document whose every line is JSON); an object there is
+  one row unless it holds lists of objects (then a problem naming them); objects in a row flattened one level
+  (`address.city`), deeper ones hidden plain JSON text, a row that isn't an object one column `value`. CSV: RFC 4180
+  by its own parser, a header row (an empty name becomes "Column 3", a repeated one "Name 2"), the delimiter
+  `,` `;` or tab, whichever the header row has most of. Types inferred from all values: numbers (JSON's, or text
+  without leading zeros or `+`, at most 15 digits; "1,5" only off a comma delimiter and with no dot in the column),
+  booleans (JSON's, `true` / `false` in CSV), `yyyy-mm-dd` dates, ISO dates & times (UTC without a zone), arrays of
+  scalars as lists, anything mixed as text. The key: a column `id`, `uuid` or `key` (any case) with its own value in
+  every row, else the row's place (`_row`, hidden), which `check` warns about: a row's page and links to it change
+  when rows are added above it.
 - *App*: a block of a remote collection asks the source for its query (`useRemoteResult`, 100 rows
   a page, "Show more"; search waits for typing to pause) instead of `applyQuery`; the item page reads
   its row by key (`rowKey` of the item id, a base64url of the key). Rows become items keeping their
