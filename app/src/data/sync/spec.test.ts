@@ -8,7 +8,7 @@ import { SYNC_COMPATIBLE, SYNC_TABLES, SYNC_VERSION } from "../../../../shared/s
  * SYNC_VERSION (and SYNC_COMPATIBLE if older devices would get the new data wrong), write the
  * migrations (docs/migrations.md) and record the new version and fingerprint here.
  */
-const RECORDED = { version: 1, fingerprint: "4af48423" };
+const RECORDED = { version: 2, fingerprint: "5c16a825" };
 
 /** A short, stable fingerprint of the list (FNV-1a of its JSON). */
 function fingerprint(value: unknown): string {

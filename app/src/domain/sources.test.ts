@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SourceColumn } from "../../../shared/sources";
 import { blankField, pickableFields, type Collection } from "./model";
-import { canGroup, canSort, fieldOperators, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withSourceColumns } from "./sources";
+import { canGroup, canSort, fieldOperators, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
 import { defaultQuery, TITLE } from "./query";
 
 const columns: SourceColumn[] = [
@@ -106,6 +106,19 @@ describe("remote collections", () => {
       ["email", "string", "email"],
     ]);
     expect(next.source?.key).toBe("id");
+  });
+
+  it("hide a column's field, not bringing it back when the columns are read again, and show it again", () => {
+    const draft = { source: people.source, fields: people.fields.map(({ collectionId: _c, position: _p, ...f }) => f) };
+    const hidden = withHiddenColumns(draft, ["name"]);
+    expect(hidden.fields.some((f) => f.column === "name")).toBe(false);
+    expect(hidden.source?.hiddenColumns).toEqual(["name"]);
+    const reread = withSourceColumns(hidden, "CRM", people.source!.target, { columns, key: ["id"] });
+    expect(reread.fields.some((f) => f.column === "name")).toBe(false);
+    expect(reread.source?.hiddenColumns).toEqual(["name"]);
+    const shown = withHiddenColumns(reread, []);
+    expect(shown.fields.at(-1)?.column).toBe("name");
+    expect(shown.source?.hiddenColumns).toBeUndefined();
   });
 
   it("name a collection after its table", () => {

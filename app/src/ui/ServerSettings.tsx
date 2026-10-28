@@ -142,7 +142,7 @@ export function ServerSettings() {
                 <Stack gap={5} key={s.id} className="server-source">
                   {state?.problem && <InlineNotification kind="error" title={s.name} subtitle={state.problem} lowContrast hideCloseButton />}
                   {state?.warnings?.map((w) => <InlineNotification key={w} kind="warning" title={s.name} subtitle={w} lowContrast hideCloseButton />)}
-                  <TextInput size="sm" id={`${uid}-src-name-${s.id}`} labelText="Name" helperText="What devices see, e.g. CRM: letters, digits, - and _." value={s.name} onChange={(e) => setSource(i, { name: e.target.value })} />
+                  <TextInput size="sm" id={`${uid}-src-name-${s.id}`} labelText="Name" helperText="What devices see, e.g. CRM: letters, digits, spaces, - and _. Renaming it keeps its collections." value={s.name} onChange={(e) => setSource(i, { name: e.target.value })} />
                   <TextInput
                     size="sm"
                     id={`${uid}-src-url-${s.id}`}

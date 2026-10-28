@@ -28,7 +28,7 @@ import {
 import { Add, ArrowRight, Close, Copy, DataTable as TableIcon, Edit, Save, TrashCan } from "@carbon/icons-react";
 import { RowActions, rowButtonProps, RowIconButton, TableStacked } from "../ui/RowActions";
 import { useStore } from "../app/store";
-import { isStruckThrough, itemLabel, labelField, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
+import { isStruckThrough, itemLabel, labelField, titleFields, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
 import { cellEditStart, type EditStart } from "../ui/editStart";
 import { itemViewOf, FULL_LAYOUT, isRestricted } from "../domain/fieldLayout";
 import { isGrouped } from "../domain/query";
@@ -50,7 +50,7 @@ export interface TableOptions {
 }
 
 /** The column that names an item and opens it (the collection's first text field). */
-const titleColumn = (collection: Collection) => collection.fields.find((f) => f.kind === "string");
+const titleColumn = (collection: Collection) => titleFields(collection)[0];
 
 /** Fields that get an input in the add row: everything editable inline, plus checkboxes. */
 const addable = (f: FieldDef) => f.kind === "checkbox" || isInlineEditable(f.kind);

@@ -1,15 +1,16 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { Button, Dropdown, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
-import { Add, TrashCan } from "@carbon/icons-react";
+import { Button, Dropdown, FilterableMultiSelect, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
+import { Add, TrashCan, ViewOff } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { useItemCounts } from "../app/useItemCounts";
 import { fieldKinds, offeredKind } from "../domain/fieldKinds";
-import { isRemote, offeredKinds } from "../domain/sources";
+import { isRemote, offeredKinds, withHiddenColumns } from "../domain/sources";
 import { SourceSettings } from "../ui/SourceSettings";
 import {
   blankField,
   isReferenceKind,
+  NO_TITLE,
   newId,
   suggestPlural,
   collectionDraft,
@@ -29,6 +30,9 @@ import { PageHeader } from "../ui/PageHeader";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { moveBlock, useReorder } from "../ui/useReorder";
 import { useLinkTarget } from "../ui/useLinkTarget";
+
+/** The title choice "the first text field with a value" (titleField null). */
+const AUTO_TITLE = "auto";
 
 export function CollectionEditorPage() {
   const { collectionId } = useParams();
@@ -123,7 +127,13 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
   const reorder = useReorder({
     count: draft.fields.length,
     onMove: (start, end, to) => setDraft((d) => ({ ...d, fields: moveBlock(d.fields, start, end, to) })),
-    onDelete: (indices) => setDraft((d) => ({ ...d, fields: d.fields.filter((_, i) => !indices.includes(i)) })),
+    // A remote collection's column fields are hidden, not removed (they'd come back when its columns are read).
+    onDelete: (indices) =>
+      setDraft((d) => {
+        const columns = d.source ? d.fields.flatMap((f, i) => (indices.includes(i) && f.column ? [f.column] : [])) : [];
+        const rest = { ...d, fields: d.fields.filter((f, i) => !indices.includes(i) || (d.source && f.column)) };
+        return columns.length ? withHiddenColumns(rest, [...(d.source?.hiddenColumns ?? []), ...columns]) : rest;
+      }),
     canDelete: (indices) => indices.length < draft.fields.length, // a collection needs a field
     noun: ["field", "fields"],
   });
@@ -134,7 +144,11 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
     return type ? ` (${type})` : "";
   };
 
+  // Title choices: its text fields (as they are now), the first with a value, or none.
+  const textFields = draft.fields.filter((f) => f.kind === "string");
   const removeField = (id: string) => setDraft((d) => ({ ...d, fields: d.fields.filter((f) => f.id !== id) }));
+  const hideColumns = (hidden: string[]) => setDraft((d) => withHiddenColumns(d, hidden));
+  const hiddenColumns = draft.source?.hiddenColumns ?? [];
 
   // A remote collection's own fields are component fields: its stored values are the source's.
   const addField = () =>
@@ -145,7 +159,8 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
     setSubmitted(true);
     if (!valid) return;
 
-    const removed = existing?.fields.filter((f) => !draft.fields.some((d) => d.id === f.id)) ?? [];
+    // Hidden columns aren't asked about: the source's values stay where they are.
+    const removed = existing?.fields.filter((f) => !draft.fields.some((d) => d.id === f.id) && !(draft.source && f.column)) ?? [];
     if (removed.length > 0) {
       const ok = await confirm({
         title: "Remove fields?",
@@ -282,15 +297,16 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
                   onChange={({ selectedItem: k }) => k && updateField(f.id, newKindPatch(k))}
                 />
                 <div className="field-row__actions">
+                  {/* A column's field is hidden (and stays so when the columns are read again), not removed. */}
                   <IconButton
                     autoAlign
                     size="sm"
                     kind="ghost"
-                    label={draft.fields.length === 1 ? "A collection needs at least one field" : "Remove field"}
+                    label={draft.fields.length === 1 ? "A collection needs at least one field" : remote && f.column ? "Hide column" : "Remove field"}
                     disabled={draft.fields.length === 1}
-                    onClick={() => removeField(f.id)}
+                    onClick={() => (remote && f.column ? hideColumns([...hiddenColumns, f.column]) : removeField(f.id))}
                   >
-                    <TrashCan />
+                    {remote && f.column ? <ViewOff /> : <TrashCan />}
                   </IconButton>
                   {/* The drag handle is always a row's last icon. */}
                   {reorder.handle(i)}
@@ -314,11 +330,42 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
                 )}
               </div>
             ))}
+            {draft.source && hiddenColumns.length > 0 && (
+              <FilterableMultiSelect<string>
+                autoAlign
+                size="sm"
+                id={`${uid}-hidden-columns`}
+                titleText="Hidden columns"
+                helperText="Not shown as fields; take one out to show it again."
+                placeholder="Hide columns"
+                items={draft.source.columns.map((c) => c.name)}
+                itemToString={(c) => c ?? ""}
+                selectedItems={hiddenColumns}
+                selectionFeedback="fixed"
+                onChange={({ selectedItems }) => hideColumns(selectedItems ?? [])}
+              />
+            )}
             <Button kind="tertiary" size="sm" renderIcon={Add} iconDescription="Add field" onClick={addField} className="add-field">
               Add field
             </Button>
             {reorder.dialog}
           </FormGroup>
+
+          {/* Which text field an item is called by (lists, links, its page's heading), or none: then by the collection's name. */}
+          <Dropdown<string>
+            autoAlign
+            size="sm"
+            id={`${uid}-title-field`}
+            titleText="Title"
+            label="Title"
+            helperText={`What an item is called in lists, links and on its page. Without a title it is called “${draft.name.trim() || "Item"}”.`}
+            items={[AUTO_TITLE, ...textFields.map((f) => f.id), NO_TITLE]}
+            selectedItem={draft.titleField === NO_TITLE ? NO_TITLE : textFields.some((f) => f.id === draft.titleField) ? draft.titleField! : AUTO_TITLE}
+            itemToString={(id) =>
+              id === AUTO_TITLE ? "The first text field with a value" : id === NO_TITLE ? "No title" : (textFields.find((f) => f.id === id)?.name.trim() || "Unnamed field")
+            }
+            onChange={({ selectedItem }) => setDraft((d) => ({ ...d, titleField: !selectedItem || selectedItem === AUTO_TITLE ? null : selectedItem }))}
+          />
 
           <div className="form-actions">
             <Button size="sm" kind="secondary" onClick={() => navigate(existing ? `/collections/${existing.id}/items` : "/collections")}>

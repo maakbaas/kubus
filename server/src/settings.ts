@@ -12,6 +12,8 @@ export interface StoredAi extends ServerAiSettings {
 }
 export interface StoredSource extends ServerSourceSettings {
   password: string;
+  /** The names it had before (renamed in the settings): collections made under one still read it. */
+  formerNames: string[];
 }
 export interface Stored {
   ai: StoredAi;
@@ -39,6 +41,7 @@ export async function loadSettings(pool: Db): Promise<Stored> {
       name: text(s.name),
       url: text(s.url),
       password: text(s.password),
+      formerNames: Array.isArray(s.formerNames) ? s.formerNames.map((n) => text(n, 40)).filter(Boolean) : [],
       schemas: Array.isArray(s.schemas) ? s.schemas.map((x) => text(x)).filter(Boolean) : [],
       queries: s.queries !== false,
       timeoutSeconds: typeof s.timeoutSeconds === "number" && s.timeoutSeconds > 0 ? s.timeoutSeconds : 30,
@@ -85,7 +88,7 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
   const names = new Set<string>();
   const sources = update.sources.map((s): StoredSource => {
     const name = text(s.name, 40);
-    if (!SOURCE_NAME.test(name)) throw new HttpError(400, `A source's name is letters, digits, - and _ (“${name}” isn't)`);
+    if (!SOURCE_NAME.test(name)) throw new HttpError(400, `A source's name is letters, digits, spaces, - and _ (“${name}” isn't)`);
     if (names.has(name.toLowerCase())) throw new HttpError(400, `Two sources are called “${name}”`);
     names.add(name.toLowerCase());
     const given = splitPassword(text(s.url));
@@ -94,9 +97,12 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
     const password =
       given.password || (typeof s.password === "string" ? s.password : before && placeOf(before.url) === placeOf(given.url) ? before.password : "");
     const timeout = Number(s.timeoutSeconds);
+    // Renamed: its old name is kept, so collections that read it by that name still do.
+    const formerNames = before ? [...before.formerNames, ...(before.name !== name ? [before.name] : [])] : [];
     return {
       id: text(s.id, 100) || crypto.randomUUID(),
       name,
+      formerNames,
       url: given.url,
       password,
       schemas: Array.isArray(s.schemas) ? s.schemas.map((x) => text(x, 200)).filter(Boolean) : [],
@@ -104,6 +110,8 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
       timeoutSeconds: Number.isFinite(timeout) && timeout > 0 ? Math.min(timeout, 3600) : 30,
     };
   });
+  // A former name another source now has is that one's (the last 20 kept).
+  for (const s of sources) s.formerNames = [...new Set(s.formerNames)].filter((n) => !names.has(n.toLowerCase())).slice(-20);
   return { ai: { url: aiUrl, key, fieldModel: text(update.ai.fieldModel, 200), codeModel: text(update.ai.codeModel, 200) }, sources };
 }
 
@@ -120,7 +128,7 @@ export function sourceConfigs(stored: Stored): SourceConfig[] {
         // Not a URL: the connector says so.
       }
     }
-    return { name: s.name, url, schemas: s.schemas, queries: s.queries, timeoutMs: Math.round(s.timeoutSeconds * 1000) };
+    return { name: s.name, formerNames: s.formerNames, url, schemas: s.schemas, queries: s.queries, timeoutMs: Math.round(s.timeoutSeconds * 1000) };
   });
 }
 
@@ -129,6 +137,6 @@ export function viewOf(stored: Stored, status: (name: string) => { connector?: s
   const { key, ...ai } = stored.ai;
   return {
     ai: { ...ai, keySet: key !== "" },
-    sources: stored.sources.map(({ password, ...s }) => ({ ...s, passwordSet: password !== "", ...status(s.name) })),
+    sources: stored.sources.map(({ password, formerNames: _formerNames, ...s }) => ({ ...s, passwordSet: password !== "", ...status(s.name) })),
   };
 }

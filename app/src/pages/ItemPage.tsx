@@ -66,6 +66,7 @@ import { TabMenu, useClippedTabs } from "../ui/TabMenu";
 import { findBlock, useLinkTarget } from "../ui/useLinkTarget";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
+import { useShownOnce } from "../ui/useShownOnce";
 import { refLabelOf, useReferenceOptions, type RefOptions } from "../ui/useReferenceOptions";
 import { isRemote, rowItem, rowKey, sourceShape } from "../domain/sources";
 
@@ -88,7 +89,7 @@ function ImageValue({ fileId, alt }: { fileId: string; alt: string }) {
 function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; value: FieldValue; refs: RefOptions; /** HTML: a click on its plain content. */ onFrameClick?(): void }): ReactNode {
   switch (field.kind) {
     case "string":
-      return <Highlight text={String(value)} query="" />;
+      return <Highlight text={String(value)} query="" links />;
     // Numbers, dates and times read exactly as in their Carbon inputs (same text, same font,
     // same place), so switching to edit mode changes nothing on screen.
     case "number":
@@ -126,7 +127,7 @@ function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; 
     case "component":
       return value == null ? null : <MarkdownView source={String(value)} />;
     case "ai":
-      return value == null ? null : field.output === "markdown" ? <MarkdownView source={String(value)} /> : <Highlight text={String(value)} query="" />;
+      return value == null ? null : field.output === "markdown" ? <MarkdownView source={String(value)} /> : <Highlight text={String(value)} query="" links />;
     case "checkbox":
     case "string_list":
     case "checklist":
@@ -233,6 +234,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   );
   const viewsBar = useRef<HTMLDivElement>(null);
   const clippedTabs = useClippedTabs(viewsBar);
+  // The same error as the page's blocks (the server can't be reached) shows once.
+  const showError = useShownOnce(error);
   // Nothing until it is in (a fraction of a second): a spinner would only flash.
   if (item === undefined && !error) return null;
   if (item === null) return <NotFound />;
@@ -475,7 +478,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
           )
         }
       />
-      {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
+      {showError && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
 
       {/* Once the collection has item views: one tab each, like the views of the collection page. The
           star makes the shown one the default for all items, the pin this item's own choice.
@@ -1117,7 +1120,7 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, fixed,
           title={readOnly ? "Written by AI from this field's prompt" : "Click to edit. What you type is kept: it is not generated again by itself."}
         >
           <AiStatus itemId={itemId ?? ""} fieldId={field.id}>
-            {!empty && (field.output === "markdown" ? <MarkdownView source={String(value)} /> : <Highlight text={String(value)} query="" />)}
+            {!empty && (field.output === "markdown" ? <MarkdownView source={String(value)} /> : <Highlight text={String(value)} query="" links />)}
           </AiStatus>
         </div>
       </div>

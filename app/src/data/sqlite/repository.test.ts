@@ -3,7 +3,7 @@
 // API rely on, without sync (data/sync/*.test.ts) or the HTTP API (headless/api.test.ts).
 import { beforeEach, describe, expect, it } from "vitest";
 import { device } from "../../test/fakeServer";
-import { newId, type Collection, type FieldDef, type FieldKind } from "../../domain/model";
+import { collectionDraft, itemLabel, newId, NO_TITLE, type Collection, type FieldDef, type FieldKind } from "../../domain/model";
 import type { CollectionView } from "../../domain/views";
 import type { DataChange } from "../repository";
 
@@ -171,6 +171,22 @@ describe("labels and search", () => {
       [{ id: a, label: "Ann", spaceId: "default" }, { id: b, label: "Bobby", spaceId: "work" }, { id: c, label: null, spaceId: "default" }].sort((x, y) => x.id.localeCompare(y.id)),
     );
     expect(await repo.listLabels(person, [b])).toEqual([{ id: b, label: "Bobby", spaceId: "work" }]);
+  });
+
+  it("label an item by its collection's title field, or not at all without one", async () => {
+    const person = await collection("Person", [field("Nick"), field("Name")]);
+    const a = await repo.createItem(person, { [person.fields[0].id]: "Bobby", [person.fields[1].id]: "Bob" }, "default");
+    const titled = async (titleField: string) => {
+      await repo.saveCollection({ ...collectionDraft(person), titleField }, "default");
+      const saved = (await repo.listCollections()).find((c) => c.id === person.id)!;
+      return { saved, label: (await repo.listLabels(saved))[0].label };
+    };
+    const byName = await titled(person.fields[1].id);
+    expect(byName).toMatchObject({ saved: { titleField: person.fields[1].id }, label: "Bob" });
+    expect(itemLabel(byName.saved, (await repo.getItem(byName.saved, a))!)).toBe("Bob");
+    const none = await titled(NO_TITLE);
+    expect(none.label).toBeNull();
+    expect(itemLabel(none.saved, (await repo.getItem(none.saved, a))!)).toBe("Person");
   });
 
   it("finds text in a space, also through the labels of referenced items", async () => {

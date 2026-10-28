@@ -4,7 +4,6 @@ import {
   COMPONENT_OUTPUTS,
   FRAME_RATIOS,
   codeProblem,
-  isAiOutput,
   kindText,
   placeProblem,
   type ComponentCode,
@@ -13,7 +12,7 @@ import {
 } from "../domain/components";
 import type { Collection } from "../domain/model";
 import { ComponentCodeEditor } from "./ComponentCodeEditor";
-import { ValueSourceSwitch } from "./ValueSourceSwitch";
+import { useValueSourceSwitch, ValueSourceSwitch } from "./ValueSourceSwitch";
 import { WriteWithAi } from "./WriteWithAi";
 
 /** What the code editor says about the built-in $ names. */
@@ -26,7 +25,7 @@ export const PROMPT_HELP =
 /**
  * The editor of a component's code, the same wherever a component is written: on its own page
  * (a shared one) and in place (a field's or block's own): Value (code or AI prompt), Write with AI, Output, the code
- * with what kind it makes and what is wrong with it, and for HTML that fills its box its shape.
+ * with what kind it makes and what is wrong with it, and for HTML the shape of its box.
  * The page adds what belongs to a shared component around it (name, description, the preview).
  */
 export function ComponentForm({
@@ -38,7 +37,6 @@ export function ComponentForm({
   outputLocked,
   outputHelp,
   invalidText,
-  fills = true,
   writer,
 }: {
   id: string;
@@ -53,8 +51,6 @@ export function ComponentForm({
   outputHelp?: string;
   /** What is wrong (overrides what the code itself shows). */
   invalidText?: string;
-  /** HTML output fills its box (no height of its own): then its shape can be chosen. */
-  fills?: boolean;
   /** Write with AI: the collection it is for, the name and description to give the model, and where its suggestion's name and description go. */
   writer?: { focus?: Collection; name: string; description: string; onNamed?(name: string, description: string): void };
 }) {
@@ -62,6 +58,7 @@ export function ComponentForm({
   const outputs = ai ? COMPONENT_OUTPUTS.filter((o) => AI_COMPONENT_OUTPUTS.includes(o.value)) : COMPONENT_OUTPUTS;
   const problem = invalidText ?? (value.code.trim() ? ((place ? placeProblem(value, place) : ai ? placeProblem(value, "field") : codeProblem(value.code)) ?? undefined) : undefined);
   const set = (patch: Partial<ComponentCode>) => onChange({ ...value, ...patch });
+  const switchSource = useValueSourceSwitch();
   return (
     <Stack gap={5}>
       {askAi && (
@@ -69,7 +66,7 @@ export function ComponentForm({
           id={id}
           ai={ai}
           locked={askAi.locked}
-          onChange={(on) => set({ ai: on, output: on && !isAiOutput(value.output) ? "string" : value.output })}
+          onChange={(on) => onChange(switchSource(value, on))}
         />
       )}
       {askAi?.help && <p className="helper field-settings__note">{askAi.help}</p>}
@@ -122,16 +119,17 @@ export function ComponentForm({
         value={value.code}
         onChange={(code) => set({ code })}
       />
-      {/* Only for HTML that fills its box (a map, a chart): content with its own height is shown at that height. */}
-      {value.output === "html" && fills && (
+      {/* Automatic: content with its own height is shown at that height, content at 100% (a map, a chart) at 16:9. */}
+      {value.output === "html" && (
         <Select
           size="sm"
           id={`${id}-frame-ratio`}
           labelText="Aspect ratio on pages"
-          helperText="For HTML that fills its box (like a map or a chart), so has no height of its own. On card covers it fills the cover."
-          value={value.frameRatio ?? "16/9"}
-          onChange={(e) => set({ frameRatio: e.target.value === "16/9" ? null : e.target.value })}
+          helperText="Automatic: the content's own height, or 16:9 for content at 100% height (like a map or a chart). A ratio gives it that shape whatever its content. On card covers it fills the cover."
+          value={value.frameRatio ?? ""}
+          onChange={(e) => set({ frameRatio: e.target.value || null })}
         >
+          <SelectItem value="" text="Automatic" />
           {FRAME_RATIOS.map((r) => (
             <SelectItem key={r} value={r} text={r.replace("/", ":")} />
           ))}

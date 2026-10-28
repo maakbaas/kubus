@@ -3,7 +3,7 @@ import { Button, Checkbox, Dropdown, InlineNotification, TextInput } from "@carb
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { orderFields } from "../domain/fieldLayout";
-import { newId, pickableFields, type Collection } from "../domain/model";
+import { newId, pickableFields, titleFields, type Collection } from "../domain/model";
 import { placeProblem } from "../domain/components";
 import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
@@ -22,6 +22,7 @@ import type { CollectionData } from "./useCollectionData";
 import { useItemActions } from "./useItemActions";
 import { useRemoteResult } from "./useRemoteResult";
 import { useBlockName } from "./BlockListEditor";
+import { useShownOnce } from "../ui/useShownOnce";
 
 // One block: a collection's items shown one way (its block type), with its own sort, grouping,
 // and fields, and the view's filter unless it has its own. Collection views and item pages
@@ -195,7 +196,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
               if (!next || next.kind === type.kind) return;
               const options = next.defaultOptions(collection);
               const showsTitle = (o: unknown) => !!(o as { showTitle?: boolean } | null)?.showTitle;
-              const title = collection.fields.find((f) => f.kind === "string");
+              const title = titleFields(collection)[0];
               const shown = block.layout.fields ?? pickableFields(collection).map((f) => f.id);
               const fields =
                 title && showsTitle(options) && shown.includes(title.id)
@@ -292,6 +293,8 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const result = remote ? remote.result : local;
   const items = remote ? remote.items : data.items;
   const error = remote?.error ?? data.error;
+  // Every block of a page asking the same server: its error (it can't be reached) shows once.
+  const showError = useShownOnce(error);
   const fields = useMemo(() => orderFields(pickableFields(collection), block.layout.fields), [collection, block.layout.fields]);
   const preset = useMemo(() => filterPreset(collection, filters, inherited), [collection, filters, inherited]);
   const actions = useItemActions({
@@ -341,7 +344,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           onOpenChange={onOpenChange}
         />
       </SectionHeader>
-      {!collapsed && error && <InlineNotification kind="error" title="Error" subtitle={error} hideCloseButton />}
+      {!collapsed && showError && <InlineNotification kind="error" title="Error" subtitle={error} hideCloseButton />}
       {/* Nothing until everything is in (a fraction of a second): a placeholder table would only
           flash, shaped unlike the real one. */}
       {!collapsed && items && (

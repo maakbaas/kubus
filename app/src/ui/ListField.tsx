@@ -238,7 +238,7 @@ export function ListField({
                     </RelatedLink>
                   )
                 ) : (
-                  <Highlight text={item.text} query="" />
+                  <Highlight text={item.text} query="" links />
                 )}
               </div>
             )}

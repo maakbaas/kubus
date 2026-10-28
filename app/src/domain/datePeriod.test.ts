@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultDateField, weekNumber, parseRange, parseRolling, periodAround, periodKind, periodLabel, rangeValue, resolveRange, rollingLabel, rollingValue, shiftPeriod } from "./datePeriod";
+import { defaultDateField, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveRange, rollingLabel, rollingRangeLabel, rollingValue, shiftPeriod } from "./datePeriod";
 
 describe("date periods", () => {
   it("finds the day, week (Sunday first), month and year around a day", () => {
@@ -56,6 +56,16 @@ describe("rolling periods", () => {
     expect(parseRolling(rollingValue({ kind: "week", offset: -2 }))).toEqual({ kind: "week", offset: -2 });
     expect(rollingLabel({ kind: "month", offset: -1 })).toBe("Last month");
     expect(rollingLabel({ kind: "day", offset: 3 })).toBe("In 3 days");
+  });
+
+  it("include a range ending today, kept as days from today", () => {
+    expect(rangeOrRolling({ start: "2026-10-21", end: today }, today)).toBe("day-6..day+0");
+    expect(rangeOrRolling({ start: "2026-10-21", end: "2026-10-26" }, today)).toBe("2026-10-21..2026-10-26");
+    expect(resolveRange("day-6..day+0", today)).toEqual({ start: "2026-10-21", end: today });
+    expect(resolveRange("day-6..day+0", "2026-11-02")).toEqual({ start: "2026-10-27", end: "2026-11-02" });
+    expect(parseRollingRange("day+1..day-1")).toBeNull();
+    expect(rollingRangeLabel({ from: -6, to: 0 })).toBe("Last 7 days");
+    expect(rollingRangeLabel({ from: 0, to: 0 })).toBe("Today");
   });
 });
 

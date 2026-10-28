@@ -37,7 +37,10 @@ What the app does, feature by feature (read the part you work on).
   checkboxes save on toggle; markdown starts editing where it was clicked. View and edit mode must
   keep the same geometry (label spacing, box height, text position) so nothing jumps. The field
   that is the item's title (`labelField`) isn't repeated among the fields: the page title itself
-  is its editor (click to edit in place). The full form
+  is its editor (click to edit in place). Which text field is the title is the collection's "Title"
+  setting (`collections.title_field`, `titleFields` in `domain/model.ts`): one field, none (`"none"`:
+  items are called by the collection's name, tables get no title link), or by default the first text
+  field with a value. The full form
   (`…/items/new`) is only for creating. Narrow screens show the items list as cards.
 - **Markdown editor has no toolbar**: formatting is typed, images pasted/dropped, links edited from
   their hover popover. Its height follows the content (no inner scrolling, no resize handle).
@@ -264,6 +267,10 @@ What the app does, feature by feature (read the part you work on).
   href tried once per editor); one that names nothing stays as written and is resolved when clicked. `?block=` /
   `?field=` scroll to the target and flash it (`ui/useLinkTarget.ts`; blocks carry `data-block-id`, item page
   fields are found by their place among the page's entries).
+- **Web addresses in plain values are links** (`Highlight`'s `links`, `splitUrls`): `http(s)://…` in text, list and
+  checklist entries, AI and component text (cells, card fields, the item page) opens outside the app (`openExternal`;
+  not the item, nor the value's editor). Never in titles (the title is the item's own link, or edited by a click), group
+  titles or search results.
 - **Tags** (`domain/tags.ts`): `#name` anywhere in text (letters, digits, `_`, `-`, `/` for nested
   `#books/to-read`; at least one letter; not inside a word, `##`, `&#1;` or a URL). Not Markdown syntax: a value stays
   plain GFM and a tag is text in it. Every place that shows text renders it as a Carbon tag (blue, shaped like the collection pills in search; hovering it shows no hover on the link or result it sits in; `ui/TagChip.tsx`):
@@ -286,7 +293,9 @@ What the app does, feature by feature (read the part you work on).
   picks the source, a table (or a written query, when the source allows them) and the key column (the
   primary key by default; assumed unique: a row's item id is its key, base64url); reading the columns
   makes a field per column (named like it, the collection named after the table), "Read columns again"
-  keeps the fields' names, order and types and adds or drops the columns that came or went. A text
+  keeps the fields' names, order and types and adds or drops the columns that came or went. A column's
+  field isn't removed but hidden (the eye icon; `source.hiddenColumns`, "Hidden columns" lists them to show
+  again): reading the columns again doesn't bring it back. A text
   column's field can be shown as Markdown or HTML; fields added there are component fields (computed
   for the rows shown); no AI or reference fields, no Created / Updated. Views, blocks, item views,
   bookmarks are as for any collection (stored here, synced); filters, sorts and groupings offer only

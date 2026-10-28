@@ -88,7 +88,7 @@ export function FieldCell({ field, item, refs, search, actions }: Props) {
   const html = field.kind === "html" || (field.kind === "component" && outputOf(field, components) === "html");
   if (html && typeof value === "string" && value) {
     const text = htmlPreview(value);
-    return text ? <Highlight text={text} query={search} /> : <ComponentValue value={value} output="html" variant="cell" search={search} />;
+    return text ? <Highlight text={text} query={search} links /> : <ComponentValue value={value} output="html" variant="cell" search={search} />;
   }
   // Component images show as a thumbnail; other results as text.
   if (field.kind === "component") {
@@ -96,11 +96,11 @@ export function FieldCell({ field, item, refs, search, actions }: Props) {
     if (output === "image") return <ComponentValue value={value} output={output} variant="cell" search={search} />;
     // Text and number results read exactly like a string or number field (no Markdown preview,
     // which would strip characters such as `*`).
-    if (output !== "markdown") return <Highlight text={value == null ? "" : String(value)} query={search} />;
+    if (output !== "markdown") return <Highlight text={value == null ? "" : String(value)} query={search} links />;
   }
   // Generated values: as their output type reads; until there is one, what it is waiting for.
   if (field.kind === "ai") {
-    const shown = value == null || value === "" ? null : typeof value === "string" && field.output === "markdown" ? <MarkdownPreview source={value} search={search} /> : <Highlight text={String(value)} query={search} />;
+    const shown = value == null || value === "" ? null : typeof value === "string" && field.output === "markdown" ? <MarkdownPreview source={value} search={search} /> : <Highlight text={String(value)} query={search} links />;
     return (
       <AiStatus itemId={item.id} fieldId={field.id} compact>
         {shown}
@@ -139,5 +139,5 @@ export function FieldCell({ field, item, refs, search, actions }: Props) {
       );
     }
   }
-  return <Highlight text={formatValue(field, value, refs)} query={search} />;
+  return <Highlight text={formatValue(field, value, refs)} query={search} links />;
 }

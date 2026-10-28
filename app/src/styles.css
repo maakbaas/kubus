@@ -153,8 +153,17 @@ body {
 .sync-status--error :is(svg, path) {
   fill: var(--cds-support-error) !important;
 }
-.sync-status--syncing svg {
+/* Only the button's icon turns (the class may sit on the tooltip wrapper, around its tooltip too). */
+.sync-status--syncing.cds--btn > svg,
+.sync-status--syncing .cds--btn > svg {
   animation: sync-spin 1.2s linear infinite;
+  transform-origin: 50% 50%;
+}
+/* The turning icon's corners reach past its box: clipped at its button, so they never add to the
+   strip's overflow (a grey band opened below the tab strip while syncing). */
+.sync-status--syncing.cds--btn,
+.sync-status--syncing .cds--btn {
+  overflow: hidden;
 }
 @keyframes sync-spin {
   to {
@@ -162,7 +171,8 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sync-status--syncing svg {
+  .sync-status--syncing .cds--btn > svg,
+  .sync-status--syncing.cds--btn > svg {
     animation: none;
   }
 }

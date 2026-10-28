@@ -144,6 +144,8 @@ export function CollectionsPage() {
             t.pluralName,
             collections.map((x) => x.pluralName),
           ),
+          // Its title field is the copy's (NO_TITLE and null map to themselves).
+          titleField: draft.titleField ? mapId(draft.titleField) : null,
           fields: draft.fields.map((f) => ({
             ...f,
             id: mapId(f.id),

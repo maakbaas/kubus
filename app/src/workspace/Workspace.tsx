@@ -17,6 +17,7 @@ import {
 import { createPortal } from "react-dom";
 import { MemoryRouter, useLocation, useNavigate, useNavigationType } from "react-router";
 import { IconButton, Link, Tab, TabList, Tabs } from "@carbon/react";
+import { ShownOnceProvider } from "../ui/useShownOnce";
 import { Add } from "@carbon/icons-react";
 import { TabMenu, occupied, useClippedTabs } from "../ui/TabMenu";
 import { AppRoutes } from "../app/routes";
@@ -320,7 +321,9 @@ function TabRouterBridge({ tab }: { tab: WorkspaceTab }) {
 
   return (
     <InAppLinks onNavigate={(to, newTab) => (newTab ? ws.openTab(to) : navigate(to))}>
-      <AppRoutes />
+      <ShownOnceProvider>
+        <AppRoutes />
+      </ShownOnceProvider>
     </InAppLinks>
   );
 }

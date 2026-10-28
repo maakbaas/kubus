@@ -24,11 +24,14 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export class Sources {
   private sources = new Map<string, Source>();
+  /** A renamed source by a former name (settings.ts formerNames). */
+  private renamed = new Map<string, string>();
 
   /** These sources from now on (the ones before are closed), each checked once (`log`: what is wrong). */
   async replace(configs: SourceConfig[], log: (message: string) => void) {
     const before = [...this.sources.values()];
     this.sources = new Map();
+    this.renamed = new Map(configs.flatMap((c) => (c.formerNames ?? []).map((former) => [former, c.name] as const)));
     for (const config of configs) {
       const connector = connectorFor(config);
       this.sources.set(config.name, "problem" in connector ? { config, connector: null, problem: connector.problem } : { config, connector });
@@ -70,6 +73,7 @@ export class Sources {
   list(): SourceInfo[] {
     return [...this.sources.values()].map(({ config, connector, problem }) => ({
       name: config.name,
+      ...(config.formerNames?.length && { formerNames: config.formerNames }),
       connector: connector?.kind ?? "none",
       capabilities: connector?.capabilities ?? { query: false },
       ...(problem && { problem }),
@@ -77,7 +81,9 @@ export class Sources {
   }
 
   /** Runs a request on a source: its mistakes answer 400, an unreachable source 502. */
-  private async on<T>(name: string, work: (connector: Connector) => Promise<T>): Promise<T> {
+  private async on<T>(asked: string, work: (connector: Connector) => Promise<T>): Promise<T> {
+    // By its name, or one it had (a collection made before it was renamed).
+    const name = this.sources.has(asked) ? asked : (this.renamed.get(asked) ?? asked);
     const source = this.sources.get(name);
     if (!source) throw new HttpError(404, `The server has no source “${name}”`);
     if (!source.connector) throw new HttpError(502, source.problem ?? "Unavailable");
