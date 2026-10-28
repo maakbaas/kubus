@@ -132,8 +132,8 @@ Extension points are registries, not special cases in pages:
   - **Spread**: a histogram's field (a number or a date: dates on a time axis), bins and Split by; a box plot's field (a
     box per X category); a heatmap's columns (the X axis) × rows (Split by), or with a date X axis and not split a
     calendar (weeks × weekdays; empty cells left undrawn).
-  - **A date period's edges**: lines and areas along a date field each item is placed at (X: each item), with a
-    date period on that field (the block's own filter's, else its view's or page's), run on to the period's edges:
+  - **A date period's edges** (Data: "Run lines to the date period's edges", `ChartOptions.edges`, off unless ticked):
+    lines and areas along a date field each item is placed at (X: each item), with a date period on that field (the block's own filter's, else its view's or page's), run on to the period's edges:
     the X axis spans exactly its days, and each line (each split part) is drawn from its last item before the period
     into its first after it, so it starts and ends at the axis rather than at the first and last point inside
     (Carbon clips what is beyond). The block finds them (`BlockUses.edges`, `periodEdges` in domain/datePeriod.ts:

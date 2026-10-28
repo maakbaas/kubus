@@ -205,6 +205,11 @@ export interface ChartOptions {
   missing: "skip" | "zero";
   /** A sparkline: no axes, legend or grid. */
   compact: boolean;
+  /**
+   * Lines and areas along a date (X: each item) with a date period on it: the axis spans the period's days and
+   * each line runs on to its edges, from the last item before it to the first after (the block fetches them).
+   */
+  edges: boolean;
   // Parts of a whole
   parts: PartsFrom;
   /** "fields": the number fields that are the parts; radar: its spokes. */
@@ -299,6 +304,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     points: true,
     missing: "skip",
     compact: false,
+    edges: false,
     parts: "groups",
     fields: [],
     total: { from: "none", number: null, field: null },
@@ -382,6 +388,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     points: flag(o.points, d.points),
     missing: o.missing === "zero" ? "zero" : "skip",
     compact: flag(o.compact, d.compact),
+    edges: flag(o.edges, d.edges),
     parts: oneOf<PartsFrom>(["groups", "fields", "one"], o.parts, d.parts),
     fields: Array.isArray(o.fields) ? o.fields.filter((f): f is string => typeof f === "string" && ids.has(f)) : [],
     total: {
@@ -752,7 +759,7 @@ export function chartTable(input: ChartInput, options: ChartOptions, timeline = 
 
   // Each line (as its values: a running total or a change needs what came before) runs on from the
   // last item before the period into the first after it, of its own (split) items with a value.
-  const edges = options.x.by === "item" && isDateField(field) ? input.edges : undefined;
+  const edges = options.edges && options.x.by === "item" && isDateField(field) ? input.edges : undefined;
   const outside = edges && { before: itemCategories({ ...input, items: edges.before }, options.x), after: itemCategories({ ...input, items: edges.after }, options.x) };
   const edgePoint = (m: (typeof measures)[number], part: string | undefined) => {
     if (!outside || m.s.transform !== "none" || isBarStyle(styleOf(m.s, options.chart))) return null;
