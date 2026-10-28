@@ -757,7 +757,45 @@ export function rowsFlux(query: SourceQuery, columns: Map<string, InfluxColumn>,
  * last() / first() from its index), then reads only the days up to it (`edgeDays`).
  */
 export function isEdgeQuery(query: SourceQuery): boolean {
-  return "table" in query.target && query.limit === 1 && query.offset === 0 && !query.groupBy && !query.counts && query.sort.length === 1 && query.sort[0].column === "_time";
+  return isTimeOrdered(query) && query.limit === 1 && query.offset === 0 && !query.counts;
+}
+
+/**
+ * A page of a measurement's rows by time (newest or oldest first), not grouped. Read as asked it pivots,
+ * sorts and counts every row of the range (all history without a `_time` filter) for a page of 100, so the
+ * connector reads it from the nearest point's day (`nearestFlux`) and more days only while they hold less
+ * than the page (`edgeDays`), and counts with `countFlux` where it can.
+ */
+export function isTimeOrdered(query: SourceQuery): boolean {
+  return "table" in query.target && !query.groupBy && query.sort.length === 1 && query.sort[0].column === "_time";
+}
+
+/** Whether a filter holds only rules on `_time`, all of them required (no `or`): a range alone. */
+function timeOnly(c: SourceCondition): boolean {
+  if ("and" in c) return c.and.every(timeOnly);
+  if ("or" in c) return c.or.length === 1 && timeOnly(c.or[0]);
+  return c.column === "_time" && ["is", "between", "before", "after"].includes(c.operator);
+}
+
+/**
+ * The rows of a measurement in a query's range, counted by InfluxDB from its index (`count()`, not a pivot
+ * of every row): per series the most points of any of its fields (a row is a series' moment; fields written
+ * together, as usual, have one each), added up. Null when the filter or search needs the rows themselves.
+ */
+export function countFlux(query: SourceQuery, columns: Map<string, InfluxColumn>): string | null {
+  if (!("table" in query.target) || query.search.trim() || !timeOnly(query.filter)) return null;
+  const { schema, name } = query.target.table;
+  const range = rangeOf(query.filter, query.timeZone);
+  const tags = [...columns.values()].filter((c) => c.tag).map((c) => c.name);
+  return `from(bucket: ${fluxString(schema ?? "")})
+  |> range(start: ${range.start}, stop: ${range.stop})
+  |> filter(fn: (r) => r._measurement == ${fluxString(name)})
+  |> count()
+  |> group(columns: ${JSON.stringify(tags)})
+  |> max()
+  |> group()
+  |> sum()
+  |> rename(columns: {_value: "_kubus_n"})`;
 }
 
 /** The moment (`_time`) of the measurement's latest (desc) or earliest point in the query's range, any field's. */

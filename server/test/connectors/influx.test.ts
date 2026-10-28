@@ -32,6 +32,8 @@ function answer(flux: string): string {
   if (flux.includes("schema.measurements(")) return csv(["_value:string"], flux.includes('"home"') ? [["temp"], ["cpu"]] : [["door"]]);
   // "cpu": a tag and a field with the same key, a field whose values have two types (as Telegraf's can).
   if (flux.includes("schema.measurementTagKeys(") && flux.includes('"cpu"')) return csv(["_value:string"], [["host"], ["source_type_str"]]);
+  // A range's rows counted from the index.
+  if (flux.includes("|> count()")) return csv(["_kubus_n:long"], [["3"]]);
   // The moment of a measurement's nearest point (an edge): none in "empty"'s range.
   if (flux.includes('(column: "_time")')) return csv(["_time:dateTime:RFC3339"], flux.includes("2026-02-01") ? [] : [["2026-03-01T11:00:00Z"]]);
   if (flux.includes("last()") && flux.includes('"cpu"')) {
@@ -98,6 +100,24 @@ const temps = (over: Partial<SourceQuery> = {}): SourceQuery => ({
 });
 
 describe("InfluxDB connector", () => {
+  it("reads a page by time from the newest point's day, and counts from the index, not every row", async () => {
+    const page = temps({ sort: [{ column: "_time", direction: "desc" }], limit: 2, counts: true });
+    const r = await connector().query(page);
+    expect(r.rows).toHaveLength(2);
+    expect(r.more).toBe(true);
+    expect(r.total).toBe(3);
+    const sent = requests.map((q) => q.query ?? "");
+    // The rows read: the newest point's day and the one before (the stand-in has more than a page there).
+    const pivots = sent.filter((q) => q.includes("pivot("));
+    expect(pivots).toHaveLength(1);
+    expect(pivots[0]).toContain("range(start: 2026-02-28T00:00:00.000Z, stop: 2026-03-02T00:00:00.000Z)");
+    expect(sent.some((q) => q.includes('sum(column: "_kubus_n")'))).toBe(false);
+    // A filter on a field needs the rows: counted the slow way.
+    requests = [];
+    await connector().query({ ...page, filter: { column: "room", operator: "is", value: "kitchen" } });
+    expect(requests.some((q) => q.query?.includes('sum(column: "_kubus_n")'))).toBe(true);
+  });
+
   it("reads an edge (the row nearest a period) from its nearest point's day, not the whole history", async () => {
     const before = { column: "_time", operator: "between" as const, value: "1700-01-01..2026-03-10" };
     const edge = temps({ filter: before, sort: [{ column: "_time", direction: "desc" }], limit: 1, counts: false });

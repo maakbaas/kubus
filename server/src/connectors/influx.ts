@@ -12,7 +12,9 @@ import {
   ID_COLUMN,
   influxColumn,
   influxValue,
+  countFlux,
   isEdgeQuery,
+  isTimeOrdered,
   nearestFlux,
   parseAnnotatedCsv,
   rowFlux,
@@ -192,7 +194,38 @@ export class InfluxConnector implements Connector {
   }
 
   async query(query: SourceQuery): Promise<SourceResult> {
-    return isEdgeQuery(query) ? this.edge(query) : this.page(query);
+    if (isEdgeQuery(query)) return this.edge(query);
+    if (isTimeOrdered(query)) return this.byTime(query);
+    return this.page(query);
+  }
+
+  /**
+   * A page by time (isTimeOrdered): from the nearest point's day, more days (a month, a year, then all) only
+   * while they hold no more than the page: rows beyond it in those days mean the page is the range's own
+   * (every row outside them is further away). The total counted from InfluxDB's index where it can be.
+   */
+  private async byTime(query: SourceQuery): Promise<SourceResult> {
+    const direction = query.sort[0].direction;
+    const counted = query.counts ? this.total(query) : Promise.resolve(undefined);
+    const at = InfluxConnector.values(await this.flux(nearestFlux(query, direction)), "_time")[0];
+    let result: SourceResult | null = at ? null : { rows: [], more: false };
+    for (const days of at ? [1, 31, 366] : []) {
+      const r = await this.page({ ...query, counts: false, filter: { and: [query.filter, edgeDays(at, direction, days, query.timeZone)] } });
+      if (r.more) {
+        result = r;
+        break;
+      }
+    }
+    result ??= await this.page({ ...query, counts: false });
+    const total = await counted;
+    return total === undefined ? result : { ...result, total };
+  }
+
+  /** A query's rows counted: by InfluxDB's index (countFlux) where the filter is a range alone, else every row read. */
+  private async total(query: SourceQuery): Promise<number> {
+    const columns = await this.columnsOf(query.target);
+    const flux = countFlux(query, columns) ?? totalFlux(query, columns);
+    return Number(InfluxConnector.values(await this.flux(flux), "_kubus_n")[0] ?? 0);
   }
 
   /** The row nearest a period (isEdgeQuery): the moment of the nearest point, then the days up to it, more while the filter keeps none. */
