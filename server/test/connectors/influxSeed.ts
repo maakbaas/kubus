@@ -24,10 +24,11 @@ export function influxFields(): Record<string, string> {
   return { address: INFLUX!, org: ORG };
 }
 
-/** A new, empty bucket (one left over from an interrupted run is deleted first). */
+/** A name for this run's own: runs (also parallel ones) never meet each other's buckets, whatever an interrupted run left. */
+export const unique = (name: string) => `${name}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+
+/** A new, empty bucket (give it a `unique` name). */
 export async function createBucket(name: string): Promise<{ id: string; orgId: string }> {
-  const found = (await (await api(`/api/v2/buckets?name=${encodeURIComponent(name)}`).catch(() => new Response("{}"))).json()) as { buckets?: { id: string }[] };
-  for (const b of found.buckets ?? []) await api(`/api/v2/buckets/${b.id}`, { method: "DELETE" });
   const orgs = (await (await api(`/api/v2/orgs?org=${encodeURIComponent(ORG)}`)).json()) as { orgs: { id: string }[] };
   const orgId = orgs.orgs[0].id;
   const made = (await (await api("/api/v2/buckets", { method: "POST", json: { orgID: orgId, name, retentionRules: [] } })).json()) as { id: string };

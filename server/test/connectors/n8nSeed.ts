@@ -26,12 +26,12 @@ function owner(): Promise<string> {
   return session;
 }
 
-/** An API key with these scopes (e.g. "dataTable:list"): its id (to delete it) and secret. */
+/** A name for this run's own: runs (also parallel ones) never meet each other's keys and tables, whatever an interrupted run left. */
+export const unique = (name: string) => `${name} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+
+/** An API key with these scopes (e.g. "dataTable:list"): its id (to delete it) and secret; n8n wants labels of their own, give it a `unique` one. */
 export async function createKey(label: string, scopes: string[]): Promise<{ id: string; key: string }> {
   const cookie = await owner();
-  // One left over from an interrupted run (n8n wants labels of its own) is deleted first.
-  const have = await json<{ data: { items: { id: string; label: string }[] } }>(await fetch(`${N8N}/rest/api-keys`, { headers: { cookie } }), "list keys");
-  for (const k of have.data.items.filter((x) => x.label === label)) await fetch(`${N8N}/rest/api-keys/${k.id}`, { method: "DELETE", headers: { cookie } });
   const made = await json<{ data: { id: string; rawApiKey: string } }>(
     await fetch(`${N8N}/rest/api-keys`, { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ label, scopes, expiresAt: null }) }),
     "create key",
@@ -63,10 +63,8 @@ export interface Table {
   projectId: string;
 }
 
-/** A new data table (one of that name left over from an interrupted run is deleted first), filled with `rows`. */
+/** A new data table (give it a `unique` name), filled with `rows`. */
 export async function createTable(key: string, name: string, columns: { name: string; type: "string" | "number" | "boolean" | "date" }[], rows: Record<string, unknown>[]): Promise<Table> {
-  const have = await api<{ data: Table[] }>(key, "/data-tables?limit=250");
-  for (const t of have.data.filter((x) => x.name === name)) await api(key, `/data-tables/${t.id}`, { method: "DELETE" });
   const table = await api<Table>(key, "/data-tables", { method: "POST", body: { name, columns } });
   // In order, in batches: the rows get ids 1, 2, … in that order.
   for (let i = 0; i < rows.length; i += 100) await api(key, `/data-tables/${table.id}/rows`, { method: "POST", body: { data: rows.slice(i, i + 100), returnType: "count" } });

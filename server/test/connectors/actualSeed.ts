@@ -20,11 +20,29 @@ export async function call<T = unknown>(method: string, path: string, body?: unk
 }
 
 /** The sync ID of the budget the service made. */
-export async function budgetId(): Promise<string> {
+async function templateId(): Promise<string> {
   const budgets = await call<{ groupId: string; name: string }[]>("GET", "/budgets");
   const ours = budgets.find((b) => b.name === "Kubus test");
   if (!ours) throw new Error("actual-http-api has no budget “Kubus test” (actualSeed.cjs makes it when the service starts)");
   return ours.groupId;
+}
+
+/**
+ * A budget of this run's own: the service's empty one exported and imported again, which makes a new budget with a new
+ * sync ID. Runs (parallel ones, or after earlier ones that were cut off) never see each other's data, whatever the
+ * service has been through. Actual's API can't delete a budget, so a test cleans up with `empty`.
+ */
+export async function budgetId(): Promise<string> {
+  const template = await templateId();
+  // (A first read downloads the budget into actual-http-api: its export doesn't, and a new container hasn't it yet.)
+  await call("GET", `/budgets/${template}/accounts`);
+  const response = await fetch(`${ACTUAL}/v1/budgets/${template}/export`, { headers: { "x-api-key": API_KEY } });
+  if (!response.ok) throw new Error(`actual-http-api export: ${response.status} ${(await response.text()).slice(0, 300)}`);
+  const file = Buffer.from(await response.arrayBuffer());
+  const made = await fetch(`${ACTUAL}/v1/budgets/import?type=actual`, { method: "POST", headers: { "x-api-key": API_KEY, "content-type": "application/zip" }, body: file });
+  const text = await made.text();
+  if (!made.ok) throw new Error(`actual-http-api import: ${made.status} ${text.slice(0, 300)}`);
+  return (JSON.parse(text) as { data: { syncId: string } }).data.syncId;
 }
 
 /** Deletes everything in the budget that earlier runs (or tests) left. */

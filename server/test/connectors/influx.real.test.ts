@@ -8,11 +8,11 @@ import type { MemoryRow } from "../../src/connectors/memory.ts";
 import type { SourceColumn } from "../../../shared/sources.ts";
 import { baseQuery, runContract, type Fixture } from "./contract.ts";
 import { PEOPLE } from "./dataset.ts";
-import { ADMIN_TOKEN, countPoints, createBucket, createToken, deleteBucket, deleteToken, INFLUX, influxFields, peopleLines, timeOf, write } from "./influxSeed.ts";
+import { ADMIN_TOKEN, countPoints, createBucket, createToken, deleteBucket, deleteToken, INFLUX, influxFields, peopleLines, timeOf, unique, write } from "./influxSeed.ts";
 
 if (!INFLUX && process.env.CI) throw new Error("KUBUS_TEST_INFLUX isn't set: CI runs the InfluxDB connector's tests against a real InfluxDB (tests/services.yml)");
 
-const BUCKET = "kubus_contract";
+const BUCKET = unique("kubus_contract");
 const config = (token: string, over: { fields?: Record<string, string>; schemas?: string[]; timeoutMs?: number } = {}) => ({
   name: "Sensors",
   kind: "influxdb",
@@ -116,7 +116,7 @@ describe.skipIf(!INFLUX)("InfluxDB connector, against InfluxDB 2", () => {
   });
 
   it("tells a bucket it has no access to (a token for another bucket) from the server's trouble", async () => {
-    const other = await createBucket("kubus_contract_other");
+    const other = await createBucket(`${BUCKET}_other`);
     const token = await createToken(bucket.orgId, [other.id], "kubus connector test (other)");
     try {
       const c = new InfluxConnector(config(token.token));
