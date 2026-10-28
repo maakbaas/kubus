@@ -37,8 +37,10 @@ What the app does, feature by feature (read the part you work on).
   checkboxes save on toggle; markdown starts editing where it was clicked. View and edit mode must
   keep the same geometry (label spacing, box height, text position) so nothing jumps. The field
   that is the item's title (`labelField`) isn't repeated among the fields: the page title itself
-  is its editor (click to edit in place). Which text field is the title is the collection's "Title"
-  setting (`collections.title_field`, `titleFields` in `domain/model.ts`): one field, none (`"none"`:
+  is its editor (click to edit in place). Which field is the title is the collection's "Title"
+  setting (`collections.title_field`, `titleFields` in `domain/model.ts`): one field, a text, number, date or
+  date-time one (`TITLE_KINDS`; a number or date shows as `titleText` gives it, `listLabels` reads it alike, and it
+  is edited among the fields, not as the page title: `editedTitleField`), none (`"none"`:
   items are called by the collection's name, tables get no title link), or by default the first text
   field with a value. The full form
   (`…/items/new`) is only for creating. Narrow screens show the items list as cards.

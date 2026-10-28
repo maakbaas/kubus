@@ -66,7 +66,8 @@ export function useItemActions({ collection, stored, query, preset, onSort, conf
         if (f.kind !== "component" && f.kind !== "ai" && v != null) values[f.id] = v;
       }
       const title = labelField(collection, original);
-      if (title) values[title.id] = nextName(String(original.values[title.id]), (stored ?? []).map((e) => itemLabel(collection, e)));
+      // A text title gets "(2)"; a number or date stays as it is.
+      if (title?.kind === "string") values[title.id] = nextName(String(original.values[title.id]), (stored ?? []).map((e) => itemLabel(collection, e)));
       try {
         await repo.createItem(collection, values, space.id); // the list hears the change and adds it
       } catch (e) {

@@ -1,7 +1,10 @@
 import { fieldKinds } from "../../domain/fieldKinds";
 import {
+  canBeTitle,
   newId,
   NO_TITLE,
+  titleFields,
+  titleText,
   now,
   type FieldDef,
   type FieldKind,
@@ -144,9 +147,9 @@ const spaceIdsOf = (json: string | null): string[] | null => {
   return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : null;
 };
 const spaceIdsJson = (ids: string[] | null) => (ids === null ? null : JSON.stringify(ids));
-/** The title field as stored: one of its text fields, NO_TITLE, else null (the first text field with a value). */
+/** The title field as stored: one of its fields that can be one (canBeTitle), NO_TITLE, else null (the first text field with a value). */
 const titleFieldOf = (draft: CollectionDraft) =>
-  draft.titleField === NO_TITLE || draft.fields.some((f) => f.id === draft.titleField && f.kind === "string") ? draft.titleField! : null;
+  draft.titleField === NO_TITLE || draft.fields.some((f) => f.id === draft.titleField && canBeTitle(f)) ? draft.titleField! : null;
 /** Whether a label field (lf) is one its collection's titles come from (titleFields). */
 const IS_TITLE_FIELD = "coalesce((SELECT tc.title_field FROM collections tc WHERE tc.id = lf.collection_id), lf.id) = lf.id";
 /** A remote collection's source, as stored (null: a native collection). */
@@ -450,7 +453,19 @@ export class SqliteRepository implements Repository {
 
   async listLabels(collection: Collection, itemIds?: string[]): Promise<ItemLabel[]> {
     // Same rule as labelField: the first of its title fields (in the collection's field order) whose
-    // value isn't blank.
+    // value isn't blank. A chosen title field that is a number or a date is read as it is shown (titleText).
+    const chosen = titleFields(collection);
+    const field = chosen.length === 1 && chosen[0].kind !== "string" ? chosen[0] : null;
+    if (field) {
+      const rows = await this.db.select<{ id: string; spaceId: string; number: number | null; text: string | null }>(
+        `SELECT o.id AS id, o.space_id AS spaceId, fv.value_number AS number, coalesce(fv.value_date, fv.value_datetime) AS text
+           FROM items o LEFT JOIN field_values fv ON fv.item_id = o.id AND fv.field_id = ?3
+          WHERE o.collection_id = ?1 AND o.deleted_at IS NULL
+            AND (?2 IS NULL OR o.id IN (SELECT value FROM json_each(?2)))`,
+        [collection.id, itemIds ? JSON.stringify(itemIds) : null, field.id],
+      );
+      return rows.map((r) => ({ id: r.id, spaceId: r.spaceId, label: titleText(field, field.kind === "number" ? r.number : r.text) || null }));
+    }
     return this.db.select<ItemLabel>(
       `SELECT o.id AS id, o.space_id AS spaceId,
               (SELECT fv.value_text FROM field_values fv JOIN fields lf ON lf.id = fv.field_id

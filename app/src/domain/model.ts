@@ -8,6 +8,7 @@ import type { ComponentOutput } from "./components";
 import type { ItemView } from "./fieldLayout";
 import type { FilterRule } from "./query";
 import type { SourceColumn, SourceTarget } from "../../../shared/sources";
+import { formatDateTime } from "./fieldKinds";
 
 export type FieldKind =
   | "string"
@@ -103,7 +104,7 @@ export interface Collection {
    * sources, read-only (domain/sources.ts). null (or absent) = its own items (a native collection).
    */
   source?: CollectionSource | null;
-  /** The text field its items' titles are (a field id), NO_TITLE for none; null (or absent) = the first text field with a value. */
+  /** The field its items' titles are (a field id: text, a number or a date, TITLE_KINDS), NO_TITLE for none; null (or absent) = the first text field with a value. */
   titleField?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -256,23 +257,36 @@ export function editableField(field: FieldDef): FieldDef {
 /** `titleField` of a collection whose items have no title (they are called by the collection's name). */
 export const NO_TITLE = "none";
 
+/** What a chosen title field can be: a field whose value reads as one line (automatic titles are text fields only). */
+export const TITLE_KINDS: readonly FieldKind[] = ["string", "number", "date", "datetime"];
+export const canBeTitle = (f: Pick<FieldDef, "kind">) => TITLE_KINDS.includes(f.kind);
+
 /**
  * The fields an item's title can come from, in order: the collection's title field, none (NO_TITLE),
  * else (not set, or its field gone) every text field: the first with a value is the title.
  */
 export function titleFields<F extends Pick<FieldDef, "id" | "kind">>(collection: { titleField?: string | null; fields: F[] }): F[] {
-  const text = collection.fields.filter((f) => f.kind === "string");
   if (collection.titleField === NO_TITLE) return [];
-  const chosen = text.find((f) => f.id === collection.titleField);
-  return chosen ? [chosen] : text;
+  const chosen = collection.fields.find((f) => f.id === collection.titleField && canBeTitle(f));
+  return chosen ? [chosen] : collection.fields.filter((f) => f.kind === "string");
+}
+
+/** A title field's value as the title ("" for none): text as it is, a number, a date as shown. */
+export function titleText(field: Pick<FieldDef, "kind">, value: FieldValue | undefined): string {
+  if (field.kind === "number") return typeof value === "number" && Number.isFinite(value) ? String(value) : "";
+  if (typeof value !== "string" || value.trim() === "") return "";
+  return field.kind === "datetime" ? formatDateTime(value) : value;
 }
 
 /** The field that provides an item's label: the first of its title fields with a value (titleFields). */
 export function labelField(collection: Collection, item: Item): FieldDef | undefined {
-  return titleFields(collection).find((f) => {
-    const v = item.values[f.id];
-    return typeof v === "string" && v.trim() !== "";
-  });
+  return titleFields(collection).find((f) => titleText(f, item.values[f.id]) !== "");
+}
+
+/** The title field edited as the title (on an item page): a text one; a number or date title is edited among the fields. */
+export function editedTitleField(collection: Collection, item: Item): FieldDef | undefined {
+  const field = labelField(collection, item);
+  return field?.kind === "string" ? field : undefined;
 }
 
 /**
@@ -288,7 +302,7 @@ export const untitledLabel = (collection: Collection): string => collection.name
 /** Human label for an item, e.g. in reference pickers and headings. */
 export function itemLabel(collection: Collection, item: Item): string {
   const field = labelField(collection, item);
-  return field ? String(item.values[field.id]) : untitledLabel(collection);
+  return field ? titleText(field, item.values[field.id]) : untitledLabel(collection);
 }
 
 /** An item's label as stored (see Repository.listLabels): null when it has no label field value. */

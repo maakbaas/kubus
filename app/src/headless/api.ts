@@ -13,7 +13,7 @@ import { isComponentOutput, placeProblem, type Component } from "../domain/compo
 import { fieldKinds } from "../domain/fieldKinds";
 import { fileSrc, IMAGE_TYPES } from "../domain/files";
 import { parseItemViews, type ItemView } from "../domain/fieldLayout";
-import { collectionDraft, isReferenceKind, newId, NO_TITLE, suggestPlural, type Collection, type CollectionDraft, type FieldDef, type FieldDraft, type Item, type ItemLabel } from "../domain/model";
+import { canBeTitle, collectionDraft, isReferenceKind, newId, NO_TITLE, suggestPlural, type Collection, type CollectionDraft, type FieldDef, type FieldDraft, type Item, type ItemLabel } from "../domain/model";
 import { applyQuery, filterValueProblem, isGrouped, operatorsFor, type FilterRule, type SortRule, type ViewQuery } from "../domain/query";
 import { refLabelForSpace } from "../domain/refOptions";
 import { DEFAULT_SPACE_ID, type Space } from "../domain/spaces";
@@ -99,13 +99,13 @@ const viewOut = ({ collapsed: _collapsed, ...view }: CollectionView) => view;
 
 const bookmarkOut = (b: Bookmark) => b;
 
-/** A collection's title field as asked for: a text field (by id or name), "none", or null (the first text field with a value). */
+/** A collection's title field as asked for: a text, number or date field (by id or name), "none", or null (the first text field with a value). */
 function titleFieldIn(collection: Collection, raw: unknown): string | null {
   if (raw === null) return null;
-  if (typeof raw !== "string") throw new HttpError(400, "`titleField` is a text field's id or name, \"none\" or null");
+  if (typeof raw !== "string") throw new HttpError(400, "`titleField` is a text, number or date field's id or name, \"none\" or null");
   if (raw === NO_TITLE) return NO_TITLE;
   const field = fieldOf(collection, raw);
-  if (field.kind !== "string") throw new HttpError(400, `“${field.name}” isn't a text field: only one can be the title`);
+  if (!canBeTitle(field)) throw new HttpError(400, `“${field.name}” isn't a text, number or date field: only one of those can be the title`);
   return field.id;
 }
 

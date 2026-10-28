@@ -19,7 +19,7 @@ import { AiStatus } from "../ui/AiStatus";
 import { formatDate, formatTime } from "../domain/fieldKinds";
 import {
   itemLabel,
-  labelField,
+  editedTitleField,
   newName,
   fieldValue,
   isMetaField,
@@ -243,7 +243,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   // The title as shown ("Untitled …" when empty); editing it edits the field's value.
   const title = shown ? itemLabel(collection, shown) : "";
   // The field shown as the page title is edited there, not repeated among the fields.
-  const titleField = shown ? labelField(collection, shown) : undefined;
+  // A number or date title is edited among the fields (editedTitleField).
+  const titleField = shown ? editedTitleField(collection, shown) : undefined;
   const titleSource = titleField && item ? String(item.values[titleField.id] ?? "") : title;
   // The page's layout: the chosen tab's item view, else the one this item is pinned to, else its
   // collection's default (starred, else the first), else the standard one (all fields, editable, with

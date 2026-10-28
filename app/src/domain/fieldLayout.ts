@@ -3,7 +3,7 @@
 // Item pages hold blocks too (lists of items, components; domain/views.ts), placed among the
 // fields: their ids are in the same list.
 
-import { isMetaField, labelField, type Item, type Collection } from "./model";
+import { editedTitleField, isMetaField, type Item, type Collection } from "./model";
 import type { FilterRule } from "./query";
 import { NOTHING_COLLAPSED, parseBlock, parseCollapsed, type Collapsed, type ViewBlock } from "./views";
 
@@ -99,7 +99,7 @@ export function itemPageFields<F extends { id: string }>(fields: F[], layout: It
 /** Whether a layout holds something back (read-only, or fields left out): the page then offers an edit icon. */
 export function isRestricted(collection: Collection, item: Item, layout: ItemLayout): boolean {
   if (!layout.editable || layout.hideEmpty) return true;
-  const titleId = labelField(collection, item)?.id;
+  const titleId = editedTitleField(collection, item)?.id;
   const shown = new Set(itemPageFields(collection.fields, layout, titleId).map((f) => f.id));
   // Fields kept out of all-fields views don't count: the standard page doesn't show them either.
   return collection.fields.some((f) => f.id !== titleId && !shown.has(f.id));

@@ -189,6 +189,21 @@ describe("labels and search", () => {
     expect(itemLabel(none.saved, (await repo.getItem(none.saved, a))!)).toBe("Person");
   });
 
+  it("label an item by a number or date title field, as it is shown", async () => {
+    const weigh = await collection("Weighing", [field("Note"), field("Weight", "number"), field("Day", "date")]);
+    const a = await repo.createItem(weigh, { [weigh.fields[0].id]: "Morning", [weigh.fields[1].id]: 78.5, [weigh.fields[2].id]: "2026-10-28" }, "default");
+    const b = await repo.createItem(weigh, { [weigh.fields[0].id]: "Evening" }, "default");
+    for (const [f, label] of [[weigh.fields[1], "78.5"], [weigh.fields[2], "2026-10-28"]] as const) {
+      await repo.saveCollection({ ...collectionDraft(weigh), titleField: f.id }, "default");
+      const saved = (await repo.listCollections()).find((c) => c.id === weigh.id)!;
+      expect(saved.titleField).toBe(f.id);
+      const labels = new Map((await repo.listLabels(saved)).map((l) => [l.id, l.label]));
+      expect([labels.get(a), labels.get(b)]).toEqual([label, null]);
+      expect(itemLabel(saved, (await repo.getItem(saved, a))!)).toBe(label);
+      expect(itemLabel(saved, (await repo.getItem(saved, b))!)).toBe("Weighing");
+    }
+  });
+
   it("finds text in a space, also through the labels of referenced items", async () => {
     const person = await collection("Person", [field("Name")]);
     const book = await collection("Book", [field("Title"), field("Notes", "markdown"), field("Author", "item", { targetCollectionId: person.id })]);

@@ -101,7 +101,7 @@ Component values run on the server, without Node's globals, and each section get
 | `GET /collections` | all collections, with their fields, item views and item counts (optional: space) |
 | `GET /collections/{c}` | one collection |
 | `POST /collections` | create one from `{ name, pluralName?, icon?, description?, spaces?, space?, fields }`, with its "All" view in that space |
-| `PATCH /collections/{c}` | change its settings: `{ name?, pluralName?, icon?, description?, spaces?, titleField? }` (`titleField`: the text field its items are called by, by id or name; `"none"` for no title; null for the first text field with a value) |
+| `PATCH /collections/{c}` | change its settings: `{ name?, pluralName?, icon?, description?, spaces?, titleField? }` (`titleField`: the text, number or date field its items are called by, by id or name; `"none"` for no title; null for the first text field with a value) |
 | `DELETE /collections/{c}` | delete it, with its items |
 | `POST /collections/{c}/fields` | add a field: `{ name, kind, … }` |
 | `PATCH /collections/{c}/fields/{f}` | change a field |

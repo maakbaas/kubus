@@ -10,6 +10,7 @@ import { SourceSettings } from "../ui/SourceSettings";
 import {
   blankField,
   isReferenceKind,
+  canBeTitle,
   NO_TITLE,
   newId,
   suggestPlural,
@@ -145,7 +146,8 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
   };
 
   // Title choices: its text fields (as they are now), the first with a value, or none.
-  const textFields = draft.fields.filter((f) => f.kind === "string");
+  // What can be the title: a text, number or date field (automatic: the first text field with a value).
+  const titleCandidates = draft.fields.filter(canBeTitle);
   const removeField = (id: string) => setDraft((d) => ({ ...d, fields: d.fields.filter((f) => f.id !== id) }));
   const hideColumns = (hidden: string[]) => setDraft((d) => withHiddenColumns(d, hidden));
   const hiddenColumns = draft.source?.hiddenColumns ?? [];
@@ -359,10 +361,10 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
             titleText="Title"
             label="Title"
             helperText={`What an item is called in lists, links and on its page. Without a title it is called “${draft.name.trim() || "Item"}”.`}
-            items={[AUTO_TITLE, ...textFields.map((f) => f.id), NO_TITLE]}
-            selectedItem={draft.titleField === NO_TITLE ? NO_TITLE : textFields.some((f) => f.id === draft.titleField) ? draft.titleField! : AUTO_TITLE}
+            items={[AUTO_TITLE, ...titleCandidates.map((f) => f.id), NO_TITLE]}
+            selectedItem={draft.titleField === NO_TITLE ? NO_TITLE : titleCandidates.some((f) => f.id === draft.titleField) ? draft.titleField! : AUTO_TITLE}
             itemToString={(id) =>
-              id === AUTO_TITLE ? "The first text field with a value" : id === NO_TITLE ? "No title" : (textFields.find((f) => f.id === id)?.name.trim() || "Unnamed field")
+              id === AUTO_TITLE ? "The first text field with a value" : id === NO_TITLE ? "No title" : (titleCandidates.find((f) => f.id === id)?.name.trim() || "Unnamed field")
             }
             onChange={({ selectedItem }) => setDraft((d) => ({ ...d, titleField: !selectedItem || selectedItem === AUTO_TITLE ? null : selectedItem }))}
           />
