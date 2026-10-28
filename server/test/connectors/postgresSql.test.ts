@@ -46,6 +46,11 @@ describe("query SQL", () => {
     expect(rows.text).not.toContain("DROP");
     expect(rows.values).toContain("%x'; DROP TABLE y; --%");
   });
+  it("sorts empty values last, unless the filter keeps none (an edge: read by the column's index)", () => {
+    const edge = querySql(query({ filter: { column: "seen", operator: "between", value: "1700-01-01..2026-09-30" }, sort: [{ column: "seen", direction: "desc" }], limit: 1 }), columns);
+    expect(edge.rows.text).toMatch(/ORDER BY q\."seen" DESC, q\."id" ASC LIMIT/);
+    expect(querySql(query({ sort: [{ column: "seen", direction: "desc" }] }), columns).rows.text).toMatch(/ORDER BY q\."seen" DESC NULLS LAST/);
+  });
   it("writes a filter's and / or tree with every rule bracketed", () => {
     const named = { column: "name", operator: "contains", value: "a" } as const;
     const big = { column: "id", operator: "gt", value: "3" } as const;

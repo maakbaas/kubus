@@ -3,6 +3,7 @@ import { MAX_SOURCE_PAGE, type SourceResult, type SourceRow } from "../../../sha
 import { useStore } from "../app/store";
 import { withComputed } from "../domain/components";
 import type { Collection, Item } from "../domain/model";
+import type { PeriodEdges } from "../domain/datePeriod";
 import type { ItemGroup, QueryResult, ViewQuery } from "../domain/query";
 import { deviceTimeZone, groupLabel, rowItem, sourceQuery, sourceShape } from "../domain/sources";
 
@@ -37,6 +38,7 @@ interface Loaded {
   rows: SourceRow[];
   total: number;
   groups: SourceResult["groups"];
+  edges?: SourceResult["edges"];
   more: boolean;
   error?: string;
 }
@@ -53,11 +55,19 @@ function useSettled<T>(value: T, ms: number): T {
 }
 
 /** The block's rows when its collection is remote (null otherwise: the block filters its items itself). */
-export function useRemoteResult(collection: Collection, query: ViewQuery, search: string, enabled: boolean, all = false): RemoteResult | null {
+export function useRemoteResult(collection: Collection, query: ViewQuery, search: string, enabled: boolean, all = false, edges: (PeriodEdges & { fieldId: string }) | null = null): RemoteResult | null {
   const { sources, components } = useStore();
   const remote = enabled && !!collection.source;
   const typed = useSettled(search, SEARCH_DELAY_MS);
-  const request = useMemo(() => (remote ? sourceQuery(collection, query, typed, deviceTimeZone()) : undefined), [remote, collection, query, typed]);
+  const request = useMemo(() => {
+    if (!remote) return undefined;
+    const tz = deviceTimeZone();
+    const asked = sourceQuery(collection, query, typed, tz);
+    // The rows just outside a date period: the same query moved before / after it (with the first page).
+    const column = edges && collection.fields.find((f) => f.id === edges.fieldId)?.column;
+    if (!edges || !column) return asked;
+    return { ...asked, edges: { column, before: sourceQuery(collection, edges.before, typed, tz).filter, after: sourceQuery(collection, edges.after, typed, tz).filter } };
+  }, [remote, collection, query, typed, edges]);
   const key = request === undefined ? "" : JSON.stringify(request);
   // The request by its key: a block renders it anew each time (its filters are new arrays), and
   // asking again on that would put the first page back over pages "Show more" added.
@@ -82,7 +92,7 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
     if (!request) return;
     sources.query(collection.source.name, { ...request, offset: 0, limit: pageSize, counts: true }).then(
       // A total under the rows in (a source that couldn't count them all) counts at least those.
-      (r) => current.current === asked && setLoaded({ key, rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, more: r.more }),
+      (r) => current.current === asked && setLoaded({ key, rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, edges: r.edges, more: r.more }),
       (e) => current.current === asked && setLoaded({ key, rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) }),
     );
   }, [remote, collection.source, key, refreshes, sources, pageSize]);
@@ -92,7 +102,7 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
     const asked = current.current;
     setLoadingMore(true);
     sources
-      .query(collection.source.name, { ...request, offset: loaded.rows.length, limit: pageSize, counts: false })
+      .query(collection.source.name, { ...request, edges: undefined, offset: loaded.rows.length, limit: pageSize, counts: false })
       .then(
         (r) =>
           current.current === asked &&
@@ -142,8 +152,10 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
       groups = [{ key: "", label: "", items: computed }];
     }
     const all = [...new Set(computed)];
-    return { result: { groups, total: loaded.total } satisfies QueryResult, items: all };
-  }, [remote, shape, loaded, collection, components, memo, query.groupBy, request?.groupBy, sources]);
+    const edgeItems = (row: SourceRow | null | undefined) => (row ? withComputed(collection, [rowItem(collection, shape, row)], components, noLabel, memo) : []);
+    const edgesOf = edges && loaded.edges ? { window: edges.window, before: edgeItems(loaded.edges.before), after: edgeItems(loaded.edges.after) } : undefined;
+    return { result: { groups, total: loaded.total, ...(edgesOf && { edges: edgesOf }) } satisfies QueryResult, items: all };
+  }, [remote, shape, loaded, collection, components, memo, query.groupBy, request?.groupBy, sources, edges]);
 
   if (!remote) return null;
   return {

@@ -198,8 +198,19 @@ takes the new one when its settings are opened. A source's name: letters, digits
   rows for a view's query: its filter as one and / or tree of rules with plain values (`SourceCondition`,
   built by the app: the view's or page's filter with the block's on top; `conditionText` writes it in a
   connector's language, every rule bracketed; checked by `isSourceCondition` before a connector sees it), search, sort, grouping, the device's time zone,
-  offset / limit, and with the first page the total and the groups' sizes), `POST …/row` (one row
-  by its key).
+  offset / limit, and with the first page the total and the groups' sizes; with `edges`, on the first page, the
+  rows just outside a chart's date period, below), `POST …/row` (one row by its key).
+- *Edges* (`SourceEdges`, `queryWithEdges` in `server/src/sources.ts`): a chart along a date field with a date
+  period on it asks, with its first page, for the row with the latest date before the period and the one with the
+  earliest after it (the same filter with the period moved just outside it, the search too). The server asks the
+  connector for each as one more query beside the page (sorted by the column, one row); one it can't answer is none,
+  never the page's error, and an older server just leaves `edges` out. Kept cheap per connector: SQL sources drop
+  "empty last" from a sort when the filter keeps no empty value (`keepsOnlyValues`), so an index on the column gives
+  the row; InfluxDB first asks the moment of the nearest point (`last()` / `first()`, from its index) and then reads
+  only the days up to it (`isEdgeQuery`, `nearestFlux`, `edgeDays`; more days while the filter keeps none); n8n is
+  asked its rows in that order a page at a time until the filter keeps one; the in-memory sources (Actual, JSON,
+  CSV, calendars) have the rows already. A calendar's after-edge past 50,000 occurrences (a daily event for ever)
+  is none.
 - *Connectors* (`server/src/connectors/`): `Connector` (check, tables, describe, query, row, close),
   picked by the source's kind in `connectors/index.ts` (its fields listed in `connectors/kinds.ts`); another kind of source is another file there and
   nothing else changes. `Sources` (`server/src/sources.ts`) holds one per source and turns a

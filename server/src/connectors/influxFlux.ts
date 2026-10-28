@@ -750,6 +750,42 @@ export function rowsFlux(query: SourceQuery, columns: Map<string, InfluxColumn>,
   ]);
 }
 
+/**
+ * An edge (server/src/sources.ts queryWithEdges): one row, the nearest by `_time`, of a measurement,
+ * not grouped. Read as a page it would pivot every row of the range (all history before a period),
+ * so the connector first asks this, the moment of the nearest point in the range (InfluxDB answers
+ * last() / first() from its index), then reads only the days up to it (`edgeDays`).
+ */
+export function isEdgeQuery(query: SourceQuery): boolean {
+  return "table" in query.target && query.limit === 1 && query.offset === 0 && !query.groupBy && !query.counts && query.sort.length === 1 && query.sort[0].column === "_time";
+}
+
+/** The moment (`_time`) of the measurement's latest (desc) or earliest point in the query's range, any field's. */
+export function nearestFlux(query: SourceQuery, direction: "asc" | "desc"): string {
+  if (!("table" in query.target)) throw new SourceError("Only a measurement has an edge");
+  const { schema, name } = query.target.table;
+  const range = rangeOf(query.filter, query.timeZone);
+  const desc = direction === "desc";
+  return `from(bucket: ${fluxString(schema ?? "")})
+  |> range(start: ${range.start}, stop: ${range.stop})
+  |> filter(fn: (r) => r._measurement == ${fluxString(name)})
+  |> ${desc ? "last" : "first"}()
+  |> group()
+  |> ${desc ? "max" : "min"}(column: "_time")
+  |> keep(columns: ["_time"])`;
+}
+
+/**
+ * The days read for an edge whose nearest point is at `at`: that point's day and the `days` before it
+ * (desc) or after it, in the time zone; the query's filter then picks the row (its other rules may
+ * leave none: more days are read then).
+ */
+export function edgeDays(at: string, direction: "asc" | "desc", days: number, timeZone: string): SourceFilter {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(Date.parse(at));
+  const shifted = new Date(Date.parse(`${day}T00:00:00Z`) + (direction === "desc" ? -days : days) * 86_400_000).toISOString().slice(0, 10);
+  return { column: "_time", operator: "between", value: direction === "desc" ? `${shifted}..${day}` : `${day}..${shifted}` };
+}
+
 /** The title: the first title column that isn't blank, else `untitled`. */
 function titleFlux(shape: SourceShape, columns: Map<string, InfluxColumn>): string {
   let title = fluxString(shape.untitled);

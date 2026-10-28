@@ -54,12 +54,15 @@ describe("query SQL", () => {
     expect(rows.params).toEqual(["a", "b", 3, pad, back, "Person", pad, back, "Person", pad, back]);
     expect(querySql(query({ sort: [{ column: "name", direction: "asc" }] }), columns, "mysql").rows.params).toEqual(["0000000000000000000$1", "$1", "0000000000000000000$1", "$1"]);
   });
-  it("writes a filter's and / or tree with every rule bracketed, empty values last", () => {
+  it("writes a filter's and / or tree with every rule bracketed, empty values last (unless the filter keeps none)", () => {
     const named = { column: "name", operator: "contains", value: "a" } as const;
     const big = { column: "id", operator: "gt", value: "3" } as const;
     const { rows } = querySql(query({ filter: { and: [{ or: [named, big] }, big] }, sort: [{ column: "id", direction: "desc" }] }), columns, "mysql");
     expect(rows.sql).toMatch(/WHERE \(\(\(.+ LIKE LOWER\(\?\) ESCAPE '!'\) OR \(q\.`id` > \?\)\) AND \(q\.`id` > \?\)\)/);
-    expect(rows.sql).toContain("ORDER BY (q.`id`) IS NULL, q.`id` DESC, q.`id` ASC LIMIT 11 OFFSET 0");
+    // The filter keeps only rows with an id: nothing to put last, so an index can give the order.
+    expect(rows.sql).toContain("ORDER BY q.`id` DESC, q.`id` ASC LIMIT 11 OFFSET 0");
+    const either = querySql(query({ filter: { or: [named, big] }, sort: [{ column: "id", direction: "desc" }] }), columns, "mysql");
+    expect(either.rows.sql).toContain("ORDER BY (q.`id`) IS NULL, q.`id` DESC, q.`id` ASC LIMIT 11 OFFSET 0");
     expect(querySql(query({ filter: { or: [] } }), columns, "mysql").rows.sql).toContain("WHERE FALSE");
   });
   it("escapes LIKE's own characters with !", () => {

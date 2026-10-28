@@ -1,4 +1,4 @@
-import { conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
+import { conditionText, keepsOnlyValues, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
 
 // The Postgres connector's SQL: how a column of each type is read, and the statements a query
@@ -359,7 +359,8 @@ export function querySql(query: SourceQuery, columns: Map<string, PgColumn>): { 
     ...(group ? groupOrderSql(group, query.groupOrder, "count(*) OVER (PARTITION BY gx.g)") : []),
     ...query.sort.map((s) => {
       const key = s.column === TITLE_COLUMN ? `lower(${titleSql(query, columns, p)})` : sortSql(column(columns, s.column));
-      return `${key} ${s.direction === "desc" ? "DESC" : "ASC"} NULLS LAST`;
+      // Empty values last, unless the filter keeps none (then an index on the column can be read in order).
+      return `${key} ${s.direction === "desc" ? "DESC" : "ASC"}${keepsOnlyValues(query.filter, s.column) ? "" : " NULLS LAST"}`;
     }),
     `${ref(column(columns, query.key))} ASC`,
   ];

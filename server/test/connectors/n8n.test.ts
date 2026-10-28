@@ -45,6 +45,17 @@ function n8nFilters(rows: Record<string, unknown>[], url: URL): Record<string, u
   });
 }
 
+/** n8n's sortBy ("column:asc|desc"; dates as text sort by time), empty values last. */
+function sorted(rows: Record<string, unknown>[], url: URL): Record<string, unknown>[] {
+  const [column, direction] = (url.searchParams.get("sortBy") ?? "id:asc").split(":");
+  const key = (r: Record<string, unknown>) => (typeof r[column] === "string" ? Date.parse(r[column] as string) : (r[column] as number | null) ?? null);
+  return [...rows].sort((a, b) => {
+    const [x, y] = [key(a), key(b)];
+    if (x === null || y === null) return Number(x === null) - Number(y === null);
+    return direction === "desc" ? y - x : x - y;
+  });
+}
+
 /** n8n's API: offset cursors, 250 a page at most. */
 function stub() {
   const requests: { url: URL; method: string; key: string | null }[] = [];
@@ -59,7 +70,7 @@ function stub() {
     requests.push({ url, method: init.method ?? "GET", key: new Headers(init.headers).get("X-N8N-API-KEY") });
     if (new Headers(init.headers).get("X-N8N-API-KEY") !== "secret") return new Response(JSON.stringify({ message: "unauthorized" }), { status: 401 });
     if (url.pathname === "/n8n/api/v1/data-tables") return Response.json(page(TABLES, url));
-    if (url.pathname === "/n8n/api/v1/data-tables/aaaaaaaaaaaaaaaa/rows") return Response.json(page(n8nFilters(LEADS, url), url));
+    if (url.pathname === "/n8n/api/v1/data-tables/aaaaaaaaaaaaaaaa/rows") return Response.json(page(sorted(n8nFilters(LEADS, url), url), url));
     return new Response(JSON.stringify({ message: "Not found" }), { status: 404 });
   });
   return requests;
@@ -87,6 +98,17 @@ const leads = (over: Partial<SourceQuery> = {}): SourceQuery => ({
 afterEach(() => vi.unstubAllGlobals());
 
 describe("n8n connector", () => {
+  it("reads an edge (one row, the latest by a date & time) by n8n's sort, a page at a time, not the whole table", async () => {
+    const requests = stub();
+    const r = await new N8nConnector(config()).query(
+      leads({ filter: { column: "met", operator: "between", value: "1700-01-01..2026-03-05" }, sort: [{ column: "met", direction: "desc" }], limit: 1, counts: false }),
+    );
+    expect(r.rows.map((x) => x.key)).toEqual(["1"]);
+    const reads = requests.filter((q) => q.url.pathname.endsWith("/rows"));
+    expect(reads).toHaveLength(1);
+    expect(reads[0].url.searchParams.get("sortBy")).toBe("met:desc");
+  });
+
   it("reads its endpoint from its address", () => {
     expect(n8nEndpoint("http://localhost:5678")).toBe("http://localhost:5678/api/v1");
     expect(n8nEndpoint("n8n.example.com/")).toBe("https://n8n.example.com/api/v1");

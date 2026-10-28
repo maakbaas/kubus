@@ -283,7 +283,30 @@ export class N8nConnector implements Connector {
     const table = await this.table(query.target);
     const list = n8nColumns(table);
     const columns = new Map(list.map((c) => [c.name, c]));
-    return queryRows(await this.rowsOf(table, list, n8nRead(query, columns)), columns, query);
+    const read = n8nRead(query, columns);
+    const sort = query.sort[0];
+    if (query.limit === 1 && query.offset === 0 && !query.groupBy && query.sort.length === 1 && columns.get(sort.column)?.kind === "datetime") return this.nearest(table, list, columns, read, query);
+    return queryRows(await this.rowsOf(table, list, read), columns, query);
+  }
+
+  /**
+   * One row, the first by a date & time (an edge: server/src/sources.ts queryWithEdges): n8n's rows read
+   * in that order, a page at a time, until the filter (exactly, in memory) keeps one; not every row.
+   */
+  private async nearest(table: N8nTable, list: SourceColumn[], columns: Map<string, SourceColumn>, read: N8nRead, query: SourceQuery): Promise<SourceResult> {
+    const params: Record<string, string> = { sortBy: `${query.sort[0].column}:${query.sort[0].direction}`, limit: String(PAGE) };
+    if (read.filters.length) params.filter = JSON.stringify({ type: "and", filters: read.filters });
+    if (read.search) params.search = read.search;
+    const rows: MemoryRow[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: Page<Record<string, unknown>> = await this.get<Page<Record<string, unknown>>>(`/data-tables/${encodeURIComponent(table.id)}/rows`, { ...params, ...(cursor && { cursor }) });
+      rows.push(...page.data.map((r) => n8nRow(r, list)));
+      const found = queryRows(rows, columns, query);
+      if (found.rows.length) return { rows: found.rows, more: false };
+      cursor = page.data.length && rows.length < MAX_ROWS ? page.nextCursor : null;
+    } while (cursor);
+    return { rows: [], more: false };
   }
 
   async row(request: SourceRowRequest): Promise<SourceRow | null> {

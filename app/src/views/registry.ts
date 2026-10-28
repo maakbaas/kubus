@@ -84,6 +84,8 @@ export interface BlockUses {
   fields: { labels: boolean; hideEmpty: boolean } | null;
   /** All of a remote collection's rows are loaded (a chart charts them all), not a page at a time. */
   all?: boolean;
+  /** A date field it charts items along: with a date period on it, the items just outside the period come too (QueryResult.edges). */
+  edges?: string | null;
   /** Its items of a native collection are shown a step at a time ("Show more"), as a remote collection's are. */
   steps?: boolean;
 }

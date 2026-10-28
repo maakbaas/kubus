@@ -1,4 +1,4 @@
-import { conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
+import { conditionText, keepsOnlyValues, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
 import { dayStart, zoneOffsets } from "./d1Sql.ts";
 
@@ -389,7 +389,11 @@ export function querySql(query: SourceQuery, columns: Map<string, MyColumn>, fla
   const from = group ? groupedFromSql(query.target, group, p, query.timeZone) : fromSql(query.target);
   const order = [
     ...(group ? [groupOrderSql(group, `q.${G}`, query.groupOrder, `COUNT(*) OVER (PARTITION BY q.${G})`, p, flavour)] : []),
-    ...query.sort.map((s) => ordered(s.column === TITLE_COLUMN ? naturalSql(titleSql(query, columns, p), p, flavour) : sortSql(column(columns, s.column), p, flavour), s.direction)),
+    ...query.sort.map((s) => {
+      const key = s.column === TITLE_COLUMN ? naturalSql(titleSql(query, columns, p), p, flavour) : sortSql(column(columns, s.column), p, flavour);
+      // Empty values last, unless the filter keeps none (then an index on the column can be read in order).
+      return keepsOnlyValues(query.filter, s.column) ? `${key} ${s.direction === "desc" ? "DESC" : "ASC"}` : ordered(key, s.direction);
+    }),
     `${ref(column(columns, query.key))} ASC`,
   ];
   // Limits are whole numbers (checked above): written as they are, as a prepared LIMIT ? may not take them.

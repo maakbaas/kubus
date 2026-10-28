@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultDateField, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveRange, rollingLabel, rollingRangeLabel, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
+import { defaultDateField, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveRange, rollingLabel, rollingRangeLabel, rollingValue, shiftPeriod, toDateLabel, toDateValue, periodEdges } from "./datePeriod";
 
 describe("date periods", () => {
   it("finds the day, week (Sunday first), month and year around a day", () => {
@@ -33,6 +33,20 @@ describe("date periods", () => {
     expect(resolveRange("week+0..day+0", "2026-10-28")).toEqual({ start: "2026-10-25", end: "2026-10-28" });
     expect(resolveRange("year-1..day+0", "2026-10-28")).toBeNull();
     expect(toDateLabel("month")).toBe("Month to date");
+  });
+
+  it("moves a query's date period on a field to just before and after it (the block's own, else the one it builds on)", () => {
+    const period = { id: "p", fieldId: "read", operator: "between" as const, value: "month+0" };
+    const other = { id: "o", fieldId: "genre", operator: "is" as const, value: "Novel", join: "or" as const };
+    const query = { filters: [period, other], sort: [], groupBy: null };
+    const e = periodEdges(query, "read", "2026-10-28")!;
+    expect(e.window).toEqual({ start: "2026-10-01", end: "2026-10-31" });
+    expect(e.before.filters).toEqual([{ ...period, value: "1700-01-01..2026-09-30" }, other]);
+    expect(e.after.filters).toEqual([{ ...period, value: "2026-11-01..2261-12-31" }, other]);
+    expect(periodEdges(query, "genre", "2026-10-28")).toBeNull();
+    const inherited = periodEdges({ filters: [other], inherited: [period], sort: [], groupBy: null }, "read", "2026-10-28")!;
+    expect(inherited.before.inherited).toEqual([{ ...period, value: "1700-01-01..2026-09-30" }]);
+    expect(inherited.before.filters).toEqual([other]);
   });
 
   it("numbers weeks from the one holding 1 January", () => {

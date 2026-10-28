@@ -63,8 +63,10 @@ function ChartView({ collection, result, options, refs, actions, page }: BlockPr
   const items = useMemo(() => chartItems(result, options.scope, pageItem), [result, options.scope, pageItem]);
   const spec = useMemo(() => {
     const ctx = { refLabel: refLabelOf(refs, "(deleted)") };
-    return chartSpec({ collection, items, ctx }, options, dark ? "g100" : "white");
-  }, [collection, items, refs, options, dark]);
+    // "Of this item" charts one item: no period around it.
+    const edges = options.scope === "page" ? undefined : result.edges;
+    return chartSpec({ collection, items, ctx, edges }, options, dark ? "g100" : "white");
+  }, [collection, items, refs, options, dark, result.edges]);
   if (wrongPage) return <p className="helper chart-block__problem">“Of this item” charts the page's item: the block lists {collection.pluralName}, not the page's collection.</p>;
   if ("problem" in spec) return <p className="helper chart-block__problem">{spec.problem}</p>;
   return (
@@ -815,7 +817,8 @@ export const chartBlock = defineBlockType<ChartOptions>({
   defaultOptions: (collection: Collection) => defaultChartOptions(collection),
   normalizeOptions: (raw, collection) => normalizeChartOptions(raw, collection),
   // Its X axis is its own setting (not the block's grouping); "This item" charts the page's item, not a query's.
-  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null }),
+  // Lines along a date field each item is placed at run on to the edges of a date period on it.
+  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null, edges: isXY(options.chart) && options.x.by === "item" ? options.x.field : null }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,
 });

@@ -124,6 +124,15 @@ Extension points are registries, not special cases in pages:
   - **Spread**: a histogram's field (a number or a date: dates on a time axis), bins and Split by; a box plot's field (a
     box per X category); a heatmap's columns (the X axis) × rows (Split by), or with a date X axis and not split a
     calendar (weeks × weekdays; empty cells left undrawn).
+  - **A date period's edges**: lines and areas along a date field each item is placed at (X: each item), with a
+    date period on that field (the block's own filter's, else its view's or page's), run on to the period's edges:
+    the X axis spans exactly its days, and each line (each split part) is drawn from its last item before the period
+    into its first after it, so it starts and ends at the axis rather than at the first and last point inside
+    (Carbon clips what is beyond). The block finds them (`BlockUses.edges`, `periodEdges` in domain/datePeriod.ts:
+    the same query with the period moved just before / after it; `QueryResult.edges`): all items outside for a
+    native collection, the nearest row each side for a remote one (`SourceEdges`, docs/sync.md; one for the whole
+    chart, so of a split chart only that row's part runs on). Not for bars, nor a series shown as a running total,
+    change or moving average (they need what came before); "Of this item" has no period.
   - **Axes**: the X axis's title; the left and (while a series uses it) right axis' title, min, max and logarithmic scale.
     Without a min, bars and stacked areas start at 0 and lines, areas and dots fit their values (`includeZero: false`, `FIT`
     in chartSpec.ts), so a weight from 80 to 70 shows its trend.

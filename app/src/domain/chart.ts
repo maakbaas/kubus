@@ -15,7 +15,7 @@
 
 import type { Component } from "./components";
 import { outputOf } from "./components";
-import { periodAround, weekNumber } from "./datePeriod";
+import { periodAround, weekNumber, type Period } from "./datePeriod";
 import { formatDate } from "./fieldKinds";
 import { fieldValue, itemLabel, newId, pickableFields, type Collection, type FieldDef, type Item } from "./model";
 import { BLOCK_HEIGHT, normalizeBlockHeight } from "./views";
@@ -526,6 +526,8 @@ export interface ChartInput {
   ctx: QueryContext;
   /** For month names (tests pin it). */
   locale?: string;
+  /** The block's date period on the X field and the items just outside it (QueryResult.edges). */
+  edges?: QueryResult["edges"];
 }
 
 const fieldsOf = (collection: Collection) => new Map(pickableFields(collection).map((f) => [f.id, f]));
@@ -635,20 +637,23 @@ export interface Split {
   names: string[];
   /** The items of a category in a series. */
   items(category: Category, series: string): Item[];
+  /** The series an item is in (also one not among the categories': an edge's). */
+  of(item: Item): string[];
 }
 
 export function splitSeries(categories: Category[], field: FieldDef | undefined, showEmpty: boolean, ctx: QueryContext): Split | null {
   if (!field) return null;
   const labelsOf = new Map<Item, string[]>();
+  const labels = (item: Item) =>
+    groupKeysOf(field, item, ctx)
+      .filter((k) => showEmpty || k.key !== "")
+      .map((k) => (k.key === "" ? NO_VALUE : k.label || k.key));
   const sizes = new Map<string, number>();
   for (const c of categories) {
     for (const item of c.items) {
       if (labelsOf.has(item)) continue;
-      const labels = groupKeysOf(field, item, ctx)
-        .filter((k) => showEmpty || k.key !== "")
-        .map((k) => (k.key === "" ? NO_VALUE : k.label || k.key));
-      labelsOf.set(item, labels);
-      for (const l of labels) sizes.set(l, (sizes.get(l) ?? 0) + 1);
+      labelsOf.set(item, labels(item));
+      for (const l of labelsOf.get(item)!) sizes.set(l, (sizes.get(l) ?? 0) + 1);
     }
   }
   const ranked = [...sizes.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { numeric: true })).map(([n]) => n);
@@ -658,6 +663,7 @@ export function splitSeries(categories: Category[], field: FieldDef | undefined,
   return {
     names,
     items: (category, series) => category.items.filter((i) => (labelsOf.get(i) ?? []).some((l) => named(l) === series)),
+    of: (item) => [...new Set((labelsOf.get(item) ?? labels(item)).map(named))],
   };
 }
 
@@ -711,6 +717,8 @@ export interface ChartTable {
   /** The categories are on a time axis (`at`) / a number axis (`number`); else labels. */
   time: boolean;
   numeric: boolean;
+  /** Lines charting items along a date with a date period on it: the period, the X axis's extent. */
+  window?: Period;
 }
 
 /**
@@ -731,6 +739,19 @@ export function chartTable(input: ChartInput, options: ChartOptions, timeline = 
   const splitField = options.splitBy && !(options.x.by === "field" && options.splitBy === field?.id) ? byId.get(options.splitBy) : undefined;
   const split = splitSeries(categories, splitField, options.x.showEmpty, ctx);
 
+  // Each line (as its values: a running total or a change needs what came before) runs on from the
+  // last item before the period into the first after it, of its own (split) items with a value.
+  const edges = options.x.by === "item" && isDateField(field) ? input.edges : undefined;
+  const outside = edges && { before: itemCategories({ ...input, items: edges.before }, options.x), after: itemCategories({ ...input, items: edges.after }, options.x) };
+  const edgePoint = (m: (typeof measures)[number], part: string | undefined) => {
+    if (!outside || m.s.transform !== "none" || isBarStyle(styleOf(m.s, options.chart))) return null;
+    const point = (c: Category | undefined) => {
+      const value = c ? measure(c.items, m) : null;
+      return c && value !== null ? { category: c, value } : null;
+    };
+    const mine = (c: Category) => (part === undefined || !split || split.of(c.items[0]).includes(part)) && measure(c.items, m) !== null;
+    return { before: point([...outside.before].reverse().find(mine)), after: point(outside.after.find(mine)) };
+  };
   const drawn: DrawnSeries[] = [];
   const points: ChartPoint[] = [];
   const taken = new Set<string>();
@@ -751,7 +772,10 @@ export function chartTable(input: ChartInput, options: ChartOptions, timeline = 
         const v = items.length === 0 ? (options.x.by !== "item" && (m.s.value === "count" || m.s.value === "sum") ? 0 : null) : measure(items, m);
         return v === null && options.missing === "zero" ? 0 : v;
       });
+      const edge = edgePoint(m, part);
+      if (edge?.before) points.push({ category: edge.before.category, series: name, value: edge.before.value });
       transformValues(raw, m.s.transform, m.s.window).forEach((value, i) => points.push({ category: categories[i], series: name, value }));
+      if (edge?.after) points.push({ category: edge.after.category, series: name, value: edge.after.value });
     }
   }
   return {
@@ -761,8 +785,12 @@ export function chartTable(input: ChartInput, options: ChartOptions, timeline = 
     categoryLabel: xLabel(collection, options),
     time: categories.length > 0 && categories.every((c) => c.at !== undefined),
     numeric: categories.length > 0 && categories.every((c) => c.number !== undefined),
+    ...(edges && { window: edges.window }),
   };
 }
+
+/** Bars and lollipops: drawn from 0, as wide as their step (not run on to a window's edges). */
+export const isBarStyle = (s: SeriesStyle) => s === "bar" || s === "lollipop";
 
 /** The total a pie, meter or gauge is measured against: the option's number, or the total field's values made into one like the value (a count against their sum); null = none. */
 export function totalOf(collection: Collection, items: Item[], options: Pick<ChartOptions, "total" | "series">): number | null {

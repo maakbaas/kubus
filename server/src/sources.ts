@@ -1,5 +1,5 @@
 import { HttpError, json, readJson, type ApiRequest, type Router } from "../../shared/router.ts";
-import { isSourceCondition, type SourceInfo, type SourceQuery, type SourceRowRequest, type SourceTarget } from "../../shared/sources.ts";
+import { isSourceCondition, type SourceInfo, type SourceQuery, type SourceResult, type SourceRow, type SourceRowRequest, type SourceTarget } from "../../shared/sources.ts";
 import { SourceError, type Connector, type SourceConfig } from "./connectors/connector.ts";
 import { connectorFor } from "./connectors/index.ts";
 
@@ -121,11 +121,28 @@ export class Sources {
           req,
           (b) => isShape(b) && isSourceCondition(b.filter) && Array.isArray(b.sort) && typeof b.timeZone === "string" && typeof b.offset === "number" && typeof b.limit === "number",
         );
-        return json(200, await this.on(params.name, (c) => c.query({ ...query, search: String(query.search ?? ""), groupOrder: query.groupOrder ?? "asc" })));
+        return json(200, await this.on(params.name, (c) => queryWithEdges(c, { ...query, search: String(query.search ?? ""), groupOrder: query.groupOrder ?? "asc" })));
       })
       .add("POST", "/api/sources/{name}/row", async (req, params) => {
         const request = await body<SourceRowRequest>(req, (b) => isShape(b) && typeof b.keyValue === "string");
         return json(200, { row: await this.on(params.name, (c) => c.row(request)) });
       });
   }
+}
+
+/**
+ * A query, and with `edges` (on its first page) the rows just outside its date period: each the same
+ * query with its filter moved outside the period, sorted by the column toward it, one row. Asked
+ * beside the page, of any connector; an edge it can't answer is none, never the page's error.
+ */
+export async function queryWithEdges(connector: Connector, query: SourceQuery): Promise<SourceResult> {
+  const { edges, ...page } = query;
+  const valid = !!edges && query.offset === 0 && typeof edges.column === "string" && isSourceCondition(edges.before) && isSourceCondition(edges.after);
+  if (!valid) return connector.query(page);
+  const edge = (filter: SourceQuery["filter"], direction: "asc" | "desc"): Promise<SourceRow | null> =>
+    connector
+      .query({ ...page, filter, sort: [{ column: edges.column, direction }], groupBy: null, offset: 0, limit: 1, counts: false })
+      .then((r) => r.rows[0] ?? null, () => null);
+  const [result, before, after] = await Promise.all([connector.query(page), edge(edges.before, "desc"), edge(edges.after, "asc")]);
+  return { ...result, edges: { before, after } };
 }
