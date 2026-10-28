@@ -1,10 +1,11 @@
 import type { Connector, SourceConfig } from "./connector.ts";
 import { D1Connector } from "./d1.ts";
 import { InfluxConnector } from "./influx.ts";
+import { MysqlConnector } from "./mysql.ts";
 import { N8nConnector } from "./n8n.ts";
 import { PostgresConnector } from "./postgres.ts";
 
-// The connectors, by a source's kind (postgres.ts, n8n.ts, influx.ts: InfluxDB 2, d1.ts: Cloudflare D1). Another kind of source is
+// The connectors, by a source's kind (postgres.ts, n8n.ts, influx.ts: InfluxDB 2, d1.ts: Cloudflare D1, mysql.ts: MySQL and MariaDB). Another kind of source is
 // another entry here, its fields in kinds.ts (and its own file beside them); nothing else on the
 // server or in the app changes.
 
@@ -13,6 +14,8 @@ const CONNECTORS: Record<string, (config: SourceConfig) => Connector> = {
   n8n: (config) => new N8nConnector(config),
   influxdb: (config) => new InfluxConnector(config),
   d1: (config) => new D1Connector(config),
+  mysql: (config) => new MysqlConnector(config, "mysql"),
+  mariadb: (config) => new MysqlConnector(config, "mariadb"),
 };
 
 /** The connector for a source, or why there is none. */

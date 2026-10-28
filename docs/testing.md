@@ -25,7 +25,7 @@ the imports).
 | `sync` | the device's side of sync (outbox, merge, files, first connection, versions) against `FakeServer` (`app/src/test/fakeServer.ts`) | `app/src/data/sync/*.test.ts` | nothing |
 | `api` | the HTTP API (`/api/v1`, the headless device) and webhooks, against `FakeServer` | `app/src/headless/*.test.ts` | nothing |
 | `app` | the app's own logic outside the UI (AI client and backfill, platform) | `app/src/{app,platform,ui,views,pages,workspace}/*.test.ts(x)` | nothing |
-| `connectors` | the remote-source connectors: their query languages run for real (SQLite for D1, the memory connector) or against a stand-in of the service (n8n, InfluxDB, Cloudflare D1's API), Postgres against a real one | `server/test/connectors/*.test.ts` | the server's packages; Postgres for `postgres.test.ts` |
+| `connectors` | the remote-source connectors: their query languages run for real (SQLite for D1, the memory connector) or against a stand-in of the service (n8n, InfluxDB, Cloudflare D1's API), Postgres, MySQL and MariaDB against real ones | `server/test/connectors/*.test.ts` | the server's packages; Postgres for `postgres.test.ts`, MySQL 8 and MariaDB for `mysql.test.ts` |
 | `server` | the server itself: its database (migrations, sync, wipe), its settings, every HTTP endpoint of the real server process (`serve.ts`), and devices syncing through it end to end | `server/test/*.test.ts` | the server's packages, Postgres, `npm run build:headless` for `/api/v1` |
 
 The `connectors` and `server` projects test `server/` code: they need its packages
@@ -40,7 +40,18 @@ npm ci --prefix server && npm run build:headless
 npm test -- --project server --project connectors
 ```
 
-Without `KUBUS_TEST_POSTGRES` they are skipped locally; in CI (`CI` set) that is an error, as is a
+The MySQL / MariaDB connector's tests (`mysql.test.ts`) get their servers likewise from `KUBUS_TEST_MYSQL`
+(MySQL 8) and `KUBUS_TEST_MARIADB`, an account that can create databases and users (`server/test/mysql.ts`);
+each server's tests run when its variable is set:
+
+```bash
+docker run -d --name kubus-test-mysql -e MYSQL_ROOT_PASSWORD=mysql -p 3306:3306 mysql:8.4
+docker run -d --name kubus-test-mariadb -e MARIADB_ROOT_PASSWORD=mariadb -p 3307:3306 mariadb:11.4
+export KUBUS_TEST_MYSQL=mysql://root:mysql@127.0.0.1:3306 KUBUS_TEST_MARIADB=mysql://root:mariadb@127.0.0.1:3307
+npm test -- --project connectors
+```
+
+Without `KUBUS_TEST_POSTGRES` (or those two) they are skipped locally; in CI (`CI` set) that is an error, as is a
 missing headless build: nothing is skipped there without anyone noticing.
 
 `FakeServer` stands in for the server in the device's sync and API tests (fast, no Postgres).
