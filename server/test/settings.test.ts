@@ -1,7 +1,9 @@
 // @vitest-environment node
 // The server's settings: secrets are kept only where they were given for (server/src/settings.ts).
 import { describe, expect, it } from "vitest";
-import { applyUpdate, NO_SETTINGS, sourceConfigs, splitPassword, viewOf, type Stored } from "../src/settings.ts";
+import {
+  applyUpdate, loadSettings, NO_SETTINGS, saveSettings, secretKey, secretWarnings, sourceConfigs, splitPassword, viewOf, type Stored,
+} from "../src/settings.ts";
 import type { ServerSettingsUpdate } from "../../shared/settings.ts";
 
 const stored: Stored = {
@@ -51,5 +53,63 @@ describe("server settings", () => {
 
   it("split a password out of a connection string", () => {
     expect(splitPassword("postgres://u:secret@h/db")).toEqual({ url: "postgres://u@h/db", password: "secret" });
+  });
+
+  describe("stored with KUBUS_SECRET_KEY", () => {
+    /** A server_settings table in memory: what saveSettings writes, loadSettings reads. */
+    const table = () => {
+      const rows = new Map<string, unknown>();
+      return {
+        rows,
+        async query<R>(sql: string, values: unknown[] = []) {
+          if (sql.startsWith("INSERT")) {
+            rows.set("ai", JSON.parse(values[0] as string));
+            rows.set("sources", JSON.parse(values[1] as string));
+          }
+          return { rows: [...rows].map(([key, value]) => ({ key, value })) as R[] };
+        },
+      };
+    };
+    const key = secretKey("a long random string");
+    const raw = (db: ReturnType<typeof table>) => JSON.stringify([...db.rows.values()]);
+
+    it("encrypt the secrets, and read them back with the key", async () => {
+      const db = table();
+      await saveSettings(db, stored, key);
+      expect(raw(db)).not.toMatch(/sk-secret|"pw"/);
+      expect(raw(db)).toContain("reader@crm");
+      expect(await loadSettings(db, key)).toEqual({ stored, plainText: false });
+      const long = { ...stored, ai: { ...stored.ai, key: "k".repeat(2000) } };
+      await saveSettings(db, long, key);
+      expect((await loadSettings(db, key)).stored.ai.key).toBe(long.ai.key);
+      expect(secretWarnings(stored, key)).toEqual([]);
+    });
+
+    it("store them as plain text without a key, and encrypt them once there is one", async () => {
+      const db = table();
+      await saveSettings(db, stored, null);
+      expect(raw(db)).toMatch(/sk-secret/);
+      expect(secretWarnings((await loadSettings(db, null)).stored, null)[0]).toMatch(/plain text/);
+      const loaded = await loadSettings(db, key);
+      expect(loaded).toEqual({ stored, plainText: true });
+      await saveSettings(db, loaded.stored, key);
+      expect(raw(db)).not.toMatch(/sk-secret/);
+      expect((await loadSettings(db, key)).plainText).toBe(false);
+    });
+
+    it("keep one another key (or no key) can't open, unused, until the right key is back", async () => {
+      const db = table();
+      await saveSettings(db, stored, key);
+      for (const other of [null, secretKey("another key")]) {
+        const { stored: loaded, plainText } = await loadSettings(db, other);
+        expect(plainText).toBe(false);
+        expect(viewOf(loaded, () => ({}))).toMatchObject({ ai: { keySet: false }, sources: [{ passwordSet: false }] });
+        expect(sourceConfigs(loaded)[0].url).toBe("postgres://reader@crm:5432/crm");
+        expect(secretWarnings(loaded, other).join()).toMatch(/can't open|doesn't open/);
+        // Saved again without entering them: still there for the right key.
+        await saveSettings(db, applyUpdate(loaded, update()), other);
+        expect((await loadSettings(db, key)).stored).toEqual(stored);
+      }
+    });
   });
 });
