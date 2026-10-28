@@ -11,6 +11,7 @@ import { Highlight } from "../ui/Highlight";
 import { useMediaQuery } from "../ui/useMediaQuery";
 import { openModeOf } from "../workspace/Workspace";
 import { FieldCell, itemLinkProps } from "./cells";
+import { useBuffered } from "../ui/useBuffered";
 import { HeightSlider } from "./HeightSlider";
 import { useMapStyle } from "../app/mapStyle";
 import { loadMapLibre, styleUrl } from "./mapLibre";
@@ -420,6 +421,9 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
 function MapOptionsEditor({ collection, options, onChange }: BlockOptionsProps<MapOptions>) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
+  // Stored after a pause, not at every step of a drag: each store is a write, a sync change and a redraw (a map's
+  // canvas resized each time, which could crash the page).
+  const [height, setHeight] = useBuffered(options.height, (h) => onChange({ ...options, height: h }));
   const location = collection.fields.find((f) => f.id === options.locationFieldId);
   const pair = !!location && isCoordinateField(location);
   return (
@@ -453,7 +457,7 @@ function MapOptionsEditor({ collection, options, onChange }: BlockOptionsProps<M
             ))}
         </Select>
       )}
-      <HeightSlider id={`${uid}-map-height`} value={options.height} onChange={(height) => onChange({ ...options, height })} />
+      <HeightSlider id={`${uid}-map-height`} value={height} onChange={setHeight} />
       <Checkbox
         id={`${uid}-map-route`}
         labelText="Route: join the dots in order"

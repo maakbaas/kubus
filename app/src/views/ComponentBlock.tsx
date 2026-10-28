@@ -19,6 +19,7 @@ import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { BLOCK_HEIGHT, normalizeBlockHeight } from "../domain/views";
 import { useOpenRelated } from "../workspace/Workspace";
+import { useBuffered } from "../ui/useBuffered";
 import { HeightSlider } from "./HeightSlider";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
@@ -101,6 +102,9 @@ export function NewBlockComponentModal({
 
 function ComponentBlockOptionsEditor({ collection, options, onChange }: BlockOptionsProps<ComponentBlockOptions>) {
   const uid = useId();
+  // Stored after a pause, not at every step of a drag: each store is a write, a sync change and a redraw (a map's
+  // canvas resized each time, which could crash the page).
+  const [height, setHeight] = useBuffered(options.height, (h) => onChange({ ...options, height: h }));
   const { components } = useStore();
   const [dialog, setDialog] = useState<"new" | "promote" | null>(null);
   const { local } = options;
@@ -150,7 +154,7 @@ function ComponentBlockOptionsEditor({ collection, options, onChange }: BlockOpt
           </>
         )}
         {/* What it shows in a box of its own (HTML) is as tall as a chart or a map, at most. */}
-        {html && <HeightSlider id={`${uid}-height`} value={options.height} onChange={(height) => onChange({ ...options, height })} />}
+        {html && <HeightSlider id={`${uid}-height`} value={height} onChange={setHeight} />}
       </Stack>
       {dialog === "new" && (
         <NewBlockComponentModal
