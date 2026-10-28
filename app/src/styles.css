@@ -2984,12 +2984,13 @@ img[data-lightbox] {
   letter-spacing: var(--cds-label-01-letter-spacing);
   color: var(--cds-text-secondary);
 }
-/* The number with the change's tag beside it, the two centred together. */
+/* The number with the change's tag beside it, the two centred together; the tag's text on the
+   number's baseline, as its unit's. */
 .stat-block__value {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  align-items: center;
+  align-items: baseline;
   gap: var(--cds-spacing-04);
 }
 .stat-block__value .cds--tag {
