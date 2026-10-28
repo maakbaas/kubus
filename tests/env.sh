@@ -7,6 +7,13 @@ export KUBUS_TEST_MARIADB=${KUBUS_TEST_MARIADB:-mysql://root:mariadb@127.0.0.1:3
 if curl -fs -m 1 http://localhost:8086/health >/dev/null 2>&1; then
   export KUBUS_TEST_INFLUX=${KUBUS_TEST_INFLUX:-http://localhost:8086}
 fi
+if curl -fs -m 1 http://localhost:5678/healthz >/dev/null 2>&1; then
+  export KUBUS_TEST_N8N=${KUBUS_TEST_N8N:-http://localhost:5678}
+fi
+# actual-http-api (Actual's own server stays inside the compose network).
+if curl -s -m 1 -o /dev/null http://localhost:5007/v1/actualhttpapiversion 2>&1; then
+  export KUBUS_TEST_ACTUAL=${KUBUS_TEST_ACTUAL:-http://localhost:5007}
+fi
 export IBM_TELEMETRY_DISABLED=true
 # Without Chrome (a cloud session has Playwright's Chromium only): playwright-cli uses that.
 if ! command -v google-chrome >/dev/null && [ -x /opt/pw-browsers/chromium ]; then
