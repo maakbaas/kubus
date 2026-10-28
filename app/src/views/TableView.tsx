@@ -302,52 +302,64 @@ export function FillTable({ children }: { children: ReactNode }) {
   }, []);
   // A table that scrolls sideways shows where more of it is: a fade at that edge (styles.css).
   // Touch screens hide scrollbars until scrolling, and they can't be made to stay.
+  // While the pane scrolls down past a table's top, its header row stays at the pane's top edge, until the
+  // table's end. Not `position: sticky`: a table that scrolls sideways has its scroller as its scroll
+  // container (overflow-x makes overflow-y auto too), which never scrolls down. The header cells are moved
+  // instead, inside the scroller, so they keep scrolling sideways with their columns: by the browser as it
+  // scrolls where it can (`data-head-follow`: a CSS scroll-driven animation along the table's place in the
+  // pane, styles.css; this only gives it the table's and header's heights), else here on each scroll of the
+  // pane (`data-head-shift`), which trails the scroll by a frame. The latter also inside something that
+  // clips (the animation would follow that). Only in a pane (the app's pages, not a dialog).
   useEffect(() => {
     const el = box.current;
     const scroller = el?.querySelector<HTMLElement>(".cds--data-table-content");
-    if (!el || !scroller) return;
+    const table = el?.querySelector("table");
+    if (!el || !scroller || !table) return;
+    const pane = el.closest<HTMLElement>(".ws-pane__body");
+    const clipped = () => {
+      for (let a = el.parentElement; a && a !== pane; a = a.parentElement) {
+        const { overflowX, overflowY } = getComputedStyle(a);
+        if (![overflowX, overflowY].every((o) => o === "visible" || o === "clip")) return true;
+      }
+      return false;
+    };
+    const scrollDriven = typeof CSS !== "undefined" && CSS.supports("animation-timeline: --a");
+    let follow = false;
+    let shown = 0;
+    const shift = () => {
+      const head = table.tHead;
+      const rect = table.getBoundingClientRect();
+      const by = pane && head && !follow ? Math.max(0, Math.min(pane.getBoundingClientRect().top - rect.top, rect.height - head.offsetHeight)) : 0;
+      if (by === shown) return;
+      shown = by;
+      el.toggleAttribute("data-head-shift", by > 0);
+      el.style.setProperty("--table-head-shift", `${by}px`);
+    };
     const update = () => {
+      follow = !!pane && scrollDriven && !clipped();
+      el.toggleAttribute("data-head-follow", follow);
+      // Where the table starts in its wrap (the animation's timeline), and how far its header can go down it.
+      el.style.setProperty("--table-head-start", `${table.getBoundingClientRect().top - el.getBoundingClientRect().top}px`);
+      el.style.setProperty("--table-head-travel", `${Math.max(0, table.offsetHeight - (table.tHead?.offsetHeight ?? 0))}px`);
+      el.toggleAttribute("data-more-start", scroller.scrollLeft > 1);
+      el.toggleAttribute("data-more-end", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
+      shift();
+    };
+    const sideways = () => {
       el.toggleAttribute("data-more-start", scroller.scrollLeft > 1);
       el.toggleAttribute("data-more-end", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
     };
     update();
-    scroller.addEventListener("scroll", update, { passive: true });
+    scroller.addEventListener("scroll", sideways, { passive: true });
+    pane?.addEventListener("scroll", shift, { passive: true });
     const observer = new ResizeObserver(update);
+    observer.observe(el);
     observer.observe(scroller);
-    if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
-    return () => {
-      scroller.removeEventListener("scroll", update);
-      observer.disconnect();
-    };
-  }, []);
-  // While the pane scrolls down past a table's top, its header row comes down with it, at the
-  // pane's top edge, until the table's end. Not `position: sticky`: the sideways scroller around
-  // the table is its scroll container (overflow-x makes overflow-y auto too) and never scrolls
-  // down, so a sticky header would stay put. The header cells are moved instead (styles.css,
-  // `data-head-shift`), inside the scroller, so they keep scrolling sideways with their columns.
-  // Only in a pane (the app's pages, not a dialog).
-  useEffect(() => {
-    const el = box.current;
-    const pane = el?.closest<HTMLElement>(".ws-pane__body");
-    const table = el?.querySelector("table");
-    if (!el || !pane || !table) return;
-    let shown = 0;
-    const update = () => {
-      const head = table.tHead;
-      const rect = table.getBoundingClientRect();
-      const shift = head ? Math.max(0, Math.min(pane.getBoundingClientRect().top - rect.top, rect.height - head.offsetHeight)) : 0;
-      if (shift === shown) return;
-      shown = shift;
-      el.toggleAttribute("data-head-shift", shift > 0);
-      el.style.setProperty("--table-head-shift", `${shift}px`);
-    };
-    update();
-    pane.addEventListener("scroll", update, { passive: true });
-    const observer = new ResizeObserver(update);
-    observer.observe(pane);
     observer.observe(table);
+    if (pane) observer.observe(pane);
     return () => {
-      pane.removeEventListener("scroll", update);
+      scroller.removeEventListener("scroll", sideways);
+      pane?.removeEventListener("scroll", shift);
       observer.disconnect();
     };
   }, []);

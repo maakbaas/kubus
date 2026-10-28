@@ -3358,6 +3358,30 @@ img[data-lightbox] {
   z-index: 1;
   transform: translateY(var(--table-head-shift, 0));
 }
+/* The same where the browser can do it as it scrolls (FillTable's `data-head-follow`: CSS scroll-driven
+   animations, Chrome and Safari 26): the header cells move along the table's place in the pane (its view
+   timeline), from when the table's top passes the pane's top edge until only the header is left of it, by as
+   much as the pane scrolled, in step with the scroll (no frame behind it, as a shift set on scroll is). */
+.table-wrap {
+  view-timeline: --table-wrap block;
+}
+.table-wrap[data-head-follow] .items-table thead th {
+  position: relative;
+  z-index: 1;
+  animation: table-head-follow linear both;
+  animation-timeline: --table-wrap;
+  /* From the table's top (below the wrap's by --table-head-start) passing the pane's top edge, as far as the
+     table's height less its header's (--table-head-travel). */
+  animation-range: exit-crossing var(--table-head-start, 0px) exit-crossing calc(var(--table-head-start, 0px) + var(--table-head-travel, 0px));
+}
+@keyframes table-head-follow {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(var(--table-head-travel, 0px));
+  }
+}
 /* Where more of a sideways-scrolling table is, its edge fades (set by FillTable): touch screens
    show no scrollbar until scrolling. Drawn on the non-scrolling container, over the rows. */
 .items-table {

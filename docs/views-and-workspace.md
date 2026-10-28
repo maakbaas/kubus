@@ -63,8 +63,9 @@ Extension points are registries, not special cases in pages:
   selectable per view, the title column too (rows then get an open button); a table looks the
   same at every width: one too wide for its pane (a phone, a narrow tiled pane) scrolls sideways,
   all its columns together (none is pinned), a fade at an edge with more beyond it; while the pane scrolls down its
-  header row stays in view at the pane's top until the table's end (moved down by `FillTable`, as sticky can't reach
-  past the sideways scroller); `FillTable`, also the
+  header row stays in view at the pane's top until the table's end (moved down, as sticky can't reach past the
+  sideways scroller: by a CSS scroll-driven animation in step with the scroll where the browser has them, Chrome and
+  Safari 26, `data-head-follow`; else by `FillTable` on each scroll, a frame behind); `FillTable`, also the
   tables of the app's own pages) and `cards` (show title, fields, cover = an image or a markdown field rendered in its place, card width (slider: the column count whose width comes closest), cover shape:
   a fixed ratio (image shown whole, the rest filled with its average colour) or the images'
   average ratio (filled, cropped); with no title and no fields a card is just its cover; a card looks
