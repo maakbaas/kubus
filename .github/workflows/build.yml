@@ -97,6 +97,7 @@ jobs:
   # Only the bundles: the checks above don't depend on the platform and run on Windows, the
   # tests on Linux in test.yml.
   desktop:
+    name: desktop (${{ matrix.name }})
     strategy:
       fail-fast: false
       matrix:
