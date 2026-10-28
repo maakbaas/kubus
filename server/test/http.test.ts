@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SYNC_VERSION, type SyncRequest, type SyncResponse } from "../../shared/sync.ts";
 import { admin, ADMIN, createDatabase, dropDatabase } from "./postgres.ts";
@@ -208,6 +209,32 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
       const response = await request(server, "/api/ai/chat/completions", { method: "POST", json: { model: "small", messages: [] } });
       expect(await response.json()).toEqual({ choices: [{ message: { content: "42" } }] });
       expect(providerRequests).toEqual([{ path: "/v1/chat/completions", authorization: "Bearer sk-server", body: JSON.stringify({ model: "small", messages: [] }) }]);
+    });
+
+    it("stores its secrets encrypted with KUBUS_SECRET_KEY, also those stored before it was set", async () => {
+      await request(server, "/api/settings", { method: "PUT", json: settings() });
+      const stored = async () => {
+        const db = new pg.Client({ connectionString: databaseUrl });
+        await db.connect();
+        try {
+          return JSON.stringify((await db.query("SELECT value FROM server_settings")).rows);
+        } finally {
+          await db.end();
+        }
+      };
+      expect(await stored()).toContain("sk-server");
+      const keyed = await startServer(databaseUrl, { KUBUS_SECRET_KEY: "test-secret-key" });
+      try {
+        for (const started = Date.now(); (await stored()).includes("sk-server") && Date.now() - started < 10_000; ) await new Promise((r) => setTimeout(r, 50));
+        expect(await stored()).not.toContain("sk-server");
+        expect(await stored()).toContain("kubus-sealed:v1:");
+        expect((await (await request(keyed, "/api/settings")).json()).ai.keySet).toBe(true);
+        providerRequests.length = 0;
+        await request(keyed, "/api/ai/chat/completions", { method: "POST", json: { model: "small", messages: [] } });
+        expect(providerRequests[0]?.authorization).toBe("Bearer sk-server");
+      } finally {
+        await keyed.stop();
+      }
     });
 
     it("says so when it offers no model, or can't reach it", async () => {

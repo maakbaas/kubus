@@ -1,3 +1,4 @@
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 import { HttpError } from "../../shared/router.ts";
 import { SOURCE_NAME, type ServerAiSettings, type ServerSettingsUpdate, type ServerSettingsView, type ServerSourceSettings } from "../../shared/settings.ts";
 import type { SourceConfig } from "./connectors/connector.ts";
@@ -6,6 +7,10 @@ import type { SourceConfig } from "./connectors/connector.ts";
 // reads, set in the app (Settings → Server) and stored in its table server_settings, secrets
 // included. Secrets are never sent back, and a stored one is only used where it was given for: one
 // whose address changes is dropped, so whoever holds the token can't send it somewhere new.
+// With KUBUS_SECRET_KEY set, the secrets are stored encrypted with it (AES-256-GCM): the database
+// alone (a dump, a backup) doesn't give them. Without it they are stored as plain text: the
+// server's owner chooses. One the key can't open (no key, another key) stays stored as it is, but
+// isn't used and reads as not set, so setting the right key again brings it back.
 
 export interface StoredAi extends ServerAiSettings {
   key: string;
@@ -29,31 +34,88 @@ export const NO_SETTINGS: Stored = { ai: { url: "", key: "", fieldModel: "", cod
 
 const text = (v: unknown, max = 2000) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
-export async function loadSettings(pool: Db): Promise<Stored> {
+/** A stored secret encrypted with the key: the prefix, then base64url of iv (12), tag (16) and ciphertext. */
+const SEALED = "kubus-sealed:v1:";
+
+/** The key the secrets are encrypted with, from KUBUS_SECRET_KEY (any string); null = plain text. */
+export function secretKey(raw: string | undefined): Buffer | null {
+  return raw ? scryptSync(raw, "kubus-server-settings", 32) : null;
+}
+
+/** A secret still encrypted: one the key couldn't open. It isn't used and reads as not set. */
+export const isSealed = (secret: string) => secret.startsWith(SEALED);
+/** A secret as it can be used: "" while it is sealed. */
+export const usable = (secret: string) => (isSealed(secret) ? "" : secret);
+
+function seal(secret: string, key: Buffer | null): string {
+  if (!key || !secret || isSealed(secret)) return secret;
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const data = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
+  return SEALED + Buffer.concat([iv, cipher.getAuthTag(), data]).toString("base64url");
+}
+
+function open(secret: string, key: Buffer | null): string {
+  if (!key || !isSealed(secret)) return secret;
+  try {
+    const bytes = Buffer.from(secret.slice(SEALED.length), "base64url");
+    const decipher = createDecipheriv("aes-256-gcm", key, bytes.subarray(0, 12));
+    decipher.setAuthTag(bytes.subarray(12, 28));
+    return Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString("utf8");
+  } catch {
+    return secret; // another key: kept sealed
+  }
+}
+
+/** The stored secrets, each with what it is for (for the log). */
+const secretsOf = (stored: Stored) => [
+  { what: "the language model's key", secret: stored.ai.key },
+  ...stored.sources.map((s) => ({ what: `${s.name}'s password`, secret: s.password })),
+];
+
+/** What is wrong with how the secrets are stored, for the log at start ([] = nothing). */
+export function secretWarnings(stored: Stored, key: Buffer | null): string[] {
+  const secrets = secretsOf(stored).filter((s) => s.secret);
+  const sealed = secrets.filter((s) => isSealed(s.secret)).map((s) => s.what);
+  return [
+    ...(!key && secrets.length > sealed.length ? ["KUBUS_SECRET_KEY isn't set: the server's secrets are stored as plain text"] : []),
+    ...(sealed.length ? [`KUBUS_SECRET_KEY ${key ? "doesn't open" : "isn't set, so it can't open"} ${sealed.join(", ")}: set the key it was stored with, or enter ${sealed.length > 1 ? "them" : "it"} again`] : []),
+  ];
+}
+
+/** The stored settings, the secrets opened with the key; `plainText`: some are stored as plain text. */
+export async function loadSettings(pool: Db, key: Buffer | null): Promise<{ stored: Stored; plainText: boolean }> {
   const { rows } = await pool.query<{ key: string; value: unknown }>("SELECT key, value FROM server_settings");
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const ai = (value("ai") ?? {}) as Partial<StoredAi>;
   const sources = Array.isArray(value("sources")) ? (value("sources") as Partial<StoredSource>[]) : [];
-  return {
-    ai: { url: text(ai.url), key: text(ai.key), fieldModel: text(ai.fieldModel), codeModel: text(ai.codeModel) },
+  // Read whole: encrypted, a secret of applyUpdate's 2000 characters is longer.
+  const secret = (v: unknown) => text(v, 4000);
+  const plainText = [ai.key, ...sources.map((s) => s.password)].some((v) => secret(v) !== "" && !isSealed(secret(v)));
+  const stored: Stored = {
+    ai: { url: text(ai.url), key: open(secret(ai.key), key), fieldModel: text(ai.fieldModel), codeModel: text(ai.codeModel) },
     sources: sources.map((s) => ({
       id: text(s.id),
       name: text(s.name),
       url: text(s.url),
-      password: text(s.password),
+      password: open(secret(s.password), key),
       formerNames: Array.isArray(s.formerNames) ? s.formerNames.map((n) => text(n, 40)).filter(Boolean) : [],
       schemas: Array.isArray(s.schemas) ? s.schemas.map((x) => text(x)).filter(Boolean) : [],
       queries: s.queries !== false,
       timeoutSeconds: typeof s.timeoutSeconds === "number" && s.timeoutSeconds > 0 ? s.timeoutSeconds : 30,
     })),
   };
+  return { stored, plainText };
 }
 
-export async function saveSettings(pool: Db, stored: Stored): Promise<void> {
+/** Stores the settings, the secrets encrypted with the key when there is one. */
+export async function saveSettings(pool: Db, stored: Stored, key: Buffer | null): Promise<void> {
+  const ai = { ...stored.ai, key: seal(stored.ai.key, key) };
+  const sources = stored.sources.map((s) => ({ ...s, password: seal(s.password, key) }));
   await pool.query(
     `INSERT INTO server_settings (key, value, updated_at) VALUES ('ai', $1, now()), ('sources', $2, now())
      ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-    [JSON.stringify(stored.ai), JSON.stringify(stored.sources)],
+    [JSON.stringify(ai), JSON.stringify(sources)],
   );
 }
 
@@ -119,10 +181,11 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
 export function sourceConfigs(stored: Stored): SourceConfig[] {
   return stored.sources.map((s) => {
     let url = s.url;
-    if (s.password) {
+    const password = usable(s.password);
+    if (password) {
       try {
         const u = new URL(s.url);
-        u.password = s.password;
+        u.password = password;
         url = u.toString();
       } catch {
         // Not a URL: the connector says so.
@@ -136,7 +199,7 @@ export function sourceConfigs(stored: Stored): SourceConfig[] {
 export function viewOf(stored: Stored, status: (name: string) => { connector?: string; problem?: string; warnings?: string[] }): ServerSettingsView {
   const { key, ...ai } = stored.ai;
   return {
-    ai: { ...ai, keySet: key !== "" },
-    sources: stored.sources.map(({ password, formerNames: _formerNames, ...s }) => ({ ...s, passwordSet: password !== "", ...status(s.name) })),
+    ai: { ...ai, keySet: usable(key) !== "" },
+    sources: stored.sources.map(({ password, formerNames: _formerNames, ...s }) => ({ ...s, passwordSet: usable(password) !== "", ...status(s.name) })),
   };
 }

@@ -135,10 +135,16 @@ are write-only: a device sees `keySet` / `passwordSet`, never the value. A secre
 update stays only while it would go to the same place (the same model address; the same scheme,
 host, port and user of a connection string): moved elsewhere it is dropped, so whoever holds the
 token can't send a stored secret to a host of their choosing. A password typed into a connection
-string is split out of it (`splitPassword`). Saving applies at once: the model is used for the next
+string is split out of it (`splitPassword`). With `KUBUS_SECRET_KEY` set the secrets are stored
+encrypted with it (AES-256-GCM, the key derived with scrypt; `kubus-sealed:v1:…`), so the database
+alone (a dump, a backup) doesn't give them; without it they are stored as plain text, the owner's
+choice, and the server says so in its log at start. Secrets stored as plain text are encrypted at
+the next start with a key. One the key can't open (the key removed or changed) is kept as it is
+but not used and reads as not set (the log names it): the right key brings it back, entering it
+again replaces it. Saving applies at once: the model is used for the next
 request, the sources' connectors are replaced and checked (`Sources.replace`), and the answer
 carries each source's problem and warnings. The server's environment variables: `DATABASE_URL`,
-`KUBUS_TOKEN`, `PORT`, `STATIC_DIR`, `KUBUS_WEBHOOK_URL` and `KUBUS_WEBHOOK_SECRET`.
+`KUBUS_TOKEN`, `KUBUS_SECRET_KEY`, `PORT`, `STATIC_DIR`, `KUBUS_WEBHOOK_URL` and `KUBUS_WEBHOOK_SECRET`.
 
 ## The server's language model
 

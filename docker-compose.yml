@@ -29,6 +29,10 @@ services:
       # Shared secret of all your devices; enter it with the server URL in the app's Settings → Sync.
       # Any long random string, e.g. node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
       KUBUS_TOKEN: change-me
+      # Optional: encrypts the secrets set in Settings → Server (the model's key, the sources'
+      # passwords) in the database; without it they are stored as plain text. Another long random
+      # string, not the token; keep it: if it is lost or changed, those secrets must be entered again.
+      # KUBUS_SECRET_KEY: another-long-random-string
       # Optional: a URL (or several, comma-separated) called with every change, signed with the
       # secret (X-Kubus-Signature; see Help → API in the app).
       # KUBUS_WEBHOOK_URL: https://automation.example.com/hooks/kubus

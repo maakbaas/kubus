@@ -11,7 +11,7 @@ import { FILE_ID } from "../../shared/files.ts";
 import { applySchema } from "./migrations.ts";
 import { loadSchema } from "./schema.ts";
 import { Sources } from "./sources.ts";
-import { applyUpdate, loadSettings, NO_SETTINGS, saveSettings, sourceConfigs, viewOf, type Stored } from "./settings.ts";
+import { applyUpdate, loadSettings, NO_SETTINGS, saveSettings, secretKey, secretWarnings, sourceConfigs, usable, viewOf, type Stored } from "./settings.ts";
 import type { ServerSettingsUpdate } from "../../shared/settings.ts";
 import { currentCursor, handleSync } from "./sync.ts";
 import { wipe } from "./wipe.ts";
@@ -25,6 +25,7 @@ import { HttpError, json, readJson, Router, type ApiRequest, type ApiResponse } 
 //   PORT          default 8080                      STATIC_DIR   built web app, default ../../app/dist
 //   KUBUS_WEBHOOK_URL     URL(s), comma-separated, called with every change (docs/sync.md)
 //   KUBUS_WEBHOOK_SECRET  signs each webhook request (X-Kubus-Signature)
+//   KUBUS_SECRET_KEY      encrypts the secrets of its settings in the database (else plain text)
 // The rest (the language model it offers, the sources it reads) is set in the app, Settings →
 // Server, and stored in its database (server/src/settings.ts).
 
@@ -35,6 +36,7 @@ if (!databaseUrl || !token) {
   process.exit(1);
 }
 const port = Number(process.env.PORT ?? 8080);
+const settingsKey = secretKey(process.env.KUBUS_SECRET_KEY);
 const staticDir = process.env.STATIC_DIR ?? join(import.meta.dirname, "../../app/dist");
 /** A sync request's largest body (a first upload sends every row at once). */
 const MAX_SYNC_BODY = 100 * 1024 * 1024;
@@ -89,7 +91,7 @@ const sources = new Sources();
 let settings: Stored = NO_SETTINGS;
 async function applySettings(next: Stored) {
   settings = next;
-  setAiSettings(next.ai);
+  setAiSettings({ ...next.ai, key: usable(next.ai.key) });
   await sources.replace(sourceConfigs(next), (message) => console.log(message));
 }
 const settingsView = () => viewOf(settings, (name) => sources.status(name));
@@ -122,7 +124,7 @@ const routes = sources.routes(new Router())
   .add("PUT", "/api/settings", async (req) => {
     fitting();
     const next = applyUpdate(settings, (await readJson(req, 256 * 1024)) as ServerSettingsUpdate);
-    await saveSettings(pool, next);
+    await saveSettings(pool, next, settingsKey);
     await applySettings(next);
     return json(200, settingsView());
   })
@@ -239,7 +241,16 @@ createServer(async (req, res) => {
   console.log(`Kubus server on :${port}`);
   // Connecting to the sources can take a while: the server answers meanwhile.
   if (!schemaError) {
-    loadSettings(pool).then(applySettings, (e) => console.error("Loading the server's settings failed", e));
+    loadSettings(pool, settingsKey)
+      .then(async ({ stored, plainText }) => {
+        for (const warning of secretWarnings(stored, settingsKey)) console.warn(warning);
+        // Stored before there was a key: encrypted now.
+        if (plainText && settingsKey) {
+          await saveSettings(pool, stored, settingsKey).catch((e) => console.error("Encrypting the server's secrets failed", e));
+        }
+        await applySettings(stored);
+      })
+      .catch((e) => console.error("Loading the server's settings failed", e));
   }
   void headless.start({
     serverUrl: `http://127.0.0.1:${port}`,
