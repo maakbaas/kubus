@@ -143,7 +143,8 @@ Extension points are registries, not special cases in pages:
     change from what it is compared with as a Carbon tag with an up or down arrow, as a % or the difference ("Change
     shown as"), green or red by which way is better ("Better": higher, lower, neither: grey), "Compared with the
     average (79.2 kg)", and a sparkline below: the value along its X axis ("Sparkline along") as Carbon's compact area
-    or line chart (`chartSpec` of a stat is it), or none (`statOf`, `baselineOf` in domain/chart.ts).
+    or line chart (`chartSpec` of a stat is it; in its tag's colour, Carbon's `color.scale`: support-success,
+    support-error, grey for neither), or none (`statOf`, `baselineOf` in domain/chart.ts).
   - **Spread**: a histogram's field (a number or a date: dates on a time axis), bins and Split by; a box plot's field (a
     box per X category); a heatmap's columns (the X axis) × rows (Split by), or with a date X axis and not split a
     calendar (weeks × weekdays; empty cells left undrawn).

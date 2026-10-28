@@ -4,6 +4,7 @@
 
 import {
   baselineOf,
+  statOf,
   chartTable,
   formatValue,
   heatmapCells,
@@ -434,7 +435,13 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         thresholds: [],
         left: { ...options.left, min: null, max: null, log: false },
       };
-      return xyChart(input, line, theme);
+      const sparkline = xyChart(input, line, theme);
+      // In the colour of its change's tag (Carbon's color.scale for its one series): green good, red bad, grey neither.
+      const trend = statOf(input, options).trend;
+      const series = (sparkline as ChartSpec).data?.[0] as { group?: string } | undefined;
+      if ("problem" in sparkline || !trend || !series?.group) return sparkline;
+      const color = trend === "good" ? "var(--cds-support-success)" : trend === "bad" ? "var(--cds-support-error)" : "var(--cds-icon-secondary)";
+      return { ...sparkline, options: { ...sparkline.options, color: { scale: { [series.group]: color } } } };
     }
     case "gauge": {
       if (needsField(first, collection)) return { problem: "Choose the field to measure." };

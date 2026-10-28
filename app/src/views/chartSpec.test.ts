@@ -173,6 +173,16 @@ describe("chartSpec", () => {
     expect([shown.numberFormatter("58"), shown.numberFormatter(57.94)]).toEqual(["58.0", "57.9"]);
   });
 
+  it("draws a stat's sparkline in its change's colour", () => {
+    const stat = (o: Partial<ChartOptions>) => spec({ chart: "stat", series: [sum("pages")], ...o });
+    expect(stat({}).chart).toBe("AreaChart");
+    expect(stat({}).options.color).toBeUndefined();
+    const scale = (o: Partial<ChartOptions>) => Object.values((stat(o).options.color as { scale: Record<string, string> }).scale);
+    expect(scale({ compare: "number", baseline: 0 })).toEqual(["var(--cds-support-success)"]);
+    expect(scale({ compare: "number", baseline: 0, better: "lower" })).toEqual(["var(--cds-support-error)"]);
+    expect(stat({ sparkline: "line" }).chart).toBe("LineChart");
+  });
+
   it("puts a scatter's items on X and Y, a series per Y field, each dot naming its item", () => {
     const x: ChartX = { ...byGenre, by: "item", field: "pages" };
     const scatter = spec({ chart: "scatter", x, series: [sum("rating"), sum("year")], splitBy: null });
