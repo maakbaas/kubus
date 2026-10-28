@@ -253,11 +253,12 @@ export class InfluxConnector implements Connector {
       : [];
     const [page, total] = await Promise.all([
       this.flux(rowsFlux(query, columns, groups.map((g) => g.raw))),
-      query.counts ? this.flux(totalFlux(query, columns)) : Promise.resolve(null),
+      // Counted as byTime counts: by InfluxDB's index where it can be, not every row read.
+      query.counts ? this.total(query) : Promise.resolve(null),
     ]);
     const rows = toRows(page, query, group, query.timeZone);
     const result: SourceResult = { rows: rows.slice(0, query.limit), more: rows.length > query.limit };
-    if (total) result.total = Number(InfluxConnector.values(total, "_kubus_n")[0] ?? 0);
+    if (total !== null) result.total = total;
     if (group && query.counts) result.groups = groups.map((g) => ({ key: groupKey(group, g.raw, query.timeZone), count: g.count }));
     return result;
   }

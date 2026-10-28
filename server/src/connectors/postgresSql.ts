@@ -181,7 +181,8 @@ export function filterSql(c: PgColumn, rule: SourceFilter, p: Params, tz: string
     if (value === "" || !Number.isFinite(n)) return "FALSE";
     // Compared with the column itself (its index) unless the value doesn't fit its type.
     const lhs = c.read === "money" || (c.read === "int" && !Number.isInteger(n)) ? `${r}::numeric` : r;
-    const rhs = `${p.add(String(n))}::numeric`;
+    // An integer column against a whole number as int8: against numeric, Postgres casts the column (no index).
+    const rhs = `${p.add(String(n))}::${c.read === "int" && Number.isSafeInteger(n) ? "int8" : "numeric"}`;
     switch (op) {
       case "is":
         return `${lhs} = ${rhs}`;
@@ -235,15 +236,17 @@ export function filterSql(c: PgColumn, rule: SourceFilter, p: Params, tz: string
         return refuse();
     }
   }
-  const ts = tsOf(c);
+  // The column itself (its index); a timestamp without time zone (UTC) against the bound as UTC wall time: the same order.
+  const ts = ref(c);
+  const at = (bound: string) => (c.read === "timestamp" ? `(${bound} AT TIME ZONE 'UTC')` : bound);
   switch (op) {
     case "is":
     case "between":
-      return `(${ts} >= ${dayStart(p, from, tz)} AND ${ts} < ${dayStart(p, to, tz, 1)})`;
+      return `(${ts} >= ${at(dayStart(p, from, tz))} AND ${ts} < ${at(dayStart(p, to, tz, 1))})`;
     case "before":
-      return `${ts} < ${dayStart(p, from, tz)}`;
+      return `${ts} < ${at(dayStart(p, from, tz))}`;
     case "after":
-      return `${ts} >= ${dayStart(p, from, tz, 1)}`;
+      return `${ts} >= ${at(dayStart(p, from, tz, 1))}`;
     default:
       return refuse();
   }
@@ -262,10 +265,8 @@ function sortSql(c: PgColumn): string {
       return `(CASE WHEN ${r} THEN 1 ELSE 0 END)`; // unchecked is a value, not empty
     case "money":
       return `${r}::numeric`;
-    case "timestamp":
-      return tsOf(c);
     default:
-      return r;
+      return r; // a timestamp without time zone too: as UTC its order is the same
   }
 }
 

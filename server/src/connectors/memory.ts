@@ -177,13 +177,16 @@ function sortKeyOf(c: SourceColumn): (row: MemoryRow) => Key {
   };
 }
 
+/** Texts in natural order, as the app's naturalCompare (one collator: localeCompare with options builds one for each comparison). */
+const naturalCompare = new Intl.Collator(undefined, { numeric: true }).compare;
+
 /** As the app compares sort keys (compareKeys in domain/query.ts), empty last either way. */
 function compareKeys(a: Key, b: Key, direction: 1 | -1): number {
   if (a === b) return 0;
   if (a === null) return 1;
   if (b === null) return -1;
   if (typeof a === "number" && typeof b === "number") return (a - b) * direction;
-  return String(a).localeCompare(String(b), undefined, { numeric: true }) * direction;
+  return naturalCompare(String(a), String(b)) * direction;
 }
 
 /** The groups a row is in, as text ("" for none), as postgresSql.ts makes them: a list's row is in one per value. */

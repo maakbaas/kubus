@@ -162,6 +162,43 @@ describe("n8n connector", () => {
     expect(n8nRules({ name: "email", type: "string", kind: "string" }, { column: "email", operator: "contains", value: "café" }, "UTC")).toBeNull();
     expect(n8nRules({ name: "won", type: "boolean", kind: "checkbox" }, { column: "won", operator: "isChecked", value: "" }, "UTC")).toBeNull();
   });
+  it("keeps a read from when it is done, however long it took", async () => {
+    stub();
+    let clock = 0;
+    vi.spyOn(Date, "now").mockImplementation(() => clock);
+    const answer = globalThis.fetch;
+    let reads = 0;
+    let done = () => {};
+    const slow = new Promise<void>((resolve) => (done = resolve));
+    vi.stubGlobal("fetch", async (input: string, init: RequestInit) => {
+      const url = new URL(input);
+      if (url.pathname.endsWith("/rows") && !url.searchParams.has("cursor")) {
+        reads++;
+        await slow;
+      }
+      return answer(input, init);
+    });
+    const c = new N8nConnector(config());
+    await c.describe({ table: { schema: null, name: "Leads" } });
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+    const first = c.query(leads());
+    await tick();
+    // Still being read 10 s later: the same read.
+    clock = 10_000;
+    const second = c.query(leads());
+    await tick();
+    done();
+    expect((await first).total).toBe(300);
+    expect((await second).total).toBe(300);
+    expect(reads).toBe(1);
+    clock = 14_000;
+    await c.query(leads());
+    expect(reads).toBe(1);
+    clock = 15_000;
+    await c.query(leads());
+    expect(reads).toBe(2);
+    vi.restoreAllMocks();
+  });
   it("tells a wrong key from a wrong request", async () => {
     stub();
     await expect(new N8nConnector({ ...config(), password: "wrong" }).check()).rejects.toThrow(/401/);

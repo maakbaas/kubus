@@ -81,7 +81,8 @@ function boundsOf(rule: SourceFilter): { from?: number; to?: number } | null {
 /**
  * The window a filter leaves: its rules on the start or end that every row meets (an end after a
  * day means the occurrence ends after it, a start before one that it starts before it: either way it
- * overlaps). An unbounded start 20 years before now (or the end), an unbounded end a year after now (or the start); a day's margin either way, for
+ * overlaps). An unbounded start 20 years before now (or the end), an unbounded end a year after now (or the start), each at
+ * a whole UTC day; a day's margin either way, for
  * the device's time zone and the event's own.
  */
 export function windowOf(filter: SourceCondition, now = Date.now()): Window {
@@ -93,8 +94,9 @@ export function windowOf(filter: SourceCondition, now = Date.now()): Window {
     if (b?.from !== undefined) from = Math.max(from, b.from);
     if (b?.to !== undefined) to = Math.min(to, b.to);
   }
-  if (from === -Infinity) from = Math.min(to, now) - PAST_MS;
-  if (to === Infinity) to = Math.max(from, now) + YEAR_MS;
+  // An open side from now, in whole UTC days (wider, never narrower): the window is the expansion's cache key (rowsOf), the same all day.
+  if (from === -Infinity) from = Math.floor((Math.min(to, now) - PAST_MS) / DAY_MS) * DAY_MS;
+  if (to === Infinity) to = Math.ceil((Math.max(from, now) + YEAR_MS) / DAY_MS) * DAY_MS;
   return { from: from - DAY_MS, to: Math.max(from, to) + DAY_MS };
 }
 

@@ -207,6 +207,14 @@ describe("IcsConnector", () => {
     expect(w.to).toBeLessThan(now + 2 * 366 * 86_400_000);
   });
 
+  it("keeps an open side's bound the same all day (the window is the expansion's cache key)", () => {
+    const morning = windowOf({ and: [] }, Date.parse("2026-10-28T00:00:01Z"));
+    expect(windowOf({ and: [] }, Date.parse("2026-10-28T23:59:59Z"))).toEqual(morning);
+    expect(morning.from % 86_400_000).toBe(0);
+    expect(morning.to % 86_400_000).toBe(0);
+    expect(windowOf({ and: [] }, Date.parse("2026-10-29T00:00:01Z"))).not.toEqual(morning);
+  });
+
   it("finds an occurrence by its key, even outside the year around now", async () => {
     const c = source();
     const shape = { target: { table: { schema: null, name: "events" } }, key: "id", columns: ["title", "start date"], title: ["title"], untitled: "Event" };

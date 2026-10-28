@@ -244,7 +244,7 @@ export class N8nConnector implements Connector {
     return table;
   }
 
-  /** The rows n8n has for a read (kept a moment, by table and read). */
+  /** The rows n8n has for a read (kept a moment from when it is done, by table and read). */
   private async rowsOf(table: N8nTable, columns: SourceColumn[], read: N8nRead): Promise<MemoryRow[]> {
     const params: Record<string, string> = { sortBy: "id:asc" };
     if (read.filters.length) params.filter = JSON.stringify({ type: "and", filters: read.filters });
@@ -256,8 +256,13 @@ export class N8nConnector implements Connector {
       const rows = this.all<Record<string, unknown>>(`/data-tables/${encodeURIComponent(table.id)}/rows`, params, MAX_ROWS).then((raw) =>
         raw.map((r) => n8nRow(r, columns)),
       );
-      rows.catch(() => this.rows.delete(key));
-      this.rows.set(key, { at: now, rows });
+      // Kept from when the read is done (as actual.ts's `kept`): a long read is still there for the requests after it.
+      const entry = { at: Infinity, rows };
+      rows.then(
+        () => (entry.at = Date.now()),
+        () => this.rows.get(key) === entry && this.rows.delete(key),
+      );
+      this.rows.set(key, entry);
     }
     return this.rows.get(key)!.rows;
   }

@@ -32,6 +32,8 @@ const columns = new Map<string, PgColumn>(
     pgColumn("name", type("text", "S")),
     pgColumn("seen", type("timestamptz", "D")),
     pgColumn("tags", type("_text", "A", { name: "text", category: "S" })),
+    pgColumn("score", type("numeric", "N")),
+    pgColumn("at", type("timestamp", "D")),
   ].map((c) => [c!.name, c!]),
 );
 const query = (over: Partial<SourceQuery> = {}): SourceQuery => ({
@@ -50,14 +52,18 @@ describe("query SQL", () => {
     const named = { column: "name", operator: "contains", value: "a" } as const;
     const big = { column: "id", operator: "gt", value: "3" } as const;
     const { rows } = querySql(query({ filter: { and: [{ or: [named, big] }, big] } }), columns);
-    expect(rows.text).toMatch(/WHERE \(\(\(.+ILIKE \$1\) OR \(q\."id" > \$2::numeric\)\) AND \(q\."id" > \$3::numeric\)\)/);
+    expect(rows.text).toMatch(/WHERE \(\(\(.+ILIKE \$1\) OR \(q\."id" > \$2::int8\)\) AND \(q\."id" > \$3::int8\)\)/);
     expect(querySql(query({ filter: { or: [] } }), columns).rows.text).toContain("WHERE FALSE");
     expect(querySql(query({ filter: { and: [] } }), columns).rows.text).not.toContain("WHERE FALSE");
   });
   it("compares numbers with the column itself, unless the value doesn't fit it", () => {
     const p = new Params();
-    expect(filterSql(columns.get("id")!, { column: "id", operator: "gt", value: "3" }, p, "UTC")).toBe('q."id" > $1::numeric');
+    expect(filterSql(columns.get("id")!, { column: "id", operator: "gt", value: "3" }, p, "UTC")).toBe('q."id" > $1::int8');
     expect(filterSql(columns.get("id")!, { column: "id", operator: "gt", value: "3.5" }, p, "UTC")).toBe('q."id"::numeric > $2::numeric');
+    // A whole number past int8 (and a float's exactness) as numeric; a numeric column against numeric.
+    expect(filterSql(columns.get("id")!, { column: "id", operator: "is", value: "1e20" }, p, "UTC")).toBe('q."id" = $3::numeric');
+    expect(filterSql(columns.get("score")!, { column: "score", operator: "lt", value: "3" }, p, "UTC")).toBe('q."score" < $4::numeric');
+    expect(p.values).toEqual(["3", "3.5", "100000000000000000000", "3"]);
   });
   it("compares a date & time by its day in the time zone, keeping to the column", () => {
     const p = new Params();
@@ -65,6 +71,16 @@ describe("query SQL", () => {
       'q."seen" < (($1::date + 0)::timestamp AT TIME ZONE $2)',
     );
     expect(p.values).toEqual(["2026-03-01", "Europe/Amsterdam"]);
+  });
+  it("keeps a timestamp without time zone to its column: the bound taken to UTC, sorted as itself", () => {
+    const p = new Params();
+    expect(filterSql(columns.get("at")!, { column: "at", operator: "is", value: "2026-03-01" }, p, "Europe/Amsterdam")).toBe(
+      `(q."at" >= ((($1::date + 0)::timestamp AT TIME ZONE $2) AT TIME ZONE 'UTC') AND q."at" < ((($3::date + 1)::timestamp AT TIME ZONE $4) AT TIME ZONE 'UTC'))`,
+    );
+    const { rows } = querySql(query({ columns: ["at"], sort: [{ column: "at", direction: "desc" }] }), columns);
+    expect(rows.text).toContain(`ORDER BY q."at" DESC`);
+    // Shown as before: as UTC.
+    expect(rows.text).toContain(`to_char((q."at" AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`);
   });
   it("orders by group, then sort, then key, and counts with the first page", () => {
     const s = querySql(query({ groupBy: "tags", groupOrder: "count", sort: [{ column: "$title", direction: "desc" }], counts: true }), columns);

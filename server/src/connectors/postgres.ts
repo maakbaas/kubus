@@ -39,8 +39,8 @@ export class PostgresConnector implements Connector {
   private async read<T>(work: (run: (s: Statement) => Promise<pg.QueryResult>) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
     try {
+      // Read only and with its timeout as every connection is (the pool's options); one round trip fewer than setting it here.
       await client.query("BEGIN TRANSACTION READ ONLY");
-      await client.query(`SET LOCAL statement_timeout = ${Number(this.config.timeoutMs)}`);
       // The extended protocol (missing from pg's types): one statement per query, never several.
       const result = await work((s) => client.query({ text: s.text, values: s.values, queryMode: "extended" } as pg.QueryConfig));
       await client.query("COMMIT");
