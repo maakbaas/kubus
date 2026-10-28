@@ -78,6 +78,12 @@ const dayDate = (day: string) => {
 };
 const scaleOf = (t: ChartTable) => (t.time ? "time" : t.numeric ? "linear" : "labels");
 
+/**
+ * A value axis fitted to its values (not from 0): lines and dots show change (a weight from 80 to 70
+ * reads as a fall, not a flat line). Bars and areas stacked to a whole keep 0, their length is their value.
+ */
+const FIT = { includeZero: false };
+
 /** A category axis and a value axis, horizontal or not. */
 function axes(t: ChartTable, horizontal: boolean, valueAxis: Record<string, unknown> = {}) {
   const domain = { mapsTo: t.time ? "date" : "key", scaleType: scaleOf(t), title: t.categoryLabel || undefined };
@@ -99,12 +105,13 @@ function combo(input: ChartInput, options: ChartOptions, theme: string, t: Chart
   const label = valueLabel(options.second, field, input.collection);
   const name = label === t.valueLabel ? `${label} (2)` : label;
   const lineRows = rows({ ...second, points: second.points.filter((p) => kept.has(p.category.key)).map((p) => ({ ...p, series: name })) });
-  const a = axes(t, false, { main: true, correspondingDatasets: [t.valueLabel] });
+  const fit = mainType === "line" ? FIT : {};
+  const a = axes(t, false, { main: true, correspondingDatasets: [t.valueLabel], ...fit });
   return {
     chart: "ComboChart",
     data: [...rows(t), ...lineRows],
     options: base(options, theme, true, {
-      axes: { ...a, right: { mapsTo: "value", scaleType: "linear", title: name, correspondingDatasets: [name] } },
+      axes: { ...a, right: { mapsTo: "value", scaleType: "linear", title: name, correspondingDatasets: [name], ...fit } },
       comboChartTypes: [
         { type: mainType, correspondingDatasets: [t.valueLabel] },
         { type: "line", correspondingDatasets: [name] },
@@ -144,7 +151,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       if (made) return made;
       const split = t.series.length > 1 || !!options.splitBy;
       const chart = options.area ? (split ? "StackedAreaChart" : "AreaChart") : "LineChart";
-      const a = axes(t, false, options.area && split ? { stacked: true, percentage: options.percent } : {});
+      const a = axes(t, false, options.area && split ? { stacked: true, percentage: options.percent } : FIT);
       const hidden = { visible: false, title: undefined };
       return {
         chart,
@@ -251,8 +258,8 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         data,
         options: base(options, theme, groups.size > 1, {
           axes: {
-            bottom: { mapsTo: "x", scaleType: time ? "time" : "linear", title: x.name },
-            left: { mapsTo: "y", scaleType: "linear", title: y.name },
+            bottom: { mapsTo: "x", scaleType: time ? "time" : "linear", title: x.name, ...FIT },
+            left: { mapsTo: "y", scaleType: "linear", title: y.name, ...FIT },
           },
           ...(bubbles && { bubble: { radiusMapsTo: "size", radiusLabel: size?.name } }),
         }),

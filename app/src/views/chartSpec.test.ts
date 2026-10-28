@@ -60,6 +60,9 @@ describe("chartSpec", () => {
     expect(line.chart).toBe("LineChart");
     expect(line.data[0]).toEqual({ group: "Books", date: new Date(2026, 0, 1), value: 1 });
     expect((line.options.axes as { bottom: { scaleType: string } }).bottom.scaleType).toBe("time");
+    // A line's values axis fits its values (a weight from 80 to 70 isn't drawn from 0); a bar's starts at 0.
+    expect((line.options.axes as { left: { includeZero?: boolean } }).left.includeZero).toBe(false);
+    expect((spec({}).options.axes as { left: { includeZero?: boolean } }).left.includeZero).toBeUndefined();
     expect(spec({ chart: "line", area: true }, "read").chart).toBe("AreaChart");
     expect(spec({ chart: "line", area: true, splitBy: "genre", percent: true }, "read").chart).toBe("StackedAreaChart");
     const compact = spec({ chart: "line", compact: true }, "read").options;

@@ -89,6 +89,8 @@ Extension points are registries, not special cases in pages:
   AI or component fields giving numbers, `numberFields`), Split by (a second field: series, at most 12, the rest
   "Other"), Show (the largest n categories, the rest "Other"), Show items without a value ("No value"), Height (see below), Width (a slider like the cards', 8 to 120rem (about 1920px) at most; saved as Full / Small / Medium / Large it reads as 120 / 24 / 40 / 64rem; a
   gauge as wide as a pane is mostly empty, so switching to one makes a full-width chart 24rem), and
+  A line's (and an area's, a scatter's) value axis fits its values instead of starting at 0 (Carbon's
+  `includeZero: false`, `FIT` in chartSpec.ts), so a weight from 80 to 70 shows its trend; bars and stacked shares keep 0.
   per type: Bar horizontal, stacked, lollipops, a second value drawn as a line on its own axis (Carbon's combo chart;
   also for Line); Line curved (default) or straight, fill the area (stacked areas when split, optionally as shares of 100%), running total, compact
   (a sparkline: no axes, legend or grid); Pie donut (the total in its centre); Radar its spokes (three or more number
