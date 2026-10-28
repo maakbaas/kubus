@@ -822,7 +822,7 @@ function __audit(opts) {
     for (const el of shown) {
       const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
       if (!hasText || srOnly(el)) continue;
-      if (el.closest("[disabled], [aria-disabled=true], .cds--btn--disabled, .cds--label--disabled, .cds--text-input--disabled, iframe, .cm-editor, .token, .lightbox, .item-card__cover, .image-input, [role=tooltip]")) continue;
+      if (el.closest("[disabled], [aria-disabled=true], .cds--btn--disabled, .cds--label--disabled, .cds--text-input--disabled, .cds--list-box--disabled, .cds--form__helper-text--disabled, iframe, .cm-editor, .token, .lightbox, .item-card__cover, .image-input, [role=tooltip]")) continue;
       // A disabled Carbon toggle: its label and state text are siblings of the disabled switch.
       if (el.closest(".cds--toggle:has(.cds--toggle__button:disabled), .cds--select--disabled")) continue;
       // …and a disabled checkbox's label (the label is a sibling of the disabled input).

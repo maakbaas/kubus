@@ -94,6 +94,7 @@ can't drift apart unnoticed: a change to the sync protocol changes both and runs
 | `app/src/data/schema.sql`, `migrations.ts`, `sqlite/` | `storage`, `sync`, `api` | all (every page reads the database) |
 | `app/src/data/sync/`, `shared/sync.ts` | `sync`, `server` | 13, 18 |
 | `app/src/headless/`, `app/src/help/api.md` | `api`, `server` | none |
+| `app/src/pages/SettingsPage.tsx`, `ui/*Settings.tsx`, `ServerConnection`, `ApiTokens` | `sync` (`SyncEngine`) | 28 (and 13, 18 for sync) |
 | `server/src/connectors/`, `shared/sources.ts` | `connectors` | none |
 | `server/src/` | `server` (and `connectors` for `sources.ts`) | none |
 | `app/src/views/` | `domain` | 05, 06, 10, 12, 22 |

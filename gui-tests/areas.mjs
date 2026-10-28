@@ -51,6 +51,7 @@ export const AREAS = [
   [/^app\/src\/(data\/sync\/|ui\/(SyncSettings|ServerConnection|ApiTokens|SyncStatusButton|ServerReplaced))/, [13, 18]],
   [/^app\/src\/(app\/(useDataChanges|itemCache|useItems|useItemCounts|useLinks)|views\/useCollectionData)/, [12, 13]],
   [/^app\/src\/(pages\/SettingsPage|ui\/(ConnectionSettings|useServerSettings|SourceSettings|localPrefs))/, [7, 18]],
+  [/^app\/src\/(pages\/SettingsPage|ui\/(AiSettings|MapSettings|ServerConnection|ConnectionSettings|ApiTokens|SyncSettings|SourceSettings|useServerSettings)|app\/mapStyle|data\/remote\/client|data\/sync\/SyncEngine)/, [28]],
   [/^app\/src\/(pages\/HelpPage|help\/)/, [1]],
 ];
 
