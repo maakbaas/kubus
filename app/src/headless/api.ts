@@ -13,11 +13,11 @@ import { isComponentOutput, placeProblem, type Component } from "../domain/compo
 import { fieldKinds } from "../domain/fieldKinds";
 import { fileSrc, IMAGE_TYPES } from "../domain/files";
 import { parseItemViews, type ItemView } from "../domain/fieldLayout";
-import { collectionDraft, isReferenceKind, newId, NO_TITLE, suggestPlural, type Collection, type CollectionDraft, type FieldDef, type FieldDraft, type Item } from "../domain/model";
-import type { FilterRule, SortRule } from "../domain/query";
+import { collectionDraft, isReferenceKind, newId, NO_TITLE, suggestPlural, type Collection, type CollectionDraft, type FieldDef, type FieldDraft, type Item, type ItemLabel } from "../domain/model";
+import { applyQuery, filterValueProblem, isGrouped, operatorsFor, type FilterRule, type SortRule, type ViewQuery } from "../domain/query";
 import { refLabelForSpace } from "../domain/refOptions";
 import { DEFAULT_SPACE_ID, type Space } from "../domain/spaces";
-import { defaultViewState, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
+import { blockQuery, defaultViewState, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
 import { draftProblem } from "../domain/collectionDraft";
 import { computeItems, loadWorld, type World } from "../domain/world";
 import { fieldOf, itemOut, same, valuesIn, type ItemsExist } from "./values";
@@ -128,6 +128,41 @@ function resolveRules<R extends { fieldId: string }>(collections: Collection | C
     const { join: _join, ...rest } = r as { join?: unknown };
     return { id: newId(), ...rest, ...(join === "or" && { join }), fieldId: fieldIdOf((r as { fieldId: string }).fieldId) } as unknown as R;
   });
+}
+
+/** A list of rules given as JSON in the query string (`?filters=[…]`). */
+function rulesParam(req: ApiRequest, name: string): unknown {
+  const raw = req.query.get(name);
+  if (raw === null) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new HttpError(400, `\`${name}\` must be a JSON list`);
+  }
+}
+
+/** Filters to run now: each rule's operator one its field's kind has, and a value it can compare. */
+function checkedFilters(collection: Collection, rules: FilterRule[]): FilterRule[] {
+  return rules.map((rule) => {
+    const field = collection.fields.find((f) => f.id === rule.fieldId)!;
+    const operators = operatorsFor(field.kind).map((o) => o.id);
+    const dated = field.kind === "date" || field.kind === "datetime";
+    if (!operators.includes(rule.operator) && !(dated && rule.operator === "between")) {
+      throw new HttpError(400, `“${field.name}” has no operator “${String(rule.operator)}”: ${[...operators, ...(dated ? ["between"] : [])].join(", ")}`);
+    }
+    const raw = rule.value as unknown;
+    const value = raw === undefined || raw === null ? "" : String(raw);
+    const problem = filterValueProblem(field, rule.operator, value.trim());
+    if (problem) throw new HttpError(400, `“${field.name}”: ${problem}`);
+    return { ...rule, value };
+  });
+}
+
+/** A page of a list: `limit` (1 to `max`) and `offset` from the query string. */
+function paging(req: ApiRequest, fallback: number, max: number) {
+  const limit = Math.min(Math.max(Number(req.query.get("limit") ?? fallback) || fallback, 1), max);
+  const offset = Math.max(Number(req.query.get("offset") ?? 0) || 0, 0);
+  return { limit, offset };
 }
 
 function blockIn(world: World, own: Collection, raw: unknown): ViewBlock {
@@ -336,6 +371,27 @@ export function createApi(repo: Repository): Router {
     };
   };
 
+  /**
+   * A collection's items in a space, worked out, through a query (as a block runs it): a page of its
+   * groups' items in order (an item in several groups is in each), and how many there are in all.
+   */
+  const queried = async (w: World, collection: Collection, spaceId: string, query: ViewQuery, limit: number, offset: number) => {
+    const labels = new Map<string, ItemLabel[]>();
+    const all = await computeItems(repo, w, collection, await repo.listItems(collection, spaceId), spaceId, labels);
+    const refLabel = await refLabelForSpace(repo, collection, spaceId, w, labels);
+    const result = applyQuery(collection, all, query, { refLabel });
+    let skip = offset;
+    let room = limit;
+    const groups = result.groups.map((g) => {
+      const shown = g.items.slice(Math.min(skip, g.items.length)).slice(0, room);
+      skip = Math.max(0, skip - g.items.length);
+      room -= shown.length;
+      return { key: g.key, label: g.label, total: g.items.length, items: shown.map((i) => itemOut(collection, i)) };
+    });
+    const total = result.groups.reduce((n, g) => n + g.items.length, 0);
+    return { grouped: isGrouped(result), groups: groups.filter((g) => g.items.length > 0), items: groups.flatMap((g) => g.items), total };
+  };
+
   /** An AI field of an item, the item, and the fingerprint of its prompt as the item reads now. */
   const aiOf = async (id: string, name: string) => {
     const w = await world();
@@ -466,8 +522,18 @@ export function createApi(repo: Repository): Router {
         const w = await world();
         const collection = collectionOf(w, c);
         const space = spaceOf(w, req.query.get("space"));
-        const limit = Math.min(Math.max(Number(req.query.get("limit") ?? 100) || 100, 1), 1000);
-        const offset = Math.max(Number(req.query.get("offset") ?? 0) || 0, 0);
+        const { limit, offset } = paging(req, 100, 1000);
+        const filters = rulesParam(req, "filters");
+        const sort = rulesParam(req, "sort");
+        if (filters !== undefined || sort !== undefined) {
+          const query: ViewQuery = {
+            filters: checkedFilters(collection, resolveRules<FilterRule>(collection, filters, "filters")),
+            sort: resolveRules<SortRule>(collection, sort, "sort").map(({ fieldId, direction }) => ({ fieldId, direction: direction === "desc" ? "desc" : "asc" })),
+            groupBy: null,
+          };
+          const { items, total } = await queried(w, collection, space.id, query, limit, offset);
+          return json(200, { items, total, limit, offset });
+        }
         const page = await computed(w, collection, await repo.listItems(collection, space.id, { limit, offset }), space.id);
         const total = (await repo.countItemsByCollection(space.id))[collection.id] ?? 0;
         return json(200, { items: page.map((i) => itemOut(collection, i)), total, limit, offset });
@@ -540,7 +606,7 @@ export function createApi(repo: Repository): Router {
       .add("GET", "/api/v1/search", async (req) => {
         const w = await world();
         const space = spaceOf(w, req.query.get("space"));
-        const limit = Math.min(Math.max(Number(req.query.get("limit") ?? 50) || 50, 1), 500);
+        const { limit } = paging(req, 50, 500);
         const shown = w.collections.filter((c) => c.spaceIds === null || c.spaceIds.includes(space.id));
         const hits = await repo.search(req.query.get("q") ?? "", shown, space.id, limit);
         // Computed per collection (not per hit), then back in the order of the hits.
@@ -557,6 +623,25 @@ export function createApi(repo: Repository): Router {
         const w = await world();
         const collection = collectionOf(w, c);
         return json(200, (await repo.listViews(collection.id, spaceOf(w, req.query.get("space")).id)).map(viewOut));
+      })
+      .add("GET", "/api/v1/collections/{c}/views/{v}/items", async (req, { c, v }) => {
+        const w = await world();
+        const collection = collectionOf(w, c);
+        const view = await viewOf(w, collection, v, req.query.get("space") ?? undefined);
+        const name = req.query.get("block");
+        const block = name === null ? view.blocks[0] : (view.blocks.find((b) => b.id === name) ?? view.blocks.find((b) => same(b.title, name)));
+        if (!block) throw new HttpError(404, `The view “${view.name}” has no block “${name}”`);
+        const { limit, offset } = paging(req, 100, 1000);
+        const result = await queried(w, collection, view.spaceId, blockQuery(view.filters, block), limit, offset);
+        return json(200, {
+          view: { id: view.id, name: view.name },
+          block: { id: block.id, title: block.title, kind: block.kind },
+          blocks: view.blocks.map((b) => ({ id: b.id, title: b.title, kind: b.kind })),
+          ...(result.grouped ? { groups: result.groups } : { items: result.items }),
+          total: result.total,
+          limit,
+          offset,
+        });
       })
       .add("POST", "/api/v1/collections/{c}/views", async (req, { c }) => {
         const o = await body(req);

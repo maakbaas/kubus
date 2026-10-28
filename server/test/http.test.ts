@@ -328,6 +328,29 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
     it("answers 404 for what isn't there", async () => {
       expect((await api("/collections/Nothing")).status).toBe(404);
     });
+
+    it("is an MCP server whose tools go through the API", async () => {
+      await api("/collections"); // started
+      const rpc = async (message: unknown, headers: Record<string, string> = { "MCP-Protocol-Version": "2025-11-25" }) => {
+        const response = await request(server, "/api/v1/mcp", { method: "POST", json: message, headers: { Accept: "application/json, text/event-stream", ...headers } });
+        return { status: response.status, type: response.headers.get("content-type"), body: response.status === 202 ? null : await response.json() };
+      };
+      const init = await rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "test", version: "1" } } }, {});
+      expect(init).toMatchObject({ status: 200, type: "application/json", body: { result: { protocolVersion: "2025-11-25", capabilities: { tools: {} } } } });
+      expect((await rpc({ jsonrpc: "2.0", method: "notifications/initialized" })).status).toBe(202);
+      const tools = (await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" })).body.result.tools.map((t: { name: string }) => t.name);
+      expect(tools).toEqual(expect.arrayContaining(["search", "list_items", "create_item"]));
+      const created = await rpc({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "create_item", arguments: { collection: "Book", values: { Title: "Through MCP" } } } });
+      expect(created.body.result.structuredContent).toMatchObject({ label: "Through MCP" });
+      const found = await rpc({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "search", arguments: { q: "through mcp" } } });
+      expect(found.body.result.structuredContent.items.map((i: { id: string }) => i.id)).toEqual([created.body.result.structuredContent.id]);
+      const missing = await rpc({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "get_collection", arguments: { collection: "Nothing" } } });
+      expect(missing.body.result.isError).toBe(true);
+
+      expect((await request(server, "/api/v1/mcp", { method: "POST", json: { jsonrpc: "2.0", id: 1, method: "ping" }, headers: { Authorization: "Bearer wrong" } })).status).toBe(401);
+      expect((await request(server, "/api/v1/mcp")).status).toBe(405);
+      expect((await fetch(`${server.url}/.well-known/oauth-protected-resource`)).status).toBe(404);
+    });
   });
 
   describe("wiping", () => {
