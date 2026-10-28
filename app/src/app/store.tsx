@@ -35,6 +35,11 @@ interface Store {
 }
 
 const StoreContext = createContext<Store | null>(null);
+/**
+ * The components alone, for what renders in every cell of a table (views/cells.tsx): the store
+ * changes with anything in it (a bookmark, a space), and every cell would render again.
+ */
+const ComponentsContext = createContext<Component[]>([]);
 
 type State = { status: "loading" } | { status: "error"; error: string } | { status: "ready"; repo: Repository; cache: ItemCache; ai: AiService; sources: SourcesClient };
 
@@ -151,7 +156,16 @@ export function StoreProvider({
   if (!value) {
     return <>{fallback({ loading: state.status === "loading", error: state.status === "error" ? state.error : undefined })}</>;
   }
-  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
+  return (
+    <StoreContext.Provider value={value}>
+      <ComponentsContext.Provider value={components}>{children}</ComponentsContext.Provider>
+    </StoreContext.Provider>
+  );
+}
+
+/** All components (as useStore().components), without rendering again when anything else in the store changes. */
+export function useComponents(): Component[] {
+  return useContext(ComponentsContext);
 }
 
 export function useStore(): Store {

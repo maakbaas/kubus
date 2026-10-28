@@ -4,7 +4,7 @@ import { htmlPreview, markdownPreviewParts } from "../domain/fieldKinds";
 import { isOpenableUrl, openExternal } from "../platform/openExternal";
 import { ToggleInput } from "../ui/ToggleInput";
 import { openModeOf } from "../workspace/Workspace";
-import { useStore } from "../app/store";
+import { useComponents } from "../app/store";
 import { outputOf } from "../domain/components";
 import { ComponentValue } from "../ui/ComponentValue";
 import { fieldValue, isMetaField, type FieldDef, type FieldKind, type FieldValue, type Item } from "../domain/model";
@@ -80,7 +80,7 @@ function MarkdownPreview({ source, search }: { source: string; search: string })
 
 /** One field value inside a view (table cell, card line), shared by every view type. */
 export function FieldCell({ field, item, refs, search, actions }: Props) {
-  const { components } = useStore();
+  const components = useComponents();
   // Element ids unique per cell: the same item can show in several blocks, panes and tabs at once.
   const uid = useId();
   const value: FieldValue = fieldValue(item, field);

@@ -23,14 +23,23 @@ interface Options {
 
 /** What a block can do with read-only items (a remote collection's rows): open them, sort them. */
 function readOnlyActions(actions: ItemActions): ItemActions {
-  const { open, sort, sortBy, groupBy } = actions;
-  return { open, sort, sortBy, groupBy };
+  return {
+    open: actions.open,
+    sortBy: actions.sortBy,
+    get sort() {
+      return actions.sort;
+    },
+    get groupBy() {
+      return actions.groupBy;
+    },
+  };
 }
 
 /**
  * What a block can do with its items. What the blocks get keeps its identity (each call goes to
- * the latest handlers), so rows that didn't change aren't rendered again; it changes only with
- * the sort, which reorders them anyway, and the grouping, which regroups them.
+ * the latest handlers, `sort` and `groupBy` read the latest query), so rows that didn't change
+ * aren't rendered again, also when they are sorted or regrouped: a sorted 1,000-row table rendered
+ * every row again. Whatever shows the sort renders with the rows it reorders.
  */
 export function useItemActions({ collection, stored, query, preset, onSort, confirm, onError }: Options): ItemActions {
   const { repo, cache, space } = useStore();
@@ -91,8 +100,6 @@ export function useItemActions({ collection, stored, query, preset, onSort, conf
   };
   const latest = useRef(current);
   latest.current = current;
-  const sort = query.sort[0];
-  const groupBy = query.groupBy;
   const readOnly = isRemote(collection);
   return useMemo<ItemActions>(
     () => {
@@ -104,12 +111,16 @@ export function useItemActions({ collection, stored, query, preset, onSort, conf
       openNew: (mode) => latest.current.openNew!(mode),
       create: (values) => latest.current.create!(values),
       groupPreset: (key) => latest.current.groupPreset!(key),
-      groupBy,
-      sort,
+      get groupBy() {
+        return latest.current.groupBy;
+      },
+      get sort() {
+        return latest.current.sort;
+      },
       sortBy: (fieldId) => latest.current.sortBy!(fieldId),
       };
       return readOnly ? readOnlyActions(actions) : actions;
     },
-    [sort, groupBy, readOnly],
+    [readOnly],
   );
 }

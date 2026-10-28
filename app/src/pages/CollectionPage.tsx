@@ -102,6 +102,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
   }, [loadViews]);
   // Opening the page shows the starred view, else the first — once, when the views have loaded.
   const openedDefault = useRef(false);
+  // The blocks wait for it: shown before, they were made for the base view, then made again for it
+  // (their key is the shown view's), a large table twice.
+  const [viewChosen, setViewChosen] = useState(false);
   // Views changed elsewhere (another pane) show up here too; items arrive through useItems.
   useDataChanges((change) => {
     if (change.scope === "views" && change.collectionId === collection.id) loadViews();
@@ -138,6 +141,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
     if (openedDefault.current || savedViews === null) return;
     openedDefault.current = true;
     selectView(wanted && savedViews.some((v) => v.id === wanted) ? wanted : defaultViewOf(savedViews), savedViews);
+    setViewChosen(true);
   }, [savedViews, selectView, wanted]);
   useEffect(() => {
     if (openedDefault.current && wanted && savedViews?.some((v) => v.id === wanted)) selectView(wanted);
@@ -443,6 +447,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
       {/* The blocks once the items are in (a fraction of a second), all at once: shown before, each
           block's header would stand alone and be pushed down as the blocks above it fill. */}
       {savedViews !== null &&
+        viewChosen &&
         (data.items !== null || data.error) &&
         view.blocks.map((block) => (
           <BlockView
