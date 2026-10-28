@@ -162,3 +162,12 @@ New connectors, in this order (read-only like the others; queried by the source 
     flattened one level, deeper ones a hidden text column). CSV: RFC 4180, a header row, the delimiter
     detected (`,` `;` tab), decimal commas only when the whole column has them; an own parser. Key: a
     column `id`, `uuid` or `key`, else the row's position (with a warning that links may break).
+
+API:
+
+21. Kubus as an MCP server over `/api/v1`, so an assistant (Claude or another MCP client) can read
+    and write the knowledge base: tools for search, reading collections, items and a view's result,
+    and creating and editing items, each a thin translation onto the same `/api/v1` routes (served by
+    the headless device, never into Postgres; documented beside them in `app/src/help/api.md`).
+    Remote MCP over streamable HTTP on the server, behind its token. Today one shared token
+    (`KUBUS_TOKEN`) can do everything: worth a read-only token for assistants that only need to read.
