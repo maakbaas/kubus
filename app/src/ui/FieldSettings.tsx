@@ -132,7 +132,6 @@ export function FieldSettings({
       <>
       <ComponentChoice
         id={id}
-        place="field"
         value={componentRef(f)}
         onChange={(ref) => onChange(fromRef(ref))}
         ai={{ value: isAi, locked: persisted, onChange: (on) => onChange({ kind: on ? "ai" : "component" }) }}

@@ -2765,6 +2765,12 @@ img[data-lightbox] {
 .block-settings__remove {
   align-self: flex-start;
 }
+/* A component block's settings: Edit component and New component side by side, wrapping when narrow. */
+.block-component__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cds-spacing-03);
+}
 .block-list__name {
   min-inline-size: 0;
   overflow-wrap: anywhere;

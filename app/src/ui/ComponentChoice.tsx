@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Button, Dropdown, Stack, Tag } from "@carbon/react";
 import { useStore } from "../app/store";
-import { componentsFor, isAiOutput, placeProblem, type Component, type ComponentCode, type ComponentPlace } from "../domain/components";
+import { componentsFor, isAiOutput, placeProblem, type Component, type ComponentCode } from "../domain/components";
 import type { Collection } from "../domain/model";
 import { ComponentForm } from "./ComponentForm";
 import { PromoteComponentModal } from "./PromoteComponentModal";
 import { ValueSourceSwitch } from "./ValueSourceSwitch";
 
-/** A place's component: a shared one it picks, or its own (local, written in place). */
+/** A field's component: a shared one it picks, or its own (local, written in place). */
 export interface ComponentRef {
   componentId: string | null;
   local: ComponentCode | null;
@@ -17,14 +17,14 @@ export interface ComponentRef {
 const LOCAL = "local";
 
 /**
- * Chooses a place's component (a component field, a component block): local (a
- * component, owned by the place: output, code and "Save as shared component") or a shared one,
- * picked by name (only those that fit the place). For fields, the Value switch (code or AI prompt) first: the component's text
- * is then a prompt, and the field stores the model's replies; fixed once the field is saved.
+ * Chooses a component or AI field's component: local (a component owned by the field: output, code
+ * and "Save as shared component") or a shared one, picked by name (only those that fit a field).
+ * The Value switch (code or AI prompt) first: the component's text is then a prompt, and the field
+ * stores the model's replies; fixed once the field is saved. (Blocks only pick shared components:
+ * views/ComponentBlock.tsx.)
  */
 export function ComponentChoice({
   id,
-  place,
   value,
   onChange,
   ai,
@@ -34,10 +34,9 @@ export function ComponentChoice({
   collection,
 }: {
   id: string;
-  place: ComponentPlace;
   value: ComponentRef;
   onChange(value: ComponentRef): void;
-  /** Fields only: whether the component asks AI, and whether that can still change. */
+  /** Whether the component asks AI, and whether that can still change. */
   ai?: { value: boolean; locked: boolean; onChange(ai: boolean): void };
   /** The output is fixed (an AI field's, once saved: its values are stored in that form). */
   outputLocked?: boolean;
@@ -50,7 +49,7 @@ export function ComponentChoice({
   const { components } = useStore();
   const [promoting, setPromoting] = useState(false);
   const asksAi = ai?.value ?? false;
-  const offered = componentsFor(components, place, value.componentId, asksAi);
+  const offered = componentsFor(components, "field", value.componentId, asksAi);
   const shared = value.local ? undefined : components.find((c) => c.id === value.componentId);
   const choices = [LOCAL, ...offered.map((c) => c.id)];
   const nameOf = (choice: string) => (choice === LOCAL ? "Local" : (components.find((c) => c.id === choice)?.name ?? ""));
@@ -78,7 +77,7 @@ export function ComponentChoice({
         id={`${id}-component`}
         titleText={asksAi ? "Prompt" : "Component"}
         label="Choose…"
-        helperText={local ? `Local: only this ${place === "field" ? "field" : "block"} uses it.` : shared ? "Shared: a change applies everywhere it is used." : undefined}
+        helperText={local ? "Local: only this field uses it." : shared ? "Shared: a change applies everywhere it is used." : undefined}
         items={choices}
         // Carbon accepts null (nothing chosen yet) at runtime; its types only say undefined.
         selectedItem={(local ? LOCAL : shared ? shared.id : null) as string}
@@ -98,7 +97,7 @@ export function ComponentChoice({
             id={id}
             value={{ ...local, ai: asksAi }}
             onChange={(next) => onChange({ componentId: null, local: next })}
-            place={place}
+            place="field"
             outputLocked={outputLocked}
             outputHelp={outputLocked ? "Fixed once saved: the values are stored in this form." : undefined}
             invalidText={invalidText}
@@ -106,7 +105,7 @@ export function ComponentChoice({
           />
           {/* Always there (in a panel above its button, appearing would move the editor): enabled once there is code that fits. */}
           <div>
-            <Button size="sm" kind="tertiary" disabled={!local.code.trim() || !!placeProblem(local, place)} onClick={() => setPromoting(true)}>
+            <Button size="sm" kind="tertiary" disabled={!local.code.trim() || !!placeProblem(local, "field")} onClick={() => setPromoting(true)}>
               Save as shared component
             </Button>
           </div>
