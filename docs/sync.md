@@ -259,6 +259,25 @@ takes the new one when its settings are opened. A source's name: letters, digits
   date & time's day in the device's zone uses the zone's offsets from 1990 to 2060 (`zoneOffsets`,
   computed with `Intl`). The time limit is the request's; filters on dates and numbers go through
   expressions (no index), text is case-insensitive for ASCII only (SQLite's `LIKE`).
+- *MySQL / MariaDB* (`connectors/mysql.ts` over `mysql2`, a pool of 4; SQL in `mysqlSql.ts`, pure and tested
+  without a server: `mysqlSql.test.ts`; `mysql.test.ts` on MySQL 8 and MariaDB): kinds MySQL and MariaDB, one
+  connector (the server's `VERSION()` decides if they disagree, with a warning). Host, port, database (opened
+  first), user, TLS; "schemas" are databases (the system's left out). Every read is one `START TRANSACTION READ
+  ONLY` with the session's `time_zone` at `+00:00` and the time limit as `max_execution_time` (MySQL) or
+  `max_statement_time` (MariaDB); statements are prepared (`?` parameters, backtick-quoted names, one statement
+  each). `check` reads `SHOW GRANTS`: a superuser (`ALL` or `SUPER` on `*.*`) or a write privilege anywhere is
+  warned about (a MySQL 8 role's privileges aren't listed there). Types from `information_schema.COLUMNS`:
+  integers, decimals, floats, `YEAR` and `BIT(n)` numbers, `TINYINT(1)` / `BIT(1)` a checkbox, `DATE`, `DATETIME`
+  (no zone: taken as UTC, like a Postgres `timestamp`) and `TIMESTAMP` (read in UTC) as dates & times, `ENUM`,
+  `TIME`, text as text, `SET` a list (grouped under each member); `JSON` (MariaDB's: a `LONGTEXT` checked by
+  `json_valid`) plain and hidden; binary, `BLOB`, spatial types and vectors dropped. Zero dates (`0000-00-00`,
+  or a zero month or day) are empty. Text is compared lower-cased in `utf8mb4_bin` whatever the column's
+  collation (case-insensitive, accents apart, as the app) and sorted in `utf8mb4_unicode_ci` with digit runs
+  padded to 20 digits (`REGEXP_REPLACE`), so "Customer 9" comes before "Customer 10"; unlike the app, "e" and
+  "é" tie (the key decides) and longer numbers sort by their text. Named time zones need MySQL's zone tables
+  (often not loaded), so a day in the device's zone is worked out as D1's: filters compare the column with the
+  day's UTC bounds (its index), grouping by day uses the zone's offsets. Numbers, dates and times are compared
+  with the column itself; text, title and sort keys go through expressions (no index).
 - *Actual Budget* (`connectors/actual.ts`): through [actual-http-api](https://github.com/jhonderson/actual-http-api),
   not Actual itself; its address (https:// unless it says http://) and the budget's sync ID, the API key as the
   password (`x-api-key`), the budget's encryption password a secret field (`budget-encryption-password`, sent only
