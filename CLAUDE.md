@@ -47,7 +47,7 @@ is what this split avoids. Keep them current when behaviour changes.
   is a migration in `server/src/migrations.ts`. Devices and servers of other versions keep syncing: never
   drop a column or value a side doesn't know.
 - **Never install the SAH-pool VFS while another worker may hold its files** (it deletes the
-  database): keep `acquireDbLock` / `poolFilesFree` in `worker.ts`.
+  database): keep `acquireDbLock` / `poolFilesFree` / `waitForPoolFiles` (`dbLock.ts`) in front of it in `worker.ts`.
 - Changing the app identifier `com.kubus.app`, database / pool names, the lock or `kubus.*` storage
   keys orphans existing data.
 - **Code lives only in components** (and filter values, whose `{{ }}` is worked out when the filter
