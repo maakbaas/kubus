@@ -120,27 +120,37 @@ test("components page: local ones by where they are used, saved as shared", asyn
 }, { viewport: "desktop" });
 
 for (const vp of ["desktop", "phone"]) {
-  test(`a component block written in its settings; add field with AI prompt @ ${vp}`, async (t) => {
+  test(`a component block's component written on its page, beside; add field with AI prompt @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(componentSpec());
     await t.open(t.listPath(ids.collections.books));
-    // Add block → "Component (local)": its code in Block settings.
+    // Add block → "New component…": named in a dialog, then written on its own page (beside the view, or a new tab on a phone).
     await blockTool(t, t.page.locator(".views-bar").first(), "View settings");
     await t.page.locator(".cds--popover--open").getByRole("button", { name: "Add block" }).click();
     await t.settle(100);
-    await t.page.getByRole("menuitem", { name: "Component (local)" }).click();
+    await t.page.getByRole("menuitem", { name: "New component…" }).click();
+    const named = t.page.locator(".cds--modal.is-visible");
+    await t.until("the new component dialog opens", async () => (await named.count()) === 1);
+    await named.getByRole("textbox", { name: "Name" }).fill("Shown count");
+    await named.getByRole("button", { name: "Create" }).click();
+    // Beside the view on a desktop (another pane), in a new tab on a phone: found by its title, shown.
+    const page = t.page.locator(".form-page").filter({ visible: true }).filter({ has: t.page.locator(".page-header__title", { hasText: "Shown count" }) });
+    await t.until("its page opens, named", async () => (await page.count()) === 1 && (await page.getByRole("textbox", { name: "Name" }).inputValue()) === "Shown count");
+    await t.audit("a new block component's page");
+    await page.getByRole("textbox", { name: "Code" }).fill("{{ $items.length }} shown");
+    await page.getByRole("button", { name: "Save changes" }).click();
     await t.settle();
-    await t.closeAll();
+    await t.open(t.listPath(ids.collections.books));
     const block = t.page.locator(".ws-pane--active .block").last();
+    await t.until("the block shows its result", async () => (await block.innerText()).includes("shown"));
+    // Its Block settings pick a shared component; no code is written there.
     await block.scrollIntoViewIfNeeded();
     await blockTool(t, block.locator(".section-header").first(), "Block settings");
     const panel = t.page.locator(".cds--popover--open");
-    await t.audit("block settings: a local component");
-    const code = panel.getByRole("textbox", { name: "Code" });
-    await code.click();
-    await t.popoverStep("typing a block's code", () => t.page.keyboard.type("{{ $items.length }} shown", { delay: 10 }), { target: code });
+    await t.audit("block settings: a shared component");
+    await t.check("block settings have no code editor", (await panel.getByRole("textbox", { name: "Code" }).count()) === 0);
+    await t.check("block settings link to the component and offer a new one", (await panel.getByRole("link", { name: "Edit component" }).count()) === 1 && (await panel.getByRole("button", { name: "New component" }).count()) === 1);
     await t.closeAll();
-    await t.until("the block shows its result", async () => (await block.innerText()).includes("shown"));
     // Add field (from a block's Fields) as a Component with AI prompt: prompt and the cost.
     await t.open(t.listPath(ids.collections.books));
     await blockTool(t, t.page.locator(".block").first().locator(".section-header").first(), "Fields");

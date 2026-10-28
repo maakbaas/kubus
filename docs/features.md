@@ -66,18 +66,20 @@ What the app does, feature by feature (read the part you work on).
   user's rights (`new Function`). The editor previews the result as you type, with only the choices the code calls
   for: a collection when it reads items, an item for `$item`, a field to group by for `$groups`, the
   fields for `$fields` (`CollectionPreview` in `ComponentEditorPage.tsx`).
-  - **Shared or local** (one paradigm for every place that takes a component): a place either picks
-    a shared component (a row of `components`, by name) or has one written in place, a *local*
-    component owned by that place and stored with it: a Component / AI field's `fields.code` /
-    `output` / `frame_ratio` (`componentId` null), a component block's `options.local`, a Markdown
-    block's text (static only: `$now`, nothing about items). `fieldComponent` / `blockComponent`
+  - **Shared or local**: a field either picks a shared component (a row of `components`, by name)
+    or has one written in place, a *local* component owned by the field and stored with it: a
+    Component / AI field's `fields.code` / `output` / `frame_ratio` (`componentId` null). A
+    component block only picks a shared one (its code is written on the component's page, never in
+    a popover; "New component" in Block settings or "Add block" names one and opens its page beside);
+    a block's own `options.local`, written by earlier versions, still shows and can only be saved as
+    shared. A Markdown block's text is local too (static only: `$now`, nothing about items). `fieldComponent` / `blockComponent`
     resolve either. Deleting the place deletes it; nothing else refers to it. The Components page
     lists local ones too (`localComponents`: by where they are used, "Books › Reading time", linked
     to their place; Markdown blocks only when their text has `{{ }}` sections), with "Save as shared
     component" (`PromoteComponentModal`, `ui/promoteLocal.ts`: a shared copy is saved, then the place
     picks it; a Markdown block becomes a component block). The same action sits in the place itself
     (field settings, block settings); "Show" filters the list (all, shared, local). One
-    control chooses (`ui/ComponentChoice.tsx`): a dropdown of "Local" plus the shared
+    control chooses a field's (`ui/ComponentChoice.tsx`): a dropdown of "Local" plus the shared
     components that fit; Local shows the same editor as a shared component's page
     (`ui/ComponentForm.tsx`: Value (Code / AI prompt), Write with AI, Output, the code with its kind and problems, an
     HTML component's shape), the page adding name, description and the preview around it.
@@ -102,8 +104,8 @@ What the app does, feature by feature (read the part you work on).
     row, in the "⋮" when its name is hidden) edits its component's code in place
     (`ui/ComponentFieldEditor.tsx`): its own is saved with the field; a shared one asks first, as the
     change applies everywhere the component is used (Change component / Discard changes, which reverts
-    / Keep editing, also on × or Escape). A component block's Block settings edit its own component,
-    or link to the shared one's page.
+    / Keep editing, also on × or Escape). A component block's Block settings pick its shared component
+    and link to its page.
   - **Kinds** (`componentUses`, `placeProblem`, `componentsFor`): what a component uses makes it a
     *field* component (`$item`: a component field), a *block* component (`$items` / `$groups` /
     `$fields` / `$all`: a block, which then offers filter, sort, fields as its code needs) or a

@@ -77,7 +77,9 @@ A tag such as #books or #books/to-read in the result shows as a tag, as it does 
 A component is **shared** or **local**:
 
 - A **shared** component has a name and is listed on the Components page. Pick it wherever it fits; a change to it applies everywhere it is used.
-- A **local** component is written in one place: a Component field, a Component block, or the text of a Markdown block. The Components page lists it by where it is used, and "Save as shared component" turns it into a shared one.
+- A **local** component is written in one place: a Component field, or the text of a Markdown block. The Components page lists it by where it is used, and "Save as shared component" turns it into a shared one.
+
+A Component block always shows a shared component: pick one in its Block settings, or choose "New component" there (or "New component…" under Add block), give it a name, and write it on its page, which opens beside the view.
 
 What the code reads decides what kind of component it is, and so where it can go:
 
