@@ -148,7 +148,7 @@ export function ApiTokens() {
               <SelectItem value="read" text={ACCESS_TEXT.read} />
               <SelectItem value="write" text={ACCESS_TEXT.write} />
             </Select>
-            <div>
+            <div className="button-row">
               <Button size="sm" kind="tertiary" type="submit" disabled={making || tokens === null}>
                 Make a token
               </Button>

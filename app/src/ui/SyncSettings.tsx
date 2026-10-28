@@ -114,17 +114,14 @@ export function SyncSettings() {
           </p>
         </Stack>
         <FormGroup legendText="Wipe">
-          <div>
+          <div className="button-row">
             <Button size="sm" kind="danger--tertiary" onClick={() => void wipe()}>
               Wipe local database
             </Button>
             {hasServer && (
-              <>
-                {" "}
-                <Button size="sm" kind="danger--tertiary" onClick={() => void wipeServer()}>
-                  Wipe server database
-                </Button>
-              </>
+              <Button size="sm" kind="danger--tertiary" onClick={() => void wipeServer()}>
+                Wipe server database
+              </Button>
             )}
           </div>
         </FormGroup>

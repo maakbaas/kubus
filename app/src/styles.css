@@ -729,9 +729,44 @@ body {
   max-inline-size: 700px;
   margin-inline: auto;
 }
-/* Help's tabs: the text keeps to the page's left edge (Carbon's tab panels are padded). */
-.help-page .cds--tab-content {
+/* Help's and Settings' tabs: the text keeps to the page's left edge (Carbon's tab panels are padded),
+   the views bar's margin below the tabs. */
+.help-page .cds--tab-content,
+.settings-page .cds--tab-content {
   padding-inline: 0;
+}
+.settings-page .cds--tab-content {
+  padding-block: 0;
+}
+/* A settings section: its parts (the intro, fields, a list or "none yet", notices, buttons) one
+   rhythm apart, the same in every section, its stacks too; the gaps are the stacks', not margins.
+   Not in its dialogs (their own layout). */
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-06);
+}
+.settings-panel .cds--stack-vertical:not(.cds--modal *) {
+  --cds-stack-gap: var(--cds-spacing-06);
+}
+.settings-panel :is(.helper, .cds--fieldset, .cds--inline-notification, .cds--form):not(.cds--modal *) {
+  margin-block: 0;
+}
+/* Buttons side by side a step apart; where a page is narrow, one above the other, as wide as each other. */
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cds-spacing-05);
+}
+@container form-page (max-width: 30rem) {
+  .button-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .button-row > .cds--btn {
+    inline-size: 100%;
+    max-inline-size: none;
+  }
 }
 .name-pair {
   display: grid;

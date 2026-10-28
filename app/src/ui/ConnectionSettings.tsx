@@ -185,7 +185,7 @@ export function ConnectionSettings() {
       ) : (
         <p className="helper">No remote connections yet.</p>
       )}
-      <div>
+      <div className="button-row">
         <Button kind="tertiary" size="sm" renderIcon={Add} onClick={() => openSource("new")}>
           Add connection
         </Button>

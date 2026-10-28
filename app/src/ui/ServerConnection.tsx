@@ -90,20 +90,17 @@ export function ServerConnection() {
             onChange={(e) => setDraft((d) => ({ ...d, token: e.target.value }))}
           />
           {result && <InlineNotification kind={result.ok ? "success" : "error"} title={result.ok ? "Connected" : "Can't connect"} subtitle={result.text} lowContrast hideCloseButton />}
-          <div>
+          <div className="button-row">
             <Button size="sm" kind="primary" type="submit" disabled={saving || !dirty}>
               Save
-            </Button>{" "}
+            </Button>
             <Button size="sm" kind="tertiary" disabled={testing || !draft.url.trim()} onClick={() => void test()}>
               Test connection
             </Button>
             {connected && (
-              <>
-                {" "}
-                <Button size="sm" kind="danger--tertiary" onClick={() => void disconnect()}>
-                  Disconnect
-                </Button>
-              </>
+              <Button size="sm" kind="danger--tertiary" onClick={() => void disconnect()}>
+                Disconnect
+              </Button>
             )}
           </div>
         </Stack>

@@ -117,16 +117,19 @@ export function AiSettings() {
     <>
       <p className="helper">The language models that write the values of AI fields and the code of components.</p>
       {/* Takes effect at once (not with Save): the way to stop requests, e.g. on a metered connection. */}
-      <Toggle
-        size="sm"
-        id={`${uid}-paused`}
-        labelText="Requests"
-        labelA="Paused"
-        labelB="Running"
-        toggled={!saved.paused}
-        onToggle={(running) => ai.setSettings({ ...saved, paused: !running })}
-      />
-      <p className="helper">While paused, no request is sent to the model (not for AI fields, not for writing components); what waits stays queued.</p>
+      <div className="cds--form-item">
+        <Toggle
+          size="sm"
+          id={`${uid}-paused`}
+          labelText="Requests"
+          labelA="Paused"
+          labelB="Running"
+          toggled={!saved.paused}
+          onToggle={(running) => ai.setSettings({ ...saved, paused: !running })}
+        />
+        {/* The switch's helper text, as a field's (Carbon's Toggle has none). */}
+        <div className="cds--form__helper-text">While paused, no request is sent to the model (not for AI fields, not for writing components); what waits stays queued.</div>
+      </div>
       <Form onSubmit={(e) => void save(e)} noValidate>
         <Stack gap={6}>
           <Select
@@ -215,7 +218,7 @@ export function AiSettings() {
                 onChange={(e) => setServerAi({ key: e.target.value || undefined })}
               />
               {serverDraft.keySet && serverDraft.key === undefined && (
-                <div>
+                <div className="button-row">
                   <Button kind="tertiary" size="sm" onClick={() => setServerAi({ key: "", keySet: false })}>
                     Remove key
                   </Button>
@@ -247,10 +250,10 @@ export function AiSettings() {
           {results.map((r, i) => (
             <InlineNotification key={i} kind={r.ok ? "success" : "error"} title={r.ok ? "Works" : "Failed"} subtitle={r.text} lowContrast hideCloseButton />
           ))}
-          <div>
+          <div className="button-row">
             <Button size="sm" kind="primary" type="submit" disabled={!dirty || saving}>
               Save
-            </Button>{" "}
+            </Button>
             <Button size="sm" kind="tertiary" disabled={testing || testModels.length === 0 || (!own && serverDirty)} onClick={() => void test()}>
               Test
             </Button>
