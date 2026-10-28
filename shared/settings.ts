@@ -16,7 +16,7 @@ export interface ServerAiSettings {
 export interface ServerSourceSettings {
   /** Stable, so a source keeps its password when it is renamed. */
   id: string;
-  /** What devices see and ask by, e.g. CRM: letters, digits, - and _. */
+  /** What devices see and ask by, e.g. CRM: letters, digits, spaces, - and _ (renamed, it is still asked for by its former names). */
   name: string;
   /** Its connection string without the password, e.g. postgres://reader@crm-host:5432/crm; its scheme picks the connector. */
   url: string;
@@ -51,5 +51,5 @@ export interface ServerSettingsUpdate {
   sources: (ServerSourceSettings & { password?: string })[];
 }
 
-/** A source's name: what /api/sources/<name> takes. */
-export const SOURCE_NAME = /^[A-Za-z0-9_-]{1,40}$/;
+/** A source's name: what /api/sources/<name> takes (single spaces between words). */
+export const SOURCE_NAME = /^(?=.{1,40}$)[A-Za-z0-9_-]+(?: [A-Za-z0-9_-]+)*$/;

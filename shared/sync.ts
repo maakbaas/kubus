@@ -12,7 +12,7 @@
  * every change to them (app/src/data/sync/spec.test.ts fails until it is). Devices send it with every
  * sync; the server turns away those older than its SYNC_COMPATIBLE.
  */
-export const SYNC_VERSION = 1;
+export const SYNC_VERSION = 2;
 /**
  * The oldest SYNC_VERSION that still reads and writes this version's data correctly: unchanged by
  * an added column or table (an older device leaves what it doesn't know as it is), raised to
@@ -60,7 +60,7 @@ export const SYNC_TABLES: SyncTable[] = [
     version: "updated_at",
     columns: {
       id: "text", name: "text", plural_name: "text", icon: "text", description: "text", item_views: "json",
-      space_ids: "json", source: "json", ...stamps,
+      space_ids: "json", source: "json", title_field: "text", ...stamps,
     },
   },
   {

@@ -1,4 +1,5 @@
 import { useId, useMemo, useState, type FormEvent } from "react";
+import { useRemoteResult } from "../views/useRemoteResult";
 import { useNavigate, useParams } from "react-router";
 import { Button, Form, InlineNotification, MultiSelect, Select, SelectItem, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
@@ -49,8 +50,6 @@ export function ComponentEditorPage() {
   const [output, setOutput] = useState<ComponentOutput>(existing?.output ?? "markdown");
   const [frameRatio, setFrameRatio] = useState<string | null>(existing?.frameRatio ?? null);
   const [ai, setAi] = useState(existing?.ai ?? false);
-  /** The preview's HTML fills its box (no height of its own): then its shape can be chosen. */
-  const [fills, setFills] = useState(false);
   /** The collection (and one of its items) the preview is rendered with: what $item and $items read. */
   const [previewCollectionId, setPreviewCollectionId] = useState("");
   const [previewItemId, setPreviewItemId] = useState("");
@@ -161,7 +160,6 @@ export function ComponentEditorPage() {
             outputLocked={outputLocked}
             outputHelp={outputLocked ? "Fixed while AI fields use it: their values are stored in this form." : aiLocked ? "Whether it asks AI is fixed while fields use it." : undefined}
             invalidText={codeError}
-            fills={fills}
             writer={{
               focus: previewCollection,
               name,
@@ -204,12 +202,11 @@ export function ComponentEditorPage() {
               ai={ai}
               name={name}
               frameRatio={frameRatio}
-              onFill={setFills}
             />
           ) : ai ? (
             <p className="helper">Choose a collection to preview the prompt for one of its items.</p>
           ) : (
-            <PreviewResult result={render({ code, output })} output={output} frameRatio={frameRatio} onFill={setFills} />
+            <PreviewResult result={render({ code, output })} output={output} frameRatio={frameRatio} />
           )}
           {error && <p className="cds--form-requirement">{error}</p>}
           <div className="form-actions">
@@ -228,14 +225,14 @@ export function ComponentEditorPage() {
 }
 
 /** The rendered result, in the same markup as a component field on an item page, so it renders identically. */
-function PreviewResult({ result, output, frameRatio, onFill, label = "Result" }: { result: unknown; output: ComponentOutput; frameRatio: string | null; onFill?(fills: boolean): void; label?: string }) {
+function PreviewResult({ result, output, frameRatio, label = "Result" }: { result: unknown; output: ComponentOutput; frameRatio: string | null; label?: string }) {
   return (
     <div className="component-test__result">
       <div className="cds--label">{label}</div>
       <div className="item-fields item-fields--form component-test__preview">
         <div className="view-field">
           <div className={`view-field__value view-field__value--component${String(result ?? "").startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}`}>
-            <ComponentValue value={result as never} output={output} frameRatio={frameRatio} onFill={onFill} variant="page" />
+            <ComponentValue value={result as never} output={output} frameRatio={frameRatio} variant="page" />
           </div>
         </div>
       </div>
@@ -258,7 +255,6 @@ function CollectionPreview({
   ai,
   name,
   frameRatio,
-  onFill,
 }: {
   collection: Collection;
   uses: { item: boolean; groups: boolean; fields: boolean };
@@ -270,16 +266,22 @@ function CollectionPreview({
   /** The component's name: what the model is told the field is called, in "Try". */
   name: string;
   frameRatio: string | null;
-  onFill(fills: boolean): void;
 }) {
   const uid = useId();
   const { components } = useStore();
   const refs = useReferenceOptions(collection);
   const { items: stored } = useItems(collection);
+  // A remote collection's rows: its first page, asked of its source (computed fields worked out).
+  const firstPage = useMemo(defaultQuery, []);
+  const remote = useRemoteResult(collection, firstPage, "", true);
   const [groupBy, setGroupBy] = useState("");
   const fieldChoices = pickableFields(collection);
   const [chosenFields, setChosenFields] = useState<FieldDef[]>(fieldChoices);
-  const items = useMemo(() => (stored ? withComputed(collection, stored, components, refLabelOf(refs)) : []), [stored, collection, components, refs]);
+  const remoteItems = remote ? remote.items : undefined;
+  const items = useMemo(
+    () => (remoteItems !== undefined ? (remoteItems ?? []) : stored ? withComputed(collection, stored, components, refLabelOf(refs)) : []),
+    [remoteItems, stored, collection, components, refs],
+  );
   const item = items.find((i) => i.id === itemId) ?? items[0];
   const result = useMemo(() => {
     if (ai) return null;
@@ -302,6 +304,7 @@ function CollectionPreview({
   );
   return (
     <>
+      {remote?.error && <InlineNotification kind="error" lowContrast hideCloseButton title={collection.pluralName} subtitle={remote.error} />}
       {uses.item && (
         <Select size="sm" id={`${uid}-preview-item`} labelText={`Preview ${collection.name}`} value={item?.id ?? ""} onChange={(e) => onItem(e.target.value)} disabled={items.length === 0}>
           {items.length === 0 && <SelectItem value="" text={`No ${collection.pluralName}`} />}
@@ -336,7 +339,7 @@ function CollectionPreview({
       {ai ? (
         request && <PromptPreview request={request} output={isAiOutput(output) ? output : "string"} />
       ) : (
-        <PreviewResult result={result} output={output} frameRatio={frameRatio} onFill={onFill} />
+        <PreviewResult result={result} output={output} frameRatio={frameRatio} />
       )}
     </>
   );

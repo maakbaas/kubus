@@ -155,8 +155,10 @@ headless device doesn't generate AI values (that stays with the apps).
 
 Databases the server reads for the devices, read-only, whose tables and queries the app shows as
 collections ("remote collections": `Collection.source`, `domain/sources.ts`). Set up in Settings →
-Server (name, connection string, password, schemas, whether queries written in the app are allowed,
-a time limit); the connection string's scheme picks the connector (`postgres://`, `n8n://`, `influxdb://`, `d1://`).
+Server (name: letters, digits, spaces, `-` and `_`; connection string, password, schemas, whether queries
+written in the app are allowed, a time limit); a renamed source keeps its former names (`formerNames`, by its
+stable id, never shown in the settings): requests by one still reach it (`Sources.on`) and `GET /api/sources`
+lists them, so a collection made under an old name reads on and takes the new one when its settings are opened; the connection string's scheme picks the connector (`postgres://`, `n8n://`, `influxdb://`, `d1://`).
 - *Protocol* (`shared/sources.ts`), connector-neutral, all behind the token:
   `GET /api/sources` (names, connector, capabilities, problem; never addresses),
   `GET /api/sources/<name>/tables`, `POST …/describe` (`{ target }`: a table or a query → its

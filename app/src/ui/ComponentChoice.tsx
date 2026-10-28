@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Button, Dropdown, Stack, Tag } from "@carbon/react";
 import { useStore } from "../app/store";
-import { componentsFor, isAiOutput, placeProblem, type Component, type ComponentCode, type ComponentPlace } from "../domain/components";
+import { componentsFor, placeProblem, type Component, type ComponentCode, type ComponentPlace } from "../domain/components";
 import type { Collection } from "../domain/model";
 import { ComponentForm } from "./ComponentForm";
 import { PromoteComponentModal } from "./PromoteComponentModal";
-import { ValueSourceSwitch } from "./ValueSourceSwitch";
+import { useValueSourceSwitch, ValueSourceSwitch } from "./ValueSourceSwitch";
 
 /** A place's component: a shared one it picks, or its own (local, written in place). */
 export interface ComponentRef {
@@ -55,6 +55,7 @@ export function ComponentChoice({
   const choices = [LOCAL, ...offered.map((c) => c.id)];
   const nameOf = (choice: string) => (choice === LOCAL ? "Local" : (components.find((c) => c.id === choice)?.name ?? ""));
   const local = value.local;
+  const switchSource = useValueSourceSwitch();
   const blank = (aiNow: boolean): ComponentCode => ({ code: "", output: aiNow ? "string" : "markdown", frameRatio: null, ai: aiNow });
 
   return (
@@ -66,8 +67,8 @@ export function ComponentChoice({
           locked={ai.locked}
           onChange={(on) => {
             ai.onChange(on);
-            // A shared component that doesn't ask the same goes; a local one keeps its code, the output follows.
-            if (local) onChange({ componentId: null, local: { ...local, ai: on, output: on && !isAiOutput(local.output) ? "string" : local.output } });
+            // A shared component that doesn't ask the same goes; a local one's code isn't carried over (useValueSourceSwitch).
+            if (local) onChange({ componentId: null, local: switchSource(local, on) });
             else if (shared && shared.ai !== on) onChange({ componentId: null, local: blank(on) });
           }}
         />

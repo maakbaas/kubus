@@ -40,7 +40,8 @@ CREATE TABLE collections (
   source      TEXT,            -- JSON { name, target, key, columns }: a remote collection's source (model.ts CollectionSource); null = its own items
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
-  deleted_at  TEXT
+  deleted_at  TEXT,
+  title_field TEXT             -- the text field its items' titles are: a field id, 'none' (no title); null = the first text field with a value (model.ts titleFields)
 );
 
 -- Saved views of a collection's items (see src/domain/views.ts and src/views/registry.ts), per space.

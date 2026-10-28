@@ -248,6 +248,20 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
       expect(await query.json()).toMatchObject({ rows: [{ key: "http-s1", values: ["Work"] }], total: 1 });
     });
 
+    it("still reads a renamed source by its former name", async () => {
+      const view = await (await request(server, "/api/settings")).json();
+      const sources = view.sources.map(({ passwordSet: _p, connector: _c, problem: _pr, warnings: _w, ...s }: { name: string; passwordSet: unknown; connector: unknown; problem: unknown; warnings: unknown }) =>
+        s.name === "Self" ? { ...s, name: "My Self" } : s,
+      );
+      expect((await request(server, "/api/settings", { method: "PUT", json: settings({ sources }) })).status).toBe(200);
+      expect(await (await request(server, "/api/sources")).json()).toContainEqual(expect.objectContaining({ name: "My Self", formerNames: ["Self"] }));
+      expect((await request(server, "/api/sources/My%20Self/tables")).status).toBe(200);
+      expect((await request(server, "/api/sources/Self/tables")).status).toBe(200);
+      // Back as it was, for the tests below.
+      const back = sources.map((s: { name: string }) => (s.name === "My Self" ? { ...s, name: "Self" } : s));
+      expect((await request(server, "/api/settings", { method: "PUT", json: settings({ sources: back }) })).status).toBe(200);
+    });
+
     it("answers 404 for an unknown source, 502 for one it can't read, 400 for a request it can't answer", async () => {
       expect((await request(server, "/api/sources/Nope/tables")).status).toBe(404);
       expect((await request(server, "/api/sources/Odd/tables")).status).toBe(502);

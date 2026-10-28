@@ -13,7 +13,7 @@ import { isComponentOutput, placeProblem, type Component } from "../domain/compo
 import { fieldKinds } from "../domain/fieldKinds";
 import { fileSrc, IMAGE_TYPES } from "../domain/files";
 import { parseItemViews, type ItemView } from "../domain/fieldLayout";
-import { collectionDraft, isReferenceKind, newId, suggestPlural, type Collection, type CollectionDraft, type FieldDef, type FieldDraft, type Item } from "../domain/model";
+import { collectionDraft, isReferenceKind, newId, NO_TITLE, suggestPlural, type Collection, type CollectionDraft, type FieldDef, type FieldDraft, type Item } from "../domain/model";
 import type { FilterRule, SortRule } from "../domain/query";
 import { refLabelForSpace } from "../domain/refOptions";
 import { DEFAULT_SPACE_ID, type Space } from "../domain/spaces";
@@ -87,6 +87,7 @@ const collectionOut = (c: Collection, itemCount?: number) => ({
   icon: c.icon,
   description: c.description,
   spaces: c.spaceIds,
+  titleField: c.titleField ?? null,
   ...(itemCount !== undefined && { itemCount }),
   fields: c.fields.map(fieldOut),
   itemViews: c.itemViews,
@@ -97,6 +98,16 @@ const collectionOut = (c: Collection, itemCount?: number) => ({
 const viewOut = ({ collapsed: _collapsed, ...view }: CollectionView) => view;
 
 const bookmarkOut = (b: Bookmark) => b;
+
+/** A collection's title field as asked for: a text field (by id or name), "none", or null (the first text field with a value). */
+function titleFieldIn(collection: Collection, raw: unknown): string | null {
+  if (raw === null) return null;
+  if (typeof raw !== "string") throw new HttpError(400, "`titleField` is a text field's id or name, \"none\" or null");
+  if (raw === NO_TITLE) return NO_TITLE;
+  const field = fieldOf(collection, raw);
+  if (field.kind !== "string") throw new HttpError(400, `“${field.name}” isn't a text field: only one can be the title`);
+  return field.id;
+}
 
 /** Field names in a block or filter list resolved to ids (against the collection it lists). */
 /** Rules (filters, sorts) with their fields named by id or name; an item view's filter names fields of any of its blocks' collections. */
@@ -399,6 +410,7 @@ export function createApi(repo: Repository): Router {
             icon: o.icon === undefined ? draft.icon : (text(o, "icon") ?? null),
             description: o.description === undefined ? draft.description : (text(o, "description") ?? ""),
             spaceIds: o.spaces === undefined ? draft.spaceIds : spacesIn(w, o.spaces),
+            titleField: o.titleField === undefined ? draft.titleField : titleFieldIn(collection, o.titleField),
           },
           DEFAULT_SPACE_ID,
         );

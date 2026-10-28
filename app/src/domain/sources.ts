@@ -7,7 +7,7 @@
 import { TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceRow, type SourceShape, type SourceSort } from "../../../shared/sources";
 import { resolveRange } from "./datePeriod";
 import { fieldKindList } from "./fieldKinds";
-import { blankField, isMetaField, newId, type Collection, type CollectionSource, type FieldDef, type FieldKind, type FieldValue, type Item } from "./model";
+import { blankField, isMetaField, newId, titleFields, type Collection, type CollectionSource, type FieldDef, type FieldKind, type FieldValue, type Item } from "./model";
 import { filterTree, mapTree } from "./filterTree";
 import { filterValueProblem, isGroupable, waitsForValue, operatorsFor, TITLE, type FilterRule, type OperatorSpec, type ViewQuery } from "./query";
 
@@ -97,8 +97,8 @@ const columnFieldsOf = (collection: Collection) => collection.fields.filter((f) 
 export function sourceShape(collection: Collection): SourceShape {
   const source = collection.source!;
   const columns = [...new Set(columnFieldsOf(collection).map((f) => f.column!))];
-  // The title is the first text field with a value (labelField), in field order.
-  const title = collection.fields.filter((f) => f.kind === "string" && f.column && sourceColumn(collection, f)).map((f) => f.column!);
+  // The title is the first of its title fields with a value (labelField), in field order.
+  const title = titleFields(collection).filter((f) => f.column && sourceColumn(collection, f)).map((f) => f.column!);
   return { target: source.target, key: source.key, columns, title, untitled: collection.name };
 }
 
@@ -180,7 +180,8 @@ export const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().time
 /**
  * A draft that reads `target` of the source `name`, with the columns just read: fields of columns
  * still there stay (renamed, reordered, shown as Markdown: as they were; a column whose type
- * changed gets its new one), fields of columns gone go, new columns get a field at the end. The key
+ * changed gets its new one), fields of columns gone go, new columns get a field at the end (but
+ * those hidden: `hiddenColumns`, kept while the column is there). The key
  * stays while its column does, else the primary key (one column), else the first column.
  */
 export function withSourceColumns<D extends { source?: CollectionSource | null; fields: (Omit<FieldDef, "collectionId" | "position">)[] }>(
@@ -190,7 +191,8 @@ export function withSourceColumns<D extends { source?: CollectionSource | null; 
   description: { columns: SourceColumn[]; key: string[] },
 ): D {
   const columns = new Map(description.columns.map((c) => [c.name, c]));
-  const had = new Set(draft.fields.flatMap((f) => (f.column ? [f.column] : [])));
+  const hidden = (draft.source?.hiddenColumns ?? []).filter((name) => columns.has(name));
+  const had = new Set([...draft.fields.flatMap((f) => (f.column ? [f.column] : [])), ...hidden]);
   const fields = draft.fields.flatMap((f) => {
     if (!f.column) return [f];
     const c = columns.get(f.column);
@@ -204,7 +206,25 @@ export function withSourceColumns<D extends { source?: CollectionSource | null; 
   }
   const old = draft.source?.key;
   const key = old && columns.has(old) ? old : description.key.length === 1 && columns.has(description.key[0]) ? description.key[0] : (description.columns[0]?.name ?? "");
-  return { ...draft, source: { name, target, key, columns: description.columns }, fields };
+  return { ...draft, source: { name, target, key, columns: description.columns, ...(hidden.length > 0 && { hiddenColumns: hidden }) }, fields };
+}
+
+/**
+ * A remote collection's columns hidden or shown again (in its settings): a hidden column's field
+ * goes (it stays hidden when the columns are read again), a column shown again gets a field at the end.
+ */
+export function withHiddenColumns<D extends { source?: CollectionSource | null; fields: (Omit<FieldDef, "collectionId" | "position">)[] }>(draft: D, hidden: string[]): D {
+  if (!draft.source) return draft;
+  const names = new Set(hidden);
+  const fields = draft.fields.filter((f) => !f.column || !names.has(f.column));
+  const had = new Set(fields.flatMap((f) => (f.column ? [f.column] : [])));
+  for (const c of draft.source.columns) {
+    if (names.has(c.name) || had.has(c.name) || !(draft.source.hiddenColumns ?? []).includes(c.name)) continue;
+    const { collectionId: _c, position: _p, ...field } = columnFields([c])[0];
+    fields.push(field);
+  }
+  const { hiddenColumns: _old, ...source } = draft.source;
+  return { ...draft, source: names.size > 0 ? { ...source, hiddenColumns: [...names] } : source, fields };
 }
 
 /** A table's name as a collection's names: "customer_orders" → "Customer order" / "Customer orders". */

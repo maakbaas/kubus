@@ -16,6 +16,8 @@ export type SourceKind = "string" | "number" | "checkbox" | "date" | "datetime" 
 export interface SourceInfo {
   /** Its name, from the server's settings (Settings → Server), e.g. "CRM". */
   name: string;
+  /** Names it had before (renamed): requests by one still reach it, and collections take its new name. */
+  formerNames?: string[];
   /** Which connector reads it, e.g. "postgres": for people only (the app treats all alike). */
   connector: string;
   /** What it can do. */

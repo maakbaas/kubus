@@ -103,6 +103,8 @@ export interface Collection {
    * sources, read-only (domain/sources.ts). null (or absent) = its own items (a native collection).
    */
   source?: CollectionSource | null;
+  /** The text field its items' titles are (a field id), NO_TITLE for none; null (or absent) = the first text field with a value. */
+  titleField?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -136,6 +138,8 @@ export interface CollectionSource {
   key: string;
   /** Its columns as last read from the source (their types and what they can do). */
   columns: SourceColumn[];
+  /** Columns hidden in the collection's settings: they have no field and aren't given one again when the columns are read. */
+  hiddenColumns?: string[];
 }
 
 /** A field as edited and saved: the field without what the repository fills in (its collection, its place). */
@@ -150,12 +154,13 @@ export interface CollectionDraft {
   description: string;
   spaceIds: string[] | null;
   source?: CollectionSource | null;
+  titleField?: string | null;
   /** Order in the array is the field order. Ids are client-generated. */
   fields: FieldDraft[];
 }
 
 /** A collection as a draft for saving, its fields as they are. */
-export const collectionDraft = ({ id, name, pluralName, icon, description, spaceIds, source, fields }: Collection): CollectionDraft => ({
+export const collectionDraft = ({ id, name, pluralName, icon, description, spaceIds, source, titleField, fields }: Collection): CollectionDraft => ({
   id,
   name,
   pluralName,
@@ -163,6 +168,7 @@ export const collectionDraft = ({ id, name, pluralName, icon, description, space
   description,
   spaceIds,
   source: source ?? null,
+  titleField: titleField ?? null,
   fields: fields.map(({ collectionId: _collectionId, position: _position, ...field }) => field),
 });
 
@@ -238,11 +244,25 @@ export function editableField(field: FieldDef): FieldDef {
   return { ...field, editedAi: true, kind: field.output === "number" ? "number" : field.output === "markdown" ? "markdown" : "string" };
 }
 
-/** The field that provides an item's label: its first non-empty string field. */
+/** `titleField` of a collection whose items have no title (they are called by the collection's name). */
+export const NO_TITLE = "none";
+
+/**
+ * The fields an item's title can come from, in order: the collection's title field, none (NO_TITLE),
+ * else (not set, or its field gone) every text field: the first with a value is the title.
+ */
+export function titleFields<F extends Pick<FieldDef, "id" | "kind">>(collection: { titleField?: string | null; fields: F[] }): F[] {
+  const text = collection.fields.filter((f) => f.kind === "string");
+  if (collection.titleField === NO_TITLE) return [];
+  const chosen = text.find((f) => f.id === collection.titleField);
+  return chosen ? [chosen] : text;
+}
+
+/** The field that provides an item's label: the first of its title fields with a value (titleFields). */
 export function labelField(collection: Collection, item: Item): FieldDef | undefined {
-  return collection.fields.find((f) => {
+  return titleFields(collection).find((f) => {
     const v = item.values[f.id];
-    return f.kind === "string" && typeof v === "string" && v.trim() !== "";
+    return typeof v === "string" && v.trim() !== "";
   });
 }
 

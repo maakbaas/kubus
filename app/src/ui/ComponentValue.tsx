@@ -306,9 +306,10 @@ export function FramesSizing({ children, maxMs = 1000, className }: { children: 
  * cover. On a page the frame measures the content's own height (body sized to its content):
  *  - flow: it has one (text, tables, a fixed-size chart), and the frame is exactly that tall;
  *  - fill: it has none (a map or chart at 100%), and the frame gets a box of a fixed shape
- *    (16:9 by default).
- * The component's own ratio setting (`ratio`) replaces that default; `<meta name="frame"
- * content="ratio=4/3">` or `content="height=300"` in the HTML wins over both. <html> has the
+ *    (16:9).
+ * The component's own ratio setting (`ratio`) gives the frame that shape whatever its content
+ * (also content at 100% beside text of its own); `<meta name="frame" content="ratio=4/3">` or
+ * `content="height=300"` in the HTML wins over it. <html> has the
  * class in-card or in-page, and --frame-width / --frame-height, for content that adapts to where
  * it is shown.
  */
@@ -316,15 +317,12 @@ export function HtmlFrame({
   html: source,
   fill = false,
   ratio = null,
-  onFill,
   onContentClick,
 }: {
   html: string;
   fill?: boolean;
-  /** The box's shape when the content fills it (the component's setting); null = 16:9. */
+  /** The box's shape (the component's setting); null = automatic: the content's own height, else 16:9. */
   ratio?: number | null;
-  /** Told whether the content turned out to fill its box (it has no height of its own). */
-  onFill?(fills: boolean): void;
   /** A click on the frame's plain content (not a link, control, map, …): e.g. to start editing. */
   onContentClick?(): void;
 }) {
@@ -406,11 +404,8 @@ export function HtmlFrame({
     if (place) setTokens(frameTokens(place));
   }, [dark]);
   const doc = useMemo(() => (html === undefined || tokens === undefined ? undefined : frameDocument(html, fill, dark, tokens)), [html, fill, dark, tokens]);
-  const fills = !!size && !size.height && !size.ratio && size.natural < FILL_THRESHOLD;
-  useEffect(() => {
-    if (size) onFill?.(fills);
-  }, [size, fills, onFill]);
-  // A size asked for wins; else its own height (flow), else the default box (fill).
+  const fills = !!size && size.natural < FILL_THRESHOLD;
+  // A size asked for in the HTML wins; else the component's ratio, else its own height (flow), else the default box (fill).
   const style: CSSProperties | undefined =
     fill || !size
       ? undefined
@@ -418,9 +413,11 @@ export function HtmlFrame({
         ? { blockSize: size.height }
         : size.ratio
           ? { aspectRatio: size.ratio, blockSize: "auto" }
-          : !fills
-            ? { blockSize: size.natural }
-            : { aspectRatio: ratio ?? 16 / 9, blockSize: "auto" };
+          : ratio
+            ? { aspectRatio: ratio, blockSize: "auto" }
+            : !fills
+              ? { blockSize: size.natural }
+              : { aspectRatio: 16 / 9, blockSize: "auto" };
   return (
     <iframe
       ref={frame}
@@ -444,17 +441,14 @@ export function ComponentValue({
   variant,
   search = "",
   frameRatio = null,
-  onFill,
   onContentClick,
 }: {
   value: FieldValue;
   output: ComponentOutput;
   variant: "page" | "cell";
   search?: string;
-  /** HTML that fills its box: the box's shape (the component's setting). */
+  /** HTML: the box's shape (the component's setting; null: automatic). */
   frameRatio?: string | null;
-  /** HTML: told whether it fills its box (the component editor then offers the ratio). */
-  onFill?(fills: boolean): void;
   /** HTML: a click on its plain content (see HtmlFrame). */
   onContentClick?(): void;
 }) {
@@ -473,7 +467,7 @@ export function ComponentValue({
           HTML
         </span>
       ) : (
-        <HtmlFrame html={text} ratio={ratioValue(frameRatio)} onFill={onFill} onContentClick={onContentClick} />
+        <HtmlFrame html={text} ratio={ratioValue(frameRatio)} onContentClick={onContentClick} />
       );
     case "markdown":
       if (variant === "page" && typeof value === "string") return <MarkdownView source={text} />;

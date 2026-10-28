@@ -9,6 +9,8 @@ import type { SourceCapabilities, SourceDescription, SourceQuery, SourceResult, 
 export interface SourceConfig {
   /** As configured, e.g. "CRM". */
   name: string;
+  /** Names it had before: it is still asked for by them (collections made under one). */
+  formerNames?: string[];
   /** Connection string; its scheme picks the connector (postgres://…, n8n://…, influxdb://…). */
   url: string;
   /** Only these schemas' tables are offered (n8n: these projects' ids; InfluxDB: buckets; empty: all but the system's). */

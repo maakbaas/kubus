@@ -6,7 +6,7 @@ import type { ServerSettingsUpdate } from "../../shared/settings.ts";
 
 const stored: Stored = {
   ai: { url: "https://api.example.com/v1", key: "sk-secret", fieldModel: "small", codeModel: "" },
-  sources: [{ id: "s1", name: "CRM", url: "postgres://reader@crm:5432/crm", password: "pw", schemas: [], queries: true, timeoutSeconds: 30 }],
+  sources: [{ id: "s1", name: "CRM", formerNames: [], url: "postgres://reader@crm:5432/crm", password: "pw", schemas: [], queries: true, timeoutSeconds: 30 }],
 };
 const update = (over: { ai?: Partial<ServerSettingsUpdate["ai"]>; source?: Partial<ServerSettingsUpdate["sources"][number]> } = {}): ServerSettingsUpdate => ({
   ai: { url: stored.ai.url, fieldModel: "small", codeModel: "", ...over.ai },
@@ -43,10 +43,23 @@ describe("server settings", () => {
   });
 
   it("refuse what can't be stored", () => {
-    expect(() => applyUpdate(stored, update({ source: { name: "no spaces" } }))).toThrow(/letters, digits/);
+    expect(() => applyUpdate(stored, update({ source: { name: "no/slashes" } }))).toThrow(/letters, digits/);
+    expect(() => applyUpdate(stored, update({ source: { name: "two  spaces" } }))).toThrow(/letters, digits/);
     expect(() => applyUpdate(stored, update({ source: { url: "not a url" } }))).toThrow(/isn't a URL/);
     expect(() => applyUpdate(stored, { ...update(), sources: [...update().sources, { ...update().sources[0], id: "s2" }] })).toThrow(/Two sources/);
     expect(() => applyUpdate(stored, update({ ai: { url: "ftp://x" } }))).toThrow(/http/);
+  });
+
+  it("keep a renamed source's former names (names with spaces too), and pass them to its connector", () => {
+    const renamed = applyUpdate(stored, update({ source: { name: "Sales CRM" } }));
+    expect(renamed.sources[0]).toMatchObject({ name: "Sales CRM", formerNames: ["CRM"] });
+    const again = applyUpdate(renamed, update({ source: { name: "Sales" } }));
+    expect(again.sources[0].formerNames).toEqual(["CRM", "Sales CRM"]);
+    expect(sourceConfigs(again)[0].formerNames).toEqual(["CRM", "Sales CRM"]);
+    // A name another source takes up again is that one's; never shown to devices in the settings.
+    const back = applyUpdate(again, update({ source: { name: "CRM" } }));
+    expect(back.sources[0].formerNames).toEqual(["Sales CRM", "Sales"]);
+    expect(JSON.stringify(viewOf(back, () => ({})))).not.toMatch(/formerNames/);
   });
 
   it("split a password out of a connection string", () => {

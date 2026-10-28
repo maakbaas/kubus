@@ -38,7 +38,8 @@ Extension points are registries, not special cases in pages:
   is stored as the filter's first `between` rule, which the rule list leaves out (a date & time by
   its local day). The current day, week, month or year is stored counted from today (`week+0`,
   `month+0`: `resolveRange` works it out when the filter runs), so a saved "this week" stays this
-  week and the panel says "This week · …"; any other period is stored as its days
+  week and the panel says "This week · …"; so is a range ending today, as days from today
+  (`day-6..day+0`, "Last 7 days · …", `rangeOrRolling`); any other period is stored as its days
   (`yyyy-mm-dd..yyyy-mm-dd`, both included; what they are, a week, a month, …, follows from them).
   The current period can't be kept as fixed days, by design. `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.
@@ -97,7 +98,8 @@ Extension points are registries, not special cases in pages:
   beside (the pane to the right, reused or split off; a new tab on windows < 72rem); middle click =
   new tab. Such links carry `data-own-click`.
 - The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Collections (with the
-  shown space's collections below it) and Components; branches remember being open per
+  shown space's collections below it), Remotes (its remote collections, while it has any; a branch
+  without a page) and Components; branches remember being open per
   device. The space switcher (`ui/SpaceSwitcher.tsx`, always shown) sits in the nav's top row beside the
   menu toggle; its last entry "Manage spaces" opens `#/spaces` (no nav entry).
 - There is no header bar. The side nav toggle (filled/outlined panel icon) sits left of the space

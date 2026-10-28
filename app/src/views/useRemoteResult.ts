@@ -56,6 +56,10 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
   const typed = useSettled(search, SEARCH_DELAY_MS);
   const request = useMemo(() => (remote ? sourceQuery(collection, query, typed, deviceTimeZone()) : undefined), [remote, collection, query, typed]);
   const key = request === undefined ? "" : JSON.stringify(request);
+  // The request by its key: a block renders it anew each time (its filters are new arrays), and
+  // asking again on that would put the first page back over pages "Show more" added.
+  const requestRef = useRef(request);
+  requestRef.current = request;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshes, setRefreshes] = useState(0);
@@ -68,12 +72,14 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
   useEffect(() => {
     if (!remote || !collection.source) return;
     const asked = `${key}#${refreshes}`;
+    const request = requestRef.current;
     if (!request) return;
     sources.query(collection.source.name, { ...request, offset: 0, limit: PAGE, counts: true }).then(
-      (r) => current.current === asked && setLoaded({ key, rows: r.rows, total: r.total ?? r.rows.length, groups: r.groups, more: r.more }),
+      // A total under the rows in (a source that couldn't count them all) counts at least those.
+      (r) => current.current === asked && setLoaded({ key, rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, more: r.more }),
       (e) => current.current === asked && setLoaded({ key, rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) }),
     );
-  }, [remote, collection.source, key, refreshes, request, sources]);
+  }, [remote, collection.source, key, refreshes, sources]);
 
   const more = useCallback(() => {
     if (!loaded || !loaded.more || !request || !collection.source || loadingMore) return;
@@ -82,7 +88,9 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
     sources
       .query(collection.source.name, { ...request, offset: loaded.rows.length, limit: PAGE, counts: false })
       .then(
-        (r) => current.current === asked && setLoaded((l) => l && { ...l, rows: [...l.rows, ...r.rows], more: r.more }),
+        (r) =>
+          current.current === asked &&
+          setLoaded((l) => l && { ...l, rows: [...l.rows, ...r.rows], total: Math.max(l.total, l.rows.length + r.rows.length), more: r.more }),
         (e) => current.current === asked && setLoaded((l) => l && { ...l, error: e instanceof Error ? e.message : String(e) }),
       )
       .finally(() => setLoadingMore(false));

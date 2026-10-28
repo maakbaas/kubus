@@ -1,6 +1,7 @@
 import { fieldKinds } from "../../domain/fieldKinds";
 import {
   newId,
+  NO_TITLE,
   now,
   type FieldDef,
   type FieldKind,
@@ -37,6 +38,7 @@ interface CollectionRow {
   item_views: string | null;
   space_ids: string | null;
   source: string | null;
+  title_field: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -142,6 +144,11 @@ const spaceIdsOf = (json: string | null): string[] | null => {
   return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : null;
 };
 const spaceIdsJson = (ids: string[] | null) => (ids === null ? null : JSON.stringify(ids));
+/** The title field as stored: one of its text fields, NO_TITLE, else null (the first text field with a value). */
+const titleFieldOf = (draft: CollectionDraft) =>
+  draft.titleField === NO_TITLE || draft.fields.some((f) => f.id === draft.titleField && f.kind === "string") ? draft.titleField! : null;
+/** Whether a label field (lf) is one its collection's titles come from (titleFields). */
+const IS_TITLE_FIELD = "coalesce((SELECT tc.title_field FROM collections tc WHERE tc.id = lf.collection_id), lf.id) = lf.id";
 /** A remote collection's source, as stored (null: a native collection). */
 const sourceJson = (draft: CollectionDraft) => (draft.source ? JSON.stringify(draft.source) : null);
 /** The column a field shows: only in a remote collection. */
@@ -286,6 +293,7 @@ export class SqliteRepository implements Repository {
       itemViews: withDefaultItemView(parseItemViews(t.item_views)),
       spaceIds: spaceIdsOf(t.space_ids),
       source: parseJson<CollectionSource | null>(t.source, null),
+      titleField: t.title_field,
       createdAt: t.created_at,
       updatedAt: t.updated_at,
     }));
@@ -299,8 +307,8 @@ export class SqliteRepository implements Repository {
     const existing = await this.db.select<{ id: string }>("SELECT id FROM collections WHERE id = ?1", [draft.id]);
     if (existing.length === 0) {
       writes.push({
-        sql: "INSERT INTO collections (id, name, plural_name, icon, description, space_ids, source, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?7, ?8, ?6, ?6)",
-        bind: [draft.id, draft.name, draft.pluralName, draft.icon, draft.description, ts, spaceIdsJson(draft.spaceIds), sourceJson(draft)],
+        sql: "INSERT INTO collections (id, name, plural_name, icon, description, space_ids, source, title_field, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?7, ?8, ?9, ?6, ?6)",
+        bind: [draft.id, draft.name, draft.pluralName, draft.icon, draft.description, ts, spaceIdsJson(draft.spaceIds), sourceJson(draft), titleFieldOf(draft)],
       });
       // Every collection starts with an ordinary (renamable, deletable) "All" view in the space it
       // was made in: a table of all items sorted by title; its options are filled in by the block
@@ -358,8 +366,8 @@ export class SqliteRepository implements Repository {
     }
 
     writes.push({
-      sql: "UPDATE collections SET name = ?1, plural_name = ?2, icon = ?3, description = ?4, space_ids = ?7, source = ?8, updated_at = ?5 WHERE id = ?6",
-      bind: [draft.name, draft.pluralName, draft.icon, draft.description, ts, draft.id, spaceIdsJson(draft.spaceIds), sourceJson(draft)],
+      sql: "UPDATE collections SET name = ?1, plural_name = ?2, icon = ?3, description = ?4, space_ids = ?7, source = ?8, title_field = ?9, updated_at = ?5 WHERE id = ?6",
+      bind: [draft.name, draft.pluralName, draft.icon, draft.description, ts, draft.id, spaceIdsJson(draft.spaceIds), sourceJson(draft), titleFieldOf(draft)],
     });
     for (const old of removed) {
       writes.push(...(await this.releaseFilesWhere("field_id = ?1", [old.id])));
@@ -441,14 +449,14 @@ export class SqliteRepository implements Repository {
   }
 
   async listLabels(collection: Collection, itemIds?: string[]): Promise<ItemLabel[]> {
-    // Same rule as labelField: the first string field (in the collection's field order) whose value
-    // isn't blank.
+    // Same rule as labelField: the first of its title fields (in the collection's field order) whose
+    // value isn't blank.
     return this.db.select<ItemLabel>(
       `SELECT o.id AS id, o.space_id AS spaceId,
-              (SELECT fv.value_text FROM field_values fv JOIN fields f ON f.id = fv.field_id
-                WHERE fv.item_id = o.id AND f.kind = 'string' AND f.deleted_at IS NULL
+              (SELECT fv.value_text FROM field_values fv JOIN fields lf ON lf.id = fv.field_id
+                WHERE fv.item_id = o.id AND lf.kind = 'string' AND lf.deleted_at IS NULL AND ${IS_TITLE_FIELD}
                   AND trim(fv.value_text, ' ' || char(9, 10, 13)) <> ''
-                ORDER BY f.position, f.created_at LIMIT 1) AS label
+                ORDER BY lf.position, lf.created_at LIMIT 1) AS label
          FROM items o
         WHERE o.collection_id = ?1 AND o.deleted_at IS NULL
           AND (?2 IS NULL OR o.id IN (SELECT value FROM json_each(?2)))`,
@@ -736,7 +744,7 @@ export class SqliteRepository implements Repository {
     // list-of-items fields match on the labels of the items they point to (as listLabels).
     const label = (ref: string) =>
       `(SELECT lv.value_text FROM field_values lv JOIN fields lf ON lf.id = lv.field_id
-         WHERE lv.item_id = ${ref} AND lf.kind = 'string' AND lf.deleted_at IS NULL
+         WHERE lv.item_id = ${ref} AND lf.kind = 'string' AND lf.deleted_at IS NULL AND ${IS_TITLE_FIELD}
            AND trim(lv.value_text, ' ' || char(9, 10, 13)) <> ''
          ORDER BY lf.position, lf.created_at LIMIT 1)`;
     const hits = await this.db.select<{ id: string }>(

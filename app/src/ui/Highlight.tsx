@@ -1,5 +1,7 @@
 import { Fragment } from "react";
+import { Link } from "@carbon/react";
 import { splitWarnings } from "../domain/components";
+import { openExternal } from "../platform/openExternal";
 import { isTag, splitTags, TAG_QUERY_END } from "../domain/tags";
 import { ComponentWarning } from "./ComponentWarning";
 import { TagChip } from "./TagChip";
@@ -28,16 +30,23 @@ export function splitMatches(text: string, re: RegExp): string[] {
   return parts;
 }
 
+/** Web addresses in plain text (http and https), without the punctuation that ends a sentence around them. */
+const URL_IN_TEXT = /\bhttps?:\/\/[^\s<>"]*[^\s<>"'.,;:!?)\]}]/gi;
+
+/** Splits `text` into alternating [plain, url, plain, url, …] parts. */
+export const splitUrls = (text: string): string[] => splitMatches(text, new RegExp(URL_IN_TEXT));
+
 /**
  * Renders `text` with every case-insensitive occurrence of `query` marked, the warnings of
  * failing component sections in it shown as warnings and its `#tags` as tags (TagChip): every
- * plain text the app shows goes through here.
+ * plain text the app shows goes through here. With `links`, its web addresses are links too.
  */
 export function Highlight({
   text,
   query,
   exactTag,
   tags = true,
+  links = false,
 }: {
   text: string;
   query: string;
@@ -45,13 +54,47 @@ export function Highlight({
   exactTag?: boolean;
   /** False where `#` is no tag: code, a link's text. */
   tags?: boolean;
+  /**
+   * Web addresses in it are links (opened outside the app): in values (text, list entries, AI and
+   * component text), never in a title, which is a link to its item itself or is edited by a click.
+   */
+  links?: boolean;
 }) {
   const parts = splitWarnings(text);
   if (parts.length > 1) {
     return (
       <span>
         {parts.map((part, i) =>
-          i % 2 === 1 ? <ComponentWarning key={i}>{part}</ComponentWarning> : <Highlight key={i} text={part} query={query} exactTag={exactTag} tags={tags} />,
+          i % 2 === 1 ? <ComponentWarning key={i}>{part}</ComponentWarning> : <Highlight key={i} text={part} query={query} exactTag={exactTag} tags={tags} links={links} />,
+        )}
+      </span>
+    );
+  }
+  const urlParts = links ? splitUrls(text) : [text];
+  if (urlParts.length > 1) {
+    return (
+      <span>
+        {urlParts.map((part, i) =>
+          i % 2 === 1 ? (
+            <Link
+              key={i}
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              // Opens the address only: not also the item (a card, a row) or the value's editor.
+              data-own-click
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openExternal(part);
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <Marked text={part} query={query} exactTag={exactTag} />
+            </Link>
+          ) : (
+            <Highlight key={i} text={part} query={query} exactTag={exactTag} tags={tags} />
+          ),
         )}
       </span>
     );

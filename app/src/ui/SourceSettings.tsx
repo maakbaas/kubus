@@ -36,7 +36,12 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
   const [mode, setMode] = useState<"table" | "query">(target && "query" in target ? "query" : "table");
   const [query, setQuery] = useState(target && "query" in target ? target.query : "");
   const sourceName = source?.name ?? "";
-  const info = offered?.find((s) => s.name === sourceName);
+  // A source renamed since is found by its former name; the collection then takes the new one.
+  const info = offered?.find((s) => s.name === sourceName) ?? offered?.find((s) => s.formerNames?.includes(sourceName));
+  const renamedTo = info && info.name !== sourceName ? info.name : null;
+  useEffect(() => {
+    if (renamedTo && source) onChange({ ...draft, source: { ...source, name: renamedTo } });
+  }, [renamedTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     sources.list().then(setOffered, (e) => setError(errorMessage(e)));

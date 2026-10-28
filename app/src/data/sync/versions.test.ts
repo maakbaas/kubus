@@ -4,7 +4,7 @@
 // column one side doesn't know stays as it is on the other.
 import { beforeEach, describe, expect, it } from "vitest";
 import { device, FakeServer, settled } from "../../test/fakeServer";
-import { SYNC_VERSION } from "../../../../shared/sync";
+import { SYNC_COMPATIBLE, SYNC_VERSION } from "../../../../shared/sync";
 
 let server: FakeServer;
 beforeEach(() => {
@@ -28,7 +28,8 @@ describe("versions", () => {
   });
 
   it("refuse a device whose data a server of an older version can't take", async () => {
-    server.version = SYNC_VERSION - 1;
+    // Older than the oldest version that reads this device's data right.
+    server.version = SYNC_COMPATIBLE - 1;
     const repo = await device();
     expect(repo.sync.status).toMatchObject({ state: "error", error: "Update the server" });
   });
