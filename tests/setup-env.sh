@@ -36,11 +36,9 @@ if ! docker info >/dev/null 2>&1; then
   (dockerd >/tmp/dockerd.log 2>&1 &)
   for _ in $(seq 30); do docker info >/dev/null 2>&1 && break; sleep 1; done
 fi
-docker compose -f tests/services.yml up -d --wait $([ -n "${PG_LOCAL:-}" ] && echo "mysql mariadb" || echo "")
-
-if [ "$CONNECTORS" = 1 ]; then
-  docker compose -f tests/services.yml --profile connectors up -d --wait
-fi
+SERVICES=$([ -n "${PG_LOCAL:-}" ] && echo "mysql mariadb" || echo "postgres mysql mariadb")
+[ "$CONNECTORS" = 1 ] && SERVICES="$SERVICES influxdb n8n actual actual-api"
+docker compose -f tests/services.yml --profile connectors up -d --wait $SERVICES
 
 if [ "$GUI" = 1 ]; then
   command -v playwright-cli >/dev/null || npm install -g @playwright/cli@0.1.22
