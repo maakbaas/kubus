@@ -7,7 +7,7 @@
 import { TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceRow, type SourceShape, type SourceSort } from "../../../shared/sources";
 import { resolveRange } from "./datePeriod";
 import { fieldKindList } from "./fieldKinds";
-import { blankField, isMetaField, newId, titleFields, type Collection, type CollectionSource, type FieldDef, type FieldKind, type FieldValue, type Item } from "./model";
+import { blankField, isMetaField, newId, SELF_FIELD, selfField, titleFields, type Collection, type CollectionSource, type FieldDef, type FieldKind, type FieldValue, type Item } from "./model";
 import { filterTree, mapTree } from "./filterTree";
 import { filterValueProblem, isGroupable, waitsForValue, operatorsFor, TITLE, type FilterRule, type OperatorSpec, type ViewQuery } from "./query";
 
@@ -35,6 +35,8 @@ const PLAIN_OPS = new Set(["contains", "notContains", "isEmpty", "isNotEmpty"]);
 
 /** The filter operators of a field: in a remote collection, those its column supports (none for a field of its own). */
 export function fieldOperators(collection: Collection, field: FieldDef): OperatorSpec[] {
+  // The item itself is this one or not (always set: never empty).
+  if (field.id === SELF_FIELD) return operatorsFor(field.kind).filter((o) => o.needsValue);
   if (!collection.source || isMetaField(field)) return operatorsFor(field.kind);
   const column = sourceColumn(collection, field);
   if (!column) return [];
@@ -141,7 +143,8 @@ export function sourceQuery(
   timeZone: string,
 ): Omit<SourceQuery, "offset" | "limit" | "counts"> {
   const shape = sourceShape(collection);
-  const byId = new Map(collection.fields.map((f) => [f.id, f]));
+  // The item itself is its row's key ("Item is This Row": the page's row).
+  const byId = new Map([...collection.fields, { ...selfField(collection), column: shape.key }].map((f) => [f.id, f]));
   // A rule still without its value (just added) doesn't filter yet; one on a column the source can't filter by neither.
   const paired = (rules: FilterRule[]): Paired[] =>
     rules.flatMap((rule) => {
@@ -158,6 +161,10 @@ export function sourceQuery(
       : mapTree<Paired, SourceFilter>(tree, (rule) => {
           const value = rule.value.trim();
           if (filterValueProblem(rule.field, rule.operator, value)) return never;
+          if (rule.field.id === SELF_FIELD) {
+            const key = rowKey(value);
+            return key === null ? never : { column: rule.column, operator: rule.operator, value: key };
+          }
           if (rule.operator !== "between") return { column: rule.column, operator: rule.operator, value };
           const period = resolveRange(value);
           return period ? { column: rule.column, operator: "between", value: `${period.start}..${period.end}` } : never;

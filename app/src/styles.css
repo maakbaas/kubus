@@ -2789,6 +2789,22 @@ img[data-lightbox] {
 .item-view .views-bar {
   margin-bottom: var(--cds-spacing-06);
 }
+/* A chart block: Carbon Charts sizes its chart to the block's width (its height is the chart's
+   own option). While Carbon Charts loads (the first chart only), the room of a medium chart is kept. */
+.chart-block {
+  inline-size: 100%;
+}
+.chart-block__loading {
+  block-size: 24rem;
+}
+.chart-block__problem {
+  margin: 0;
+}
+/* A chart's settings: notes span the options grid. */
+.chart-options__note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
 /* In a toolbar popover, view-type options stack in one column. */
 .toolbar-popover .view-options {
   grid-template-columns: minmax(0, 1fr);

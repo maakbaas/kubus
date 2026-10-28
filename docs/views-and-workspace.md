@@ -62,7 +62,31 @@ Extension points are registries, not special cases in pages:
   the same at every width (labels beside values, a label wrapping when the card is very narrow), and
   only "Show as a list when narrow" changes it: in a pane narrower than tables restack in
   (`STACK_BELOW_REM`), one card per row as list rows, cover beside the text) and
-  `component` (`views/ComponentBlock.tsx`). `markdown` (`views/MarkdownBlock.tsx`) is a block with its own Markdown text, stored in the block's options: a local static component (GFM whose `{{ }}` sections may use `$now`, nothing about items); it is shown (rendered) and edited (as written) exactly like a Markdown field (same read-only box, `FieldEditor`); "Save as shared component" in its Block settings stores the text as a new shared static component (named like the block) and turns the block into a component block showing it. A component block shows a shared component (`options.componentId`), picked in its Block settings, which also have "Edit component" (its page) and "New component" (named in a dialog, picked, and opened beside the page to be written, `NewBlockComponentModal`): a block's code is never written in a popover. Its own component (`options.local`) was written in Block settings by earlier versions and still shows; its settings then offer only "Save as shared component". "Add block" is a menu (`views/AddBlockButton.tsx`): a block of each type ("New component…" for a component block, as above) and one per shared block or static component. A block type only
+  `chart` (`views/ChartBlock.tsx`: settings and view; `domain/chart.ts`: the values, pure; `views/chartSpec.ts`: Carbon
+  Charts' component, data and options for them; `views/ChartCanvas.tsx`: Carbon Charts itself, a lazily loaded chunk with
+  d3, so the app doesn't load it until a chart is shown). Like a table, its filter picks the items and its grouping (Sort
+  and group) makes the categories: grouped by Status it is a bar per status, with nothing to set; not grouped, one
+  category of all its items. A date's groups are merged into steps (Date steps: day, week (Sunday to Saturday), month,
+  year, or automatic by how far the dates spread); a line gets every step from the first to the last, in time order.
+  Its settings (`ChartOptions`, all in Block settings): Chart (13 types in sections: Compare: Bar, Radar, Bullet; Over
+  time: Line; Parts of a whole: Pie, Treemap, Word cloud; Spread: Histogram, Box plot, Scatter, Heatmap; One value:
+  Gauge, Meter), Value (Count of items, or the Sum / Average / Minimum / Maximum of a number field: number fields and
+  AI or component fields giving numbers, `numberFields`), Split by (a second field: series, at most 12, the rest
+  "Other"), Show (the largest n categories, the rest "Other"), Show items without a value ("No value"), Height, Width (full, or at most 24 / 40 / 64rem: a
+  gauge as wide as a pane is mostly empty, so switching to one makes a full-width chart small), and
+  per type: Bar horizontal, stacked, lollipops, a second value drawn as a line on its own axis (Carbon's combo chart;
+  also for Line); Line fill the area (stacked areas when split, optionally as shares of 100%), running total, compact
+  (a sparkline: no axes, legend or grid); Pie donut (the total in its centre); Radar its spokes (three or more number
+  fields; a count is averaged); Histogram its field and bins; Box plot its field (a box per group); Scatter X (a
+  number or date), Y and Size (bubbles), a dot per item, clicking one opens it; Heatmap categories × Split by, or,
+  grouped by a date and not split, a calendar (weeks × weekdays; empty cells left undrawn); Gauge, Meter and Bullet
+  measure against a number, a field (its values made into one the same way: on a block of one item, that item's
+  own, "Pages read of Pages") or nothing (the value is a %), Gauge and Meter turn yellow / red from a warning and
+  danger share, Meter can show the groups as parts of a whole, Bullet a bar per group against its target. A setting
+  still to choose (a field, three spokes) or nothing to chart says so instead of an empty chart. The chart follows
+  the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart charts the rows loaded so far
+  (roadmap #7). 
+  `markdown` (`views/MarkdownBlock.tsx`) is a block with its own Markdown text, stored in the block's options: a local static component (GFM whose `{{ }}` sections may use `$now`, nothing about items); it is shown (rendered) and edited (as written) exactly like a Markdown field (same read-only box, `FieldEditor`); "Save as shared component" in its Block settings stores the text as a new shared static component (named like the block) and turns the block into a component block showing it. A component block shows a shared component (`options.componentId`), picked in its Block settings, which also have "Edit component" (its page) and "New component" (named in a dialog, picked, and opened beside the page to be written, `NewBlockComponentModal`): a block's code is never written in a popover. Its own component (`options.local`) was written in Block settings by earlier versions and still shows; its settings then offer only "Save as shared component". "Add block" is a menu (`views/AddBlockButton.tsx`): a block of each type ("New component…" for a component block, as above) and one per shared block or static component. A block type only
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
 - **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + JSON config

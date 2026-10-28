@@ -84,6 +84,12 @@ describe("remote collections", () => {
     expect(sourceQuery(people, { ...defaultQuery(), filters: [{ id: "1", fieldId: "f-born", operator: "before", value: "soon" }] }, "", "UTC").filter).toEqual({ or: [] });
   });
 
+  it("send the item itself as its row's key", () => {
+    const is = (value: string) => sourceQuery(people, { ...defaultQuery(), filters: [{ id: "1", fieldId: "$id", operator: "is", value }] }, "", "UTC").filter;
+    expect(is(rowItemId("42"))).toEqual({ column: "id", operator: "is", value: "42" });
+    expect(fieldOperators(people, { ...blankField("$id", "Item", "item") }).map((o) => o.id)).toEqual(["is", "isNot"]);
+  });
+
   it("send the view's (or page's) filter and the block's as one and / or tree", () => {
     const name = (value: string, join?: "or") => ({ id: value, fieldId: "f-name", operator: "contains" as const, value, ...(join && { join }) });
     const q = sourceQuery(people, { ...defaultQuery(), inherited: [name("a")], filters: [name("b", "or"), name("c")] }, "", "UTC");

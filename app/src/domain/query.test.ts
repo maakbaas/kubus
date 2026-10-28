@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FieldDef, Item, Collection } from "./model";
-import { applyQuery, defaultQuery, filterCodeValue, filterPreset, filterValueProblem, resolveFilterValues, type FilterRule, type QueryContext } from "./query";
+import { applyQuery, defaultQuery, filterCodeValue, filterPreset, filterValueProblem, PAGE_ITEM, resolveFilterValues, type FilterRule, type QueryContext } from "./query";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], position: number): FieldDef => ({
   id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position,
@@ -44,6 +44,20 @@ describe("applyQuery", () => {
     const is = (value: string) => ids(applyQuery(withRead, items, { ...defaultQuery(), filters: [{ id: "f", fieldId: "read", operator: "is" as const, value }] }, ctx));
     expect(is("true")).toEqual(["1"]);
     expect(is(" False ")).toEqual(["2", "3"]);
+  });
+});
+
+describe("the item itself", () => {
+  it("filters an item page's block to the page's item, or every other one", () => {
+    const rule = (operator: "is" | "isNot"): FilterRule => ({ id: "f", fieldId: "$id", operator, value: PAGE_ITEM });
+    const page = { collection, item: books[2], refLabel: () => "" };
+    const run = (operator: "is" | "isNot") => ids(applyQuery(collection, books, { ...defaultQuery(), filters: resolveFilterValues([rule(operator)], page) }, ctx));
+    expect(run("is")).toEqual(["3"]);
+    expect(run("isNot")).toEqual(["2", "1"]);
+    // Not on an item page: nothing to be.
+    expect(applyQuery(collection, books, { ...defaultQuery(), filters: resolveFilterValues([rule("is")], null) }, ctx).total).toBe(3);
+    // A new item isn't given an id by it.
+    expect(filterPreset(collection, [{ ...rule("is"), value: "3" }])).toEqual({});
   });
 });
 

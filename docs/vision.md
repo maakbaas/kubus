@@ -17,7 +17,7 @@ Rules that keep this from becoming three products glued together:
   kind. Sketch:
   `{ edit, create, delete, editSchema, offline, serverQuery }`; the native source declares all.
 - **Views and components are source-agnostic.** Table, cards, field and block components and
-  (future) chart/dashboard block types render "items of a collection", wherever they come from. If remote
+  the chart block (and future dashboards) render "items of a collection", wherever they come from. If remote
   data ever needs its own pages or its own query editor, the design has gone wrong.
 - **Native vs remote:**
 
@@ -56,7 +56,8 @@ The stages, in order:
 - **Remote sources**, read-only: tables and SQL queries through the server, same views and
   components (docs/sync.md "Remote sources"). Built for Postgres, n8n data tables, InfluxDB 2 and Cloudflare D1. Remote data stays read-only by
   design (no Directus side).
-- **Chart / dashboard block types** (Metabase side). Not started.
+- **Chart / dashboard block types** (Metabase side). The chart block is built (docs/views-and-workspace.md
+  "Block types"); what is left is roadmap #7.
 
 ## Open items
 
@@ -85,7 +86,10 @@ Remote sources:
 
 Charts:
 
-7. Chart / dashboard block types.
+7. Charts of remote collections over all their rows: today a chart charts the rows loaded so far
+   (a page at a time, "Show more" under it); counts could come from the source's group counts
+   (`SourceResult.groups`), sums, averages, minimums and maximums from a new aggregate in the source
+   query. Dashboards: charts of several collections side by side.
 
 Local storage:
 

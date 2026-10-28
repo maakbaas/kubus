@@ -101,7 +101,8 @@ function __design(opts) {
     const SCALE = new Set([0, 2, 4, 8, 12, 16, 24, 32, 40, 48, 64, 80, 96, 160]);
     const PROPS = ["marginTop", "marginRight", "marginBottom", "marginLeft", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "rowGap", "columnGap"];
     for (const el of shown) {
-      if ([...el.classList].some((c) => c.startsWith("cds--")) || el.closest(USER_CONTENT) || !el.classList.length) continue;
+      // A chart's insides are Carbon Charts' (Carbon's design: its tooltips, legends and axes).
+      if ([...el.classList].some((c) => c.startsWith("cds--")) || el.closest(USER_CONTENT + ", .cds--chart-holder") || !el.classList.length) continue;
       // The page's end also clears the home indicator and an on-screen keyboard (keyboardInset.ts).
       if (el.matches(".app-content, .cds--data-table td, .cds--data-table th")) continue;
       const pageEnd = el.matches(".ws-tab-content");
@@ -168,8 +169,8 @@ function __design(opts) {
     };
     const WEIGHTS = new Set(["300", "400", "600"]);
     // Carbon's components with their own text settings (tree nodes, the tab strip's contained tabs,
-    // sortable table headers): Carbon's design.
-    const CARBON_TEXT = ".cds--tree-node, .cds--tabs--contained, .cds--table-header-label, .cds--table-sort";
+    // sortable table headers, Carbon Charts' axes, legends and tooltips): Carbon's design.
+    const CARBON_TEXT = ".cds--tree-node, .cds--tabs--contained, .cds--table-header-label, .cds--table-sort, .cds--chart-holder";
     for (const el of shown) {
       if (!ownText(el) || el.closest(USER_CONTENT + ", .item-card__cover, " + CARBON_TEXT)) continue;
       const s = cs(el);
@@ -188,7 +189,7 @@ function __design(opts) {
     // the content switcher's ends, loading spinner; the Markdown's inline code (the editor's).
     const ROUND = ".cds--popover-content, .cds--checkbox-label, .cds--toggle__switch, .cds--toggle__appearance, .cds--tag, .cds--slider__thumb, .cds--radio-button__appearance, .cds--loading, .cds--popover-caret, .cds--tooltip-content, .cds--skeleton";
     // Floating layers (shadows give them depth) and the dragged row of a reorder.
-    const FLOATING = ".cds--popover-content, .overflow-bar[data-open] > .overflow-bar__items, .cds--modal-container, .cds--list-box__menu, .cds--overflow-menu-options, .flatpickr-calendar, [role=menu], .search-bar, .cds--side-nav, [data-dragging], .cds--toast-notification, .ws-drop";
+    const FLOATING = ".cds--popover-content, .overflow-bar[data-open] > .overflow-bar__items, .cds--modal-container, .cds--list-box__menu, .cds--overflow-menu-options, .flatpickr-calendar, [role=menu], .search-bar, .cds--side-nav, [data-dragging], .cds--toast-notification, .ws-drop, .cds--cc--tooltip";
     for (const el of shown) {
       const s = cs(el);
       const radius = [s.borderTopLeftRadius, s.borderTopRightRadius, s.borderBottomLeftRadius, s.borderBottomRightRadius].map(px);
