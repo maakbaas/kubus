@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:
 import { HttpError } from "../../shared/router.ts";
 import { SOURCE_NAME, type ServerAiSettings, type ServerSettingsUpdate, type ServerSettingsView, type ServerSourceSettings } from "../../shared/settings.ts";
 import type { SourceConfig } from "./connectors/connector.ts";
-import { connectionKinds, fieldsFor, placeOf } from "./connectors/kinds.ts";
+import { connectionKinds, fieldsFor, hintOf, placeOf, secretKeysOf } from "./connectors/kinds.ts";
 
 // The server's own settings (shared/settings.ts): the language model it offers and the sources it
 // reads, set in the app (Settings → AI and Connections) and stored in its table server_settings, secrets
@@ -18,6 +18,8 @@ export interface StoredAi extends ServerAiSettings {
 }
 export interface StoredSource extends ServerSourceSettings {
   password: string;
+  /** Its secret fields (kinds.ts ConnectionField.secret), kept like the password: only the set ones. */
+  secrets: Record<string, string>;
   /** The names it had before (renamed in the settings): collections made under one still read it. */
   formerNames: string[];
 }
@@ -71,7 +73,10 @@ function open(secret: string, key: Buffer | null): string {
 /** The stored secrets, each with what it is for (for the log). */
 const secretsOf = (stored: Stored) => [
   { what: "the language model's key", secret: stored.ai.key },
-  ...stored.sources.map((s) => ({ what: `${s.name}'s password`, secret: s.password })),
+  ...stored.sources.flatMap((s) => [
+    { what: `${s.name}'s password`, secret: s.password },
+    ...Object.entries(s.secrets).map(([key, secret]) => ({ what: `${s.name}'s ${key}`, secret })),
+  ]),
 ];
 
 /** What is wrong with how the secrets are stored, for the log at start ([] = nothing). */
@@ -92,7 +97,8 @@ export async function loadSettings(pool: Db, key: Buffer | null): Promise<{ stor
   const sources = Array.isArray(value("sources")) ? (value("sources") as Partial<StoredSource>[]) : [];
   // Read whole: encrypted, a secret of applyUpdate's 2000 characters is longer.
   const secret = (v: unknown) => text(v, 4000);
-  const plainText = [ai.key, ...sources.map((s) => s.password)].some((v) => secret(v) !== "" && !isSealed(secret(v)));
+  const secretsOfSource = (s: Partial<StoredSource>) => (s.secrets && typeof s.secrets === "object" ? Object.values(s.secrets) : []);
+  const plainText = [ai.key, ...sources.flatMap((s) => [s.password, ...secretsOfSource(s)])].some((v) => secret(v) !== "" && !isSealed(secret(v)));
   const stored: Stored = {
     ai: { url: text(ai.url), key: open(secret(ai.key), key), fieldModel: text(ai.fieldModel), codeModel: text(ai.codeModel) },
     sources: sources.map((s) => ({
@@ -101,6 +107,11 @@ export async function loadSettings(pool: Db, key: Buffer | null): Promise<{ stor
       kind: text(s.kind),
       fields: fieldsFor(text(s.kind), s.fields) ?? {},
       password: open(secret(s.password), key),
+      secrets: Object.fromEntries(
+        secretKeysOf(text(s.kind))
+          .map((k) => [k, open(secret((s.secrets as Record<string, unknown> | undefined)?.[k]), key)] as const)
+          .filter(([, v]) => v !== ""),
+      ),
       formerNames: Array.isArray(s.formerNames) ? s.formerNames.map((n) => text(n, 40)).filter(Boolean) : [],
       schemas: Array.isArray(s.schemas) ? s.schemas.map((x) => text(x)).filter(Boolean) : [],
       timeoutSeconds: typeof s.timeoutSeconds === "number" && s.timeoutSeconds > 0 ? s.timeoutSeconds : 30,
@@ -112,7 +123,11 @@ export async function loadSettings(pool: Db, key: Buffer | null): Promise<{ stor
 /** Stores the settings, the secrets encrypted with the key when there is one. */
 export async function saveSettings(pool: Db, stored: Stored, key: Buffer | null): Promise<void> {
   const ai = { ...stored.ai, key: seal(stored.ai.key, key) };
-  const sources = stored.sources.map((s) => ({ ...s, password: seal(s.password, key) }));
+  const sources = stored.sources.map((s) => ({
+    ...s,
+    password: seal(s.password, key),
+    secrets: Object.fromEntries(Object.entries(s.secrets).map(([k, v]) => [k, seal(v, key)])),
+  }));
   await pool.query(
     `INSERT INTO server_settings (key, value, updated_at) VALUES ('ai', $1, now()), ('sources', $2, now())
      ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
@@ -136,8 +151,14 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
     const fields = fieldsFor(kind, s.fields);
     if (!fields) throw new HttpError(400, `${name}: the server doesn't read sources of the kind “${kind}”`);
     const before = old.sources.find((o) => o.id === s.id);
-    const password =
-      typeof s.password === "string" ? s.password : before && placeOf(before.kind, before.fields) === placeOf(kind, fields) ? before.password : "";
+    // The secret fields given, else the stored ones (while of the same kind): kept below only if the place stays.
+    const given = s.secrets && typeof s.secrets === "object" ? s.secrets : {};
+    const isGiven = (k: string) => typeof given[k] === "string";
+    const secretKeys = secretKeysOf(kind);
+    const candidate = Object.fromEntries(secretKeys.map((k) => [k, isGiven(k) ? text(given[k]) : before?.kind === kind ? (before.secrets[k] ?? "") : ""]));
+    const samePlace = !!before && placeOf(before.kind, { ...before.fields, ...before.secrets }) === placeOf(kind, { ...fields, ...candidate });
+    const secrets = Object.fromEntries(secretKeys.map((k) => [k, isGiven(k) || samePlace ? candidate[k] : ""] as const).filter(([, v]) => v !== ""));
+    const password = typeof s.password === "string" ? s.password : samePlace ? before.password : "";
     const timeout = Number(s.timeoutSeconds);
     // Renamed: its old name is kept, so collections that read it by that name still do.
     const formerNames = before ? [...before.formerNames, ...(before.name !== name ? [before.name] : [])] : [];
@@ -148,6 +169,7 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
       kind,
       fields,
       password,
+      secrets,
       schemas: Array.isArray(s.schemas) ? s.schemas.map((x) => text(x, 200)).filter(Boolean) : [],
       timeoutSeconds: Number.isFinite(timeout) && timeout > 0 ? Math.min(timeout, 3600) : 30,
     };
@@ -159,7 +181,15 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
 
 /** What the connectors are given. */
 export function sourceConfigs(stored: Stored): SourceConfig[] {
-  return stored.sources.map((s) => ({ name: s.name, formerNames: s.formerNames, kind: s.kind, fields: s.fields, password: usable(s.password), schemas: s.schemas, timeoutMs: Math.round(s.timeoutSeconds * 1000) }));
+  return stored.sources.map((s) => ({
+    name: s.name,
+    formerNames: s.formerNames,
+    kind: s.kind,
+    fields: { ...s.fields, ...Object.fromEntries(Object.entries(s.secrets).map(([k, v]) => [k, usable(v)])) },
+    password: usable(s.password),
+    schemas: s.schemas,
+    timeoutMs: Math.round(s.timeoutSeconds * 1000),
+  }));
 }
 
 /** The settings as a device sees them: secrets left out. */
@@ -168,6 +198,11 @@ export function viewOf(stored: Stored, status: (name: string) => { connector?: s
   return {
     ai: { ...ai, keySet: usable(key) !== "" },
     kinds: connectionKinds(),
-    sources: stored.sources.map(({ password, formerNames: _formerNames, ...s }) => ({ ...s, passwordSet: usable(password) !== "", ...status(s.name) })),
+    sources: stored.sources.map(({ password, secrets, formerNames: _formerNames, ...s }) => ({
+      ...s,
+      passwordSet: usable(password) !== "",
+      secretHints: Object.fromEntries(Object.entries(secrets).filter(([, v]) => usable(v) !== "").map(([k, v]) => [k, hintOf(v)])),
+      ...status(s.name),
+    })),
   };
 }

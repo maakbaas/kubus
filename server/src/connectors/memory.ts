@@ -7,8 +7,9 @@ import { SourceError } from "./connector.ts";
 // sorts, groups, counts and pages them as postgresSql.ts does in SQL, which follows the app's own
 // applyQuery: text compared case-insensitively, empty values last both ways, a date & time on the
 // day it is in the device's time zone, the key breaking ties. Text sorts as the app's does
-// ("Customer 9" before "Customer 10"). Pure, tested in app/src/data/remote/memory.test.ts. Lists
-// (string_list) aren't read by any connector that uses it yet, so it doesn't take them.
+// ("Customer 9" before "Customer 10"). Pure, tested in server/test/connectors/memory.test.ts. A list
+// (string_list) is filtered by its text ("a, b") as the app's are, sorted by it, and a row is grouped
+// under each of its values (as postgresSql.ts does).
 
 /** A row: its values by column name. */
 export type MemoryRow = Record<string, SourceValue>;
@@ -47,7 +48,8 @@ export function ruleTest(c: SourceColumn, rule: SourceFilter, day: (iso: string)
     throw new SourceError(`“${c.name}” can't be filtered with ${op}`);
   };
   const never = () => false;
-  if (c.kind === "string") {
+  if (c.kind === "string" || c.kind === "string_list") {
+    const list = c.kind === "string_list";
     const needle = value.toLowerCase();
     const text = (row: MemoryRow) => textOf(get(row)).toLowerCase();
     switch (op) {
@@ -61,7 +63,7 @@ export function ruleTest(c: SourceColumn, rule: SourceFilter, day: (iso: string)
         return (row) => text(row) !== "";
       case "is":
       case "isNot":
-        if (c.plain) return refuse();
+        if (list || c.plain) return refuse();
         return op === "is" ? (row) => text(row) === needle : (row) => text(row) !== needle;
       default:
         return refuse();
@@ -171,7 +173,7 @@ function sortKeyOf(c: SourceColumn): (row: MemoryRow) => Key {
     if (v === null || v === "") return null;
     if (typeof v === "number") return v;
     if (c.kind === "datetime") return Date.parse(String(v));
-    return textOf(v).toLowerCase();
+    return textOf(v).toLowerCase() || null; // an empty list too
   };
 }
 
@@ -184,16 +186,17 @@ function compareKeys(a: Key, b: Key, direction: 1 | -1): number {
   return String(a).localeCompare(String(b), undefined, { numeric: true }) * direction;
 }
 
-/** The group a row is in, as text ("" for none), as postgresSql.ts makes it. */
-function groupKeyOf(c: SourceColumn, day: (iso: string) => string | null): (row: MemoryRow) => string {
+/** The groups a row is in, as text ("" for none), as postgresSql.ts makes them: a list's row is in one per value. */
+function groupKeysOf(c: SourceColumn, day: (iso: string) => string | null): (row: MemoryRow) => string[] {
   if (c.plain) throw new SourceError(`“${c.name}” can't be grouped`);
   return (row) => {
     const v = row[c.name] ?? null;
-    if (c.kind === "checkbox") return v === true ? "yes" : "no";
-    if (v === null) return "";
-    if (c.kind === "datetime") return day(String(v)) ?? "";
-    if (c.kind === "date") return String(v).slice(0, 10);
-    return textOf(v);
+    if (c.kind === "checkbox") return [v === true ? "yes" : "no"];
+    if (v === null) return [""];
+    if (Array.isArray(v)) return v.length ? [...new Set(v.map(String))] : [""];
+    if (c.kind === "datetime") return [day(String(v)) ?? ""];
+    if (c.kind === "date") return [String(v).slice(0, 10)];
+    return [textOf(v)];
   };
 }
 
@@ -228,11 +231,14 @@ export function queryRows(rows: MemoryRow[], columns: Map<string, SourceColumn>,
   let groups: { key: string; count: number }[] | undefined;
   if (query.groupBy) {
     const group = column(columns, query.groupBy);
-    const groupOf = groupKeyOf(group, day);
+    const groupsOf = groupKeysOf(group, day);
     const byGroup = new Map<string, MemoryRow[]>();
     for (const { row } of keyed) {
-      const g = groupOf(row);
-      byGroup.set(g, [...(byGroup.get(g) ?? []), row]);
+      for (const g of groupsOf(row)) {
+        const members = byGroup.get(g);
+        if (members) members.push(row);
+        else byGroup.set(g, [row]);
+      }
     }
     const value = (g: string): Key => (g === "" ? null : group.kind === "number" ? Number(g) : group.kind === "checkbox" ? (g === "yes" ? 0 : 1) : g);
     const direction = query.groupOrder === "desc" ? -1 : 1;

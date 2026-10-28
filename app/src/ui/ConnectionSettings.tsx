@@ -8,9 +8,17 @@ import { useServerSettings } from "./useServerSettings";
 // The databases the connected server reads for remote collections (its sources), the same for every
 // device: part of the server's settings (useServerSettings). Each is set up with its kind's own fields,
 // as the server describes them (shared/settings.ts ConnectionKind), so the app knows no database. A password is typed once: it is never
-// shown again, and stays while left empty (until the address it goes to changes).
+// shown again, and stays while left empty (until the address it goes to changes). A secret field (a calendar's address) is the same,
+// shown only by its hint (its host).
 
-type SourceDraft = Omit<ServerSettingsUpdate["sources"][number], "schemas"> & { passwordSet: boolean; schemasText: string };
+type SourceDraft = Omit<ServerSettingsUpdate["sources"][number], "schemas" | "secrets"> & {
+  passwordSet: boolean;
+  schemasText: string;
+  /** The set secret fields' hints (from the server). */
+  secretHints: Record<string, string>;
+  /** The secret fields typed here (sent; the rest are kept). */
+  secrets: Record<string, string>;
+};
 
 const draftOf = (view: ServerSettingsView): SourceDraft[] =>
   view.sources.map((s) => ({
@@ -19,15 +27,18 @@ const draftOf = (view: ServerSettingsView): SourceDraft[] =>
     kind: s.kind,
     fields: s.fields,
     passwordSet: s.passwordSet,
+    secretHints: s.secretHints ?? {},
+    secrets: {},
     schemasText: s.schemas.join(", "),
     timeoutSeconds: s.timeoutSeconds,
   }));
 
 const updateOf = (draft: SourceDraft[]): ServerSettingsUpdate["sources"] =>
-  draft.map(({ passwordSet: _p, schemasText, password, ...s }) => ({
+  draft.map(({ passwordSet: _p, secretHints: _h, schemasText, password, secrets, ...s }) => ({
     ...s,
     schemas: schemasText.split(",").map((x) => x.trim()).filter(Boolean),
     ...(password !== undefined && { password }),
+    ...(Object.keys(secrets).length > 0 && { secrets }),
   }));
 
 export function ConnectionSettings() {
@@ -89,7 +100,7 @@ export function ConnectionSettings() {
                 labelText="Kind"
                 value={s.kind}
                 // Another kind: none of the last one's fields (or schemas) applies.
-                onChange={(e) => setSource(i, { kind: e.target.value, fields: {}, schemasText: "" })}
+                onChange={(e) => setSource(i, { kind: e.target.value, fields: {}, secrets: {}, schemasText: "" })}
               >
                 {!kind && <SelectItem value={s.kind} text={s.kind ? `${s.kind} (unknown)` : "Choose a kind"} />}
                 {kinds.map((k) => (
@@ -111,6 +122,22 @@ export function ConnectionSettings() {
                       <SelectItem key={c.value} value={c.value} text={c.text} />
                     ))}
                   </Select>
+                ) : f.secret ? (
+                  <PasswordInput
+                    key={f.key}
+                    size="sm"
+                    id={`${uid}-src-${f.key}-${s.id}`}
+                    labelText={f.label}
+                    placeholder={
+                      f.key in s.secretHints && s.secrets[f.key] === undefined ? `Set${s.secretHints[f.key] ? ` (${s.secretHints[f.key]})` : ""}: type to replace it` : f.placeholder
+                    }
+                    helperText={f.helperText}
+                    value={s.secrets[f.key] ?? ""}
+                    onChange={(e) => {
+                      const { [f.key]: _old, ...rest } = s.secrets;
+                      setSource(i, { secrets: e.target.value ? { ...rest, [f.key]: e.target.value } : rest });
+                    }}
+                  />
                 ) : (
                   <TextInput
                     key={f.key}
@@ -168,7 +195,7 @@ export function ConnectionSettings() {
             size="sm"
             renderIcon={Add}
             onClick={() =>
-              setDraft((d) => d && [...d, { id: crypto.randomUUID(), name: "", kind: kinds[0]?.id ?? "", fields: {}, schemasText: "", timeoutSeconds: 30, passwordSet: false }])
+              setDraft((d) => d && [...d, { id: crypto.randomUUID(), name: "", kind: kinds[0]?.id ?? "", fields: {}, secrets: {}, secretHints: {}, schemasText: "", timeoutSeconds: 30, passwordSet: false }])
             }
           >
             Add connection

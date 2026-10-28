@@ -90,4 +90,23 @@ describe("queryRows", () => {
     expect(findRow(rows, columns, { ...base(), keyValue: "2" })).toEqual({ key: "2", values: ["Bob", 41] });
     expect(findRow(rows, columns, { ...base(), keyValue: "99" })).toBeNull();
   });
+  it("filters, sorts and groups lists as the app does", () => {
+    const tagged = new Map<string, SourceColumn>([...columns, ["tags", { name: "tags", type: "list", kind: "string_list" }]]);
+    const list: MemoryRow[] = [
+      { id: 1, name: "a", tags: ["Work", "home"] },
+      { id: 2, name: "b", tags: [] },
+      { id: 3, name: "c", tags: ["home"] },
+      { id: 4, name: "d", tags: null },
+    ];
+    const q = (over: Partial<SourceQuery>) => queryRows(list, tagged, base({ columns: ["tags"], ...over }));
+    const keys = (over: Partial<SourceQuery>) => q(over).rows.map((r) => Number(r.key));
+    expect(keys({ filter: { column: "tags", operator: "contains", value: "WORK" } })).toEqual([1]);
+    expect(keys({ filter: { column: "tags", operator: "isEmpty", value: "" } })).toEqual([2, 4]);
+    expect(() => q({ filter: { column: "tags", operator: "is", value: "home" } })).toThrow();
+    expect(keys({ sort: [{ column: "tags", direction: "desc" }] })).toEqual([1, 3, 2, 4]);
+    const grouped = q({ groupBy: "tags", sort: [] });
+    expect(grouped.groups).toEqual([{ key: "home", count: 2 }, { key: "Work", count: 1 }, { key: "", count: 2 }]);
+    expect(grouped.total).toBe(4);
+    expect(grouped.rows.map((r) => `${r.key}:${r.group}`)).toEqual(["1:home", "3:home", "1:Work", "2:", "4:"]);
+  });
 });

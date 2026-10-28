@@ -168,7 +168,17 @@ Connections (name, kind, that kind's own fields, password, schemas, a time limit
 connection string); its kind picks the connector, which reads the fields (`SourceConfig`). The server describes the
 kinds and their fields (`server/src/connectors/kinds.ts`; `ConnectionKind` in `shared/settings.ts`, `GET
 /api/settings` → `kinds`), so the app knows no database: PostgreSQL (host, port, database, user, TLS), n8n data tables
-(address), InfluxDB 2 (address, organization), Cloudflare D1 (account ID, database ID). Sources were stored as
+(address), InfluxDB 2 (address, organization), Cloudflare D1 (account ID, database ID), MySQL and MariaDB (host, port,
+database, user, TLS), Actual Budget (address, budget sync ID), Calendar (ICS) (address), JSON and CSV over HTTP
+(address, rows at, header name). A kind can mark a field secret (`ConnectionField.secret`: a calendar's address
+carries its secret in its path, an API's key may sit in the query string): it is stored with the source's secrets
+(`StoredSource.secrets`, encrypted like the password), never sent to a device (`GET /api/settings` gives only a hint
+per set one, `secretHints`: an address's scheme and host), set through the update's `secrets` (left out: kept while
+the source's place stays, `placeOf`; a changed place drops it with the password) and handed to the connector among
+its fields. Connectors that read one document over HTTP rather than a database (ICS, JSON, CSV) share
+`connectors/httpDocument.ts`: one `GET`, kept a minute and then revalidated (`ETag` / `Last-Modified`), the source's
+time limit, at most 20 MB, a status code or a web page where data was expected said in words; `webcal://` is read
+over https. Sources were stored as
 connection strings before; that format was dropped without a migration (a breaking change: such a source reads as
 of no kind until it is set up again), and app and server must both be this version.
 A renamed source keeps its former names (`formerNames`, by its stable id, never shown in the settings): requests by one
@@ -211,7 +221,7 @@ takes the new one when its settings are opened. A source's name: letters, digits
   filter is one flat and / or list with one sort and no counts, so the rows a query could keep are
   read (250 rows a request, by id, at most 100,000 rows; kept 5 s, so a view's pages and counts share
   a read) and queried in memory (`connectors/memory.ts`, pure: the same meaning as `postgresSql.ts`;
-  text sorts as the app's, "Customer 9" before "Customer 10"). n8n is sent, as its `filter`, the
+  text sorts as the app's, "Customer 9" before "Customer 10"; a list is filtered and sorted by its text and grouped under each value). n8n is sent, as its `filter`, the
   rules every kept row meets (not under an `or`) that it can narrow by: text contains / is (as
   `ilike`, ASCII only: n8n's SQLite folds only ASCII case), empty / not empty, numbers, dates by day
   (the lower bound a UTC day early: n8n on SQLite compares its stored "yyyy-mm-dd hh:mm:ss" as text

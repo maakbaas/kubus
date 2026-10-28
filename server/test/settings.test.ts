@@ -10,7 +10,7 @@ import type { ServerSettingsUpdate } from "../../shared/settings.ts";
 const crm = { host: "crm", port: "5432", database: "crm", user: "reader", ssl: "" };
 const stored: Stored = {
   ai: { url: "https://api.example.com/v1", key: "sk-secret", fieldModel: "small", codeModel: "" },
-  sources: [{ id: "s1", name: "CRM", formerNames: [], kind: "postgres", fields: crm, password: "pw", schemas: [], timeoutSeconds: 30 }],
+  sources: [{ id: "s1", name: "CRM", formerNames: [], kind: "postgres", fields: crm, password: "pw", secrets: {}, schemas: [], timeoutSeconds: 30 }],
 };
 const update = (over: { ai?: Partial<ServerSettingsUpdate["ai"]>; source?: Partial<ServerSettingsUpdate["sources"][number]> } = {}): ServerSettingsUpdate => ({
   ai: { url: stored.ai.url, fieldModel: "small", codeModel: "", ...over.ai },
@@ -27,7 +27,7 @@ describe("server settings", () => {
 
   it("show the kinds the server reads, with their fields", () => {
     const { kinds } = viewOf(stored, () => ({}));
-    expect(kinds.map((k) => k.id)).toEqual(["postgres", "n8n", "influxdb", "d1"]);
+    expect(kinds.map((k) => k.id)).toEqual(["postgres", "n8n", "influxdb", "d1", "mysql", "mariadb", "actual", "ics", "json", "csv"]);
     expect(kinds[0].fields.map((f) => f.key)).toEqual(["host", "port", "database", "user", "ssl"]);
     expect(kinds.find((k) => k.id === "d1")?.schemas).toBeNull();
   });
@@ -79,6 +79,56 @@ describe("server settings", () => {
     const back = applyUpdate(again, update({ source: { name: "CRM" } }));
     expect(back.sources[0].formerNames).toEqual(["Sales CRM", "Sales"]);
     expect(JSON.stringify(viewOf(back, () => ({})))).not.toMatch(/formerNames/);
+  });
+
+  describe("secret fields (a calendar's address)", () => {
+    const address = "https://calendar.example.com/private-s3cr3t/basic.ics";
+    const ics = (over: Partial<ServerSettingsUpdate["sources"][number]> = {}) =>
+      update({ source: { kind: "ics", fields: {}, secrets: { address }, password: "pw", ...over } });
+    const first = applyUpdate(stored, ics());
+
+    it("are stored apart from the fields, given to the connector, and never shown (only their host)", () => {
+      expect(first.sources[0]).toMatchObject({ fields: {}, secrets: { address } });
+      expect(sourceConfigs(first)[0].fields).toEqual({ address });
+      const view = viewOf(first, () => ({}));
+      expect(JSON.stringify(view)).not.toMatch(/s3cr3t/);
+      expect(view.sources[0].secretHints).toEqual({ address: "https://calendar.example.com/…" });
+      // Typed in the fields instead, a secret one isn't taken.
+      expect(applyUpdate(stored, update({ source: { kind: "ics", fields: { address } } })).sources[0]).toMatchObject({ fields: {}, secrets: {} });
+    });
+
+    it("are kept while left out, with the password", () => {
+      const kept = applyUpdate(first, update({ source: { kind: "ics", fields: {}, name: "Calendar" } })).sources[0];
+      expect(kept).toMatchObject({ secrets: { address }, password: "pw" });
+    });
+
+    it("take the password along when one changes, and are cleared by an empty one", () => {
+      const moved = applyUpdate(first, update({ source: { kind: "ics", fields: {}, secrets: { address: "https://evil.example/x.ics" } } })).sources[0];
+      expect(moved).toMatchObject({ secrets: { address: "https://evil.example/x.ics" }, password: "" });
+      expect(applyUpdate(first, update({ source: { kind: "ics", fields: {}, secrets: { address: "" } } })).sources[0].secrets).toEqual({});
+      // Another kind: none of them applies.
+      expect(applyUpdate(first, update({ source: { kind: "json", fields: {} } })).sources[0]).toMatchObject({ secrets: {}, password: "" });
+    });
+
+    it("are encrypted with the key like the password", async () => {
+      const rows = new Map<string, unknown>();
+      const db = {
+        async query<R>(sql: string, values: unknown[] = []) {
+          if (sql.startsWith("INSERT")) {
+            rows.set("ai", JSON.parse(values[0] as string));
+            rows.set("sources", JSON.parse(values[1] as string));
+          }
+          return { rows: [...rows].map(([key, value]) => ({ key, value })) as R[] };
+        },
+      };
+      const key = secretKey("a long random string");
+      await saveSettings(db, first, key);
+      expect(JSON.stringify([...rows.values()])).not.toMatch(/s3cr3t/);
+      expect((await loadSettings(db, key)).stored).toEqual(first);
+      const unopened = (await loadSettings(db, null)).stored;
+      expect(viewOf(unopened, () => ({})).sources[0].secretHints).toEqual({});
+      expect(secretWarnings(unopened, null).join()).toMatch(/address/);
+    });
   });
 
   describe("stored with KUBUS_SECRET_KEY", () => {

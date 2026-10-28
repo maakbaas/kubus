@@ -95,7 +95,7 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 ```
 
 Repo layout: `app/` the web app (what Tauri and the phone run), `desktop/` the Tauri shell,
-`server/` the sync server (Node 24, dependencies `pg` and `@sqlite.org/sqlite-wasm`), `shared/` what
+`server/` the sync server (Node 24, dependencies `pg`, `@sqlite.org/sqlite-wasm` and the connectors' `mysql2`, `ical.js`), `shared/` what
 both import (`sync.ts` the sync protocol, `files.ts`, `router.ts`, `api.ts`), `app/src/headless` the
 headless device that answers the server's HTTP API (bundled into `server/headless`).
 

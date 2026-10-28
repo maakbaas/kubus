@@ -20,7 +20,7 @@ export interface ServerSourceSettings {
   name: string;
   /** Its kind (a ConnectionKind's id, e.g. "postgres"): picks the connector. */
   kind: string;
-  /** That kind's fields (its password aside), e.g. { host, port, database, user, ssl }. */
+  /** That kind's fields (its password and secret fields aside), e.g. { host, port, database, user, ssl }. */
   fields: Record<string, string>;
   /** Only these schemas' tables are offered (empty: all). */
   schemas: string[];
@@ -36,6 +36,12 @@ export interface ConnectionField {
   helperText?: string;
   /** A choice of these (the first is the default) instead of a text box. */
   choices?: { value: string; text: string }[];
+  /**
+   * Kept like the password (a calendar's address with its secret path, a key in a query string): stored
+   * on the server only, never sent back (a device sees only a hint, e.g. its address's host), kept while
+   * left out of an update, dropped when the source's place changes.
+   */
+  secret?: boolean;
 }
 
 /**
@@ -58,6 +64,8 @@ export interface ServerSettingsView {
   kinds: ConnectionKind[];
   sources: (ServerSourceSettings & {
     passwordSet: boolean;
+    /** The secret fields that are set, each with a hint of what it is (an address's scheme and host, e.g. "https://calendar.example.com/…"; else ""). */
+    secretHints: Record<string, string>;
     /** Its connector ("postgres"), once it has one. */
     connector?: string;
     /** Why it can't be read now (no connector for the scheme, can't connect), or a warning (a user that can write). */
@@ -69,11 +77,13 @@ export interface ServerSettingsView {
 /**
  * PUT /api/settings: the settings as a whole. A secret left out (undefined) stays as it is, but
  * only while it would go to the same place (the same API address; for a source, the same kind and the fields its password belongs to: host, port and user, an address, an account):
- * moved elsewhere it is dropped, so a stored secret can't be sent somewhere new. "" clears it.
+ * moved elsewhere it is dropped, so a stored secret can't be sent somewhere new. "" clears it. A secret field
+ * (ConnectionField.secret) is the same.
  */
 export interface ServerSettingsUpdate {
   ai: ServerAiSettings & { key?: string };
-  sources: (ServerSourceSettings & { password?: string })[];
+  /** `secrets`: the secret fields to set ("" clears one); one left out is kept like the password. */
+  sources: (ServerSourceSettings & { password?: string; secrets?: Record<string, string> })[];
 }
 
 /** A source's name: what /api/sources/<name> takes (single spaces between words). */
