@@ -97,3 +97,17 @@ Sync:
     data connecting to a server with data merges them (today the device's data is discarded).
 12. Robustness: paged pulls, webhooks that survive a server restart (today best effort), and a
     device freeing space by dropping originals it has.
+
+Views:
+
+13. A calendar block type, for any collection with a date or date & time field (native or remote):
+    month and year views with a dot per day that has items, a 24-hour bar per day, a week / day time
+    grid. Moving to another period sets the block's date range, so a remote source sends only that
+    period. Built from Carbon (no calendar library), overlapping items placed in lanes by a helper in
+    `domain/`.
+14. A timeline / Gantt block type: items as bars from a start to an end field, rows from a grouping
+    or reference field, optional dependencies (a reference field to items of the same collection) and
+    progress (a number field).
+15. Dragging in the calendar and timeline blocks (move, resize, create), only where items can be
+    changed (native collections whose fields are editable): an own pointer hook like
+    `ui/useReorder.tsx`, or interact.js if touch gets hard.
