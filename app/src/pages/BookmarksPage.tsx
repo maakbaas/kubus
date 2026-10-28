@@ -25,6 +25,7 @@ import { PageHeader } from "../ui/PageHeader";
 import { errorMessage } from "../ui/useConfirm";
 import { useMountedDialog } from "../ui/useMountedDialog";
 import { useTableSort } from "../ui/useTableSort";
+import { LIST_MAIN, LIST_TABLE } from "../ui/listTable";
 import { RowActions, ROW_BUTTON } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
 
@@ -69,10 +70,10 @@ export function BookmarksPage() {
         </Tile>
       ) : (
         <FillTable>
-          <Table size="sm">
+          <Table size="sm" className={LIST_TABLE}>
             <TableHead>
               <TableRow>
-                <TableHeader {...header("name")}>Name</TableHeader>
+                <TableHeader className={LIST_MAIN} {...header("name")}>Name</TableHeader>
                 <TableHeader {...header("kind")}>Collection</TableHeader>
                 <TableHeader aria-label="Actions" />
               </TableRow>
@@ -82,7 +83,7 @@ export function BookmarksPage() {
                 const collection = collections.find((t) => t.id === b.collectionId);
                 return (
                   <TableRow key={b.id}>
-                    <TableCell>
+                    <TableCell className={LIST_MAIN}>
                       <Link href={`#${bookmarkPath(b)}`}>{b.label}</Link>
                     </TableCell>
                     <TableCell>

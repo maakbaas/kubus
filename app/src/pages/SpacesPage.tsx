@@ -11,6 +11,7 @@ import { IconPicker } from "../ui/IconPicker";
 import { NewButton } from "../ui/NewButton";
 import { PageHeader } from "../ui/PageHeader";
 import { useTableSort } from "../ui/useTableSort";
+import { LIST_MAIN, LIST_TABLE } from "../ui/listTable";
 import { RowActions, ROW_BUTTON } from "../ui/RowActions";
 import { SPACE_ICON } from "../ui/SpaceSwitcher";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
@@ -81,23 +82,23 @@ export function SpacesPage() {
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
       <FillTable>
-        <Table size="sm">
+        <Table size="sm" className={LIST_TABLE}>
           <TableHead>
             <TableRow>
-              <TableHeader>Icon</TableHeader>
+              <TableHeader className={LIST_MAIN}>Icon</TableHeader>
               {/* As wide as the row allows, so the name's input opens at a usable width. */}
-              <TableHeader style={{ inlineSize: "100%" }} {...header("name")}>Name</TableHeader>
+              <TableHeader className={LIST_MAIN} style={{ inlineSize: "100%" }} {...header("name")}>Name</TableHeader>
               <TableHeader aria-label="Actions" />
             </TableRow>
           </TableHead>
           <TableBody>
             {sort(spaces).map((s) => (
               <TableRow key={s.id}>
-                <TableCell className="space-icon">
+                <TableCell className={`space-icon ${LIST_MAIN}`}>
                   <IconPicker id={`space-icon-${s.id}`} value={s.icon ?? SPACE_ICON} size={16} onChange={(icon) => save(s, { icon })} />
                 </TableCell>
                 {/* Edits in place like the Collections page's descriptions: the input covers the cell, text unmoved. */}
-                <TableCell className={`cell--string${editing?.id === s.id ? " cell--editing" : ""}`}>
+                <TableCell className={`${LIST_MAIN} cell--string${editing?.id === s.id ? " cell--editing" : ""}`}>
                   {editing?.id === s.id ? (
                     (() => {
                       const editor = (

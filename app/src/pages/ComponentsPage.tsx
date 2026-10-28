@@ -13,6 +13,7 @@ import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import { pickShared } from "../ui/promoteLocal";
 import { errorMessage } from "../ui/useConfirm";
 import { useTableSort } from "../ui/useTableSort";
+import { LIST_MAIN, LIST_TABLE } from "../ui/listTable";
 import { RowActions, ROW_BUTTON } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
 
@@ -112,10 +113,10 @@ export function ComponentsPage() {
         </Tile>
       ) : (
         <FillTable>
-          <Table size="sm">
+          <Table size="sm" className={LIST_TABLE}>
             <TableHead>
               <TableRow>
-                <TableHeader {...header("name")}>Name</TableHeader>
+                <TableHeader className={LIST_MAIN} {...header("name")}>Name</TableHeader>
                 <TableHeader {...header("kind")}>Kind</TableHeader>
                 <TableHeader {...header("place")}>Where</TableHeader>
                 <TableHeader {...header("description")}>Description</TableHeader>
@@ -128,7 +129,7 @@ export function ComponentsPage() {
                 const code = codeOf(r);
                 return (
                   <TableRow key={r.shared ? r.shared.id : r.local.key}>
-                    <TableCell>
+                    <TableCell className={LIST_MAIN}>
                       {r.shared ? (
                         <Link href={`#/components/${r.shared.id}`}>{r.shared.name}</Link>
                       ) : r.local.href ? (

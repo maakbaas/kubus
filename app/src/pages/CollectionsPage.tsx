@@ -17,6 +17,7 @@ import {
 import { Copy, DataBase, Edit, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { useTableSort } from "../ui/useTableSort";
+import { LIST_MAIN, LIST_TABLE } from "../ui/listTable";
 import { inSpace } from "../domain/spaces";
 import { useDataChanges } from "../app/useDataChanges";
 import {
@@ -189,10 +190,10 @@ export function CollectionsPage() {
 
   const table = (list: Collection[]) => (
     <FillTable>
-      <Table size="sm">
+      <Table size="sm" className={LIST_TABLE}>
         <TableHead>
           <TableRow>
-            <TableHeader {...header("name")}>Name</TableHeader>
+            <TableHeader className={LIST_MAIN} {...header("name")}>Name</TableHeader>
             <TableHeader {...header("description")}>Description</TableHeader>
             {spaces.length > 1 && <TableHeader {...header("spaces")}>Spaces</TableHeader>}
             <TableHeader aria-label="Actions" />
@@ -201,7 +202,7 @@ export function CollectionsPage() {
         <TableBody>
           {sort(list).map((t) => (
             <TableRow key={t.id}>
-              <TableCell>
+              <TableCell className={LIST_MAIN}>
                 {inSpace(t, space.id) ? (
                   <Link href={`#/collections/${t.id}/items`}>
                     <span className="icon-label">

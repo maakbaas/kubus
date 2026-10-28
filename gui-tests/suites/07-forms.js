@@ -213,7 +213,9 @@ for (const vp of ["desktop", "phone"]) {
     await t.seed(profileSpec("long", { items: 2, collectionsExtra: 6 }));
     await t.open("/collections");
     await t.audit("overview");
-    const desc = t.page.locator(".cell-editable[aria-label^='Edit description of']").first();
+    // A phone shows only the name and the icons (the list table's other columns are hidden).
+    const desc = t.page.locator(".cell-editable[aria-label^='Edit description of']").filter({ visible: true }).first();
+    if (vp === "phone") await t.check("a phone hides the description column", (await desc.count()) === 0);
     if (await desc.count()) {
       await t.noShift("editing a description in place moves nothing", async () => {
         await desc.click();
