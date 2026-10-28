@@ -26,7 +26,7 @@ device keeps its data and the next connection is a first one) + Wipe local datab
 pauses sync with `SyncControl.pause`, which keeps URL and token but forgets the server so switching it on again is a
 first connection; then the worker drops every table and creates the schema afresh, and the app reloads) + Wipe server
 database (while connected; `POST /api/wipe` with `{"confirm":"wipe"}`, `server/src/wipe.ts`: drops every table and sequence in
-the server's schema, whatever they are, and applies `schema.sql` again, in one transaction; then this device pauses sync, so
+the server's schema, whatever they are, its own settings and API tokens included (a wipe is everything), and applies `schema.sql` again, in one transaction; then this device pauses sync, so
 switching it on again uploads its data). A server whose database can't be migrated (`docs/migrations.md`: one migrated by a newer server, a synced column of another type) still starts: sync answers with that
 error until the database is wiped. Per device (localStorage
 `kubus.sync`). The replica in Postgres is readable (not end-to-end encrypted): the hub vision
@@ -134,7 +134,7 @@ What a server offers beyond sync is set in the app: the language model in Settin
 its part on top of what the server holds then (`ui/useServerSettings.ts`). `GET` / `PUT /api/settings`
 (`server/src/settings.ts`, types in `shared/settings.ts`) with the sync token; any device with the
 token may change them. They are stored in the server's own table `server_settings` (JSON by key:
-`ai`, `sources`), never synced and kept by a wipe (as are the API tokens, `api_tokens`: "The API" below). Secrets (the model's key, a source's password)
+`ai`, `sources`), never synced and dropped by a wipe (as are the API tokens, `api_tokens`: "The API" below). Secrets (the model's key, a source's password)
 are write-only: a device sees `keySet` / `passwordSet`, never the value. A secret left out of an
 update stays only while it would go to the same place (the same model address; a source's same kind
 and the fields its password belongs to, `placeOf`: host, port and user, an address, an account): moved
@@ -357,9 +357,9 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   and listening to `/api/events`. It starts with a first connection (everything but bytes). After a
   wipe (409) it wipes itself and connects again: it is a cache, it never uploads stale data.
 - *Auth* (`server/src/tokens.ts`, types in `shared/tokens.ts`): the devices' `KUBUS_TOKEN` reaches everything, `/api/v1`
-  too; other tools get an API token, made in Settings → Server (`ui/ApiTokens.tsx`, shown once in a dialog with a copy
+  too; other tools get an API token, made in Settings → API tokens (`ui/ApiTokens.tsx`, shown once in a dialog with a copy
   button): `kubus_` + 32 random bytes (base64url), with a name and an access, `read` or `write` (read & write). The server
-  keeps only its SHA-256 (hex), in its own table `api_tokens` (`server/schema.sql`), never synced, kept by a wipe (a tool keeps its access to the new data). An API token reaches only `/api/v1`
+  keeps only its SHA-256 (hex), in its own table `api_tokens` (`server/schema.sql`), never synced, dropped by a wipe (a tool needs a new token afterwards). An API token reaches only `/api/v1`
   (and its MCP server): anything else under `/api` (sync, events, files, settings, the model, sources,
   `/api/tokens`, wipe) answers 403; a read token only `GET` / `HEAD`, every write (AI fields included) another method,
   403 saying so. A token's last use is written at most once a minute (per server process). Devices list, make and

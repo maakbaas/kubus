@@ -103,12 +103,14 @@ describe.skipIf(!ADMIN)("the server's database", () => {
     expect((await pool.query("SELECT name FROM spaces")).rows).toEqual([{ name: "Office" }]);
   });
 
-  it("records every migration again after a wipe, keeping the API tokens", async () => {
+  it("records every migration again after a wipe, dropping the server's settings and API tokens", async () => {
     await pool.query(schemaSql);
     await pool.query("INSERT INTO api_tokens (id, name, access, token_sha256) VALUES ('t1', 'Scripts', 'read', 'abc')");
+    await pool.query(`INSERT INTO server_settings (key, value) VALUES ('ai', '{}')`);
     await wipe(pool, schemaSql);
     expect(await applied()).toEqual(MIGRATIONS.map((m) => m.version));
     expect((await pool.query("SELECT count(*)::int AS n FROM server_meta")).rows).toEqual([{ n: 2 }]);
-    expect((await pool.query("SELECT id FROM api_tokens")).rows).toEqual([{ id: "t1" }]);
+    expect((await pool.query("SELECT id FROM api_tokens")).rows).toEqual([]);
+    expect((await pool.query("SELECT key FROM server_settings")).rows).toEqual([]);
   });
 });

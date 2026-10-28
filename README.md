@@ -72,7 +72,7 @@ the phone (an installable home-screen app) and the desktop app, put the server b
 example with Caddy, Tailscale Serve or a Cloudflare tunnel.
 
 The same server answers an HTTP API at `/api/v1` (and MCP at `/api/v1/mcp`) with an API token made in
-Settings → Server (read, or read & write; the devices' token works too), and calls `KUBUS_WEBHOOK_URL`
+Settings → API tokens (read, or read & write; the devices' token works too), and calls `KUBUS_WEBHOOK_URL`
 on every change when set (commented in `docker-compose.yml`); Help → API in the app documents both.
 In the app, the server's own settings set up what it offers every device: a language model
 (Settings → AI → "The server's", used through the server so the key stays there; a device can still

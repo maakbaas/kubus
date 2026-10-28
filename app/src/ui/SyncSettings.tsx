@@ -55,7 +55,7 @@ export function SyncSettings() {
   const wipeServer = async () => {
     const ok = await confirm({
       title: "Wipe the server's database?",
-      body: `Deletes ALL data on ${config.url}: every collection, item and file of every device that syncs with it. It can't be undone. Sync on this device is paused; switching it on again uploads this device's data. Other devices keep their data but stop matching the server: disconnect and connect them again, or wipe them.`,
+      body: `Deletes ALL data on ${config.url}: every collection, item and file of every device that syncs with it, and the server's own settings: its language model, its connections and its API tokens. It can't be undone. Sync on this device is paused; switching it on again uploads this device's data. Other devices keep their data but stop matching the server: disconnect and connect them again, or wipe them.`,
       confirmLabel: "Wipe server database",
     });
     if (!ok) return;

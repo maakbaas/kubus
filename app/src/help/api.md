@@ -8,7 +8,7 @@ All addresses below start with /api/v1 on your server.
 
 ## Getting started
 
-Every request needs a token, sent as a bearer token. Make one for each script or tool in **Settings → Server → API tokens**: give it a name and its access, *Read* or *Read & write*, and copy the token (it starts with `kubus_`) from the dialog: it is shown only that once. This lists your collections:
+Every request needs a token, sent as a bearer token. Make one for each script or tool in **Settings → API tokens**: give it a name and its access, *Read* or *Read & write*, and copy the token (it starts with `kubus_`) from the dialog: it is shown only that once. This lists your collections:
 
 ```bash
 curl -H "Authorization: Bearer $KUBUS_API_TOKEN" https://notes.example.com/api/v1/collections

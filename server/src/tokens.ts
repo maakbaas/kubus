@@ -6,7 +6,7 @@ import type { ApiTokenAccess, ApiTokenInfo, ApiTokenMade, ApiTokenRequest } from
 // Who a request is: a device (KUBUS_TOKEN, everything) or an API token (shared/tokens.ts: only
 // /api/v1 and the MCP endpoint, reading or also writing). API tokens are random (kubus_ + 32 bytes,
 // base64url), stored as their SHA-256 in the server's own table api_tokens (schema.sql) and made,
-// listed and revoked by devices at /api/tokens. Kept by a wipe, like the server's settings.
+// listed and revoked by devices at /api/tokens. A wipe drops them, like the server's settings.
 
 /** "all": a device (KUBUS_TOKEN); else an API token's access. */
 export type Access = "all" | ApiTokenAccess;
@@ -23,7 +23,7 @@ const bearer = (header: string | undefined) => (header ?? "").replace(/^Bearer /
 export const allows = (access: Access, method: string) => access !== "read" || method === "GET" || method === "HEAD";
 
 /** The 403 answer's message for a read token's write. */
-export const READ_ONLY = "This API token can only read (GET and HEAD): make one with read & write access in Settings → Server";
+export const READ_ONLY = "This API token can only read (GET and HEAD): make one with read & write access in Settings → API tokens";
 
 interface Row {
   id: string;

@@ -28,7 +28,7 @@ import { HttpError, json, readJson, Router, type ApiRequest, type ApiResponse } 
 //   KUBUS_WEBHOOK_SECRET  signs each webhook request (X-Kubus-Signature)
 //   KUBUS_SECRET_KEY      encrypts the secrets of its settings in the database (else plain text)
 // The rest (the language model it offers, the sources it reads, the API tokens of other tools) is
-// set in the app, Settings → Server, and stored in its database (server/src/settings.ts, tokens.ts).
+// set in the app (Settings → AI, Connections, API tokens) and stored in its database (server/src/settings.ts, tokens.ts).
 
 const databaseUrl = process.env.DATABASE_URL;
 const token = process.env.KUBUS_TOKEN;
@@ -102,6 +102,8 @@ const routes = tokens.routes(sources.routes(new Router()))
     if ((await readJson(req, 1024) as { confirm?: string } | undefined)?.confirm !== "wipe") return json(400, { error: "Not confirmed" });
     await wipe(pool, schemaSql);
     schemaError = null;
+    // Its settings went too: no model, no sources.
+    await applySettings(NO_SETTINGS);
     broadcast(0);
     return json(200, { ok: true });
   })

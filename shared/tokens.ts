@@ -1,4 +1,4 @@
-// API tokens (Settings → Server in the app): made for other tools, each reaching only the HTTP API
+// API tokens (Settings → API tokens in the app): made for other tools, each reaching only the HTTP API
 // (/api/v1) and the server's MCP endpoint, to read or to read and write. Stored on the server only
 // (its table api_tokens: the token's SHA-256, never the token), listed, made and revoked by devices
 // (KUBUS_TOKEN) at /api/tokens. Types only, so the server runs it directly with Node (as shared/sync.ts).

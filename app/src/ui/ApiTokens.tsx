@@ -1,9 +1,8 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import {
   Button,
   CodeSnippet,
   Form,
-  FormGroup,
   IconButton,
   InlineNotification,
   Modal,
@@ -27,15 +26,18 @@ import { errorMessage, useConfirm } from "./useConfirm";
 import { useMountedDialog } from "./useMountedDialog";
 
 // The connected server's API tokens (shared/tokens.ts), for other tools: each reaches only the HTTP
-// API, to read or to read and write. Made, listed and revoked here with this device's token; a
-// made token is shown once (MadeToken), the server keeps only its hash.
+// API, to read or to read and write (a section of the settings). Made, listed and revoked here with
+// this device's token; a made token is shown once (MadeToken), the server keeps only its hash.
 
 const ACCESS_TEXT: Record<ApiTokenAccess, string> = { read: "Read", write: "Read & write" };
 
 export function ApiTokens() {
   const uid = useId();
   const { sources, repo } = useStore();
-  const { url, token } = repo.sync.config;
+  const { sync } = repo;
+  useSyncExternalStore(sync.subscribe.bind(sync), () => sync.status);
+  const { url, token } = sync.config;
+  const connected = token !== "" && url !== "";
   const [tokens, setTokens] = useState<ApiTokenInfo[] | null>(null);
   const [error, setError] = useState<string>();
   const [name, setName] = useState("");
@@ -49,8 +51,8 @@ export function ApiTokens() {
   useEffect(() => {
     setTokens(null);
     setError(undefined);
-    sources.apiTokens().then(setTokens, (e) => setError(errorMessage(e)));
-  }, [sources, url, token]);
+    if (connected) sources.apiTokens().then(setTokens, (e) => setError(errorMessage(e)));
+  }, [sources, url, token, connected]);
 
   const make = async (e: { preventDefault(): void }) => {
     e.preventDefault();
@@ -86,13 +88,17 @@ export function ApiTokens() {
     }
   };
 
+  if (!connected) {
+    return <InlineNotification kind="info" title="No server" subtitle="Connect this device to a Kubus server first (Settings → Server): these are that server's API tokens." lowContrast hideCloseButton />;
+  }
+
   return (
-    <FormGroup legendText="API tokens">
+    <>
+      <p className="helper">
+        For scripts and other tools: a token reaches only the server's API (Help → API), to read or to read and write. Your devices'
+        token can do everything; give a tool its own token instead, and revoke it when it is no longer used.
+      </p>
       <Stack gap={6}>
-        <p className="helper">
-          For scripts and other tools: a token reaches only the server's API (Help → API), to read or to read and write. Your devices'
-          token can do everything; give a tool its own token instead, and revoke it when it is no longer used.
-        </p>
         {error && <InlineNotification kind="error" title="API tokens" subtitle={error} lowContrast hideCloseButton />}
         {tokens && tokens.length > 0 && (
           <FillTable>
@@ -152,7 +158,7 @@ export function ApiTokens() {
       </Stack>
       {made && <MadeToken made={made} onClose={() => setMade(null)} />}
       {dialog}
-    </FormGroup>
+    </>
   );
 }
 

@@ -166,6 +166,7 @@ const CRAWL_PAGES = [
   ["settings server", () => "/settings?section=server"],
   ["settings sync", () => "/settings?section=sync"],
   ["settings AI", () => "/settings?section=ai"],
+  ["settings API tokens", () => "/settings?section=tokens"],
   ["search", () => "/search?q=the"],
 ];
 

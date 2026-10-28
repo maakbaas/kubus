@@ -30,6 +30,7 @@ function matrixPages(ids) {
     ["settings: sync", "/settings?section=sync"],
     ["settings: connections", "/settings?section=connections"],
     ["settings: AI", "/settings?section=ai"],
+    ["settings: API tokens", "/settings?section=tokens"],
     ["help", "/help"],
     ["not found", "/no/such/page"],
   ];

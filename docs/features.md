@@ -167,12 +167,12 @@ What the app does, feature by feature (read the part you work on).
 - **Settings** (`#/settings`, `pages/SettingsPage.tsx`, the last node of the side nav, pinned at its bottom with Help: `NavFooter`): tabs
   Server (`ui/ServerConnection.tsx`; `?section=server`, the default: the server's address and token, Save, "Test
   connection" (`SyncControl.testServer`: `/api/health`, then whether the token is accepted; nothing saved) and Disconnect;
-  sync, the server's model and remote collections all use it; once connected, its API tokens, `ui/ApiTokens.tsx`: listed with
-  access, made and last used, revoked after a confirmation, made with a name and Read / Read & write, the new token shown
-  once in a dialog with a copy button; docs/sync.md "The API"), Sync (`ui/SyncSettings.tsx`; `?section=sync`: the
+  sync, the server's model, remote collections and API tokens all use it), Sync (`ui/SyncSettings.tsx`; `?section=sync`: the
   "Sync this device" switch and "Download images", both applied at once, the state, Wipe local / server database),
   Connections (`ui/ConnectionSettings.tsx`; `?section=connections`: the server's remote sources, each set up by its kind's own fields, Host / Port / Database / User for PostgreSQL and so on, as the server describes them; docs/sync.md "Remote sources") and AI
-  (`ui/AiSettings.tsx`; `?section=ai`). Connections and the server's half of AI are the server's own settings, the same
+  (`ui/AiSettings.tsx`; `?section=ai`) and API tokens (`ui/ApiTokens.tsx`; `?section=tokens`, once connected: the server's
+  tokens listed with access, made and last used, revoked after a confirmation, made with a name and Read / Read & write, the
+  new token shown once in a dialog with a copy button; docs/sync.md "The API"). Connections and the server's half of AI are the server's own settings, the same
   for every device, stored on the server, keys and passwords write-only (docs/sync.md "The server's settings"; each tab
   saves its part on top of what the server holds then: `ui/useServerSettings.ts`). AI is the language model of this
   device, and its "Language model" dropdown also picks which one the boxes below it set up: "The server's" (the default
@@ -319,7 +319,7 @@ What the app does, feature by feature (read the part you work on).
   CDN) and the service worker caches all of it, so offline it looks exactly as online.
 - **Future:** every open item is numbered in `docs/vision.md`, "Open items".
 - **Sync.** The local SQLite is an offline-first replica of a Postgres-backed server (see "Sync with Postgres").
-- **HTTP API and webhooks.** The server answers `/api/v1` for other tools (with an API token made in Settings → Server, read or read & write, or the devices' token), through its own copy of the
+- **HTTP API and webhooks.** The server answers `/api/v1` for other tools (with an API token made in Settings → API tokens, read or read & write, or the devices' token), through its own copy of the
   app (the headless device), and can call webhooks on every change (`docs/sync.md`, Help → API).
 - **One codebase, many shells.** Desktop runs in Tauri; iOS (and anything else) runs the same web
   build as a home-screen web app (PWA). No native-only features in the core app.

@@ -437,19 +437,20 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
       expect((await request(server, "/api/wipe", { method: "POST", json: {} })).status).toBe(400);
     });
 
-    it("drops the devices' data, makes a new database and keeps the server's settings and API tokens", async () => {
+    it("drops the devices' data, the server's settings and API tokens, and makes a new database", async () => {
       const before = (await sync({})).body.database.id;
       await request(server, "/api/settings", { method: "PUT", json: settings() });
-      const kept = (await (await request(server, "/api/tokens", { method: "POST", json: { name: "Kept", access: "read" } })).json()) as ApiTokenMade;
+      const made = (await (await request(server, "/api/tokens", { method: "POST", json: { name: "Kept", access: "read" } })).json()) as ApiTokenMade;
       expect((await request(server, "/api/wipe", { method: "POST", json: { confirm: "wipe" } })).status).toBe(200);
       const after = await sync({ database: before });
       expect(after.status).toBe(409);
       const fresh = await sync({});
       expect(fresh.body.database.id).not.toBe(before);
       expect(fresh.body.changes.spaces?.some((r) => r.id === "http-s1")).toBeFalsy();
-      expect((await (await request(server, "/api/settings")).json()).ai.keySet).toBe(true);
-      expect(((await (await request(server, "/api/tokens")).json()) as ApiTokenInfo[]).map((t) => t.id)).toContain(kept.id);
-      expect((await request(server, "/api/v1/collections", { headers: { Authorization: `Bearer ${kept.token}` } })).status).not.toBe(401);
+      expect((await (await request(server, "/api/settings")).json()).ai.keySet).toBe(false);
+      expect((await (await request(server, "/api/ai")).json()).available).toBe(false);
+      expect(((await (await request(server, "/api/tokens")).json()) as ApiTokenInfo[]).map((t) => t.id)).not.toContain(made.id);
+      expect((await request(server, "/api/v1/collections", { headers: { Authorization: `Bearer ${made.token}` } })).status).toBe(401);
     });
   });
 });

@@ -29,9 +29,9 @@ CREATE TABLE IF NOT EXISTS file_bytes (
   PRIMARY KEY (id)
 );
 
--- The server's own settings (Settings → Server in the app; server/src/settings.ts): the language
--- model it offers and the sources it reads, as JSON by key ('ai', 'sources'), secrets included.
--- Never synced or sent to a device; kept by a wipe (it is the server's, not the devices' data).
+-- The server's own settings (Settings → AI and Connections in the app; server/src/settings.ts): the
+-- language model it offers and the sources it reads, as JSON by key ('ai', 'sources'), secrets
+-- included. Never synced or sent to a device; dropped by a wipe like everything else.
 CREATE TABLE IF NOT EXISTS server_settings (
   key            text NOT NULL,
   value          jsonb NOT NULL,
@@ -39,10 +39,10 @@ CREATE TABLE IF NOT EXISTS server_settings (
   PRIMARY KEY (key)
 );
 
--- API tokens (Settings → Server in the app; server/src/tokens.ts, types in shared/tokens.ts): each
+-- API tokens (Settings → API tokens in the app; server/src/tokens.ts, types in shared/tokens.ts): each
 -- reaches only /api/v1 (and the MCP endpoint), to read ('read': GET / HEAD) or also to write
 -- ('write'). The token itself is shown once and never stored, only its SHA-256 (hex). Never synced;
--- kept by a wipe, like server_settings.
+-- dropped by a wipe, like server_settings.
 CREATE TABLE IF NOT EXISTS api_tokens (
   id             text NOT NULL,
   name           text NOT NULL,
