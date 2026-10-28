@@ -2902,6 +2902,12 @@ img[data-lightbox] {
 .chart-options .cds--accordion__item--active > .cds--accordion__wrapper {
   padding-block: var(--cds-spacing-03) var(--cds-spacing-05);
 }
+/* Number fields chosen in order: the multi-select, then the chosen fields' list (each with its handle). */
+.chart-options__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--cds-spacing-03);
+}
 .chart-options__section,
 .chart-options__series,
 .chart-options__group {

@@ -93,7 +93,8 @@ Extension points are registries, not special cases in pages:
   when the settings open; a setting
   that doesn't apply because of another one is disabled with the reason under it, never hidden, and a setting depends only
   on those above it. Switching type keeps every setting (`switchKind`: a gauge narrows a full-width chart, a scatter
-  places each item, a radar or parts from fields with none chosen take the series' fields).
+  places each item, a radar or parts from fields with none chosen take the series' fields). Series, and the
+  number fields of parts or spokes (listed under their multi-select, in the order drawn), are reordered like other lists (`ui/useReorder.tsx`: drag a row's handle, or arrow keys on it; Delete removes the selected).
   - **Of** (on an item page, for a block of the page's own collection): these items, or this item alone (`scope: "page"`,
     `chartItems`: then the block has no filter), e.g. a pie of this person's fat, muscle and bone mass.
   - **X axis** (`ChartX`): nothing (one category of all items), a field's values (any field grouping could use: its

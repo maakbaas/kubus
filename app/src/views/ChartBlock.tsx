@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { Accordion, AccordionItem, Button, Checkbox, IconButton, MultiSelect, NumberInput, Select, SelectItem, SelectItemGroup, Slider, TextInput } from "@carbon/react";
-import { Add, ArrowDown, ArrowUp, ChartColumn, TrashCan } from "@carbon/icons-react";
+import { Add, ChartColumn, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import {
   AGGREGATES,
@@ -40,6 +40,7 @@ import type { Collection, FieldDef } from "../domain/model";
 import type { GroupOrder } from "../domain/query";
 import { useMediaQuery } from "../ui/useMediaQuery";
 import { useBuffered } from "../ui/useBuffered";
+import { moveBlock, useReorder } from "../ui/useReorder";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { openModeOf } from "../workspace/Workspace";
 import { chartSpec } from "./chartSpec";
@@ -235,23 +236,71 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** A row's heading in a list (a series): its name, and buttons to move or remove it. */
-function RowHead({ title, index, count, noun, onMove, onRemove }: { title: string; index: number; count: number; noun: string; onMove(by: number): void; onRemove(): void }) {
+/**
+ * Number fields chosen in order (a meter's or pie's parts, a radar's spokes): picked in a
+ * multi-select, listed under it in their order, reordered by their handles like other lists.
+ */
+function FieldList({ id, label, fields, value, disabled, helper, onChange }: { id: string; label: string; fields: FieldDef[]; value: string[]; disabled?: boolean; helper?: ReactNode; onChange(ids: string[]): void }) {
+  const chosen = value.flatMap((v) => fields.filter((f) => f.id === v));
+  const order = useReorder({
+    count: chosen.length,
+    onMove: (start, end, to) => onChange(moveBlock(chosen, start, end, to).map((f) => f.id)),
+    onDelete: (indices) => onChange(chosen.filter((_, i) => !indices.includes(i)).map((f) => f.id)),
+    noun: ["field", "fields"],
+  });
+  return (
+    <div className="chart-options__fields">
+      <MultiSelect<FieldDef>
+        autoAlign
+        size="sm"
+        id={id}
+        titleText={label}
+        label={chosen.length ? chosen.map((f) => f.name).join(", ") : "Choose number fields"}
+        helperText={helper}
+        disabled={disabled}
+        items={fields}
+        itemToString={(f) => f?.name ?? ""}
+        selectedItems={chosen}
+        // The order kept: what stays where it was, what is added at the end.
+        onChange={({ selectedItems }) => {
+          const ids = (selectedItems ?? []).map((f) => f.id);
+          onChange([...chosen.map((f) => f.id).filter((x) => ids.includes(x)), ...ids.filter((x) => !chosen.some((f) => f.id === x))]);
+        }}
+      />
+      {!disabled && chosen.length > 1 && (
+        <div>
+          {chosen.map((f, i) => (
+            <div key={f.id} className="field-order__row" {...order.row(i)}>
+              <span className="chart-options__row-title" title={f.name}>
+                {f.name}
+              </span>
+              <span className="field-order__moves">
+                <IconButton autoAlign kind="ghost" size="sm" label="Remove field" onClick={() => onChange(chosen.filter((x) => x !== f).map((x) => x.id))}>
+                  <TrashCan />
+                </IconButton>
+                {order.handle(i)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {order.dialog}
+    </div>
+  );
+}
+
+/** A row's heading in a list (a series): its name, a button to remove it and its handle (drag to reorder, useReorder). */
+function RowHead({ title, count, noun, handle, onRemove }: { title: string; count: number; noun: string; handle: ReactNode; onRemove(): void }) {
   return (
     <div className="chart-options__row-head">
       <span className="chart-options__row-title" title={title}>
         {title}
       </span>
-      <IconButton autoAlign label={`Move ${noun} up`} kind="ghost" size="sm" align="top" disabled={index === 0} onClick={() => onMove(-1)}>
-        <ArrowUp />
-      </IconButton>
-      <IconButton autoAlign label={`Move ${noun} down`} kind="ghost" size="sm" align="top" disabled={index === count - 1} onClick={() => onMove(1)}>
-        <ArrowDown />
-      </IconButton>
       {/* A chart has at least one series: the last can't be removed. */}
       <IconButton autoAlign label={`Remove ${noun}`} kind="ghost" size="sm" align="top-end" disabled={count === 1} onClick={onRemove}>
         <TrashCan />
       </IconButton>
+      {handle}
     </div>
   );
 }
@@ -264,12 +313,15 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   const set = (patch: Partial<ChartOptions>) => update({ ...o, ...patch });
   const setX = (patch: Partial<ChartX>) => set({ x: { ...o.x, ...patch } });
   const setSeries = (id: string, patch: Partial<ChartSeries>) => set({ series: o.series.map((s) => (s.id === id ? { ...s, ...patch } : s)) });
-  const moveSeries = (index: number, by: number) => {
-    const series = [...o.series];
-    const [s] = series.splice(index, 1);
-    series.splice(index + by, 0, s);
-    set({ series });
-  };
+  // Series are reordered like other lists: by their handles (drag, or arrow keys), Delete removing the selected.
+  const seriesOrder = useReorder({
+    count: o.series.length,
+    onMove: (start, end, to) => set({ series: moveBlock(o.series, start, end, to) }),
+    onDelete: (indices) => set({ series: o.series.filter((_, i) => !indices.includes(i)) }),
+    canDelete: (indices) => indices.length < o.series.length,
+    noun: o.chart === "scatter" ? ["Y field", "Y fields"] : ["series", "series"],
+  });
+
   const numbers = numberFields(collection, components);
   const axis = axisFields(collection, components);
   const splits = splitFields(collection);
@@ -374,18 +426,14 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
       )}
       {xControls}
       {has.parts && (
-        <MultiSelect<FieldDef>
-          autoAlign
-          size="sm"
+        <FieldList
           id={`${uid}-part-fields`}
-          titleText="Number fields"
-          label={o.fields.length ? numbers.filter((f) => o.fields.includes(f.id)).map((f) => f.name).join(", ") : "Choose number fields"}
-          helperText={o.parts === "fields" ? undefined : "Only when the parts are number fields"}
+          label="Number fields"
+          fields={numbers}
+          value={o.fields}
+          helper={o.parts === "fields" ? undefined : "Only when the parts are number fields"}
           disabled={o.parts !== "fields"}
-          items={numbers}
-          itemToString={(f) => f?.name ?? ""}
-          selectedItems={numbers.filter((f) => o.fields.includes(f.id))}
-          onChange={({ selectedItems }) => set({ fields: (selectedItems ?? []).map((f) => f.id) })}
+          onChange={(fields) => set({ fields })}
         />
       )}
       {has.spread && <FieldSelect id={`${uid}-spread`} label="Field" fields={axis} value={o.spreadField} helper="The number or date whose values are spread" onChange={(spreadField) => set({ spreadField })} />}
@@ -405,17 +453,17 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   // --- Series: bar / line / area (every series' settings), scatter (each a Y field)
   const seriesRows = o.series.map((s, i) => {
     const sid = `${uid}-series-${s.id}`;
-    const head = <RowHead title={seriesLabel(s, collection, o.x)} index={i} count={o.series.length} noun={o.chart === "scatter" ? "Y field" : "series"} onMove={(by) => moveSeries(i, by)} onRemove={() => set({ series: o.series.filter((x) => x.id !== s.id) })} />;
+    const head = <RowHead title={seriesLabel(s, collection, o.x)} count={o.series.length} noun={o.chart === "scatter" ? "Y field" : "series"} handle={seriesOrder.handle(i)} onRemove={() => set({ series: o.series.filter((x) => x.id !== s.id) })} />;
     if (o.chart === "scatter")
       return (
-        <div key={s.id} className="chart-options__series">
+        <div key={s.id} className="chart-options__series" {...seriesOrder.row(i)}>
           {head}
           <FieldSelect id={`${sid}-field`} label="Y" fields={numbers} value={s.field} onChange={(field) => setSeries(s.id, { field, value: s.value === "count" ? "sum" : s.value })} />
           <TextInput size="sm" id={`${sid}-label`} labelText="Label" placeholder={seriesLabel({ ...s, label: "" }, collection, o.x)} value={s.label} onChange={(e) => setSeries(s.id, { label: e.target.value })} />
         </div>
       );
     return (
-      <div key={s.id} className="chart-options__series">
+      <div key={s.id} className="chart-options__series" {...seriesOrder.row(i)}>
         {head}
         {aggregateSelect(`${sid}-value`, "Value", s.value, (value) => setSeries(s.id, { value, ...(value !== "count" && !s.field && { field: numbers[0]?.id ?? null }) }))}
         <FieldSelect id={`${sid}-field`} label="Of" fields={numbers} value={s.value === "count" ? null : s.field} none={s.value === "count" ? "—" : undefined} disabled={s.value === "count"} helper={s.value === "count" ? "Not for a count" : undefined} onChange={(field) => setSeries(s.id, { field })} />
@@ -462,6 +510,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
       >
         {o.chart === "scatter" ? "Add Y field" : "Add series"}
       </Button>
+      {seriesOrder.dialog}
       {has.xy && splitSelect("Split by")}
     </Section>
   );
@@ -493,17 +542,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   );
   const spokesSection = o.chart === "radar" && (
     <Section key="spokes" title="Spokes">
-      <MultiSelect<FieldDef>
-        autoAlign
-        size="sm"
-        id={`${uid}-spokes`}
-        titleText="Spokes"
-        label={o.fields.length ? numbers.filter((f) => o.fields.includes(f.id)).map((f) => f.name).join(", ") : "Choose number fields"}
-        items={numbers}
-        itemToString={(f) => f?.name ?? ""}
-        selectedItems={numbers.filter((f) => o.fields.includes(f.id))}
-        onChange={({ selectedItems }) => set({ fields: (selectedItems ?? []).map((f) => f.id) })}
-      />
+      <FieldList id={`${uid}-spokes`} label="Spokes" fields={numbers} value={o.fields} onChange={(fields) => set({ fields })} />
       {/* A spoke is a number field made into one per shape: a count of items isn't one. */}
       {aggregateSelect(`${uid}-spoke-value`, "Value", first.value === "count" ? "avg" : first.value, (value) => setFirst({ value }), true)}
     </Section>
