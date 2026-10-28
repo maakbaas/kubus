@@ -40,7 +40,10 @@ Rules that keep this from becoming three products glued together:
   the EAV `field_values`), so queries and query components don't have to deal with EAV.
 - Remote sources make the server essential and change the security story: auth, secret storage
   for credentials (a source's password and the model's key are write-only and, with `KUBUS_SECRET_KEY`
-  set, stored encrypted; `docs/sync.md`), read-only database users by default.
+  set, stored encrypted; `docs/sync.md`), read-only database users by default. Three things are
+  easily mixed up: `KUBUS_TOKEN` is the devices' shared token for sync and the API (an environment
+  variable, not stored in the database); `KUBUS_SECRET_KEY` only encrypts the stored secrets at rest;
+  per-use API tokens are not built yet (roadmap #22).
 - **Connect live state, copy histories.** A connector suits a live database worth querying: data that
   changes in place (balances, rows), a source that filters, sorts and pages for itself, or a generic
   store that opens many apps at once (Postgres, MySQL). An API that is a feed (only a recent window,
@@ -177,7 +180,7 @@ API:
     the headless device, never into Postgres; documented beside them in `app/src/help/api.md`).
     Remote MCP over streamable HTTP on the server, behind an API token (#22, so an assistant can be
     given one that only reads).
-22. API tokens made in the app (Settings → Server tab), read or read & write, instead of the API using
+22. API tokens made in the app (Settings → Server tab; not built yet), read or read & write, instead of the API using
     `KUBUS_TOKEN` (which stays the devices' token, with access to everything as now). A server-only
     table `api_tokens` (name, access, the token's SHA-256, created, last used; a migration in
     `server/src/migrations.ts`, not synced); a token is random (`kubus_…`) and shown once. An API token
