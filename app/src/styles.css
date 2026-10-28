@@ -59,6 +59,9 @@ body {
   --cds-body-01-letter-spacing: 0.16px;
   /* Carbon's sans stack (the body font), for text inside elements set in code-02. */
   --font-sans: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, ".SFNSText-Regular", sans-serif;
+  /* Carbon Charts reads these two (it never defines them itself): its labels in the app font. */
+  --cds-charts-font-family: var(--font-sans);
+  --cds-charts-font-family-condensed: var(--font-sans);
   --cds-code-02-font-family: "IBM Plex Mono", system-ui, -apple-system, BlinkMacSystemFont, ".SFNSText-Regular", monospace;
   --cds-code-02-font-size: 0.875rem;
   --cds-code-02-font-weight: 400;
