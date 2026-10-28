@@ -3,7 +3,7 @@
 // ChartCanvas (loaded only when a chart is shown) picks the component by name.
 
 import {
-  aggregate,
+  baselineOf,
   chartTable,
   formatValue,
   heatmapCells,
@@ -421,6 +421,21 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         format,
       };
     }
+    case "stat": {
+      // Its sparkline: the value along the X axis as a compact line or area (Carbon's), the value's series alone.
+      if (needsField(first, collection)) return { problem: "Choose the field to show." };
+      if (items.length === 0) return noItems;
+      const line: ChartOptions = {
+        ...options,
+        chart: options.sparkline === "line" ? "line" : "area",
+        compact: true,
+        series: [{ ...first, style: null, axis: "left" }],
+        splitBy: null,
+        thresholds: [],
+        left: { ...options.left, min: null, max: null, log: false },
+      };
+      return xyChart(input, line, theme);
+    }
     case "gauge": {
       if (needsField(first, collection)) return { problem: "Choose the field to measure." };
       if (items.length === 0) return noItems;
@@ -430,8 +445,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       const reached = statusOf(percent, options.thresholds.map((t) => ({ value: thresholdPercent(t, options.thresholdMode, one.max), status: t.status })));
       const status = reached && carbonStatus(reached);
       // The change from the comparison value, in the same % of the total ("Previous" only after a last value).
-      const how = options.compare === "prev" && first.value !== "last" ? null : options.compare;
-      const before = how ? aggregate(items, how, fields.get(options.compareField ?? first.field ?? "")) : null;
+      const before = baselineOf(input, options);
       const beforePercent = percentOf(before, one.max);
       const delta = beforePercent === null ? 0 : Math.round((percent - beforePercent) * 100) / 100;
       // Carbon's gauge shows a %, here with the decimals; it hands the number over as text ("30").

@@ -19,9 +19,11 @@ import {
   normalizeChartOptions,
   numberFields,
   PREVIOUS,
+  A_NUMBER,
   SERIES_STYLES,
   seriesLabel,
   splitFields,
+  statOf,
   styleOf,
   drawsTimeline,
   THRESHOLD_STATUSES,
@@ -47,6 +49,7 @@ import { moveBlock, useReorder } from "../ui/useReorder";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { openModeOf } from "../workspace/Workspace";
 import { chartSpec } from "./chartSpec";
+import { StatView } from "./StatView";
 import { AspectSelect, HeightSlider } from "./HeightSlider";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
@@ -64,12 +67,30 @@ function ChartView({ collection, result, options, refs, actions, page }: BlockPr
   const pageItem = page && page.collection.id === collection.id ? page.item : null;
   const wrongPage = options.scope === "page" && !!page && !pageItem;
   const items = useMemo(() => chartItems(result, options.scope, pageItem), [result, options.scope, pageItem]);
-  const spec = useMemo(() => {
-    const ctx = { refLabel: refLabelOf(refs, "(deleted)") };
-    return chartSpec({ collection, items, ctx }, options, dark ? "g100" : "white");
+  const { spec, stat } = useMemo(() => {
+    const input = { collection, items, ctx: { refLabel: refLabelOf(refs, "(deleted)") } };
+    // A stat's spec is its sparkline.
+    return { spec: chartSpec(input, options, dark ? "g100" : "white"), stat: options.chart === "stat" ? statOf(input, options) : null };
   }, [collection, items, refs, options, dark]);
   if (wrongPage) return <p className="helper chart-block__problem">“Of this item” charts the page's item: the block lists {collection.pluralName}, not the page's collection.</p>;
   if ("problem" in spec) return <p className="helper chart-block__problem">{spec.problem}</p>;
+  if (stat) {
+    // A sparkline of more than one step only (no X axis: one).
+    const line = options.sparkline !== "none" && options.x.by !== "none" && spec.data.length > 1;
+    return (
+      <StatView
+        stat={stat}
+        options={options}
+        sparkline={
+          line && (
+            <Suspense fallback={<div style={{ blockSize: String(spec.options.height) }} />}>
+              <ChartCanvas spec={spec} />
+            </Suspense>
+          )
+        }
+      />
+    );
+  }
   return (
     <div className="chart-block" style={{ maxInlineSize: `${options.width}rem` }}>
       <Suspense fallback={<div className="chart-block__loading" style={{ blockSize: String(spec.options.height) }} />}>
@@ -102,24 +123,24 @@ function kindHas(kind: ChartKind) {
     xy,
     parts,
     /** Categories from the X axis (`options.x`). */
-    x: xy || parts || kind === "radar" || kind === "boxplot" || kind === "heatmap",
+    x: xy || parts || kind === "radar" || kind === "boxplot" || kind === "heatmap" || kind === "stat",
     /** A list of series: bar / line / area (every setting), scatter (each a Y field). */
     seriesList: xy || kind === "scatter",
     /** One value (the first series): parts, gauge, heatmap. */
-    value: parts || kind === "gauge" || kind === "heatmap",
+    value: parts || kind === "gauge" || kind === "heatmap" || kind === "stat",
     /** A number or date field whose values are spread. */
     spread: kind === "histogram" || kind === "boxplot",
     total: parts || kind === "gauge",
     thresholds: xy || kind === "gauge" || kind === "meter",
     axes: xy || kind === "histogram" || kind === "boxplot" || kind === "scatter",
-    legend: kind !== "gauge",
-    height: kind !== "meter",
-    display: xy || kind === "pie" || kind === "gauge" || kind === "histogram",
+    legend: kind !== "gauge" && kind !== "stat",
+    height: kind !== "meter" && kind !== "stat",
+    display: xy || kind === "pie" || kind === "gauge" || kind === "histogram" || kind === "stat",
   };
 }
 
 /** The label of the X axis's "By" for a kind: what its categories are. */
-const X_LABEL: Partial<Record<ChartKind, string>> = { radar: "A shape per", pie: "Parts", meter: "Parts", treemap: "Parts", wordcloud: "Parts", boxplot: "A box per", heatmap: "Columns" };
+const X_LABEL: Partial<Record<ChartKind, string>> = { stat: "Sparkline along", radar: "A shape per", pie: "Parts", meter: "Parts", treemap: "Parts", wordcloud: "Parts", boxplot: "A box per", heatmap: "Columns" };
 const X_BY: { value: XBy; text: string }[] = [
   { value: "none", text: "Nothing (all items)" },
   { value: "field", text: "A field's values" },
@@ -151,8 +172,15 @@ const unique = <T,>(list: T[]) => [...new Set(list)];
  */
 function switchKind(o: ChartOptions, chart: ChartKind, axis: FieldDef[]): ChartOptions {
   const next: ChartOptions = { ...o, chart };
-  if (chart === "gauge" && o.width === CHART_WIDTH.max) next.width = GAUGE_WIDTH;
-  else if (o.chart === "gauge" && chart !== "gauge" && o.width === GAUGE_WIDTH) next.width = CHART_WIDTH.max;
+  // A gauge and a stat are narrow: as wide as a pane they are mostly empty.
+  const narrow = (k: ChartKind) => k === "gauge" || k === "stat";
+  if (narrow(chart) && o.width === CHART_WIDTH.max) next.width = GAUGE_WIDTH;
+  else if (narrow(o.chart) && !narrow(chart) && o.width === GAUGE_WIDTH) next.width = CHART_WIDTH.max;
+  // A stat's sparkline runs along a date the first time.
+  if (chart === "stat" && o.x.by === "none") {
+    const date = axis.find((f) => f.kind === "date" || f.kind === "datetime");
+    if (date) next.x = { ...o.x, by: "field", field: date.id };
+  }
   if (chart === "scatter") {
     const field = axis.some((f) => f.id === o.x.field) ? o.x.field : (axis[0]?.id ?? null);
     next.x = { ...o.x, by: "item", field };
@@ -350,7 +378,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
 
   // --- Data: what is charted (the X axis's categories, a spread field, a scatter's fields)
   // The X axis makes the categories only of parts from them.
-  const xShown = has.x && !(has.parts && o.parts !== "groups");
+  const xShown = has.x && !(has.parts && o.parts !== "groups") && !(o.chart === "stat" && o.sparkline === "none");
   const fieldMode = o.x.by === "field";
   // A line or area has every step in order: the largest n can't be picked, dates can't be reordered.
   const timeline = has.xy && drawsTimeline(o);
@@ -430,6 +458,13 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
           <SelectItem value="fields" text="Number fields" />
           {/* A treemap of one value is one rectangle. */}
           {(o.chart !== "treemap" || o.parts === "one") && <SelectItem value="one" text="One value (against its total)" />}
+        </Select>
+      )}
+      {o.chart === "stat" && (
+        <Select size="sm" id={`${uid}-sparkline`} labelText="Sparkline" value={o.sparkline} onChange={(e) => set({ sparkline: e.target.value as ChartOptions["sparkline"] })}>
+          <SelectItem value="area" text="Area" />
+          <SelectItem value="line" text="Line" />
+          <SelectItem value="none" text="None" />
         </Select>
       )}
       {xControls}
@@ -521,7 +556,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   // what takes it away: nothing above the pointer moves), one value's part, a word cloud's words
   // (number fields as parts are named by their aggregate; a gauge shows only its number).
   const labelShown =
-    o.chart === "heatmap" || (!fieldsParts && ((has.parts && o.parts === "one" && o.chart !== "treemap") || o.chart === "pie" || o.chart === "wordcloud"));
+    o.chart === "heatmap" || o.chart === "stat" || (!fieldsParts && ((has.parts && o.parts === "one" && o.chart !== "treemap") || o.chart === "pie" || o.chart === "wordcloud"));
   const valueSection = has.value && (
     <Section key="value" title="Value">
       {aggregateSelect(`${uid}-value`, "Value", first.value, (value) =>
@@ -615,17 +650,31 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
         </>
       )}
       {o.chart === "pie" && check("donut", "Donut (the total in the middle)")}
-      {o.chart === "gauge" && (
+      {o.chart === "gauge" && check("fullCircle", "Full circle")}
+      {(o.chart === "gauge" || o.chart === "stat") && (
         <>
-          {check("fullCircle", "Full circle")}
           <Select size="sm" id={`${uid}-compare`} labelText="Compare with" value={o.compare ?? ""} onChange={(e) => set({ compare: (e.target.value || null) as Compare | null })}>
             <SelectItem value="" text="Nothing" />
-            {[...AGGREGATES, ...(first.value === "last" ? [PREVIOUS] : [])].map((a) => (
+            {[...AGGREGATES, ...(first.value === "last" ? [PREVIOUS] : []), A_NUMBER].map((a) => (
               <SelectItem key={a.value} value={a.value} text={a.text} />
             ))}
           </Select>
-          {o.compare && o.compare !== "count" && (
+          {o.compare && o.compare !== "count" && o.compare !== "number" && (
             <FieldSelect id={`${uid}-compare-field`} label="Compared of" fields={numbers} value={o.compareField} none="The value's field" onChange={(compareField) => set({ compareField })} />
+          )}
+          {o.compare === "number" && <NumberField id={`${uid}-baseline`} label="Number" value={o.baseline} onChange={(baseline) => set({ baseline })} />}
+          {o.chart === "stat" && o.compare && (
+            <>
+              <Select size="sm" id={`${uid}-change-as`} labelText="Change shown as" value={o.changeAs} onChange={(e) => set({ changeAs: e.target.value as ChartOptions["changeAs"] })}>
+                <SelectItem value="percent" text="A % of what it is compared with" />
+                <SelectItem value="value" text="The difference" />
+              </Select>
+              <Select size="sm" id={`${uid}-better`} labelText="Better" value={o.better} onChange={(e) => set({ better: e.target.value as ChartOptions["better"] })}>
+                <SelectItem value="higher" text="Higher (up green, down red)" />
+                <SelectItem value="lower" text="Lower (down green, up red)" />
+                <SelectItem value="neither" text="Neither (grey)" />
+              </Select>
+            </>
           )}
         </>
       )}

@@ -31,6 +31,7 @@ export type ChartKind =
   | "treemap"
   | "wordcloud"
   | "gauge"
+  | "stat"
   | "histogram"
   | "boxplot"
   | "scatter"
@@ -47,6 +48,7 @@ export const CHART_KINDS: { kind: ChartKind; label: string; section: string }[] 
   { kind: "treemap", label: "Treemap", section: "Parts of a whole" },
   { kind: "wordcloud", label: "Word cloud", section: "Parts of a whole" },
   { kind: "gauge", label: "Gauge", section: "One value" },
+  { kind: "stat", label: "Stat", section: "One value" },
   { kind: "histogram", label: "Histogram", section: "Spread" },
   { kind: "boxplot", label: "Box plot", section: "Spread" },
   { kind: "scatter", label: "Scatter", section: "Spread" },
@@ -71,9 +73,10 @@ export const AGGREGATES: { value: Aggregate; text: string }[] = [
   { value: "last", text: "Last value" },
 ];
 
-/** What a gauge compares its value with: any aggregate, or (when its value is the last) the value before it. */
-export type Compare = Aggregate | "prev";
+/** What a gauge or stat compares its value with: any aggregate, (when its value is the last) the value before it, or a number. */
+export type Compare = Aggregate | "prev" | "number";
 export const PREVIOUS: { value: Compare; text: string } = { value: "prev", text: "Previous value" };
+export const A_NUMBER: { value: Compare; text: string } = { value: "number", text: "A number" };
 
 /** The steps a date category is counted in ("auto": by how far the dates spread); minutes and hours only of a date & time. */
 export type DateStep = "auto" | "minute" | "hour" | "day" | "week" | "month" | "year";
@@ -219,10 +222,19 @@ export interface ChartOptions {
   donut: boolean;
   // Gauge
   fullCircle: boolean;
-  /** A second value, shown as the increase or decrease from it; null = none. */
+  /** A second value (a stat's baseline), shown as the increase or decrease from it; null = none. */
   compare: Compare | null;
-  /** The number field `compare` is taken of; null = the gauge's own. */
+  /** The number field `compare` is taken of; null = the value's own. */
   compareField: string | null;
+  /** `compare` "number": the number compared with. */
+  baseline: number | null;
+  // Stat
+  /** Below its number: the value along the X axis, a compact area or line chart (Carbon's), or none. */
+  sparkline: "area" | "line" | "none";
+  /** Which way of the change is good (green) and which bad (red); "neither": both grey. */
+  better: "higher" | "lower" | "neither";
+  /** The change shown as a % of the baseline or as the difference itself. */
+  changeAs: "percent" | "value";
   // Histogram and box plot: the number or date field whose values are spread; histogram: its bins (0: automatic).
   spreadField: string | null;
   bins: number;
@@ -310,6 +322,10 @@ export function defaultChartOptions(collection: Collection, components: Componen
     fullCircle: false,
     compare: null,
     compareField: null,
+    baseline: null,
+    sparkline: "area",
+    better: "higher",
+    changeAs: "percent",
     spreadField: number,
     bins: 0,
     sizeField: null,
@@ -395,8 +411,12 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     },
     donut: flag(o.donut, d.donut),
     fullCircle: flag(o.fullCircle, d.fullCircle),
-    compare: o.compare === null || o.compare === undefined ? null : oneOf<Compare | null>([...values(AGGREGATES), "prev"], o.compare, null),
+    compare: o.compare === null || o.compare === undefined ? null : oneOf<Compare | null>([...values(AGGREGATES), "prev", "number"], o.compare, null),
     compareField: field(o.compareField),
+    baseline: typeof o.baseline === "number" && Number.isFinite(o.baseline) ? o.baseline : null,
+    sparkline: oneOf<ChartOptions["sparkline"]>(["area", "line", "none"], o.sparkline, d.sparkline),
+    better: oneOf<ChartOptions["better"]>(["higher", "lower", "neither"], o.better, d.better),
+    changeAs: oneOf<ChartOptions["changeAs"]>(["percent", "value"], o.changeAs, d.changeAs),
     spreadField: field(o.spreadField, o.spreadField === null ? null : d.spreadField),
     bins: count(o.bins, 100),
     sizeField: field(o.sizeField),
@@ -454,6 +474,8 @@ export function aggregate(items: Item[], how: Compare, field: FieldDef | undefin
       return values[values.length - 1];
     case "prev":
       return values.length > 1 ? values[values.length - 2] : null;
+    case "number":
+      return null;
   }
 }
 
@@ -935,6 +957,39 @@ export function singleValue(input: ChartInput, options: ChartOptions): SingleVal
   const first = options.series[0] ?? newSeries();
   const field = first.field ? fieldsOf(collection).get(first.field) : undefined;
   return { value: aggregate(items, first.value, field), max: totalOf(collection, items, options), label: seriesLabel(first, collection) };
+}
+
+/**
+ * What a gauge's or stat's value is compared with: `compare` of its items (of `compareField`, else the
+ * value's own field; "Previous value" only after a last value), or the number typed; null for none.
+ */
+export function baselineOf(input: ChartInput, options: ChartOptions): number | null {
+  const first = options.series[0] ?? newSeries();
+  const how = options.compare === "prev" && first.value !== "last" ? null : options.compare;
+  if (!how) return null;
+  if (how === "number") return options.baseline;
+  return aggregate(input.items, how, fieldsOf(input.collection).get(options.compareField ?? first.field ?? ""));
+}
+
+/** A stat: its value, what it is compared with, and the change (the difference, and its % of the baseline). */
+export interface Stat {
+  value: number | null;
+  label: string;
+  baseline: number | null;
+  change: number | null;
+  /** null: no baseline, or one of 0. */
+  percent: number | null;
+  /** How the change reads (`better`): up or down good or bad, neither, or none (no change, no baseline). */
+  trend: "good" | "bad" | "neutral" | null;
+}
+
+export function statOf(input: ChartInput, options: ChartOptions): Stat {
+  const { value, label } = singleValue(input, options);
+  const baseline = baselineOf(input, options);
+  const change = value === null || baseline === null ? null : value - baseline;
+  const percent = change === null || !baseline ? null : (change / Math.abs(baseline)) * 100;
+  const trend = !change ? null : options.better === "neither" ? "neutral" : (change > 0) === (options.better === "higher") ? "good" : "bad";
+  return { value, label, baseline, change, percent, trend };
 }
 
 /** A value as a share of its max, in % (of 100 without a max); null without a value. */

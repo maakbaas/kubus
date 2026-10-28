@@ -104,7 +104,7 @@ Extension points are registries, not special cases in pages:
   d3, so the app doesn't load it until a chart is shown). The block's filter and sort pick its items; everything else is the
   chart's own (`ChartOptions`, all in Block settings, stored right away), so its grouping (Sort and group) isn't used. The
   settings are a Chart select (13 types in sections: Compare and over time: Bar, Line, Area, Radar; Parts of a whole: Pie,
-  Meter, Treemap, Word cloud; One value: Gauge; Spread: Histogram, Box plot, Scatter, Heatmap) and an accordion whose
+  Meter, Treemap, Word cloud; One value: Gauge, Stat; Spread: Histogram, Box plot, Scatter, Heatmap) and an accordion whose
   sections are fixed per type (Data, Series, Value, Total, Display, Axes, Thresholds, Values and legend, Size), all closed
   when the settings open; a setting
   that doesn't apply because of another one is disabled with the reason under it, never hidden, and a setting depends only
@@ -138,7 +138,12 @@ Extension points are registries, not special cases in pages:
     adds a "Remaining" slice; a meter shows it as its empty part (Carbon's proportional meter); one value on a meter is a
     bar of its share. A gauge measures its value against its total likewise (none: the value is a %), shows its % (Carbon's
     gauge: no unit, the decimals as set), and the increase or decrease from a comparison value (any value, and "Previous
-    value" after the Last value; Carbon's delta arrow).
+    value" after the Last value, or a number; Carbon's delta arrow). A stat (`StatView`, like Grafana's stat panel, made
+    of Carbon parts; Carbon Charts has none): the value's name, the number (heading-06, its unit a step smaller), the
+    change from what it is compared with as a Carbon tag with an up or down arrow, as a % or the difference ("Change
+    shown as"), green or red by which way is better ("Better": higher, lower, neither: grey), "Compared with the
+    average (79.2 kg)", and a sparkline below: the value along its X axis ("Sparkline along") as Carbon's compact area
+    or line chart (`chartSpec` of a stat is it), or none (`statOf`, `baselineOf` in domain/chart.ts).
   - **Spread**: a histogram's field (a number or a date: dates on a time axis), bins and Split by; a box plot's field (a
     box per X category); a heatmap's columns (the X axis) × rows (Split by), or with a date X axis and not split a
     calendar (weeks × weekdays; empty cells left undrawn).

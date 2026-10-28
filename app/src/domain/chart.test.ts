@@ -18,6 +18,7 @@ import {
   scatterPoints,
   seriesLabel,
   singleValue,
+  statOf,
   spreadValues,
   statusOf,
   statusRanges,
@@ -627,6 +628,21 @@ describe("formatValue", () => {
     expect(f(72.46, 0)).toBe("72");
     expect(f(2, 2, "  ")).toBe("2.00");
     expect(f(-0.001)).toBe("0");
+  });
+});
+
+describe("statOf", () => {
+  // Pages: 300, 200, 80, 120 (the last value 120, the one before it 80, the average 175).
+  const last = series({ value: "last", field: "pages" });
+  it("compares the value with a baseline: an aggregate, the previous value or a number", () => {
+    expect(statOf(input(), options({ chart: "stat", series: [last] }))).toEqual({ value: 120, label: "Last Pages", baseline: null, change: null, percent: null, trend: null });
+    expect(statOf(input(), options({ chart: "stat", series: [last], compare: "prev" }))).toMatchObject({ baseline: 80, change: 40, percent: 50, trend: "good" });
+    expect(statOf(input(), options({ chart: "stat", series: [last], compare: "avg" }))).toMatchObject({ baseline: 175, change: -55, trend: "bad" });
+    expect(statOf(input(), options({ chart: "stat", series: [last], compare: "number", baseline: 100, better: "lower" }))).toMatchObject({ change: 20, percent: 20, trend: "bad" });
+    expect(statOf(input(), options({ chart: "stat", series: [last], compare: "number", baseline: 120, better: "neither" })).trend).toBeNull();
+    expect(statOf(input(), options({ chart: "stat", series: [last], compare: "number", baseline: 0 })).percent).toBeNull();
+    // "Previous value" only after a last value.
+    expect(statOf(input(), options({ chart: "stat", series: [sumPages], compare: "prev" })).baseline).toBeNull();
   });
 });
 

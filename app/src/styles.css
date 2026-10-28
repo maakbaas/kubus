@@ -88,6 +88,16 @@ body {
   /* Page titles use heading-04 (compact UI: more room for content). */
   --cds-heading-04-font-size: 1.75rem;
   --cds-heading-04-line-height: 1.28572;
+  /* A stat's number (heading-06, light), its unit (heading-03) and its labels (label-01). */
+  --cds-heading-06-font-size: 2.625rem;
+  --cds-heading-06-font-weight: 300;
+  --cds-heading-06-line-height: 1.199;
+  --cds-heading-06-letter-spacing: 0;
+  --cds-heading-03-font-size: 1.25rem;
+  --cds-heading-03-font-weight: 400;
+  --cds-label-01-font-size: 0.75rem;
+  --cds-label-01-line-height: 1.33333;
+  --cds-label-01-letter-spacing: 0.32px;
   --cds-spacing-13: 10rem;
 }
 
@@ -2939,6 +2949,44 @@ img[data-lightbox] {
 }
 .chart-block__loading {
   block-size: 24rem;
+}
+/* A stat (StatView): the value's name (label-01), the number (heading-06, light) with its unit a step
+   smaller and the change's tag beside it, what it is compared with (helper text), the sparkline below. */
+.stat-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-02);
+  padding-block-start: var(--cds-spacing-05);
+}
+.stat-block__label,
+.stat-block__from {
+  font-size: var(--cds-label-01-font-size);
+  line-height: var(--cds-label-01-line-height);
+  letter-spacing: var(--cds-label-01-letter-spacing);
+  color: var(--cds-text-secondary);
+}
+.stat-block__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cds-spacing-04);
+}
+.stat-block__number {
+  font-size: var(--cds-heading-06-font-size);
+  font-weight: var(--cds-heading-06-font-weight);
+  line-height: var(--cds-heading-06-line-height);
+  letter-spacing: var(--cds-heading-06-letter-spacing);
+}
+.stat-block__unit {
+  margin-inline-start: var(--cds-spacing-02);
+  font-size: var(--cds-heading-03-font-size);
+  font-weight: var(--cds-heading-03-font-weight);
+}
+.stat-block__change {
+  margin: 0;
+}
+.stat-block__sparkline {
+  margin-block-start: var(--cds-spacing-03);
 }
 .chart-block__problem {
   margin: 0;
