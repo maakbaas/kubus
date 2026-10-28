@@ -192,10 +192,17 @@ a time limit); the connection string's scheme picks the connector (`postgres://`
   n8n offers scopes. Tables only (no query language; `schema` null, a name two projects share gets
   its id: "Notes (<id>)"); "Schemas" lists project ids. Types: string as text, number, boolean as a
   checkbox, date as a date & time; then n8n's `id` (the key), `createdAt`, `updatedAt`. The API's
-  filter is one flat and / or list with one sort and no counts, so a table is read whole (250 rows a
-  request, by id, at most 100,000 rows; kept 5 s, so a view's pages and counts share a read) and
-  queried in memory (`connectors/memory.ts`, pure: the same meaning as `postgresSql.ts`; text sorts
-  as the app's, "Customer 9" before "Customer 10"). The time limit bounds each request.
+  filter is one flat and / or list with one sort and no counts, so the rows a query could keep are
+  read (250 rows a request, by id, at most 100,000 rows; kept 5 s, so a view's pages and counts share
+  a read) and queried in memory (`connectors/memory.ts`, pure: the same meaning as `postgresSql.ts`;
+  text sorts as the app's, "Customer 9" before "Customer 10"). n8n is sent, as its `filter`, the
+  rules every kept row meets (not under an `or`) that it can narrow by: text contains / is (as
+  `ilike`, ASCII only: n8n's SQLite folds only ASCII case), empty / not empty, numbers, dates by day
+  (the lower bound a UTC day early: n8n on SQLite compares its stored "yyyy-mm-dd hh:mm:ss" as text
+  with the ISO time sent); checkboxes are not sent. The search is sent when every searched column is
+  text (n8n searches all of a table's own columns), an item page asks for its `id`. Whatever n8n
+  returns is filtered exactly in memory, so a looser rule only reads more. Without a filter the whole
+  table is read. The time limit bounds each request.
 - *InfluxDB 2* (`connectors/influx.ts`, Flux in `influxFlux.ts`, pure and tested without a server):
   `influxdb://host:8086/org` (`influxdbs://` for HTTPS; port 8086 / 443 by default), the token as the
   password; Flux over `/api/v2/query` (annotated CSV, `RFC3339Nano` times) with the time limit as the
