@@ -150,6 +150,7 @@ strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 | `21-baselines` | screenshot baselines of 9 key states (pages of typical content, a popover, a dialog) at desktop and phone, light and dark |
 | `22-components-filters-cards` | a field's settings under its name and type; local components (fields, blocks, Markdown code) and saved as shared from the Components page; AI prompt in the field dialog; strike through the item on tables and cards; `{{ }}` code in a filter value and an invalid value; cards with the cover beside the text, the same in narrow and wide panes |
 | `23-perf` | perf tests, run only with `--perf` (left out of other runs): the app's hot paths, each phase (a load, a click, a key, to the state it leads to) timed with main-thread busy time, long tasks, elements and heap; seeding, settling and audits reported apart |
+| `25-map-and-view-options` | the Map block against a stubbed OpenFreeMap (Location text or Latitude / Longitude, Show as route, zoom, a dot hovered and clicked), Cards (Show title, Cover beside the text, Card width, Cover, Cover shape), Table (Title links, Items shown at a time, Show more), the Component and Markdown blocks, a block's Name, Hide empty fields and header, the Collection picker of an item page's block; each change read back from the stored view and after a reload |
 
 ## Adding to it
 

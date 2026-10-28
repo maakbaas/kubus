@@ -33,9 +33,10 @@ export const AREAS = [
   [/^app\/src\/(ui\/(Lightbox|images|thumbnails)|domain\/files)/, [16]],
 
   // Collection views and their blocks.
-  [/^app\/src\/views\/(TableView|cells)|^app\/src\/ui\/(RowActions|useTableSort)/, [5, 12]],
-  [/^app\/src\/views\/CardsView/, [6, 19, 22]],
-  [/^app\/src\/(views\/|pages\/CollectionPage|domain\/(views|query|filterTree|datePeriod))/, [5, 6, 10, 22]],
+  [/^app\/src\/views\/(TableView|cells)|^app\/src\/ui\/(RowActions|useTableSort)/, [5, 12, 25]],
+  [/^app\/src\/views\/CardsView/, [6, 19, 22, 25]],
+  [/^app\/src\/(views\/|pages\/CollectionPage|domain\/(views|query|filterTree|datePeriod))/, [5, 6, 10, 22, 25]],
+  [/^app\/src\/(views\/(MapView|ComponentBlock|MarkdownBlock)|domain\/geo|ui\/MapSettings)/, [25]],
   [/^app\/src\/ui\/(ToolbarPopover|panelRoom|OverflowBar)|^app\/src\/platform\/keyboardInset/, [10, 14, 20]],
 
   // Collections, fields, components.

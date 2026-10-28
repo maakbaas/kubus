@@ -620,8 +620,9 @@ function __audit(opts) {
     const known = (c) => tokens.has(strip(c)) || /rgba\(\d+, \d+, \d+, 0\)/.test(c);
     const seenColors = new Set();
     for (const el of shown) {
-      // Exempt: user content (images, code colouring) and image covers filled with their average colour.
-      if (el.closest("iframe, .item-view__image, img, .cm-editor, .token, .milkdown pre code, .lightbox, .item-card__cover") || srOnly(el)) continue;
+      // Exempt: user content (images, code colouring), image covers filled with their average colour, and
+      // a map legend's swatches (the colours of the map's groups are Carbon Charts' series palette, as a chart's).
+      if (el.closest("iframe, .item-view__image, img, .cm-editor, .token, .milkdown pre code, .lightbox, .item-card__cover, .map-block__swatch") || srOnly(el)) continue;
       const s = cs(el);
       const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
       const props = [["background-color", s.backgroundColor]];
@@ -824,6 +825,8 @@ function __audit(opts) {
       if (el.closest("[disabled], [aria-disabled=true], .cds--btn--disabled, .cds--label--disabled, .cds--text-input--disabled, iframe, .cm-editor, .token, .lightbox, .item-card__cover, .image-input, [role=tooltip]")) continue;
       // A disabled Carbon toggle: its label and state text are siblings of the disabled switch.
       if (el.closest(".cds--toggle:has(.cds--toggle__button:disabled), .cds--select--disabled")) continue;
+      // …and a disabled checkbox's label (the label is a sibling of the disabled input).
+      if (el.closest(".cds--checkbox-wrapper:has(.cds--checkbox:disabled)")) continue;
       if (el.matches("input, textarea, select, option")) continue; // their placeholders are exempt; values are checked as text elsewhere
       const s = cs(el);
       if (parseFloat(s.opacity) === 0) continue;
