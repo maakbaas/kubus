@@ -65,8 +65,8 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-const connector = (over: { url?: string; schemas?: string[]; queries?: boolean } = {}) =>
-  new InfluxConnector({ name: "Sensors", url: "influxdb://:tok@influx.example.com:8086/acme", schemas: [], queries: true, timeoutMs: 5000, ...over });
+const connector = (over: { fields?: Record<string, string>; schemas?: string[]; queries?: boolean } = {}) =>
+  new InfluxConnector({ name: "Sensors", kind: "influxdb", fields: { address: "influx.example.com:8086", org: "acme" }, password: "tok", schemas: [], queries: true, timeoutMs: 5000, ...over });
 
 const temps = (over: Partial<SourceQuery> = {}): SourceQuery => ({
   target: { table: { schema: "home", name: "temp" } },
@@ -90,9 +90,9 @@ describe("InfluxDB connector", () => {
   it("asks the organization's query endpoint with its token, over HTTPS for influxdbs://", async () => {
     await connector().check();
     expect(requests[0]).toMatchObject({ url: "http://influx.example.com:8086/api/v2/query?org=acme", method: "POST", authorization: "Token tok" });
-    await connector({ url: "influxdbs://:tok@cloud.example.com/my%20org" }).check();
+    await connector({ fields: { address: "https://cloud.example.com/", org: "my org" } }).check();
     expect(requests.at(-2)?.url).toBe("https://cloud.example.com:443/api/v2/query?org=my%20org");
-    expect(() => connector({ url: "influxdb://:tok@influx.example.com:8086" })).toThrow(/names no organization/);
+    expect(() => connector({ fields: { address: "influx.example.com:8086", org: "" } })).toThrow(/organization/);
   });
 
   it("warns about a token that can do more than read", async () => {

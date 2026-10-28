@@ -1,5 +1,6 @@
 import type { SourceDescription, SourceQuery, SourceResult, SourceRow, SourceRowRequest, SourceShape, SourceTable, SourceTarget } from "../../../shared/sources.ts";
 import { SourceError, type Connector, type SourceConfig } from "./connector.ts";
+import { addressOf } from "./kinds.ts";
 import {
   ALL_START,
   ALL_STOP,
@@ -20,8 +21,8 @@ import {
 } from "./influxFlux.ts";
 
 // An InfluxDB 2 server, strictly read-only: it is only ever asked Flux that reads (influxFlux.ts),
-// over its HTTP API with the token. Connection string: influxdb://host:8086/org (influxdbs:// for
-// HTTPS), the token as its password. Buckets are its "schemas", their measurements its tables.
+// over its HTTP API with the token. Its fields: the address
+// (http://host:8086, or https://) and the organization; the token as its password. Buckets are its "schemas", their measurements its tables.
 // The real protection is a token that can only read (docs/sync.md): `check` warns when it can write.
 
 /** How long a target's columns are trusted before they are read again (new fields or tags). */
@@ -45,12 +46,17 @@ export class InfluxConnector implements Connector {
         queryHelp: "Flux that only reads, ending in its tables (they are put together as one): views filter, sort and page them.",
       }),
     };
-    const url = new URL(config.url);
-    const secure = url.protocol === "influxdbs:";
-    this.base = `${secure ? "https" : "http"}://${url.hostname}:${url.port || (secure ? "443" : "8086")}`;
-    this.org = decodeURIComponent(url.pathname.replace(/^\/+|\/+$/g, ""));
-    this.token = decodeURIComponent(url.password);
-    if (!this.org) throw new Error("The connection string names no organization (influxdb://host:8086/org)");
+    let url: URL;
+    try {
+      url = addressOf(config.fields.address ?? "", false);
+    } catch {
+      throw new SourceError("The address isn't one (http://influx.example.com:8086)");
+    }
+    const secure = url.protocol === "https:";
+    this.base = `${url.protocol}//${url.hostname}:${url.port || (secure ? "443" : "8086")}`;
+    this.org = config.fields.org ?? "";
+    this.token = config.password;
+    if (!this.org) throw new SourceError("An InfluxDB source needs its organization");
   }
 
   private headers(more: Record<string, string> = {}) {

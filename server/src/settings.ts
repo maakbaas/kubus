@@ -1,7 +1,7 @@
 import { HttpError } from "../../shared/router.ts";
 import { SOURCE_NAME, type ServerAiSettings, type ServerSettingsUpdate, type ServerSettingsView, type ServerSourceSettings } from "../../shared/settings.ts";
 import type { SourceConfig } from "./connectors/connector.ts";
-import { connectionKinds, fieldsOf, urlOf } from "./connectors/forms.ts";
+import { connectionKinds, fieldsFor, placeOf } from "./connectors/kinds.ts";
 
 // The server's own settings (shared/settings.ts): the language model it offers and the sources it
 // reads, set in the app (Settings → AI and Connections) and stored in its table server_settings, secrets
@@ -38,7 +38,8 @@ export async function loadSettings(pool: Db): Promise<Stored> {
     sources: sources.map((s) => ({
       id: text(s.id),
       name: text(s.name),
-      url: text(s.url),
+      kind: text(s.kind),
+      fields: fieldsFor(text(s.kind), s.fields) ?? {},
       password: text(s.password),
       schemas: Array.isArray(s.schemas) ? s.schemas.map((x) => text(x)).filter(Boolean) : [],
       queries: s.queries !== false,
@@ -55,28 +56,6 @@ export async function saveSettings(pool: Db, stored: Stored): Promise<void> {
   );
 }
 
-/** A connection string's parts that decide where its password goes. */
-function placeOf(url: string): string | null {
-  try {
-    const u = new URL(url);
-    return `${u.protocol}//${decodeURIComponent(u.username)}@${u.hostname}:${u.port}`;
-  } catch {
-    return null;
-  }
-}
-
-/** A connection string without its password, and the password it held (""). */
-export function splitPassword(url: string): { url: string; password: string } {
-  try {
-    const u = new URL(url);
-    const password = decodeURIComponent(u.password);
-    u.password = "";
-    return { url: u.toString(), password };
-  } catch {
-    return { url, password: "" };
-  }
-}
-
 /** The settings after an update (checked; 400 when something can't be stored), secrets kept by the rule above. */
 export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
   if (!update || typeof update !== "object" || !update.ai || !Array.isArray(update.sources)) throw new HttpError(400, "Send the settings as a whole");
@@ -89,25 +68,18 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
     if (!SOURCE_NAME.test(name)) throw new HttpError(400, `A source's name is letters, digits, - and _ (“${name}” isn't)`);
     if (names.has(name.toLowerCase())) throw new HttpError(400, `Two sources are called “${name}”`);
     names.add(name.toLowerCase());
+    const kind = text(s.kind, 40);
+    const fields = fieldsFor(kind, s.fields);
+    if (!fields) throw new HttpError(400, `${name}: the server doesn't read sources of the kind “${kind}”`);
     const before = old.sources.find((o) => o.id === s.id);
-    const given = splitPassword(text(s.url));
-    if (s.kind !== undefined) {
-      const fields = Object.fromEntries(Object.entries(s.fields ?? {}).map(([k, v]) => [k, text(v, 500)]));
-      const made = urlOf(s.kind, fields);
-      if (made === null) throw new HttpError(400, `${name}: the server doesn't know connections of the kind “${s.kind}”`);
-      // The same fields as stored keep the stored string as it was (written by hand, it may read differently).
-      const was = before && fieldsOf(before.url);
-      given.url = was && was.kind === s.kind && JSON.stringify(was.fields) === JSON.stringify({ ...was.fields, ...fields }) ? before.url : made;
-      given.password = "";
-    }
-    if (!placeOf(given.url)) throw new HttpError(400, `${name}: the connection string isn't a URL (e.g. postgres://user@host:5432/database or influxdb://host:8086/org)`);
     const password =
-      given.password || (typeof s.password === "string" ? s.password : before && placeOf(before.url) === placeOf(given.url) ? before.password : "");
+      typeof s.password === "string" ? s.password : before && placeOf(before.kind, before.fields) === placeOf(kind, fields) ? before.password : "";
     const timeout = Number(s.timeoutSeconds);
     return {
       id: text(s.id, 100) || crypto.randomUUID(),
       name,
-      url: given.url,
+      kind,
+      fields,
       password,
       schemas: Array.isArray(s.schemas) ? s.schemas.map((x) => text(x, 200)).filter(Boolean) : [],
       queries: s.queries !== false,
@@ -117,21 +89,9 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
   return { ai: { url: aiUrl, key, fieldModel: text(update.ai.fieldModel, 200), codeModel: text(update.ai.codeModel, 200) }, sources };
 }
 
-/** What the connectors are given: the connection string with its password. */
+/** What the connectors are given. */
 export function sourceConfigs(stored: Stored): SourceConfig[] {
-  return stored.sources.map((s) => {
-    let url = s.url;
-    if (s.password) {
-      try {
-        const u = new URL(s.url);
-        u.password = s.password;
-        url = u.toString();
-      } catch {
-        // Not a URL: the connector says so.
-      }
-    }
-    return { name: s.name, url, schemas: s.schemas, queries: s.queries, timeoutMs: Math.round(s.timeoutSeconds * 1000) };
-  });
+  return stored.sources.map((s) => ({ name: s.name, kind: s.kind, fields: s.fields, password: s.password, schemas: s.schemas, queries: s.queries, timeoutMs: Math.round(s.timeoutSeconds * 1000) }));
 }
 
 /** The settings as a device sees them: secrets left out. */
@@ -140,6 +100,6 @@ export function viewOf(stored: Stored, status: (name: string) => { connector?: s
   return {
     ai: { ...ai, keySet: key !== "" },
     kinds: connectionKinds(),
-    sources: stored.sources.map(({ password, ...s }) => ({ ...s, passwordSet: password !== "", ...fieldsOf(s.url), ...status(s.name) })),
+    sources: stored.sources.map(({ password, ...s }) => ({ ...s, passwordSet: password !== "", ...status(s.name) })),
   };
 }

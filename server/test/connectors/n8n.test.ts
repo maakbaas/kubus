@@ -65,7 +65,7 @@ function stub() {
   return requests;
 }
 
-const config = (over: { url?: string; schemas?: string[] } = {}) => ({ name: "Flows", url: "n8n://:secret@n8n.example.com/n8n", schemas: [], queries: true, timeoutMs: 5000, ...over });
+const config = (over: { schemas?: string[] } = {}) => ({ name: "Flows", kind: "n8n", fields: { address: "n8n.example.com/n8n" }, password: "secret", schemas: [], queries: true, timeoutMs: 5000, ...over });
 const leads = (over: Partial<SourceQuery> = {}): SourceQuery => ({
   target: { table: { schema: null, name: "Leads" } },
   key: "id",
@@ -87,9 +87,9 @@ const leads = (over: Partial<SourceQuery> = {}): SourceQuery => ({
 afterEach(() => vi.unstubAllGlobals());
 
 describe("n8n connector", () => {
-  it("reads its endpoint from the connection string", () => {
-    expect(n8nEndpoint("n8n+http://:k%40y@localhost:5678")).toEqual({ base: "http://localhost:5678/api/v1", key: "k@y" });
-    expect(n8nEndpoint("n8n://n8n.example.com/")).toEqual({ base: "https://n8n.example.com/api/v1", key: "" });
+  it("reads its endpoint from its address", () => {
+    expect(n8nEndpoint("http://localhost:5678")).toBe("http://localhost:5678/api/v1");
+    expect(n8nEndpoint("n8n.example.com/")).toBe("https://n8n.example.com/api/v1");
   });
   it("lists tables, a shared name with its id, and only the projects asked for", async () => {
     stub();
@@ -164,7 +164,7 @@ describe("n8n connector", () => {
   });
   it("tells a wrong key from a wrong request", async () => {
     stub();
-    await expect(new N8nConnector(config({ url: "n8n://:wrong@n8n.example.com/n8n" })).check()).rejects.toThrow(/401/);
+    await expect(new N8nConnector({ ...config(), password: "wrong" }).check()).rejects.toThrow(/401/);
     await expect(new N8nConnector(config()).query(leads({ target: { table: { schema: null, name: "Nope" } } }))).rejects.toThrow(/no data table/);
   });
 });

@@ -175,7 +175,7 @@ test("connections: a source is set up with its kind's own fields", async (t) => 
   fake.settings = {
     ai: { url: "", fieldModel: "", codeModel: "", keySet: false },
     kinds: [kind("postgres", "PostgreSQL", [["host", "Host"], ["port", "Port"], ["database", "Database"], ["user", "User"]], "Password", "Schemas"), kind("d1", "Cloudflare D1", [["account", "Account ID"], ["database", "Database ID"]], "API token", null)],
-    sources: [{ id: "s1", name: "CRM", url: "postgres://reader@crm:5432/crm", kind: "postgres", fields: { host: "crm", port: "5432", database: "crm", user: "reader" }, schemas: [], queries: true, timeoutSeconds: 30, passwordSet: true }],
+    sources: [{ id: "s1", name: "CRM", kind: "postgres", fields: { host: "crm", port: "5432", database: "crm", user: "reader" }, schemas: [], queries: true, timeoutSeconds: 30, passwordSet: true }],
   };
   await connect(t, "https://conn.test", { confirm: false });
   await t.open("/settings?section=connections");
@@ -192,7 +192,4 @@ test("connections: a source is set up with its kind's own fields", async (t) => 
   await pane.getByRole("button", { name: "Save" }).click();
   await t.until("saving sends the kind and its fields", () => fake.saved?.sources?.[0]?.kind === "d1" || JSON.stringify(fake.saved));
   await t.check("the fields are sent as typed", JSON.stringify(fake.saved.sources[0].fields) === JSON.stringify({ account: "acc", database: "db" }), JSON.stringify(fake.saved.sources[0]));
-  await pane.locator("select[id$='-src-kind-s1']").selectOption("");
-  await t.settle();
-  await t.check("a plain connection string is still offered", (await pane.getByRole("textbox", { name: "Connection string" }).count()) === 1);
 }, { viewport: "desktop" });

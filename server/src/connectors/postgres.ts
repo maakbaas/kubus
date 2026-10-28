@@ -22,7 +22,12 @@ export class PostgresConnector implements Connector {
     this.config = config;
     this.capabilities = { query: config.queries, ...(config.queries && { queryLanguage: "SQL" }) };
     this.pool = new pg.Pool({
-      connectionString: config.url,
+      host: config.fields.host,
+      port: Number(config.fields.port) || 5432,
+      database: config.fields.database,
+      user: config.fields.user || undefined,
+      password: config.password || undefined,
+      ssl: config.fields.ssl === "verify" ? true : config.fields.ssl === "require" ? { rejectUnauthorized: false } : false,
       max: 4,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,

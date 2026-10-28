@@ -18,8 +18,10 @@ export interface ServerSourceSettings {
   id: string;
   /** What devices see and ask by, e.g. CRM: letters, digits, - and _. */
   name: string;
-  /** Its connection string without the password, e.g. postgres://reader@crm-host:5432/crm; its scheme picks the connector. */
-  url: string;
+  /** Its kind (a ConnectionKind's id, e.g. "postgres"): picks the connector. */
+  kind: string;
+  /** That kind's fields (its password aside), e.g. { host, port, database, user, ssl }. */
+  fields: Record<string, string>;
   /** Only these schemas' tables are offered (empty: all). */
   schemas: string[];
   /** Queries written in the app are allowed, not only its tables. */
@@ -34,12 +36,13 @@ export interface ConnectionField {
   label: string;
   placeholder?: string;
   helperText?: string;
+  /** A choice of these (the first is the default) instead of a text box. */
+  choices?: { value: string; text: string }[];
 }
 
 /**
- * A kind of source the server can read, as the app sets it up: its own fields (which the server
- * makes the connection string from), what its password is called, and what its schemas are (null:
- * it has none). Described by the server (server/src/connectors/forms.ts), so the app knows no database.
+ * A kind of source the server can read, as the app sets it up: its own fields, what its password is called, and what its schemas are (null:
+ * it has none). Described by the server (server/src/connectors/kinds.ts), so the app knows no database.
  */
 export interface ConnectionKind {
   /** E.g. "postgres". */
@@ -53,13 +56,10 @@ export interface ConnectionKind {
 /** GET /api/settings: what is set, secrets left out. */
 export interface ServerSettingsView {
   ai: ServerAiSettings & { keySet: boolean };
-  /** The kinds of connection it can set up (older servers: none, only connection strings). */
-  kinds?: ConnectionKind[];
+  /** The kinds of source it can read. */
+  kinds: ConnectionKind[];
   sources: (ServerSourceSettings & {
     passwordSet: boolean;
-    /** Its kind and that kind's fields, read from its connection string; none when no kind reads it. */
-    kind?: string;
-    fields?: Record<string, string>;
     /** Its connector ("postgres"), once it has one. */
     connector?: string;
     /** Why it can't be read now (no connector for the scheme, can't connect), or a warning (a user that can write). */
@@ -70,13 +70,12 @@ export interface ServerSettingsView {
 
 /**
  * PUT /api/settings: the settings as a whole. A secret left out (undefined) stays as it is, but
- * only while it would go to the same place (the same API address; the same host, port and user):
+ * only while it would go to the same place (the same API address; for a source, the same kind and the fields its password belongs to: host, port and user, an address, an account):
  * moved elsewhere it is dropped, so a stored secret can't be sent somewhere new. "" clears it.
  */
 export interface ServerSettingsUpdate {
   ai: ServerAiSettings & { key?: string };
-  /** With `kind`, the connection string is made from `fields` (and `url` is ignored). */
-  sources: (ServerSourceSettings & { password?: string; kind?: string; fields?: Record<string, string> })[];
+  sources: (ServerSourceSettings & { password?: string })[];
 }
 
 /** A source's name: what /api/sources/<name> takes. */

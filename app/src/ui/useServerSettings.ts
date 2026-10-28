@@ -11,7 +11,7 @@ import { errorMessage } from "./useConfirm";
 /** What is set, as it would be saved again: secrets left out stay as they are. */
 export const updateOf = (view: ServerSettingsView): ServerSettingsUpdate => ({
   ai: { url: view.ai.url, fieldModel: view.ai.fieldModel, codeModel: view.ai.codeModel },
-  sources: view.sources.map(({ id, name, url, schemas, queries, timeoutSeconds }) => ({ id, name, url, schemas, queries, timeoutSeconds })),
+  sources: view.sources.map(({ id, name, kind, fields, schemas, queries, timeoutSeconds }) => ({ id, name, kind, fields, schemas, queries, timeoutSeconds })),
 });
 
 export function useServerSettings() {

@@ -7,35 +7,17 @@ import { useServerSettings } from "./useServerSettings";
 
 // The databases the connected server reads for remote collections (its sources), the same for every
 // device: part of the server's settings (useServerSettings). Each is set up with its kind's own fields,
-// which the server describes and makes the connection string from (shared/settings.ts ConnectionKind);
-// a string no kind reads, or a server that names no kinds, is a plain connection string. A password is typed once: it is never
+// as the server describes them (shared/settings.ts ConnectionKind), so the app knows no database. A password is typed once: it is never
 // shown again, and stays while left empty (until the address it goes to changes).
 
-/** A source as edited: `kind` "" is a plain connection string (`url`), else that kind's `fields`. */
-interface SourceDraft {
-  id: string;
-  name: string;
-  kind: string;
-  fields: Record<string, string>;
-  url: string;
-  password?: string;
-  passwordSet: boolean;
-  schemasText: string;
-  queries: boolean;
-  timeoutSeconds: number;
-}
-
-/** What a connection string is, when the server doesn't name a kind for it. */
-const PLAIN = "";
-const PLAIN_SCHEMAS = { label: "Schemas", helperText: "Only these schemas' tables are offered (n8n: these projects' ids; InfluxDB: buckets' measurements), comma-separated." };
+type SourceDraft = Omit<ServerSettingsUpdate["sources"][number], "schemas"> & { passwordSet: boolean; schemasText: string };
 
 const draftOf = (view: ServerSettingsView): SourceDraft[] =>
   view.sources.map((s) => ({
     id: s.id,
     name: s.name,
-    kind: (view.kinds?.length && s.kind) || PLAIN,
-    fields: s.fields ?? {},
-    url: s.url,
+    kind: s.kind,
+    fields: s.fields,
     passwordSet: s.passwordSet,
     schemasText: s.schemas.join(", "),
     queries: s.queries,
@@ -43,9 +25,8 @@ const draftOf = (view: ServerSettingsView): SourceDraft[] =>
   }));
 
 const updateOf = (draft: SourceDraft[]): ServerSettingsUpdate["sources"] =>
-  draft.map(({ passwordSet: _p, schemasText, password, kind, fields, ...s }) => ({
+  draft.map(({ passwordSet: _p, schemasText, password, ...s }) => ({
     ...s,
-    ...(kind !== PLAIN && { kind, fields }),
     schemas: schemasText.split(",").map((x) => x.trim()).filter(Boolean),
     ...(password !== undefined && { password }),
   }));
@@ -68,7 +49,7 @@ export function ConnectionSettings() {
 
   const setSource = (i: number, patch: Partial<SourceDraft>) => setDraft((d) => d && d.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const status = (id: string) => view.sources.find((s) => s.id === id);
-  const kinds = view.kinds ?? [];
+  const { kinds } = view;
 
   async function save(e: { preventDefault(): void }) {
     e.preventDefault();
@@ -97,29 +78,41 @@ export function ConnectionSettings() {
         {draft.map((s, i) => {
           const state = status(s.id);
           const kind = kinds.find((k) => k.id === s.kind);
-          const schemas = kind ? kind.schemas : PLAIN_SCHEMAS;
+          const schemas = kind?.schemas;
           return (
             <Stack gap={5} key={s.id} className="server-source">
               {state?.problem && <InlineNotification kind="error" title={s.name} subtitle={state.problem} lowContrast hideCloseButton />}
               {state?.warnings?.map((w) => <InlineNotification key={w} kind="warning" title={s.name} subtitle={w} lowContrast hideCloseButton />)}
               <TextInput size="sm" id={`${uid}-src-name-${s.id}`} labelText="Name" helperText="What devices see, e.g. CRM: letters, digits, - and _." value={s.name} onChange={(e) => setSource(i, { name: e.target.value })} />
-              {kinds.length > 0 && (
-                <Select
-                  size="sm"
-                  id={`${uid}-src-kind-${s.id}`}
-                  labelText="Kind"
-                  value={s.kind}
-                  // Another kind: none of the last one's fields (or schemas) applies.
-                  onChange={(e) => setSource(i, { kind: e.target.value, fields: {}, schemasText: "" })}
-                >
-                  {kinds.map((k) => (
-                    <SelectItem key={k.id} value={k.id} text={k.label} />
-                  ))}
-                  <SelectItem value={PLAIN} text="A connection string" />
-                </Select>
-              )}
-              {kind ? (
-                kind.fields.map((f) => (
+              <Select
+                size="sm"
+                id={`${uid}-src-kind-${s.id}`}
+                labelText="Kind"
+                value={s.kind}
+                // Another kind: none of the last one's fields (or schemas) applies.
+                onChange={(e) => setSource(i, { kind: e.target.value, fields: {}, schemasText: "" })}
+              >
+                {!kind && <SelectItem value={s.kind} text={s.kind ? `${s.kind} (unknown)` : "Choose a kind"} />}
+                {kinds.map((k) => (
+                  <SelectItem key={k.id} value={k.id} text={k.label} />
+                ))}
+              </Select>
+              {kind?.fields.map((f) =>
+                f.choices ? (
+                  <Select
+                    key={f.key}
+                    size="sm"
+                    id={`${uid}-src-${f.key}-${s.id}`}
+                    labelText={f.label}
+                    helperText={f.helperText}
+                    value={s.fields[f.key] ?? ""}
+                    onChange={(e) => setSource(i, { fields: { ...s.fields, [f.key]: e.target.value } })}
+                  >
+                    {f.choices.map((c) => (
+                      <SelectItem key={c.value} value={c.value} text={c.text} />
+                    ))}
+                  </Select>
+                ) : (
                   <TextInput
                     key={f.key}
                     size="sm"
@@ -130,24 +123,14 @@ export function ConnectionSettings() {
                     value={s.fields[f.key] ?? ""}
                     onChange={(e) => setSource(i, { fields: { ...s.fields, [f.key]: e.target.value } })}
                   />
-                ))
-              ) : (
-                <TextInput
-                  size="sm"
-                  id={`${uid}-src-url-${s.id}`}
-                  labelText="Connection string"
-                  placeholder="postgres://reader@db-host:5432/crm"
-                  helperText={state?.connector ? `Read by its ${state.connector} connector.` : "postgres://user@host:port/database, n8n://host for n8n's data tables (its API key as the password), influxdb://host:8086/org (influxdbs:// for HTTPS; the token as password), or d1://account-id/database-id for Cloudflare D1 (an API token with D1 Read as the password)."}
-                  value={s.url}
-                  onChange={(e) => setSource(i, { url: e.target.value })}
-                />
+                ),
               )}
               <PasswordInput
                 size="sm"
                 id={`${uid}-src-password-${s.id}`}
                 labelText={kind?.password.label ?? "Password"}
                 placeholder={s.passwordSet && s.password === undefined ? "Set: type to replace it" : "None"}
-                helperText={kind?.password.helperText ?? "Kept while left empty (unless the host, port or user changes)."}
+                helperText={kind?.password.helperText}
                 value={s.password ?? ""}
                 onChange={(e) => setSource(i, { password: e.target.value || undefined })}
               />
@@ -187,7 +170,7 @@ export function ConnectionSettings() {
             size="sm"
             renderIcon={Add}
             onClick={() =>
-              setDraft((d) => d && [...d, { id: crypto.randomUUID(), name: "", kind: kinds[0]?.id ?? PLAIN, fields: {}, url: "", schemasText: "", queries: true, timeoutSeconds: 30, passwordSet: false }])
+              setDraft((d) => d && [...d, { id: crypto.randomUUID(), name: "", kind: kinds[0]?.id ?? "", fields: {}, schemasText: "", queries: true, timeoutSeconds: 30, passwordSet: false }])
             }
           >
             Add connection

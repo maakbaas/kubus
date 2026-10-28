@@ -2,8 +2,8 @@ import type { SourceDescription, SourceQuery, SourceResult, SourceRow, SourceRow
 import { SourceError, type Connector, type SourceConfig } from "./connector.ts";
 import { d1Column, fromSql, ident, querySql, rowSql, type D1Column, type Statement } from "./d1Sql.ts";
 
-// A Cloudflare D1 database (SQLite), read over Cloudflare's HTTP API: d1://<account id>/<database id>,
-// the password an API token. Strictly read-only, though D1 has no read-only mode to ask for: only
+// A Cloudflare D1 database (SQLite), read over Cloudflare's HTTP API by its account ID and
+// database ID, the password an API token. Strictly read-only, though D1 has no read-only mode to ask for: only
 // statements made here are sent (SELECT, and PRAGMA table_xinfo for a table's columns: `readOnly`
 // refuses anything else), a written query is one statement (D1 would run several) inside a
 // subquery, where SQLite allows nothing but a SELECT, and a statement D1 says changed the database
@@ -44,12 +44,10 @@ export class D1Connector implements Connector {
   constructor(config: SourceConfig) {
     this.config = config;
     this.capabilities = { query: config.queries, ...(config.queries && { queryLanguage: "SQL" }) };
-    const u = new URL(config.url);
-    const account = decodeURIComponent(u.hostname);
-    const database = decodeURIComponent(u.pathname.replace(/^\/+|\/+$/g, ""));
-    if (!account || !database || database.includes("/")) throw new SourceError("A D1 connection string is d1://<account id>/<database id>");
+    const { account, database } = config.fields;
+    if (!account || !database) throw new SourceError("A D1 source needs its account ID and database ID");
     this.endpoint = `${API}/accounts/${encodeURIComponent(account)}/d1/database/${encodeURIComponent(database)}/raw`;
-    this.token = decodeURIComponent(u.password || u.username);
+    this.token = config.password;
   }
 
   /** Runs one statement. */

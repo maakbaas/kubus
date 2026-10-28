@@ -135,10 +135,10 @@ its part on top of what the server holds then (`ui/useServerSettings.ts`). `GET`
 token may change them. They are stored in the server's own table `server_settings` (JSON by key:
 `ai`, `sources`), never synced and kept by a wipe. Secrets (the model's key, a source's password)
 are write-only: a device sees `keySet` / `passwordSet`, never the value. A secret left out of an
-update stays only while it would go to the same place (the same model address; the same scheme,
-host, port and user of a connection string): moved elsewhere it is dropped, so whoever holds the
-token can't send a stored secret to a host of their choosing. A password typed into a connection
-string is split out of it (`splitPassword`). Saving applies at once: the model is used for the next
+update stays only while it would go to the same place (the same model address; a source's same kind
+and the fields its password belongs to, `placeOf`: host, port and user, an address, an account): moved
+elsewhere it is dropped, so whoever holds the token can't send a stored secret to a host of their
+choosing. Saving applies at once: the model is used for the next
 request, the sources' connectors are replaced and checked (`Sources.replace`), and the answer
 carries each source's problem and warnings. The server's environment variables: `DATABASE_URL`,
 `KUBUS_TOKEN`, `PORT`, `STATIC_DIR`, `KUBUS_WEBHOOK_URL` and `KUBUS_WEBHOOK_SECRET`.
@@ -159,12 +159,13 @@ headless device doesn't generate AI values (that stays with the apps).
 Databases the server reads for the devices, read-only, whose tables and queries the app shows as
 collections ("remote collections": `Collection.source`, `domain/sources.ts`). Set up in Settings →
 Connections (name, kind, that kind's own fields, password, schemas, whether queries written in the app are
-allowed, a time limit). A source is stored as a connection string, whose scheme picks the connector (`postgres://`,
-`n8n://`, `influxdb://`, `d1://`); the app never builds one: the server describes each kind's fields
-(`ConnectionKind` in `shared/settings.ts`, `GET /api/settings` → `kinds`, each source's `kind` / `fields`), and a
-`PUT` with `kind` and `fields` has the server make the string (`server/src/connectors/forms.ts`; the same fields as
-stored keep a hand-written string as it was). A string no kind reads, or a server that names no kinds, is edited as
-a plain connection string ("A connection string" in the Kind dropdown).
+allowed, a time limit). A source is stored as its kind and that kind's fields, its password beside them (no
+connection string); its kind picks the connector, which reads the fields (`SourceConfig`). The server describes the
+kinds and their fields (`server/src/connectors/kinds.ts`; `ConnectionKind` in `shared/settings.ts`, `GET
+/api/settings` → `kinds`), so the app knows no database: PostgreSQL (host, port, database, user, TLS), n8n data tables
+(address), InfluxDB 2 (address, organization), Cloudflare D1 (account ID, database ID). Sources were stored as
+connection strings before; that format was dropped without a migration (a breaking change: such a source reads as
+of no kind until it is set up again), and app and server must both be this version.
 - *Protocol* (`shared/sources.ts`), connector-neutral, all behind the token:
   `GET /api/sources` (names, connector, capabilities, problem; never addresses),
   `GET /api/sources/<name>/tables`, `POST …/describe` (`{ target }`: a table or a query → its
