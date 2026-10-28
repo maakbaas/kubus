@@ -16,7 +16,7 @@ server ↔ headless device interface).
 client never talks to Postgres: browsers and the iOS PWA can only do HTTP. One container
 (`server/Dockerfile`, `docker-compose.yml` with `DATABASE_URL` and `KUBUS_TOKEN`) serves the
 sync API at `/api` and the built web app at `/`, so the phone installs the app from the server
-(same origin, no CORS). Auth is one shared bearer token (`KUBUS_TOKEN`, the devices'; other tools get API tokens of
+(same origin, no CORS; another origin is allowed, a browser's preflight kept two hours: `Access-Control-Max-Age`). Auth is one shared bearer token (`KUBUS_TOKEN`, the devices'; other tools get API tokens of
 their own: "The API" below); the app's
 Settings holds server URL + token + "Test connection" + Disconnect in the Server tab (`#/settings?section=server`,
 `ui/ServerConnection.tsx`), and on/off + Download images + the wipes in the Sync tab (`#/settings?section=sync`,
@@ -204,8 +204,8 @@ takes the new one when its settings are opened. A source's name: letters, digits
   nothing else changes. `Sources` (`server/src/sources.ts`) holds one per source and turns a
   connector's `SourceError` into 400, anything else into 502.
 - *Postgres* (`connectors/postgres.ts`, SQL in `postgresSql.ts`, pure and tested without a
-  database): every statement in a `READ ONLY` transaction with `statement_timeout`, on connections
-  opened with `default_transaction_read_only`, using the extended protocol (one statement per query:
+  database): every statement in a `READ ONLY` transaction, on connections opened with
+  `default_transaction_read_only` and `statement_timeout` (the pool's `options`), using the extended protocol (one statement per query:
   a statement can't add another). Values
   are parameters and names quoted. Types map by `pg_type.typcategory` (`pgColumn`): numbers, booleans,
   `date`, `timestamptz` / `timestamp` (taken as UTC) as their field types; text, enums, `uuid`, `time`,
@@ -214,7 +214,8 @@ takes the new one when its settings are opened. A source's name: letters, digits
   sorted or grouped; JSON and XML hidden in a new collection's view); binary data, search indexes,
   PostGIS shapes and internals dropped. A filter means what the app's does (`applyQuery`): text
   case-insensitive, empty values last both ways, a date & time on its day in the device's time zone,
-  comparisons kept to the column (so indexes are used), the key breaking ties so pages never overlap.
+  comparisons kept to the column (so indexes are used: a whole number against an integer column as `int8`, a
+  `timestamp` column against its bound turned to UTC, and sorted as itself), the key breaking ties so pages never overlap.
   A list column groups a row under each value. At start (and on every change) `check` warns about a
   superuser or a user that can write: give it a user that can only read (`GRANT SELECT`); the app only reads tables.
 - *n8n* (`connectors/n8n.ts`): n8n's data tables through its public API, its address
@@ -234,7 +235,8 @@ takes the new one when its settings are opened. A source's name: letters, digits
   with the ISO time sent); checkboxes are not sent. The search is sent when every searched column is
   text (n8n searches all of a table's own columns), an item page asks for its `id`. Whatever n8n
   returns is filtered exactly in memory, so a looser rule only reads more. Without a filter the whole
-  table is read. The time limit bounds each request.
+  table is read. A read is kept 5 seconds from when it is done (a view's pages and counts share it; one still
+  coming in is shared too). The time limit bounds each request.
 - *InfluxDB 2* (`connectors/influx.ts`, Flux in `influxFlux.ts`, pure and tested without a server):
   its address (http://host:8086, or https://; port 8086 / 443 by default) and organization, the token as the
   password; Flux over `/api/v2/query` (annotated CSV, `RFC3339Nano` times) with the time limit as the
@@ -316,7 +318,8 @@ takes the new one when its settings are opened. A source's name: letters, digits
   `uid@2026-03-01T08:00:00.000Z`, `uid@2026-04-01` all day). A row is an occurrence: repeating events (`RRULE`
   / `RDATE`, less `EXDATE`, `RECURRENCE-ID` overrides where they moved to, `RANGE=THISANDFUTURE`) are expanded
   over the days the filter's rules on start / end (start date, end date) leave, those every row meets (not
-  under an `or`), a day's margin either way; else 20 years back and a year ahead of now. At most 50,000 rows (`MAX_ROWS`:
+  under an `or`), a day's margin either way; else 20 years back and a year ahead of now (in whole UTC days: the
+  expansion is kept by its window, the same all day). At most 50,000 rows (`MAX_ROWS`:
   past it, a problem asking for a shorter range); a repeating event is stepped through from its first
   occurrence, at most 200,000 steps (a minutely rule from long ago ends early). Single events are read
   whatever the dates. Times in the file's `VTIMEZONE`, else the `TZID` as an IANA zone, else (floating, or a
@@ -342,7 +345,9 @@ takes the new one when its settings are opened. A source's name: letters, digits
   every row, else the row's place (`_row`, hidden), which `check` warns about: a row's page and links to it change
   when rows are added above it.
 - *App*: a block of a remote collection asks the source for its query (`useRemoteResult`, its Limit of rows
-  a page (100 unless set; 0, a chart's unless set: every page, one after the other), "Show more"; search waits for typing to pause) instead of `applyQuery`; the item page reads
+  a page (100 unless set; 0, a chart's unless set: every page, one after the other), "Show more"; search waits for typing to pause) instead of `applyQuery`;
+  a query asked while the same one is on its way shares its answer (`SourcesClient.query`); the first page is asked again
+  when the request changes, not when another collection does (each is a new object then). The item page reads
   its row by key (`rowKey` of the item id, a base64url of the key). Rows become items keeping their
   identity while unchanged. A page added after the first ("Show more", loading every row) only makes its own rows into
   items (`addRows`), so loading many pages costs as much as their rows; while every row loads, the block (a chart,
@@ -352,7 +357,7 @@ takes the new one when its settings are opened. A source's name: letters, digits
   point at remote collections (#5); global search and the API (`/api/v1`) don't read remote rows
   (#1). InfluxDB: a page sorted by `_time` alone (not grouped) is read from the nearest point's day and the
   days next to it (a day per 100 rows of the page, a month at most), else over its whole range as asked (`isTimeOrdered`,
-  `byTime`); every query slower than 3 s is logged with its script (`SLOW_MS`), and its total counted from InfluxDB's
+  `byTime`); every query slower than 3 s is logged with its script (`SLOW_MS`), and a total (by time or not) counted from InfluxDB's
   index when the filter is a `_time` range alone (`countFlux`: per series the most points of any field, so fields
   written apart are undercounted); any other sort, a grouping or a filter on a field reads the measurement over all
   time unless filtered on `_time` (keep a `_time` filter on large buckets), two text sorts asked opposite ways sort the second the way of the

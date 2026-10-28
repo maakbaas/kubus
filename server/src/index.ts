@@ -226,6 +226,8 @@ createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
   res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS");
+  // A browser asks before each request (its token header): its answer kept two hours (Chromium's most).
+  res.setHeader("Access-Control-Max-Age", "7200");
   try {
     if (req.method === "OPTIONS") return send(res, 204, "");
     if (url.pathname === "/api/health") return send(res, 200, '{"ok":true}');

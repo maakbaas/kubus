@@ -26,6 +26,8 @@ export class SourcesClient {
   /** Bumped by `refresh`: what shows remote rows reads them again. */
   private listeners = new Set<(collectionId: string | null) => void>();
   private shown = new Map<string, Item>();
+  /** Queries on their way, by source and query. */
+  private asking = new Map<string, Promise<SourceResult>>();
 
   constructor(private config: () => SyncConfig) {}
 
@@ -57,8 +59,15 @@ export class SourcesClient {
   describe(source: string, target: SourceTarget): Promise<SourceDescription> {
     return this.call(`/sources/${encodeURIComponent(source)}/describe`, { target });
   }
+  /** A query asked while the same one is still on its way gets its answer (several blocks of one view ask alike). */
   query(source: string, query: SourceQuery): Promise<SourceResult> {
-    return this.call(`/sources/${encodeURIComponent(source)}/query`, query);
+    const key = `${source}\n${JSON.stringify(query)}`;
+    let asked = this.asking.get(key);
+    if (!asked) {
+      asked = this.call<SourceResult>(`/sources/${encodeURIComponent(source)}/query`, query).finally(() => this.asking.delete(key));
+      this.asking.set(key, asked);
+    }
+    return asked;
   }
   async row(source: string, request: SourceRowRequest): Promise<SourceRow | null> {
     return (await this.call<{ row: SourceRow | null }>(`/sources/${encodeURIComponent(source)}/row`, request)).row;

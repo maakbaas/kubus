@@ -18,7 +18,7 @@ export default defineConfig({
     projects: [
       project("domain", ["app/src/domain/**/*.test.ts"]),
       project("storage", ["app/src/data/*.test.ts", "app/src/data/sqlite/**/*.test.ts"]),
-      project("sync", ["app/src/data/sync/**/*.test.ts"]),
+      project("sync", ["app/src/data/sync/**/*.test.ts", "app/src/data/remote/**/*.test.ts"]),
       project("api", ["app/src/headless/**/*.test.ts"]),
       project("app", ["app/src/{app,platform,ui,views,pages,workspace}/**/*.test.{ts,tsx}"]),
       ...(serverInstalled

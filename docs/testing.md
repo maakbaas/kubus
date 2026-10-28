@@ -22,7 +22,7 @@ the imports).
 |---|---|---|---|
 | `domain` | the storage-agnostic model: query, views, fields, components, AI prompts, links, tags | `app/src/domain/*.test.ts` | nothing |
 | `storage` | the device's database: schema and migrations (`fixture-v1.sql` migrated keeps every row), the engine, the Repository contract | `app/src/data/*.test.ts`, `app/src/data/sqlite/*.test.ts` | nothing |
-| `sync` | the device's side of sync (outbox, merge, files, first connection, versions) against `FakeServer` (`app/src/test/fakeServer.ts`) | `app/src/data/sync/*.test.ts` | nothing |
+| `sync` | the device's side of sync (outbox, merge, files, first connection, versions) against `FakeServer` (`app/src/test/fakeServer.ts`); the client of the server's remote sources | `app/src/data/sync/*.test.ts`, `app/src/data/remote/*.test.ts` | nothing |
 | `api` | the HTTP API (`/api/v1`, the headless device) and webhooks, against `FakeServer` | `app/src/headless/*.test.ts` | nothing |
 | `app` | the app's own logic outside the UI (AI client and backfill, platform) | `app/src/{app,platform,ui,views,pages,workspace}/*.test.ts(x)` | nothing |
 | `connectors` | the remote-source connectors: their query languages run for real (SQLite for D1, the memory connector) or against a stand-in of the service (n8n, InfluxDB, Cloudflare D1's API), Postgres, MySQL and MariaDB against real ones | `server/test/connectors/*.test.ts` | the server's packages; Postgres for `postgres.test.ts`, MySQL 8 and MariaDB for `mysql.test.ts` |
