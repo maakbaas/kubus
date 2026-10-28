@@ -168,13 +168,21 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
       // The caret is inside the panel: shifted back, so it keeps pointing at the button.
       if (tip) tip.style.translate = `${-dx}px 0`;
     };
-    // While open the panel never gets shorter: one hung above its button would otherwise move
+    // While open, a panel hung above its button never gets shorter: it would otherwise move
     // everything in it down when something in it shrinks (a code editor's help giving way to a
-    // one-line problem), under the pointer. It grows as needed; the held height goes on close.
+    // one-line problem), under the pointer. It grows as needed; the held height goes on close. One
+    // hung below keeps its top edge, so it shrinks back (a section of it collapsed again).
     let held = 0;
     const hold = () => {
-      const panel = content()?.querySelector<HTMLElement>(".toolbar-popover__panel");
-      if (!panel) return;
+      const el = content();
+      const panel = el?.querySelector<HTMLElement>(".toolbar-popover__panel");
+      const r = root.current?.getBoundingClientRect();
+      if (!el || !panel || !r) return;
+      if (sideOf(r, el.getBoundingClientRect()) === "below") {
+        held = 0;
+        panel.style.minBlockSize = "";
+        return;
+      }
       const h = panel.getBoundingClientRect().height;
       if (h <= held) return;
       held = h;

@@ -89,13 +89,13 @@ function unusedHeight(holder: HTMLElement, part: string): number {
  * The same spec as before while nothing in it changed (functions aside: what they depend on is
  * the spec's `format`): Carbon redraws a chart whenever its data or options are new objects, which
  * hides its tooltip under the pointer, so a re-render of the block with equal options must not hand
- * it new ones.
+ * it new ones. `drawing` names its chart type and options: a new one is a new Carbon chart.
  */
-function useStableSpec(spec: ChartSpec): ChartSpec {
-  const last = useRef<{ key: string; spec: ChartSpec } | null>(null);
+function useStableSpec(spec: ChartSpec): { spec: ChartSpec; drawing: string } {
+  const last = useRef<{ key: string; spec: ChartSpec; drawing: string } | null>(null);
   const key = JSON.stringify(spec);
-  if (last.current?.key !== key) last.current = { key, spec };
-  return last.current.spec;
+  if (last.current?.key !== key) last.current = { key, spec, drawing: `${spec.chart}:${JSON.stringify([spec.options, spec.format])}` };
+  return last.current;
 }
 
 /**
@@ -103,7 +103,7 @@ function useStableSpec(spec: ChartSpec): ChartSpec {
  * height (the spec's) is the most it takes: a round chart narrower than that is fitted to its drawing.
  */
 export default function ChartCanvas({ spec: latest, onItem }: { spec: ChartSpec; onItem?(itemId: string, event: MouseEvent | undefined): void }) {
-  const spec = useStableSpec(latest);
+  const { spec, drawing } = useStableSpec(latest);
   const Chart = CHARTS[spec.chart] as React.ComponentType<{ data: unknown; options: unknown; ref: React.Ref<Instance> }>;
   const ref = useRef<Instance>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -154,12 +154,14 @@ export default function ChartCanvas({ spec: latest, onItem }: { spec: ChartSpec;
       events.removeEventListener("scatter-click", click);
       events.removeEventListener("render-finished", rendered);
     };
-  }, [spec.chart, part]);
+  }, [drawing, part]);
   const options = useMemo(() => (fitted === null ? spec.options : { ...spec.options, height: `${fitted}px` }), [spec, fitted]);
-  // A new chart type is a new chart (Carbon's can't change type in place).
+  // New options (or a new chart type) are a new chart: Carbon merges new options into its old ones,
+  // so whatever was taken out (a threshold, an axis's min, a title) would stay drawn. New data alone
+  // is drawn in place.
   return (
     <div ref={box}>
-      <Chart key={spec.chart} ref={ref} data={spec.data} options={options} />
+      <Chart key={drawing} ref={ref} data={spec.data} options={options} />
     </div>
   );
 }

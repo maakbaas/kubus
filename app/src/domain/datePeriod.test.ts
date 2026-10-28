@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultDateField, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveRange, rollingLabel, rollingRangeLabel, rollingValue, shiftPeriod } from "./datePeriod";
+import { defaultDateField, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveRange, rollingLabel, rollingRangeLabel, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
 
 describe("date periods", () => {
   it("finds the day, week (Sunday first), month and year around a day", () => {
@@ -24,6 +24,15 @@ describe("date periods", () => {
     expect(shiftPeriod({ start: "2026-12-27", end: "2027-01-02" }, "week", 1)).toEqual({ start: "2027-01-03", end: "2027-01-09" });
     expect(shiftPeriod({ start: "2026-03-31", end: "2026-03-31" }, "day", 1)).toEqual({ start: "2026-04-01", end: "2026-04-01" });
     expect(shiftPeriod({ start: "2026-10-01", end: "2026-10-10" }, "range", 1)).toEqual({ start: "2026-10-11", end: "2026-10-20" });
+  });
+
+  it("keeps this week, month or year so far, up to today", () => {
+    expect(toDateValue("year")).toBe("year+0..day+0");
+    expect(resolveRange("year+0..day+0", "2026-10-28")).toEqual({ start: "2026-01-01", end: "2026-10-28" });
+    expect(resolveRange("month+0..day+0", "2026-10-28")).toEqual({ start: "2026-10-01", end: "2026-10-28" });
+    expect(resolveRange("week+0..day+0", "2026-10-28")).toEqual({ start: "2026-10-25", end: "2026-10-28" });
+    expect(resolveRange("year-1..day+0", "2026-10-28")).toBeNull();
+    expect(toDateLabel("month")).toBe("Month to date");
   });
 
   it("numbers weeks from the one holding 1 January", () => {

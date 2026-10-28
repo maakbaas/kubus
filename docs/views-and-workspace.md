@@ -39,7 +39,8 @@ Extension points are registries, not special cases in pages:
   its local day). The current day, week, month or year is stored counted from today (`week+0`,
   `month+0`: `resolveRange` works it out when the filter runs), so a saved "this week" stays this
   week and the panel says "This week · …"; so is a range ending today, as days from today
-  (`day-6..day+0`, "Last 7 days · …", `rangeOrRolling`); any other period is stored as its days
+  (`day-6..day+0`, "Last 7 days · …", `rangeOrRolling`), and the current week, month or year so far ("Year to date", a
+  checkbox under Week, Month and Year: `year+0..day+0`, "Year to date · 1 Jan – 28 Oct 2026"); any other period is stored as its days
   (`yyyy-mm-dd..yyyy-mm-dd`, both included; what they are, a week, a month, …, follows from them).
   The current period can't be kept as fixed days, by design. `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.
@@ -88,7 +89,8 @@ Extension points are registries, not special cases in pages:
   chart's own (`ChartOptions`, all in Block settings, stored right away), so its grouping (Sort and group) isn't used. The
   settings are a Chart select (13 types in sections: Compare and over time: Bar, Line, Area, Radar; Parts of a whole: Pie,
   Meter, Treemap, Word cloud; One value: Gauge; Spread: Histogram, Box plot, Scatter, Heatmap) and an accordion whose
-  sections are fixed per type (Data, Series, Value, Total, Display, Axes, Thresholds, Values and legend, Size); a setting
+  sections are fixed per type (Data, Series, Value, Total, Display, Axes, Thresholds, Values and legend, Size), all closed
+  when the settings open; a setting
   that doesn't apply because of another one is disabled with the reason under it, never hidden, and a setting depends only
   on those above it. Switching type keeps every setting (`switchKind`: a gauge narrows a full-width chart, a scatter
   places each item, a radar or parts from fields with none chosen take the series' fields).
@@ -102,7 +104,8 @@ Extension points are registries, not special cases in pages:
     plot's boxes, a heatmap's columns and parts from categories are the X axis too.
   - **Series** (bar, line, area): any number (`ChartSeries`), each a count or the sum / average / minimum / maximum / first
     / last value of a number field (number fields and AI or component fields giving numbers, `numberFields`), with a
-    label, drawn as the chart's (Bar: bars, …) or bars, lollipops, a line, an area or dots, on the left or right axis, and
+    label, drawn as bars, lollipops, a line, an area or dots (the chart's own style, the type's: Bar bars, …, is stored as
+    none, so it follows the type), on the left or right axis, and
     shown as its values, a running total, the change from the step before or a moving average (`transformValues`). Split
     by (a field) splits every series ("Pages · Novel" with several; at most 12, the rest "Other"). One style on one axis
     is Carbon's own chart; mixed styles or a right axis are its combo chart (`comboChartTypes` per style). Bars and areas
@@ -139,7 +142,9 @@ Extension points are registries, not special cases in pages:
   draws it, again when its width changes), HTML with a height of its own is that tall (it scrolls inside beyond the
   height). The component's own aspect ratio setting is gone (a stored `frameRatio` is kept, unused); a component
   field's HTML that fills its box is 24rem tall. ChartCanvas hands Carbon the same data and options objects while
-  nothing in them changed (`useStableSpec`): Carbon redraws on new ones, which hid the tooltip under the pointer.
+  nothing in them changed (`useStableSpec`): Carbon redraws on new ones, which hid the tooltip under the pointer. New
+  options (or type) are a new Carbon chart (keyed on them): Carbon merges new options into its old ones, so a setting
+  taken out (a threshold, an axis's min) stayed drawn until a reload; new data alone is drawn in place.
   `markdown` (`views/MarkdownBlock.tsx`) is a block with its own Markdown text, stored in the block's options: a local static component (GFM whose `{{ }}` sections may use `$now`, nothing about items); it is shown (rendered) and edited (as written) exactly like a Markdown field (same read-only box, `FieldEditor`); "Save as shared component" in its Block settings stores the text as a new shared static component (named like the block) and turns the block into a component block showing it. A component block shows a shared component (`options.componentId`), picked in its Block settings, which also have "Edit component" (its page) and "New component" (named in a dialog, picked, and opened beside the page to be written, `NewBlockComponentModal`): a block's code is never written in a popover. Its own component (`options.local`) was written in Block settings by earlier versions and still shows; its settings then offer only "Save as shared component". "Add block" is a menu (`views/AddBlockButton.tsx`): a block of each type ("New component…" for a component block, as above) and one per shared block or static component. A block type only
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.

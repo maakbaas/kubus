@@ -2,7 +2,8 @@
 // "between" rule. Its value is fixed days ("yyyy-mm-dd..yyyy-mm-dd", both included), or rolling: a
 // day, week, month or year counted from today ("month+0" this month, "week-1" last week), worked
 // out whenever the filter runs; a range ending today is rolling too, its days counted from today
-// ("day-6..day+0": the last 7 days). Which period fixed days are follows from them, so nothing but the
+// ("day-6..day+0": the last 7 days), and so is this week, month or year so far ("year+0..day+0":
+// year to date). Which period fixed days are follows from them, so nothing but the
 // rule is stored. Weeks run Sunday to Saturday, like the date pickers' calendars; week 1 is the one
 // holding 1 January. Storage-free and UI-free.
 
@@ -58,6 +59,22 @@ export function parseRollingRange(value: string): RollingRange | null {
   return range.from <= range.to ? range : null;
 }
 
+/** This week, month or year up to today (year to date). */
+export type ToDate = "week" | "month" | "year";
+const TO_DATE = /^(week|month|year)\+0\.\.day\+0$/;
+
+/** A to-date period's value ("year+0..day+0"). */
+export const toDateValue = (kind: ToDate) => `${rollingValue({ kind, offset: 0 })}${SEPARATOR}${rollingValue({ kind: "day", offset: 0 })}`;
+
+/** The to-date period of a between rule's value, or null when it is none. */
+export function parseToDate(value: string): ToDate | null {
+  const m = TO_DATE.exec(value.trim());
+  return m ? (m[1] as ToDate) : null;
+}
+
+/** A to-date period in words: "Year to date". */
+export const toDateLabel = (kind: ToDate) => `${kind[0].toUpperCase()}${kind.slice(1)} to date`;
+
 /** A range kept as it is stored: one ending today as days counted from today (so it moves with it), any other as its days. */
 export function rangeOrRolling(period: Period, today: string): string {
   return period.end === today && period.start <= today ? rollingRangeValue({ from: daysBetween(today, period.start), to: 0 }) : rangeValue(period);
@@ -74,6 +91,8 @@ export function rollingRangeLabel({ from, to }: RollingRange): string {
 export function resolveRange(value: string, today = formatDate(new Date())): Period | null {
   const rolling = parseRolling(value);
   if (rolling) return rollingPeriod(rolling, today);
+  const toDate = parseToDate(value);
+  if (toDate) return { start: periodAround(toDate, today).start, end: today };
   const range = parseRollingRange(value);
   if (range) return { start: addDays(today, range.from), end: addDays(today, range.to) };
   return parseRange(value);

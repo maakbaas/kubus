@@ -295,7 +295,7 @@ export function filterValueProblem(field: FieldDef, operator: FilterOperator, va
   if (value.startsWith(ERROR_PREFIX)) return value.slice(ERROR_PREFIX.length);
   const v = value.trim();
   if (v === "" || isPageValue(v)) return undefined;
-  if (operator === "between") return (field.kind === "date" || field.kind === "datetime") && resolveRange(v) ? undefined : "A period is yyyy-mm-dd..yyyy-mm-dd, day-n..day+0, or day, week, month or year +/- a number";
+  if (operator === "between") return (field.kind === "date" || field.kind === "datetime") && resolveRange(v) ? undefined : "A period is yyyy-mm-dd..yyyy-mm-dd, day-n..day+0, week, month or year+0..day+0 (so far), or day, week, month or year +/- a number";
   const compares = operator === "is" || operator === "isNot" || operator === "gt" || operator === "lt" || operator === "before" || operator === "after";
   if (!compares) return undefined;
   if (field.kind === "checkbox" && !/^(true|false)$/i.test(v)) return "A checkbox is true or false";

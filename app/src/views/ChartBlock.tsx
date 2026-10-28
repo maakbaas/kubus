@@ -135,9 +135,9 @@ const STATUSES: { value: ThresholdStatus; text: string }[] = [
 /** The merged Total select: the sum of the parts (or 100), a typed number, or a field's id. */
 const TOTAL_NONE = "";
 const TOTAL_NUMBER = "$number";
-/** "Draw as": the chart's own style (null). */
-const CHARTS_STYLE = "";
 
+/** A series' "Draw as": the chart's own style kept as none (it follows the chart's kind), another as itself. */
+const chartsStyle = (s: ChartSeries, style: SeriesStyle, chart: ChartKind): SeriesStyle | null => (style === styleOf({ ...s, style: null }, chart) ? null : style);
 const isDate = (f: FieldDef | undefined) => f?.kind === "date" || f?.kind === "datetime";
 const unique = <T,>(list: T[]) => [...new Set(list)];
 
@@ -226,10 +226,10 @@ function NumberField({ id, label, value, disabled, helper, hideLabel, onChange }
   );
 }
 
-/** An accordion section of the settings. */
-function Section({ title, open, children }: { title: string; open?: boolean; children: ReactNode }) {
+/** An accordion section of the settings: closed when the settings open, so they read as a list of sections. */
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <AccordionItem title={title} open={open}>
+    <AccordionItem title={title}>
       <div className="chart-options__section">{children}</div>
     </AccordionItem>
   );
@@ -421,8 +421,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
         <FieldSelect id={`${sid}-field`} label="Of" fields={numbers} value={s.value === "count" ? null : s.field} none={s.value === "count" ? "—" : undefined} disabled={s.value === "count"} helper={s.value === "count" ? "Not for a count" : undefined} onChange={(field) => setSeries(s.id, { field })} />
         <TextInput size="sm" id={`${sid}-label`} labelText="Label" placeholder={seriesLabel({ ...s, label: "" }, collection, o.x)} value={s.label} onChange={(e) => setSeries(s.id, { label: e.target.value })} />
         <div className="chart-options__pair">
-          <Select size="sm" id={`${sid}-style`} labelText="Draw as" value={s.style ?? CHARTS_STYLE} onChange={(e) => setSeries(s.id, { style: (e.target.value || null) as SeriesStyle | null })}>
-            <SelectItem value={CHARTS_STYLE} text={`Chart's (${SERIES_STYLES.find((x) => x.value === styleOf({ ...s, style: null }, o.chart))!.text})`} />
+          <Select size="sm" id={`${sid}-style`} labelText="Draw as" value={styleOf(s, o.chart)} onChange={(e) => setSeries(s.id, { style: chartsStyle(s, e.target.value as SeriesStyle, o.chart) })}>
             {SERIES_STYLES.map((x) => (
               <SelectItem key={x.value} value={x.value} text={x.text} />
             ))}
@@ -449,7 +448,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
     );
   });
   const seriesSection = has.seriesList && (
-    <Section key="series" title={o.chart === "scatter" ? "Y" : "Series"} open>
+    <Section key="series" title={o.chart === "scatter" ? "Y" : "Series"}>
       {seriesRows}
       <Button
         kind="tertiary"
@@ -471,7 +470,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   const setFirst = (patch: Partial<ChartSeries>) => set({ series: o.series.length ? o.series.map((s, i) => (i === 0 ? { ...s, ...patch } : s)) : [{ ...first, ...patch }] });
   const fieldsParts = has.parts && o.parts === "fields";
   const valueSection = has.value && (
-    <Section key="value" title="Value" open={!hasData}>
+    <Section key="value" title="Value">
       {aggregateSelect(`${uid}-value`, "Value", first.value, (value) =>
         set({
           series: (o.series.length ? o.series : [first]).map((s, i) => (i === 0 ? { ...s, value, ...(value !== "count" && !s.field && { field: numbers[0]?.id ?? null }) } : s)),
@@ -493,7 +492,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
     </Section>
   );
   const spokesSection = o.chart === "radar" && (
-    <Section key="spokes" title="Spokes" open>
+    <Section key="spokes" title="Spokes">
       <MultiSelect<FieldDef>
         autoAlign
         size="sm"
@@ -752,7 +751,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
       {/* Keyed sections keep their open / closed state when the kind changes. */}
       <Accordion size="sm" className="chart-options__sections">
         {hasData && (
-          <Section key="data" title="Data" open>
+          <Section key="data" title="Data">
             {data}
           </Section>
         )}
