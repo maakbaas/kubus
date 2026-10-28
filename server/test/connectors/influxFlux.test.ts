@@ -3,6 +3,8 @@
 import { describe, expect, it } from "vitest";
 import {
   checkFlux,
+  countFlux,
+  NO_GROUP,
   dayIn,
   dayStart,
   fieldColumns,
@@ -167,6 +169,28 @@ describe("scripts", () => {
     expect(flux).toContain('timezone.location(name: "Europe/Amsterdam")');
     expect(groupKey(columns.get("_time")!, "2026-02-28T23:00:00Z", "Europe/Amsterdam")).toBe("2026-03-01");
     expect(groupKey(columns.get("usage")!, "3", "UTC")).toBe("3");
+  });
+  it("keeps the group of rows with no value apart from the empty text, and a day one group however many moments it has", () => {
+    // Found against InfluxDB 2.7 (influx.real.test.ts): a "" from a map's if becomes a null group, and sort + limit drops the last row.
+    const q = query({ groupBy: "note", groupOrder: "asc" });
+    const flux = groupsFlux(q, columns);
+    expect(flux).toContain(`(if exists r["note"] and r["note"] != "" then r["note"] else "${NO_GROUP}")`);
+    expect(flux).toContain(`(if r._kubus_g == "${NO_GROUP}" then 1 else 0)`);
+    expect(flux).toMatch(/keep\(columns: \["_kubus_g", "_kubus_n"\]\)\n {2}\|> limit\(n: 1000\)$/);
+    expect(groupKey(columns.get("note")!, NO_GROUP, "UTC")).toBe("");
+    expect(groupsFlux(query({ groupBy: "_time" }), columns)).toContain(`_kubus_v: (if r._kubus_g == "${NO_GROUP}" then 0 else int(v: time(v: r._kubus_g)))`);
+  });
+  it("groups and sorts a missing checkbox as unchecked", () => {
+    expect(groupsFlux(query({ groupBy: "ok" }), columns)).toContain('(if exists r["ok"] and r["ok"] then "yes" else "no")');
+    expect(rowsFlux(query({ sort: [{ column: "ok", direction: "asc" }] }), columns)).toContain('_kubus_e0: (if (if exists r["ok"] and r["ok"] then "yes" else "no") == "" then 1 else 0)');
+  });
+  it("counts from the index only for a time range of days, not for a value that matches nothing", () => {
+    const range = { column: "_time", operator: "between" as const, value: "2026-03-01..2026-03-07" };
+    expect(countFlux(query({ filter: range }), columns)).toContain("|> count()");
+    for (const value of ["nonsense", "2026-03-07..2026-03-01", "2026-03-01T10:00..2026-03-02"]) {
+      expect(countFlux(query({ filter: { column: "_time", operator: "between", value } }), columns), value).toBeNull();
+    }
+    expect(countFlux(query({ filter: { column: "_time", operator: "before", value: "yesterday" } }), columns)).toBeNull();
   });
   it("counts", () => {
     expect(totalFlux(query({ search: "x" }), columns)).toMatch(/filter\(fn: \(r\) => \(.*=~ \/\(\?i\)x\/ or .*\)\)\n {2}\|> keep\(columns: \["_time"\]\)\n {2}\|> map\(fn: \(r\) => \(\{r with _kubus_n: 1\}\)\)\n {2}\|> sum\(column: "_kubus_n"\)$/);

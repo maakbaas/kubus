@@ -253,10 +253,13 @@ export function resolvePageValues(filters: FilterRule[], page: Item | null): Fil
       if (period) return { ...r, value: `${period.start}..${period.end}` };
       return { ...r, value: `${ERROR_PREFIX}${page ? "This item has no date to count the period from" : "A period counted from the page's item: only on an item page"}` };
     }
-    if (r.value === PAGE_ITEM) return { ...r, value: page?.id ?? "" };
     if (!isPageValue(r.value)) return r;
-    const v = page?.values[r.value.slice(PAGE_ITEM.length + 1)];
-    return { ...r, value: typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? String(v) : "" };
+    const v = r.value === PAGE_ITEM ? page?.id : page?.values[r.value.slice(PAGE_ITEM.length + 1)];
+    const text = typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? String(v) : "";
+    // The page's item has no such value (no Mentor): "Author is its Mentor" matches nothing, not everything
+    // (a rule with an empty value doesn't filter yet); "is not" it holds for every item.
+    if (page && text === "" && r.operator !== "isNot") return { ...r, value: `${ERROR_PREFIX}This item has no value there` };
+    return { ...r, value: text };
   });
 }
 

@@ -64,8 +64,9 @@ export class D1Connector implements Connector {
     }
     const body = (await response.json().catch(() => null)) as RawResponse | null;
     const message = body?.errors?.map((e) => e.message).join("; ") || `${response.status} ${response.statusText}`;
-    // 400 is the statement's own fault (D1's SQLite error); anything else is the token or Cloudflare.
-    if (response.status === 400) throw new SourceError(message);
+    // 400 is the statement's own fault (D1's SQLite error, code 7500) unless Cloudflare says the Authorization
+    // header isn't one (6003 / 6111: an empty or malformed token); anything else is the token or Cloudflare.
+    if (response.status === 400 && !body?.errors?.some((e) => e.code === 6003 || e.code === 6111)) throw new SourceError(message);
     if (!response.ok || !body?.success) throw new Error(`Cloudflare: ${message}`);
     const result = body.result?.[0];
     if (result?.meta?.changed_db || (result?.meta?.changes ?? 0) > 0) {

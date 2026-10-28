@@ -96,7 +96,7 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   `installOpfsSAHPoolVfs()` fails to open a pool file, its error path calls `removeVfs()`, which
   deletes the pool directory, i.e. the database (this happened on reload-after-save). The worker
   therefore takes a Web Lock (`kubus-db`) for its lifetime and probes every pool file before
-  installing (`acquireDbLock` / `poolFilesFree` in `worker.ts`). Keep both.
+  installing (`acquireDbLock` / `poolFilesFree` / `waitForPoolFiles` in `dbLock.ts`, called by `worker.ts`). Keep both.
 
 - **Typed columns map to Postgres** as `text`, `double precision`, `date`, `timestamptz`,
   `boolean`, `uuid`, `jsonb`; markdown is `text`, and images reference a files table.

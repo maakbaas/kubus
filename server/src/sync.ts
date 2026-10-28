@@ -114,6 +114,9 @@ export async function handleSync(
 ): Promise<(SyncResponse & { wrote: boolean }) | { mismatch: SyncMismatch } | { outdated: SyncOutdated }> {
   const outdated = refusal(req);
   if (outdated) return { outdated };
+  // A request without its changes or cursor (a hand-made one) pushes nothing and starts at the beginning.
+  const pushed: Record<string, WireRow[]> = req.changes && typeof req.changes === "object" ? req.changes : {};
+  const requested = Number(req.since) || 0;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -137,7 +140,7 @@ export async function handleSync(
     for (const t of SYNC_TABLES) {
       // A statement per set of columns (one, unless devices of several versions' rows were merged).
       const byColumns = new Map<string, WireRow[]>();
-      for (const row of unique(t, req.changes[t.name] ?? [])) {
+      for (const row of unique(t, pushed[t.name] ?? [])) {
         const id = columnsOf(t, row).join(",");
         const group = byColumns.get(id);
         if (group) group.push(row);
@@ -152,11 +155,11 @@ export async function handleSync(
         }
       }
     }
-    const missing = await missingFiles(client, req.changes);
+    const missing = await missingFiles(client, pushed);
 
     const cursor = await currentCursor(client);
     // A device ahead of the server (the database was reset) starts over.
-    const since = req.since > cursor ? 0 : req.since;
+    const since = requested > cursor ? 0 : requested;
 
     // What changed after `since`, but for the rows this request wrote (after `before`): the device
     // has them, and the cursor covers them.
