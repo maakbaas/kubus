@@ -150,6 +150,7 @@ strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 | `21-baselines` | screenshot baselines of 9 key states (pages of typical content, a popover, a dialog) at desktop and phone, light and dark |
 | `22-components-filters-cards` | a field's settings under its name and type; local components (fields, blocks, Markdown code) and saved as shared from the Components page; AI prompt in the field dialog; strike through the item on tables and cards; `{{ }}` code in a filter value and an invalid value; cards with the cover beside the text, the same in narrow and wide panes |
 | `23-perf` | perf tests, run only with `--perf` (left out of other runs): the app's hot paths, each phase (a load, a click, a key, to the state it leads to) timed with main-thread busy time, long tasks, elements and heap; seeding, settling and audits reported apart |
+| `27-field-kinds-settings` | field kinds and their settings in the collection editor and the field dialog: the type menu lists every kind and each brings its own settings (Refers to, the toggle icons, strike through, component code and Output, Value AI prompt); every kind stored with its settings and shown again after a reload; validation (names, a reference without a collection), a type changed before saving, a removed field, plural / singular name and description, the Title choice, a list of items edited in an item |
 
 ## Adding to it
 
