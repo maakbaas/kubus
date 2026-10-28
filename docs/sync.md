@@ -158,8 +158,13 @@ headless device doesn't generate AI values (that stays with the apps).
 
 Databases the server reads for the devices, read-only, whose tables and queries the app shows as
 collections ("remote collections": `Collection.source`, `domain/sources.ts`). Set up in Settings →
-Connections (name, connection string, password, schemas, whether queries written in the app are allowed,
-a time limit); the connection string's scheme picks the connector (`postgres://`, `n8n://`, `influxdb://`, `d1://`).
+Connections (name, kind, that kind's own fields, password, schemas, whether queries written in the app are
+allowed, a time limit). A source is stored as a connection string, whose scheme picks the connector (`postgres://`,
+`n8n://`, `influxdb://`, `d1://`); the app never builds one: the server describes each kind's fields
+(`ConnectionKind` in `shared/settings.ts`, `GET /api/settings` → `kinds`, each source's `kind` / `fields`), and a
+`PUT` with `kind` and `fields` has the server make the string (`server/src/connectors/forms.ts`; the same fields as
+stored keep a hand-written string as it was). A string no kind reads, or a server that names no kinds, is edited as
+a plain connection string ("A connection string" in the Kind dropdown).
 - *Protocol* (`shared/sources.ts`), connector-neutral, all behind the token:
   `GET /api/sources` (names, connector, capabilities, problem; never addresses),
   `GET /api/sources/<name>/tables`, `POST …/describe` (`{ target }`: a table or a query → its

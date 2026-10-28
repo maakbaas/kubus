@@ -164,7 +164,7 @@ What the app does, feature by feature (read the part you work on).
   connection" (`SyncControl.testServer`: `/api/health`, then whether the token is accepted; nothing saved) and Disconnect;
   sync, the server's model and remote collections all use it), Sync (`ui/SyncSettings.tsx`; `?section=sync`: the
   "Sync this device" switch and "Download images", both applied at once, the state, Wipe local / server database),
-  Connections (`ui/ConnectionSettings.tsx`; `?section=connections`: the server's remote sources) and AI
+  Connections (`ui/ConnectionSettings.tsx`; `?section=connections`: the server's remote sources, each set up by its kind's own fields, Host / Port / Database / User for PostgreSQL and so on, as the server describes them; docs/sync.md "Remote sources") and AI
   (`ui/AiSettings.tsx`; `?section=ai`). Connections and the server's half of AI are the server's own settings, the same
   for every device, stored on the server, keys and passwords write-only (docs/sync.md "The server's settings"; each tab
   saves its part on top of what the server holds then: `ui/useServerSettings.ts`). AI is the language model of this

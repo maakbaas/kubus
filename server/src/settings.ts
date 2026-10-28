@@ -1,6 +1,7 @@
 import { HttpError } from "../../shared/router.ts";
 import { SOURCE_NAME, type ServerAiSettings, type ServerSettingsUpdate, type ServerSettingsView, type ServerSourceSettings } from "../../shared/settings.ts";
 import type { SourceConfig } from "./connectors/connector.ts";
+import { connectionKinds, fieldsOf, urlOf } from "./connectors/forms.ts";
 
 // The server's own settings (shared/settings.ts): the language model it offers and the sources it
 // reads, set in the app (Settings → AI and Connections) and stored in its table server_settings, secrets
@@ -88,9 +89,18 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
     if (!SOURCE_NAME.test(name)) throw new HttpError(400, `A source's name is letters, digits, - and _ (“${name}” isn't)`);
     if (names.has(name.toLowerCase())) throw new HttpError(400, `Two sources are called “${name}”`);
     names.add(name.toLowerCase());
-    const given = splitPassword(text(s.url));
-    if (!placeOf(given.url)) throw new HttpError(400, `${name}: the connection string isn't a URL (e.g. postgres://user@host:5432/database or influxdb://host:8086/org)`);
     const before = old.sources.find((o) => o.id === s.id);
+    const given = splitPassword(text(s.url));
+    if (s.kind !== undefined) {
+      const fields = Object.fromEntries(Object.entries(s.fields ?? {}).map(([k, v]) => [k, text(v, 500)]));
+      const made = urlOf(s.kind, fields);
+      if (made === null) throw new HttpError(400, `${name}: the server doesn't know connections of the kind “${s.kind}”`);
+      // The same fields as stored keep the stored string as it was (written by hand, it may read differently).
+      const was = before && fieldsOf(before.url);
+      given.url = was && was.kind === s.kind && JSON.stringify(was.fields) === JSON.stringify({ ...was.fields, ...fields }) ? before.url : made;
+      given.password = "";
+    }
+    if (!placeOf(given.url)) throw new HttpError(400, `${name}: the connection string isn't a URL (e.g. postgres://user@host:5432/database or influxdb://host:8086/org)`);
     const password =
       given.password || (typeof s.password === "string" ? s.password : before && placeOf(before.url) === placeOf(given.url) ? before.password : "");
     const timeout = Number(s.timeoutSeconds);
@@ -129,6 +139,7 @@ export function viewOf(stored: Stored, status: (name: string) => { connector?: s
   const { key, ...ai } = stored.ai;
   return {
     ai: { ...ai, keySet: key !== "" },
-    sources: stored.sources.map(({ password, ...s }) => ({ ...s, passwordSet: password !== "", ...status(s.name) })),
+    kinds: connectionKinds(),
+    sources: stored.sources.map(({ password, ...s }) => ({ ...s, passwordSet: password !== "", ...fieldsOf(s.url), ...status(s.name) })),
   };
 }
