@@ -24,7 +24,7 @@ the imports).
 | `storage` | the device's database: schema and migrations (`fixture-v1.sql` migrated keeps every row), the engine, the Repository contract | `app/src/data/*.test.ts`, `app/src/data/sqlite/*.test.ts` | nothing |
 | `sync` | the device's side of sync (outbox, merge, files, first connection, versions) against `FakeServer` (`app/src/test/fakeServer.ts`); the client of the server's remote sources | `app/src/data/sync/*.test.ts`, `app/src/data/remote/*.test.ts` | nothing |
 | `api` | the HTTP API (`/api/v1`, the headless device) and webhooks, against `FakeServer` | `app/src/headless/*.test.ts` | nothing |
-| `app` | the app's own logic outside the UI (AI client and backfill, platform) | `app/src/{app,platform,ui,views,pages,workspace,test}/*.test.ts(x)` | nothing |
+| `app` | the app's own logic outside the UI: the AI service and backfill, the item cache, the workspace layout, block registry and item actions, remote paging, platform adapters, and the hooks and browser-facing helpers (`ui/`), run without a DOM | `app/src/{app,platform,ui,views,pages,workspace,test}/*.test.ts(x)` | nothing |
 | `connectors` | the remote-source connectors: their query languages run for real (SQLite for D1, the memory connector) or against a stand-in of the service (n8n, InfluxDB, Cloudflare D1's API), Postgres, MySQL and MariaDB against real ones | `server/test/connectors/*.test.ts` | the server's packages; Postgres for `postgres.test.ts`, MySQL 8 and MariaDB for `mysql.test.ts` |
 | `server` | the server itself: its database (migrations, sync, wipe), its settings, the MCP protocol and its tools (`mcp.test.ts`, with a fake API), every HTTP endpoint of the real server process (`serve.ts`), and devices syncing through it end to end | `server/test/*.test.ts` | the server's packages, Postgres, `npm run build:headless` for `/api/v1` |
 
@@ -55,6 +55,7 @@ Without `KUBUS_TEST_POSTGRES` (or those two) they are skipped locally; in CI (`C
 missing headless build: nothing is skipped there without anyone noticing.
 
 `FakeServer` stands in for the server in the device's sync and API tests (fast, no Postgres).
+`renderHook` (`app/src/test/hooks.ts`) runs a React hook in node, without a DOM or renderer (state, effects, external stores); a test mocks `../app/store` for `useStore`. Pure logic of a hook is better extracted and tested on its own (`views/itemActions.ts`, `views/remotePages.ts`); browser APIs (viewport, selection, canvas) are stubbed per test with `vi.stubGlobal`.
 `server/test/devices.test.ts` runs the same kind of devices against the real server, so the two
 can't drift apart unnoticed: a change to the sync protocol changes both and runs both.
 
