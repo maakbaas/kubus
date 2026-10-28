@@ -75,6 +75,29 @@ can't drift apart unnoticed: a change to the sync protocol changes both and runs
 Before pushing: `npm run typecheck` (and `npm run typecheck --prefix server`, `npm run typecheck:test --prefix server` for server code),
 the vitest projects above, and `npm run test:gui -- --changed --smoke` for a change the GUI shows.
 
+## Coverage
+
+One command gives one report of everything the tests run (`coverage/`, git-ignored):
+
+```bash
+npm run test:coverage                         # the vitest projects with V8 coverage (needs what `npm test` needs)
+npm run test:gui -- --coverage [--suite NN]   # optional: the GUI tests' coverage of app/src (below)
+npm run coverage:report                       # merges what exists: coverage/index.html and a table per directory
+```
+
+- **Unit**: `vitest.config.ts` (`coverage`: `app/src`, `server/src`, `shared`, without tests, `app/src/test`, CSS and Markdown) writes
+  `coverage/unit/coverage-final.json`. Pass `--coverage.include='<glob>'` and `--coverage.reporter=text-summary` to look at one area.
+  Coverage slows tests down, so under `--coverage` a test may take 20 s instead of 5.
+- **Server child process**: the HTTP and device tests run the real server as a child process (`server/test/serve.ts`), invisible to vitest.
+  Under coverage `vitest.config.ts` sets `KUBUS_V8_DIR`; `serve.ts` then gives the child `NODE_V8_COVERAGE` of that folder (and
+  `exitOnTerm.mjs`, because V8 writes a process's coverage when it exits, and `stop()` would kill it). `coverage/server-v8/` holds the dumps.
+- **GUI**: `--coverage` makes `run.mjs` build with source maps and each test collect V8 precise coverage over CDP (Chromium; the app's main
+  thread, not its workers), into `coverage/gui-v8/`, one file per test (`gui-tests/README.md`).
+- **The merge** (`tests/coverage.mjs`) converts the V8 data with `ast-v8-to-istanbul` (the GUI's through the build's source maps, the server's
+  through node's type stripping, which keeps offsets) and joins the three maps per file by the place of each statement, function and branch
+  in the source, since the transforms behind them number those differently. The table lists per directory the merged percentages and the
+  statements each kind reached alone. A kind with no data is left out, so the report is always of what was run.
+
 ## Writing tests
 
 - A test goes in the project of the code it tests, beside it (`app/src`) or in `server/test`

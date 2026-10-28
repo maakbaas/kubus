@@ -29,3 +29,4 @@ gui-tests/.build-*/
 
 # Working copies of parallel agent sessions
 .claude/worktrees/
+coverage/
