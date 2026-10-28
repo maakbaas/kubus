@@ -25,7 +25,7 @@ const RowLive = createContext(true);
  * A row action's IconButton: until its row is live, the same markup without the tooltip (so
  * nothing moves when it comes), a plain button labelled by `label`. Props as rowButtonProps.
  */
-export function RowIconButton({ label, align, className, onClick, children }: { label: string; align?: "top-end" | "bottom" | "left"; className?: string; onClick?: (e: MouseEvent<HTMLButtonElement>) => void; children: ReactNode; kind?: "ghost"; size?: "sm"; autoAlign?: boolean }) {
+export function RowIconButton({ label, align, className, pressed, onClick, children }: { label: string; align?: "top-end" | "bottom" | "left"; className?: string; pressed?: boolean; onClick?: (e: MouseEvent<HTMLButtonElement>) => void; children: ReactNode; kind?: "ghost"; size?: "sm"; autoAlign?: boolean }) {
   const live = useContext(RowLive);
   const button = useRef<HTMLButtonElement>(null);
   const hadFocus = useRef(false);
@@ -36,7 +36,7 @@ export function RowIconButton({ label, align, className, onClick, children }: { 
   }, [live]);
   if (live) {
     return (
-      <IconButton ref={button} autoAlign kind="ghost" size="sm" align={align} className={className} label={label} onClick={onClick}>
+      <IconButton ref={button} autoAlign kind="ghost" size="sm" align={align} className={className} label={label} isSelected={pressed} onClick={onClick}>
         {children}
       </IconButton>
     );
@@ -48,6 +48,7 @@ export function RowIconButton({ label, align, className, onClick, children }: { 
           ref={button}
           type="button"
           aria-label={label}
+          aria-pressed={pressed}
           className={`${className ? `${className} ` : ""}cds--btn cds--btn--sm cds--layout--size-sm cds--btn--ghost cds--btn--icon-only`}
           onClick={onClick}
           onFocus={() => (hadFocus.current = true)}
@@ -113,6 +114,7 @@ export function RowActions({ children }: { children(inMenu: boolean): ReactNode 
 
 /** The dark popover behind one button, styled like the markdown editor's table menu. */
 function RowActionsMenu({ children }: { children: ReactNode }) {
+  const live = useContext(RowLive);
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
   const pressedOutside = useRef(false);
@@ -131,6 +133,17 @@ function RowActionsMenu({ children }: { children: ReactNode }) {
     pressedOutside.current = false;
     setOpen(false);
   };
+  // Until its row is live (or it is tapped open: a touch screen's row never is), the same button
+  // without the popover around it or its tooltip: every stacked row has this menu.
+  if (!live && !open) {
+    return (
+      <span className="cds--popover-container cds--popover--caret cds--popover--drop-shadow cds--popover--high-contrast cds--popover--auto-align cds--autoalign cds--popover--bottom-end row-actions__menu">
+        <RowIconButton label="Actions" align="left" pressed={false} onClick={() => setOpen(true)}>
+          <OverflowMenuVertical />
+        </RowIconButton>
+      </span>
+    );
+  }
   return (
     <Popover ref={root} open={open} align="bottom-end" autoAlign highContrast className="row-actions__menu" onRequestClose={requestClose}>
       <IconButton autoAlign kind="ghost" size="sm" align="left" label="Actions" isSelected={open} onClick={() => setOpen((o) => !o)}>
