@@ -13,6 +13,8 @@ export function loadMapLibre(): Promise<MapLibre> {
     import("maplibre-gl"),
     import("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"),
     import("maplibre-gl/dist/maplibre-gl.css"),
+    // A map's dots and routes are coloured as a chart's series (MapView's chartPalette reads its tokens).
+    import("@carbon/charts-react/styles.css"),
   ]).then(
     ([lib, worker]) => {
       lib.setWorkerUrl(worker.default);

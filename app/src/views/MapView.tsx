@@ -1,7 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Checkbox, IconButton, Link, Popover, PopoverContent, Select, SelectItem } from "@carbon/react";
 import { CenterToFit, Earth, ZoomIn, ZoomOut } from "@carbon/icons-react";
-import * as colors from "@carbon/colors";
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { isCoordinateField, isLocationTextField, locationOf, locationOfPair, type LngLat } from "../domain/geo";
 import { fieldValue, isStruckThrough, itemLabel, pickableFields, type Collection, type FieldDef, type Item } from "../domain/model";
@@ -19,8 +18,9 @@ import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./regi
 
 // A block showing its items as dots on a vector map (MapLibre GL, OpenFreeMap's tiles). An item's
 // place is read from its fields (domain/geo.ts): one text field with both coordinates, or two
-// number fields. The block's grouping colours the dots (one colour per group, Carbon's categorical
-// data-visualization palette, with a legend); hovering a dot shows the item's title and the
+// number fields. The block's grouping colours the dots (one colour per group, as a chart colours its
+// series: Carbon Charts' palette for so many, with a legend); dots and route lines are drawn as a
+// lollipop chart's dots and lines, so maps and charts look alike; hovering a dot shows the item's title and the
 // block's fields (the pointer can move onto it, to its title's link), clicking it opens the item
 // (Ctrl/Cmd: beside). On a touch screen the first tap shows the item, a tap on its title opens it.
 // With Route on, a line joins the dots in the block's order (one per group, in its colour).
@@ -36,11 +36,23 @@ export interface MapOptions {
   route: boolean;
 }
 
-/** Carbon's categorical palette (in its order: neighbours contrast), for the light and dark themes. */
-const PALETTE = {
-  light: [colors.purple70, colors.cyan50, colors.teal70, colors.magenta70, colors.red50, colors.red90, colors.green60, colors.blue80, colors.magenta50, colors.yellow50, colors.teal50, colors.cyan90, colors.orange70, colors.purple50],
-  dark: [colors.purple60, colors.cyan40, colors.teal60, colors.magenta40, colors.red50, colors.red10, colors.green30, colors.blue50, colors.magenta60, colors.yellow30, colors.teal40, colors.cyan10, colors.orange50, colors.purple30],
-};
+/**
+ * Carbon Charts' colours for `count` groups, as a chart of that many series has them (its own stylesheet's
+ * `--cds-charts-…` tokens, loaded with MapLibre: mapLibre.ts): the 1- to 5-colour palette, else the 14-colour
+ * one, its first option, in order. Read for the theme from an element Carbon Charts would style.
+ */
+function chartPalette(el: HTMLElement, count: number, dark: boolean): string[] {
+  const variants = count > 5 ? 14 : Math.max(count, 1);
+  const holder = document.createElement("div");
+  holder.className = "cds--chart-holder";
+  holder.hidden = true;
+  if (dark) holder.dataset.carbonTheme = "g100";
+  el.appendChild(holder);
+  const style = getComputedStyle(holder);
+  const palette = Array.from({ length: Math.min(variants, 14) }, (_, i) => style.getPropertyValue(`--cds-charts-${variants}-1-${i + 1}`).trim());
+  holder.remove();
+  return palette;
+}
 
 const SOURCE = "kubus-items";
 const LAYER = "kubus-dots";
@@ -57,6 +69,8 @@ interface Place {
   item: Item;
   at: LngLat;
   color: string;
+  /** Its group's key (a route per group). */
+  group: string;
 }
 
 interface Legend {
@@ -65,8 +79,11 @@ interface Legend {
   color: string;
 }
 
-/** The items with a place, each once (in the first group it is in), coloured by group; and the legend. */
-function placesOf(collection: Collection, result: QueryResult, options: MapOptions, palette: string[], plain: string, empty: string) {
+/**
+ * The items with a place, each once (in the first group it is in), coloured by group as a chart's series
+ * are (`palette`: the colours for so many groups); and the legend.
+ */
+function placesOf(collection: Collection, result: QueryResult, options: MapOptions, palette: (count: number) => string[]) {
   const fields = pickableFields(collection);
   const location = fields.find((f) => f.id === options.locationFieldId);
   const longitude = location && isCoordinateField(location) ? fields.find((f) => f.id === options.longitudeFieldId) : undefined;
@@ -76,40 +93,45 @@ function placesOf(collection: Collection, result: QueryResult, options: MapOptio
     return locationOf(fieldValue(item, location));
   };
   const grouped = isGrouped(result);
-  const places: Place[] = [];
-  const legend: Legend[] = [];
   const seen = new Set<string>();
   let missing = 0;
-  result.groups.forEach((group, i) => {
-    const color = !grouped ? plain : group.key === "" ? empty : palette[i % palette.length];
-    let shown = false;
+  // The groups with a place: the series a chart would have.
+  const shown = result.groups.flatMap((group) => {
+    const placed: { item: Item; at: LngLat }[] = [];
     for (const item of group.items) {
       if (seen.has(item.id)) continue;
       seen.add(item.id);
       const at = placeOf(item);
-      if (!at) {
-        missing++;
-        continue;
-      }
-      places.push({ item, at, color });
-      shown = true;
+      if (at) placed.push({ item, at });
+      else missing++;
     }
-    if (grouped && shown) legend.push({ key: group.key, label: group.label, color });
+    return placed.length ? [{ group, placed }] : [];
+  });
+  const colors = palette(shown.length);
+  const places: Place[] = [];
+  const legend: Legend[] = [];
+  shown.forEach(({ group, placed }, i) => {
+    // None until Carbon Charts' stylesheet is in (the map isn't drawn before either).
+    const color = colors[i % colors.length] ?? "";
+    for (const p of placed) places.push({ ...p, color, group: group.key });
+    if (grouped) legend.push({ key: group.key, label: group.label, color });
   });
   return { places, legend, missing, chosen: !!location && (!isCoordinateField(location) || !!longitude) };
 }
 
-/** The route: the places in order, a line per colour (group). */
+/** The route: the places in order, a line per group. */
 const routeJson = (places: Place[]): Parameters<GeoJSONSource["setData"]>[0] => {
-  const lines = new Map<string, [number, number][]>();
+  const lines = new Map<string, { color: string; coordinates: [number, number][] }>();
   for (const p of places) {
-    const line = lines.get(p.color) ?? [];
-    line.push([p.at.lng, p.at.lat]);
-    lines.set(p.color, line);
+    const line = lines.get(p.group) ?? { color: p.color, coordinates: [] };
+    line.coordinates.push([p.at.lng, p.at.lat]);
+    lines.set(p.group, line);
   }
   return {
     type: "FeatureCollection",
-    features: [...lines].filter(([, line]) => line.length > 1).map(([color, coordinates]) => ({ type: "Feature", properties: { color }, geometry: { type: "LineString", coordinates } })),
+    features: [...lines.values()]
+      .filter((line) => line.coordinates.length > 1)
+      .map(({ color, coordinates }) => ({ type: "Feature", properties: { color }, geometry: { type: "LineString", coordinates } })),
   };
 };
 
@@ -137,8 +159,6 @@ function fit(map: MapLibreMap, places: Place[], animate: boolean) {
   map.fitBounds([west, south, east, north], { padding: 40, maxZoom: 14, animate });
 }
 
-/** A theme token's value, for what the map draws (it can't read CSS variables). */
-const token = (el: HTMLElement, name: string) => getComputedStyle(el).getPropertyValue(name).trim();
 
 export function MapView({ collection, result, fields, layout, options, refs, search, actions }: BlockProps<MapOptions>) {
   const dark = useMediaQuery("(prefers-color-scheme: dark)");
@@ -151,22 +171,25 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  // Colours for what the map draws, read from the theme (they follow it).
-  const [theme, setTheme] = useState({ plain: "", empty: "", ring: "" });
+  // The dots' colours are Carbon Charts' (its stylesheet comes with MapLibre), for the theme.
+  const [stylesIn, setStylesIn] = useState(false);
   useEffect(() => {
+    loadMapLibre().then(() => setStylesIn(true), () => {});
+  }, []);
+  const palette = useMemo(() => {
     const el = box.current;
-    if (!el) return;
-    setTheme({ plain: token(el, "--cds-interactive"), empty: token(el, "--cds-icon-secondary"), ring: token(el, "--cds-background") });
-  }, [dark]);
+    const cache = new Map<number, string[]>();
+    return (count: number) => {
+      if (!cache.has(count)) cache.set(count, el && stylesIn ? chartPalette(el, count, dark) : []);
+      return cache.get(count)!;
+    };
+  }, [dark, stylesIn]);
 
-  const { places, legend, missing, chosen } = useMemo(
-    () => placesOf(collection, result, options, dark ? PALETTE.dark : PALETTE.light, theme.plain || colors.blue60, theme.empty || colors.gray50),
-    [collection, result, options, dark, theme],
-  );
+  const { places, legend, missing, chosen } = useMemo(() => placesOf(collection, result, options, palette), [collection, result, options, palette]);
 
-  // The latest places and colours, for the map's own handlers (set up once).
-  const latest = useRef({ places, ring: theme.ring, route: options.route });
-  latest.current = { places, ring: theme.ring, route: options.route };
+  // The latest places, for the map's own handlers (set up once).
+  const latest = useRef({ places, route: options.route });
+  latest.current = { places, route: options.route };
 
   /** The dot shown with its item (hovered, or tapped on a touch screen), and where on the map it is. */
   const [shownDot, setShownDot] = useState<{ index: number; pinned: boolean } | null>(null);
@@ -221,7 +244,8 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
             type: "line",
             source: ROUTE_SOURCE,
             layout: { "line-join": "round", "line-cap": "round" },
-            paint: { "line-color": ["get", "color"], "line-width": 3, "line-opacity": 0.8 },
+            // As a lollipop chart's lines (Carbon Charts).
+            paint: { "line-color": ["get", "color"], "line-width": 1 },
           });
           m.addSource(SOURCE, { type: "geojson", data: geoJson(latest.current.places) });
           m.addLayer({
@@ -229,10 +253,12 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
             type: "circle",
             source: SOURCE,
             paint: {
+              // As a lollipop chart's dots (Carbon Charts): its colour at 30%, outlined, filled when hovered.
               "circle-color": ["get", "color"],
-              "circle-radius": ["case", ["boolean", ["feature-state", "hover"], false], 8, 6],
-              "circle-stroke-width": 2,
-              "circle-stroke-color": latest.current.ring || "#ffffff",
+              "circle-radius": 4,
+              "circle-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 1, 0.3],
+              "circle-stroke-width": 1.5,
+              "circle-stroke-color": ["get", "color"],
             },
           });
           setReady(true);
@@ -304,13 +330,12 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
     if (!map || !ready) return;
     (map.getSource(SOURCE) as GeoJSONSource | undefined)?.setData(geoJson(places));
     (map.getSource(ROUTE_SOURCE) as GeoJSONSource | undefined)?.setData(routeJson(options.route ? places : []));
-    if (theme.ring) map.setPaintProperty(LAYER, "circle-stroke-color", theme.ring);
     if (fitted.current !== ids) {
       fit(map, places, fitted.current !== null);
       fitted.current = ids;
     }
     setShownDot((d) => (d && d.index < places.length ? d : null));
-  }, [places, ids, ready, theme.ring, options.route]);
+  }, [places, ids, ready, options.route]);
 
   // The shown dot's place on the map, kept while the map moves.
   const shownPlace = shownDot ? places[shownDot.index] : undefined;

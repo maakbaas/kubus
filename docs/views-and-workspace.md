@@ -77,8 +77,10 @@ Extension points are registries, not special cases in pages:
   item's place is read from its fields, `domain/geo.ts`: Location is a text field or a component giving text with both
   coordinates, "52.37, 4.89", "geo:52.37,4.89" or a map link with "@lat,lon" / "q=lat,lon", or a number field
   with the latitude, then Longitude a second number field; a first guess by field name. The block's grouping colours
-  the dots, Carbon's categorical palette for the theme, with a legend and how many items have no place; ungrouped
-  they are `--cds-interactive`. Hovering a dot shows a Carbon popover with the item's title (in the text colour, a
+  the dots as a chart colours its series: Carbon Charts' palette for that many groups (1 to 5, else 14; its own
+  `--cds-charts-…` tokens for the theme, its stylesheet loaded with MapLibre: `chartPalette`), with a legend and how
+  many items have no place; ungrouped they are a one-series chart's colour. Dots and route lines are drawn as a
+  lollipop chart's: a 4px dot in its colour at 30% with a 1.5px outline, filled when hovered; 1px lines. Hovering a dot shows a Carbon popover with the item's title (in the text colour, a
   link) and the block's fields, 14 to 24rem wide; the pointer can move onto it (it hides `HIDE_DELAY` after leaving
   both); clicking a dot opens the item (`openModeOf`); on touch screens the first tap shows it and its title opens it. The
   map fits the dots when which items are shown changes, not when one is edited. Zoom buttons are Carbon icon
