@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SourceColumn, SourceRow } from "../../../shared/sources";
 import { blankField, pickableFields, type Collection } from "./model";
-import { addRows, canGroup, canSort, fieldOperators, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
+import { addRows, canGroup, canSort, sourcePeriod, fieldOperators, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
 import { defaultQuery, TITLE } from "./query";
 
 const columns: SourceColumn[] = [
@@ -112,6 +112,16 @@ describe("remote collections", () => {
       ["email", "string", "email"],
     ]);
     expect(next.source?.key).toBe("id");
+  });
+
+  it("start a time series' view with the last 7 days on its time column (none for other sources)", () => {
+    const draft = { source: people.source, fields: people.fields.map(({ collectionId: _c, position: _p, ...f }) => f) };
+    const series = withSourceColumns(draft, "CRM", people.source!.target, { columns, key: ["id"], time: "born" });
+    expect(series.source?.time).toBe("born");
+    expect(sourcePeriod(series)).toEqual([{ id: "f-born-period", fieldId: "f-born", operator: "between", value: "day-6..day+0" }]);
+    expect(sourcePeriod(people)).toEqual([]);
+    // A time column it no longer has: none.
+    expect(withSourceColumns(draft, "CRM", people.source!.target, { columns, key: ["id"], time: "gone" }).source?.time).toBeUndefined();
   });
 
   it("hide a column's field, not bringing it back when the columns are read again, and show it again", () => {

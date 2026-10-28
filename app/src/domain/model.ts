@@ -141,6 +141,8 @@ export interface CollectionSource {
   columns: SourceColumn[];
   /** Columns hidden in the collection's settings: they have no field and aren't given one again when the columns are read. */
   hiddenColumns?: string[];
+  /** A time series' time column (SourceDescription.time): a new view of it starts with a date period on it. */
+  time?: string;
 }
 
 /** A field as edited and saved: the field without what the repository fills in (its collection, its place). */

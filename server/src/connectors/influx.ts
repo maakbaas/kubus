@@ -12,9 +12,6 @@ import {
   influxColumn,
   influxValue,
   countFlux,
-  isTimeOrdered,
-  nearestFlux,
-  pageDays,
   parseAnnotatedCsv,
   rowFlux,
   rowsFlux,
@@ -195,7 +192,8 @@ export class InfluxConnector implements Connector {
     for (const { name, field, datatype } of fieldColumns(types, tagKeys)) add(name, datatype, false, field);
     if (columns.length === 1) throw new SourceError(`“${target.table.name}” has no data in “${target.table.schema}”`);
     columns.push({ name: ID_COLUMN, type: "series and time", kind: "string", read: "string", hidden: true });
-    return { columns, key: [ID_COLUMN], dropped };
+    // Its time: a measurement is read by time (a collection of it starts with a date period on it).
+    return { columns, key: [ID_COLUMN], dropped, ...(columns.some((c) => c.name === "_time") && { time: "_time" }) };
   }
 
   async describe(target: SourceTarget): Promise<SourceDescription> {
@@ -206,33 +204,6 @@ export class InfluxConnector implements Connector {
     return { ...description, columns: description.columns.map(({ read: _read, tag: _tag, field: _field, ...c }) => c) };
   }
 
-  async query(query: SourceQuery): Promise<SourceResult> {
-    if (isTimeOrdered(query)) return this.byTime(query);
-    return this.page(query);
-  }
-
-  /**
-   * A page by time (isTimeOrdered): from the nearest point's day and the days next to it; rows beyond the page
-   * in those days mean the page is the range's own (every row outside them is further away), else the whole
-   * range is read as asked. The total counted from InfluxDB's index where it can be.
-   */
-  private async byTime(query: SourceQuery): Promise<SourceResult> {
-    const direction = query.sort[0].direction;
-    const counted = query.counts ? this.total(query) : Promise.resolve(undefined);
-    const at = InfluxConnector.values(await this.flux(nearestFlux(query, direction)), "_time")[0];
-    let result: SourceResult | null = at ? null : { rows: [], more: false };
-    // The page's days: the nearest point's and as many before (or after) as the page needs at least a day a
-    // row of (a month at most). Too few rows there: the whole range, as asked (no wider tries in between).
-    if (at) {
-      const days = Math.min(31, Math.max(1, Math.ceil((query.offset + query.limit) / 100)));
-      const r = await this.page({ ...query, counts: false, filter: { and: [query.filter, pageDays(at, direction, days, query.timeZone)] } });
-      if (r.more) result = r;
-    }
-    result ??= await this.page({ ...query, counts: false });
-    const total = await counted;
-    return total === undefined ? result : { ...result, total };
-  }
-
   /** A query's rows counted: by InfluxDB's index (countFlux) where the filter is a range alone, else every row read. */
   private async total(query: SourceQuery): Promise<number> {
     const columns = await this.columnsOf(query.target);
@@ -240,7 +211,7 @@ export class InfluxConnector implements Connector {
     return Number(InfluxConnector.values(await this.flux(flux), "_kubus_n")[0] ?? 0);
   }
 
-  private async page(query: SourceQuery): Promise<SourceResult> {
+  async query(query: SourceQuery): Promise<SourceResult> {
     const columns = await this.columnsOf(query.target);
     const group = query.groupBy ? columns.get(query.groupBy) : undefined;
     // A grouped query's rows are placed by their group's place, so its groups come first.
@@ -253,7 +224,7 @@ export class InfluxConnector implements Connector {
       : [];
     const [page, total] = await Promise.all([
       this.flux(rowsFlux(query, columns, groups.map((g) => g.raw))),
-      // Counted as byTime counts: by InfluxDB's index where it can be, not every row read.
+      // Counted by InfluxDB's index where it can be (a time range alone), not every row read.
       query.counts ? this.total(query) : Promise.resolve(null),
     ]);
     const rows = toRows(page, query, group, query.timeZone);

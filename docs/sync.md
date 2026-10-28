@@ -355,13 +355,12 @@ takes the new one when its settings are opened. A source's name: letters, digits
 - *Known limits*: text sorts by the source's collation ("Customer 10" before "Customer 9"), not the
   app's numeric order (roadmap #6); counting a heavy query runs it in full (#6); references can't
   point at remote collections (#5); global search and the API (`/api/v1`) don't read remote rows
-  (#1). InfluxDB: a page sorted by `_time` alone (not grouped) is read from the nearest point's day and the
-  days next to it (a day per 100 rows of the page, a month at most), else over its whole range as asked (`isTimeOrdered`,
-  `byTime`); every query slower than 3 s is logged with its script (`SLOW_MS`), and a total (by time or not) counted from InfluxDB's
+  (#1). InfluxDB is read by time, as a time-series database is: a page builds and sorts every row of its range
+  (a limit only trims the answer), so a measurement is read over all time unless filtered on `_time`; a collection
+  made of one starts with a date period on it (Last 7 days, `SourceDescription.time`, `sourcePeriod`). Every query
+  slower than 3 s is logged with its script (`SLOW_MS`), and a total is counted from InfluxDB's
   index when the filter is a `_time` range alone (`countFlux`: per series the most points of any field, so fields
-  written apart are undercounted); any other sort, a grouping or a filter on a field reads the measurement over all
-  time unless filtered on `_time` (keep a `_time` filter on large buckets), two text sorts asked opposite ways sort the second the way of the
-  first, and a field whose type differs between series can't be read with the others.
+  written apart are undercounted); two text sorts asked opposite ways sort the second the way of the first, and a field whose type differs between series can't be read with the others.
 
 ## The API (headless device) and webhooks
 

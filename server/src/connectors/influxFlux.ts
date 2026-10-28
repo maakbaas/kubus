@@ -750,16 +750,6 @@ export function rowsFlux(query: SourceQuery, columns: Map<string, InfluxColumn>,
   ]);
 }
 
-/**
- * A page of a measurement's rows by time (newest or oldest first), not grouped. Read as asked it pivots,
- * sorts and counts every row of the range (all history without a `_time` filter) for a page of 100, so the
- * connector reads it from the nearest point's day (`nearestFlux`) and more days only while they hold less
- * than the page (`pageDays`), and counts with `countFlux` where it can.
- */
-export function isTimeOrdered(query: SourceQuery): boolean {
-  return "table" in query.target && !query.groupBy && query.sort.length === 1 && query.sort[0].column === "_time";
-}
-
 /** Whether a filter holds only rules on `_time`, all of them required (no `or`): a range alone. */
 function timeOnly(c: SourceCondition): boolean {
   if ("and" in c) return c.and.every(timeOnly);
@@ -786,32 +776,6 @@ export function countFlux(query: SourceQuery, columns: Map<string, InfluxColumn>
   |> group()
   |> sum()
   |> rename(columns: {_value: "_kubus_n"})`;
-}
-
-/** The moment (`_time`) of the measurement's latest (desc) or earliest point in the query's range, any field's. */
-export function nearestFlux(query: SourceQuery, direction: "asc" | "desc"): string {
-  if (!("table" in query.target)) throw new SourceError("Only a measurement is read by time");
-  const { schema, name } = query.target.table;
-  const range = rangeOf(query.filter, query.timeZone);
-  const desc = direction === "desc";
-  return `from(bucket: ${fluxString(schema ?? "")})
-  |> range(start: ${range.start}, stop: ${range.stop})
-  |> filter(fn: (r) => r._measurement == ${fluxString(name)})
-  |> ${desc ? "last" : "first"}()
-  |> group()
-  |> ${desc ? "max" : "min"}(column: "_time")
-  |> keep(columns: ["_time"])`;
-}
-
-/**
- * The days read for a page by time whose nearest point is at `at`: that point's day and the `days` before it
- * (desc) or after it, in the time zone; the query's filter then picks the rows (its other rules may leave
- * fewer than the page: more days are read then).
- */
-export function pageDays(at: string, direction: "asc" | "desc", days: number, timeZone: string): SourceFilter {
-  const day = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(Date.parse(at));
-  const shifted = new Date(Date.parse(`${day}T00:00:00Z`) + (direction === "desc" ? -days : days) * 86_400_000).toISOString().slice(0, 10);
-  return { column: "_time", operator: "between", value: direction === "desc" ? `${shifted}..${day}` : `${day}..${shifted}` };
 }
 
 /** The title: the first title column that isn't blank, else `untitled`. */

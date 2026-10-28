@@ -126,11 +126,12 @@ export function newBlock(kind: BlockKind, options: unknown, id = newId()): ViewB
 
 /**
  * The unsaved starting view of every collection: a table of all items, sorted by title (of these
- * fields; null = all), its fields editable unless the collection is read-only (a remote one).
+ * fields; null = all), its fields editable unless the collection is read-only (a remote one), filtered
+ * by `filters` (a time series' date period: sources.ts sourcePeriod).
  */
-export function defaultViewState(defaultOptions: unknown, fields: string[] | null = null, editable = true): ViewState {
+export function defaultViewState(defaultOptions: unknown, fields: string[] | null = null, editable = true, filters: FilterRule[] = []): ViewState {
   const block = newBlock("table", defaultOptions, MAIN_BLOCK);
-  return { filters: [], blocks: [fields ? { ...block, layout: { ...block.layout, fields } } : block], editable };
+  return { filters, blocks: [fields ? { ...block, layout: { ...block.layout, fields } } : block], editable };
 }
 
 /** Id of the default view's block. */

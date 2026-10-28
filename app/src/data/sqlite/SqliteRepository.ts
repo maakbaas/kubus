@@ -29,7 +29,7 @@ import type { SyncEnvironment } from "../sync/environment";
 import { acceptedStatement, editedStatement, generatedStatement } from "./generated";
 import { decodeAiInput } from "../../domain/ai";
 import { draftProblem } from "../../domain/collectionDraft";
-import { firstShownFields, isRemote } from "../../domain/sources";
+import { firstShownFields, isRemote, sourcePeriod } from "../../domain/sources";
 import type { SqlClient, Statement } from "./protocol";
 
 interface CollectionRow {
@@ -319,7 +319,7 @@ export class SqliteRepository implements Repository {
       writes.push({
         sql: `INSERT INTO views (id, collection_id, space_id, name, config, position, is_default, created_at, updated_at)
               VALUES (?1, ?2, ?5, 'All', ?3, 0, 0, ?4, ?4)`,
-        bind: [newId(), draft.id, JSON.stringify(defaultViewState(null, firstShownFields(draft), !draft.source)), ts, spaceId],
+        bind: [newId(), draft.id, JSON.stringify(defaultViewState(null, firstShownFields(draft), !draft.source, sourcePeriod(draft))), ts, spaceId],
       });
     }
 

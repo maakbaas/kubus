@@ -5,7 +5,7 @@
 // collection's own (component fields) are only shown, computed for the rows that are loaded.
 
 import { TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceRow, type SourceShape, type SourceSort } from "../../../shared/sources";
-import { resolveRange } from "./datePeriod";
+import { resolveRange, rollingRangeValue } from "./datePeriod";
 import { fieldKindList } from "./fieldKinds";
 import { blankField, isMetaField, newId, SELF_FIELD, selfField, titleFields, type Collection, type CollectionSource, type FieldDef, type FieldKind, type FieldValue, type Item } from "./model";
 import { filterTree, mapTree } from "./filterTree";
@@ -195,7 +195,7 @@ export function withSourceColumns<D extends { source?: CollectionSource | null; 
   draft: D,
   name: string,
   target: CollectionSource["target"],
-  description: { columns: SourceColumn[]; key: string[] },
+  description: { columns: SourceColumn[]; key: string[]; time?: string },
 ): D {
   const columns = new Map(description.columns.map((c) => [c.name, c]));
   const hidden = (draft.source?.hiddenColumns ?? []).filter((name) => columns.has(name));
@@ -213,7 +213,8 @@ export function withSourceColumns<D extends { source?: CollectionSource | null; 
   }
   const old = draft.source?.key;
   const key = old && columns.has(old) ? old : description.key.length === 1 && columns.has(description.key[0]) ? description.key[0] : (description.columns[0]?.name ?? "");
-  return { ...draft, source: { name, target, key, columns: description.columns, ...(hidden.length > 0 && { hiddenColumns: hidden }) }, fields };
+  const time = description.time && columns.has(description.time) ? description.time : undefined;
+  return { ...draft, source: { name, target, key, columns: description.columns, ...(hidden.length > 0 && { hiddenColumns: hidden }), ...(time && { time }) }, fields };
 }
 
 /**
@@ -294,4 +295,14 @@ export function addRows(prev: BuiltRows | null, basis: readonly unknown[], rows:
   });
   b.count = rows.length;
   return b;
+}
+
+/**
+ * The date period a new view of a time series starts with: the last 7 days (rolling) on its time column's
+ * field, as a time-series database is read by time (else a view reads all of it); none for other collections.
+ * Its rule's id is fixed, so the starting view is the same each time it is made.
+ */
+export function sourcePeriod(collection: { source?: CollectionSource | null; fields: Pick<FieldDef, "id" | "kind" | "column">[] }): FilterRule[] {
+  const field = collection.source?.time ? collection.fields.find((f) => f.column === collection.source!.time && (f.kind === "date" || f.kind === "datetime")) : undefined;
+  return field ? [{ id: `${field.id}-period`, fieldId: field.id, operator: "between", value: rollingRangeValue({ from: -6, to: 0 }) }] : [];
 }

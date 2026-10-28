@@ -5,7 +5,7 @@ import { Add, Filter, Renew, Save, Search as SearchIcon, SettingsAdjust, Star, S
 import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { newName, now, newId, type Collection } from "../domain/model";
-import { firstShownFields, isRemote } from "../domain/sources";
+import { firstShownFields, isRemote, sourcePeriod } from "../domain/sources";
 import { defaultViewState, newBlock, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
 import { NotFound } from "../ui/NotFound";
 import { CollectionIcon } from "../ui/collectionIcons";
@@ -59,7 +59,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // without one (the collection is shared from another space) shows `base` as a virtual "All"
   // view, stored once it is changed, renamed or joined by another view; a collection always has a view.
   const base = useMemo(
-    () => normalized(collection, defaultViewState(blockType("table").defaultOptions(collection), firstShownFields(collection), !isRemote(collection))),
+    () => normalized(collection, defaultViewState(blockType("table").defaultOptions(collection), firstShownFields(collection), !isRemote(collection), sourcePeriod(collection))),
     [collection],
   );
   const virtualView = useMemo<CollectionView>(

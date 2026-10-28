@@ -58,6 +58,11 @@ export interface SourceDescription {
   key: string[];
   /** Columns that aren't read (binary data, search indexes, internals), for people. */
   dropped: { name: string; type: string }[];
+  /**
+   * A time series' time column (InfluxDB's `_time`): read by time, as a time-series database is, so a
+   * collection made of it starts with a date period on it (app/src/domain/sources.ts sourcePeriod).
+   */
+  time?: string;
 }
 
 /** The filter operators a source understands: the app's (domain/query.ts), "between" taking yyyy-mm-dd..yyyy-mm-dd. */
