@@ -2,7 +2,7 @@ name: Test
 
 # On every push, on Linux, beside build.yml (the Windows installers, which also runs the unit tests):
 # - unit: both typechecks and every vitest project, the server's tests against a real Postgres (and
-#   MySQL 8 and MariaDB for their connector) and the headless device (a few minutes);
+#   MySQL 8 and MariaDB for their connector, InfluxDB 2 and n8n for theirs) and the headless device (a few minutes);
 # - gui: the GUI suite's smoke tests (gui-tests/), only those of the suites covering the files this
 #   branch changed (gui-tests/areas.mjs), all of them on main; skipped when nothing the GUI shows
 #   changed; not the screenshot baselines (machine-dependent). The full GUI suite (an hour) stays a
@@ -52,11 +52,39 @@ jobs:
           - 3307:3306
         options: >-
           --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 5s --health-retries 20
+      # The connectors' real services (tests/services.yml; Actual Budget, which needs two and a seed script, only runs locally).
+      influxdb:
+        image: influxdb:2.7.12
+        env:
+          DOCKER_INFLUXDB_INIT_MODE: setup
+          DOCKER_INFLUXDB_INIT_USERNAME: kubus
+          DOCKER_INFLUXDB_INIT_PASSWORD: kubus-test-password
+          DOCKER_INFLUXDB_INIT_ORG: kubus
+          DOCKER_INFLUXDB_INIT_BUCKET: setup
+          DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: kubus-test-admin-token
+        ports:
+          - 8086:8086
+        options: >-
+          --health-cmd "influx ping" --health-interval 5s --health-timeout 5s --health-retries 20
+      n8n:
+        image: n8nio/n8n:2.45.5
+        env:
+          N8N_DIAGNOSTICS_ENABLED: 'false'
+          N8N_VERSION_NOTIFICATIONS_ENABLED: 'false'
+          N8N_PERSONALIZATION_ENABLED: 'false'
+          N8N_HIRING_BANNER_ENABLED: 'false'
+          N8N_LISTEN_ADDRESS: 0.0.0.0
+        ports:
+          - 5678:5678
+        options: >-
+          --health-cmd "wget -qO- http://127.0.0.1:5678/healthz/readiness" --health-interval 5s --health-timeout 5s --health-retries 30
     env:
       # server/test/postgres.ts and mysql.ts; in CI a missing database fails the tests instead of skipping them.
       KUBUS_TEST_POSTGRES: postgres://postgres:postgres@localhost:5432/postgres
       KUBUS_TEST_MYSQL: mysql://root:mysql@127.0.0.1:3306
       KUBUS_TEST_MARIADB: mysql://root:mariadb@127.0.0.1:3307
+      KUBUS_TEST_INFLUX: http://localhost:8086
+      KUBUS_TEST_N8N: http://localhost:5678
     steps:
       - uses: actions/checkout@v4
 

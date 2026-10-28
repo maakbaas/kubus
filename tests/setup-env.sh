@@ -4,8 +4,21 @@
 # tests/services.yml), playwright-cli pointed at a local Chromium. Then: `source tests/env.sh`.
 #   tests/setup-env.sh            everything
 #   tests/setup-env.sh --no-gui   without playwright-cli
+#   tests/setup-env.sh --connectors   also the connectors' real services (InfluxDB, n8n, Actual Budget: services.yml,
+#                                     profile `connectors`; a few GB of images, a minute or two to start)
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+# Flags, in any order.
+GUI=1
+CONNECTORS=0
+for flag in "$@"; do
+  case "$flag" in
+    --no-gui) GUI=0 ;;
+    --connectors) CONNECTORS=1 ;;
+    *) echo "Unknown flag: $flag" >&2; exit 2 ;;
+  esac
+done
 
 [ -d node_modules ] || npm ci
 [ -d server/node_modules ] || npm ci --prefix server
@@ -25,7 +38,11 @@ if ! docker info >/dev/null 2>&1; then
 fi
 docker compose -f tests/services.yml up -d --wait $([ -n "${PG_LOCAL:-}" ] && echo "mysql mariadb" || echo "")
 
-if [ "${1:-}" != "--no-gui" ]; then
+if [ "$CONNECTORS" = 1 ]; then
+  docker compose -f tests/services.yml --profile connectors up -d --wait
+fi
+
+if [ "$GUI" = 1 ]; then
   command -v playwright-cli >/dev/null || npm install -g @playwright/cli@0.1.22
 fi
 echo "Ready: source tests/env.sh"

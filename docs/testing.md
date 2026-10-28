@@ -25,7 +25,7 @@ the imports).
 | `sync` | the device's side of sync (outbox, merge of two devices' edits, files, first connection, versions, the engine's timing and error states, the server's change signal) against `FakeServer` (`app/src/test/fakeServer.ts`); the client of the server's remote sources; the router and helpers of `shared/` (their tests live in `app/src`: `shared/` is copied whole into the server's image and typechecked without vitest) | `app/src/data/sync/*.test.ts`, `app/src/data/remote/*.test.ts` | nothing |
 | `api` | the HTTP API (`/api/v1`, the headless device): every route and its errors (`apiRoutes.test.ts`, checked against `help/api.md`), values by kind, the component compiler, webhooks and the device's 503s, against `FakeServer` | `app/src/headless/*.test.ts` | nothing |
 | `app` | the app's own logic outside the UI: the AI service and backfill, the item cache, the workspace layout, block registry and item actions, remote paging, platform adapters, and the hooks and browser-facing helpers (`ui/`), run without a DOM | `app/src/{app,platform,ui,views,pages,workspace,test}/*.test.ts(x)` | nothing |
-| `connectors` | the remote-source connectors: their query languages run for real (SQLite for D1, the memory connector) or against a stand-in of the service (n8n, InfluxDB, Cloudflare D1's API), Postgres, MySQL and MariaDB against real ones | `server/test/connectors/*.test.ts` | the server's packages; Postgres for `postgres.test.ts`, MySQL 8 and MariaDB for `mysql.test.ts` |
+| `connectors` | the remote-source connectors, against the real services wherever one runs locally: Postgres, MySQL 8, MariaDB, InfluxDB 2, n8n and Actual Budget (with actual-http-api) in containers; CSV, JSON, NDJSON and ICS from real files over real local HTTP servers; D1 on a real SQLite behind a stand-in of Cloudflare's API (D1 itself doesn't run locally); the shared contract (`contract.ts`) asked of each; the unit tests of their query languages and the memory connector | `server/test/connectors/*.test.ts` | the server's packages; per service the variable below (its tests are skipped without it) |
 | `server` | the server itself: its modules in-process (so coverage counts them: sync, schema, migrations and wipe in `sync.test.ts` and `database.test.ts`; `tokens`, `files` against Postgres; `sources` with stand-in connectors; `ai` against a stand-in provider; `events`; `headless`), its settings, the MCP protocol and its tools (`mcp.test.ts`, with a fake API), every HTTP endpoint of the real server process (`serve.ts`: `http.test.ts` the working paths, `endpoints.test.ts` the 400 / 401 / 403 / 404 / 405 / 413 ones), and devices syncing through it end to end | `server/test/*.test.ts` | the server's packages, Postgres, `npm run build:headless` for `/api/v1` |
 
 The `connectors` and `server` projects test `server/` code: they need its packages
@@ -50,6 +50,33 @@ docker run -d --name kubus-test-mariadb -e MARIADB_ROOT_PASSWORD=mariadb -p 3307
 export KUBUS_TEST_MYSQL=mysql://root:mysql@127.0.0.1:3306 KUBUS_TEST_MARIADB=mysql://root:mariadb@127.0.0.1:3307
 npm test -- --project connectors
 ```
+
+The connectors' other real services are in `tests/services.yml` under the compose profile `connectors`
+(`tests/setup-env.sh --connectors` starts them all; or `docker compose -f tests/services.yml --profile connectors up -d --wait influxdb`
+for one); `tests/env.sh` sets a variable for each that answers, and a test file without its variable is skipped:
+
+| Service (pinned image) | Variable | Files | Seeded through | Start / test time (4 busy CPUs) | CI |
+|---|---|---|---|---|---|
+| InfluxDB 2.7.12 | `KUBUS_TEST_INFLUX` (`_ORG`, `_TOKEN`: the image's setup) | `influx.real.test.ts` | its HTTP API: a bucket, line protocol, a read-only token (`influxSeed.ts`) | 4 s / 35 s | yes |
+| n8n 2.45.5 | `KUBUS_TEST_N8N` | `n8n.real.test.ts` | owner setup and API keys (`/rest`), data tables (`/api/v1/data-tables`) (`n8nSeed.ts`) | 1 to 2 min / 17 s | yes |
+| Actual Budget server 26.10.0 + actual-http-api 26.10.1 | `KUBUS_TEST_ACTUAL` (`_KEY`) | `actual.real.test.ts` | actual-http-api's write routes; the empty budget is made by `actualSeed.cjs` when the `actual-api` service starts | 45 s / 25 s | no: two services and a mounted script (a job's service containers can have neither) |
+
+A CI job that has the service sets the variable and a missing one is an error there. Docker Hub rate-limits
+anonymous pulls: `mirror.gcr.io/<image>` has the same images (`docker tag` them to the pinned names).
+
+What the connector tests ask, for every connector that can answer it:
+
+- `contract.ts` (the shared contract, `shared/sources.ts`): a fixture says what a service holds (the dataset's people,
+  `dataset.ts`, loaded through the service's own API) and `contractCases` derives every filter operator of each column's
+  type, every sort, a search, every page, every grouping and order, trees of and / or, a row by its key and the requests
+  that must be refused; each answer must equal memory.ts's `queryRows` (the app's own meaning, `applyQuery`) on the rows
+  the service holds. Where a source differs by its documented limits (docs/sync.md "Known limits": text order, a tie's
+  order) the fixture says how (`text`, `looseTies`), not the case.
+- Each service's own: listing, types of every column, errors (a wrong key or password, an unreachable host, a missing
+  table, a key without the scope, the time limit) and that it only reads (the data is the same after, the key can't write).
+- `http.transport.test.ts`: the HTTP connectors with real files: 20,000 rows, the row and size limits, encodings (a BOM,
+  declared charsets, UTF-16), malformed content, redirects (the password stays on its origin), statuses, slow and cut-off
+  bodies, the password in each place, pages, revalidation.
 
 Without `KUBUS_TEST_POSTGRES` (or those two) they are skipped locally; in CI (`CI` set) that is an error, as is a
 missing headless build: nothing is skipped there without anyone noticing.
@@ -104,8 +131,10 @@ npm run coverage:report                       # merges what exists: coverage/ind
 - A test goes in the project of the code it tests, beside it (`app/src`) or in `server/test`
   (`connectors/` for a connector). A new kind of test that fits no project gets one in
   `vitest.config.ts` and a row above.
-- A connector's test answers as its service does (a stand-in like `influx.test.ts`, or the real
-  engine like `d1.test.ts` on SQLite), and checks that it only reads.
+- A connector's test answers as its service does: the real service where one runs locally (`*.real.test.ts`,
+  `contract.*.test.ts`), else a stand-in that follows the service's documented answers (`d1Api.ts` for Cloudflare's API,
+  `influx.test.ts` and the others' unit tests), and checks that it only reads. A new connector gets a fixture for the
+  contract (`contract.ts`) first.
 - `fixture-v1.sql` (with `schema-v1.sql`) is frozen: a migration must keep its rows, and the app
   must read them as they were. A later release whose data takes new shapes gets a fixture of
   its own version, made with that release's app.

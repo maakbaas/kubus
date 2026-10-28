@@ -289,16 +289,16 @@ function overridden(event: IcalEvent, at: Time): boolean {
 }
 
 /** The calendar's rows over a window: its single events, and its repeating events' occurrences that overlap the window. */
-export function rowsOf(calendar: Calendar, window: Window): MemoryRow[] {
-  const cacheKey = `${window.from} ${window.to}`;
+export function rowsOf(calendar: Calendar, window: Window, max = MAX_ROWS): MemoryRow[] {
+  const cacheKey = `${window.from} ${window.to} ${max}`;
   const have = calendar.expanded.get(cacheKey);
   if (have) return have;
   const rows = [...calendar.singles];
   const tooMany = () =>
-    new SourceError(`More than ${MAX_ROWS.toLocaleString("en")} events from ${dayText(window.from)} to ${dayText(window.to)}: filter by a shorter range of start dates`);
+    new SourceError(`More than ${max.toLocaleString("en")} events from ${dayText(window.from)} to ${dayText(window.to)}: filter by a shorter range of start dates`);
   const add = (o: { row: MemoryRow; start: number; end: number }) => {
     if (o.start >= window.to || o.end < window.from) return;
-    if (rows.length >= MAX_ROWS) throw tooMany();
+    if (rows.length >= max) throw tooMany();
     rows.push(o.row);
   };
   for (const r of calendar.repeating) {
