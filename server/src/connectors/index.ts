@@ -1,12 +1,14 @@
 import type { Connector, SourceConfig } from "./connector.ts";
 import { CsvConnector } from "./csv.ts";
 import { D1Connector } from "./d1.ts";
+import { IcsConnector } from "./ics.ts";
 import { InfluxConnector } from "./influx.ts";
 import { JsonConnector } from "./json.ts";
 import { N8nConnector } from "./n8n.ts";
 import { PostgresConnector } from "./postgres.ts";
 
-// The connectors, by a source's kind (postgres.ts, n8n.ts, influx.ts: InfluxDB 2, d1.ts: Cloudflare D1, json.ts / csv.ts: JSON and CSV over HTTP). Another kind of source is
+// The connectors, by a source's kind (postgres.ts, n8n.ts, influx.ts: InfluxDB 2, d1.ts: Cloudflare D1, ics.ts: a calendar subscription,
+// json.ts / csv.ts: JSON and CSV over HTTP). Another kind of source is
 // another entry here, its fields in kinds.ts (and its own file beside them); nothing else on the
 // server or in the app changes.
 
@@ -17,6 +19,7 @@ const CONNECTORS: Record<string, (config: SourceConfig) => Connector> = {
   d1: (config) => new D1Connector(config),
   json: (config) => new JsonConnector(config),
   csv: (config) => new CsvConnector(config),
+  ics: (config) => new IcsConnector(config),
 };
 
 /** The connector for a source, or why there is none. */

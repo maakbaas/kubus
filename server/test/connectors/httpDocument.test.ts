@@ -2,7 +2,7 @@
 // One document over HTTP (server/src/connectors/httpDocument.ts) against a stand-in server.
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { DOCUMENT_TTL_MS, documentAddress, fetchDocument, forgetDocuments, nextLink } from "../../src/connectors/httpDocument.ts";
+import { DOCUMENT_TTL_MS, documentAddress, fetchDocument, forgetDocuments, hasSecretPlace, nextLink, withSecret } from "../../src/connectors/httpDocument.ts";
 
 let server: Server;
 let base = "";
@@ -75,6 +75,17 @@ describe("documentAddress", () => {
     expect(documentAddress("http://example.com/x").protocol).toBe("http:");
     expect(() => documentAddress("ftp://example.com/x")).toThrow(/https/);
     expect(() => documentAddress("")).toThrow(/no address/);
+  });
+});
+
+describe("withSecret", () => {
+  it("fills {secret} in, encoded, as typed or as a URL writes it", () => {
+    const typed = "https://calendar.google.com/calendar/ical/me%40gmail.com/{secret}/basic.ics";
+    expect(withSecret(typed, "private-a/b c")).toBe("https://calendar.google.com/calendar/ical/me%40gmail.com/private-a%2Fb%20c/basic.ics");
+    expect(withSecret(documentAddress("webcal://cal.example.com/{secret}.ics?k={secret}"), "s&1")).toBe("https://cal.example.com/s%261.ics?k=s%261");
+    expect(withSecret("https://cal.example.com/a.ics", "s")).toBe("https://cal.example.com/a.ics");
+    expect(hasSecretPlace(documentAddress("cal.example.com/{secret}"))).toBe(true);
+    expect(hasSecretPlace("https://cal.example.com/a.ics")).toBe(false);
   });
 });
 

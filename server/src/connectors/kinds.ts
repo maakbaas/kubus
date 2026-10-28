@@ -130,7 +130,10 @@ const KINDS: Kind[] = [
         helperText: "The calendar's address (webcal://, webcals:// or https://). With a secret in it, write {secret} in its place and put the secret below.",
       },
     ],
-    password: { label: "Secret", helperText: "Fills {secret} in the address; else sent as Authorization: Bearer. Usually empty for a public calendar. Kept while left empty (unless the address changes)." },
+    password: {
+      label: "Secret",
+      helperText: "Fills {secret} in the address; else sent as Authorization: Bearer. Usually empty for a public calendar. Kept while left empty (unless the address changes).",
+    },
     schemas: null,
     place: ["address"],
   },

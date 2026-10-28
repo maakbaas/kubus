@@ -72,9 +72,15 @@ export function documentAddress(typed: string): URL {
   return u;
 }
 
-/** An address with its `{secret}` (as typed or URL-encoded) replaced by the secret, URL-encoded as a component. */
+/** `{secret}` in an address (as typed, or as a URL writes it: `%7Bsecret%7D`). */
+const SECRET_PLACE = /\{secret\}|%7Bsecret%7D/gi;
+
+/** Whether an address has `{secret}` in it. */
+export const hasSecretPlace = (address: URL | string) => new RegExp(SECRET_PLACE.source, "i").test(address.toString());
+
+/** An address with its `{secret}` filled in by the secret (encoded as one part of a path or query). */
 export function withSecret(address: URL | string, secret: string): string {
-  return address.toString().replace(/\{secret\}|%7Bsecret%7D/gi, () => encodeURIComponent(secret));
+  return address.toString().replace(SECRET_PLACE, () => encodeURIComponent(secret));
 }
 
 /** The next page's address from a `Link: <…>; rel="next"` header, or null. */
@@ -91,7 +97,7 @@ export function nextLink(doc: HttpDocument): string | null {
 /** What a status code means for whoever set the source up. */
 function statusProblem(status: number, what: string): string {
   if (status === 401 || status === 403) return `The address answers ${status}: it doesn't accept the password (or needs one)`;
-  if (status === 404 || status === 410) return `There is no ${what} at the address (${status})`;
+  if (status === 404 || status === 410) return `There is no ${what.replace(/^an? /, "")} at the address (${status})`;
   if (status === 429) return "The address answers 429: too many requests, try again later";
   if (status >= 500) return `The address answers ${status}: its server has a problem`;
   return `The address answers ${status}`;
