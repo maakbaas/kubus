@@ -15,7 +15,7 @@ Extension points are registries, not special cases in pages:
   runs, as if its result had been typed (`{{ 1 == 1 }}` is "true"), reading `$now` and, on an item
   page, the page's item as `$item`. A value that can't be compared (failing code, "maybe" for a
   checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
-  nothing, never the wrong items. The value input is text for every kind (the braces must be typable);
+  nothing, never the wrong items (so does a value from the page's item that it doesn't have: "Author is this Book's Mentor" on a Book without one). The value input is text for every kind (the braces must be typable);
   under it, what the code works out to ("= true").
 - **And / Or** (`app/src/domain/filterTree.ts`): each rule says how it joins what comes before it
   (`FilterRule.join`: absent = And, narrowing; "or" lets more items in), read in order without precedence
