@@ -363,7 +363,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   const offerScope = place === "item" && (pageCollectionId === collection.id || o.scope === "page");
 
   // A setting that does nothing with the others as they are (downstream of one of them) isn't shown.
-  const check = (key: "points" | "compact" | "donut" | "fullCircle" | "horizontal", label: string, shown = true) =>
+  const check = (key: "points" | "compact" | "donut" | "fullCircle" | "horizontal" | "showLabel", label: string, shown = true) =>
     shown && <Checkbox id={`${uid}-${key}`} labelText={label} checked={o[key]} onChange={(_, { checked }) => set({ [key]: checked })} />;
   const aggregateSelect = (id: string, label: string, value: Aggregate, onAggregate: (a: Aggregate) => void, noCount = false, hideLabel = false) => (
     <Select size="sm" id={id} labelText={label} hideLabel={hideLabel} value={value} onChange={(e) => onAggregate(e.target.value as Aggregate)}>
@@ -566,7 +566,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
         }),
       )}
       {first.value !== "count" && !fieldsParts && <FieldSelect id={`${uid}-value-field`} label="Of" fields={numbers} value={first.field} onChange={(field) => setFirst({ field })} />}
-      {labelShown && <TextInput size="sm" id={`${uid}-value-label`} labelText="Label" placeholder={seriesLabel({ ...first, label: "" }, collection)} value={first.label} onChange={(e) => setFirst({ label: e.target.value })} />}
+      {o.chart === "stat" && check("showLabel", "Show the name above the number")}
+      {labelShown && (o.chart !== "stat" || o.showLabel) && <TextInput size="sm" id={`${uid}-value-label`} labelText="Label" placeholder={seriesLabel({ ...first, label: "" }, collection)} value={first.label} onChange={(e) => setFirst({ label: e.target.value })} />}
     </Section>
   );
   const spokesSection = o.chart === "radar" && (

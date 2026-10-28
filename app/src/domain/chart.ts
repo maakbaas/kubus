@@ -229,6 +229,8 @@ export interface ChartOptions {
   /** `compare` "number": the number compared with. */
   baseline: number | null;
   // Stat
+  /** Its value's name above the number. */
+  showLabel: boolean;
   /** Below its number: the value along the X axis, a compact area or line chart (Carbon's), or none. */
   sparkline: "area" | "line" | "none";
   /** Which way of the change is good (green) and which bad (red); "neither": both grey. */
@@ -323,6 +325,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     compare: null,
     compareField: null,
     baseline: null,
+    showLabel: true,
     sparkline: "area",
     better: "higher",
     changeAs: "percent",
@@ -414,6 +417,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     compare: o.compare === null || o.compare === undefined ? null : oneOf<Compare | null>([...values(AGGREGATES), "prev", "number"], o.compare, null),
     compareField: field(o.compareField),
     baseline: typeof o.baseline === "number" && Number.isFinite(o.baseline) ? o.baseline : null,
+    showLabel: flag(o.showLabel, d.showLabel),
     sparkline: oneOf<ChartOptions["sparkline"]>(["area", "line", "none"], o.sparkline, d.sparkline),
     better: oneOf<ChartOptions["better"]>(["higher", "lower", "neither"], o.better, d.better),
     changeAs: oneOf<ChartOptions["changeAs"]>(["percent", "value"], o.changeAs, d.changeAs),

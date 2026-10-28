@@ -36,7 +36,7 @@ export function StatView({ stat, options, sparkline }: { stat: Stat; options: Ch
     <div className="stat-block" style={{ maxInlineSize: `${options.width}rem` }}>
       <div className="stat-block__body">
         <div className="stat-block__text">
-          <span className="stat-block__label">{stat.label}</span>
+          {options.showLabel && <span className="stat-block__label">{stat.label}</span>}
           <div className="stat-block__value">
             <span className="stat-block__number">
               {number}
