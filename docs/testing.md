@@ -26,7 +26,7 @@ the imports).
 | `api` | the HTTP API (`/api/v1`, the headless device) and webhooks, against `FakeServer` | `app/src/headless/*.test.ts` | nothing |
 | `app` | the app's own logic outside the UI (AI client and backfill, platform) | `app/src/{app,platform,ui,views,pages,workspace}/*.test.ts(x)` | nothing |
 | `connectors` | the remote-source connectors: their query languages run for real (SQLite for D1, the memory connector) or against a stand-in of the service (n8n, InfluxDB, Cloudflare D1's API), Postgres, MySQL and MariaDB against real ones | `server/test/connectors/*.test.ts` | the server's packages; Postgres for `postgres.test.ts`, MySQL 8 and MariaDB for `mysql.test.ts` |
-| `server` | the server itself: its database (migrations, sync, wipe), its settings, the MCP protocol and its tools (`mcp.test.ts`, with a fake API), every HTTP endpoint of the real server process (`serve.ts`), and devices syncing through it end to end | `server/test/*.test.ts` | the server's packages, Postgres, `npm run build:headless` for `/api/v1` |
+| `server` | the server itself: its modules in-process (so coverage counts them: sync, schema, migrations and wipe in `sync.test.ts` and `database.test.ts`; `tokens`, `files` against Postgres; `sources` with stand-in connectors; `ai` against a stand-in provider; `events`; `headless`), its settings, the MCP protocol and its tools (`mcp.test.ts`, with a fake API), every HTTP endpoint of the real server process (`serve.ts`: `http.test.ts` the working paths, `endpoints.test.ts` the 400 / 401 / 403 / 404 / 405 / 413 ones), and devices syncing through it end to end | `server/test/*.test.ts` | the server's packages, Postgres, `npm run build:headless` for `/api/v1` |
 
 The `connectors` and `server` projects test `server/` code: they need its packages
 (`npm ci --prefix server`), and are left out (with a note) without them. Tests that need Postgres
@@ -74,6 +74,29 @@ can't drift apart unnoticed: a change to the sync protocol changes both and runs
 
 Before pushing: `npm run typecheck` (and `npm run typecheck --prefix server`, `npm run typecheck:test --prefix server` for server code),
 the vitest projects above, and `npm run test:gui -- --changed --smoke` for a change the GUI shows.
+
+## Coverage
+
+One command gives one report of everything the tests run (`coverage/`, git-ignored):
+
+```bash
+npm run test:coverage                         # the vitest projects with V8 coverage (needs what `npm test` needs)
+npm run test:gui -- --coverage [--suite NN]   # optional: the GUI tests' coverage of app/src (below)
+npm run coverage:report                       # merges what exists: coverage/index.html and a table per directory
+```
+
+- **Unit**: `vitest.config.ts` (`coverage`: `app/src`, `server/src`, `shared`, without tests, `app/src/test`, CSS and Markdown) writes
+  `coverage/unit/coverage-final.json`. Pass `--coverage.include='<glob>'` and `--coverage.reporter=text-summary` to look at one area.
+  Coverage slows tests down, so under `--coverage` a test may take 20 s instead of 5.
+- **Server child process**: the HTTP and device tests run the real server as a child process (`server/test/serve.ts`), invisible to vitest.
+  Under coverage `vitest.config.ts` sets `KUBUS_V8_DIR`; `serve.ts` then gives the child `NODE_V8_COVERAGE` of that folder (and
+  `exitOnTerm.mjs`, because V8 writes a process's coverage when it exits, and `stop()` would kill it). `coverage/server-v8/` holds the dumps.
+- **GUI**: `--coverage` makes `run.mjs` build with source maps and each test collect V8 precise coverage over CDP (Chromium; the app's main
+  thread, not its workers), into `coverage/gui-v8/`, one file per test (`gui-tests/README.md`).
+- **The merge** (`tests/coverage.mjs`) converts the V8 data with `ast-v8-to-istanbul` (the GUI's through the build's source maps, the server's
+  through node's type stripping, which keeps offsets) and joins the three maps per file by the place of each statement, function and branch
+  in the source, since the transforms behind them number those differently. The table lists per directory the merged percentages and the
+  statements each kind reached alone. A kind with no data is left out, so the report is always of what was run.
 
 ## Writing tests
 

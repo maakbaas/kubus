@@ -145,7 +145,7 @@ export async function saveSettings(pool: Db, stored: Stored, key: Buffer | null)
 
 /** The settings after an update (checked; 400 when something can't be stored), secrets kept by the rule above. */
 export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
-  if (!update || typeof update !== "object" || !update.ai || !Array.isArray(update.sources)) throw new HttpError(400, "Send the settings as a whole");
+  if (!update || typeof update !== "object" || !update.ai || !Array.isArray(update.sources) || update.sources.some((s) => !s || typeof s !== "object")) throw new HttpError(400, "Send the settings as a whole");
   const aiUrl = text(update.ai.url).replace(/\/+$/, "");
   if (aiUrl && !/^https?:\/\//i.test(aiUrl)) throw new HttpError(400, "The model's address starts with http:// or https://");
   const key = typeof update.ai.key === "string" ? text(update.ai.key) : aiUrl === old.ai.url ? old.ai.key : "";

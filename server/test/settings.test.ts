@@ -35,6 +35,10 @@ describe("server settings", () => {
     expect(viewOf(liberty, () => ({})).map).toEqual({ style: "liberty" });
   });
 
+  it("refuse a source that isn't one", () => {
+    expect(() => applyUpdate(stored, { ...update(), sources: [null as never] })).toThrow("Send the settings as a whole");
+  });
+
   it("show the kinds the server reads, with their fields", () => {
     const { kinds } = viewOf(stored, () => ({}));
     expect(kinds.map((k) => k.id)).toEqual(["postgres", "n8n", "influxdb", "d1", "mysql", "mariadb", "actual", "ics", "json", "csv"]);

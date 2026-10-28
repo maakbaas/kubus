@@ -134,6 +134,7 @@ stale peer range.
 - `npm test`: every vitest project; `npm test -- --project sync` one part, `npm run test:changed` the tests reaching
   files changed since origin/main. The server's projects need `npm ci --prefix server` and Postgres
   (`KUBUS_TEST_POSTGRES`): `docs/testing.md`. Run the projects of what a change touches before pushing.
+- `npm run test:coverage` (+ `npm run test:gui -- --coverage`), then `npm run coverage:report`: one merged coverage report in `coverage/` (`docs/testing.md`).
 - `npm run build:headless`: the headless device for the server (`server/headless`, git-ignored); without it the
   server's `/api/v1` answers 503. Rebuild it after app changes when running the server locally.
 - `npm run test:gui`: the GUI stress suite (CI runs only smoke tests; `gui-tests/README.md`): every page, size and content shape through

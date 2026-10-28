@@ -79,6 +79,17 @@ function __makeT(ctx, pg, name, opts) {
     if (sameOrigin(r.url()) && !/ABORTED/i.test(why)) errors.push({ where, text: `Request failed: ${why} ${r.url().slice(base.length, base.length + 200)}` });
   });
 
+  // --coverage (Chromium): V8's precise coverage over CDP. Taken before every load, which throws the old
+  // page's scripts away, and at the end of the test; a take holds what ran since the one before.
+  const coverage = { cdp: null, takes: [] };
+  async function takeCoverage() {
+    if (!coverage.cdp) return;
+    try {
+      const { result } = await coverage.cdp.send("Profiler.takePreciseCoverage");
+      coverage.takes.push(result.filter((e) => e.url.startsWith(base + "/")).map(({ url, functions }) => ({ url, functions })));
+    } catch {}
+  }
+
   async function shoot(boxes) {
     shotN += 1;
     const file = `${slug}--${String(shotN).padStart(2, "0")}.jpg`;
@@ -126,6 +137,8 @@ function __makeT(ctx, pg, name, opts) {
     errors,
     external,
     timing,
+    coverage,
+    takeCoverage,
 
     /** Names what the test is doing now (shown with console errors and failures). */
     at(label) {
@@ -135,6 +148,7 @@ function __makeT(ctx, pg, name, opts) {
     /** Loads the app and waits for the database (for seeding before showing a page). */
     async boot() {
       await timed("boot", async () => {
+        await takeCoverage();
         await pg.goto(base + "/");
         await pg.waitForFunction(() => window.kubus && window.kubus.repo, null, { timeout: 30000 });
         await pg.waitForSelector(".ws-pane", { timeout: 30000 });
@@ -150,6 +164,7 @@ function __makeT(ctx, pg, name, opts) {
       // under load).
       if (!keepTabs && pg.url().startsWith(base)) await pg.evaluate(() => sessionStorage.setItem("__gui_clear_tabs", "1"));
       loads += 1;
+      await takeCoverage();
       await timed("load", async () => {
         await pg.goto(`${base}/?load=${loads}#${path}`);
         await pg.waitForFunction(() => window.kubus && window.kubus.repo, null, { timeout: opts.perf ? 120000 : 30000 });
@@ -830,6 +845,11 @@ async function __main(pg) {
   if (cdp) await cdp.send("Performance.enable");
   const t = __makeT(ctx, p, entry.name, opts);
   t.cdp = opts.perf ? cdp : null;
+  if (chromium && __OPTS.coverage) {
+    t.coverage.cdp = await ctx.newCDPSession(p);
+    await t.coverage.cdp.send("Profiler.enable");
+    await t.coverage.cdp.send("Profiler.startPreciseCoverage", { callCount: true, detailed: true });
+  }
   const started = Date.now();
   let status = "pass";
   let error = null;
@@ -864,7 +884,8 @@ async function __main(pg) {
     } catch {}
     perf = { phases: t.phases, heapMB };
   }
+  await t.takeCoverage();
   const ms = Date.now() - started;
   await ctx.close().catch(() => {});
-  return JSON.stringify({ name: entry.name, status, error, ms, timing: t.timing, perf, viewport: opts.viewport || "desktop", dark: !!opts.dark, checkpoints: t.checkpoints });
+  return JSON.stringify({ name: entry.name, status, error, ms, timing: t.timing, perf, viewport: opts.viewport || "desktop", dark: !!opts.dark, checkpoints: t.checkpoints, coverage: t.coverage.takes });
 }
