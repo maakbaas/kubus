@@ -57,6 +57,8 @@ function chartPalette(el: HTMLElement, count: number, dark: boolean): string[] {
 
 const SOURCE = "kubus-items";
 const LAYER = "kubus-dots";
+/** Under each dot, a disc of the page's background: the route stops at a dot's edge, as a lollipop's line does. */
+const UNDER_LAYER = "kubus-dots-under";
 const ROUTE_SOURCE = "kubus-route";
 const ROUTE_LAYER = "kubus-route";
 /** How long a shown item stays after the pointer leaves its dot: time to move onto it. */
@@ -187,10 +189,12 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
   }, [dark, stylesIn]);
 
   const { places, legend, missing, chosen } = useMemo(() => placesOf(collection, result, options, palette), [collection, result, options, palette]);
+  // What a chart's dots sit on: the page's background (a theme token, read: the map can't read CSS variables).
+  const under = useMemo(() => (box.current ? getComputedStyle(box.current).getPropertyValue("--cds-background").trim() : "") || (dark ? "#161616" : "#ffffff"), [dark]);
 
   // The latest places, for the map's own handlers (set up once).
-  const latest = useRef({ places, route: options.route });
-  latest.current = { places, route: options.route };
+  const latest = useRef({ places, route: options.route, under });
+  latest.current = { places, route: options.route, under };
 
   /** The dot shown with its item (hovered, or tapped on a touch screen), and where on the map it is. */
   const [shownDot, setShownDot] = useState<{ index: number; pinned: boolean } | null>(null);
@@ -249,6 +253,12 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
             paint: { "line-color": ["get", "color"], "line-width": 1 },
           });
           m.addSource(SOURCE, { type: "geojson", data: geoJson(latest.current.places) });
+          m.addLayer({
+            id: UNDER_LAYER,
+            type: "circle",
+            source: SOURCE,
+            paint: { "circle-color": latest.current.under, "circle-radius": 4 },
+          });
           m.addLayer({
             id: LAYER,
             type: "circle",
@@ -331,12 +341,13 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
     if (!map || !ready) return;
     (map.getSource(SOURCE) as GeoJSONSource | undefined)?.setData(geoJson(places));
     (map.getSource(ROUTE_SOURCE) as GeoJSONSource | undefined)?.setData(routeJson(options.route ? places : []));
+    if (map.getLayer(UNDER_LAYER)) map.setPaintProperty(UNDER_LAYER, "circle-color", under);
     if (fitted.current !== ids) {
       fit(map, places, fitted.current !== null);
       fitted.current = ids;
     }
     setShownDot((d) => (d && d.index < places.length ? d : null));
-  }, [places, ids, ready, options.route]);
+  }, [places, ids, ready, options.route, under]);
 
   // The shown dot's place on the map, kept while the map moves.
   const shownPlace = shownDot ? places[shownDot.index] : undefined;
