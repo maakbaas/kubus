@@ -20,6 +20,7 @@ import {
   statusRanges,
   thresholdStatus,
   styleOf,
+  drawsTimeline,
   thresholdPercent,
   weekdays,
   xField,
@@ -172,7 +173,7 @@ const isBarStyle = (s: SeriesStyle) => s === "bar" || s === "lollipop";
  */
 function xyChart(input: ChartInput, options: ChartOptions, theme: string): ChartSpec | Problem {
   const styleOfSeries = (s: ChartOptions["series"][number]) => styleOf(s, options.chart);
-  const timeline = options.series.some((s) => ["line", "area"].includes(styleOfSeries(s)));
+  const timeline = drawsTimeline(options);
   const t = chartTable(input, options, timeline);
   if (t.points.every((p) => p.value === null)) return { problem: "No items to chart." };
 

@@ -124,7 +124,7 @@ describe("normalizeChartOptions", () => {
   it("defaults unknown values and clamps numbers", () => {
     const o = normalizeChartOptions(
       {
-        chart: "nope", scope: "x", x: { by: "x", order: "x", dateStep: "hour", showEmpty: "yes", top: 7.6 }, stack: "x", horizontal: 1, curve: "x", missing: "x",
+        chart: "nope", scope: "x", x: { by: "x", order: "x", dateStep: "fortnight", showEmpty: "yes", top: 7.6 }, stack: "x", horizontal: 1, curve: "x", missing: "x",
         parts: "x", total: { from: "x", number: "5" }, compare: "median", decimals: 9, legend: "x", legendPosition: "x", height: 100, width: 3, thresholdMode: "x",
         xTitle: 4, unit: null, left: { title: "kg", min: 0, max: "x", log: true }, right: "x", bins: -2,
       },
@@ -259,6 +259,22 @@ describe("chartCategories", () => {
   it("puts a date & time on its local day", () => {
     const list = chartCategories(input(measurements, logs), { ...options({}, {}, logs).x, by: "field", field: "when", dateStep: "month" });
     expect(cats(list)).toEqual([["Feb 2026", ["1", "2", "3"]]]);
+  });
+
+  it("counts a date & time in hours or minutes (automatically within three days), every step on a timeline", () => {
+    const at = (id: string, when: string | null): Item => ({ ...log(id, "Ann", null, 70), values: { label: `M${id}`, when: when && new Date(when).toISOString() } });
+    const items = [at("1", "2026-02-03T09:40"), at("2", "2026-02-03T08:10"), at("3", "2026-02-03T09:05"), at("4", null)];
+    const x = { ...options({}, {}, logs).x, by: "field" as const, field: "when", dateStep: "hour" as const };
+    expect(cats(chartCategories(input(items, logs), x))).toEqual([["08:00", ["2"]], ["09:00", ["1", "3"]]]);
+    expect(chartCategories(input(items, logs), { ...x, dateStep: "auto" }).map((c) => c.label)).toEqual(["08:10", "09:05", "09:40"]); // an hour and a half: minutes
+    expect(chartCategories(input([items[0], at("5", "2026-02-05T07:00")], logs), { ...x, dateStep: "auto" }).map((c) => c.label)).toEqual(["3 Feb, 09:00", "5 Feb, 07:00"]);
+    expect(chartCategories(input(items, logs), x)[0].at).toBe(new Date(2026, 1, 3, 8).getTime());
+    expect(cats(chartCategories(input(items, logs), { ...x, order: "count", showEmpty: true }))).toEqual([["09:00", ["1", "3"]], ["08:00", ["2"]], ["No value", ["4"]]]);
+    expect(chartCategories(input(items.slice(0, 2), logs), { ...x, dateStep: "minute" }, true)).toHaveLength(91); // 8:10 to 9:40
+    expect(cats(chartCategories(input([items[0], at("5", "2026-02-04T07:00")], logs), { ...x, dateStep: "hour" }))).toEqual([["3 Feb, 09:00", ["1"]], ["4 Feb, 07:00", ["5"]]]);
+    // More than three days: in days; a date (no time) in days either way.
+    expect(chartCategories(input([items[0], at("6", "2026-02-09T07:00")], logs), { ...x, dateStep: "auto" }).map((c) => c.day)).toEqual(["2026-02-03", "2026-02-09"]);
+    expect(chartCategories(input(measurements, logs), { ...x, field: "day", dateStep: "hour" }).map((c) => c.day)).toEqual(["2026-02-01", "2026-02-03", "2026-02-05"]);
   });
 
   it("places each item at its date, date & time or number, those without one left out", () => {

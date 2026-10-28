@@ -16,7 +16,7 @@
 import type { Component } from "./components";
 import { outputOf } from "./components";
 import { periodAround, weekNumber } from "./datePeriod";
-import { formatDate } from "./fieldKinds";
+import { formatDate, formatTime } from "./fieldKinds";
 import { fieldValue, itemLabel, newId, pickableFields, type Collection, type FieldDef, type Item } from "./model";
 import { BLOCK_HEIGHT, DEFAULT_ASPECT, normalizeAspect, normalizeBlockHeight, type AspectRatio } from "./views";
 import { applyQuery, defaultQuery, groupKeysOf, isGroupable, naturalCompare, type GroupOrder, type QueryContext, type QueryResult } from "./query";
@@ -75,10 +75,14 @@ export const AGGREGATES: { value: Aggregate; text: string }[] = [
 export type Compare = Aggregate | "prev";
 export const PREVIOUS: { value: Compare; text: string } = { value: "prev", text: "Previous value" };
 
-/** The steps a date category is counted in ("auto": by how far the dates spread). */
-export type DateStep = "auto" | "day" | "week" | "month" | "year";
+/** The steps a date category is counted in ("auto": by how far the dates spread); minutes and hours only of a date & time. */
+export type DateStep = "auto" | "minute" | "hour" | "day" | "week" | "month" | "year";
+/** The steps whole days are counted in. */
+export type DayStep = Exclude<DateStep, "auto" | "minute" | "hour">;
 export const DATE_STEPS: { value: DateStep; text: string }[] = [
   { value: "auto", text: "Automatic" },
+  { value: "minute", text: "Minute" },
+  { value: "hour", text: "Hour" },
   { value: "day", text: "Day" },
   { value: "week", text: "Week" },
   { value: "month", text: "Month" },
@@ -425,6 +429,9 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
 export const styleOf = (series: ChartSeries, chart: ChartKind): SeriesStyle =>
   series.style ?? (chart === "line" ? "line" : chart === "area" ? "area" : "bar");
 
+/** Whether a chart draws a line or an area: its date steps are then every one from the first to the last, in time order. */
+export const drawsTimeline = (options: Pick<ChartOptions, "series" | "chart">) => options.series.some((s) => ["line", "area"].includes(styleOf(s, options.chart)));
+
 // --- Values ---------------------------------------------------------------------------------------
 
 /** A number field's values on items (those without one left out). */
@@ -509,13 +516,13 @@ const dayTime = (day: string) => {
 };
 
 /** The step for dates spread from `first` to `last` (yyyy-mm-dd): a month in days, half a year in weeks, five in months, more in years. */
-export function autoStep(first: string, last: string): Exclude<DateStep, "auto"> {
+export function autoStep(first: string, last: string): DayStep {
   const days = (Date.parse(last) - Date.parse(first)) / 86_400_000;
   return days <= 31 ? "day" : days <= 183 ? "week" : days <= 5 * 366 ? "month" : "year";
 }
 
 /** The step a day falls in: its first day, and its name ("2026-10-28", "Week 44 2026", "Oct 2026", "2026"). */
-export function dateStepOf(day: string, step: Exclude<DateStep, "auto">, locale?: string): { day: string; label: string } {
+export function dateStepOf(day: string, step: DayStep, locale?: string): { day: string; label: string } {
   if (step === "day") return { day, label: day };
   const start = periodAround(step, day).start;
   if (step === "week") {
@@ -528,7 +535,7 @@ export function dateStepOf(day: string, step: Exclude<DateStep, "auto">, locale?
 }
 
 /** The step after one (its first day): the next day, week, month or year. */
-function nextStep(day: string, step: Exclude<DateStep, "auto">): string {
+function nextStep(day: string, step: DayStep): string {
   const [y, m, d] = day.split("-").map(Number);
   const date = step === "day" ? new Date(y, m - 1, d + 1) : step === "week" ? new Date(y, m - 1, d + 7) : step === "month" ? new Date(y, m, 1) : new Date(y + 1, 0, 1);
   return formatDate(date);
@@ -577,11 +584,14 @@ export function chartCategories(input: ChartInput, x: ChartX, timeline = false):
     .map((g): Category => ({ key: g.key, label: g.key === "" ? NO_VALUE : g.label, items: g.items }));
   if (field.kind === "number") return groups.map((g) => (g.key === "" ? g : { ...g, number: Number(g.key) }));
   if (!isDateField(field)) return groups;
+  const timed = field.kind === "datetime" ? timeCategories(input, field, x, groups, timeline) : null;
+  if (timed) return timed;
 
   // Days into steps, in the groups' order (by date either way, or the largest first).
   const days = groups.filter((g) => DAY.test(g.key)).map((g) => g.key).sort();
   if (days.length === 0) return groups;
-  const step = x.dateStep === "auto" ? autoStep(days[0], days[days.length - 1]) : x.dateStep;
+  // Minutes and hours are of a date & time: a date's are its days.
+  const step = x.dateStep === "auto" || x.dateStep === "minute" || x.dateStep === "hour" ? (x.dateStep === "auto" ? autoStep(days[0], days[days.length - 1]) : "day") : x.dateStep;
   const steps = new Map<string, Category>();
   // A step's items in the block's order (its days' groups come in date order), for "first" and "last".
   const position = new Map(items.map((item, i) => [item, i]));
@@ -614,6 +624,75 @@ export function chartCategories(input: ChartInput, x: ChartX, timeline = false):
     merged.push(byDay.get(day) ?? { key: day, label: dateStepOf(day, step, input.locale).label, items: [], day, at: dayTime(day) });
   }
   return merged;
+}
+
+/** The step for times spread over `span` ms: three hours in minutes, three days in hours, more in days or longer (null). */
+export function autoTimeStep(span: number): "minute" | "hour" | null {
+  return span <= 3 * 3_600_000 ? "minute" : span <= 3 * 86_400_000 ? "hour" : null;
+}
+
+/** The start (ms, local) of the minute or hour a moment falls in. */
+function timeStepOf(at: number, step: "minute" | "hour"): number {
+  const d = new Date(at);
+  d.setSeconds(0, 0);
+  if (step === "hour") d.setMinutes(0);
+  return d.getTime();
+}
+
+/** The step after one: a minute later, or the next hour (by the clock, over a change of summer time too). */
+function nextTimeStep(at: number, step: "minute" | "hour"): number {
+  const d = new Date(at);
+  if (step === "minute") d.setMinutes(d.getMinutes() + 1);
+  else d.setHours(d.getHours() + 1);
+  return d.getTime();
+}
+
+/**
+ * A date & time's values in minutes or hours (picked, or "auto" over at most three days), as
+ * chartCategories gives them: by time either way or the largest first, "No value" last, every step
+ * from the first to the last on a timeline. Null when the steps are days or longer.
+ */
+function timeCategories(input: ChartInput, field: FieldDef, x: ChartX, groups: Category[], timeline: boolean): Category[] | null {
+  if (x.dateStep !== "auto" && x.dateStep !== "minute" && x.dateStep !== "hour") return null;
+  const moments = new Map<Item, number>();
+  let first = Infinity;
+  let last = -Infinity;
+  for (const item of input.items) {
+    const v = fieldValue(item, field);
+    const at = typeof v === "string" && v ? Date.parse(v) : NaN;
+    if (Number.isNaN(at)) continue;
+    moments.set(item, at);
+    first = Math.min(first, at);
+    last = Math.max(last, at);
+  }
+  if (moments.size === 0) return null;
+  const step = x.dateStep === "auto" ? autoTimeStep(last - first) : x.dateStep;
+  if (!step) return null;
+  // Times alone within a day ("14:00"), with their day over more ("28 Oct, 14:00").
+  const oneDay = formatDate(new Date(first)) === formatDate(new Date(last));
+  const format: Intl.DateTimeFormatOptions = oneDay ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
+  const category = (at: number): Category => {
+    const d = new Date(at);
+    return { key: `${formatDate(d)}T${formatTime(d)}`, label: d.toLocaleString(input.locale, format), items: [], at };
+  };
+  // Items in the block's order within their step.
+  const steps = new Map<number, Category>();
+  for (const [item, at] of moments) {
+    const start = timeStepOf(at, step);
+    let c = steps.get(start);
+    if (!c) steps.set(start, (c = category(start)));
+    c.items.push(item);
+  }
+  const none = groups.find((g) => g.key === "");
+  if (timeline) {
+    const all: Category[] = [];
+    for (let at = timeStepOf(first, step), n = 0; at <= last && n < MAX_STEPS; at = nextTimeStep(at, step), n++) all.push(steps.get(at) ?? category(at));
+    return all;
+  }
+  const sorted = [...steps.values()].sort((a, b) => a.at! - b.at!);
+  if (x.order === "desc") sorted.reverse();
+  if (x.order === "count") sorted.sort((a, b) => b.items.length - a.items.length);
+  return none ? [...sorted, none] : sorted;
 }
 
 /** Each item a category: at its value of the X field (in that order), or without a field by its title in the block's order. */

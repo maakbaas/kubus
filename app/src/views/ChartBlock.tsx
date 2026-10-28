@@ -23,6 +23,7 @@ import {
   seriesLabel,
   splitFields,
   styleOf,
+  drawsTimeline,
   THRESHOLD_STATUSES,
   TRANSFORMS,
   type Aggregate,
@@ -350,6 +351,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   // --- Data: what is charted (the X axis's categories, a spread field, a scatter's fields)
   const xDisabled = has.parts && o.parts !== "groups" ? "Only when the parts are groups" : false;
   const fieldMode = o.x.by === "field" ? false : "Only by a field's values";
+  // "No value" as a category (not on a line of dates: it has no place there) or as a series of the split.
+  const offerEmpty = (!xDisabled && o.x.by === "field" && !(isDate(xField) && drawsTimeline(o))) || !!o.splitBy;
   const xControls = has.x && (
     <>
       <Select
@@ -396,7 +399,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
         onChange={(e) => setX({ dateStep: e.target.value as DateStep })}
       >
         {DATE_STEPS.map((d) => (
-          <SelectItem key={d.value} value={d.value} text={d.text} />
+          // A date has no time of day: minutes and hours are of a date & time.
+          <SelectItem key={d.value} value={d.value} text={d.text} disabled={xField?.kind === "date" && (d.value === "minute" || d.value === "hour") && o.x.dateStep !== d.value} />
         ))}
       </Select>
       <Select size="sm" id={`${uid}-x-top`} labelText="Show" value={String(o.x.top)} disabled={!!xDisabled || !!fieldMode} onChange={(e) => setX({ top: Number(e.target.value) })}>
@@ -404,7 +408,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
           <SelectItem key={n} value={String(n)} text={n === 0 ? "All categories" : `The largest ${n}, the rest as Other`} />
         ))}
       </Select>
-      <Checkbox id={`${uid}-x-empty`} labelText="Show items without a value" checked={o.x.showEmpty} disabled={!!xDisabled || !!fieldMode} onChange={(_, { checked }) => setX({ showEmpty: checked })} />
+      {offerEmpty && <Checkbox id={`${uid}-x-empty`} labelText="Show items without a value" checked={o.x.showEmpty} onChange={(_, { checked }) => setX({ showEmpty: checked })} />}
     </>
   );
   const splitSelect = (label: string) => <FieldSelect id={`${uid}-split`} label={label} fields={splits} value={o.splitBy} none="Not split" onChange={(splitBy) => set({ splitBy })} />;
