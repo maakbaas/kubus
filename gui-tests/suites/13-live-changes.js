@@ -81,8 +81,8 @@ for (const vp of ["desktop", "phone"]) {
     const edit = (fn) => external(t, `const col = await c(arg); const fields = (${fn})(col.fields); await repo.saveCollection({ id: col.id, name: col.name, pluralName: col.pluralName, icon: col.icon, description: col.description, spaceIds: col.spaceIds, fields }, "default");`, coll);
     await edit(`(fs) => fs.map((f) => f.name === "Count" ? { ...f, name: "Count renamed to something much longer" } : f)`);
     await t.audit("a field renamed");
-    // Column names: the header of a table, the line labels (data-label) of a stacked one.
-    const names = () => t.page.locator(".ws-pane--active .items-table").first().evaluate((el) => [...el.querySelectorAll("th, td[data-label]")].map((c) => c.getAttribute("data-label") || c.textContent).join("|"));
+    // Column names: the table's header.
+    const names = () => t.page.locator(".ws-pane--active .items-table").first().evaluate((el) => [...el.querySelectorAll("th")].map((c) => c.textContent).join("|"));
     await t.check("the column shows the new name", (await names()).includes("Count renamed"));
     await edit(`(fs) => [...fs, { id: crypto.randomUUID(), name: "Added field", kind: "string", targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false }]`);
     await t.audit("a field added");

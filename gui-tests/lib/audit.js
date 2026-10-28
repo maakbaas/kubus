@@ -241,7 +241,7 @@ function __audit(opts) {
   // The nearest ancestor that clips (overflow other than visible) bounds an element: sticking out
   // of it sideways means it is cut off (hidden/clip) or makes that box scroll (auto/scroll),
   // which is only fine for boxes meant to scroll sideways.
-  const H_SCROLLERS = ".cds--tab--list, .table-wrap--scroll .cds--data-table-content, pre, .milkdown pre, .code-editor, .cds--tabs__nav, .cm-scroller, .views-tabs";
+  const H_SCROLLERS = ".cds--tab--list, .items-table .cds--data-table-content, pre, .milkdown pre, .code-editor, .cds--tabs__nav, .cm-scroller, .views-tabs";
   function clipParent(el) {
     for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
       const s = cs(p);
@@ -296,6 +296,17 @@ function __audit(opts) {
   }
 
   lap();
+  /**
+   * A table's first column stays put while the rest scrolls sideways under it (styles.css): a cell
+   * of another column shows only right of it. Narrows `area` to that.
+   */
+  function underStickyColumn(el, area) {
+    const cell = el.closest?.(".items-table :is(td, th)");
+    const first = cell?.parentElement?.firstElementChild;
+    if (!cell || !first || first === cell || cs(first).position !== "sticky") return area;
+    return { ...area, left: Math.max(area.left, first.getBoundingClientRect().right) };
+  }
+
   section = "text-overlap";
   // ---- text-overlap ---------------------------------------------------------------------------------
   {
@@ -326,6 +337,7 @@ function __audit(opts) {
           area = { left: Math.max(area.left, pr.left), top: Math.max(area.top, pr.top), right: Math.min(area.right, pr.right), bottom: Math.min(area.bottom, pr.bottom) };
         }
       }
+      area = underStickyColumn(el, area);
       clipCache.set(el, area);
       return area;
     }
@@ -376,6 +388,7 @@ function __audit(opts) {
         area = { left: Math.max(area.left, pr.left), top: Math.max(area.top, pr.top), right: Math.min(area.right, pr.right), bottom: Math.min(area.bottom, pr.bottom) };
       }
     }
+    area = underStickyColumn(el, area);
     area.left = Math.max(area.left, 0); area.top = Math.max(area.top, 0);
     area.right = Math.min(area.right, vw); area.bottom = Math.min(area.bottom, vh);
     return area;

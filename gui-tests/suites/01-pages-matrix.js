@@ -37,7 +37,7 @@ for (const style of MATRIX_STYLES) {
   for (const vp of MATRIX_VIEWPORTS) {
     test(`${style} content @ ${vp}`, async (t) => {
       await t.boot();
-      // Long content has long field names too (labels of stacked tables, item pages, editors).
+      // Long content has long field names too (table headers, card labels, item pages, editors).
       const ids = await t.seed(matrixSpec(style, { items: style === "short" ? 3 : 14, longNames: style === "long" }));
       for (const [label, path] of matrixPages(ids)) {
         await t.open(path);

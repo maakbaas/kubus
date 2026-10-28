@@ -11,7 +11,7 @@ import { IconPicker } from "../ui/IconPicker";
 import { NewButton } from "../ui/NewButton";
 import { PageHeader } from "../ui/PageHeader";
 import { useTableSort } from "../ui/useTableSort";
-import { RowActions, rowButtonProps } from "../ui/RowActions";
+import { RowActions, ROW_BUTTON } from "../ui/RowActions";
 import { SPACE_ICON } from "../ui/SpaceSwitcher";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { FillTable } from "../views/TableView";
@@ -97,7 +97,7 @@ export function SpacesPage() {
                   <IconPicker id={`space-icon-${s.id}`} value={s.icon ?? SPACE_ICON} size={16} onChange={(icon) => save(s, { icon })} />
                 </TableCell>
                 {/* Edits in place like the Collections page's descriptions: the input covers the cell, text unmoved. */}
-                <TableCell data-label="Name" className={`cell--string${editing?.id === s.id ? " cell--editing" : ""}`}>
+                <TableCell className={`cell--string${editing?.id === s.id ? " cell--editing" : ""}`}>
                   {editing?.id === s.id ? (
                     (() => {
                       const editor = (
@@ -145,24 +145,17 @@ export function SpacesPage() {
                   )}
                 </TableCell>
                 <RowActions>
-                  {(inMenu) => {
-                    const btn = rowButtonProps(inMenu);
-                    return (
-                      <>
-                        <IconButton {...btn} label={`Switch to ${s.name}`} disabled={s.id === shown.id} onClick={() => setSpace(s.id)}>
-                          <ArrowRight />
-                        </IconButton>
-                        <IconButton
-                          {...btn}
-                          label={spaces.length < 2 ? "The only space can't be deleted" : `Delete ${s.name}`}
-                          disabled={spaces.length < 2}
-                          onClick={() => remove(s)}
-                        >
-                          <TrashCan />
-                        </IconButton>
-                      </>
-                    );
-                  }}
+                  <IconButton {...ROW_BUTTON} label={`Switch to ${s.name}`} disabled={s.id === shown.id} onClick={() => setSpace(s.id)}>
+                    <ArrowRight />
+                  </IconButton>
+                  <IconButton
+                    {...ROW_BUTTON}
+                    label={spaces.length < 2 ? "The only space can't be deleted" : `Delete ${s.name}`}
+                    disabled={spaces.length < 2}
+                    onClick={() => remove(s)}
+                  >
+                    <TrashCan />
+                  </IconButton>
                 </RowActions>
               </TableRow>
             ))}

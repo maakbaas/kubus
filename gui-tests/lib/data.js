@@ -114,7 +114,7 @@ async function __seedInPage(spec) {
       id: b.id || uid(), title: b.title || "", kind: b.kind || "table", filters: b.filters ? b.filters.map((r) => ({ id: uid(), fieldId: fieldId(r.field), operator: r.operator, value: String(r.value).replace(/@([a-z0-9_]+)/gi, (_, k) => fieldId(k)) })) : null,
       sort: b.sort ? b.sort.map((s) => ({ fieldId: fieldId(s.field), direction: s.direction || "asc" })) : [{ fieldId: "$title", direction: "asc" }],
       groupBy: b.groupBy ? fieldId(b.groupBy) : null, layout: mapLayout(b.layout), collectionId: b.collection ? ids.collections[b.collection] : null,
-      options: b.options ? JSON.parse(JSON.stringify(b.options).replace(/"@([a-z0-9_]+)"/gi, (_, k) => JSON.stringify(fieldId(k)))) : b.kind === "cards" ? { coverFieldId: null, cardWidth: 16, coverRatio: "auto", showTitle: true, listNarrow: false } : b.kind === "markdown" ? { text: "" } : { titleLink: true, stackNarrow: true, editable: true },
+      options: b.options ? JSON.parse(JSON.stringify(b.options).replace(/"@([a-z0-9_]+)"/gi, (_, k) => JSON.stringify(fieldId(k)))) : b.kind === "cards" ? { coverFieldId: null, cardWidth: 16, coverRatio: "auto", showTitle: true, coverBeside: false } : b.kind === "markdown" ? { text: "" } : { titleLink: true, editable: true },
       ...(b.hideHeader ? { hideHeader: true } : {}),
       ...(b.componentKey ? { kind: "component", options: { componentId: ids.components[b.componentKey], local: null } } : {}),
       ...(b.local != null ? { kind: "component", options: { componentId: null, local: { code: b.local, output: b.output || "markdown", frameRatio: null, ai: false } } } : {}),
@@ -293,14 +293,14 @@ function matrixSpec(style, opts = {}) {
   const books = spec.collections[0];
   books.views = [
     { name: "All", blocks: [{ kind: "table" }] },
-    { name: "Cards", blocks: [{ kind: "cards", options: { coverFieldId: "@cover", cardWidth: 14, coverRatio: "auto", showTitle: true, listNarrow: false } }] },
+    { name: "Cards", blocks: [{ kind: "cards", options: { coverFieldId: "@cover", cardWidth: 14, coverRatio: "auto", showTitle: true, coverBeside: false } }] },
     { name: "Grouped", blocks: [{ kind: "table", groupBy: "done" }] },
     {
       name: "Blocks",
       blocks: [
         { kind: "markdown", title: "Notes", options: { text: MARKDOWN[style] || MARKDOWN.typical } },
         { kind: "table", title: style === "long" ? TEXT.long[0] : "Table", layout: { fields: ["title", "count", "date", "done", "tags"] } },
-        { kind: "cards", title: "Cards", options: { coverFieldId: "@cover", cardWidth: 10, coverRatio: "1/1", showTitle: true, listNarrow: false } },
+        { kind: "cards", title: "Cards", options: { coverFieldId: "@cover", cardWidth: 10, coverRatio: "1/1", showTitle: true, coverBeside: false } },
         { kind: "component", local: "{{ 21 * 2 }}" },
       ],
     },

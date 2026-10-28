@@ -25,7 +25,7 @@ import { PageHeader } from "../ui/PageHeader";
 import { errorMessage } from "../ui/useConfirm";
 import { useMountedDialog } from "../ui/useMountedDialog";
 import { useTableSort } from "../ui/useTableSort";
-import { RowActions, rowButtonProps } from "../ui/RowActions";
+import { RowActions, ROW_BUTTON } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
 
 /** Something that can be bookmarked: one of a collection's views or items. */
@@ -82,10 +82,10 @@ export function BookmarksPage() {
                 const collection = collections.find((t) => t.id === b.collectionId);
                 return (
                   <TableRow key={b.id}>
-                    <TableCell data-label="Name">
+                    <TableCell>
                       <Link href={`#${bookmarkPath(b)}`}>{b.label}</Link>
                     </TableCell>
-                    <TableCell data-label="Collection">
+                    <TableCell>
                       {collection && (
                         <span className="icon-label">
                           <CollectionIcon name={collection.icon} />
@@ -95,16 +95,9 @@ export function BookmarksPage() {
                       )}
                     </TableCell>
                     <RowActions>
-                      {(inMenu) => {
-                        const btn = rowButtonProps(inMenu);
-                        return (
-                          <>
-                            <IconButton {...btn} label={`Remove bookmark ${b.label}`} onClick={() => repo.removeBookmark(b.targetId, space.id).catch(fail)}>
-                              <TrashCan />
-                            </IconButton>
-                          </>
-                        );
-                      }}
+                      <IconButton {...ROW_BUTTON} label={`Remove bookmark ${b.label}`} onClick={() => repo.removeBookmark(b.targetId, space.id).catch(fail)}>
+                        <TrashCan />
+                      </IconButton>
                     </RowActions>
                   </TableRow>
                 );

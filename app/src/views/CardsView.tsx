@@ -14,7 +14,6 @@ import { isEmptyValue, isGrouped } from "../domain/query";
 import { itemLinkProps, FieldCell } from "./cells";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { defineBlockType, type BlockOptionsProps, type BlockProps, type ItemActions } from "./registry";
-import { STACK_BELOW_REM } from "./TableView";
 
 /** Card options: which field is the cover, and the cards' shape (the fields on a card are the block's). */
 export interface CardOptions {
@@ -29,8 +28,8 @@ export interface CardOptions {
   coverRatio: CoverRatio;
   /** Show the item's title on the card. With no title and no fields a card is just its cover. */
   showTitle: boolean;
-  /** In a narrow pane (one card per row): a list, each card's cover beside its title and fields. */
-  listNarrow: boolean;
+  /** The cover beside the title and fields (a list row when one card fills the row), else above them. */
+  coverBeside: boolean;
 }
 
 type CoverRatio = "auto" | "1:1" | "3:2" | "2:3" | "16:9";
@@ -172,12 +171,10 @@ interface ItemCardProps {
   search: string;
   actions: ItemActions;
   onRatio(key: string, ratio: number): void;
-  /** Shown as a list row: the cover beside the text ("Show as a list when narrow", in a narrow pane). */
-  listed: boolean;
 }
 
 /** One item's card. Memoized: it isn't rendered again unless its item or the view's settings changed. */
-const ItemCard = memo(function ItemCard({ collection, item, options, layout, shown, kind, refs, search, actions, onRatio, listed }: ItemCardProps) {
+const ItemCard = memo(function ItemCard({ collection, item, options, layout, shown, kind, refs, search, actions, onRatio }: ItemCardProps) {
   const cover = options.coverFieldId ? item.values[options.coverFieldId] : null;
   // A selected title field shows as a field too, even beside the card title.
   const fields = layout.hideEmpty ? shown.filter((f) => !isEmptyValue(fieldValue(item, f))) : shown;
@@ -189,7 +186,7 @@ const ItemCard = memo(function ItemCard({ collection, item, options, layout, sho
     // own, which can't be inside a link; they sit above it.
     <Tile
       className={
-        !hasText ? "item-card item-card--image-only" : hasCover && listed ? "item-card item-card--cover-left" : "item-card"
+        !hasText ? "item-card item-card--image-only" : hasCover && options.coverBeside ? "item-card item-card--cover-left" : "item-card"
       }
     >
       <Link
@@ -284,16 +281,13 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
   }, [measuring]);
 
   const grid = useRef<HTMLDivElement>(null);
-  const { columns, narrow } = useCardColumns(grid, options.cardWidth, result.total > 0);
-  // "Show as a list when narrow": in a narrow pane (where tables restack) one card per row, as list
-  // rows. Otherwise, and always with the option off, the grid just follows the card width.
-  const listed = options.listNarrow && narrow;
+  const columns = useCardColumns(grid, options.cardWidth, result.total > 0);
 
   if (result.total === 0) return <p className="helper view-empty">No {collection.pluralName} match.</p>;
   const cards = (group: (typeof result.groups)[number]) => (
             <div
               className={options.coverRatio === "auto" ? "item-cards item-cards--auto-ratio" : "item-cards"}
-              style={{ "--card-columns": listed ? 1 : columns, "--cover-ratio": coverRatio, visibility: measuring ? "hidden" : undefined } as CSSProperties}
+              style={{ "--card-columns": columns, "--cover-ratio": coverRatio, visibility: measuring ? "hidden" : undefined } as CSSProperties}
             >
               {group.items.map((item) => (
                 <ItemCard
@@ -308,7 +302,6 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
                   search={search}
                   actions={actions}
                   onRatio={onRatio}
-                  listed={listed}
                 />
               ))}
             </div>
@@ -348,25 +341,22 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
  * by a card plus its gap, rounded to the nearest whole number. Follows the container's width.
  */
 /** `present`: the grid is shown (its element exists); set up again when that changes. */
-/** The cards per row for the target width, and whether the pane is narrower than a table restacks in. */
-function useCardColumns(container: RefObject<HTMLDivElement | null>, targetRem: number, present: boolean): { columns: number; narrow: boolean } {
-  const [state, setState] = useState({ columns: 1, narrow: false });
+function useCardColumns(container: RefObject<HTMLDivElement | null>, targetRem: number, present: boolean): number {
+  const [columns, setColumns] = useState(1);
   useLayoutEffect(() => {
     const el = container.current;
     if (!el) return;
     const measure = () => {
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
       const gap = rem; // the grid's gap is spacing-05 (1rem)
-      const columns = Math.max(1, Math.round((el.clientWidth + gap) / (targetRem * rem + gap)));
-      const narrow = el.clientWidth < STACK_BELOW_REM * rem;
-      setState((s) => (s.columns === columns && s.narrow === narrow ? s : { columns, narrow }));
+      setColumns(Math.max(1, Math.round((el.clientWidth + gap) / (targetRem * rem + gap))));
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
   }, [container, targetRem, present]);
-  return state;
+  return columns;
 }
 
 function CardOptionsEditor({ collection, options, onChange }: BlockOptionsProps<CardOptions>) {
@@ -383,10 +373,11 @@ function CardOptionsEditor({ collection, options, onChange }: BlockOptionsProps<
           onChange={(_, { checked }) => onChange({ ...options, showTitle: checked })}
         />
         <Checkbox
-          id={`${uid}-cards-list-narrow`}
-          labelText="Show as a list when narrow"
-          checked={options.listNarrow}
-          onChange={(_, { checked }) => onChange({ ...options, listNarrow: checked })}
+          id={`${uid}-cards-cover-beside`}
+          labelText="Cover beside the text"
+          disabled={!options.coverFieldId}
+          checked={options.coverBeside}
+          onChange={(_, { checked }) => onChange({ ...options, coverBeside: checked })}
         />
       </div>
       <Slider
@@ -430,7 +421,7 @@ export const cardsView = defineBlockType<CardOptions>({
   kind: "cards",
   label: "Cards",
   icon: GridIcon,
-  defaultOptions: (collection) => ({ coverFieldId: imageFields(collection)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, listNarrow: false }),
+  defaultOptions: (collection) => ({ coverFieldId: imageFields(collection)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, coverBeside: false }),
   uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true } }),
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<CardOptions>;
@@ -443,7 +434,8 @@ export const cardsView = defineBlockType<CardOptions>({
           : CARD_WIDTH.initial,
       coverRatio: COVER_RATIOS.some((r) => r.value === o.coverRatio) ? o.coverRatio! : "auto",
       showTitle: o.showTitle !== false,
-      listNarrow: o.listNarrow === true,
+      // (Older versions stored `listNarrow`: this layout only in a narrow pane, now gone.)
+      coverBeside: o.coverBeside === true,
     };
   },
   View: CardsView,

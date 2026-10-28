@@ -1916,8 +1916,8 @@ img[data-lightbox] {
 .item-card--image-only .item-card__cover {
   margin-block-end: calc(-1 * var(--cds-spacing-05));
 }
-/* A list row ("Show as a list when narrow", one card per row): the cover takes two fifths of the
-   card, from its top to its bottom edge (the image centred in it at the view's shape), the title
+/* "Cover beside the text" (a list row when one card fills the row): the cover takes two fifths
+   of the card, from its top to its bottom edge (the image centred in it at the view's shape), the title
    and fields beside it. */
 .item-card--cover-left {
   display: grid;
@@ -1967,7 +1967,7 @@ img[data-lightbox] {
 }
 /* Label and value side by side, labels in a column of 6rem, at most two fifths of a narrow card
    (a label then wraps, readable whole, rather than stacking above its value: a card looks the same
-   at every width unless its view asks for list rows). */
+   at every width). */
 .item-card__fields {
   display: grid;
   grid-template-columns: minmax(0, min(6rem, 40%)) minmax(0, 1fr);
@@ -2339,14 +2339,6 @@ img[data-lightbox] {
 .items-table .row-actions {
   inline-size: auto;
 }
-.items-table td {
-  overflow-wrap: anywhere;
-}
-/* Names and titles (link cells) break only between words: breaking anywhere would let a long
-   neighbouring cell squeeze them until a word splits. */
-.items-table td:has(> a) {
-  overflow-wrap: break-word;
-}
 .items-table :is(td, th).row-actions {
   text-align: end;
 }
@@ -2477,17 +2469,6 @@ img[data-lightbox] {
   font-family: var(--cds-code-02-font-family);
   letter-spacing: var(--cds-code-02-letter-spacing);
   white-space: nowrap;
-}
-.row-actions__menu {
-  display: none; /* stacked tables only (see .table-wrap[data-stacked]) */
-}
-/* A stacked row's stand-ins for its icons (RowActions): as wide as the icon buttons, so the table
-   measures as wide unstacked as it would be with them. Hidden with the icons in stacked tables. */
-.row-action-icon--placeholder {
-  display: inline-block;
-  inline-size: 2rem;
-  block-size: 2rem;
-  vertical-align: top;
 }
 .row-actions {
   white-space: nowrap;
@@ -2870,7 +2851,7 @@ img[data-lightbox] {
 :is(.cds--label, legend.cds--label) > .icon-label {
   min-inline-size: 0;
 }
-/* In a table (collections, bookmarks, rows stacked as cards) a long name wraps instead: the label
+/* In a table (collections, bookmarks) a long name wraps instead: the label
    grows with it, the icon stays on its first line. */
 .cds--data-table .icon-label {
   max-block-size: none;
@@ -3184,37 +3165,42 @@ img[data-lightbox] {
   }
 }
 
-/* Narrow panes: every table restacks as cards. Each row is a card; each cell a line with its
-   column name (data-label) on the left; the row's icons at the bottom right. Driven by the
-   table's own width (container query), so a narrow tiled pane gets it as well as a phone. */
-.table-wrap {
-  container: table / inline-size;
-}
-/* While a pane widens, a table is briefly narrower than its box (FillTable widens its last
-   column from a ResizeObserver): the box has the rows' colour, so no page colour flashes beside
-   them. Stacked as cards (narrow), the box stays clear. */
+/* A table too wide for its pane (a phone, a narrow tiled pane) stays a table and scrolls
+   sideways (FillTable, views/TableView.tsx), its first column (the title) staying put. Words are
+   never split: columns get as narrow as their longest word, then the table scrolls. */
 .items-table .cds--data-table-content {
   background: var(--cds-layer);
-  /* Carbon makes this box scroll sideways (overflow-x: auto). Tables here fit their pane (shared
-     widths shrink, stacked cards), so a scrollbar could only come from sub-pixel rounding or an
-     overlaid editor: clip instead, which never shows one. */
-  overflow: clip;
-}
-/* A view that keeps its table a table in a narrow pane: it scrolls sideways instead, and words
-   are never split (the columns get as narrow as their longest word, then the table scrolls). */
-.table-wrap--scroll .cds--data-table-content {
   overflow-x: auto;
+  /* What is scrolled into view (a focused cell editor) comes out beside the first column, not
+     under it (its width set by FillTable). */
+  scroll-padding-inline-start: var(--table-first-column, 0);
 }
-.table-wrap--scroll .items-table td {
+.items-table td,
+.items-table td:has(> a) {
   overflow-wrap: break-word;
 }
+/* The first column stays at the start while the rest scrolls under it (unless it is half the table
+   or more: FillTable); its cells keep their own (solid) backgrounds over what passes beneath. Sticky is also the anchor of an editing cell's
+   input (as `position: relative` is elsewhere). */
+.table-wrap[data-sticky-first] .items-table :is(th, td):first-child {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+}
+/* A first cell being edited (or the add row's input there) comes above the other rows' first
+   cells: each is a layer of its own (z-index), which would cover its menu (a combo box, a date's
+   calendar) where it opens over them. */
+.table-wrap[data-sticky-first] .items-table :is(th, td):first-child:focus-within {
+  z-index: 3;
+}
 /* Where more of a sideways-scrolling table is, its edge fades (set by FillTable): touch screens
-   show no scrollbar until scrolling. Drawn on the non-scrolling container, over the rows. */
-.table-wrap--scroll .items-table {
+   show no scrollbar until scrolling. Drawn on the non-scrolling container, over the rows; the
+   start one beside the first column, which doesn't scroll. */
+.items-table {
   position: relative;
 }
-.table-wrap--scroll .items-table::before,
-.table-wrap--scroll .items-table::after {
+.items-table::before,
+.items-table::after {
   content: "";
   position: absolute;
   inset-block: 0;
@@ -3222,190 +3208,20 @@ img[data-lightbox] {
   pointer-events: none;
   opacity: 0;
   transition: opacity 110ms;
-  z-index: 1;
+  z-index: 2;
 }
-.table-wrap--scroll .items-table::before {
-  inset-inline-start: 0;
+.items-table::before {
+  inset-inline-start: var(--table-first-column, 0);
   background: linear-gradient(to right, var(--cds-background), transparent);
 }
-.table-wrap--scroll .items-table::after {
+.items-table::after {
   inset-inline-end: 0;
   background: linear-gradient(to left, var(--cds-background), transparent);
 }
-.table-wrap--scroll[data-more-start] .items-table::before,
-.table-wrap--scroll[data-more-end] .items-table::after {
+.table-wrap[data-more-start] .items-table::before,
+.table-wrap[data-more-end] .items-table::after {
   opacity: 1;
 }
-/* Set by FillTable (views/TableView.tsx): the pane is narrow, or the columns don't fit it. */
-.table-wrap[data-stacked] .cds--data-table-content {
-  background: none;
-  /* Cards have no columns to overflow sideways: the row actions' popover must not be clipped. */
-  overflow: visible;
-}
-.table-wrap[data-stacked] {
-  .items-table thead {
-    display: none;
-  }
-  .items-table :is(table, tbody) {
-    display: block;
-    inline-size: auto !important; /* FillTable sizes columns; cards don't have any */
-    background: none;
-  }
-  /* Each row is its own small table, with space before the next. */
-  .items-table tbody {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-05);
-  }
-  /* Labels in one column as wide as the longest of the card (subgrid), values beside them; at
-     most 40% of the card (of the table's size container: a percentage resolves to nothing here):
-     a long field name wraps instead of squeezing the values to a sliver. */
-  .items-table tbody tr {
-    display: grid;
-    grid-template-columns: fit-content(40cqi) minmax(0, 1fr);
-    block-size: auto;
-    background: none;
-  }
-  .items-table tbody td {
-    display: grid;
-    grid-column: 1 / -1;
-    grid-template-columns: subgrid;
-    column-gap: var(--cds-spacing-05);
-    align-items: center;
-    inline-size: auto !important;
-    block-size: auto;
-    min-block-size: 2rem;
-    padding: var(--cds-spacing-02) var(--cds-spacing-05);
-    border: 0;
-    border-block-end: 1px solid var(--cds-border-subtle);
-    background: var(--cds-layer-01);
-  }
-  /* The labels are the card's header column, shaded like the table's header row: each label
-     fills its line's label column, out to the card's edge; a gap before the value. */
-  .items-table tbody td[data-label]::before {
-    content: attr(data-label);
-    display: flex;
-    align-items: center;
-    align-self: stretch;
-    margin-block: calc(-1 * var(--cds-spacing-02));
-    margin-inline-start: calc(-1 * var(--cds-spacing-05));
-    padding: var(--cds-spacing-02) var(--cds-spacing-05);
-    background: var(--cds-layer-accent-01);
-    /* The label is the body font even where the value is code-02 (dates, component code). */
-    font-family: var(--font-sans);
-    letter-spacing: var(--cds-body-compact-01-letter-spacing);
-    font-weight: 600;
-    color: var(--cds-text-primary);
-    overflow-wrap: anywhere;
-    white-space: normal; /* not the value's (dates and times keep to one line; their label needn't) */
-    min-inline-size: 0; /* the column's fit-content cap applies (else its unwrapped width) */
-  }
-  /* The title link: Carbon's links are inline-flex, whose text (an anonymous flex item) can't
-     shrink below its longest word, so an unbroken title made the pane scroll sideways. */
-  .items-table tbody td > .cds--link {
-    display: block;
-    min-inline-size: 0;
-    overflow-wrap: anywhere;
-  }
-  /* Editable values: the hover reaches the card's edge on the right and the label on the left
-     (the line's padding is 1rem at the sides, 0.25rem above and below); the padding brings the
-     text back to where it was. */
-  .items-table tbody td .cell-editable {
-    margin: calc(-1 * var(--cds-spacing-02)) calc(-1 * var(--cds-spacing-05));
-    padding: var(--cds-spacing-02) var(--cds-spacing-05);
-    align-self: stretch; /* the line's full height, not just the text's */
-  }
-  .items-table tbody td .cell-edit-box {
-    align-self: stretch;
-  }
-  /* An editing cell: the editor takes the value's place, beside the label. The box around the
-     hidden value (which sizes the line) anchors it, so it adds nothing to the line's height; it
-     reaches back over the label gap and out to the card's edge and the line's padding, because the
-     input indents its text by the 1rem a wide cell has as padding: the text stays where the
-     value's was. */
-  .items-table tbody td.cell--editing {
-    position: static;
-  }
-  .items-table tbody td.cell--editing > .cell-edit-box {
-    display: block;
-    position: relative;
-    grid-column: 2;
-  }
-  .items-table tbody td.cell--editing .cell-edit-box > .cell-overlay {
-    inset: calc(-1 * var(--cds-spacing-02)) calc(-1 * var(--cds-spacing-05));
-  }
-  /* The editor is centred on the value's own line here (not on a cell with a bottom border), so
-     the input's text needs no 1px lift. */
-  .items-table tbody td.cell--editing .cell-edit-box :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box) {
-    padding-block-start: 0;
-  }
-  /* A wrapped text editor: the cell's padding here is 0.25rem / 1rem (not a wide cell's), and it
-     must end at the card's edge, not 2px past it (clipped there). */
-  .items-table tbody td .cell-inline-editor .cell-textarea {
-    margin: calc(-1 * var(--cds-spacing-02)) calc(-1 * var(--cds-spacing-05));
-    padding: var(--cds-spacing-02) var(--cds-spacing-05);
-  }
-  /* The row's actions: a menu in the card's top-right corner, over its first line (which keeps
-     room for it), so they take no line of their own. The icons of a wide table are hidden. */
-  .items-table tbody tr {
-    position: relative;
-  }
-  /* At least the menu's height: a row without any shown values (a collection without fields) would
-     otherwise be empty, its menu overlapping the next row's. */
-  .items-table tbody tr:has(> td.row-actions:not(:empty)) {
-    min-block-size: 2rem;
-  }
-  .items-table tbody td.row-actions {
-    position: absolute;
-    inset-block-start: 0;
-    inset-inline-end: 0;
-    display: flex;
-    padding: 0;
-    border: 0;
-    background: none;
-    inline-size: auto !important;
-    min-block-size: 0;
-  }
-  .items-table tbody td.row-actions .row-action-icon {
-    display: none;
-  }
-  .items-table tbody td.row-actions .row-actions__menu {
-    display: inline-flex;
-  }
-  /* The menu's icons keep their ghost buttons' size; the dark popover is the md-table-menu one. */
-  .items-table tbody tr > td:first-child {
-    padding-inline-end: calc(var(--cds-spacing-05) + 2rem);
-  }
-  .items-table tbody td.row-actions:empty,
-  .items-table tbody td:not([data-label]):empty {
-    display: none;
-  }
-  /* No "+" row as a card of its own: the page's "New …" button adds items here. */
-  .items-table tbody tr.table-add-row--idle {
-    display: none;
-  }
-  /* Images sit at the start of their value, like the other values (wide tables centre them). */
-  /* Never wider than the value's column (in a wide table a percentage cap would make the image
-     shrinkable where its stand-in isn't: the column would change when it loads). */
-  .items-table tbody td.cell--image .image-thumb {
-    object-position: left center;
-    max-inline-size: 100%;
-  }
-  /* No row hover on cards: Carbon's hover adds borders (things shift) and tints the whole row,
-     icons included; the icons are buttons with their own hover. */
-  .items-table .cds--data-table tbody tr:hover td {
-    border-block-start: 0;
-    border-block-end: 1px solid var(--cds-border-subtle);
-    background: var(--cds-layer-01);
-    color: inherit;
-  }
-  .items-table .cds--data-table tbody tr:hover,
-  .items-table .cds--data-table tbody tr:hover td.row-actions {
-    border: 0;
-    background: none;
-  }
-}
-
 /* Field order editor: a row per field, checkbox (shown) and up / down when shown. */
 .field-order .cds--form-item.cds--checkbox-wrapper {
   margin: 0;

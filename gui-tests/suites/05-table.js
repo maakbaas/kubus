@@ -14,7 +14,7 @@ async function openTool(t, scope, label) {
   await t.settle(150);
 }
 
-/** A profile whose "All" view is a table of a few columns (all 15 make it stack as cards on most screens). */
+/** A profile whose "All" view is a table of a few columns (all 15 make it scroll sideways on most screens). */
 function narrowTableSpec(style, opts) {
   const spec = profileSpec(style, opts);
   spec.collections[0].views = [{ name: "All", blocks: [{ kind: "table", layout: { fields: ["title", "count", "date", "done", "fav", "ref", "tags"] } }] }];
@@ -41,7 +41,7 @@ async function headerWidths(t, scope = ".items-table") {
 for (const [style, vp] of [["typical", "desktop"], ["long", "desktop"], ["typical", "laptop"], ["long", "phone"], ["unicode", "wide"]]) {
   test(`table: edit cells in place, columns keep their width: ${style} @ ${vp}`, async (t) => {
     await t.boot();
-    // Phones get every column (stacked as cards); wider windows a real table.
+    // Phones get every column (the table scrolls sideways); wider windows a few.
     const ids = await t.seed(vp === "phone" ? profileSpec(style, { items: 8 }) : narrowTableSpec(style, { items: 8 }));
     await t.open(t.listPath(ids.collections.books));
     await t.audit("table");
@@ -51,7 +51,10 @@ for (const [style, vp] of [["typical", "desktop"], ["long", "desktop"], ["typica
     for (let i = 0; i < n; i++) {
       const cell = cells.nth(i);
       const name = (await cell.getAttribute("aria-label")) || `cell ${i}`;
-      await cell.scrollIntoViewIfNeeded();
+      // Wholly in view (a table wider than a phone scrolls sideways): else focusing its editor
+      // scrolls the rest of it in, which is the browser's doing, not a jump.
+      await cell.evaluate((el) => el.scrollIntoView({ block: "center", inline: "center" }));
+      await t.wait(100);
       const before = await headerWidths(t);
       await t.noShift(`${name}: opening the cell editor moves nothing`, async () => {
         await cell.click({ position: { x: 3, y: 3 } });
@@ -81,7 +84,7 @@ for (const [style, vp] of [["typical", "desktop"], ["long", "desktop"], ["typica
   }, { viewport: vp });
 }
 
-// Phones stack every table as cards (no add row): a real table at two window sizes.
+// A table that fits its pane, at two window sizes.
 for (const vp of ["desktop", "laptop"]) {
   test(`table: add row, sorting, hover, checkboxes, row actions @ ${vp}`, async (t) => {
     await t.boot();
@@ -244,7 +247,7 @@ for (const n of [200, 1000]) {
 }
 
 for (const vp of ["desktop", "wide"]) {
-  test(`table: narrow panes restack as cards @ ${vp}`, async (t) => {
+  test(`table: narrow panes scroll sideways, the first column staying put @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(profileSpec("long", { items: 6 }));
     const list = t.listPath(ids.collections.books);
@@ -252,6 +255,22 @@ for (const vp of ["desktop", "wide"]) {
       await t.seed({ prefs: { "kubus.workspace.default": wsLayout([["/collections"], [list]], { sizes, active: 1 }) } });
       await t.open(list, { keepTabs: true });
       await t.audit(`table in a pane of ${Math.round(sizes[1] * 100)}%`);
+      const scrolled = await t.page.evaluate(() => {
+        const scroller = document.querySelector(".ws-pane--active .items-table .cds--data-table-content");
+        if (!scroller || scroller.scrollWidth <= scroller.clientWidth + 1) return null;
+        const first = () => scroller.querySelector("tbody tr td")?.getBoundingClientRect().left;
+        const second = () => scroller.querySelector("tbody tr td:nth-child(2)")?.getBoundingClientRect().left;
+        const before = { first: first(), second: second() };
+        scroller.scrollLeft = scroller.scrollWidth;
+        return { before, after: { first: first(), second: second() } };
+      });
+      if (!scrolled) continue;
+      await t.settle(150);
+      scrolled.fade = await t.page.evaluate(() => document.querySelector(".ws-pane--active .table-wrap")?.hasAttribute("data-more-start"));
+      await t.check("scrolled: the first column stays put", Math.abs(scrolled.after.first - scrolled.before.first) <= 1, JSON.stringify(scrolled));
+      await t.check("scrolled: the other columns move", scrolled.after.second < scrolled.before.second - 1, JSON.stringify(scrolled));
+      await t.check("scrolled: the start edge fades", scrolled.fade === true, JSON.stringify(scrolled));
+      await t.audit(`table in a pane of ${Math.round(sizes[1] * 100)}%, scrolled to its end`);
     }
   }, { viewport: vp });
 }

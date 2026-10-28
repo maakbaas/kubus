@@ -55,13 +55,16 @@ Extension points are registries, not special cases in pages:
   group in a collapsible Carbon Accordion; columns as wide as their content on one line while
   there's room, the actions column widened by `FillTable` so the table spans the pane; an editing
   cell overlays its input on the invisibly kept value so the column never resizes; columns are
-  selectable per view, the title column too (rows then get an open button); in a narrow pane
-  every table restacks as cards, column names as row labels: `.table-wrap` container query) and `cards` (show title, fields, cover = an image or a markdown field rendered in its place, card width (slider: the column count whose width comes closest), cover shape:
+  selectable per view, the title column too (rows then get an open button); a table looks the
+  same at every width: one too wide for its pane (a phone, a narrow tiled pane) scrolls sideways,
+  its first column staying put (sticky, unless it is half the table or more), a fade at an edge with more beyond it; `FillTable`, also the
+  tables of the app's own pages) and `cards` (show title, fields, cover = an image or a markdown field rendered in its place, card width (slider: the column count whose width comes closest), cover shape:
   a fixed ratio (image shown whole, the rest filled with its average colour) or the images'
   average ratio (filled, cropped); with no title and no fields a card is just its cover; a card looks
-  the same at every width (labels beside values, a label wrapping when the card is very narrow), and
-  only "Show as a list when narrow" changes it: in a pane narrower than tables restack in
-  (`STACK_BELOW_REM`), one card per row as list rows, cover beside the text) and
+  the same at every width (labels beside values, a label wrapping when the card is very narrow);
+  "Cover beside the text" puts the cover at the card's left instead of on top, at every width (a
+  list row where one card fills the row)),
+  `component` (`views/ComponentBlock.tsx`) and
   `chart` (`views/ChartBlock.tsx`: settings and view; `domain/chart.ts`: the values, pure; `views/chartSpec.ts`: Carbon
   Charts' component, data and options for them; `views/ChartCanvas.tsx`: Carbon Charts itself, a lazily loaded chunk with
   d3, so the app doesn't load it until a chart is shown). Like a table, its filter picks the items and its grouping (Sort

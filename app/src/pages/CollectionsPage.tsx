@@ -35,7 +35,7 @@ import { CollectionIcon } from "../ui/collectionIcons";
 import { NewButton } from "../ui/NewButton";
 import { PageHeader } from "../ui/PageHeader";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
-import { RowActions, rowButtonProps } from "../ui/RowActions";
+import { RowActions, ROW_BUTTON } from "../ui/RowActions";
 import { FillTable, useSharedColumns } from "../views/TableView";
 
 /**
@@ -201,7 +201,7 @@ export function CollectionsPage() {
         <TableBody>
           {sort(list).map((t) => (
             <TableRow key={t.id}>
-              <TableCell data-label="Name">
+              <TableCell>
                 {inSpace(t, space.id) ? (
                   <Link href={`#/collections/${t.id}/items`}>
                     <span className="icon-label">
@@ -217,10 +217,7 @@ export function CollectionsPage() {
                 )}
               </TableCell>
               {/* Edits in place, like other tables' cells: Enter or clicking away saves, Escape cancels. */}
-              <TableCell
-                data-label="Description"
-                className={`cell--string${editing?.id === t.id ? " cell--editing" : ""}`}
-              >
+              <TableCell className={`cell--string${editing?.id === t.id ? " cell--editing" : ""}`}>
                 {editing?.id === t.id ? (
                   (() => {
                     const editor = (
@@ -281,37 +278,30 @@ export function CollectionsPage() {
                 )}
               </TableCell>
               {spaces.length > 1 && (
-                <TableCell data-label="Spaces">{spaceNames(t)}</TableCell>
+                <TableCell>{spaceNames(t)}</TableCell>
               )}
               <RowActions>
-                {(inMenu) => {
-                  const btn = rowButtonProps(inMenu);
-                  return (
-                    <>
-                      <IconButton
-                        {...btn}
-                        label={`Edit ${t.pluralName} collection`}
-                        onClick={() => navigate(`/collections/${t.id}/edit`)}
-                      >
-                        <Edit />
-                      </IconButton>
-                      <IconButton
-                        {...btn}
-                        label={`Duplicate ${t.pluralName} collection`}
-                        onClick={() => duplicate(t)}
-                      >
-                        <Copy />
-                      </IconButton>
-                      <IconButton
-                        {...btn}
-                        label={`Delete ${t.pluralName} collection`}
-                        onClick={() => remove(t)}
-                      >
-                        <TrashCan />
-                      </IconButton>
-                    </>
-                  );
-                }}
+                <IconButton
+                  {...ROW_BUTTON}
+                  label={`Edit ${t.pluralName} collection`}
+                  onClick={() => navigate(`/collections/${t.id}/edit`)}
+                >
+                  <Edit />
+                </IconButton>
+                <IconButton
+                  {...ROW_BUTTON}
+                  label={`Duplicate ${t.pluralName} collection`}
+                  onClick={() => duplicate(t)}
+                >
+                  <Copy />
+                </IconButton>
+                <IconButton
+                  {...ROW_BUTTON}
+                  label={`Delete ${t.pluralName} collection`}
+                  onClick={() => remove(t)}
+                >
+                  <TrashCan />
+                </IconButton>
               </RowActions>
             </TableRow>
           ))}
