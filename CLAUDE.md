@@ -24,6 +24,8 @@ is what this split avoids. Keep them current when behaviour changes.
   (`SYNC_VERSION` / `SYNC_COMPATIBLE`), the steps of a change.
 - `docs/testing.md`: the test suites (vitest projects `domain`, `storage`, `sync`, `api`, `app`, `connectors`,
   `server`; the GUI suites), what each covers and needs (Postgres), what to run for a change, and CI.
+- `docs/connectors.md`: connector ideas (which sources, connected or copied, and why) and design notes
+  for the chosen ones; ideas, not planned work.
 - `docs/vision.md`: the "one hub" vision (native + remote sources, capabilities), the roadmap and
   every open item, numbered (other docs refer to them as "roadmap #n"; keep the list there only).
 
