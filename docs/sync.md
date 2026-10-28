@@ -303,9 +303,9 @@ tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 
 **Known limits** (the planned ones are numbered in docs/vision.md, "Open items"):
 - Last writer wins per field; concurrent offline edits to the *same markdown field* lose one side
-  (roadmap #11). Equal timestamps on two devices don't converge (#11).
-- A pull is not paged (#12). Webhooks are best effort, lost on a restart (#12). A device never frees
-  space by dropping originals it has (#12). A device that still shows an image deleted elsewhere
+  (roadmap #10). Equal timestamps on two devices don't converge (#10).
+- A pull is not paged (#11). Webhooks are best effort, lost on a restart (#11). A device never frees
+  space by dropping originals it has (#11). A device that still shows an image deleted elsewhere
   only lacks it until its next sync brings the edit that removed it. An image is lost only when a
   device offline for over a week adds a use of it itself (a paste, or an edit of an old copy of the
   text winning last-writer-wins) without having its bytes (possible only with "Full size when
@@ -314,4 +314,4 @@ tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 - One user, one token (the API too; it can also run component code on the server). A device
   that is not synced can lose its data on a schema wipe; with the server the replica re-syncs, so
   enable sync before putting real notes in. Connecting a device that has data of its own to a
-  server that has data too discards the device's data, no merge (#11).
+  server that has data too discards the device's data, no merge (#10).

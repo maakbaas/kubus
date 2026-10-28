@@ -1,13 +1,14 @@
 import { lazy, Suspense, useId, useMemo } from "react";
-import { Checkbox, MultiSelect, NumberInput, Select, SelectItem, SelectItemGroup } from "@carbon/react";
+import { Checkbox, MultiSelect, NumberInput, Select, SelectItem, SelectItemGroup, Slider } from "@carbon/react";
 import { ChartColumn } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import {
   AGGREGATES,
   axisFields,
   CHART_HEIGHTS,
+  GAUGE_WIDTH,
   CHART_KINDS,
-  CHART_WIDTHS,
+  CHART_WIDTH,
   DATE_STEPS,
   defaultChartOptions,
   isSingleValue,
@@ -46,9 +47,8 @@ function ChartView({ collection, result, options, refs, actions }: BlockProps<Ch
   }, [collection, result, groupBy, refs, options, dark]);
   if ("problem" in spec) return <p className="helper chart-block__problem">{spec.problem}</p>;
   const byId = (id: string) => result.groups.flatMap((g) => g.items).find((i) => i.id === id);
-  const width = CHART_WIDTHS.find((w) => w.value === options.width)?.rem;
   return (
-    <div className="chart-block" style={width ? { maxInlineSize: `${width}rem` } : undefined}>
+    <div className="chart-block" style={{ maxInlineSize: `${options.width}rem` }}>
       <Suspense fallback={<div className="chart-block__loading" />}>
         <ChartCanvas
           spec={spec}
@@ -127,7 +127,7 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
         value={o.chart}
         onChange={(e) => {
           const chart = e.target.value as ChartKind;
-          set({ chart, ...(chart === "gauge" && o.width === "full" && { width: "s" }) });
+          set({ chart, ...(chart === "gauge" && o.width === CHART_WIDTH.max && { width: GAUGE_WIDTH }) });
         }}
       >
         {sections.map((s) => (
@@ -234,11 +234,17 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
           ))}
         </Select>
       )}
-      <Select size="sm" id={`${uid}-width`} labelText="Width" value={o.width} onChange={(e) => set({ width: e.target.value as ChartOptions["width"] })}>
-        {CHART_WIDTHS.map((w) => (
-          <SelectItem key={w.value} value={w.value} text={w.rem ? `${w.text} (${w.rem}rem at most)` : w.text} />
-        ))}
-      </Select>
+      <Slider
+        id={`${uid}-width`}
+        labelText="Width"
+        min={CHART_WIDTH.min}
+        max={CHART_WIDTH.max}
+        step={CHART_WIDTH.step}
+        value={o.width}
+        formatLabel={(v) => `${v}rem`}
+        hideTextInput
+        onChange={({ value }) => set({ width: value })}
+      />
       <div className="view-options__checks">
         {show.empty && check("showEmpty", "Show items without a value")}
         {/* Only what applies (with the chosen split, area, second value). */}
@@ -272,7 +278,7 @@ export const chartBlock = defineBlockType<ChartOptions>({
   defaultOptions: (collection) => defaultChartOptions(collection),
   normalizeOptions: (raw, collection) => normalizeChartOptions(raw, collection),
   // Its grouping is its categories (a gauge has none: one value of all its items).
-  uses: (options) => ({ query: true, groups: options.chart !== "gauge" && !(options.chart === "meter" && !options.proportional), fields: null }),
+  uses: (options) => ({ query: true, all: true, groups: options.chart !== "gauge" && !(options.chart === "meter" && !options.proportional), fields: null }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,
 });

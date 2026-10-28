@@ -73,14 +73,12 @@ export const CHART_HEIGHTS: { value: ChartHeight; text: string; rem: number }[] 
   { value: "l", text: "Large", rem: 32 },
 ];
 
-export type ChartWidth = "full" | "s" | "m" | "l";
-/** How wide a chart may get (a gauge as wide as a pane is mostly empty); "full" = the block's width. */
-export const CHART_WIDTHS: { value: ChartWidth; text: string; rem: number | null }[] = [
-  { value: "full", text: "Full width", rem: null },
-  { value: "s", text: "Small", rem: 24 },
-  { value: "m", text: "Medium", rem: 40 },
-  { value: "l", text: "Large", rem: 64 },
-];
+/** How wide a chart may get, in rem (a slider like the cards'; the maximum is about 1920px, wider than any pane). */
+export const CHART_WIDTH = { min: 8, max: 120, step: 1 };
+/** What a gauge gets when switched to (as wide as a pane it is mostly empty). */
+export const GAUGE_WIDTH = 24;
+/** Widths saved before the slider: their rem. */
+const LEGACY_WIDTHS: Record<string, number> = { full: CHART_WIDTH.max, s: 24, m: 40, l: 64 };
 
 export interface ChartOptions {
   chart: ChartKind;
@@ -97,7 +95,8 @@ export interface ChartOptions {
   /** At most this many categories (the largest), the rest as "Other"; 0 = all. */
   top: number;
   height: ChartHeight;
-  width: ChartWidth;
+  /** At most this wide, in rem (CHART_WIDTH). */
+  width: number;
   // Bar
   horizontal: boolean;
   /** Series side by side, or stacked. */
@@ -163,7 +162,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     showEmpty: false,
     top: 0,
     height: "m",
-    width: "full",
+    width: CHART_WIDTH.max,
     horizontal: false,
     stacked: false,
     lollipop: false,
@@ -207,7 +206,12 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     showEmpty: flag(o.showEmpty, d.showEmpty),
     top: count(o.top, 100),
     height: oneOf(CHART_HEIGHTS, o.height, d.height),
-    width: oneOf(CHART_WIDTHS, o.width, d.width),
+    width:
+      typeof o.width === "number" && Number.isFinite(o.width)
+        ? Math.min(CHART_WIDTH.max, Math.max(CHART_WIDTH.min, Math.round(o.width)))
+        : typeof o.width === "string" && o.width in LEGACY_WIDTHS
+          ? LEGACY_WIDTHS[o.width]
+          : d.width,
     horizontal: flag(o.horizontal, d.horizontal),
     stacked: flag(o.stacked, d.stacked),
     lollipop: flag(o.lollipop, d.lollipop),

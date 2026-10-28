@@ -2375,6 +2375,11 @@ img[data-lightbox] {
 .block-more .helper {
   margin-bottom: 0;
 }
+/* A chart loading all rows: the bar takes the room beside Cancel. */
+.block-more__bar {
+  flex: 1;
+  min-inline-size: 0;
+}
 
 /* Tables */
 /* Whole image, scaled to the row height (never cropped), in a box of a fixed size: the image

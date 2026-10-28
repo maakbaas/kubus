@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from "react";
-import { Button, Checkbox, Dropdown, InlineNotification, TextInput } from "@carbon/react";
+import { Button, Checkbox, Dropdown, InlineNotification, ProgressBar, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { orderFields } from "../domain/fieldLayout";
@@ -285,7 +285,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const inherited = useMemo(() => resolveFilterValues(viewFilters ?? [], page ?? null), [viewFilters, page]);
   const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder]); // eslint-disable-line react-hooks/exhaustive-deps
   // A remote collection's rows come from its source a page at a time, filtered and sorted there.
-  const remote = useRemoteResult(collection, query, search, uses.query);
+  const remote = useRemoteResult(collection, query, search, uses.query, !!uses.all);
   const local = useMemo(
     () => (!remote && data.items && uses.query ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),
     [remote, collection, data.items, data.ctx, uses.query, query, search],
@@ -365,11 +365,25 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           onGroupCollapse={(key, on) => block.groupBy && onCollapse(withGroupCollapsed(state, block.id, block.groupBy, key, on))}
         />
       )}
-      {/* A remote collection's rows come a page at a time. */}
+      {/* A remote collection's rows come a page at a time, or (a chart) all of them, which can be stopped. */}
+      {!collapsed && remote?.progress && (
+        <div className="block-more">
+          <ProgressBar
+            className="block-more__bar"
+            size="small"
+            label={`Loading rows: ${remote.progress.loaded} of ${remote.progress.total}`}
+            value={remote.progress.loaded}
+            max={Math.max(remote.progress.total, 1)}
+          />
+          <Button kind="tertiary" size="sm" onClick={remote.progress.cancel}>
+            Cancel
+          </Button>
+        </div>
+      )}
       {!collapsed && items && remote?.more && (
         <div className="block-more">
           <Button kind="tertiary" size="sm" disabled={remote.loadingMore} onClick={remote.more}>
-            Show more
+            {uses.all ? "Load all rows" : "Show more"}
           </Button>
           <span className="helper">
             {items.length} of {result.total}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SourceResult, SourceRow } from "../../../shared/sources";
+import { MAX_SOURCE_PAGE, type SourceResult, type SourceRow } from "../../../shared/sources";
 import { useStore } from "../app/store";
 import { withComputed } from "../domain/components";
 import type { Collection, Item } from "../domain/model";
@@ -9,6 +9,7 @@ import { deviceTimeZone, groupLabel, rowItem, sourceQuery, sourceShape } from ".
 // A block of a remote collection: its query asked of the source (filter, sort, grouping and search
 // worked out there, shared/sources.ts), a page at a time. What it gives the block type is the same
 // QueryResult as applyQuery's, so tables, cards and components show remote rows as they show items.
+// A block that needs every row (a chart) loads the pages one after the other until they are in; that can be stopped.
 
 /** Rows per page ("Show more" asks for the next). */
 const PAGE = 100;
@@ -23,6 +24,8 @@ export interface RemoteResult {
   /** Loads the next page; null when every row is in. */
   more: (() => void) | null;
   loadingMore: boolean;
+  /** Loading every row (`all`): how far it is, and a way to stop; null when done or stopped. */
+  progress: { loaded: number; total: number; cancel: () => void } | null;
 }
 
 const EMPTY: QueryResult = { groups: [], total: 0 };
@@ -50,7 +53,7 @@ function useSettled<T>(value: T, ms: number): T {
 }
 
 /** The block's rows when its collection is remote (null otherwise: the block filters its items itself). */
-export function useRemoteResult(collection: Collection, query: ViewQuery, search: string, enabled: boolean): RemoteResult | null {
+export function useRemoteResult(collection: Collection, query: ViewQuery, search: string, enabled: boolean, all = false): RemoteResult | null {
   const { sources, components } = useStore();
   const remote = enabled && !!collection.source;
   const typed = useSettled(search, SEARCH_DELAY_MS);
@@ -63,6 +66,9 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshes, setRefreshes] = useState(0);
+  // The request whose remaining pages the person stopped loading.
+  const [stopped, setStopped] = useState("");
+  const pageSize = all ? MAX_SOURCE_PAGE : PAGE;
   // The request now, so a late answer to an older one is dropped.
   const current = useRef("");
   current.current = `${key}#${refreshes}`;
@@ -74,19 +80,19 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
     const asked = `${key}#${refreshes}`;
     const request = requestRef.current;
     if (!request) return;
-    sources.query(collection.source.name, { ...request, offset: 0, limit: PAGE, counts: true }).then(
+    sources.query(collection.source.name, { ...request, offset: 0, limit: pageSize, counts: true }).then(
       // A total under the rows in (a source that couldn't count them all) counts at least those.
       (r) => current.current === asked && setLoaded({ key, rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, more: r.more }),
       (e) => current.current === asked && setLoaded({ key, rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) }),
     );
-  }, [remote, collection.source, key, refreshes, sources]);
+  }, [remote, collection.source, key, refreshes, sources, pageSize]);
 
   const more = useCallback(() => {
     if (!loaded || !loaded.more || !request || !collection.source || loadingMore) return;
     const asked = current.current;
     setLoadingMore(true);
     sources
-      .query(collection.source.name, { ...request, offset: loaded.rows.length, limit: PAGE, counts: false })
+      .query(collection.source.name, { ...request, offset: loaded.rows.length, limit: pageSize, counts: false })
       .then(
         (r) =>
           current.current === asked &&
@@ -94,13 +100,20 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
         (e) => current.current === asked && setLoaded((l) => l && { ...l, error: e instanceof Error ? e.message : String(e) }),
       )
       .finally(() => setLoadingMore(false));
-  }, [loaded, request, collection.source, loadingMore, sources]);
+  }, [loaded, request, collection.source, loadingMore, sources, pageSize]);
+
+  const isStopped = stopped === `${key}#${refreshes}`;
+  const fresh = loaded?.key === key;
+  // Every row wanted: the next page is asked as soon as the last one is in.
+  const loadingAll = all && fresh && !!loaded?.more && !isStopped && !loaded.error;
+  useEffect(() => {
+    if (loadingAll && !loadingMore) more();
+  }, [loadingAll, loadingMore, more]);
 
   // Rows that didn't change keep their item (memoized rows and computed values rely on it).
   const known = useRef(new Map<string, { values: string; item: Item }>());
   const memo = useMemo(() => new WeakMap<Item, Item>(), [collection, components]); // eslint-disable-line react-hooks/exhaustive-deps
   const shape = useMemo(() => (collection.source ? sourceShape(collection) : null), [collection]);
-  const fresh = loaded?.key === key;
   const result = useMemo(() => {
     // While a changed query is asked, the rows of the one before stay (nothing flashes away).
     if (!remote || !shape || !loaded) return null;
@@ -137,7 +150,8 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
     result: result?.result ?? EMPTY,
     items: result?.items ?? null,
     error: fresh ? loaded?.error : undefined,
-    more: fresh && loaded?.more ? more : null,
+    more: fresh && loaded?.more && !loadingAll ? (all ? () => setStopped("") : more) : null,
     loadingMore,
+    progress: loadingAll && loaded ? { loaded: loaded.rows.length, total: loaded.total, cancel: () => setStopped(current.current) } : null,
   };
 }

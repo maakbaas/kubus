@@ -91,7 +91,7 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   sorted and grouped there: `useRemoteResult`, docs/sync.md "Remote sources") instead of
   `applyQuery`. Rendering is not
   virtualized: rows and cards are memoized only. If a 5,000-item collection feels slow, render rows
-  in steps (roadmap #10), not virtualization (which clashes with `FillTable` / `useSharedColumns`
+  in steps (roadmap #9), not virtualization (which clashes with `FillTable` / `useSharedColumns`
   measuring every row).
 - **Never install the SAH-pool VFS while another worker may hold its files.** If
   `installOpfsSAHPoolVfs()` fails to open a pool file, its error path calls `removeVfs()`, which
@@ -102,10 +102,10 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 - **Typed columns map to Postgres** as `text`, `double precision`, `date`, `timestamptz`,
   `boolean`, `uuid`, `jsonb`; markdown is `text`, and images reference a files table.
 - **Single connection per origin:** the SAH-pool VFS locks the DB, so a second browser tab can't open
-  it (shows an error). Fine for Tauri/PWA; several tabs are roadmap #9.
+  it (shows an error). Fine for Tauri/PWA; several tabs are roadmap #8.
 - **Storage lives in the web view, not a visible file.** On desktop the DB is inside the WebView2
   profile (`%LOCALAPPDATA%\com.kubus.app\EBWebView`). Without sync there is no backup yet
-  (export / import: roadmap #8). Changing the app identifier or `useHttpsScheme` changes the origin and orphans the data.
+  (export / import: roadmap #7). Changing the app identifier or `useHttpsScheme` changes the origin and orphans the data.
 - **iOS eviction:** Safari can evict storage under pressure; home-screen apps are exempt from the
   7-day rule and we request `navigator.storage.persist()`. With sync on, the server is the backup.
-- macOS/Linux Tauri builds use WKWebView/WebKitGTK; OPFS support there is not verified (roadmap #9).
+- macOS/Linux Tauri builds use WKWebView/WebKitGTK; OPFS support there is not verified (roadmap #8).

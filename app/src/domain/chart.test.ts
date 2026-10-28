@@ -171,7 +171,7 @@ describe("chart kinds", () => {
     const o = normalizeChartOptions({ chart: "pie", value: "median", valueField: "gone", splitBy: "genre", top: 7.6, fields: ["pages", "gone"], max: "x" }, collection);
     expect(o).toMatchObject({ chart: "pie", value: "count", valueField: "pages", splitBy: "genre", top: 8, fields: ["pages"], max: null });
     expect(normalizeChartOptions({ chart: "nope" }, collection).chart).toBe("bar");
-    expect([normalizeChartOptions({ width: "s" }, collection).width, normalizeChartOptions({ width: "huge" }, collection).width]).toEqual(["s", "full"]);
+    expect([normalizeChartOptions({ width: "s" }, collection).width, normalizeChartOptions({ width: "huge" }, collection).width, normalizeChartOptions({ width: 3 }, collection).width, normalizeChartOptions({ width: 50 }, collection).width]).toEqual([24, 120, 8, 50]);
     expect(normalizeChartOptions({ valueField: null }, collection).valueField).toBeNull();
   });
 });

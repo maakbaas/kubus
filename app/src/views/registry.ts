@@ -82,6 +82,8 @@ export interface BlockUses {
   groups: boolean;
   /** Fields can be chosen, with these of the layout's settings; null = no field choice. */
   fields: { labels: boolean; hideEmpty: boolean } | null;
+  /** All of a remote collection's rows are loaded (a chart charts them all), not a page at a time. */
+  all?: boolean;
 }
 
 /** Where a block is: in a collection view, or on an item page (which can give it an item). */

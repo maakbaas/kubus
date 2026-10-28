@@ -87,8 +87,8 @@ Extension points are registries, not special cases in pages:
   time: Line; Parts of a whole: Pie, Treemap, Word cloud; Spread: Histogram, Box plot, Scatter, Heatmap; One value:
   Gauge, Meter), Value (Count of items, or the Sum / Average / Minimum / Maximum of a number field: number fields and
   AI or component fields giving numbers, `numberFields`), Split by (a second field: series, at most 12, the rest
-  "Other"), Show (the largest n categories, the rest "Other"), Show items without a value ("No value"), Height, Width (full, or at most 24 / 40 / 64rem: a
-  gauge as wide as a pane is mostly empty, so switching to one makes a full-width chart small), and
+  "Other"), Show (the largest n categories, the rest "Other"), Show items without a value ("No value"), Height, Width (a slider like the cards', 8 to 120rem (about 1920px) at most; saved as Full / Small / Medium / Large it reads as 120 / 24 / 40 / 64rem; a
+  gauge as wide as a pane is mostly empty, so switching to one makes a full-width chart 24rem), and
   per type: Bar horizontal, stacked, lollipops, a second value drawn as a line on its own axis (Carbon's combo chart;
   also for Line); Line fill the area (stacked areas when split, optionally as shares of 100%), running total, compact
   (a sparkline: no axes, legend or grid); Pie donut (the total in its centre); Radar its spokes (three or more number
@@ -99,8 +99,7 @@ Extension points are registries, not special cases in pages:
   own, "Pages read of Pages") or nothing (the value is a %), Gauge and Meter turn yellow / red from a warning and
   danger share, Meter can show the groups as parts of a whole, Bullet a bar per group against its target. A setting
   still to choose (a field, three spokes) or nothing to chart says so instead of an empty chart. The chart follows
-  the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart charts the rows loaded so far
-  (roadmap #7). 
+  the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of 500 one after the other, a progress bar and Cancel under it; after Cancel the chart shows the rows in and "Load all rows" goes on). 
   `markdown` (`views/MarkdownBlock.tsx`) is a block with its own Markdown text, stored in the block's options: a local static component (GFM whose `{{ }}` sections may use `$now`, nothing about items); it is shown (rendered) and edited (as written) exactly like a Markdown field (same read-only box, `FieldEditor`); "Save as shared component" in its Block settings stores the text as a new shared static component (named like the block) and turns the block into a component block showing it. A component block shows a shared component (`options.componentId`), picked in its Block settings, which also have "Edit component" (its page) and "New component" (named in a dialog, picked, and opened beside the page to be written, `NewBlockComponentModal`): a block's code is never written in a popover. Its own component (`options.local`) was written in Block settings by earlier versions and still shows; its settings then offer only "Save as shared component". "Add block" is a menu (`views/AddBlockButton.tsx`): a block of each type ("New component…" for a component block, as above) and one per shared block or static component. A block type only
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
