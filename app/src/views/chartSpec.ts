@@ -327,7 +327,8 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       const ranges = thresholdRanges(options);
       return {
         chart: "MeterChart",
-        data: [{ group: one.label, value: Math.round(Math.min(100, Math.max(0, percent)) * 10) / 10 }],
+        // The bar is in %; the label gives the value itself against its max.
+        data: [{ group: one.max === null || one.value === null ? one.label : `${one.label}: ${num(one.value)} of ${num(one.max)}`, value: Math.round(Math.min(100, Math.max(0, percent)) * 10) / 10 }],
         options: base(options, theme, false, { height: "5rem", meter: { ...(ranges && { status: { ranges } }) } }),
       };
     }
@@ -351,6 +352,8 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
     }
   }
 }
+
+const num = (n: number) => String(Math.round(n * 100) / 100);
 
 /** A meter's status ranges (in %) from its warning and danger thresholds; null without either. */
 function thresholdRanges(options: ChartOptions): { range: [number, number]; status: string }[] | null {
