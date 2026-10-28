@@ -56,13 +56,6 @@ const CURRENT: SchemaPlan = { schema, triggers: outboxTriggerSql, migrations: MI
 /** The newest version: the last migration's, or 1 (schema-v1.sql) before there is any. */
 export const latestVersion = (plan: SchemaPlan) => plan.migrations.at(-1)?.version ?? 1;
 
-/**
- * PRAGMA user_version of a database made before versions were counted: a hash of the schema it was
- * made with. These are the hashes of the first release's schema (schema-v1.sql), i.e. version 1:
- * its text with LF line endings, and with CRLF, as the Windows builds read it (they were made from a
- * Windows checkout, before .gitattributes kept every checkout at LF).
- */
-export const FIRST_RELEASE_HASHES = [-1610800982, 571953669];
 /** Version numbers are below this; anything else in user_version is a pre-release schema's hash. */
 const MAX_VERSION = 1_000_000;
 
@@ -70,15 +63,14 @@ const MAX_VERSION = 1_000_000;
  * Brings the database to the newest schema (PRAGMA user_version is its version): a new one is
  * made from the schema, an older one migrated (migrations.ts), keeping its data. One from a newer
  * version of the app is not touched: opening it fails, so the data waits for the app's update.
- * One from before the first release with another schema (a hash in user_version) starts afresh,
- * as pre-release versions did. Foreign keys must be off (the engine turns them on afterwards).
+ * One from before the first release (a hash of its schema in user_version) starts afresh, as
+ * pre-release versions did. Foreign keys must be off (the engine turns them on afterwards).
  */
 export function ensureSchema(db: Db, plan: SchemaPlan = CURRENT) {
   db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
   const latest = latestVersion(plan);
-  let version = Number(db.selectValue("PRAGMA user_version"));
+  const version = Number(db.selectValue("PRAGMA user_version"));
   if (version === latest) return;
-  if (FIRST_RELEASE_HASHES.includes(version)) version = 1;
   if (version > latest && version < MAX_VERSION) {
     throw new Error(`This database was made by a newer version of Kubus (schema ${version}, this one knows ${latest}): update the app`);
   }

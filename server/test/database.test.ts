@@ -111,17 +111,4 @@ describe.skipIf(!ADMIN)("the server's database", () => {
     expect((await pool.query("SELECT count(*)::int AS n FROM server_meta")).rows).toEqual([{ n: 2 }]);
     expect((await pool.query("SELECT id FROM api_tokens")).rows).toEqual([{ id: "t1" }]);
   });
-
-  it("adds api_tokens to a database made before it, without a migration (older servers still open it)", async () => {
-    await pool.query(schemaSql);
-    await pool.query("DROP TABLE api_tokens; INSERT INTO spaces (id, name, position) VALUES ('s1', 'Work', 0)");
-    await pool.query("CREATE TABLE schema_migrations (version integer NOT NULL PRIMARY KEY, description text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())");
-    await start(MIGRATIONS);
-    expect(await applied()).toEqual([]);
-    await pool.query("INSERT INTO api_tokens (id, name, access, token_sha256) VALUES ('t1', 'Scripts', 'read', 'abc')");
-    expect((await pool.query("SELECT name, last_used_at FROM api_tokens")).rows).toEqual([{ name: "Scripts", last_used_at: null }]);
-    expect((await pool.query("SELECT name FROM spaces")).rows).toEqual([{ name: "Work" }]);
-    await start(MIGRATIONS);
-    expect(await applied()).toEqual([]);
-  });
 });

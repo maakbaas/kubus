@@ -12,7 +12,7 @@
  * every change to them (app/src/data/sync/spec.test.ts fails until it is). Devices send it with every
  * sync; the server turns away those older than its SYNC_COMPATIBLE.
  */
-export const SYNC_VERSION = 2;
+export const SYNC_VERSION = 1;
 /**
  * The oldest SYNC_VERSION that still reads and writes this version's data correctly: unchanged by
  * an added column or table (an older device leaves what it doesn't know as it is), raised to

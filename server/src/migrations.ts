@@ -23,8 +23,6 @@ export interface ServerMigration {
   up: string | ((client: pg.PoolClient) => Promise<void>);
 }
 
-// None yet. A server-only table that is only added (api_tokens) needs none: the schema adds it, and an
-// older server still opens the database.
 export const MIGRATIONS: ServerMigration[] = [];
 
 /** Serializes servers starting on the same database. */

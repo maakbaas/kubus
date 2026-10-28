@@ -27,10 +27,4 @@ export interface Migration {
   up: string | ((db: Db) => void);
 }
 
-export const MIGRATIONS: Migration[] = [
-  {
-    version: 2,
-    description: "A collection's title field (collections.title_field; null: the first text field with a value, as before)",
-    up: "ALTER TABLE collections ADD COLUMN title_field TEXT",
-  },
-];
+export const MIGRATIONS: Migration[] = [];

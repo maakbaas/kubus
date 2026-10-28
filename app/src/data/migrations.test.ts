@@ -10,15 +10,8 @@ import { DirectSqlClient } from "./sqlite/direct";
 import { SqliteRepository } from "./sqlite/SqliteRepository";
 import { memoryEnvironment } from "./sync/environment";
 import { MIGRATIONS, type Db } from "./migrations";
-import { ensureSchema, FIRST_RELEASE_HASHES, latestVersion } from "./sqlite/engine";
+import { ensureSchema, latestVersion } from "./sqlite/engine";
 import { fileIds, outboxTriggerSql, schema } from "./schema";
-
-/** 32-bit FNV-1a hash of the schema text, as a signed int: what pre-release versions kept in user_version. */
-function schemaHash(text: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
-  return h | 0;
-}
 
 /** Everything about a database's schema that the app relies on, independent of how it was written. */
 function shape(db: Db) {
@@ -48,12 +41,6 @@ function shape(db: Db) {
 describe("migrations", () => {
   it("are numbered 2, 3, 4, … in order", () => {
     expect(MIGRATIONS.map((m) => m.version)).toEqual(MIGRATIONS.map((_, i) => i + 2));
-  });
-
-  it("start from the first release's schema, which databases made before them are recognized by", () => {
-    // LF and CRLF (the Windows builds' checkout): whatever this checkout has, both are recognized.
-    const lf = firstRelease.replace(/\r\n/g, "\n");
-    expect(FIRST_RELEASE_HASHES).toEqual([schemaHash(lf), schemaHash(lf.replace(/\n/g, "\r\n"))]);
   });
 
   it("bring a database of the first release to exactly the schema of a new one", async () => {

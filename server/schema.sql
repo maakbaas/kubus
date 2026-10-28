@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS server_settings (
 -- API tokens (Settings → Server in the app; server/src/tokens.ts, types in shared/tokens.ts): each
 -- reaches only /api/v1 (and the MCP endpoint), to read ('read': GET / HEAD) or also to write
 -- ('write'). The token itself is shown once and never stored, only its SHA-256 (hex). Never synced;
--- kept by a wipe, like server_settings. Added to older databases by this schema (no migration).
+-- kept by a wipe, like server_settings.
 CREATE TABLE IF NOT EXISTS api_tokens (
   id             text NOT NULL,
   name           text NOT NULL,

@@ -1,9 +1,8 @@
 // @vitest-environment node
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import { beforeAll, describe, expect, it } from "vitest";
-import firstRelease from "../schema-v1.sql?raw";
-import { MIGRATIONS, type Db } from "../migrations";
-import { ensureSchema, FIRST_RELEASE_HASHES, latestVersion, type SchemaPlan } from "./engine";
+import type { Db } from "../migrations";
+import { ensureSchema, type SchemaPlan } from "./engine";
 
 let sqlite3: Db;
 beforeAll(async () => {
@@ -88,16 +87,6 @@ describe("the schema", () => {
     expect(() => ensureSchema(db, plan)).toThrow(/newer version of Kubus/);
     expect(version(db)).toBe(7);
     expect(rows(db, "SELECT count(*) AS n FROM notes")).toEqual([{ n: 2 }]);
-  });
-
-  it.each(FIRST_RELEASE_HASHES)("takes a database made before versions with the first release's schema as version 1 (hash %i)", (hash) => {
-    const db = open();
-    db.exec(firstRelease);
-    db.exec(`PRAGMA user_version = ${hash}`);
-    db.exec("INSERT INTO spaces (id, name, position, created_at, updated_at) VALUES ('s', 'S', 0, 'x', 'x')");
-    ensureSchema(db);
-    expect(version(db)).toBe(latestVersion({ schema: "", triggers: "", migrations: MIGRATIONS }));
-    expect(db.selectValue("SELECT name FROM spaces")).toBe("S");
   });
 
   it("starts a pre-release database of another schema afresh", () => {
