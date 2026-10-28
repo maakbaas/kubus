@@ -72,6 +72,11 @@ export function documentAddress(typed: string): URL {
   return u;
 }
 
+/** An address with its `{secret}` (as typed or URL-encoded) replaced by the secret, URL-encoded as a component. */
+export function withSecret(address: URL | string, secret: string): string {
+  return address.toString().replace(/\{secret\}|%7Bsecret%7D/gi, () => encodeURIComponent(secret));
+}
+
 /** The next page's address from a `Link: <…>; rel="next"` header, or null. */
 export function nextLink(doc: HttpDocument): string | null {
   const link = doc.headers.get("link");
