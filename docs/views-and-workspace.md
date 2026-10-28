@@ -44,6 +44,10 @@ Extension points are registries, not special cases in pages:
   (`yyyy-mm-dd..yyyy-mm-dd`, both included; what they are, a week, a month, …, follows from them).
   The current period can't be kept as fixed days, by design. `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.
+- **Limit** (a block's Filter panel, under its rules; `ViewBlock.limit`, saved with the view): how many items it shows at
+  first and each "Show more" adds; empty is all. Unset it is 100, or all for a block that needs every item (a chart:
+  `BlockUses.all`; `blockLimit`). A remote collection is asked that many rows a page (all: every page, one after the
+  other). The Filter button is blue while a Limit is set.
 - **Page-wide filter** (item pages): with more than one block listing items (`uses.query`), the page toolbar gets "Filter all blocks", the collection views' filter panel (`QueryEditor`, date period included) over the fields of all those collections (`pageFilterScope`; a name several share gets its collection behind it; remote collections included: a remote block hands the rules to its source like its own filter, `sourceQuery`, connector-neutral, so a block of a remote table can show this month's rows). It is `ItemLayout.filters`, unsaved until Save changes like a block's filter. Like a view's filter, each block builds on it (And / Or above): a block takes the rules on its collection's fields and, if native, the pseudo fields (`pageFiltersFor`) and ignores the rest. With one block, or none, it doesn't apply.
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,

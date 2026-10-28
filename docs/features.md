@@ -326,7 +326,7 @@ What the app does, feature by feature (read the part you work on).
   for the rows shown); no AI or reference fields, no Created / Updated. Views, blocks, item views,
   bookmarks are as for any collection (stored here, synced); filters, sorts and groupings offer only
   what a column supports (`fieldOperators`, `canSort`, `canGroup`: JSON and the like only "contains" /
-  "is empty"); blocks show 100 rows and "Show more" (`useRemoteResult`). Nothing edits them: no "New",
+  "is empty"); blocks show their Limit of rows (100 unless set; a chart all) and "Show more" (`useRemoteResult`). Nothing edits them: no "New",
   no add row, no in-place editing, no delete or duplicate, checkboxes don't toggle, the item page has
   no editable fields, pin or space; the repository refuses item writes to them too. "Read again" (the
   collection page's views bar) reads the rows again. Needs the server online; nothing is kept offline.

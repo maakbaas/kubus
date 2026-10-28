@@ -34,7 +34,15 @@ export interface ViewBlock {
   options: unknown;
   /** Shown without its header (name, collapse, menus on hover); only in collection views. Absent = shown. */
   hideHeader?: true;
+  /** Items shown at first and added by each "Show more" (Filter → Limit); 0 = all. Absent = its type's default (`blockLimit`). */
+  limit?: number;
 }
+
+/** Items a block shows at first and adds by each "Show more" unless its Limit says otherwise. */
+export const DEFAULT_LIMIT = 100;
+
+/** A block's Limit: its own, else all for a block that needs every item (a chart), else DEFAULT_LIMIT; 0 = all. */
+export const blockLimit = (block: Pick<ViewBlock, "limit">, all: boolean): number => block.limit ?? (all ? 0 : DEFAULT_LIMIT);
 
 /** What is shown right now; may or may not match a saved view. */
 export interface ViewState {
@@ -188,6 +196,7 @@ export function parseBlock(raw: unknown): ViewBlock | null {
     options: o.options ?? null,
   };
   if (o.hideHeader === true) block.hideHeader = true;
+  if (typeof o.limit === "number" && Number.isInteger(o.limit) && o.limit >= 0) block.limit = o.limit;
   return o.groupOrder === "desc" || o.groupOrder === "count" ? { ...block, groupOrder: o.groupOrder } : block;
 }
 

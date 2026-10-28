@@ -3,7 +3,7 @@ import { codeProblem, componentUses, itemsInput, localComponents, placeProblem, 
 import { parseLayout } from "./fieldLayout";
 import type { Collection, FieldDef, Item } from "./model";
 import { filterPreset, PAGE_ITEM, pageItemField, resolvePageValues, type FilterRule } from "./query";
-import { blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery } from "./views";
+import { blockLimit, blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery } from "./views";
 
 const code = (text: string) => ({ code: text, ai: false });
 const field = (id: string, name: string, kind: FieldDef["kind"], targetCollectionId: string | null = null): FieldDef => ({
@@ -21,6 +21,13 @@ const book = (id: string, title: string, pages: number, author: string | null): 
 const rule = (fieldId: string, operator: FilterRule["operator"], value: string): FilterRule => ({ id: fieldId, fieldId, operator, value });
 
 describe("parseViewConfig", () => {
+  it("keeps a block's Limit (0: all); without one a chart shows all, other blocks 100 at a time", () => {
+    const blocks = [{ ...newBlock("table", {}, "a"), limit: 25 }, { ...newBlock("table", {}, "b"), limit: 0 }, { ...newBlock("table", {}, "c"), limit: -1 }];
+    const read = parseViewConfig(JSON.stringify({ filters: [], blocks })).blocks;
+    expect(read.map((b) => b.limit)).toEqual([25, 0, undefined]);
+    expect([blockLimit(read[0], false), blockLimit(read[1], false), blockLimit(read[2], false), blockLimit(read[2], true)]).toEqual([25, 0, 100, 0]);
+  });
+
   it("reads blocks as stored, and compares equal to what was stored", () => {
     const state = { filters: [rule("pages", "lt", "50")], blocks: [newBlock("table", {}, "x"), { ...newBlock("cards", {}, "y"), filters: [] }], editable: false };
     const read = parseViewConfig(JSON.stringify(state));

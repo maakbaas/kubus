@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from "react";
-import { Button, Checkbox, Dropdown, InlineNotification, ProgressBar, TextInput } from "@carbon/react";
+import { Button, Checkbox, Dropdown, InlineNotification, NumberInput, ProgressBar, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { orderFields } from "../domain/fieldLayout";
@@ -10,7 +10,7 @@ import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
 import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type ItemGroup, type QueryResult, type ViewQuery } from "../domain/query";
 import { periodEdges } from "../domain/datePeriod";
-import { blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
+import { blockLimit, blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { ToolbarPopover } from "../ui/ToolbarPopover";
@@ -31,8 +31,6 @@ import { BLOCK_HEIGHT } from "../domain/views";
 // both render their blocks with BlockView; BlockMenus in each block's header edits it (also when
 // a view has a single block: the toolbar holds only the view's own controls).
 
-/** Items shown at first by a table or cards of a native collection, and added by each "Show more". */
-const STEP = 100;
 const NO_RESULT: QueryResult = { groups: [], total: 0 };
 
 /** A block type with its icon, as shown in the "Show as" menu. */
@@ -96,6 +94,12 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
   // A block always builds on its view's (or item page's) filter; its own rules are marked blue.
   const filterCount = query.filters.length;
   const inherits = place === "item" ? "the page's" : "the view's";
+  const limit = blockLimit(block, !!uses.all);
+  // Its type's own Limit is kept as none (it follows the type), any other as itself.
+  const setLimit = (n: number) => {
+    const { limit: _old, ...rest } = block;
+    onChange(n === blockLimit({}, !!uses.all) ? rest : { ...rest, limit: n });
+  };
   return (
     <>
       {uses.query && (
@@ -103,7 +107,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
           label={filterCount > 0 ? `Filter (${filterCount})` : "Filter"}
           icon={Filter}
           width="wide"
-          active={filterCount > 0}
+          active={filterCount > 0 || block.limit !== undefined}
           onOpenChange={onOpenChange}
         >
           <div className="view-settings">
@@ -116,6 +120,20 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
               title="Filter"
               emptyText={query.inherited?.length ? `Only ${inherits} filter. A rule joined with And narrows it, with Or lets more items in.` : "Showing all items."}
               onChange={(q) => onChange({ ...block, filters: q.filters.length > 0 ? q.filters : null })}
+            />
+            <NumberInput
+              size="sm"
+              id={`${uid}-limit`}
+              label="Limit"
+              helperText="Items shown at first, and added by each Show more. Empty: all."
+              allowEmpty
+              hideSteppers
+              min={0}
+              value={limit === 0 ? "" : limit}
+              onChange={(_, { value }) => {
+                const n = String(value ?? "").trim() === "" ? 0 : Number(value);
+                if (Number.isInteger(n) && n >= 0) setLimit(n);
+              }}
             />
           </div>
         </ToolbarPopover>
@@ -294,7 +312,9 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
     return found && { ...found, fieldId: uses.edges! };
   }, [uses.query, uses.edges, query]);
   // A remote collection's rows come from its source a page at a time, filtered and sorted there.
-  const remote = useRemoteResult(collection, query, search, uses.query, !!uses.all, edges);
+  // Its Limit: items shown at first and added by each "Show more" (0: all, a remote collection's loaded page by page).
+  const limit = blockLimit(block, !!uses.all);
+  const remote = useRemoteResult(collection, query, search, uses.query, limit === 0, edges, limit || undefined);
   const local = useMemo(() => {
     if (remote || !data.items || !uses.query) return NO_RESULT;
     const result = applyQuery(collection, data.items, query, data.ctx, search);
@@ -303,11 +323,11 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
     const outside = (q: ViewQuery) => applyQuery(collection, data.items!, { ...q, sort: [], groupBy: null }, data.ctx, search).groups[0]?.items ?? [];
     return { ...result, edges: { window: edges.window, before: outside(edges.before), after: outside(edges.after) } };
   }, [remote, collection, data.items, data.ctx, uses.query, query, search, edges]);
-  // A native collection's items are shown a step at a time too (a table of thousands rows is slow), in the order of the groups.
-  const [shown, setShown] = useState(STEP);
-  const stepKey = `${collection.id}|${search}|${JSON.stringify(query)}`;
-  useEffect(() => setShown(STEP), [stepKey]);
-  const stepped = !remote && !!uses.steps && local.groups.reduce((n, g) => n + g.items.length, 0) > shown;
+  // A native collection's items are shown a Limit at a time too (a table of thousands rows is slow), in the order of the groups.
+  const [shown, setShown] = useState(limit);
+  const stepKey = `${collection.id}|${search}|${limit}|${JSON.stringify(query)}`;
+  useEffect(() => setShown(limit), [stepKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stepped = !remote && limit > 0 && local.groups.reduce((n, g) => n + g.items.length, 0) > shown;
   const cut = useMemo(() => {
     if (!stepped) return local;
     let left = shown;
@@ -411,7 +431,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
       )}
       {!collapsed && items && stepped && (
         <div className="block-more">
-          <Button kind="tertiary" size="sm" onClick={() => setShown((n) => n + STEP)}>
+          <Button kind="tertiary" size="sm" onClick={() => setShown((n) => n + limit)}>
             Show more
           </Button>
           <span className="helper">
@@ -422,7 +442,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
       {!collapsed && items && remote?.more && (
         <div className="block-more">
           <Button kind="tertiary" size="sm" disabled={remote.loadingMore} onClick={remote.more}>
-            {uses.all ? "Load all rows" : "Show more"}
+            {limit === 0 ? "Load all rows" : "Show more"}
           </Button>
           <span className="helper">
             {items.length} of {result.total}

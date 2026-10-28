@@ -82,12 +82,10 @@ export interface BlockUses {
   groups: boolean;
   /** Fields can be chosen, with these of the layout's settings; null = no field choice. */
   fields: { labels: boolean; hideEmpty: boolean } | null;
-  /** All of a remote collection's rows are loaded (a chart charts them all), not a page at a time. */
+  /** It needs every item (a chart charts them all): its Limit is "all" unless set, a remote collection's rows all loaded. */
   all?: boolean;
   /** A date field it charts items along: with a date period on it, the items just outside the period come too (QueryResult.edges). */
   edges?: string | null;
-  /** Its items of a native collection are shown a step at a time ("Show more"), as a remote collection's are. */
-  steps?: boolean;
 }
 
 /** Where a block is: in a collection view, or on an item page (which can give it an item). */

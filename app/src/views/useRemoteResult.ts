@@ -55,7 +55,16 @@ function useSettled<T>(value: T, ms: number): T {
 }
 
 /** The block's rows when its collection is remote (null otherwise: the block filters its items itself). */
-export function useRemoteResult(collection: Collection, query: ViewQuery, search: string, enabled: boolean, all = false, edges: (PeriodEdges & { fieldId: string }) | null = null): RemoteResult | null {
+export function useRemoteResult(
+  collection: Collection,
+  query: ViewQuery,
+  search: string,
+  enabled: boolean,
+  all = false,
+  edges: (PeriodEdges & { fieldId: string }) | null = null,
+  /** Rows per page (a block's Limit); else PAGE. */
+  page?: number,
+): RemoteResult | null {
   const { sources, components } = useStore();
   const remote = enabled && !!collection.source;
   const typed = useSettled(search, SEARCH_DELAY_MS);
@@ -78,7 +87,7 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
   const [refreshes, setRefreshes] = useState(0);
   // The request whose remaining pages the person stopped loading.
   const [stopped, setStopped] = useState("");
-  const pageSize = all ? MAX_SOURCE_PAGE : PAGE;
+  const pageSize = all ? MAX_SOURCE_PAGE : Math.min(page ?? PAGE, MAX_SOURCE_PAGE);
   // The request now, so a late answer to an older one is dropped.
   const current = useRef("");
   current.current = `${key}#${refreshes}`;

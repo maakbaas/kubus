@@ -353,8 +353,8 @@ takes the new one when its settings are opened. A source's name: letters, digits
   scalars as lists, anything mixed as text. The key: a column `id`, `uuid` or `key` (any case) with its own value in
   every row, else the row's place (`_row`, hidden), which `check` warns about: a row's page and links to it change
   when rows are added above it.
-- *App*: a block of a remote collection asks the source for its query (`useRemoteResult`, 100 rows
-  a page, "Show more"; search waits for typing to pause) instead of `applyQuery`; the item page reads
+- *App*: a block of a remote collection asks the source for its query (`useRemoteResult`, its Limit of rows
+  a page (100 unless set; 0, a chart's unless set: every page, one after the other), "Show more"; search waits for typing to pause) instead of `applyQuery`; the item page reads
   its row by key (`rowKey` of the item id, a base64url of the key). Rows become items keeping their
   identity while unchanged. Nothing is cached offline; the collection page's "Read again" asks again.
 - *Known limits*: text sorts by the source's collation ("Customer 10" before "Customer 9"), not the
