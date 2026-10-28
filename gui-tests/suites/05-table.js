@@ -247,7 +247,7 @@ for (const n of [200, 1000]) {
 }
 
 for (const vp of ["desktop", "wide"]) {
-  test(`table: narrow panes scroll sideways, the first column staying put @ ${vp}`, async (t) => {
+  test(`table: narrow panes scroll sideways, all columns together @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(profileSpec("long", { items: 6 }));
     const list = t.listPath(ids.collections.books);
@@ -267,10 +267,51 @@ for (const vp of ["desktop", "wide"]) {
       if (!scrolled) continue;
       await t.settle(150);
       scrolled.fade = await t.page.evaluate(() => document.querySelector(".ws-pane--active .table-wrap")?.hasAttribute("data-more-start"));
-      await t.check("scrolled: the first column stays put", Math.abs(scrolled.after.first - scrolled.before.first) <= 1, JSON.stringify(scrolled));
+      await t.check("scrolled: the first column moves (none is pinned)", scrolled.after.first < scrolled.before.first - 1, JSON.stringify(scrolled));
       await t.check("scrolled: the other columns move", scrolled.after.second < scrolled.before.second - 1, JSON.stringify(scrolled));
       await t.check("scrolled: the start edge fades", scrolled.fade === true, JSON.stringify(scrolled));
       await t.audit(`table in a pane of ${Math.round(sizes[1] * 100)}%, scrolled to its end`);
     }
+  }, { viewport: vp });
+}
+
+for (const vp of ["desktop", "phone"]) {
+  test(`table: the header row stays in view while the pane scrolls down @ ${vp}`, async (t) => {
+    await t.boot();
+    const ids = await t.seed(profileSpec("long", { items: 60 }));
+    await t.open(t.listPath(ids.collections.books));
+    const at = () =>
+      t.page.evaluate(() => {
+        const pane = document.querySelector(".ws-pane--active .ws-pane__body");
+        const scroller = document.querySelector(".ws-pane--active .items-table .cds--data-table-content");
+        const th = scroller?.querySelector("thead th");
+        const td = scroller?.querySelector("tbody tr td");
+        if (!pane || !th || !td) return null;
+        return { pane: pane.getBoundingClientRect().top, head: th.getBoundingClientRect().top, headLeft: th.getBoundingClientRect().left, cellLeft: td.getBoundingClientRect().left, scrollTop: pane.scrollTop };
+      });
+    const before = await at();
+    await t.check("a table is shown", !!before, "no table");
+    if (!before) return;
+    await t.page.evaluate(() => {
+      const pane = document.querySelector(".ws-pane--active .ws-pane__body");
+      pane.scrollTop = pane.scrollHeight / 2;
+    });
+    await t.settle(150);
+    const down = await at();
+    await t.check("the pane scrolled down past the table's top", down.scrollTop > 0 && before.head - down.scrollTop < down.pane, JSON.stringify({ before, down }));
+    await t.check("scrolled down: the header row is at the pane's top", Math.abs(down.head - down.pane) <= 1, JSON.stringify({ before, down }));
+    await t.audit("table scrolled down, header row held", { shotOnFail: true });
+    // Sideways too (a phone): the header cells stay above their columns.
+    await t.page.evaluate(() => {
+      const scroller = document.querySelector(".ws-pane--active .items-table .cds--data-table-content");
+      scroller.scrollLeft = scroller.scrollWidth;
+    });
+    await t.settle(150);
+    const side = await at();
+    await t.check("scrolled sideways: the header cells stay above their columns", Math.abs(side.headLeft - side.cellLeft) <= 1, JSON.stringify(side));
+    await t.page.evaluate(() => (document.querySelector(".ws-pane--active .ws-pane__body").scrollTop = 0));
+    await t.settle(150);
+    const back = await at();
+    await t.check("scrolled back up: the header row is in its place again", Math.abs(back.head - before.head) <= 1, JSON.stringify({ before, back }));
   }, { viewport: vp });
 }

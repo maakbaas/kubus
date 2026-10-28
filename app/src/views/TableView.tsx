@@ -278,7 +278,7 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
  * An items table. Columns are as wide as their content (see styles.css), so the table can end
  * before the pane does; then its last (actions) column is widened to fill the rest of the row.
  * A table that doesn't fit its pane (a phone, a narrow tiled pane) stays a table: it scrolls
- * sideways, its first column (the title) staying put.
+ * sideways, all its columns together. While the pane scrolls down, its header row stays in view.
  */
 export function FillTable({ children }: { children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
@@ -300,20 +300,13 @@ export function FillTable({ children }: { children: ReactNode }) {
     observer.observe(table);
     return () => observer.disconnect();
   }, []);
-  // A table that scrolls sideways shows where more of it is: a fade at that edge (styles.css),
-  // the start one beside the first column, which stays put. Touch screens hide scrollbars until
-  // scrolling, and they can't be made to stay. A first column of half the table or more (an
-  // unbroken title, the actions of a table without fields) scrolls with the rest: kept in place
-  // it would cover what scrolls.
+  // A table that scrolls sideways shows where more of it is: a fade at that edge (styles.css).
+  // Touch screens hide scrollbars until scrolling, and they can't be made to stay.
   useEffect(() => {
     const el = box.current;
     const scroller = el?.querySelector<HTMLElement>(".cds--data-table-content");
     if (!el || !scroller) return;
     const update = () => {
-      const first = scroller.querySelector("tr")?.firstElementChild as HTMLElement | null | undefined;
-      const sticky = !!first && first.offsetWidth < scroller.clientWidth / 2;
-      el.toggleAttribute("data-sticky-first", sticky);
-      el.style.setProperty("--table-first-column", `${sticky ? first.offsetWidth : 0}px`);
       el.toggleAttribute("data-more-start", scroller.scrollLeft > 1);
       el.toggleAttribute("data-more-end", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
     };
@@ -324,6 +317,37 @@ export function FillTable({ children }: { children: ReactNode }) {
     if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
     return () => {
       scroller.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, []);
+  // While the pane scrolls down past a table's top, its header row comes down with it, at the
+  // pane's top edge, until the table's end. Not `position: sticky`: the sideways scroller around
+  // the table is its scroll container (overflow-x makes overflow-y auto too) and never scrolls
+  // down, so a sticky header would stay put. The header cells are moved instead (styles.css,
+  // `data-head-shift`), inside the scroller, so they keep scrolling sideways with their columns.
+  // Only in a pane (the app's pages, not a dialog).
+  useEffect(() => {
+    const el = box.current;
+    const pane = el?.closest<HTMLElement>(".ws-pane__body");
+    const table = el?.querySelector("table");
+    if (!el || !pane || !table) return;
+    let shown = 0;
+    const update = () => {
+      const head = table.tHead;
+      const rect = table.getBoundingClientRect();
+      const shift = head ? Math.max(0, Math.min(pane.getBoundingClientRect().top - rect.top, rect.height - head.offsetHeight)) : 0;
+      if (shift === shown) return;
+      shown = shift;
+      el.toggleAttribute("data-head-shift", shift > 0);
+      el.style.setProperty("--table-head-shift", `${shift}px`);
+    };
+    update();
+    pane.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(pane);
+    observer.observe(table);
+    return () => {
+      pane.removeEventListener("scroll", update);
       observer.disconnect();
     };
   }, []);

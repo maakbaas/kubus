@@ -131,7 +131,7 @@ strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 | `02-shell` | side nav (toggle, branches, overlay, resize gutter), space switcher, global search, sync status, many tabs and the tab width rules, tab close / middle click / history, split panes, divider drag, drag a tab to split |
 | `03-click-everything` | every visible control on 14 pages is clicked (and what it opens, one level down), every icon button hovered; audit after each |
 | `04-item-editing` | in-place editing of every field kind: label, box and text stay put, nothing else moves, Escape / Enter / click outside; title, checkboxes, lists, collapse, image hover; item views |
-| `05-table` | cell editing keeps column widths, add row, sorting, hover, row actions, grouping, 60 columns, 200 / 1000 rows, narrow panes scroll sideways with the first column staying put |
+| `05-table` | cell editing keeps column widths, add row, sorting, hover, row actions, grouping, 60 columns, 200 / 1000 rows, narrow panes scroll sideways (all columns together), the header row held while the pane scrolls down |
 | `06-views-blocks` | views (add, rename, star, unsaved changes, delete, 25 views), filters, every block menu, Show as, add / hide / remove blocks, collapse, cards options |
 | `07-forms` | creating a collection with every field type, new item form, editor reorder / remove, icon picker, components (failing and wide HTML), spaces, bookmarks, settings, collections overview |
 | `08-markdown` | typing every GFM construct, no inner scrolling, huge notes, links, chips, task boxes |

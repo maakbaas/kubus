@@ -297,14 +297,14 @@ function __audit(opts) {
 
   lap();
   /**
-   * A table's first column stays put while the rest scrolls sideways under it (styles.css): a cell
-   * of another column shows only right of it. Narrows `area` to that.
+   * A table's header row stays in view while the pane scrolls down, the rows passing under it
+   * (styles.css, `data-head-shift`): a body cell shows only below it. Narrows `area` to that.
    */
-  function underStickyColumn(el, area) {
-    const cell = el.closest?.(".items-table :is(td, th)");
-    const first = cell?.parentElement?.firstElementChild;
-    if (!cell || !first || first === cell || cs(first).position !== "sticky") return area;
-    return { ...area, left: Math.max(area.left, first.getBoundingClientRect().right) };
+  function underStuckHeader(el, area) {
+    const cell = el.closest?.(".table-wrap[data-head-shift] .items-table tbody td");
+    const head = cell?.closest("table")?.tHead;
+    if (!cell || !head) return area;
+    return { ...area, top: Math.max(area.top, head.getBoundingClientRect().bottom) };
   }
 
   section = "text-overlap";
@@ -337,7 +337,7 @@ function __audit(opts) {
           area = { left: Math.max(area.left, pr.left), top: Math.max(area.top, pr.top), right: Math.min(area.right, pr.right), bottom: Math.min(area.bottom, pr.bottom) };
         }
       }
-      area = underStickyColumn(el, area);
+      area = underStuckHeader(el, area);
       clipCache.set(el, area);
       return area;
     }
@@ -388,7 +388,7 @@ function __audit(opts) {
         area = { left: Math.max(area.left, pr.left), top: Math.max(area.top, pr.top), right: Math.min(area.right, pr.right), bottom: Math.min(area.bottom, pr.bottom) };
       }
     }
-    area = underStickyColumn(el, area);
+    area = underStuckHeader(el, area);
     area.left = Math.max(area.left, 0); area.top = Math.max(area.top, 0);
     area.right = Math.min(area.right, vw); area.bottom = Math.min(area.bottom, vh);
     return area;

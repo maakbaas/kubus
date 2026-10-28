@@ -512,28 +512,27 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
           {/* "+" takes the menu arrow's place; with the arrow it joins the icons at the right edge. */}
           {!clippedTabs && <span className="tab-menu">{addButton}</span>}
           <span className="views-bar__spacer" />
-          <OverflowBar>
-          {clippedTabs && addButton}
-          {/* Held while a panel is open, as on collection pages (the "⋮" menu on phones). */}
+          {/* Always in the bar, left of the other buttons (never in the "⋮" menu), as on collection
+              pages; held while a panel is open, so they appear once the panel closes. */}
           {panels.hold("changed", changed) && (
             <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Discard changes" onClick={() => setDraft(null)}>
               <Undo />
             </IconButton>
           )}
           {panels.hold("changed", changed) && activeView && (
-            <>
-              <IconButton
-                autoAlign
-                kind="ghost"
-                size="sm"
-                align="bottom"
-                label="Save changes to view"
-                onClick={() => saveViews(itemViews.map((v) => (v.id === activeView.id ? { ...v, layout: current } : v)))}
-              >
-                <Save />
-              </IconButton>
-            </>
+            <IconButton
+              autoAlign
+              kind="ghost"
+              size="sm"
+              align="bottom"
+              label="Save changes to view"
+              onClick={() => saveViews(itemViews.map((v) => (v.id === activeView.id ? { ...v, layout: current } : v)))}
+            >
+              <Save />
+            </IconButton>
           )}
+          <OverflowBar>
+          {clippedTabs && addButton}
           {activeView && (
             <>
               {/* The last view can't be deleted: a collection always keeps one (like its collection views). */}

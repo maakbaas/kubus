@@ -248,10 +248,11 @@ body {
      deeper than 10px and solid; in the home-screen app that also keeps iOS from blurring the bar.
      Sticky changes nothing here (the strip never scrolls). Nothing fixed may sit above it there: a
      fixed element hit first (even body, through a ::before) ends the search. z-index keeps its
-     tooltips above pane content (sticky makes the strip a stacking context). */
+     tooltips above pane content (sticky makes the strip a stacking context), also above a table's
+     header row held at the pane's top (z-index 1, FillTable). */
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
 }
 /* A strip at the window's top edge gets a little room above its tabs, in its own colour: as
    wide as the gutters between panes (4px). */
@@ -3257,36 +3258,30 @@ img[data-lightbox] {
 }
 
 /* A table too wide for its pane (a phone, a narrow tiled pane) stays a table and scrolls
-   sideways (FillTable, views/TableView.tsx), its first column (the title) staying put. Words are
+   sideways (FillTable, views/TableView.tsx), all its columns together (none is pinned). Words are
    never split: columns get as narrow as their longest word, then the table scrolls. */
 .items-table .cds--data-table-content {
   background: var(--cds-layer);
   overflow-x: auto;
-  /* What is scrolled into view (a focused cell editor) comes out beside the first column, not
-     under it (its width set by FillTable). */
-  scroll-padding-inline-start: var(--table-first-column, 0);
 }
 .items-table td,
 .items-table td:has(> a) {
   overflow-wrap: break-word;
 }
-/* The first column stays at the start while the rest scrolls under it (unless it is half the table
-   or more: FillTable); its cells keep their own (solid) backgrounds over what passes beneath. Sticky is also the anchor of an editing cell's
-   input (as `position: relative` is elsewhere). */
-.table-wrap[data-sticky-first] .items-table :is(th, td):first-child {
-  position: sticky;
-  inset-inline-start: 0;
+/* While the pane scrolls down past a table's top, its header row stays in view at the pane's top
+   edge (FillTable sets the shift: sticky can't, the sideways scroller is the table's scroll
+   container). The header cells are moved, not the table's parts around them, so they still scroll
+   sideways with their columns; their own (solid) backgrounds cover the rows passing beneath. A
+   transform, not a filter (Safari rules above): Floating UI knows a transform makes a containing
+   block for the tooltips of a header's sort buttons. Only while moved: then it is a layer above the
+   rows (z-index), under the tab strip's tooltips (the strip is a layer higher). */
+.table-wrap[data-head-shift] .items-table thead th {
+  position: relative;
   z-index: 1;
-}
-/* A first cell being edited (or the add row's input there) comes above the other rows' first
-   cells: each is a layer of its own (z-index), which would cover its menu (a combo box, a date's
-   calendar) where it opens over them. */
-.table-wrap[data-sticky-first] .items-table :is(th, td):first-child:focus-within {
-  z-index: 3;
+  transform: translateY(var(--table-head-shift, 0));
 }
 /* Where more of a sideways-scrolling table is, its edge fades (set by FillTable): touch screens
-   show no scrollbar until scrolling. Drawn on the non-scrolling container, over the rows; the
-   start one beside the first column, which doesn't scroll. */
+   show no scrollbar until scrolling. Drawn on the non-scrolling container, over the rows. */
 .items-table {
   position: relative;
 }
@@ -3302,7 +3297,7 @@ img[data-lightbox] {
   z-index: 2;
 }
 .items-table::before {
-  inset-inline-start: var(--table-first-column, 0);
+  inset-inline-start: 0;
   background: linear-gradient(to right, var(--cds-background), transparent);
 }
 .items-table::after {
