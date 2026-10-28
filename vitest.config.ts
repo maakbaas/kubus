@@ -10,9 +10,12 @@ import { defineConfig } from "vitest/config";
 // without them they are left out, with a note. server's tests also need Postgres (KUBUS_TEST_POSTGRES,
 // server/test/postgres.ts); without it they are skipped, except in CI.
 
-// Coverage slows the code down (and the machine is often busy): more time per test.
-const testTimeout = process.argv.includes("--coverage") ? 20_000 : 5_000;
-const project = (name: string, include: string[]) => ({ test: { name, include, environment: "node", testTimeout } });
+// Coverage slows the code down (and the machine is often busy): more time per test. The server's and the
+// connectors' tests start real servers and databases: their timeout only guards against a hang.
+const coverage = process.argv.includes("--coverage");
+const project = (name: string, include: string[], timeout = 5_000) => ({
+  test: { name, include, environment: "node", testTimeout: coverage ? Math.max(timeout, 20_000) : timeout },
+});
 
 const serverInstalled = existsSync(new URL("server/node_modules/pg", import.meta.url));
 if (!serverInstalled) console.warn("The connectors and server tests are left out: install the server's packages (npm ci in server/)");
@@ -41,7 +44,7 @@ export default defineConfig({
       project("api", ["app/src/headless/**/*.test.ts"]),
       project("app", ["app/src/{app,platform,ui,views,pages,workspace}/**/*.test.{ts,tsx}"]),
       ...(serverInstalled
-        ? [project("connectors", ["server/test/connectors/**/*.test.ts"]), project("server", ["server/test/*.test.ts"])]
+        ? [project("connectors", ["server/test/connectors/**/*.test.ts"], 30_000), project("server", ["server/test/*.test.ts"], 30_000)]
         : []),
     ],
   },
