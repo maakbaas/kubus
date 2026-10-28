@@ -540,11 +540,9 @@ function MapOptionsEditor({ collection, options, onChange }: BlockOptionsProps<M
       <Checkbox
         id={`${uid}-map-route`}
         labelText="Show as route"
-        helperText="A line through the dots in the block's sort order, one per group."
         checked={options.route}
         onChange={(_, { checked }) => onChange({ ...options, route: checked })}
       />
-      <p className="helper">The dots are coloured by the block's grouping (Sort and group).</p>
     </div>
   );
 }
