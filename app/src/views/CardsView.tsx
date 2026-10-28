@@ -422,7 +422,7 @@ export const cardsView = defineBlockType<CardOptions>({
   label: "Cards",
   icon: GridIcon,
   defaultOptions: (collection) => ({ coverFieldId: imageFields(collection)[0]?.id ?? null, cardWidth: CARD_WIDTH.initial, coverRatio: "auto", showTitle: true, coverBeside: false }),
-  uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true } }),
+  uses: () => ({ query: true, steps: true, groups: true, fields: { labels: true, hideEmpty: true } }),
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<CardOptions>;
     const ids = new Set(pickableFields(collection).map((f) => f.id));

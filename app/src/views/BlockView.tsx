@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Button, Checkbox, Dropdown, InlineNotification, ProgressBar, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
@@ -8,7 +8,7 @@ import { placeProblem } from "../domain/components";
 import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
-import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type QueryResult } from "../domain/query";
+import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type ItemGroup, type QueryResult } from "../domain/query";
 import { blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
@@ -29,6 +29,8 @@ import { useShownOnce } from "../ui/useShownOnce";
 // both render their blocks with BlockView; BlockMenus in each block's header edits it (also when
 // a view has a single block: the toolbar holds only the view's own controls).
 
+/** Items shown at first by a table or cards of a native collection, and added by each "Show more". */
+const STEP = 100;
 const NO_RESULT: QueryResult = { groups: [], total: 0 };
 
 /** A block type with its icon, as shown in the "Show as" menu. */
@@ -290,7 +292,23 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
     () => (!remote && data.items && uses.query ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),
     [remote, collection, data.items, data.ctx, uses.query, query, search],
   );
-  const result = remote ? remote.result : local;
+  // A native collection's items are shown a step at a time too (a table of thousands rows is slow), in the order of the groups.
+  const [shown, setShown] = useState(STEP);
+  const stepKey = `${collection.id}|${search}|${JSON.stringify(query)}`;
+  useEffect(() => setShown(STEP), [stepKey]);
+  const stepped = !remote && !!uses.steps && local.groups.reduce((n, g) => n + g.items.length, 0) > shown;
+  const cut = useMemo(() => {
+    if (!stepped) return local;
+    let left = shown;
+    const groups: ItemGroup[] = [];
+    for (const g of local.groups) {
+      if (left <= 0) break;
+      groups.push(g.items.length <= left ? g : { ...g, items: g.items.slice(0, left) });
+      left -= g.items.length;
+    }
+    return { ...local, groups };
+  }, [stepped, local, shown]);
+  const result = remote ? remote.result : cut;
   const items = remote ? remote.items : data.items;
   const error = remote?.error ?? data.error;
   // Every block of a page asking the same server: its error (it can't be reached) shows once.
@@ -371,13 +389,22 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           <ProgressBar
             className="block-more__bar"
             size="small"
-            label={`Loading rows: ${remote.progress.loaded} of ${remote.progress.total}`}
-            value={remote.progress.loaded}
-            max={Math.max(remote.progress.total, 1)}
+            label={`Loading rows: ${remote.progress.loaded} so far`}
+            {...(remote.progress.fraction !== null && { value: Math.round(remote.progress.fraction * 100), max: 100 })}
           />
           <Button kind="tertiary" size="sm" onClick={remote.progress.cancel}>
             Cancel
           </Button>
+        </div>
+      )}
+      {!collapsed && items && stepped && (
+        <div className="block-more">
+          <Button kind="tertiary" size="sm" onClick={() => setShown((n) => n + STEP)}>
+            Show more
+          </Button>
+          <span className="helper">
+            {cut.groups.reduce((n, g) => n + g.items.length, 0)} of {local.groups.reduce((n, g) => n + g.items.length, 0)}
+          </span>
         </div>
       )}
       {!collapsed && items && remote?.more && (

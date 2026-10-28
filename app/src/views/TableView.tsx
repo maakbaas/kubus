@@ -666,7 +666,7 @@ export const tableView = defineBlockType<TableOptions>({
     return { titleLink: o.titleLink !== false };
   },
   // Columns are its fields.
-  uses: () => ({ query: true, groups: true, fields: { labels: false, hideEmpty: false } }),
+  uses: () => ({ query: true, steps: true, groups: true, fields: { labels: false, hideEmpty: false } }),
   View: TableView,
   OptionsEditor: TableOptionsEditor,
 });

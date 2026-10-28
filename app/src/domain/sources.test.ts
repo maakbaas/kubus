@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SourceColumn } from "../../../shared/sources";
 import { blankField, pickableFields, type Collection } from "./model";
-import { canGroup, canSort, fieldOperators, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
+import { canGroup, canSort, fieldOperators, linePosition, loadedFraction, namesOfTable, reversedRequest, rowPosition, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
 import { defaultQuery, TITLE } from "./query";
 
 const columns: SourceColumn[] = [
@@ -131,5 +131,28 @@ describe("remote collections", () => {
     expect(namesOfTable("customer_orders")).toEqual({ name: "Customer order", pluralName: "Customer orders" });
     expect(namesOfTable("companies")).toEqual({ name: "Company", pluralName: "Companies" });
     expect(namesOfTable("status")).toEqual({ name: "Status", pluralName: "Status" });
+  });
+});
+
+describe("how far a load of all rows is", () => {
+  const request = { groupBy: null, groupOrder: "asc" as const, sort: [{ column: "born", direction: "asc" as const }], key: "id", columns: ["born"], title: [] as string[] };
+  const row = (born: string | null) => ({ key: "1", values: [born] });
+  it("places a row by its first sort column: dates, numbers, text", () => {
+    expect(rowPosition(request, row("2020-01-01"))).toBe(Date.parse("2020-01-01T00:00:00Z"));
+    expect(rowPosition(request, row(null))).toBeNull();
+    expect(linePosition("b")!).toBeGreaterThan(linePosition("a")!);
+    expect(linePosition("ab")!).toBeGreaterThan(linePosition("aa")!);
+  });
+  it("reverses the order", () => {
+    expect(reversedRequest(request)?.sort[0].direction).toBe("desc");
+    expect(reversedRequest({ ...request, sort: [] })?.sort).toEqual([{ column: "id", direction: "desc" }]);
+    expect(reversedRequest({ ...request, groupBy: "g", groupOrder: "count" })).toBeNull();
+  });
+  it("tells the fraction, and none where unknown", () => {
+    expect(loadedFraction(0, 25, 100)).toBe(0.25);
+    expect(loadedFraction(100, 75, 0)).toBe(0.25);
+    expect(loadedFraction(5, null, 10)).toBe(1);
+    expect(loadedFraction(5, 5, 5)).toBe(0);
+    expect(loadedFraction(null, 1, 2)).toBeNull();
   });
 });

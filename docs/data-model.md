@@ -90,9 +90,8 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   meant for remote collections, whose blocks ask their source for each page of rows (filtered,
   sorted and grouped there: `useRemoteResult`, docs/sync.md "Remote sources") instead of
   `applyQuery`. Rendering is not
-  virtualized: rows and cards are memoized only. If a 5,000-item collection feels slow, render rows
-  in steps (roadmap #9), not virtualization (which clashes with `FillTable` / `useSharedColumns`
-  measuring every row).
+  virtualized: rows and cards are memoized only. Instead a table or cards block shows a native collection's items in steps of 100 ("Show more", `STEP` in `BlockView`), not virtualization (which clashes with `FillTable` / `useSharedColumns`
+  measuring every row); the other block types get every item.
 - **Never install the SAH-pool VFS while another worker may hold its files.** If
   `installOpfsSAHPoolVfs()` fails to open a pool file, its error path calls `removeVfs()`, which
   deletes the pool directory, i.e. the database (this happened on reload-after-save). The worker

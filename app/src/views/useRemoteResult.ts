@@ -4,7 +4,7 @@ import { useStore } from "../app/store";
 import { withComputed } from "../domain/components";
 import type { Collection, Item } from "../domain/model";
 import type { ItemGroup, QueryResult, ViewQuery } from "../domain/query";
-import { deviceTimeZone, groupLabel, rowItem, sourceQuery, sourceShape } from "../domain/sources";
+import { deviceTimeZone, groupLabel, loadedFraction, reversedRequest, rowItem, rowPosition, sourceQuery, sourceShape } from "../domain/sources";
 
 // A block of a remote collection: its query asked of the source (filter, sort, grouping and search
 // worked out there, shared/sources.ts), a page at a time. What it gives the block type is the same
@@ -24,8 +24,11 @@ export interface RemoteResult {
   /** Loads the next page; null when every row is in. */
   more: (() => void) | null;
   loadingMore: boolean;
-  /** Loading every row (`all`): how far it is, and a way to stop; null when done or stopped. */
-  progress: { loaded: number; total: number; cancel: () => void } | null;
+  /**
+   * Loading every row (`all`): the rows in, how far along the order they come in (0 to 1; null where
+   * that can't be told: the source's count may be short), and a way to stop; null when done or stopped.
+   */
+  progress: { loaded: number; fraction: number | null; cancel: () => void } | null;
 }
 
 const EMPTY: QueryResult = { groups: [], total: 0 };
@@ -68,6 +71,8 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
   const [refreshes, setRefreshes] = useState(0);
   // The request whose remaining pages the person stopped loading.
   const [stopped, setStopped] = useState("");
+  // The place of the last row in the order of the request (the first row of the opposite order), asked with the first page.
+  const [end, setEnd] = useState<{ asked: string; position: number | null } | null>(null);
   const pageSize = all ? MAX_SOURCE_PAGE : PAGE;
   // The request now, so a late answer to an older one is dropped.
   const current = useRef("");
@@ -80,12 +85,19 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
     const asked = `${key}#${refreshes}`;
     const request = requestRef.current;
     if (!request) return;
+    const opposite = all ? reversedRequest(request) : null;
+    if (opposite) {
+      sources.query(collection.source.name, { ...opposite, offset: 0, limit: 1, counts: false }).then(
+        (r) => current.current === asked && setEnd({ asked, position: r.rows[0] ? rowPosition(request, r.rows[0]) : null }),
+        () => current.current === asked && setEnd({ asked, position: null }),
+      );
+    }
     sources.query(collection.source.name, { ...request, offset: 0, limit: pageSize, counts: true }).then(
       // A total under the rows in (a source that couldn't count them all) counts at least those.
       (r) => current.current === asked && setLoaded({ key, rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, more: r.more }),
       (e) => current.current === asked && setLoaded({ key, rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) }),
     );
-  }, [remote, collection.source, key, refreshes, sources, pageSize]);
+  }, [remote, collection.source, key, refreshes, sources, pageSize, all]);
 
   const more = useCallback(() => {
     if (!loaded || !loaded.more || !request || !collection.source || loadingMore) return;
@@ -152,6 +164,16 @@ export function useRemoteResult(collection: Collection, query: ViewQuery, search
     error: fresh ? loaded?.error : undefined,
     more: fresh && loaded?.more && !loadingAll ? (all ? () => setStopped("") : more) : null,
     loadingMore,
-    progress: loadingAll && loaded ? { loaded: loaded.rows.length, total: loaded.total, cancel: () => setStopped(current.current) } : null,
+    progress:
+      loadingAll && loaded && request
+        ? {
+            loaded: loaded.rows.length,
+            fraction:
+              end?.asked === `${key}#${refreshes}` && loaded.rows.length
+                ? loadedFraction(rowPosition(request, loaded.rows[0]), rowPosition(request, loaded.rows[loaded.rows.length - 1]), end.position)
+                : null,
+            cancel: () => setStopped(current.current),
+          }
+        : null,
   };
 }
