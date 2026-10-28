@@ -194,8 +194,8 @@ of no kind until it is set up again), and app and server must both be this versi
   A list column groups a row under each value. At start (and on every change) `check` warns about a
   superuser or a user that can write: give it a user that can only read (`GRANT SELECT`); queries
   written in the app read whatever that user can (turn queries off per source to allow tables only).
-- *n8n* (`connectors/n8n.ts`): n8n's data tables through its public API, `n8n://host[:port][/path]`
-  (https) or `n8n+http://…` (plain http), the API key as the password (header `X-N8N-API-KEY`).
+- *n8n* (`connectors/n8n.ts`): n8n's data tables through its public API, its address
+  (https:// unless it says http://), the API key as the password (header `X-N8N-API-KEY`).
   Strictly read-only: its one request helper only sends `GET`s (`/data-tables`, `…/<id>/rows`); give
   it a key with only the read scopes (`dataTable:list`, `dataTableRow:read`) where
   n8n offers scopes. Tables only (no query language; `schema` null, a name two projects share gets
@@ -213,7 +213,7 @@ of no kind until it is set up again), and app and server must both be this versi
   returns is filtered exactly in memory, so a looser rule only reads more. Without a filter the whole
   table is read. The time limit bounds each request.
 - *InfluxDB 2* (`connectors/influx.ts`, Flux in `influxFlux.ts`, pure and tested without a server):
-  `influxdb://host:8086/org` (`influxdbs://` for HTTPS; port 8086 / 443 by default), the token as the
+  its address (http://host:8086, or https://; port 8086 / 443 by default) and organization, the token as the
   password; Flux over `/api/v2/query` (annotated CSV, `RFC3339Nano` times) with the time limit as the
   request's. Strictly read-only: the connector only ever sends Flux that reads, and a query written in
   the app is refused (`checkFlux`, a tokenizer: strings, interpolations, regexes and comments read as
@@ -233,7 +233,7 @@ of no kind until it is set up again), and app and server must both be this versi
   column; groups are counted and ordered first and rows placed by their group's place (`dict`).
   Grouping by day uses `date.truncate` with a `timezone` location (InfluxDB 2.1 or later).
 - *Cloudflare D1* (`connectors/d1.ts`, SQL in `d1Sql.ts`, pure and tested on SQLite itself:
-  `d1Sql.test.ts`): `d1://<account id>/<database id>`, the password an API token, read over
+  `d1Sql.test.ts`): its account ID and database ID, the password an API token, read over
   Cloudflare's HTTP API (`/raw`, one request per statement). Strictly read-only though D1 has no
   read-only mode: only statements the connector makes are sent (`SELECT`, `PRAGMA table_xinfo`;
   anything else is refused before it leaves), a written query is one statement (any `;` outside
