@@ -19,6 +19,7 @@ import {
   spreadValues,
   statusOf,
   statusRanges,
+  thresholdStatus,
   styleOf,
   thresholdPercent,
   weekdays,
@@ -29,6 +30,7 @@ import {
   type ChartInput,
   type ChartOptions,
   type DrawnSeries,
+  type ThresholdStatus,
 } from "../domain/chart";
 import { pickableFields, type FieldDef } from "../domain/model";
 
@@ -126,14 +128,16 @@ const domainOf = (a: ChartAxis, values: number[]): [number, number] | null =>
 const thresholdLines = (options: ChartOptions) =>
   options.thresholds.map((t) => ({
     value: t.value,
-    label: t.status === "danger" ? "Danger" : "Warning",
-    fillColor: t.status === "danger" ? "var(--cds-support-error)" : "var(--cds-support-warning)",
+    label: thresholdStatus(t.status).text,
+    fillColor: thresholdStatus(t.status).color,
     valueFormatter: (v: number) => formatValue(v, options),
   }));
 
 const CURVES: Record<ChartOptions["curve"], string> = { smooth: "curveMonotoneX", straight: "curveLinear", step: "curveStepAfter" };
 
 const isDate = (f: FieldDef | undefined) => f?.kind === "date" || f?.kind === "datetime";
+/** A status as Carbon's gauge and meter take it ("success" below every threshold); null for one it has none for. */
+const carbonStatus = (status: string) => (status === "success" ? status : thresholdStatus(status as ThresholdStatus).carbon);
 /** A day's (yyyy-mm-dd) local midnight, or `plus` days later. */
 const localDay = (day: string, plus = 0) => {
   const [y, m, d] = day.split("-").map(Number);
@@ -350,7 +354,10 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         const one = singleValue(input, options);
         const percent = percentOf(one.value, one.max);
         if (percent === null || one.value === null) return { problem: "No value to show." };
-        const ranges = statusRanges(options.thresholds.map((t) => ({ value: thresholdPercent(t, options.thresholdMode, one.max), status: t.status })));
+        const ranges = statusRanges(options.thresholds.map((t) => ({ value: thresholdPercent(t, options.thresholdMode, one.max), status: t.status })))?.flatMap((r) => {
+          const status = carbonStatus(r.status);
+          return status ? [{ ...r, status }] : [];
+        });
         const label = `${one.label}: ${formatValue(one.value, options)}${one.max === null ? "" : ` of ${formatValue(one.max, options)}`}`;
         return {
           chart: "MeterChart",
@@ -422,7 +429,8 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       const one = singleValue(input, options);
       const percent = percentOf(one.value, one.max);
       if (percent === null) return { problem: "No value to show." };
-      const status = statusOf(percent, options.thresholds.map((t) => ({ value: thresholdPercent(t, options.thresholdMode, one.max), status: t.status })));
+      const reached = statusOf(percent, options.thresholds.map((t) => ({ value: thresholdPercent(t, options.thresholdMode, one.max), status: t.status })));
+      const status = reached && carbonStatus(reached);
       // The change from the comparison value, in the same % of the total ("Previous" only after a last value).
       const how = options.compare === "prev" && first.value !== "last" ? null : options.compare;
       const before = how ? aggregate(items, how, fields.get(options.compareField ?? first.field ?? "")) : null;

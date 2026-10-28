@@ -136,7 +136,8 @@ Extension points are registries, not special cases in pages:
   - **Axes**: the X axis's title; the left and (while a series uses it) right axis' title, min, max and logarithmic scale.
     Without a min, bars and stacked areas start at 0 and lines, areas and dots fit their values (`includeZero: false`, `FIT`
     in chartSpec.ts), so a weight from 80 to 70 shows its trend.
-  - **Thresholds**: warning and danger levels; lines on a bar, line or area chart's left axis, a gauge's colour and a
+  - **Thresholds**: info, target, warning and danger levels (`THRESHOLD_STATUSES`: blue, green, yellow, red lines;
+    a gauge or meter takes Carbon's statuses only, a target as its success, and doesn't offer info); lines on a bar, line or area chart's left axis, a gauge's colour and a
     meter's status ranges (there a % of the total or values: `thresholdPercent`, `statusOf`, `statusRanges`).
   - **Values and legend**: a unit and decimals for axes, tooltips and a gauge (`formatValue`); the legend automatic (with
     more than one series or part), shown or hidden, and where.

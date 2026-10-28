@@ -120,10 +120,12 @@ describe("chartSpec", () => {
   });
 
   it("draws thresholds as lines on the value axis", () => {
-    const s = spec({ thresholds: [{ value: 2, status: "warning" }, { value: 5, status: "danger" }] });
+    const s = spec({ thresholds: [{ value: 1, status: "info" }, { value: 2, status: "warning" }, { value: 5, status: "danger" }, { value: 8, status: "target" }] });
     expect(axes(s).left.thresholds).toMatchObject([
+      { value: 1, label: "Info", fillColor: "var(--cds-support-info)" },
       { value: 2, label: "Warning", fillColor: "var(--cds-support-warning)" },
       { value: 5, label: "Danger", fillColor: "var(--cds-support-error)" },
+      { value: 8, label: "Target", fillColor: "var(--cds-support-success)" },
     ]);
   });
 
@@ -152,6 +154,9 @@ describe("chartSpec", () => {
     expect(one.data).toEqual([{ group: "Sum of Pages: 580 of 1000", value: 58 }]);
     expect(one.options.meter).toEqual({ status: { ranges: [{ range: [0, 50], status: "success" }, { range: [50, 100], status: "warning" }] } });
     const parts = spec({ chart: "meter", parts: "fields", fields: ["pages", "rating"], total: { from: "number", number: 1000, field: null } });
+    // Carbon's statuses only: a target is its success, an info none of its own (left out).
+    const targets = spec({ chart: "meter", parts: "one", series: [sum("pages")], total: { from: "number", number: 1000, field: null }, thresholds: [{ value: 20, status: "info" }, { value: 50, status: "target" }] });
+    expect(targets.options.meter).toEqual({ status: { ranges: [{ range: [0, 20], status: "success" }, { range: [50, 100], status: "success" }] } });
     expect(parts.data).toEqual([{ group: "Pages", value: 580 }, { group: "Rating", value: 11 }]);
     expect((parts.options.meter as { proportional: { total: number } }).proportional.total).toBe(1000);
   });

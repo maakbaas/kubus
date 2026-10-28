@@ -23,6 +23,7 @@ import {
   seriesLabel,
   splitFields,
   styleOf,
+  THRESHOLD_STATUSES,
   TRANSFORMS,
   type Aggregate,
   type ChartKind,
@@ -131,10 +132,6 @@ const ORDERS: { value: GroupOrder; text: string }[] = [
 ];
 const TOPS = [0, 5, 8, 12, 20];
 const BINS = [0, 5, 10, 20, 50];
-const STATUSES: { value: ThresholdStatus; text: string }[] = [
-  { value: "warning", text: "Warning" },
-  { value: "danger", text: "Danger" },
-];
 /** The merged Total select: the sum of the parts (or 100), a typed number, or a field's id. */
 const TOTAL_NONE = "";
 const TOTAL_NUMBER = "$number";
@@ -690,7 +687,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
             onChange={(value) => value !== null && set({ thresholds: o.thresholds.map((x, j) => (j === i ? { ...x, value } : x)) })}
           />
           <Select size="sm" id={`${uid}-threshold-${i}-status`} labelText={`Threshold ${i + 1} status`} hideLabel value={t.status} onChange={(e) => set({ thresholds: o.thresholds.map((x, j) => (j === i ? { ...x, status: e.target.value as ThresholdStatus } : x)) })}>
-            {STATUSES.map((s) => (
+            {THRESHOLD_STATUSES.filter((s) => has.xy || s.carbon || s.value === t.status).map((s) => (
               <SelectItem key={s.value} value={s.value} text={s.text} />
             ))}
           </Select>

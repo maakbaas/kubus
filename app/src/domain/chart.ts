@@ -155,7 +155,18 @@ export interface ChartTotal {
   field: string | null;
 }
 
-export type ThresholdStatus = "warning" | "danger";
+export type ThresholdStatus = "info" | "target" | "warning" | "danger";
+/**
+ * The statuses, in the order offered: each with its line's colour (a Carbon token: bar, line, area) and
+ * Carbon's status for a gauge or meter (null: Carbon has none for it, so a gauge or meter doesn't offer it).
+ */
+export const THRESHOLD_STATUSES: { value: ThresholdStatus; text: string; color: string; carbon: "success" | "warning" | "danger" | null }[] = [
+  { value: "info", text: "Info", color: "var(--cds-support-info)", carbon: null },
+  { value: "target", text: "Target", color: "var(--cds-support-success)", carbon: "success" },
+  { value: "warning", text: "Warning", color: "var(--cds-support-warning)", carbon: "warning" },
+  { value: "danger", text: "Danger", color: "var(--cds-support-error)", carbon: "danger" },
+];
+export const thresholdStatus = (status: ThresholdStatus) => THRESHOLD_STATUSES.find((s) => s.value === status)!;
 export interface Threshold {
   value: number;
   status: ThresholdStatus;
@@ -390,7 +401,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
       ? o.thresholds.flatMap((t) => {
           const r = record(t);
           const value = finite(r.value);
-          return value === null ? [] : [{ value, status: r.status === "danger" ? ("danger" as const) : ("warning" as const) }];
+          return value === null ? [] : [{ value, status: oneOf<ThresholdStatus>(values(THRESHOLD_STATUSES), r.status, "warning") }];
         })
       : [],
     thresholdMode: o.thresholdMode === "absolute" ? "absolute" : "percent",
