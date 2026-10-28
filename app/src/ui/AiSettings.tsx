@@ -141,8 +141,8 @@ export function AiSettings() {
             value={draft.source}
             onChange={(e) => setDraft((d) => ({ ...d, source: e.target.value === "own" ? "own" : "server" }))}
           >
-            <SelectItem value="server" text="The server's" />
-            <SelectItem value="own" text="My own, on this device" />
+            <SelectItem value="server" text="From server" />
+            <SelectItem value="own" text="Local" />
           </Select>
           {own ? (
             <>

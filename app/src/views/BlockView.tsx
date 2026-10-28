@@ -109,32 +109,37 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
           active={filterCount > 0 || block.limit !== undefined}
           onOpenChange={onOpenChange}
         >
-          <div className="view-settings">
-            <QueryEditor
-              collection={collection}
-              query={query}
-              refs={refs}
-              part="filter"
-              page={page}
-              title="Filter"
-              emptyText={query.inherited?.length ? `Only ${inherits} filter. A rule joined with And narrows it, with Or lets more items in.` : "Showing all items."}
-              onChange={(q) => onChange({ ...block, filters: q.filters.length > 0 ? q.filters : null })}
-            />
-            <NumberInput
-              size="sm"
-              id={`${uid}-limit`}
-              label="Limit"
-              helperText="Items shown at first, and added by each Show more. Empty: all."
-              allowEmpty
-              hideSteppers
-              min={0}
-              value={limit === 0 ? "" : limit}
-              onChange={(_, { value }) => {
-                const n = String(value ?? "").trim() === "" ? 0 : Number(value);
-                if (Number.isInteger(n) && n >= 0) setLimit(n);
-              }}
-            />
-          </div>
+          <QueryEditor
+            collection={collection}
+            query={query}
+            refs={refs}
+            part="filter"
+            page={page}
+            emptyText={query.inherited?.length ? `Only ${inherits} filter. A rule joined with And narrows it, with Or lets more items in.` : undefined}
+            onChange={(q) => onChange({ ...block, filters: q.filters.length > 0 ? q.filters : null })}
+            footer={
+              // How many items it shows at first and each Show more adds (empty: all).
+              <div className="block-limit">
+                <span>Show</span>
+                <NumberInput
+                  size="sm"
+                  id={`${uid}-limit`}
+                  label="Items shown at a time"
+                  hideLabel
+                  placeholder="all"
+                  allowEmpty
+                  hideSteppers
+                  min={0}
+                  value={limit === 0 ? "" : limit}
+                  onChange={(_, { value }) => {
+                    const n = String(value ?? "").trim() === "" ? 0 : Number(value);
+                    if (Number.isInteger(n) && n >= 0) setLimit(n);
+                  }}
+                />
+                <span>items at a time</span>
+              </div>
+            }
+          />
         </ToolbarPopover>
       )}
       {uses.query && (

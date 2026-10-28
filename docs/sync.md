@@ -129,7 +129,7 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
 
 ## The server's settings
 
-What a server offers beyond sync is set in the app: the language model in Settings → AI ("The server's",
+What a server offers beyond sync is set in the app: the language model in Settings → AI ("From server",
 `ui/AiSettings.tsx`), the remote sources in Settings → Connections (`ui/ConnectionSettings.tsx`) and the maps' style
 in Settings → Maps (`ui/MapSettings.tsx`: one OpenFreeMap style for every Map block on every device, `MAP_STYLE_IDS`, Automatic until one is chosen (`DEFAULT_MAP_STYLE`);
 a device keeps the last one it heard in `kubus.mapStyle`, `app/mapStyle.ts`, asks the server once a map is shown, and
@@ -155,13 +155,13 @@ carries each source's problem and warnings. The server's environment variables: 
 
 ## The server's language model
 
-Set in Settings → AI with "The server's" chosen (address, key, a model for AI fields and one for writing components):
+Set in Settings → AI with "From server" chosen (address, key, a model for AI fields and one for writing components):
 `server/src/ai.ts` gives every device the same model. `GET /api/ai` says what is offered (`ServerAi`
 in `shared/api.ts`: the models, never the address or key); `POST /api/ai/chat/completions` and
 `GET /api/ai/models` forward to the provider with the server's key, for any device with the token.
-In the app, Settings → AI → "The server's" (`AiConfig.source`, the default without a device's own)
+In the app, Settings → AI → "From server" (`AiConfig.source`, the default without a device's own)
 points `createLlmClient` at `<server>/api/ai` with the sync token (`AiService.providerOf`; saving the
-server's settings asks again, `serverChanged`); "My own" uses the device's own provider. The
+server's settings asks again, `serverChanged`); "Local" uses the device's own provider. The
 headless device doesn't generate AI values (that stays with the apps).
 
 ## Remote sources (remote collections)

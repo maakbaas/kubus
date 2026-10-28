@@ -183,10 +183,10 @@ What the app does, feature by feature (read the part you work on).
   new token shown once in a dialog with a copy button; docs/sync.md "The API"). Connections and the server's half of AI are the server's own settings, the same
   for every device, stored on the server, keys and passwords write-only (docs/sync.md "The server's settings"; each tab
   saves its part on top of what the server holds then: `ui/useServerSettings.ts`). AI is the language model of this
-  device, and its "Language model" dropdown also picks which one the boxes below it set up: "The server's" (the default
+  device, and its "Language model" dropdown also picks which one the boxes below it set up: "From server" (the default
   for a device without its own; the boxes are the server's address, key and models, saved to the server; asked
   for at `GET /api/ai` and called through the server's proxy `/api/ai/chat/completions` and `/api/ai/models` with the
-  sync token, so its key stays on the server: `server/src/ai.ts`, `AiService.providerOf`), or "My own": the address of an OpenAI-style API (any provider: OpenAI, OpenRouter, Ollama, LM Studio, …; nothing is preset), the key and two models, each a combo box over the provider's `/models` (any name can be typed): one for AI fields (runs for every value: fast and cheap) and one for writing components (a stronger one; empty = the field model). `AiService.client("field" | "code")` picks it. Stored per device
+  sync token, so its key stays on the server: `server/src/ai.ts`, `AiService.providerOf`), or "Local": the address of an OpenAI-style API (any provider: OpenAI, OpenRouter, Ollama, LM Studio, …; nothing is preset), the key and two models, each a combo box over the provider's `/models` (any name can be typed): one for AI fields (runs for every value: fast and cheap) and one for writing components (a stronger one; empty = the field model). `AiService.client("field" | "code")` picks it. Stored per device
   (`kubus.ai` in localStorage), never synced. The sync status icon (tab strip, top right) only shows the state; its
   popover tells more and has "Configure sync".
 - **Help** (`#/help`, `pages/HelpPage.tsx`, above Settings in the side nav): tabs along the top like Settings

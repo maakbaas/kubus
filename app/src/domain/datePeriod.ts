@@ -67,21 +67,19 @@ export function parseRolling(value: string): Rolling | null {
 }
 
 /** What a rolling range is counted in. */
-export type RangeUnit = "minute" | "hour" | "day";
-export const RANGE_UNITS: { unit: RangeUnit; text: string }[] = [
-  { unit: "minute", text: "Minutes" },
-  { unit: "hour", text: "Hours" },
-  { unit: "day", text: "Days" },
-];
+export type RangeUnit = "minute" | "hour" | "day" | "week" | "month" | "year";
 
-/** A rolling range: its first and last day (hour, minute) as days from today ("day-6..day+0", the last 7 days). */
+/**
+ * A rolling range: its first and last day (minute, hour, week, month, year) counted from today's
+ * ("day-6..day+0", the last 7 days; "month-11..month+0", the last 12 months, this one included).
+ */
 export interface RollingRange {
   from: number;
   to: number;
   /** Days unless given. */
   unit?: RangeUnit;
 }
-const ROLLING_RANGE = /^(minute|hour|day)([+-]\d+)\.\.(minute|hour|day)([+-]\d+)$/;
+const ROLLING_RANGE = /^(minute|hour|day|week|month|year)([+-]\d+)\.\.(minute|hour|day|week|month|year)([+-]\d+)$/;
 
 const offsetText = (offset: number) => `${offset < 0 ? "-" : "+"}${Math.abs(offset)}`;
 /** A rolling range's value ("day-6..day+0", "hour-23..hour+0"). */
@@ -120,6 +118,9 @@ const RANGE_WORDS: Record<RangeUnit, [one: string, many: string, current: string
   minute: ["minute", "minutes", "This minute"],
   hour: ["hour", "hours", "This hour"],
   day: ["day", "days", "Today"],
+  week: ["week", "weeks", "This week"],
+  month: ["month", "months", "This month"],
+  year: ["year", "years", "This year"],
 };
 /** A rolling range in words: "Last 7 days" (up to today), "Today", "Last 24 hours". */
 export function rollingRangeLabel({ from, to, unit = "day" }: RollingRange): string {
@@ -140,12 +141,16 @@ export function resolveRange(value: string, now = nowMinute()): Period | null {
   const toDate = parseToDate(value);
   if (toDate) return { start: periodAround(toDate, today).start, end: today };
   const range = parseRollingRange(value);
-  if (range?.unit === "minute" || range?.unit === "hour") {
-    const step = range.unit === "hour" ? 60 : 1;
-    const current = floorTo(asMinute(now), range.unit);
-    return { start: addMinutes(current, range.from * step), end: addMinutes(current, range.to * step + step - 1) };
+  if (range?.unit === "minute") {
+    const current = asMinute(now);
+    return { start: addMinutes(current, range.from), end: addMinutes(current, range.to) };
   }
-  if (range) return { start: addDays(today, range.from), end: addDays(today, range.to) };
+  // From the first one's start to the last one's end (an hour's from now's).
+  if (range) {
+    const kind = range.unit ?? "day";
+    const at = kind === "hour" ? asMinute(now) : today;
+    return { start: rollingPeriod({ kind, offset: range.from }, at).start, end: rollingPeriod({ kind, offset: range.to }, at).end };
+  }
   return parseRange(value);
 }
 

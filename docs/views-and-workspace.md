@@ -30,29 +30,29 @@ Extension points are registries, not special cases in pages:
   `SourceCondition`), so every connector filters the same way; a new item is preset only from rules every
   listed item meets (`requiredRules`).
 - **Date period** (`app/src/domain/datePeriod.ts`, `views/DatePeriodFilter.tsx`): the top of every
-  filter panel. A content switcher (Hour, Day, Week, Month, Year, Range) sets the current hour / day / week
-  (Sunday to Saturday, like the date pickers' calendars; week 1 holds 1 January) / month / year in
-  one click; ‹ › step to the one before / after (a range by its length), the calendar button back
-  to the current one, × clears it; Hour shows its day and hour (00:00 … 23:00), Range a "Last n" with minutes, hours or days
-  (`minute-29..minute+0`, `hour-23..hour+0`, `day-6..day+0`: counted from now, `RANGE_UNITS`) and two date inputs. The year dropdown runs from a century back to the current year, never into the future (the year shown stays if outside). It goes by the first date or date &
-  time field (none: Updated), or one picked beside the switcher (Created and Updated included). It
-  is stored as the filter's first `between` rule, which the rule list leaves out (a date & time by
-  its local day; in an hour or a range of minutes or hours by its local minute, a date there by its day). The current day, week, month or year is stored counted from today (`week+0`,
-  `month+0`: `resolveRange` works it out when the filter runs), so a saved "this week" stays this
-  week and the panel says "This week · …"; so is a range ending today, as days from today
-  (`day-6..day+0`, "Last 7 days · …", `rangeOrRolling`), and the current week, month or year so far ("Year to date", a
-  checkbox under Week, Month and Year: `year+0..day+0`, "Year to date · 1 Jan – 28 Oct 2026"). On an item page a
-  period counted from a day can be counted from the page's item's date instead ("Counted from": Today or "This
-  measurement's Date"; stored as the value then `@$item.<field>`, `anchoredValue` in domain/datePeriod.ts, worked out
-  for each page's item by `resolvePageValues`; elsewhere, or for an item without that date, it matches nothing); any other period is stored as its days
-  (`yyyy-mm-dd..yyyy-mm-dd`, both included; what they are, a week, a month, …, follows from them), an hour or a range
-  of minutes as its minutes (`yyyy-mm-ddTHH:MM..yyyy-mm-ddTHH:MM`, both included: an hour is `…T14:00..…T14:59`).
-  The current period can't be kept as fixed days, by design. `between` isn't in the operator menus
+  filter panel (no heading above it: the panel's button says "Filter"). A content switcher (Hour, Day, Week, Month,
+  Year, Range) picks the kind; the line under it shows the period ("Any date" while there is none), a blue "Rolling"
+  tag while it moves on with time, "by <field>" (the first date or date & time field, none: Updated; Created and
+  Updated can be picked) and, once a period is set, ‹ › (the one before / after: a rolling one stays rolling, `week-1`
+  "Last week"; a chosen one by its length), the calendar button (the current one) and × (any date). "Which" says which
+  one of its kind: counted from now (`hour+0`, `week+0`, `month-1`: `resolveRange` works it out when the filter runs,
+  so a saved "this week" stays this week), so far for a week, month or year (`year+0..day+0`, "Year to date"), the last
+  n up to now with n beside it (`day-6..day+0` the last 7 days, `hour-23..hour+0`, `month-11..month+0` the last 12
+  months, this one included; an hour also offers the last n minutes, `minute-29..minute+0`), or a chosen one (its days
+  fixed, `yyyy-mm-dd..yyyy-mm-dd`, both included: its day, hour (00:00 … 23:00), a day of its week, month or year beside
+  it; the years run from a century back to now). Range is two chosen days. Switching kind keeps the Which (a chosen
+  month becomes the chosen week of its first day; the last n starts at the kind's own n: 24 hours, 7 days, 4 weeks, 12
+  months, 3 years). It is stored as the filter's first `between` rule, which the rule list leaves out (a date & time by
+  its local day; in an hour or a range of minutes by its local minute, `yyyy-mm-ddTHH:MM..yyyy-mm-ddTHH:MM` with an
+  hour `…T14:00..…T14:59`, a date there by its day). On an item page a rolling period can be counted from the page's
+  item's date instead ("Counted from": Today or "This measurement's Date"; stored as the value then
+  `@$item.<field>`, `anchoredValue` in domain/datePeriod.ts, worked out for each page's item by `resolvePageValues`;
+  elsewhere, or for an item without that date, it matches nothing). `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.
-- **Limit** (a block's Filter panel, under its rules; `ViewBlock.limit`, saved with the view): how many items it shows at
-  first and each "Show more" adds; empty is all. Unset it is 100, or all for a block that needs every item (a chart:
-  `BlockUses.all`; `blockLimit`). A remote collection is asked that many rows a page (all: every page, one after the
-  other). The Filter button is blue while a Limit is set.
+- **Limit** (a block's Filter panel, beside Add filter: "Show [100] items at a time"; `ViewBlock.limit`, saved with the
+  view): how many items it shows at first and each "Show more" adds; empty is all. Unset it is 100, or all for a block
+  that needs every item (a chart: `BlockUses.all`; `blockLimit`). A remote collection is asked that many rows a page
+  (all: every page, one after the other). The Filter button is blue while a Limit is set.
 - **Page-wide filter** (item pages): with more than one block listing items (`uses.query`), the page toolbar gets "Filter all blocks", the collection views' filter panel (`QueryEditor`, date period included) over the fields of all those collections (`pageFilterScope`; a name several share gets its collection behind it; remote collections included: a remote block hands the rules to its source like its own filter, `sourceQuery`, connector-neutral, so a block of a remote table can show this month's rows). It is `ItemLayout.filters`, unsaved until Save changes like a block's filter. Like a view's filter, each block builds on it (And / Or above): a block takes the rules on its collection's fields and, if native, the pseudo fields (`pageFiltersFor`) and ignores the rest. With one block, or none, it doesn't apply.
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,

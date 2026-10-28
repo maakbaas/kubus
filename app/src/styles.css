@@ -2099,8 +2099,31 @@ img[data-lightbox] {
 .query-editor .helper {
   margin: 0;
 }
-.query-editor__add {
+/* "Add filter" and what goes beside it (a block's "Show [100] items at a time"), the rules' distance below them. */
+.query-editor__foot {
+  align-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--cds-spacing-03);
   margin-block-start: var(--cds-spacing-05);
+}
+.block-limit {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+  color: var(--cds-text-secondary);
+}
+/* A number of a few digits: Carbon's input is at least 9.375rem wide. */
+.block-limit .cds--form-item {
+  flex: none;
+}
+/* Carbon keeps the steppers' room on the right even without them. */
+.block-limit .cds--number input[type="number"] {
+  min-inline-size: 0;
+  inline-size: 5rem;
+  padding-inline-end: var(--cds-spacing-05);
 }
 /* heading-compact-01 */
 .query-editor__title {
@@ -2121,21 +2144,15 @@ img[data-lightbox] {
   padding-inline-start: var(--cds-spacing-05);
 }
 /* A rule's value on an item page: where it comes from (a value, or one of the page's item's), and the value. */
-/* The date period above the filter's rules: the switcher with its field beside it, then the period
-   shown with its buttons (touching, at the right), then a range's two days. */
+/* The date period above the filter's rules: the switcher, then the period shown with the field it goes
+   by and its buttons (touching, at the right), then which one (and its day, month, …) or a range's two days. */
 .date-period {
   align-self: stretch;
   display: flex;
   flex-direction: column;
   gap: var(--cds-spacing-03);
 }
-.date-period__kinds {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: var(--cds-spacing-03);
-  align-items: center;
-}
-/* Five switches fit a phone's panel unclipped ("Month" whole) with a step less padding (Carbon's
+/* Six switches fit a phone's panel unclipped ("Month" whole) with a step less padding (Carbon's
    own rule is this specific), their names centred. */
 .date-period .cds--content-switcher:not(.cds--content-switcher--icon-only) .cds--content-switcher-btn {
   padding-inline: var(--cds-spacing-03);
@@ -2151,17 +2168,30 @@ img[data-lightbox] {
 }
 .date-period__nav {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  column-gap: var(--cds-spacing-03);
 }
-/* Wraps on a phone rather than hiding the week's last day. */
+.date-period__rolling {
+  margin: 0;
+}
+/* "by Read": the field it goes by, a small inline choice. */
+.date-period__field .cds--select--inline .cds--label {
+  margin-inline-end: var(--cds-spacing-02);
+}
+.date-period__field .cds--select-input {
+  inline-size: auto;
+}
+/* Wraps on a phone rather than hiding the week's last day; narrower than 14rem it has its own line
+   and the rest goes below it. */
 .date-period__label {
-  flex: 1;
-  min-inline-size: 0;
+  flex: 1 1 auto;
+  min-inline-size: min(100%, 14rem);
 }
 /* Going straight to a day, week, month or year: its calendar, or its month and year, on the range's columns. */
 .date-period__pick {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
   gap: var(--cds-spacing-03);
 }
 .date-period__pick .cds--date-picker,
@@ -2194,9 +2224,12 @@ img[data-lightbox] {
   gap: var(--cds-spacing-05);
 }
 @media (max-width: 42rem) {
+  /* Six switches across a phone's panel, "Month" and "Range" whole. */
+  .date-period .cds--content-switcher:not(.cds--content-switcher--icon-only) .cds--content-switcher-btn {
+    padding-inline: var(--cds-spacing-02);
+  }
   .query-editor__rule,
   .query-editor__pair,
-  .date-period__kinds,
   .view-options {
     grid-template-columns: minmax(0, 1fr);
   }

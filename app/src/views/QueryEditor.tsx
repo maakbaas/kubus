@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { Button, Heading, IconButton, Select, SelectItem, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import { isMetaField, newId, pickableFields, selfField, type FieldDef, type FieldKind, type Collection } from "../domain/model";
@@ -30,9 +30,14 @@ interface Props {
   noGroup?: boolean;
   /** On an item page: its collection, so reference rules can compare with the page's item. */
   page?: Collection;
-  /** Filter part: its heading and what an empty filter means (defaults: a view's). */
+  /**
+   * Filter part: its heading (none where its button says it: "Filter"), what an empty filter means
+   * (default: a view's, left out under a date period, whose "Any date" says it), and what goes
+   * beside "Add filter" (a block's limit).
+   */
   title?: string;
   emptyText?: string;
+  footer?: ReactNode;
   /** A page-wide filter over several collections (`collection` holds all their fields): each field's operators are its own collection's (a remote one's, what its column supports). */
   owners?: Collection[];
   onChange(query: ViewQuery): void;
@@ -130,7 +135,9 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
  * Edits part of a view's query: its filters, or its sort and grouping (each shown in its own
  * toolbar popover). Built only on the query registry (domain/query.ts).
  */
-export function QueryEditor({ collection, query, refs, part, noGroup, page, title = "Filter", emptyText = "Showing all items.", owners, onChange }: Props) {
+const SHOWING_ALL = "Showing all items.";
+
+export function QueryEditor({ collection, query, refs, part, noGroup, page, title, emptyText = SHOWING_ALL, footer, owners, onChange }: Props) {
   // Element ids unique per editor: several item lists (tabs, panes) can be open at once.
   const uid = useId();
   // On an item page, a block of its own collection can also be filtered on the item itself
@@ -158,17 +165,16 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
   const joinsFirst = (query.inherited?.length ?? 0) > 0;
   const sort = query.sort[0];
   const groupable = pickableFields(collection).filter((f) => canGroup(collection, f));
+  const dated = dateFields(collection).length > 0;
 
   return (
     <div className="query-editor">
       {part === "filter" && (
       <section>
-        <Heading className="query-editor__title">{title}</Heading>
+        {title && <Heading className="query-editor__title">{title}</Heading>}
         {/* Not for a remote collection without dates (its rows have no Created or Updated). */}
-        {dateFields(collection).length > 0 && (
-          <DatePeriodFilter collection={collection} filters={query.filters} page={page} onChange={(filters) => onChange({ ...query, filters })} />
-        )}
-        {query.filters.length === 0 && <p className="helper">{emptyText}</p>}
+        {dated && <DatePeriodFilter collection={collection} filters={query.filters} page={page} onChange={(filters) => onChange({ ...query, filters })} />}
+        {query.filters.length === 0 && (emptyText !== SHOWING_ALL || !dated) && <p className="helper">{emptyText}</p>}
         {query.filters.map((rule) => {
           if (rule === period) return null;
           const field = fieldsById.get(rule.fieldId);
@@ -237,10 +243,17 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
             </div>
           );
         })}
-        {filterable.some((f) => !isMetaField(f)) && (
-          <Button kind="tertiary" size="sm" renderIcon={Add} iconDescription="Add filter" onClick={addFilter} className="query-editor__add">
-            Add filter
-          </Button>
+        {(filterable.some((f) => !isMetaField(f)) || footer) && (
+          <div className="query-editor__foot">
+            {filterable.some((f) => !isMetaField(f)) ? (
+              <Button kind="tertiary" size="sm" renderIcon={Add} iconDescription="Add filter" onClick={addFilter}>
+                Add filter
+              </Button>
+            ) : (
+              <span />
+            )}
+            {footer}
+          </div>
         )}
       </section>
       )}
