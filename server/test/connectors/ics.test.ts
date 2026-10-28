@@ -184,12 +184,16 @@ describe("IcsConnector", () => {
     ]);
   });
 
-  it("expands repeating events over the filter's dates, else a year around now", async () => {
+  it("expands repeating events over the filter's dates, else 20 years back and a year ahead of now", async () => {
     const far = await source().query(events({ filter: titled("birthday", { column: "start date", operator: "is", value: "2040-05-05" }) }));
     expect(far.rows.map((x) => x.key)).toEqual(["bday@2040-05-05"]);
     const near = await source().query(events({ filter: titled("birthday") }));
-    expect(near.total).toBeGreaterThanOrEqual(2);
-    expect(near.total).toBeLessThanOrEqual(3);
+    // The yearly birthday (from 2000) from 20 years back to a year ahead (a day either way).
+    const day = 86_400_000;
+    let birthdays = 0;
+    for (let y = 2000; Date.parse(`${y}-05-05T00:00:00Z`) <= Date.now() + 366 * day; y++) if (Date.parse(`${y}-05-05T00:00:00Z`) >= Date.now() - 20 * 366 * day) birthdays++;
+    expect(near.total).toBeGreaterThanOrEqual(birthdays - 1);
+    expect(near.total).toBeLessThanOrEqual(birthdays + 1);
     // Single events whatever the dates.
     expect((await source().query(events({ filter: titled("trip") }))).total).toBe(1);
     expect(windowOf({ and: [{ column: "end date", operator: "after", value: "2030-01-01" }, { column: "start", operator: "before", value: "2030-02-01" }] })).toEqual({
@@ -199,7 +203,8 @@ describe("IcsConnector", () => {
     // A bound under an or doesn't narrow.
     const now = Date.parse("2026-10-28T00:00:00Z");
     const w = windowOf({ or: [{ column: "start date", operator: "is", value: "2040-01-01" }, titled("x")] }, now);
-    expect(w.from).toBeLessThan(now - 365 * 86_400_000);
+    expect(w.from).toBeLessThan(now - 20 * 365 * 86_400_000);
+    expect(w.to).toBeLessThan(now + 2 * 366 * 86_400_000);
   });
 
   it("finds an occurrence by its key, even outside the year around now", async () => {

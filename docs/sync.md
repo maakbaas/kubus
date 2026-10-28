@@ -317,7 +317,7 @@ takes the new one when its settings are opened. A source's name: letters, digits
   `uid@2026-03-01T08:00:00.000Z`, `uid@2026-04-01` all day). A row is an occurrence: repeating events (`RRULE`
   / `RDATE`, less `EXDATE`, `RECURRENCE-ID` overrides where they moved to, `RANGE=THISANDFUTURE`) are expanded
   over the days the filter's rules on start / end (start date, end date) leave, those every row meets (not
-  under an `or`), a day's margin either way; else a year back and ahead of now. At most 50,000 rows (`MAX_ROWS`:
+  under an `or`), a day's margin either way; else 20 years back and a year ahead of now. At most 50,000 rows (`MAX_ROWS`:
   past it, a problem asking for a shorter range); a repeating event is stepped through from its first
   occurrence, at most 200,000 steps (a minutely rule from long ago ends early). Single events are read
   whatever the dates. Times in the file's `VTIMEZONE`, else the `TZID` as an IANA zone, else (floating, or a

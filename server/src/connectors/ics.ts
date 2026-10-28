@@ -14,7 +14,7 @@ import { findRow, queryRows, type MemoryRow } from "./memory.ts";
 // A row is an occurrence: a single event, or one of a repeating event's (RRULE / RDATE, less EXDATE;
 // a RECURRENCE-ID override in its place, wherever it moved to). Repeating events are expanded only
 // over the dates the query's filter keeps (its rules on the start or end, all of which a row meets),
-// else a year back and ahead of now, at most MAX_ROWS rows. Times in the event's VTIMEZONE, else its
+// else 20 years back and a year ahead of now, at most MAX_ROWS rows. Times in the event's VTIMEZONE, else its
 // TZID as an IANA zone, else (floating) as UTC; start / end as ISO UTC. An all-day event has no start
 // or end time: its days are its start date and end date (inclusive: DTEND, exclusive, a day earlier),
 // which for a timed event are the days it starts and ends on where the calendar has it. The key is
@@ -27,6 +27,8 @@ export const MAX_ROWS = 50_000;
 const MAX_STEPS = 200_000;
 const DAY_MS = 86_400_000;
 const YEAR_MS = 366 * DAY_MS;
+/** How far back an unbounded start goes. */
+const PAST_MS = 20 * YEAR_MS;
 const TABLE = "events";
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -79,7 +81,7 @@ function boundsOf(rule: SourceFilter): { from?: number; to?: number } | null {
 /**
  * The window a filter leaves: its rules on the start or end that every row meets (an end after a
  * day means the occurrence ends after it, a start before one that it starts before it: either way it
- * overlaps). Unbounded sides a year beyond now (or the other bound); a day's margin either way, for
+ * overlaps). An unbounded start 20 years before now (or the end), an unbounded end a year after now (or the start); a day's margin either way, for
  * the device's time zone and the event's own.
  */
 export function windowOf(filter: SourceCondition, now = Date.now()): Window {
@@ -91,7 +93,7 @@ export function windowOf(filter: SourceCondition, now = Date.now()): Window {
     if (b?.from !== undefined) from = Math.max(from, b.from);
     if (b?.to !== undefined) to = Math.min(to, b.to);
   }
-  if (from === -Infinity) from = Math.min(to, now) - YEAR_MS;
+  if (from === -Infinity) from = Math.min(to, now) - PAST_MS;
   if (to === Infinity) to = Math.max(from, now) + YEAR_MS;
   return { from: from - DAY_MS, to: Math.max(from, to) + DAY_MS };
 }
