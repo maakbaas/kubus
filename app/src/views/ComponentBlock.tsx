@@ -17,7 +17,9 @@ import {
 import { ComponentValue } from "../ui/ComponentValue";
 import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import { refLabelOf } from "../ui/useReferenceOptions";
+import { BLOCK_HEIGHT, normalizeBlockHeight } from "../domain/views";
 import { useOpenRelated } from "../workspace/Workspace";
+import { HeightSlider } from "./HeightSlider";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
 // A block that shows a component: a block component, which lists the block's items ($items,
@@ -29,6 +31,8 @@ import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./regi
 
 export interface ComponentBlockOptions {
   componentId: string | null;
+  /** HTML: the most it takes, in rem (BLOCK_HEIGHT, like a chart's and a map's); less tall content takes its own height. */
+  height: number;
   /** Its own (local) component, from an earlier version (none are made now); null = the shared `componentId`. */
   local: ComponentCode | null;
 }
@@ -59,7 +63,7 @@ function ComponentBlockView({ collection, result, fields, options, refs, all }: 
   }, [component, options.componentId, collection, result, fields, refs, all]);
   return (
     <div className="component-block">
-      <ComponentValue value={value} output={component?.output ?? "markdown"} frameRatio={component?.frameRatio} variant="page" />
+      <ComponentValue value={value} output={component?.output ?? "markdown"} maxHeight={options.height} variant="page" />
     </div>
   );
 }
@@ -102,7 +106,8 @@ function ComponentBlockOptionsEditor({ collection, options, onChange }: BlockOpt
   const { local } = options;
   const shared = local ? undefined : components.find((c) => c.id === options.componentId);
   const offered = blockComponents(components, options.componentId);
-  const pick = (componentId: string) => onChange({ componentId, local: null });
+  const pick = (componentId: string) => onChange({ ...options, componentId, local: null });
+  const html = (local ?? shared)?.output === "html";
   return (
     <div className="view-options view-options--stack">
       <Stack gap={5}>
@@ -144,6 +149,8 @@ function ComponentBlockOptionsEditor({ collection, options, onChange }: BlockOpt
             </div>
           </>
         )}
+        {/* What it shows in a box of its own (HTML) is as tall as a chart or a map, at most. */}
+        {html && <HeightSlider id={`${uid}-height`} value={options.height} onChange={(height) => onChange({ ...options, height })} />}
       </Stack>
       {dialog === "new" && (
         <NewBlockComponentModal
@@ -183,11 +190,11 @@ export const componentBlock = defineBlockType<ComponentBlockOptions>({
   label: "Component",
   icon: ComponentIcon,
   // A new one picks a shared component in its settings ("Add block" offers them, and a new one, directly).
-  defaultOptions: () => ({ componentId: null, local: null }),
+  defaultOptions: () => ({ componentId: null, height: BLOCK_HEIGHT.initial, local: null }),
   normalizeOptions(raw) {
-    const o = (raw ?? {}) as { componentId?: unknown; local?: unknown };
+    const o = (raw ?? {}) as { componentId?: unknown; height?: unknown; local?: unknown };
     const local = normalizeLocal(o.local);
-    return { componentId: !local && typeof o.componentId === "string" ? o.componentId : null, local };
+    return { componentId: !local && typeof o.componentId === "string" ? o.componentId : null, height: normalizeBlockHeight(o.height), local };
   },
   // By what its code uses: a static component has no filter, sort or fields.
   uses(options, components) {

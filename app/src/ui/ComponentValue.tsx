@@ -3,7 +3,8 @@ import { Html as HtmlIcon } from "@carbon/icons-react";
 import type { FieldValue } from "../domain/model";
 import { useStore } from "../app/store";
 import { fileSrc, fileIdsIn } from "../domain/files";
-import { isComponentError, ratioValue, type ComponentOutput } from "../domain/components";
+import { isComponentError, type ComponentOutput } from "../domain/components";
+import { BLOCK_HEIGHT } from "../domain/views";
 import { TAG_SOURCE } from "../domain/tags";
 import { openModeOf } from "../workspace/Workspace";
 import { Highlight } from "./Highlight";
@@ -304,25 +305,25 @@ export function FramesSizing({ children, maxMs = 1000, className }: { children: 
  * Its size, one component for every place: html and body are always 100% of the frame, so
  * content can fill it (`#map { height: 100% }`). On a card cover (`fill`) the frame is the
  * cover. On a page the frame measures the content's own height (body sized to its content):
- *  - flow: it has one (text, tables, a fixed-size chart), and the frame is exactly that tall;
- *  - fill: it has none (a map or chart at 100%), and the frame gets a box of a fixed shape
- *    (16:9).
- * The component's own ratio setting (`ratio`) gives the frame that shape whatever its content
- * (also content at 100% beside text of its own); `<meta name="frame" content="ratio=4/3">` or
- * `content="height=300"` in the HTML wins over it. <html> has the
+ *  - flow: it has one (text, tables, a fixed-size chart), and the frame is exactly that tall, at
+ *    most `maxHeight` (a component block's Height; it scrolls inside beyond that);
+ *  - fill: it has none (a map or chart at 100%), and the frame is `maxHeight` tall (a field
+ *    component, without one: BLOCK_HEIGHT's initial height, like a new block's).
+ * `<meta name="frame" content="ratio=4/3">` or `content="height=300"` in the HTML gives it that
+ * size (at most `maxHeight`). <html> has the
  * class in-card or in-page, and --frame-width / --frame-height, for content that adapts to where
  * it is shown.
  */
 export function HtmlFrame({
   html: source,
   fill = false,
-  ratio = null,
+  maxHeight = null,
   onContentClick,
 }: {
   html: string;
   fill?: boolean;
-  /** The box's shape (the component's setting); null = automatic: the content's own height, else 16:9. */
-  ratio?: number | null;
+  /** The most it takes on a page, in rem (a component block's Height); null = no limit for content with a height of its own. */
+  maxHeight?: number | null;
   /** A click on the frame's plain content (not a link, control, map, …): e.g. to start editing. */
   onContentClick?(): void;
 }) {
@@ -405,19 +406,19 @@ export function HtmlFrame({
   }, [dark]);
   const doc = useMemo(() => (html === undefined || tokens === undefined ? undefined : frameDocument(html, fill, dark, tokens)), [html, fill, dark, tokens]);
   const fills = !!size && size.natural < FILL_THRESHOLD;
-  // A size asked for in the HTML wins; else the component's ratio, else its own height (flow), else the default box (fill).
+  // A size asked for in the HTML wins; else its own height (flow), else the block's height (fill). Never more than the block's height.
+  const max = `${maxHeight ?? BLOCK_HEIGHT.initial}rem`;
+  const capped = (px: number) => (maxHeight === null ? `${px}px` : `min(${px}px, ${max})`);
   const style: CSSProperties | undefined =
     fill || !size
       ? undefined
       : size.height
-        ? { blockSize: size.height }
+        ? { blockSize: capped(size.height) }
         : size.ratio
-          ? { aspectRatio: size.ratio, blockSize: "auto" }
-          : ratio
-            ? { aspectRatio: ratio, blockSize: "auto" }
-            : !fills
-              ? { blockSize: size.natural }
-              : { aspectRatio: 16 / 9, blockSize: "auto" };
+          ? { aspectRatio: size.ratio, blockSize: "auto", ...(maxHeight !== null && { maxBlockSize: max }) }
+          : !fills
+            ? { blockSize: capped(size.natural) }
+            : { blockSize: max };
   return (
     <iframe
       ref={frame}
@@ -440,15 +441,15 @@ export function ComponentValue({
   output,
   variant,
   search = "",
-  frameRatio = null,
+  maxHeight = null,
   onContentClick,
 }: {
   value: FieldValue;
   output: ComponentOutput;
   variant: "page" | "cell";
   search?: string;
-  /** HTML: the box's shape (the component's setting; null: automatic). */
-  frameRatio?: string | null;
+  /** HTML: the most it takes, in rem (a component block's Height; see HtmlFrame). */
+  maxHeight?: number | null;
   /** HTML: a click on its plain content (see HtmlFrame). */
   onContentClick?(): void;
 }) {
@@ -467,7 +468,7 @@ export function ComponentValue({
           HTML
         </span>
       ) : (
-        <HtmlFrame html={text} ratio={ratioValue(frameRatio)} onContentClick={onContentClick} />
+        <HtmlFrame html={text} maxHeight={maxHeight} onContentClick={onContentClick} />
       );
     case "markdown":
       if (variant === "page" && typeof value === "string") return <MarkdownView source={text} />;

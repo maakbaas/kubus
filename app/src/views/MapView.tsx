@@ -1,15 +1,17 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
-import { IconButton, Link, Popover, PopoverContent, Select, SelectItem, Slider } from "@carbon/react";
+import { IconButton, Link, Popover, PopoverContent, Select, SelectItem } from "@carbon/react";
 import { CenterToFit, Earth, ZoomIn, ZoomOut } from "@carbon/icons-react";
 import * as colors from "@carbon/colors";
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { isCoordinateField, isLocationTextField, locationOf, locationOfPair, type LngLat } from "../domain/geo";
 import { fieldValue, isStruckThrough, itemLabel, pickableFields, type Collection, type FieldDef, type Item } from "../domain/model";
 import { isEmptyValue, isGrouped, type QueryResult } from "../domain/query";
+import { BLOCK_HEIGHT, normalizeBlockHeight } from "../domain/views";
 import { Highlight } from "../ui/Highlight";
 import { useMediaQuery } from "../ui/useMediaQuery";
 import { openModeOf } from "../workspace/Workspace";
 import { FieldCell, itemLinkProps } from "./cells";
+import { HeightSlider } from "./HeightSlider";
 import { loadMapLibre, MAP_STYLES, styleUrl, type MapStyle } from "./mapLibre";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
@@ -25,12 +27,10 @@ export interface MapOptions {
   locationFieldId: string | null;
   /** With a number field as location: the longitude's number field. */
   longitudeFieldId: string | null;
-  /** The map's height in rem (MAP_HEIGHT range). */
+  /** The map's height in rem (BLOCK_HEIGHT, like a chart's and a component's). */
   height: number;
   style: MapStyle;
 }
-
-const MAP_HEIGHT = { min: 12, max: 48, step: 1, initial: 24 };
 
 /** Carbon's categorical palette (in its order: neighbours contrast), for the light and dark themes. */
 const PALETTE = {
@@ -413,17 +413,7 @@ function MapOptionsEditor({ collection, options, onChange }: BlockOptionsProps<M
           <SelectItem key={s.value} value={s.value} text={s.text} />
         ))}
       </Select>
-      <Slider
-        id={`${uid}-map-height`}
-        labelText="Height"
-        min={MAP_HEIGHT.min}
-        max={MAP_HEIGHT.max}
-        step={MAP_HEIGHT.step}
-        value={options.height}
-        formatLabel={(v) => `${v}rem`}
-        hideTextInput
-        onChange={({ value }) => onChange({ ...options, height: value })}
-      />
+      <HeightSlider id={`${uid}-map-height`} value={options.height} onChange={(height) => onChange({ ...options, height })} />
       <p className="helper">The dots are coloured by the block's grouping (Sort and group).</p>
     </div>
   );
@@ -445,7 +435,7 @@ export const mapView = defineBlockType<MapOptions>({
   kind: "map",
   label: "Map",
   icon: Earth,
-  defaultOptions: (collection) => ({ ...guessLocation(collection), height: MAP_HEIGHT.initial, style: "auto" }),
+  defaultOptions: (collection) => ({ ...guessLocation(collection), height: BLOCK_HEIGHT.initial, style: "auto" }),
   uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true } }),
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<MapOptions>;
@@ -455,8 +445,7 @@ export const mapView = defineBlockType<MapOptions>({
     return {
       locationFieldId: location?.id ?? null,
       longitudeFieldId: longitude?.id ?? null,
-      height:
-        typeof o.height === "number" ? Math.min(MAP_HEIGHT.max, Math.max(MAP_HEIGHT.min, Math.round(o.height))) : MAP_HEIGHT.initial,
+      height: normalizeBlockHeight(o.height),
       style: MAP_STYLES.some((s) => s.value === o.style) ? o.style! : "auto",
     };
   },

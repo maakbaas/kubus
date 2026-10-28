@@ -23,6 +23,7 @@ import { useItemActions } from "./useItemActions";
 import { useRemoteResult } from "./useRemoteResult";
 import { useBlockName } from "./BlockListEditor";
 import { useShownOnce } from "../ui/useShownOnce";
+import { BLOCK_HEIGHT } from "../domain/views";
 
 // One block: a collection's items shown one way (its block type), with its own sort, grouping,
 // and fields, and the view's filter unless it has its own. Collection views and item pages
@@ -235,7 +236,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
               onClose={() => setPromoting(false)}
               onPromoted={(c) => {
                 setPromoting(false);
-                onSet({ kind: "component", options: { componentId: c.id, local: null } satisfies ComponentBlockOptions });
+                onSet({ kind: "component", options: { componentId: c.id, height: BLOCK_HEIGHT.initial, local: null } satisfies ComponentBlockOptions });
               }}
             />
           )}

@@ -1038,7 +1038,7 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, fixed,
           className={`view-field__value view-field__value--component${text.startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}${text ? "" : " view-field__value--empty"}`}
           title={component ? `Computed by the component “${component.name}”` : "Computed by its component"}
         >
-          <ComponentValue value={value} output={outputOf(field, components)} frameRatio={fieldComponent(field, components)?.frameRatio} variant="page" />
+          <ComponentValue value={value} output={outputOf(field, components)} variant="page" />
         </div>
       </div>
     );

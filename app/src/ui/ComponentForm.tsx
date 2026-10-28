@@ -2,7 +2,6 @@ import { Select, SelectItem, Stack } from "@carbon/react";
 import {
   AI_COMPONENT_OUTPUTS,
   COMPONENT_OUTPUTS,
-  FRAME_RATIOS,
   codeProblem,
   kindText,
   placeProblem,
@@ -119,22 +118,6 @@ export function ComponentForm({
         value={value.code}
         onChange={(code) => set({ code })}
       />
-      {/* Automatic: content with its own height is shown at that height, content at 100% (a map, a chart) at 16:9. */}
-      {value.output === "html" && (
-        <Select
-          size="sm"
-          id={`${id}-frame-ratio`}
-          labelText="Aspect ratio on pages"
-          helperText="Automatic: the content's own height, or 16:9 for content at 100% height (like a map or a chart). A ratio gives it that shape whatever its content. On card covers it fills the cover."
-          value={value.frameRatio ?? ""}
-          onChange={(e) => set({ frameRatio: e.target.value || null })}
-        >
-          <SelectItem value="" text="Automatic" />
-          {FRAME_RATIOS.map((r) => (
-            <SelectItem key={r} value={r} text={r.replace("/", ":")} />
-          ))}
-        </Select>
-      )}
     </Stack>
   );
 }

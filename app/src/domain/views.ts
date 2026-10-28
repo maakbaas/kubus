@@ -206,3 +206,19 @@ export function parseViewConfig(json: string): ViewState & { collapsed: Collapse
     collapsed: parseCollapsed(o.collapsed),
   };
 }
+
+/**
+ * The height of a block that draws in a box of its own (a chart, a map, a component), in rem. It is
+ * the most it takes: content that is less tall (a pie in a narrow block, a component's text) is
+ * shown at its own height; content that fills its box (a map, a chart or HTML at 100%) gets it all.
+ */
+export const BLOCK_HEIGHT = { min: 8, max: 48, step: 1, initial: 24 };
+/** Heights saved as a size before the slider (charts): their rem. */
+const LEGACY_HEIGHTS: Record<string, number> = { s: 16, m: 24, l: 32 };
+
+/** A stored block height made valid: rem within BLOCK_HEIGHT (an old size name as its rem). */
+export function normalizeBlockHeight(raw: unknown): number {
+  if (typeof raw === "string" && raw in LEGACY_HEIGHTS) return LEGACY_HEIGHTS[raw];
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return BLOCK_HEIGHT.initial;
+  return Math.min(BLOCK_HEIGHT.max, Math.max(BLOCK_HEIGHT.min, Math.round(raw)));
+}

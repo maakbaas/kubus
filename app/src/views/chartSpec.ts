@@ -3,7 +3,6 @@
 // only when a chart is shown) picks the component by name.
 
 import {
-  CHART_HEIGHTS,
   chartTable,
   heatmapCells,
   percentOf,
@@ -54,15 +53,14 @@ export interface ChartSpec {
 /** Why there is nothing to draw (shown instead of an empty chart); null when there is. */
 export type ChartProblem = string | null;
 
-const HEIGHT_REM = Object.fromEntries(CHART_HEIGHTS.map((h) => [h.value, h.rem]));
 /** A sparkline's height. */
 const COMPACT_REM = 4;
 
-/** What every chart shares: its theme and height, no toolbar, a legend only with more than one series. */
+/** What every chart shares: its theme and height (the most it takes: ChartCanvas fits a pie or gauge to less), no toolbar, a legend only with more than one series. */
 function base(options: ChartOptions, theme: string, legend: boolean, extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     theme,
-    height: `${options.chart === "line" && options.compact ? COMPACT_REM : HEIGHT_REM[options.height]}rem`,
+    height: `${options.chart === "line" && options.compact ? COMPACT_REM : options.height}rem`,
     resizable: true,
     animations: false,
     toolbar: { enabled: false },

@@ -12,6 +12,7 @@ import { outputOf } from "./components";
 import { periodAround, weekNumber } from "./datePeriod";
 import { formatDate } from "./fieldKinds";
 import { fieldValue, itemLabel, pickableFields, type Collection, type FieldDef, type Item } from "./model";
+import { BLOCK_HEIGHT, normalizeBlockHeight } from "./views";
 import { groupKeysOf, isGrouped, isGroupable, type GroupOrder, type QueryContext, type QueryResult } from "./query";
 
 export type ChartKind =
@@ -70,13 +71,6 @@ export const DATE_STEPS: { value: DateStep; text: string }[] = [
   { value: "year", text: "Year" },
 ];
 
-export type ChartHeight = "s" | "m" | "l";
-export const CHART_HEIGHTS: { value: ChartHeight; text: string; rem: number }[] = [
-  { value: "s", text: "Small", rem: 16 },
-  { value: "m", text: "Medium", rem: 24 },
-  { value: "l", text: "Large", rem: 32 },
-];
-
 /** How wide a chart may get, in rem (a slider like the cards'; the maximum is about 1920px, wider than any pane). */
 export const CHART_WIDTH = { min: 8, max: 120, step: 1 };
 /** What a gauge gets when switched to (as wide as a pane it is mostly empty). */
@@ -98,7 +92,8 @@ export interface ChartOptions {
   showEmpty: boolean;
   /** At most this many categories (the largest), the rest as "Other"; 0 = all. */
   top: number;
-  height: ChartHeight;
+  /** The most it takes, in rem (BLOCK_HEIGHT, like a map's and a component's); a pie or gauge in a narrow block takes less. */
+  height: number;
   /** At most this wide, in rem (CHART_WIDTH). */
   width: number;
   // Bar
@@ -173,7 +168,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     dateStep: "auto",
     showEmpty: false,
     top: 0,
-    height: "m",
+    height: BLOCK_HEIGHT.initial,
     width: CHART_WIDTH.max,
     horizontal: false,
     stacked: false,
@@ -221,7 +216,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     dateStep: oneOf(DATE_STEPS, o.dateStep, d.dateStep),
     showEmpty: flag(o.showEmpty, d.showEmpty),
     top: count(o.top, 100),
-    height: oneOf(CHART_HEIGHTS, o.height, d.height),
+    height: normalizeBlockHeight(o.height),
     width:
       typeof o.width === "number" && Number.isFinite(o.width)
         ? Math.min(CHART_WIDTH.max, Math.max(CHART_WIDTH.min, Math.round(o.width)))

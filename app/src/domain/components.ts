@@ -318,16 +318,6 @@ function asOutput(output: ComponentOutput, v: FieldValue): FieldValue {
   }
 }
 
-/** Shapes offered for HTML that fills its box. */
-export const FRAME_RATIOS = ["16/9", "21/9", "3/2", "4/3", "1/1", "3/4"];
-
-/** A stored ratio ("4/3") as a number; null when absent or unreadable. */
-export function ratioValue(ratio: string | null | undefined): number | null {
-  const m = /^\s*([\d.]+)\s*(?:\/\s*([\d.]+))?\s*$/.exec(ratio ?? "");
-  const n = m ? Number(m[1]) / Number(m[2] ?? 1) : NaN;
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
 /** The output type of a component field's component (Markdown when it has none). */
 export const outputOf = (field: FieldDef, components: Component[]): ComponentOutput => fieldComponent(field, components)?.output ?? "markdown";
 

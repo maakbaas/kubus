@@ -57,6 +57,7 @@ function ComponentEditor({ existing }: { existing: Component | undefined }) {
   const [description, setDescription] = useState(existing?.description ?? "");
   const [code, setCode] = useState(existing?.code ?? "");
   const [output, setOutput] = useState<ComponentOutput>(existing?.output ?? "markdown");
+  // No longer set (a component block's Height sizes HTML now): kept as it is stored.
   const [frameRatio, setFrameRatio] = useState<string | null>(existing?.frameRatio ?? null);
   const [ai, setAi] = useState(existing?.ai ?? false);
   /** The collection (and one of its items) the preview is rendered with: what $item and $items read. */
@@ -208,12 +209,11 @@ function ComponentEditor({ existing }: { existing: Component | undefined }) {
               output={output}
               ai={ai}
               name={name}
-              frameRatio={frameRatio}
             />
           ) : ai ? (
             <p className="helper">Choose a collection to preview the prompt for one of its items.</p>
           ) : (
-            <PreviewResult result={render({ code, output })} output={output} frameRatio={frameRatio} />
+            <PreviewResult result={render({ code, output })} output={output} />
           )}
           {error && <p className="cds--form-requirement">{error}</p>}
           <div className="form-actions">
@@ -232,14 +232,14 @@ function ComponentEditor({ existing }: { existing: Component | undefined }) {
 }
 
 /** The rendered result, in the same markup as a component field on an item page, so it renders identically. */
-function PreviewResult({ result, output, frameRatio, label = "Result" }: { result: unknown; output: ComponentOutput; frameRatio: string | null; label?: string }) {
+function PreviewResult({ result, output, label = "Result" }: { result: unknown; output: ComponentOutput; label?: string }) {
   return (
     <div className="component-test__result">
       <div className="cds--label">{label}</div>
       <div className="item-fields item-fields--form component-test__preview">
         <div className="view-field">
           <div className={`view-field__value view-field__value--component${String(result ?? "").startsWith(ERROR_PREFIX) ? " view-field__value--error" : ""}`}>
-            <ComponentValue value={result as never} output={output} frameRatio={frameRatio} variant="page" />
+            <ComponentValue value={result as never} output={output} variant="page" />
           </div>
         </div>
       </div>
@@ -261,7 +261,6 @@ function CollectionPreview({
   output,
   ai,
   name,
-  frameRatio,
 }: {
   collection: Collection;
   uses: { item: boolean; groups: boolean; fields: boolean };
@@ -272,7 +271,6 @@ function CollectionPreview({
   ai: boolean;
   /** The component's name: what the model is told the field is called, in "Try". */
   name: string;
-  frameRatio: string | null;
 }) {
   const uid = useId();
   const { components } = useStore();
@@ -346,7 +344,7 @@ function CollectionPreview({
       {ai ? (
         request && <PromptPreview request={request} output={isAiOutput(output) ? output : "string"} />
       ) : (
-        <PreviewResult result={result} output={output} frameRatio={frameRatio} />
+        <PreviewResult result={result} output={output} />
       )}
     </>
   );
@@ -359,7 +357,7 @@ function PromptPreview({ request, output }: { request: ReturnType<typeof promptR
   const configured = ai.isConfigured("field") && !paused;
   const [reply, setReply] = useState<{ value: unknown } | { error: string } | null>(null);
   const [asking, setAsking] = useState(false);
-  if ("problem" in request) return <PreviewResult result={ERROR_PREFIX + request.problem} output="string" frameRatio={null} label="Sent to the model" />;
+  if ("problem" in request) return <PreviewResult result={ERROR_PREFIX + request.problem} output="string" label="Sent to the model" />;
   const tryIt = async () => {
     setAsking(true);
     setReply(null);
@@ -378,7 +376,7 @@ function PromptPreview({ request, output }: { request: ReturnType<typeof promptR
   };
   return (
     <>
-      <PreviewResult result={request.prompt} output="string" frameRatio={null} label="Sent to the model" />
+      <PreviewResult result={request.prompt} output="string" label="Sent to the model" />
       <div>
         <Button size="sm" kind="tertiary" disabled={!configured || asking} onClick={tryIt}>
           {asking ? "Asking…" : "Try"}
@@ -386,7 +384,7 @@ function PromptPreview({ request, output }: { request: ReturnType<typeof promptR
       </div>
       {!configured && <p className="helper">Set up a language model in Settings to try the prompt.</p>}
       {reply && "error" in reply && <InlineNotification kind="error" lowContrast hideCloseButton title="The model's reply doesn't fit" subtitle={reply.error} />}
-      {reply && "value" in reply && <PreviewResult result={reply.value} output={output} frameRatio={null} label="The model's reply (not stored)" />}
+      {reply && "value" in reply && <PreviewResult result={reply.value} output={output} label="The model's reply (not stored)" />}
     </>
   );
 }

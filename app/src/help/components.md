@@ -68,7 +68,7 @@ Choose the output that fits what your code makes:
 - **Text**: plain text, shown as it is.
 - **Number**: a number, which sorts as a number.
 - **Image**: the result is the address of an image.
-- **HTML**: a small web page, shown in a sealed-off frame where scripts work.
+- **HTML**: a small web page, shown in a sealed-off frame where scripts work. On a page it is as tall as its content; content at 100% height (a map, a chart) fills a box as tall as the block's Height (a Component block's setting, like a chart's or a map's), and content taller than that scrolls inside it.
 
 A tag such as #books or #books/to-read in the result shows as a tag, as it does in any text of the app, and clicking it searches for that tag. This works in every output except code. In HTML it works for tags in the HTML as written, not for text a script adds later.
 

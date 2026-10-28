@@ -7,12 +7,14 @@ import { type Component, type LocalOwner } from "../domain/components";
 import { collectionDraft, type Collection } from "../domain/model";
 import type { CollectionView, ViewBlock } from "../domain/views";
 import type { ComponentBlockOptions } from "../views/ComponentBlock";
+import { normalizeBlockHeight } from "../domain/views";
 
 /** The block, now showing the shared component (a Markdown block becomes a component block). */
 const promotedBlock = (block: ViewBlock, componentId: string): ViewBlock => ({
   ...block,
   kind: "component",
-  options: { componentId, local: null } satisfies ComponentBlockOptions,
+  // A component block keeps its height.
+  options: { componentId, height: normalizeBlockHeight((block.options as { height?: unknown } | null)?.height), local: null } satisfies ComponentBlockOptions,
 });
 
 export async function pickShared(repo: Repository, owner: LocalOwner, component: Component, collections: Collection[], spaceId: string): Promise<void> {

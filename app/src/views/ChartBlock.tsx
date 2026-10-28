@@ -7,7 +7,6 @@ import {
   PREVIOUS,
   type Compare,
   axisFields,
-  CHART_HEIGHTS,
   GAUGE_WIDTH,
   CHART_KINDS,
   CHART_WIDTH,
@@ -29,6 +28,7 @@ import { useBuffered } from "../ui/useBuffered";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { openModeOf } from "../workspace/Workspace";
 import { chartSpec } from "./chartSpec";
+import { HeightSlider } from "./HeightSlider";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
 // A chart of the block's items (Carbon Charts). Like a table, its filter picks the items and its
@@ -51,7 +51,7 @@ function ChartView({ collection, result, options, refs, actions }: BlockProps<Ch
   const byId = (id: string) => result.groups.flatMap((g) => g.items).find((i) => i.id === id);
   return (
     <div className="chart-block" style={{ maxInlineSize: `${options.width}rem` }}>
-      <Suspense fallback={<div className="chart-block__loading" />}>
+      <Suspense fallback={<div className="chart-block__loading" style={{ blockSize: String(spec.options.height) }} />}>
         <ChartCanvas
           spec={spec}
           onItem={(id, event) => {
@@ -230,11 +230,7 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
         </>
       )}
       {show.height && (
-        <Select size="sm" id={`${uid}-height`} labelText="Height" value={o.height} disabled={o.chart === "line" && o.compact} onChange={(e) => set({ height: e.target.value as ChartOptions["height"] })}>
-          {CHART_HEIGHTS.map((h) => (
-            <SelectItem key={h.value} value={h.value} text={h.text} />
-          ))}
-        </Select>
+        <HeightSlider id={`${uid}-height`} value={o.height} disabled={o.chart === "line" && o.compact} onChange={(height) => set({ height })} />
       )}
       {o.chart === "gauge" && (
         <>
