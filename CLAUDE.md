@@ -47,7 +47,7 @@ is what this split avoids. Keep them current when behaviour changes.
   is a migration in `server/src/migrations.ts`. Devices and servers of other versions keep syncing: never
   drop a column or value a side doesn't know.
 - **Never install the SAH-pool VFS while another worker may hold its files** (it deletes the
-  database): keep `acquireDbLock` / `poolFilesFree` in `worker.ts`.
+  database): keep `acquireDbLock` / `poolFilesFree` / `waitForPoolFiles` (`dbLock.ts`) in front of it in `worker.ts`.
 - Changing the app identifier `com.kubus.app`, database / pool names, the lock or `kubus.*` storage
   keys orphans existing data.
 - **Code lives only in components** (and filter values, whose `{{ }}` is worked out when the filter
@@ -134,6 +134,7 @@ stale peer range.
 - `npm test`: every vitest project; `npm test -- --project sync` one part, `npm run test:changed` the tests reaching
   files changed since origin/main. The server's projects need `npm ci --prefix server` and Postgres
   (`KUBUS_TEST_POSTGRES`): `docs/testing.md`. Run the projects of what a change touches before pushing.
+- `npm run test:coverage` (+ `npm run test:gui -- --coverage`), then `npm run coverage:report`: one merged coverage report in `coverage/` (`docs/testing.md`).
 - `npm run build:headless`: the headless device for the server (`server/headless`, git-ignored); without it the
   server's `/api/v1` answers 503. Rebuild it after app changes when running the server locally.
 - `npm run test:gui`: the GUI stress suite (CI runs only smoke tests; `gui-tests/README.md`): every page, size and content shape through

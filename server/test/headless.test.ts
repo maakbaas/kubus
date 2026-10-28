@@ -71,8 +71,9 @@ describe("the headless device's host", () => {
     expect(host.problem).toBe("The API couldn't start: the server isn't up");
     expect(log).toEqual(["The API couldn't start: the server isn't up (trying again in 30 s)"]);
     vi.advanceTimersByTime(30_000);
-    for (let i = 0; i < 100 && !host.device; i++) await new Promise((r) => setImmediate(r)); // its import is real I/O
-    expect(host.device).not.toBeNull();
+    // The retry's import is real I/O, and the module runner may wait on timers of its own: real ones from here.
+    vi.useRealTimers();
+    await vi.waitFor(() => expect(host.device).not.toBeNull());
     expect(log.at(-1)).toBe("API ready at /api/v1");
   });
 

@@ -261,8 +261,9 @@ export class SqliteRepository implements Repository {
         UNION SELECT collection_id FROM views WHERE space_id = ?1 AND deleted_at IS NULL`,
       [spaceId],
     );
+    // Read before the items are deleted; the release statements run after that, in the same transaction.
+    const released = await this.releaseFilesWhere("item_id IN (SELECT id FROM items WHERE space_id = ?1 AND deleted_at IS NULL)", [spaceId]);
     await this.db.write([
-      ...(await this.releaseFilesWhere("item_id IN (SELECT id FROM items WHERE space_id = ?1 AND deleted_at IS NULL)", [spaceId])),
       { sql: "UPDATE items SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
       { sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
       { sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
@@ -272,6 +273,7 @@ export class SqliteRepository implements Repository {
               ON CONFLICT (id) DO UPDATE SET deleted_at = excluded.deleted_at, updated_at = excluded.updated_at`,
         bind: [ts, spaceId],
       },
+      ...released,
     ]);
     this.emit({ scope: "spaces" }, { scope: "bookmarks" }, ...collections.flatMap((c) => [
       { scope: "items", collectionId: c.collection_id } as const,

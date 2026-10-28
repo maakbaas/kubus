@@ -595,27 +595,35 @@ function filtered(query: SourceQuery, columns: Map<string, InfluxColumn>): { scr
   return { script, pipeline: where ? [`filter(fn: (r) => ${where})`] : [] };
 }
 
-/** The group a row is in, as text ("" for none); a date & time by the start of its day (`groupKey` makes it the day). */
+/**
+ * The key of the group of rows with no value. Not "": InfluxDB 2.7 makes a "" that a map's `if` gives a null, and
+ * a null is a group of its own (rows with and without a value are counted apart, or lost from a grouped table).
+ */
+export const NO_GROUP = "\ufdd0";
+
+/** The group a row is in, as text (NO_GROUP for none); a date & time by the start of its day (`groupKey` makes it the day). */
 function groupFlux(c: InfluxColumn, script: Script, tz: string): string {
   const r = ref(c.name);
   switch (c.read) {
     case "number":
-      return `(if exists ${r} then string(v: float(v: ${r})) else "")`;
+      return `(if exists ${r} then string(v: float(v: ${r})) else "${NO_GROUP}")`;
     case "bool":
-      return `(if exists ${r} then (if ${r} then "yes" else "no") else "")`;
+      // Unchecked is a value, not empty (as the app's, and a SQL source's NULL is no).
+      return `(if exists ${r} and ${r} then "yes" else "no")`;
     case "time":
       formatIn(tz);
       script.need("date");
       script.need("timezone");
-      return `(if exists ${r} then string(v: date.truncate(t: ${r}, unit: 1d, location: timezone.location(name: ${fluxString(tz)}))) else "")`;
+      return `(if exists ${r} then string(v: date.truncate(t: ${r}, unit: 1d, location: timezone.location(name: ${fluxString(tz)}))) else "${NO_GROUP}")`;
     default:
-      return textOf(c);
+      // (Not textOf(c) != "": nested ifs of "" make a null group, too.)
+      return c.read === "string" ? `(if exists ${r} and ${r} != "" then ${r} else "${NO_GROUP}")` : `(if ${textOf(c)} != "" then ${textOf(c)} else "${NO_GROUP}")`;
   }
 }
 
 /** A group's key as the app shows it (SourceRow.group): numbers as numbers, a date & time as its day. */
 export function groupKey(c: InfluxColumn, raw: string, tz: string): string {
-  if (raw === "") return "";
+  if (raw === "" || raw === NO_GROUP) return "";
   if (c.read === "number") return String(Number(raw));
   if (c.read === "time") {
     const at = Date.parse(raw.replace(/(\.\d{3})\d+/, "$1"));
@@ -633,7 +641,8 @@ function groupValueFlux(c: InfluxColumn): string {
     case "bool":
       return `(if exists ${r} and ${r} then 0 else 1)`;
     case "time":
-      return `(if exists ${r} then int(v: ${r}) else 0)`;
+      // The day's start (the group's key), not the moment: a day is one group, however many moments it has.
+      return `(if r._kubus_g == "${NO_GROUP}" then 0 else int(v: time(v: r._kubus_g)))`;
     default:
       return "r._kubus_g";
   }
@@ -655,7 +664,7 @@ export function groupsFlux(query: SourceQuery, columns: Map<string, InfluxColumn
   const key = groupFlux(group, script, query.timeZone);
   // Flux sorts all columns one way: the empty group's marker is turned to fall last either way.
   const desc = query.groupOrder !== "asc";
-  const empty = desc ? `(if r._kubus_g == "" then 0 else 1)` : `(if r._kubus_g == "" then 1 else 0)`;
+  const empty = desc ? `(if r._kubus_g == "${NO_GROUP}" then 0 else 1)` : `(if r._kubus_g == "${NO_GROUP}" then 1 else 0)`;
   return script.render([
     ...pipeline,
     `map(fn: (r) => ({r with _kubus_g: ${key}}))`,
@@ -665,8 +674,9 @@ export function groupsFlux(query: SourceQuery, columns: Map<string, InfluxColumn
     `group()`,
     `map(fn: (r) => ({r with _kubus_e: ${empty}}))`,
     `sort(columns: ${JSON.stringify(["_kubus_e", ...(query.groupOrder === "count" ? ["_kubus_n"] : []), "_kubus_v"])}, desc: ${desc})`,
-    `limit(n: ${MAX_SOURCE_GROUPS})`,
+    // Not limit right after the sort: InfluxDB 2.7 makes that a top() that drops the last (empty) group.
     `keep(columns: ["_kubus_g", "_kubus_n"])`,
+    `limit(n: ${MAX_SOURCE_GROUPS})`,
   ]);
 }
 
@@ -717,7 +727,8 @@ export function rowsFlux(query: SourceQuery, columns: Map<string, InfluxColumn>,
       if (c.plain) throw new SourceError(`“${c.name}” can't be sorted`);
       const r = ref(c.name);
       const flip = (s.direction === "desc") !== desc;
-      text = textOf(c);
+      // A missing checkbox is unchecked, a value of its own.
+      text = c.read === "bool" ? `(if exists ${r} and ${r} then "yes" else "no")` : textOf(c);
       switch (c.read) {
         case "number":
           value = `(if exists ${r} then ${flip ? "0.0 - " : ""}float(v: ${r}) else 0.0)`;
@@ -748,11 +759,11 @@ export function rowsFlux(query: SourceQuery, columns: Map<string, InfluxColumn>,
   ]);
 }
 
-/** Whether a filter holds only rules on `_time`, all of them required (no `or`): a range alone. */
-function timeOnly(c: SourceCondition): boolean {
-  if ("and" in c) return c.and.every(timeOnly);
-  if ("or" in c) return c.or.length === 1 && timeOnly(c.or[0]);
-  return c.column === "_time" && ["is", "between", "before", "after"].includes(c.operator);
+/** Whether a filter holds only rules on `_time`, all of them required (no `or`) and each a range of days (not a value that matches nothing): a range alone. */
+function timeOnly(c: SourceCondition, tz: string): boolean {
+  if ("and" in c) return c.and.every((x) => timeOnly(x, tz));
+  if ("or" in c) return c.or.length === 1 && timeOnly(c.or[0], tz);
+  return c.column === "_time" && ["is", "between", "before", "after"].includes(c.operator) && dayBounds(c, tz) !== null;
 }
 
 /**
@@ -761,7 +772,7 @@ function timeOnly(c: SourceCondition): boolean {
  * together, as usual, have one each), added up. Null when the filter or search needs the rows themselves.
  */
 export function countFlux(query: SourceQuery, columns: Map<string, InfluxColumn>): string | null {
-  if (!("table" in query.target) || query.search.trim() || !timeOnly(query.filter)) return null;
+  if (!("table" in query.target) || query.search.trim() || !timeOnly(query.filter, query.timeZone)) return null;
   const { schema, name } = query.target.table;
   const range = rangeOf(query.filter, query.timeZone);
   const tags = [...columns.values()].filter((c) => c.tag).map((c) => c.name);

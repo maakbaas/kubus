@@ -33,6 +33,9 @@
 //   --min-free <gb>    wait before starting a test while less memory is free (default 1.5)
 //   --name <name>      name of this run's browser sessions, build and report folders (default: none), so
 //                      a second run (another --port) can go alongside without ending the first's
+//   --coverage         collect the app's JS coverage (V8, Chromium, the build with source maps) into
+//                      coverage/gui-v8[-name]/, one file per test; tests/coverage.mjs maps it to app/src
+//                      and merges it into the report (npm run coverage:report)
 //   --perf             only the perf tests ({ perf: true }, left out of other runs): each once, one
 //                      browser (--workers); per-phase timings in perf-summary.json beside the report
 //   --perf-compare <file>  with --perf: compare with an earlier perf-summary.json (change per test)
@@ -51,6 +54,7 @@ import { freemem } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { gzipSync } from "node:zlib";
 import { PNG } from "pngjs";
 import pixelmatch from "pixelmatch";
 import { suitesFor } from "./areas.mjs";
@@ -75,6 +79,11 @@ const minFree = Number(opt("min-free", 1.5)) * GB;
 // sandboxed HTML frame); keep `minFree` for everything else; at most 3.
 const autoWorkers = Math.max(1, Math.min(3, Math.floor((freemem() - minFree) / (1.7 * GB))));
 const perfMode = flag("perf");
+const coverage = flag("coverage");
+if (coverage && (devMode || externalUrl)) {
+  console.error("--coverage needs the build (its source maps), not --dev or --base-url");
+  process.exit(1);
+}
 // Perf runs measure: one browser by default, so tests don't slow each other down.
 const workers = Math.max(1, Number(opt("workers", perfMode ? 1 : autoWorkers)));
 const recycleEvery = Math.max(1, Number(opt("recycle", 8)));
@@ -83,6 +92,7 @@ const suiteFilter = opt("suite");
 const retries = Number(opt("retries", 1));
 // Perf runs measure each test once (a change is judged against an earlier run, --perf-compare).
 const repeat = perfMode ? 1 : Math.max(1, Number(opt("repeat", 1)));
+const coverageDir = join(root, "coverage", opt("name") ? `gui-v8-${opt("name")}` : "gui-v8");
 const baselineDir = join(here, "baselines");
 const updateBaselines = flag("update-baselines");
 /** A pixel differs when pixelmatch's colour distance is over this (0…1); a baseline fails when more than BASELINE_SHARE of its pixels differ. */
@@ -268,7 +278,8 @@ async function buildApp() {
   const stampFile = join(buildDir, "stamp.json");
   const stamp = sourceStamp();
   try {
-    if (JSON.parse(readFileSync(stampFile, "utf8")).stamp === stamp && existsSync(join(buildDir, "index.html"))) return console.log("Using the build of the current sources");
+    const built = JSON.parse(readFileSync(stampFile, "utf8"));
+    if (built.stamp === stamp && (!coverage || built.sourcemap) && existsSync(join(buildDir, "index.html"))) return console.log("Using the build of the current sources");
   } catch {
     /* no build yet */
   }
@@ -276,13 +287,13 @@ async function buildApp() {
   const t0 = Date.now();
   // NODE_ENV=development: import.meta.env.DEV stays on (window.kubus for seeding) and React logs
   // its warnings, which the tests count as console errors, exactly as with the dev server.
-  const child = npxVite(["build", "--config", "app/vite.config.ts", "--mode", "development", "--outDir", buildDir, "--emptyOutDir"], { env: { ...process.env, NODE_ENV: "development" } });
+  const child = npxVite(["build", "--config", "app/vite.config.ts", "--mode", "development", "--outDir", buildDir, "--emptyOutDir", ...(coverage ? ["--sourcemap"] : [])], { env: { ...process.env, NODE_ENV: "development" } });
   let log = "";
   child.stdout.on("data", (d) => (log += d));
   child.stderr.on("data", (d) => (log += d));
   const code = await new Promise((done) => child.on("close", done));
   if (code !== 0) throw new Error(`The build failed:\n${log.split("\n").slice(-30).join("\n")}`);
-  writeFileSync(stampFile, JSON.stringify({ stamp }));
+  writeFileSync(stampFile, JSON.stringify({ stamp, sourcemap: coverage }));
   console.log(`Built in ${Math.round((Date.now() - t0) / 1000)}s`);
 }
 
@@ -315,7 +326,7 @@ function stopServer() {
 
 // ---- run --------------------------------------------------------------------------------------
 async function runTest(session, t, n) {
-  const opts = { browser: browserName || "chromium", test: t.name, baseUrl, shotDir: shotDir.replace(/\\/g, "/"), skip: skipRules, shotAll: flag("shot-all"), ignoreConsole: IGNORE_CONSOLE, shotPrefix: t.label ? `r${n}-` : "" };
+  const opts = { browser: browserName || "chromium", test: t.name, baseUrl, shotDir: shotDir.replace(/\\/g, "/"), skip: skipRules, shotAll: flag("shot-all"), ignoreConsole: IGNORE_CONSOLE, shotPrefix: t.label ? `r${n}-` : "", coverage };
   const code = `async page => {\nconst __OPTS = ${JSON.stringify(opts)};\n${lib}\n${t.src}\nreturn await __main(page);\n}`;
   const file = join(tmpDir, `t${n}.js`);
   writeFileSync(file, code);
@@ -329,6 +340,9 @@ async function runTest(session, t, n) {
     const msg = (r.out + r.err).trim().slice(0, 2000) || `exit code ${r.code}`;
     result = { name: t.name, status: "error", error: msg, checkpoints: [] };
   }
+  // The test's V8 coverage goes to its own file (a retry replaces the attempt before it), not into the report.
+  if (result.coverage) writeFileSync(join(coverageDir, `t${n}.json.gz`), gzipSync(JSON.stringify(result.coverage)));
+  delete result.coverage;
   for (const c of result.checkpoints || []) if (c.kind === "baseline") compareBaseline(c);
   if (result.status === "pass" && (result.checkpoints || []).some((c) => !c.pass)) result.status = "fail";
   return { ...result, name: t.label || result.name, test: t.name, suite: t.suite, viewport: result.viewport || t.opts.viewport || "desktop", dark: !!t.opts.dark };
@@ -365,6 +379,11 @@ async function main() {
   rmSync(reportDir, { recursive: true, force: true });
   mkdirSync(shotDir, { recursive: true });
   mkdirSync(tmpDir, { recursive: true });
+  if (coverage) {
+    rmSync(coverageDir, { recursive: true, force: true });
+    mkdirSync(coverageDir, { recursive: true });
+    writeFileSync(join(coverageDir, "meta.json"), JSON.stringify({ buildDir, baseUrl }));
+  }
   const strays = killStrays();
   if (strays) console.log(`Ended ${strays} browser session(s) left over by an earlier run`);
   await ensureServer();

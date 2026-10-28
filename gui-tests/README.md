@@ -19,6 +19,7 @@ npm run test:gui -- --skip theme-color,type-style # leave audit rules out
 npm run test:gui -- --list                        # list the tests
 npm run test:gui -- --dev                         # against the dev server (port 1420) instead of a build
 npm run test:gui -- --name b --port 1431          # a second run alongside the first (own browsers, build, report-b/)
+npm run test:gui -- --coverage                    # also collect the app's JS coverage (see below)
 npm run test:gui -- --perf                        # only the perf tests (suite 23), each once; perf-summary.json
 npm run test:gui -- --perf --perf-compare old.json # …compared per test with an earlier perf-summary.json
 ```
@@ -47,6 +48,16 @@ already running elsewhere.
 Output: `gui-tests/report/index.html` (open it in a browser) with every test, every checkpoint and
 its screenshot; failing elements are outlined and numbered in the screenshot. `results.json`
 beside it has the same data. The exit code is 1 when any checkpoint failed.
+
+## Coverage
+
+`--coverage` collects which lines of `app/src` and `shared/` the tests run: the build is made with source maps (redone once if it
+was made without), and every test starts V8's precise coverage over CDP in its Chromium page (taken before each page load, which
+discards the old page's scripts, and at the end). Each test's data goes gzipped to `coverage/gui-v8/tN.json.gz` (`coverage/gui-v8-<name>/`
+with `--name`), about 100–400 KB; the folder is emptied at the start of a run. It needs the build (not `--dev` or `--base-url`) and Chromium; the
+SQLite worker's own code is not included. `npm run coverage:report` maps the data through the source maps to the files in `app/src`
+and merges it with the unit tests' (`docs/testing.md`, Coverage). Try it on a few tests:
+`npm run test:gui -- --suite 02 --grep "resize gutter" --workers 1 --coverage`.
 
 ## Memory
 
@@ -149,8 +160,10 @@ strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 | `20-mobile-keyboard` | a field in a popover (block settings, view settings, icon picker) on phones with the on-screen keyboard coming up the Android way (shorter window) and the iOS way (shorter visual viewport, `t.keyboardUp`): it stays open and focused, keeps its side of its button, fits above the keyboard with the field in sight, typing works |
 | `21-baselines` | screenshot baselines of 9 key states (pages of typical content, a popover, a dialog) at desktop and phone, light and dark |
 | `22-components-filters-cards` | a field's settings under its name and type; local components (fields, blocks, Markdown code) and saved as shared from the Components page; AI prompt in the field dialog; strike through the item on tables and cards; `{{ }}` code in a filter value and an invalid value; cards with the cover beside the text, the same in narrow and wide panes |
+| `26-query-filter-sort-group` | the query panels with the table's rows asserted against the data: every Condition of every field kind, And / Or between rules, Value from the page's item, Remove filter; Sort by (every field, both directions, empty last) and Direction; Group by (every groupable field) and Group order, collapsed groups and blocks kept; the date period (Hour to Year, Which: counted from today / so far / the last n / a chosen one, Previous / Next, Any date, by Published / Logged / Created / Updated, Counted from the page's item's date, Range); a block's filter on top of its view's (And narrows, Or lets more in, the period frames both), Limit; "Filter all blocks" on an item page; a reference field's Choices; the panels on phones and laptops |
 | `23-perf` | perf tests, run only with `--perf` (left out of other runs): the app's hot paths, each phase (a load, a click, a key, to the state it leads to) timed with main-thread busy time, long tasks, elements and heap; seeding, settling and audits reported apart |
 | `25-map-and-view-options` | the Map block against a stubbed OpenFreeMap (Location text or Latitude / Longitude, Show as route, zoom, a dot hovered and clicked), Cards (Show title, Cover beside the text, Card width, Cover, Cover shape), Table (Title links, Items shown at a time, Show more), the Component and Markdown blocks, a block's Name, Hide empty fields and header, the Collection picker of an item page's block; each change read back from the stored view and after a reload |
+| `27-field-kinds-settings` | field kinds and their settings in the collection editor and the field dialog: the type menu lists every kind and each brings its own settings (Refers to, the toggle icons, strike through, component code and Output, Value AI prompt); every kind stored with its settings and shown again after a reload; validation (names, a reference without a collection), a type changed before saving, a removed field, plural / singular name and description, the Title choice, a list of items edited in an item |
 
 ## Adding to it
 

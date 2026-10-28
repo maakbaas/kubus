@@ -186,13 +186,16 @@ function sortKeyOf(c: SourceColumn): (row: MemoryRow) => Key {
 /** Texts in natural order, as the app's naturalCompare (one collator: localeCompare with options builds one for each comparison). */
 const naturalCompare = new Intl.Collator(undefined, { numeric: true }).compare;
 
+/** How two texts compare: the app's by default; a source with its own order (tests of connectors that have one) says its. */
+export type TextCompare = (a: string, b: string) => number;
+
 /** As the app compares sort keys (compareKeys in domain/query.ts), empty last either way. */
-function compareKeys(a: Key, b: Key, direction: 1 | -1): number {
+function compareKeys(a: Key, b: Key, direction: 1 | -1, text: TextCompare = naturalCompare): number {
   if (a === b) return 0;
   if (a === null) return 1;
   if (b === null) return -1;
   if (typeof a === "number" && typeof b === "number") return (a - b) * direction;
-  return naturalCompare(String(a), String(b)) * direction;
+  return text(String(a), String(b)) * direction;
 }
 
 /** The groups a row is in, as text ("" for none), as postgresSql.ts makes them: a list's row is in one per value. */
@@ -210,7 +213,7 @@ function groupKeysOf(c: SourceColumn, day: (iso: string) => string | null): (row
 }
 
 /** A query over rows: its page, and (with `counts`) its total and groups. */
-export function queryRows(rows: MemoryRow[], columns: Map<string, SourceColumn>, query: SourceQuery): SourceResult {
+export function queryRows(rows: MemoryRow[], columns: Map<string, SourceColumn>, query: SourceQuery, text: TextCompare = naturalCompare): SourceResult {
   if (!Number.isInteger(query.offset) || query.offset < 0) throw new SourceError("offset must be a whole number");
   if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > MAX_SOURCE_PAGE) throw new SourceError(`limit must be 1 to ${MAX_SOURCE_PAGE}`);
   const day = minuteIn(query.timeZone);
@@ -230,10 +233,10 @@ export function queryRows(rows: MemoryRow[], columns: Map<string, SourceColumn>,
   const keyed = found.map((row) => ({ row, keys: sorts.map((s) => s.key(row)), id: keyOf(row) }));
   keyed.sort((a, b) => {
     for (let i = 0; i < sorts.length; i++) {
-      const d = compareKeys(a.keys[i], b.keys[i], sorts[i].direction);
+      const d = compareKeys(a.keys[i], b.keys[i], sorts[i].direction, text);
       if (d) return d;
     }
-    return compareKeys(a.id, b.id, 1);
+    return compareKeys(a.id, b.id, 1, text);
   });
 
   let ordered: { row: MemoryRow; group?: string }[] = keyed;
@@ -257,7 +260,7 @@ export function queryRows(rows: MemoryRow[], columns: Map<string, SourceColumn>,
         const d = byGroup.get(b)!.length - byGroup.get(a)!.length;
         if (d) return d;
       }
-      return compareKeys(value(a), value(b), direction);
+      return compareKeys(value(a), value(b), direction, text);
     });
     ordered = order.flatMap((g) => byGroup.get(g)!.map((row) => ({ row, group: g })));
     groups = order.slice(0, MAX_SOURCE_GROUPS).map((g) => ({ key: g, count: byGroup.get(g)!.length }));

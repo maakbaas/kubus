@@ -329,9 +329,11 @@ takes the new one when its settings are opened. A source's name: letters, digits
   key's start. The parsed calendar is kept with the document (a minute), its expansions per window. Then
   queried in memory (`memory.ts`). `check` warns about a calendar with no events, or events it can't read.
 - *JSON and CSV over HTTP* (`connectors/json.ts`, `csv.ts`, what both share in `httpTable.ts`; pure parts tested,
-  the connectors against a stand-in server): one table per source (JSON: named by "Rows at"'s last token, else `rows`;
+  the connectors against real files over real local HTTP servers): one table per source (JSON: named by "Rows at"'s last token, else `rows`;
   CSV: `rows`; any name is read, so a collection reads on when "Rows at" changes), read through `httpDocument.ts`
-  (redirects followed: a published Google Sheet's CSV address answers with one) and its next pages by
+  (redirects followed by hand, at most 10, a header or parameter password stays on the address's origin; the text in the
+  charset the server declares, UTF-16 by its byte order mark, else UTF-8; a GET on a connection the server had closed
+  is repeated once: a published Google Sheet's CSV address answers with a redirect) and its next pages by
   `Link: rel="next"` (at most 100 pages, 20 MB in all, `MAX_ROWS` 100,000 rows), queried in memory (`memory.ts`). The
   address is clear text; a secret in it is written `{secret}` and is the password (`withSecret`, URL-encoded). Else the
   password goes in the query under "Query parameter", under "Header name", or as `Authorization: Bearer`; only to the
@@ -364,7 +366,7 @@ takes the new one when its settings are opened. A source's name: letters, digits
   made of one starts with a date period on it (Last 7 days, `SourceDescription.time`, `sourcePeriod`). Every query
   slower than 3 s is logged with its script (`SLOW_MS`), and a total is counted from InfluxDB's
   index when the filter is a `_time` range alone (`countFlux`: per series the most points of any field, so fields
-  written apart are undercounted); two text sorts asked opposite ways sort the second the way of the first, and a field whose type differs between series can't be read with the others.
+  written apart are undercounted); two text sorts asked opposite ways sort the second the way of the first (so do the key's ties: they follow the first sort's direction, not always ascending), and a field whose type differs between series can't be read with the others. A missing checkbox field is unchecked (grouped "no", sorted with the unchecked), as in SQL sources. InfluxDB 2.7 quirks the Flux works around (`influx.real.test.ts`): a `""` a map's `if` gives is a null (the group of rows with no value has the key `NO_GROUP`), and `sort |> limit` drops the last row (a `keep` is put between them).
 
 ## The API (headless device) and webhooks
 
