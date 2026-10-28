@@ -27,6 +27,8 @@ const GRACE_MS = 10_000;
 interface Source<T> {
   list(collection: Collection): Promise<T[]>;
   one(collection: Collection, id: string): Promise<T | null>;
+  /** Whether a reloaded entry is the one held (then the list keeps its identity, and nothing hears of it). */
+  same?(a: T, b: T): boolean;
 }
 
 interface Entry<T> {
@@ -93,7 +95,11 @@ export class SharedCache<T extends { id: string }> {
     const generation = ++entry.generation;
     try {
       const items = await this.source.list(collection);
-      if (entry.generation === generation) this.set(entry, items);
+      if (entry.generation !== generation) return;
+      const held = entry.snapshot.items;
+      const same = this.source.same;
+      if (same && held && !entry.snapshot.error && held.length === items.length && held.every((x, i) => same(x, items[i]))) return;
+      this.set(entry, items);
     } catch (e) {
       if (entry.generation === generation) this.set(entry, entry.snapshot.items, messageOf(e));
     }
@@ -113,6 +119,10 @@ export class SharedCache<T extends { id: string }> {
       .then((item) => {
         const list = entry.snapshot.items;
         if (!list) return;
+        if (item && this.source.same) {
+          const held = list.find((x) => x.id === id);
+          if (held && this.source.same(held, item)) return;
+        }
         const rest = list.filter((x) => x.id !== id);
         if (!item) return this.set(entry, rest);
         this.set(entry, rest.length === list.length ? [item, ...rest] : list.map((x) => (x.id === id ? item : x)));
@@ -191,7 +201,13 @@ export class ItemCache {
       collectionOf,
     );
     this.labels = new SharedCache(
-      { list: (t) => repo.listLabels(t), one: async (t, id) => (await repo.listLabels(t, [id]))[0] ?? null },
+      {
+        list: (t) => repo.listLabels(t),
+        one: async (t, id) => (await repo.listLabels(t, [id]))[0] ?? null,
+        // An edit that leaves the label as it was (most do) changes nothing that shows labels:
+        // references, and the rows and cards of every collection referring to this one.
+        same: (a, b) => a.label === b.label && a.spaceId === b.spaceId,
+      },
       collectionOf,
     );
     this.unsubscribe = repo.subscribe((change) => {
