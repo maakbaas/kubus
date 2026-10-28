@@ -146,15 +146,15 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
           <FieldSelect id={`${uid}-value-field`} label="Of" fields={numbers} value={o.valueField} disabled={o.value === "count"} onChange={(valueField) => set({ valueField })} />
         </>
       )}
-      {o.chart === "radar" && (
+      {(o.chart === "radar" || (o.chart === "meter" && o.proportional)) && (
         <>
-          {aggregates(`${uid}-value`, "Value", o.value === "count" ? "avg" : o.value, (value) => set({ value: value ?? "avg" }), { count: false })}
+          {o.chart === "radar" && aggregates(`${uid}-value`, "Value", o.value === "count" ? "avg" : o.value, (value) => set({ value: value ?? "avg" }), { count: false })}
           <MultiSelect<FieldDef>
             autoAlign
             size="sm"
             id={`${uid}-spokes`}
-            titleText="Spokes"
-            label={o.fields.length ? numbers.filter((f) => o.fields.includes(f.id)).map((f) => f.name).join(", ") : "Choose number fields"}
+            titleText={o.chart === "radar" ? "Spokes" : "Parts (number fields)"}
+            label={o.fields.length ? numbers.filter((f) => o.fields.includes(f.id)).map((f) => f.name).join(", ") : o.chart === "meter" ? "Groups (or choose fields)" : "Choose number fields"}
             items={numbers}
             itemToString={(f) => f?.name ?? ""}
             selectedItems={numbers.filter((f) => o.fields.includes(f.id))}
@@ -279,7 +279,7 @@ export const chartBlock = defineBlockType<ChartOptions>({
   defaultOptions: (collection) => defaultChartOptions(collection),
   normalizeOptions: (raw, collection) => normalizeChartOptions(raw, collection),
   // Its grouping is its categories (a gauge has none: one value of all its items).
-  uses: (options) => ({ query: true, all: true, groups: options.chart !== "gauge" && !(options.chart === "meter" && !options.proportional), fields: null }),
+  uses: (options) => ({ query: true, all: true, groups: options.chart !== "gauge" && !(options.chart === "meter" && (!options.proportional || options.fields.length > 0)), fields: null }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,
 });

@@ -11,6 +11,7 @@ import {
   resultItems,
   scatterPoints,
   singleValue,
+  aggregate,
   statusOf,
   valueLabel,
   valuesByCategory,
@@ -299,8 +300,20 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       };
     }
     case "meter": {
-      if (needsValueField) return { problem: "Choose the field to measure." };
       const items = resultItems(input.result);
+      // Parts of a whole by number fields (fat, bone, muscle of a total weight): each field's value is a part.
+      if (options.proportional && options.fields.length > 0) {
+        const how = options.value === "count" ? "sum" : options.value;
+        const data = options.fields.flatMap((id) => {
+          const field = fields.get(id);
+          const value = field ? aggregate(items, how, field) : null;
+          return field && value !== null && value > 0 ? [{ group: field.name, value }] : [];
+        });
+        if (data.length === 0) return noItems;
+        const total = singleValue(input.collection, items, options).max ?? data.reduce((n, d) => n + d.value, 0);
+        return { chart: "MeterChart", data, options: base(options, theme, true, { height: "6rem", meter: { proportional: { total } } }) };
+      }
+      if (needsValueField) return { problem: "Choose the field to measure." };
       if (options.proportional) {
         const t = chartTable(input, { ...options, splitBy: null });
         const data = t.points.filter((p) => p.value !== null && p.value > 0).map((p) => ({ group: p.category.label, value: p.value }));
