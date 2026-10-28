@@ -89,7 +89,10 @@ function unusedHeight(holder: HTMLElement, part: string): number {
  * The same spec as before while nothing in it changed (functions aside: what they depend on is
  * the spec's `format`): Carbon redraws a chart whenever its data or options are new objects, which
  * hides its tooltip under the pointer, so a re-render of the block with equal options must not hand
- * it new ones. `drawing` names its chart type and options: a new one is a new Carbon chart.
+ * it new ones. `drawing` names its chart type, options and series: a new one is a new Carbon chart.
+ * The series too: Carbon keeps every series name a chart has had (`allDataGroups`, only added to)
+ * and colours them by their place there, so a series renamed or added in place took the next
+ * colours (until the page was reloaded).
  */
 function useStableSpec(spec: ChartSpec): { spec: ChartSpec; drawing: string } {
   const last = useRef<{ key: string; spec: ChartSpec; drawing: string } | null>(null);
@@ -98,7 +101,10 @@ function useStableSpec(spec: ChartSpec): { spec: ChartSpec; drawing: string } {
   if (given.current === spec && last.current) return last.current;
   given.current = spec;
   const key = JSON.stringify(spec);
-  if (last.current?.key !== key) last.current = { key, spec, drawing: `${spec.chart}:${JSON.stringify([spec.options, spec.format])}` };
+  if (last.current?.key !== key) {
+    const series = [...new Set(spec.data.map((d) => (d as { group?: unknown }).group))];
+    last.current = { key, spec, drawing: `${spec.chart}:${JSON.stringify([spec.options, spec.format, series])}` };
+  }
   return last.current;
 }
 
