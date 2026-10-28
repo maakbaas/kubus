@@ -126,3 +126,12 @@ API:
 
 15. API tokens for one space, and tokens that expire; OAuth for MCP clients that can't send a header
     (claude.ai's connectors), and allowed origins for browser-based ones.
+
+Charts:
+
+16. A value axis's min and max only framing the chart. Carbon Charts leaves out every data point
+    outside an axis's `domain` (`getAllDataFromDomain` in its model), so a bar above the max vanishes
+    instead of reaching the top, and a line skips the value. Keeping them means changing Carbon's
+    behaviour: the value axes left out of that filter, and the plot clipped by hand (Carbon draws
+    this chart without a clip, and dots never clipped), so a bar below the min doesn't cover the axis.
+    Parked: not worth patching Carbon's internals for now.
