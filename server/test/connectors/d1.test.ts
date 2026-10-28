@@ -1,19 +1,18 @@
 // @vitest-environment node
 // The D1 connector (server/src/connectors/d1.ts) against a stand-in for Cloudflare's /raw endpoint
-// that runs each statement on SQLite itself (node:sqlite), as D1 does: the requests it makes, how
+// (d1Api.ts) that runs each statement on SQLite itself (node:sqlite), as D1 does: the requests it makes, how
 // it reads the answers and errors, and that it stays read-only.
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SourceError } from "../../src/connectors/connector.ts";
 import { D1Connector } from "../../src/connectors/d1.ts";
 import type { SourceQuery } from "../../../shared/sources.ts";
+import { stubD1, type D1Stub } from "./d1Api.ts";
 
 const ENDPOINT = "https://api.cloudflare.com/client/v4/accounts/acc/d1/database/db-1/raw";
 
 let db: DatabaseSync;
-let requests: { url: string; authorization: string | null; sql: string; params: unknown[] }[];
-/** Answers the stand-in gives instead of running the statement (Cloudflare's own errors). */
-let override: ((sql: string) => Response | null) | null;
+let stub: D1Stub;
 
 beforeEach(() => {
   db = new DatabaseSync(":memory:");
@@ -21,33 +20,12 @@ beforeEach(() => {
     INSERT INTO people VALUES (1, 'Ann', 1, 3, x'00'), (2, 'Bob', 0, 4.5, NULL), (3, NULL, 'yes', NULL, NULL);
     CREATE VIEW actives AS SELECT id, name FROM people WHERE active = 1;
     CREATE TABLE _cf_KV (key TEXT);`);
-  requests = [];
-  override = null;
-  vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
-    const { sql, params } = JSON.parse(String(init.body)) as { sql: string; params: (string | number)[] };
-    requests.push({ url, authorization: new Headers(init.headers).get("authorization"), sql, params });
-    const answer = override?.(sql);
-    if (answer) return answer;
-    try {
-      const statement = db.prepare(sql);
-      statement.setReturnArrays(true);
-      const named = Object.fromEntries(params.map((v, i) => [`?${i + 1}`, v]));
-      const columns = statement.columns().map((c) => c.name);
-      if (columns.length === 0) {
-        const { changes } = statement.run(named);
-        return Response.json({ success: true, result: [{ success: true, results: { columns: [], rows: [] }, meta: { changed_db: Number(changes) > 0, changes: Number(changes) } }] });
-      }
-      const rows = (statement.all(named) as unknown as unknown[][]).map((r) => r.map((v) => (v instanceof Uint8Array ? [...v] : v)));
-      return Response.json({ success: true, result: [{ success: true, results: { columns, rows }, meta: { changed_db: false, changes: 0 } }] });
-    } catch (e) {
-      return Response.json({ success: false, errors: [{ code: 7500, message: (e as Error).message }] }, { status: 400 });
-    }
-  });
+  stub = stubD1(db);
 });
 
 afterEach(() => vi.unstubAllGlobals());
 
-const connector = (over: { fields?: Record<string, string>; schemas?: string[] } = {}) =>
+const connector = (over: { fields?: Record<string, string>; schemas?: string[]; password?: string } = {}) =>
   new D1Connector({ name: "Edge", kind: "d1", fields: { account: "acc", database: "db-1" }, password: "token-1", schemas: [], timeoutMs: 5000, ...over });
 
 const people = (over: Partial<SourceQuery> = {}): SourceQuery => ({
@@ -71,7 +49,7 @@ const people = (over: Partial<SourceQuery> = {}): SourceQuery => ({
 describe("D1 connector", () => {
   it("reads its account and database from the connection string, the token as its password", async () => {
     expect(await connector().check()).toEqual([]);
-    expect(requests[0]).toMatchObject({ url: ENDPOINT, authorization: "Bearer token-1", sql: "SELECT 1" });
+    expect(stub.requests[0]).toMatchObject({ url: ENDPOINT, authorization: "Bearer token-1", sql: "SELECT 1" });
     expect(() => connector({ fields: { account: "acc", database: "" } })).toThrow(SourceError);
     expect(await connector({ schemas: ["main"] }).check()).toEqual(["D1 has no schemas: the source's schemas are ignored"]);
   });
@@ -100,7 +78,7 @@ describe("D1 connector", () => {
       total: 3,
     });
     expect((await c.query(people({ offset: 2 }))).rows).toEqual([{ key: "3", values: [null, true, null] }]);
-    expect(requests.every((r) => /^(SELECT|PRAGMA)/i.test(r.sql))).toBe(true);
+    expect(stub.requests.every((r) => /^(SELECT|PRAGMA)/i.test(r.sql))).toBe(true);
   });
 
   it("groups, as the other connectors do", async () => {
@@ -123,14 +101,14 @@ describe("D1 connector", () => {
 
   it("tells the request's mistakes (400) from Cloudflare's and the token's", async () => {
     await expect(connector().describe({ table: { schema: null, name: "nothing" } })).rejects.toThrow(SourceError);
-    override = () => Response.json({ success: false, errors: [{ code: 10000, message: "Authentication error" }] }, { status: 403 });
+    stub.override = () => Response.json({ success: false, errors: [{ code: 10000, message: "Authentication error" }] }, { status: 403 });
     const error = await connector().tables().catch((e: Error) => e);
     expect(error).not.toBeInstanceOf(SourceError);
     expect((error as Error).message).toBe("Cloudflare: Authentication error");
   });
 
   it("refuses an answer that says the database changed", async () => {
-    override = () => Response.json({ success: true, result: [{ success: true, results: { columns: ["1"], rows: [[1]] }, meta: { changed_db: true, changes: 1 } }] });
+    stub.override = () => Response.json({ success: true, result: [{ success: true, results: { columns: ["1"], rows: [[1]] }, meta: { changed_db: true, changes: 1 } }] });
     await expect(connector().check()).rejects.toThrow(/changed the D1 database/);
   });
 
@@ -139,5 +117,39 @@ describe("D1 connector", () => {
       new Promise((_resolve, reject) => init.signal!.addEventListener("abort", () => reject(init.signal!.reason))),
     );
     await expect(new D1Connector({ name: "Slow", kind: "d1", fields: { account: "acc", database: "db-1" }, password: "t", schemas: [], timeoutMs: 20 }).check()).rejects.toThrow(/took too long/);
+  });
+
+  it("folds the case of ASCII only, as SQLite's LIKE does", async () => {
+    db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT); INSERT INTO t VALUES (1, 'Émile'), (2, 'emile')");
+    const q: SourceQuery = { ...people({ target: { table: { schema: null, name: "t" } }, columns: ["id", "name"], title: ["name"] }), filter: { column: "name", operator: "contains", value: "ÉMILE" } };
+    // É matches É, but not é; A to Z fold, so "EMILE" finds "emile" and not "Émile".
+    expect((await connector().query(q)).rows.map((r) => r.key)).toEqual(["1"]);
+    expect((await connector().query({ ...q, filter: { column: "name", operator: "contains", value: "EMILE" } })).rows.map((r) => r.key)).toEqual(["2"]);
+  });
+
+  it("tells a token Cloudflare refuses from the statement's mistake, whatever the status", async () => {
+    // A well-formed token it doesn't know: 401 (code 9109).
+    const unknown = await connector({ password: "another-token" }).check().catch((e: Error) => e);
+    expect(unknown).not.toBeInstanceOf(SourceError);
+    expect((unknown as Error).message).toBe("Cloudflare: Invalid access token");
+    // No token at all: "Bearer " is no header, and Cloudflare answers 400 (6003, 6111) as it does for a bad statement.
+    const none = await connector({ password: "" }).check().catch((e: Error) => e);
+    expect(none).not.toBeInstanceOf(SourceError);
+    expect((none as Error).message).toMatch(/Invalid format for Authorization header/);
+    // A database Cloudflare can't route to.
+    const lost = await connector({ fields: { account: "acc", database: "elsewhere" } }).check().catch((e: Error) => e);
+    expect(lost).not.toBeInstanceOf(SourceError);
+    expect((lost as Error).message).toMatch(/^Cloudflare: Could not route to/);
+  });
+
+  it("reads Cloudflare's answer: its envelope, meta and blobs as bytes", async () => {
+    const raw = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { authorization: "Bearer token-1", "content-type": "application/json" },
+      body: JSON.stringify({ sql: "SELECT id, photo FROM people ORDER BY id", params: [] }),
+    });
+    const body = (await raw.json()) as { success: boolean; errors: unknown[]; messages: unknown[]; result: object[] };
+    expect(body).toMatchObject({ success: true, errors: [], messages: [] });
+    expect(body.result[0]).toMatchObject({ success: true, results: { columns: ["id", "photo"], rows: [[1, [0]], [2, null], [3, null]] }, meta: { changed_db: false, changes: 0, rows_read: 3, rows_written: 0 } });
   });
 });

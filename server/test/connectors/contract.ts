@@ -202,6 +202,14 @@ function describeResult(r: unknown): string {
   return `rows [${x.rows.map((row) => (row.group === undefined ? row.key : `${row.group}/${row.key}`)).join(" ")}] more ${x.more} total ${x.total}${groups}`;
 }
 
+/** The first row whose values differ, for the failure's report. */
+function firstDifference(got: unknown, want: unknown): string {
+  if (typeof got === "string" || typeof want === "string") return "";
+  const [g, w] = [(got as SourceResult).rows, (want as SourceResult).rows];
+  const i = g.findIndex((row, n) => JSON.stringify(row) !== JSON.stringify(w[n]));
+  return i < 0 ? "" : `\n  first difference, row ${i}: want ${JSON.stringify(w[i])} got ${JSON.stringify(g[i])}`;
+}
+
 /** The answer the app's meaning gives. */
 export function reference(fx: Fixture, query: SourceQuery) {
   return queryRows(fx.rows, new Map(fx.columns.map((c) => [c.name, c])), query, fx.text);
@@ -244,19 +252,23 @@ function same(fx: Fixture, query: SourceQuery, got: SourceResult, want: SourceRe
   if (!fx.looseTies) return JSON.stringify(got) === JSON.stringify(want);
   const whole = query.offset === 0 && !want.more;
   if (JSON.stringify({ ...got, rows: 0, groups: 0 }) !== JSON.stringify({ ...want, rows: 0, groups: 0 })) return false;
-  if (query.groupBy && query.groupOrder === "count") {
-    // Groups of the same size come in either order.
-    const sizes = (g?: { key: string; count: number }[]) => JSON.stringify(g?.map((x) => x.count));
-    const members = (g?: { key: string; count: number }[]) => JSON.stringify(g?.map((x) => `${x.key}:${x.count}`).sort());
-    if (sizes(got.groups) !== sizes(want.groups) || members(got.groups) !== members(want.groups)) return false;
+  if (query.groupBy) {
+    // Groups that tie (of the same size, or that the source's order doesn't tell apart) come in either order.
+    const [g, w] = [got.groups ?? [], want.groups ?? []];
+    if (g.length !== w.length) return false;
+    const tied = (a: { key: string; count: number }, b: { key: string; count: number }) =>
+      query.groupOrder === "count" ? a.count === b.count : (fx.text ?? ((x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0)))(a.key.toLowerCase(), b.key.toLowerCase()) === 0 && a.key !== "" === (b.key !== "");
+    const classes = new Map<string, number>();
+    w.forEach((x, i) => classes.set(x.key, i > 0 && tied(w[i - 1], x) ? classes.get(w[i - 1].key)! : i));
+    if (!g.every((x, i) => classes.get(x.key) === classes.get(w[i].key) && x.count === w.find((y) => y.key === x.key)?.count)) return false;
     if (!whole) return got.rows.length === want.rows.length;
     const byGroup = (rows: SourceRow[]) => {
       const out = new Map<string, SourceRow[]>();
       for (const r of rows) out.set(r.group ?? "", [...(out.get(r.group ?? "") ?? []), r]);
       return out;
     };
-    const [g, w] = [byGroup(got.rows), byGroup(want.rows)];
-    return g.size === w.size && [...w].every(([key, rows]) => g.has(key) && sameRows(fx, query, g.get(key)!, rows, true));
+    const [gr, wr] = [byGroup(got.rows), byGroup(want.rows)];
+    return gr.size === wr.size && [...wr].every(([key, rows]) => gr.has(key) && sameRows(fx, query, gr.get(key)!, rows, true));
   }
   if (JSON.stringify(got.groups) !== JSON.stringify(want.groups)) return false;
   return sameRows(fx, query, got.rows, want.rows, whole);
@@ -296,7 +308,7 @@ export function runContract(get: () => Fixture, options: { errors?: boolean; tim
         got = `error: ${(e as Error).message}`;
       }
       const ok = typeof want === "string" ? typeof got === "string" : typeof got !== "string" && same(fx, q, got as SourceResult, want as SourceResult);
-      if (!ok) failures.push(`${name}\n  want ${describeResult(want)}\n  got  ${describeResult(got)}`);
+      if (!ok) failures.push(`${name}\n  want ${describeResult(want)}\n  got  ${describeResult(got)}${firstDifference(got, want)}`);
     };
     // A few at a time: a service answers several requests at once.
     const queue = [...cases];
