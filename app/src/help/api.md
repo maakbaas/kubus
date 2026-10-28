@@ -8,21 +8,26 @@ All addresses below start with /api/v1 on your server.
 
 ## Getting started
 
-Every request needs the server's token: the same KUBUS_TOKEN your devices use to sync. Send it as a bearer token. This lists your collections:
+Every request needs a token, sent as a bearer token. Make one for each script or tool in **Settings → Server → API tokens**: give it a name and its access, *Read* or *Read & write*, and copy the token (it starts with `kubus_`) from the dialog: it is shown only that once. This lists your collections:
 
 ```bash
-curl -H "Authorization: Bearer $KUBUS_TOKEN" https://notes.example.com/api/v1/collections
+curl -H "Authorization: Bearer $KUBUS_API_TOKEN" https://notes.example.com/api/v1/collections
 ```
 
-And this adds a book:
+And this adds a book (with a *Read & write* token):
 
 ```bash
-curl -X POST -H "Authorization: Bearer $KUBUS_TOKEN" -H "Content-Type: application/json" \
+curl -X POST -H "Authorization: Bearer $KUBUS_API_TOKEN" -H "Content-Type: application/json" \
   -d '{"values": {"Title": "Dune", "Pages": 412}}' \
   https://notes.example.com/api/v1/collections/books/items
 ```
 
-> Whoever has the token can read and change everything, and can run component code on the server. Keep it secret.
+- **A read token** can only read: GET (and HEAD) requests. Every write, generating an AI value included, answers 403.
+- **A read & write token** can do everything below.
+- An API token reaches only these addresses (/api/v1), never sync or the server's settings. Revoke it in the same list when it is no longer used (the list also says when each was last used); whatever uses it is refused from then on.
+- The devices' own token (the server's KUBUS_TOKEN) works here too, with access to everything. Better give each tool its own API token.
+
+> Whoever has a token can read everything (reading runs your components' code on the server), and with a read & write token change everything. Keep tokens secret.
 
 ## How requests work
 
@@ -36,6 +41,8 @@ When something goes wrong, the answer is an error message as JSON, `{ "error": "
 | Status | Meaning |
 |---|---|
 | 400 | the request isn't right (a missing or wrong value) |
+| 401 | no token, or one that isn't (or no longer is) valid |
+| 403 | the token can only read, and this is a write |
 | 404 | no such collection, item, field, … |
 | 405 | that method isn't allowed here |
 | 409 | refused by a rule, such as deleting the only space or a collection others refer to |
@@ -157,7 +164,7 @@ A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, o
 Images are stored apart from items, named by a fingerprint of their bytes (SHA-256). Upload one by sending its bytes:
 
 ```bash
-curl -X POST -H "Authorization: Bearer $KUBUS_TOKEN" -H "Content-Type: image/png" \
+curl -X POST -H "Authorization: Bearer $KUBUS_API_TOKEN" -H "Content-Type: image/png" \
   --data-binary @cover.png https://notes.example.com/api/v1/files
 → { "id": "<sha256>", "src": "files/<sha256>" }
 ```

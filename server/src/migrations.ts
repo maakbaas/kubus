@@ -23,7 +23,21 @@ export interface ServerMigration {
   up: string | ((client: pg.PoolClient) => Promise<void>);
 }
 
-export const MIGRATIONS: ServerMigration[] = [];
+export const MIGRATIONS: ServerMigration[] = [
+  {
+    version: 1,
+    description: "API tokens (api_tokens)",
+    up: `CREATE TABLE IF NOT EXISTS api_tokens (
+      id             text NOT NULL,
+      name           text NOT NULL,
+      access         text NOT NULL,
+      token_sha256   text NOT NULL UNIQUE,
+      created_at     timestamptz NOT NULL DEFAULT now(),
+      last_used_at   timestamptz,
+      PRIMARY KEY (id)
+    )`,
+  },
+];
 
 /** Serializes servers starting on the same database. */
 const LOCK_ID = 7_236_002;

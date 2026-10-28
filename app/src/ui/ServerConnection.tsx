@@ -1,12 +1,13 @@
 import { useId, useState, useSyncExternalStore } from "react";
 import { Button, Form, InlineNotification, PasswordInput, Stack, TextInput } from "@carbon/react";
 import { useStore } from "../app/store";
+import { ApiTokens } from "./ApiTokens";
 import { errorMessage, useConfirm } from "./useConfirm";
 
 /**
  * The Kubus server this device is connected to: its address and token (a section of the settings).
  * Sync, the server's language model and remote collections all go through it; whether data syncs is
- * Settings → Sync.
+ * Settings → Sync. Once connected, also the server's API tokens (ApiTokens).
  */
 export function ServerConnection() {
   const { repo } = useStore();
@@ -71,43 +72,46 @@ export function ServerConnection() {
   return (
     <>
       <p className="helper">The Kubus server this device syncs with, and that offers it a language model and remote collections.</p>
-      <Form onSubmit={save} noValidate>
-        <Stack gap={6}>
-          <TextInput
-            size="sm"
-            id={`${uid}-url`}
-            labelText="Server"
-            placeholder="https://notes.example.com"
-            value={draft.url}
-            onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
-          />
-          <PasswordInput
-            size="sm"
-            id={`${uid}-token`}
-            labelText="Token"
-            helperText="The KUBUS_TOKEN of the server."
-            value={draft.token}
-            onChange={(e) => setDraft((d) => ({ ...d, token: e.target.value }))}
-          />
-          {result && <InlineNotification kind={result.ok ? "success" : "error"} title={result.ok ? "Connected" : "Can't connect"} subtitle={result.text} lowContrast hideCloseButton />}
-          <div>
-            <Button size="sm" kind="primary" type="submit" disabled={saving || !dirty}>
-              Save
-            </Button>{" "}
-            <Button size="sm" kind="tertiary" disabled={testing || !draft.url.trim()} onClick={() => void test()}>
-              Test connection
-            </Button>
-            {connected && (
-              <>
-                {" "}
-                <Button size="sm" kind="danger--tertiary" onClick={() => void disconnect()}>
-                  Disconnect
-                </Button>
-              </>
-            )}
-          </div>
-        </Stack>
-      </Form>
+      <Stack gap={7}>
+        <Form onSubmit={save} noValidate>
+          <Stack gap={6}>
+            <TextInput
+              size="sm"
+              id={`${uid}-url`}
+              labelText="Server"
+              placeholder="https://notes.example.com"
+              value={draft.url}
+              onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
+            />
+            <PasswordInput
+              size="sm"
+              id={`${uid}-token`}
+              labelText="Token"
+              helperText="The KUBUS_TOKEN of the server."
+              value={draft.token}
+              onChange={(e) => setDraft((d) => ({ ...d, token: e.target.value }))}
+            />
+            {result && <InlineNotification kind={result.ok ? "success" : "error"} title={result.ok ? "Connected" : "Can't connect"} subtitle={result.text} lowContrast hideCloseButton />}
+            <div>
+              <Button size="sm" kind="primary" type="submit" disabled={saving || !dirty}>
+                Save
+              </Button>{" "}
+              <Button size="sm" kind="tertiary" disabled={testing || !draft.url.trim()} onClick={() => void test()}>
+                Test connection
+              </Button>
+              {connected && (
+                <>
+                  {" "}
+                  <Button size="sm" kind="danger--tertiary" onClick={() => void disconnect()}>
+                    Disconnect
+                  </Button>
+                </>
+              )}
+            </div>
+          </Stack>
+        </Form>
+        {connected && sync.config.url && <ApiTokens />}
+      </Stack>
       {dialog}
     </>
   );

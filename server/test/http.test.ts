@@ -9,6 +9,7 @@ import { join } from "node:path";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SYNC_VERSION, type SyncRequest, type SyncResponse } from "../../shared/sync.ts";
+import type { ApiTokenInfo, ApiTokenMade } from "../../shared/tokens.ts";
 import { admin, ADMIN, createDatabase, dropDatabase, sourceFor } from "./postgres.ts";
 import { HEADLESS_BUILT, request, startServer, TOKEN, type RunningServer } from "./serve.ts";
 
@@ -71,7 +72,7 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
     });
 
     it("refuses /api without the right token", async () => {
-      for (const authorization of ["", "Bearer wrong", `Bearer ${TOKEN}x`]) {
+      for (const authorization of ["", "Bearer wrong", `Bearer ${TOKEN}x`, "Bearer kubus_notatoken"]) {
         const response = await request(server, "/api/settings", { headers: { Authorization: authorization } });
         expect(response.status).toBe(401);
       }
@@ -330,14 +331,78 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
     });
   });
 
+  describe("API tokens", () => {
+    const make = async (body: unknown) => {
+      const response = await request(server, "/api/tokens", { method: "POST", json: body });
+      return { status: response.status, body: (await response.json()) as ApiTokenMade & { error?: string } };
+    };
+    const as = (token: string, path: string, init: RequestInit & { json?: unknown } = {}) =>
+      request(server, path, { ...init, headers: { Authorization: `Bearer ${token}` } });
+    const list = async () => (await (await request(server, "/api/tokens")).json()) as ApiTokenInfo[];
+
+    it("are made, listed without the token, and revoked by devices", async () => {
+      const made = await make({ name: " Scripts ", access: "write" });
+      expect(made.status).toBe(201);
+      expect(made.body).toMatchObject({ name: "Scripts", access: "write", lastUsedAt: null });
+      expect(made.body.token).toMatch(/^kubus_[A-Za-z0-9_-]{43}$/);
+      const listed = (await list()).find((t) => t.id === made.body.id);
+      expect(listed).toEqual({ id: made.body.id, name: "Scripts", access: "write", createdAt: made.body.createdAt, lastUsedAt: null });
+      expect(JSON.stringify(await list())).not.toContain(made.body.token);
+      expect((await as(made.body.token, "/api/v1/collections/Nothing")).status).not.toBe(401);
+      expect((await request(server, `/api/tokens/${made.body.id}`, { method: "DELETE" })).status).toBe(200);
+      expect((await request(server, `/api/tokens/${made.body.id}`, { method: "DELETE" })).status).toBe(404);
+      expect((await list()).some((t) => t.id === made.body.id)).toBe(false);
+      expect((await as(made.body.token, "/api/v1/collections")).status).toBe(401);
+    });
+
+    it("refuse a token without a name or access", async () => {
+      expect((await make({ name: "", access: "read" })).status).toBe(400);
+      expect((await make({ name: "x", access: "all" })).status).toBe(400);
+      expect((await make(null)).status).toBe(400);
+    });
+
+    it("reach only /api/v1, never the devices' endpoints", async () => {
+      const { token } = (await make({ name: "Everything", access: "write" })).body;
+      for (const [method, path] of [["POST", "/api/sync"], ["GET", "/api/settings"], ["GET", "/api/tokens"], ["POST", "/api/tokens"], ["GET", "/api/events"], ["GET", "/api/ai"], ["POST", "/api/wipe"]]) {
+        const response = await as(token, path, { method, ...(method === "POST" && { json: {} }) });
+        expect(response.status, `${method} ${path}`).toBe(403);
+        expect((await response.json()).error).toMatch(/only the API/);
+      }
+    });
+
+    it("of read access only read: every write is refused with 403", async () => {
+      const { token } = (await make({ name: "Reader", access: "read" })).body;
+      for (const [method, path] of [["POST", "/api/v1/collections"], ["PATCH", "/api/v1/items/x"], ["DELETE", "/api/v1/items/x"], ["PUT", "/api/v1/items/x/ai/Summary"], ["POST", "/api/v1/files"]]) {
+        const response = await as(token, path, { method });
+        expect(response.status, `${method} ${path}`).toBe(403);
+        expect((await response.json()).error).toMatch(/can only read/);
+      }
+      expect([200, 503]).toContain((await as(token, "/api/v1/collections")).status);
+      expect([200, 404]).toContain((await as(token, "/api/v1/files/0000000000000000000000000000000000000000000000000000000000000000", { method: "HEAD" })).status);
+    });
+
+    it("note when they were last used", async () => {
+      const made = (await make({ name: "Cron", access: "read" })).body;
+      await as(made.token, "/api/v1/collections");
+      let used: string | null = null;
+      for (let i = 0; i < 50 && !used; i++) {
+        used = (await list()).find((t) => t.id === made.id)?.lastUsedAt ?? null;
+        if (!used) await new Promise((r) => setTimeout(r, 50));
+      }
+      expect(used).not.toBeNull();
+      expect(Date.parse(used!)).toBeGreaterThanOrEqual(Date.parse(made.createdAt));
+    });
+  });
+
   describe("wiping", () => {
     it("needs to be confirmed in so many words", async () => {
       expect((await request(server, "/api/wipe", { method: "POST", json: {} })).status).toBe(400);
     });
 
-    it("drops the devices' data, makes a new database and keeps the server's settings", async () => {
+    it("drops the devices' data, makes a new database and keeps the server's settings and API tokens", async () => {
       const before = (await sync({})).body.database.id;
       await request(server, "/api/settings", { method: "PUT", json: settings() });
+      const kept = (await (await request(server, "/api/tokens", { method: "POST", json: { name: "Kept", access: "read" } })).json()) as ApiTokenMade;
       expect((await request(server, "/api/wipe", { method: "POST", json: { confirm: "wipe" } })).status).toBe(200);
       const after = await sync({ database: before });
       expect(after.status).toBe(409);
@@ -345,6 +410,8 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
       expect(fresh.body.database.id).not.toBe(before);
       expect(fresh.body.changes.spaces?.some((r) => r.id === "http-s1")).toBeFalsy();
       expect((await (await request(server, "/api/settings")).json()).ai.keySet).toBe(true);
+      expect(((await (await request(server, "/api/tokens")).json()) as ApiTokenInfo[]).map((t) => t.id)).toContain(kept.id);
+      expect((await request(server, "/api/v1/collections", { headers: { Authorization: `Bearer ${kept.token}` } })).status).not.toBe(401);
     });
   });
 });

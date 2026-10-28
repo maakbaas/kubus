@@ -3,7 +3,7 @@
 // (KUBUS_TEST_POSTGRES: ./postgres.ts).
 import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { migrate, type ServerMigration } from "../src/migrations.ts";
+import { migrate, MIGRATIONS, type ServerMigration } from "../src/migrations.ts";
 import { loadSchema } from "../src/schema.ts";
 import { handleSync } from "../src/sync.ts";
 import { wipe } from "../src/wipe.ts";
@@ -103,10 +103,26 @@ describe.skipIf(!ADMIN)("the server's database", () => {
     expect((await pool.query("SELECT name FROM spaces")).rows).toEqual([{ name: "Office" }]);
   });
 
-  it("records every migration again after a wipe", async () => {
+  it("records every migration again after a wipe, keeping the API tokens", async () => {
     await pool.query(schemaSql);
+    await pool.query("INSERT INTO api_tokens (id, name, access, token_sha256) VALUES ('t1', 'Scripts', 'read', 'abc')");
     await wipe(pool, schemaSql);
-    expect(await applied()).toEqual([]);
+    expect(await applied()).toEqual(MIGRATIONS.map((m) => m.version));
     expect((await pool.query("SELECT count(*)::int AS n FROM server_meta")).rows).toEqual([{ n: 2 }]);
+    expect((await pool.query("SELECT id FROM api_tokens")).rows).toEqual([{ id: "t1" }]);
+  });
+
+  it("adds api_tokens to a database made before it (migration 1)", async () => {
+    await pool.query(schemaSql);
+    await pool.query("DROP TABLE api_tokens; INSERT INTO spaces (id, name, position) VALUES ('s1', 'Work', 0)");
+    // As a server before migration 1 left it: the table for them, none recorded.
+    await pool.query("CREATE TABLE schema_migrations (version integer NOT NULL PRIMARY KEY, description text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())");
+    await start(MIGRATIONS);
+    expect(await applied()).toEqual([1]);
+    await pool.query("INSERT INTO api_tokens (id, name, access, token_sha256) VALUES ('t1', 'Scripts', 'read', 'abc')");
+    expect((await pool.query("SELECT name, last_used_at FROM api_tokens")).rows).toEqual([{ name: "Scripts", last_used_at: null }]);
+    expect((await pool.query("SELECT name FROM spaces")).rows).toEqual([{ name: "Work" }]);
+    await start(MIGRATIONS);
+    expect(await applied()).toEqual([1]);
   });
 });
