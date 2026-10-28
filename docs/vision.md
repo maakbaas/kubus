@@ -40,6 +40,12 @@ Rules that keep this from becoming three products glued together:
   the EAV `field_values`), so queries and query components don't have to deal with EAV.
 - Remote sources make the server essential and change the security story: auth, secret storage
   for credentials, read-only database users by default.
+- **Connect live state, copy histories.** A connector suits a live database worth querying: data that
+  changes in place (balances, rows), a source that filters, sorts and pages for itself, or a generic
+  store that opens many apps at once (Postgres, MySQL). An API that is a feed (only a recent window,
+  like Spotify's last plays or an RSS feed), needs OAuth, or holds a history worth owning is better
+  copied (n8n into Postgres / Influx, or native items through `/api/v1`). Most self-hosted apps have a
+  REST API with a key and filtering: Kubus can be the hub that links a self-hoster's apps into notes.
 
 ## Roadmap
 
@@ -111,3 +117,48 @@ Views:
 15. Dragging in the calendar and timeline blocks (move, resize, create), only where items can be
     changed (native collections whose fields are editable): an own pointer hook like
     `ui/useReorder.tsx`, or interact.js if touch gets hard.
+
+New connectors, in this order (read-only like the others; queried by the source where it can, else in
+`memory.ts`; each tested against a stand-in of its service or the real engine):
+
+16. Groundwork. Secret parts of an address beyond its password (`splitPassword`,
+    `server/src/settings.ts`): secret calendar addresses and published Google Sheets carry the secret
+    in the path, API keys sometimes in the query string; a connector declares its secret parts and
+    devices see the address without them (`webcals://calendar.google.com/…`), still dropped when the
+    address changes. `string_list` in `memory.ts`. A shared `httpDocument.ts` for #19 and #20: one GET
+    with `ETag` / `If-Modified-Since`, kept about a minute, the source's timeout, a size limit (about
+    20 MB), status codes and content types turned into a clear problem.
+17. Actual Budget through [actual-http-api](https://github.com/jhonderson/actual-http-api), not Actual
+    itself (`@actual-app/api` needs `better-sqlite3` and Actual's core, holds one budget per process
+    and must match the Actual server's version; the sync server's budget file is stale without its
+    CRDT messages). `actual://host[:port]/<budget-sync-id>` (https) or `actual+http://…`, the API key
+    as password (`x-api-key`); only GETs and `POST /v1/budgets/{id}/run-query` (ActualQL: filter,
+    orderBy, groupBy, select, calculate, limit, offset), an "experimental" endpoint whose 501
+    (`EXPERIMENTAL_OPERATIONS_ENABLED=false`) is the source's problem. Every request loads and syncs
+    the budget: keep a read a few seconds. Curated tables: transactions (payee, category and account
+    names), accounts (balance), categories (group), payees, schedules, budget months (month ×
+    category: budgeted, spent, balance; queried in memory); amounts from cents, dates `yyyy-mm-dd`,
+    split transactions with stable keys; no query language. An encrypted budget is the source's
+    problem until a source can have a second secret (its encryption password).
+18. MySQL / MariaDB, a dialect beside `postgresSql.ts` / `d1Sql.ts`: `mysql://user@host:3306/db`,
+    `mariadb://…`, schemas are databases, driver `mysql2` (pure JS). Backtick quoting,
+    case-insensitive collations, numeric text order and empty values last as the app has them,
+    `TINYINT(1)` a checkbox, zero dates empty, `DATETIME` vs `TIMESTAMP` time zones, `JSON` / `BLOB` /
+    `GEOMETRY` hidden or dropped. Every read in `START TRANSACTION READ ONLY`, a warning for a user that
+    can write (`SHOW GRANTS`); timeout by `MAX_EXECUTION_TIME` (MySQL) or `max_statement_time`
+    (MariaDB); a query is one `SELECT` / `WITH`. Tested on MySQL 8 and MariaDB (`KUBUS_TEST_MYSQL`).
+19. Calendar (ICS) subscriptions: `webcal://` / `webcals://` and `ics+https://`, one calendar per
+    source, table `events`, the address's path and query secret. `ical.js` parses; repeating events
+    (`RRULE`, `EXDATE`, `RECURRENCE-ID`, `VTIMEZONE`) are expanded only within the filter's date range
+    (else a year back and ahead, bounded by `MAX_ROWS`). Columns: title, start, end, all-day, start and
+    end date (all-day events per day), location, description, status, categories, recurring; key: UID
+    plus the occurrence's start. Later: CalDAV (editing), several calendars per source.
+20. JSON and CSV over HTTP, the long tail without code per app (a published Google Sheet is CSV):
+    `json+https://…`, `csv+https://…` (and `+http`), NDJSON detected. The rows are at the address's
+    fragment read as a JSON Pointer (`…#/data/items`, never sent; none: the top level). The password
+    goes as `Authorization: Bearer`, or under the address's user as header name
+    (`json+https://X-Api-Key@host/…`). Paging by `Link: rel="next"` up to `MAX_ROWS`. Columns inferred
+    from a sample (numbers, booleans, ISO dates and date & times, string arrays as lists, objects
+    flattened one level, deeper ones a hidden text column). CSV: RFC 4180, a header row, the delimiter
+    detected (`,` `;` tab), decimal commas only when the whole column has them; an own parser. Key: a
+    column `id`, `uuid` or `key`, else the row's position (with a warning that links may break).
