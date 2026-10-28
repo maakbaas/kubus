@@ -265,6 +265,7 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
         )}
         {o.chart === "pie" && check("donut", "Donut")}
         {o.chart === "gauge" && check("fullCircle", "Full circle")}
+        {o.chart === "gauge" && check("asValue", "Show the value, not a %")}
         {o.chart === "meter" && check("proportional", "Parts of a whole (by group)")}
       </div>
     </div>

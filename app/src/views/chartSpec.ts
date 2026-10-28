@@ -294,7 +294,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         chart: "GaugeChart",
         data: [{ group: "value", value: Math.round(Math.min(100, Math.max(0, percent)) * 10) / 10 }],
         options: base(options, theme, false, {
-          gauge: { type: options.fullCircle ? "full" : "semi", ...(status && { status }), showPercentageSymbol: true, deltaArrow: { enabled: false } },
+          gauge: { type: options.fullCircle ? "full" : "semi", ...(status && { status }), showPercentageSymbol: !options.asValue, numberFormatter: (n: number) => (options.asValue ? String(Math.round(((one.max === null ? n : (n * one.max) / 100) + Number.EPSILON) * 100) / 100) : String(n)), deltaArrow: { enabled: false } },
         }),
       };
     }
@@ -306,7 +306,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         const data = t.points.filter((p) => p.value !== null && p.value > 0).map((p) => ({ group: p.category.label, value: p.value }));
         if (data.length === 0) return noItems;
         const total = singleValue(input.collection, items, options).max ?? data.reduce((n, d) => n + (d.value ?? 0), 0);
-        return { chart: "MeterChart", data, options: base(options, theme, true, { height: undefined, meter: { proportional: { total } } }) };
+        return { chart: "MeterChart", data, options: base(options, theme, true, { height: "6rem", meter: { proportional: { total } } }) };
       }
       const one = singleValue(input.collection, items, options);
       const percent = percentOf(one.value, one.max);
@@ -315,7 +315,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       return {
         chart: "MeterChart",
         data: [{ group: one.label, value: Math.round(Math.min(100, Math.max(0, percent)) * 10) / 10 }],
-        options: base(options, theme, false, { height: undefined, meter: { ...(ranges && { status: { ranges } }) } }),
+        options: base(options, theme, false, { height: "5rem", meter: { ...(ranges && { status: { ranges } }) } }),
       };
     }
     case "bullet": {

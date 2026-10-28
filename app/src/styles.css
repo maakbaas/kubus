@@ -2873,6 +2873,7 @@ img[data-lightbox] {
    own option). While Carbon Charts loads (the first chart only), the room of a medium chart is kept. */
 .chart-block {
   inline-size: 100%;
+  padding-block-start: var(--cds-spacing-05);
 }
 .chart-block__loading {
   block-size: 24rem;

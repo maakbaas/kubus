@@ -47,13 +47,14 @@ export const CHART_KINDS: { kind: ChartKind; label: string; section: string }[] 
 ];
 
 /** How the items of a category become one number. */
-export type Aggregate = "count" | "sum" | "avg" | "min" | "max";
+export type Aggregate = "count" | "sum" | "avg" | "min" | "max" | "first";
 export const AGGREGATES: { value: Aggregate; text: string }[] = [
   { value: "count", text: "Count of items" },
   { value: "sum", text: "Sum" },
   { value: "avg", text: "Average" },
   { value: "min", text: "Minimum" },
   { value: "max", text: "Maximum" },
+  { value: "first", text: "First value" },
 ];
 
 /** The steps a date category is counted in ("auto": by how far the dates spread). */
@@ -131,6 +132,8 @@ export interface ChartOptions {
   dangerAt: number | null;
   /** Gauge: a full circle instead of a half. */
   fullCircle: boolean;
+  /** Gauge: the value itself in the middle instead of its share of the max (%). */
+  asValue: boolean;
   /** Meter: the categories as parts of one bar (of the max). */
   proportional: boolean;
 }
@@ -182,6 +185,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     warnAt: null,
     dangerAt: null,
     fullCircle: false,
+    asValue: false,
     proportional: false,
   };
 }
@@ -231,6 +235,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     warnAt: finite(o.warnAt),
     dangerAt: finite(o.dangerAt),
     fullCircle: flag(o.fullCircle, d.fullCircle),
+    asValue: flag(o.asValue, d.asValue),
     proportional: flag(o.proportional, d.proportional),
   };
 }
@@ -261,6 +266,8 @@ export function aggregate(items: Item[], how: Aggregate, field: FieldDef | undef
       return Math.min(...values);
     case "max":
       return Math.max(...values);
+    case "first":
+      return values[0];
   }
 }
 
@@ -268,7 +275,7 @@ export function aggregate(items: Item[], how: Aggregate, field: FieldDef | undef
 export function valueLabel(how: Aggregate, field: FieldDef | undefined, collection: Collection): string {
   if (how === "count") return collection.pluralName;
   const name = field?.name ?? "?";
-  return how === "sum" ? `Sum of ${name}` : how === "avg" ? `Average ${name}` : how === "min" ? `Minimum ${name}` : `Maximum ${name}`;
+  return how === "sum" ? `Sum of ${name}` : how === "avg" ? `Average ${name}` : how === "min" ? `Minimum ${name}` : how === "first" ? `First ${name}` : `Maximum ${name}`;
 }
 
 // --- Categories -----------------------------------------------------------------------------------
