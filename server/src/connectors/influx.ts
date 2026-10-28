@@ -31,6 +31,9 @@ import {
 /** How long a target's columns are trusted before they are read again (new fields or tags). */
 const COLUMNS_TTL_MS = 60_000;
 
+/** A query slower than this is logged (with its script). */
+const SLOW_MS = 3000;
+
 export class InfluxConnector implements Connector {
   readonly kind = "influxdb";
   private config: SourceConfig;
@@ -60,6 +63,17 @@ export class InfluxConnector implements Connector {
 
   /** Runs a Flux script (one that only reads), with the source's time limit. */
   private async flux(query: string): Promise<CsvTable[]> {
+    const started = Date.now();
+    try {
+      return await this.run(query);
+    } finally {
+      // A slow query in the server's log, by its time and its script (what it reads, how): which one to look at.
+      const took = Date.now() - started;
+      if (took >= SLOW_MS) console.warn(`[source ${this.config.name}] InfluxDB query took ${(took / 1000).toFixed(1)}s:\n${query}`);
+    }
+  }
+
+  private async run(query: string): Promise<CsvTable[]> {
     let response: Response;
     try {
       response = await fetch(`${this.base}/api/v2/query?org=${encodeURIComponent(this.org)}`, {
@@ -198,21 +212,21 @@ export class InfluxConnector implements Connector {
   }
 
   /**
-   * A page by time (isTimeOrdered): from the nearest point's day, more days (a month, a year, then all) only
-   * while they hold no more than the page: rows beyond it in those days mean the page is the range's own
-   * (every row outside them is further away). The total counted from InfluxDB's index where it can be.
+   * A page by time (isTimeOrdered): from the nearest point's day and the days next to it; rows beyond the page
+   * in those days mean the page is the range's own (every row outside them is further away), else the whole
+   * range is read as asked. The total counted from InfluxDB's index where it can be.
    */
   private async byTime(query: SourceQuery): Promise<SourceResult> {
     const direction = query.sort[0].direction;
     const counted = query.counts ? this.total(query) : Promise.resolve(undefined);
     const at = InfluxConnector.values(await this.flux(nearestFlux(query, direction)), "_time")[0];
     let result: SourceResult | null = at ? null : { rows: [], more: false };
-    for (const days of at ? [1, 31, 366] : []) {
+    // The page's days: the nearest point's and as many before (or after) as the page needs at least a day a
+    // row of (a month at most). Too few rows there: the whole range, as asked (no wider tries in between).
+    if (at) {
+      const days = Math.min(31, Math.max(1, Math.ceil((query.offset + query.limit) / 100)));
       const r = await this.page({ ...query, counts: false, filter: { and: [query.filter, pageDays(at, direction, days, query.timeZone)] } });
-      if (r.more) {
-        result = r;
-        break;
-      }
+      if (r.more) result = r;
     }
     result ??= await this.page({ ...query, counts: false });
     const total = await counted;

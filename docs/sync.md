@@ -350,8 +350,9 @@ takes the new one when its settings are opened. A source's name: letters, digits
 - *Known limits*: text sorts by the source's collation ("Customer 10" before "Customer 9"), not the
   app's numeric order (roadmap #6); counting a heavy query runs it in full (#6); references can't
   point at remote collections (#5); global search and the API (`/api/v1`) don't read remote rows
-  (#1). InfluxDB: a page sorted by `_time` alone (not grouped) is read from the nearest point's day, more
-  days only while they hold less than the page (`isTimeOrdered`, `byTime`), and its total counted from InfluxDB's
+  (#1). InfluxDB: a page sorted by `_time` alone (not grouped) is read from the nearest point's day and the
+  days next to it (a day per 100 rows of the page, a month at most), else over its whole range as asked (`isTimeOrdered`,
+  `byTime`); every query slower than 3 s is logged with its script (`SLOW_MS`), and its total counted from InfluxDB's
   index when the filter is a `_time` range alone (`countFlux`: per series the most points of any field, so fields
   written apart are undercounted); any other sort, a grouping or a filter on a field reads the measurement over all
   time unless filtered on `_time` (keep a `_time` filter on large buckets), two text sorts asked opposite ways sort the second the way of the
