@@ -16,7 +16,8 @@ server ↔ headless device interface).
 client never talks to Postgres: browsers and the iOS PWA can only do HTTP. One container
 (`server/Dockerfile`, `docker-compose.yml` with `DATABASE_URL` and `KUBUS_TOKEN`) serves the
 sync API at `/api` and the built web app at `/`, so the phone installs the app from the server
-(same origin, no CORS). Auth is one shared bearer token (`KUBUS_TOKEN`); the app's
+(same origin, no CORS). Auth is one shared bearer token (`KUBUS_TOKEN`, the devices'; other tools get API tokens of
+their own: "The API" below); the app's
 Settings holds server URL + token + "Test connection" + Disconnect in the Server tab (`#/settings?section=server`,
 `ui/ServerConnection.tsx`), and on/off + Download images + the wipes in the Sync tab (`#/settings?section=sync`,
 `ui/SyncSettings.tsx`; reached from the "Configure sync" button in the popover of the status icon ending the top-right
@@ -133,7 +134,7 @@ What a server offers beyond sync is set in the app: the language model in Settin
 its part on top of what the server holds then (`ui/useServerSettings.ts`). `GET` / `PUT /api/settings`
 (`server/src/settings.ts`, types in `shared/settings.ts`) with the sync token; any device with the
 token may change them. They are stored in the server's own table `server_settings` (JSON by key:
-`ai`, `sources`), never synced and kept by a wipe. Secrets (the model's key, a source's password)
+`ai`, `sources`), never synced and kept by a wipe (as are the API tokens, `api_tokens`: "The API" below). Secrets (the model's key, a source's password)
 are write-only: a device sees `keySet` / `passwordSet`, never the value. A secret left out of an
 update stays only while it would go to the same place (the same model address; a source's same kind
 and the fields its password belongs to, `placeOf`: host, port and user, an address, an account): moved
@@ -279,6 +280,18 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   once uploaded, fetched from the server when asked), syncing over HTTP with `http://127.0.0.1:$PORT`
   and listening to `/api/events`. It starts with a first connection (everything but bytes). After a
   wipe (409) it wipes itself and connects again: it is a cache, it never uploads stale data.
+- *Auth* (`server/src/tokens.ts`, types in `shared/tokens.ts`): the devices' `KUBUS_TOKEN` reaches everything, `/api/v1`
+  too; other tools get an API token, made in Settings → Server (`ui/ApiTokens.tsx`, shown once in a dialog with a copy
+  button): `kubus_` + 32 random bytes (base64url), with a name and an access, `read` or `write` (read & write). The server
+  keeps only its SHA-256 (hex), in its own table `api_tokens` (`server/schema.sql`; server migration 1 adds it to older
+  databases), never synced, kept by a wipe (a tool keeps its access to the new data). An API token reaches only `/api/v1`
+  (and the MCP endpoint, roadmap #19): anything else under `/api` (sync, events, files, settings, the model, sources,
+  `/api/tokens`, wipe) answers 403; a read token only `GET` / `HEAD`, every write (AI fields included) another method,
+  403 saying so. A token's last use is written at most once a minute (per server process). Devices list, make and
+  revoke them: `GET /api/tokens` (`ApiTokenInfo[]`, no token), `POST /api/tokens` `{ name, access }` (201,
+  `ApiTokenMade`: the token, this once), `DELETE /api/tokens/<id>` (404 for an unknown one). `ApiTokens.check(header)`
+  answers who a request's `Authorization` is (`{ access: "all" | "read" | "write" }` or null), for the server and for
+  endpoints of its own (MCP); `allows(access, method)` is the read rule. Revoking takes effect at the next request.
 - *Requests* run one at a time (`HeadlessDevice.serial`); each syncs first unless the device is
   already at the server's latest write (`HeadlessOptions.cursor`, which the server knows: reads see
   the latest data without a request), and a write syncs again before it answers.
@@ -321,7 +334,9 @@ tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
   text winning last-writer-wins) without having its bytes (possible only with "Full size when
   opened" and the image never opened); with the bytes, it uploads them again (`missingFiles`). A
   device that sweeps while sync is off leaves the server's copy (another device's sweep deletes it).
-- One user, one token (the API too; it can also run component code on the server). A device
+- One user: the devices share one token; API tokens are per tool, but reach every space (a token for one space, and
+  expiry, are later: roadmap #20). Reading through the API runs the components already there (component values), so a
+  read token runs code on the server too. A device
   that is not synced can lose its data on a schema wipe; with the server the replica re-syncs, so
   enable sync before putting real notes in. Connecting a device that has data of its own to a
   server that has data too discards the device's data, no merge (#9).

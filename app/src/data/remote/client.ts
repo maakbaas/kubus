@@ -9,12 +9,13 @@ import type {
   SourceTarget,
 } from "../../../../shared/sources";
 import type { ServerSettingsUpdate, ServerSettingsView } from "../../../../shared/settings";
+import type { ApiTokenInfo, ApiTokenMade, ApiTokenRequest } from "../../../../shared/tokens";
 import type { Item } from "../../domain/model";
 import type { SyncConfig } from "../repository";
 
 // The server's remote sources (shared/sources.ts), asked for over HTTP with the sync token: the
 // server this device syncs with reads them for it (server/src/sources.ts). Also the server's own
-// settings, which set those sources up (shared/settings.ts). Nothing is stored or
+// settings, which set those sources up (shared/settings.ts), and its API tokens. Nothing is stored or
 // kept offline: a remote collection reads its rows whenever it is shown.
 
 const TIMEOUT_MS = 60_000;
@@ -70,6 +71,18 @@ export class SourcesClient {
   /** Stores the server's settings as a whole (secrets left out stay where they go: shared/settings.ts). */
   saveServerSettings(update: ServerSettingsUpdate): Promise<ServerSettingsView> {
     return this.call("/settings", update, "PUT");
+  }
+
+  /** The server's API tokens (shared/tokens.ts), without the tokens themselves. */
+  apiTokens(): Promise<ApiTokenInfo[]> {
+    return this.call("/tokens");
+  }
+  /** Makes an API token: the answer carries the token, the only time it is shown. */
+  makeApiToken(request: ApiTokenRequest): Promise<ApiTokenMade> {
+    return this.call("/tokens", request);
+  }
+  async revokeApiToken(id: string): Promise<void> {
+    await this.call(`/tokens/${encodeURIComponent(id)}`, undefined, "DELETE");
   }
 
   /** Remembers rows as shown (as items), for `shownItem`. */

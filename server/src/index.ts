@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
@@ -14,6 +13,7 @@ import { Sources } from "./sources.ts";
 import { applyUpdate, loadSettings, NO_SETTINGS, saveSettings, secretKey, secretWarnings, sourceConfigs, usable, viewOf, type Stored } from "./settings.ts";
 import type { ServerSettingsUpdate } from "../../shared/settings.ts";
 import { currentCursor, handleSync } from "./sync.ts";
+import { allows, ApiTokens, READ_ONLY } from "./tokens.ts";
 import { wipe } from "./wipe.ts";
 import { MAX_FILE_BYTES, type SyncRequest } from "../../shared/sync.ts";
 import { HttpError, json, readJson, Router, type ApiRequest, type ApiResponse } from "../../shared/router.ts";
@@ -21,13 +21,13 @@ import { HttpError, json, readJson, Router, type ApiRequest, type ApiResponse } 
 // Kubus server: the sync API (/api), the HTTP API for other tools (/api/v1, answered by the
 // headless device: server/src/headless.ts) and, from the same origin, the web app (so a phone can
 // install it as a home-screen app). Configuration is environment only:
-//   DATABASE_URL  Postgres connection string        KUBUS_TOKEN  shared secret of the devices and the API
+//   DATABASE_URL  Postgres connection string        KUBUS_TOKEN  shared secret of the devices (and the API)
 //   PORT          default 8080                      STATIC_DIR   built web app, default ../../app/dist
 //   KUBUS_WEBHOOK_URL     URL(s), comma-separated, called with every change (docs/sync.md)
 //   KUBUS_WEBHOOK_SECRET  signs each webhook request (X-Kubus-Signature)
 //   KUBUS_SECRET_KEY      encrypts the secrets of its settings in the database (else plain text)
-// The rest (the language model it offers, the sources it reads) is set in the app, Settings →
-// Server, and stored in its database (server/src/settings.ts).
+// The rest (the language model it offers, the sources it reads, the API tokens of other tools) is
+// set in the app, Settings → Server, and stored in its database (server/src/settings.ts, tokens.ts).
 
 const databaseUrl = process.env.DATABASE_URL;
 const token = process.env.KUBUS_TOKEN;
@@ -55,10 +55,8 @@ try {
   console.error(schemaError);
 }
 
-const digest = (s: string) => createHash("sha256").update(s).digest();
-const expected = digest(token);
-const authorized = (req: IncomingMessage) =>
-  timingSafeEqual(digest((req.headers.authorization ?? "").replace(/^Bearer /, "")), expected);
+// KUBUS_TOKEN reaches everything; an API token only /api/v1 (a read token only its GET / HEAD).
+const tokens = new ApiTokens(pool, token);
 
 function send(res: ServerResponse, status: number, body: string, type = "application/json") {
   res.writeHead(status, { "Content-Type": type });
@@ -97,7 +95,7 @@ async function applySettings(next: Stored) {
 const settingsView = () => viewOf(settings, (name) => sources.status(name));
 
 // The devices' endpoints (the token is checked before these run).
-const routes = sources.routes(new Router())
+const routes = tokens.routes(sources.routes(new Router()))
   .add("POST", "/api/wipe", async (req) => {
     // Asked for in so many words, so no stray request can do it.
     if ((await readJson(req, 1024) as { confirm?: string } | undefined)?.confirm !== "wipe") return json(400, { error: "Not confirmed" });
@@ -224,7 +222,12 @@ createServer(async (req, res) => {
     if (req.method === "OPTIONS") return send(res, 204, "");
     if (url.pathname === "/api/health") return send(res, 200, '{"ok":true}');
     if (url.pathname.startsWith("/api/")) {
-      if (!authorized(req)) return send(res, 401, '{"error":"Wrong token"}');
+      const who = await tokens.check(req.headers.authorization);
+      if (!who) return send(res, 401, '{"error":"Wrong token"}');
+      if (who.access !== "all") {
+        if (!url.pathname.startsWith("/api/v1/")) return send(res, 403, '{"error":"An API token reaches only the API (/api/v1)"}');
+        if (!allows(who.access, req.method ?? "GET")) return send(res, 403, JSON.stringify({ error: READ_ONLY }));
+      }
       if (url.pathname === "/api/events" && req.method === "GET") return handleEvents(req, res);
       const request = toApiRequest(req, url);
       const answer = url.pathname.startsWith("/api/v1/") ? await handleApi(request) : await routes.handle(request);
