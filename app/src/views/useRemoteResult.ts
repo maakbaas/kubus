@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MAX_SOURCE_PAGE, type SourceResult, type SourceRow } from "../../../shared/sources";
+import { MAX_SOURCE_PAGE } from "../../../shared/sources";
 import { useStore } from "../app/store";
 import { withComputed } from "../domain/components";
 import type { Collection, Item } from "../domain/model";
-import type { ItemGroup, QueryResult, ViewQuery } from "../domain/query";
-import { addRows, deviceTimeZone, groupLabel, rowItem, sourceQuery, sourceShape, type BuiltRows } from "../domain/sources";
+import type { QueryResult, ViewQuery } from "../domain/query";
+import { addRows, deviceTimeZone, rowItem, sourceQuery, sourceShape, type BuiltRows } from "../domain/sources";
+import { firstPage, remoteQueryResult, withNextPage, withPageError, type Loaded } from "./remotePages";
 
 // A block of a remote collection: its query asked of the source (filter, sort, grouping and search
 // worked out there, shared/sources.ts), a page at a time. What it gives the block type is the same
@@ -34,18 +35,6 @@ export interface RemoteResult {
 
 const EMPTY: QueryResult = { groups: [], total: 0 };
 const noLabel = () => "";
-
-interface Loaded {
-  /** The request these rows answer. */
-  key: string;
-  /** Which first page these rows start with: pages added after it keep it (their rows are only added). */
-  batch: number;
-  rows: SourceRow[];
-  total: number;
-  groups: SourceResult["groups"];
-  more: boolean;
-  error?: string;
-}
 
 /** While rows come in, a block is shown them at most this often (its chart or map drawn anew each time). */
 const LOADING_SHOWN_MS = 1000;
@@ -123,11 +112,7 @@ export function useRemoteResult(
       setAnswered(asked);
       setLoaded({ key, batch: ++batches.current, ...l });
     };
-    sources.query(collection.source.name, { ...request, offset: 0, limit: pageSize, counts: true }).then(
-      // A total under the rows in (a source that couldn't count them all) counts at least those.
-      (r) => got({ rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, more: r.more }),
-      (e) => got({ rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) }),
-    );
+    void firstPage(sources.query(collection.source.name, { ...request, offset: 0, limit: pageSize, counts: true })).then(got);
     // The source by its name: the rest of the request is in `key` (the collection is a new object whenever any collection changes).
   }, [remote, collection.source?.name, key, refreshes, sources, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -138,10 +123,8 @@ export function useRemoteResult(
     sources
       .query(collection.source.name, { ...request, offset: loaded.rows.length, limit: pageSize, counts: false })
       .then(
-        (r) =>
-          current.current === asked &&
-          setLoaded((l) => l && { ...l, rows: [...l.rows, ...r.rows], total: Math.max(l.total, l.rows.length + r.rows.length), more: r.more }),
-        (e) => current.current === asked && setLoaded((l) => l && { ...l, error: e instanceof Error ? e.message : String(e) }),
+        (r) => current.current === asked && setLoaded((l) => withNextPage(l, r)),
+        (e) => current.current === asked && setLoaded((l) => withPageError(l, e)),
       )
       .finally(() => setLoadingMore(false));
   }, [loaded, request, collection.source, loadingMore, sources, pageSize]);
@@ -176,15 +159,7 @@ export function useRemoteResult(
   }, [remote, shape, loaded, rowsFrom, components, memo, grouped, sources]);
   const result = useMemo(() => {
     if (!made || !loaded || !shape) return null;
-    const b = made;
-    const groupField = query.groupBy ? collection.fields.find((f) => f.id === query.groupBy) : undefined;
-    // Copies: what the block got before stays as it was.
-    const groups: ItemGroup[] = grouped
-      ? // In the source's order; a group shows once rows of it are in.
-        loaded.groups!.filter((g) => b.byGroup.has(g.key)).map((g) => ({ key: g.key, label: groupLabel(groupField, g.key), items: b.byGroup.get(g.key)!.slice() }))
-      : [{ key: "", label: "", items: b.computed.slice() }];
-    const all = b.all.slice();
-    return { result: { groups, total: loaded.total } satisfies QueryResult, items: all };
+    return remoteQueryResult(made, loaded, collection, query.groupBy, grouped);
   }, [made, loaded, shape, collection, query.groupBy, grouped]);
 
   // While every row is loading, the block (a chart, a map: drawn anew each time) gets them at most once a second.
