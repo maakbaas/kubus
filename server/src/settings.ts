@@ -1,11 +1,11 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 import { HttpError } from "../../shared/router.ts";
-import { SOURCE_NAME, type ServerAiSettings, type ServerSettingsUpdate, type ServerSettingsView, type ServerSourceSettings } from "../../shared/settings.ts";
+import { MAP_STYLE_IDS, SOURCE_NAME, type ServerAiSettings, type ServerMapSettings, type ServerSettingsUpdate, type ServerSettingsView, type ServerSourceSettings } from "../../shared/settings.ts";
 import type { SourceConfig } from "./connectors/connector.ts";
 import { connectionKinds, fieldsFor, placeOf, secretKeysOf } from "./connectors/kinds.ts";
 
-// The server's own settings (shared/settings.ts): the language model it offers and the sources it
-// reads, set in the app (Settings → AI and Connections) and stored in its table server_settings, secrets
+// The server's own settings (shared/settings.ts): the language model it offers, the sources it
+// reads and how maps look, set in the app (Settings → AI, Connections and Maps) and stored in its table server_settings, secrets
 // included. Secrets are never sent back, and a stored one is only used where it was given for: one
 // whose address changes is dropped, so whoever holds the token can't send it somewhere new.
 // With KUBUS_SECRET_KEY set, the secrets are stored encrypted with it (AES-256-GCM): the database
@@ -26,6 +26,7 @@ export interface StoredSource extends ServerSourceSettings {
 export interface Stored {
   ai: StoredAi;
   sources: StoredSource[];
+  map: ServerMapSettings;
 }
 
 /** What this needs of the server's pool (pg.Pool): kept narrow, so it is tested without the server's packages. */
@@ -33,7 +34,13 @@ interface Db {
   query<R>(text: string, values?: unknown[]): Promise<{ rows: R[] }>;
 }
 
-export const NO_SETTINGS: Stored = { ai: { url: "", key: "", fieldModel: "", codeModel: "" }, sources: [] };
+export const NO_SETTINGS: Stored = { ai: { url: "", key: "", fieldModel: "", codeModel: "" }, sources: [], map: { style: "auto" } };
+
+/** A map style as stored or sent; else `fallback`. */
+const mapOf = (raw: unknown, fallback: ServerMapSettings): ServerMapSettings => {
+  const style = (raw as Partial<ServerMapSettings> | null | undefined)?.style;
+  return MAP_STYLE_IDS.includes(style as never) ? { style: style! } : fallback;
+};
 
 const text = (v: unknown, max = 2000) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -116,6 +123,7 @@ export async function loadSettings(pool: Db, key: Buffer | null): Promise<{ stor
       schemas: Array.isArray(s.schemas) ? s.schemas.map((x) => text(x)).filter(Boolean) : [],
       timeoutSeconds: typeof s.timeoutSeconds === "number" && s.timeoutSeconds > 0 ? s.timeoutSeconds : 30,
     })),
+    map: mapOf(value("map"), NO_SETTINGS.map),
   };
   return { stored, plainText };
 }
@@ -129,9 +137,9 @@ export async function saveSettings(pool: Db, stored: Stored, key: Buffer | null)
     secrets: Object.fromEntries(Object.entries(s.secrets).map(([k, v]) => [k, seal(v, key)])),
   }));
   await pool.query(
-    `INSERT INTO server_settings (key, value, updated_at) VALUES ('ai', $1, now()), ('sources', $2, now())
+    `INSERT INTO server_settings (key, value, updated_at) VALUES ('ai', $1, now()), ('sources', $2, now()), ('map', $3, now())
      ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-    [JSON.stringify(ai), JSON.stringify(sources)],
+    [JSON.stringify(ai), JSON.stringify(sources), JSON.stringify(stored.map)],
   );
 }
 
@@ -176,7 +184,7 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
   });
   // A former name another source now has is that one's (the last 20 kept).
   for (const s of sources) s.formerNames = [...new Set(s.formerNames)].filter((n) => !names.has(n.toLowerCase())).slice(-20);
-  return { ai: { url: aiUrl, key, fieldModel: text(update.ai.fieldModel, 200), codeModel: text(update.ai.codeModel, 200) }, sources };
+  return { ai: { url: aiUrl, key, fieldModel: text(update.ai.fieldModel, 200), codeModel: text(update.ai.codeModel, 200) }, sources, map: mapOf(update.map, old.map) };
 }
 
 /** What the connectors are given. */
@@ -197,6 +205,7 @@ export function viewOf(stored: Stored, status: (name: string) => { connector?: s
   const { key, ...ai } = stored.ai;
   return {
     ai: { ...ai, keySet: usable(key) !== "" },
+    map: stored.map,
     kinds: connectionKinds(),
     sources: stored.sources.map(({ password, secrets, formerNames: _formerNames, ...s }) => ({
       ...s,

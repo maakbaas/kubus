@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
-import { IconButton, Link, Popover, PopoverContent, Select, SelectItem } from "@carbon/react";
+import { Checkbox, IconButton, Link, Popover, PopoverContent, Select, SelectItem } from "@carbon/react";
 import { CenterToFit, Earth, ZoomIn, ZoomOut } from "@carbon/icons-react";
 import * as colors from "@carbon/colors";
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
@@ -12,15 +12,17 @@ import { useMediaQuery } from "../ui/useMediaQuery";
 import { openModeOf } from "../workspace/Workspace";
 import { FieldCell, itemLinkProps } from "./cells";
 import { HeightSlider } from "./HeightSlider";
-import { loadMapLibre, MAP_STYLES, styleUrl, type MapStyle } from "./mapLibre";
+import { useMapStyle } from "../app/mapStyle";
+import { loadMapLibre, styleUrl } from "./mapLibre";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
 // A block showing its items as dots on a vector map (MapLibre GL, OpenFreeMap's tiles). An item's
 // place is read from its fields (domain/geo.ts): one text field with both coordinates, or two
 // number fields. The block's grouping colours the dots (one colour per group, Carbon's categorical
 // data-visualization palette, with a legend); hovering a dot shows the item's title and the
-// block's fields, clicking it opens the item (Ctrl/Cmd: beside). On a touch screen the first tap
-// shows the item, a tap on its title opens it.
+// block's fields (the pointer can move onto it, to its title's link), clicking it opens the item
+// (Ctrl/Cmd: beside). On a touch screen the first tap shows the item, a tap on its title opens it.
+// With Route on, a line joins the dots in the block's order (one per group, in its colour).
 
 export interface MapOptions {
   /** The text field holding both coordinates, or (a number field) the latitude; null = none chosen. */
@@ -29,7 +31,8 @@ export interface MapOptions {
   longitudeFieldId: string | null;
   /** The map's height in rem (BLOCK_HEIGHT, like a chart's and a component's). */
   height: number;
-  style: MapStyle;
+  /** A line through the dots, in the block's order (a track, a trip): one per group. */
+  route: boolean;
 }
 
 /** Carbon's categorical palette (in its order: neighbours contrast), for the light and dark themes. */
@@ -40,6 +43,10 @@ const PALETTE = {
 
 const SOURCE = "kubus-items";
 const LAYER = "kubus-dots";
+const ROUTE_SOURCE = "kubus-route";
+const ROUTE_LAYER = "kubus-route";
+/** How long a shown item stays after the pointer leaves its dot: time to move onto it. */
+const HIDE_DELAY = 200;
 
 /** Fields a location can be read from (Location), and those a longitude can (with a number latitude). */
 const locationFields = (collection: Collection) => pickableFields(collection).filter((f) => isLocationTextField(f) || isCoordinateField(f));
@@ -91,6 +98,20 @@ function placesOf(collection: Collection, result: QueryResult, options: MapOptio
   return { places, legend, missing, chosen: !!location && (!isCoordinateField(location) || !!longitude) };
 }
 
+/** The route: the places in order, a line per colour (group). */
+const routeJson = (places: Place[]): Parameters<GeoJSONSource["setData"]>[0] => {
+  const lines = new Map<string, [number, number][]>();
+  for (const p of places) {
+    const line = lines.get(p.color) ?? [];
+    line.push([p.at.lng, p.at.lat]);
+    lines.set(p.color, line);
+  }
+  return {
+    type: "FeatureCollection",
+    features: [...lines].filter(([, line]) => line.length > 1).map(([color, coordinates]) => ({ type: "Feature", properties: { color }, geometry: { type: "LineString", coordinates } })),
+  };
+};
+
 const geoJson = (places: Place[]): Parameters<GeoJSONSource["setData"]>[0] => ({
   type: "FeatureCollection",
   features: places.map((p, i) => ({
@@ -120,6 +141,8 @@ const token = (el: HTMLElement, name: string) => getComputedStyle(el).getPropert
 
 export function MapView({ collection, result, fields, layout, options, refs, search, actions }: BlockProps<MapOptions>) {
   const dark = useMediaQuery("(prefers-color-scheme: dark)");
+  // One style for every map (Settings → Maps).
+  const mapStyle = useMapStyle();
   const touch = useMediaQuery("(hover: none)");
   const box = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
@@ -141,8 +164,8 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
   );
 
   // The latest places and colours, for the map's own handlers (set up once).
-  const latest = useRef({ places, ring: theme.ring });
-  latest.current = { places, ring: theme.ring };
+  const latest = useRef({ places, ring: theme.ring, route: options.route });
+  latest.current = { places, ring: theme.ring, route: options.route };
 
   /** The dot shown with its item (hovered, or tapped on a touch screen), and where on the map it is. */
   const [shownDot, setShownDot] = useState<{ index: number; pinned: boolean } | null>(null);
@@ -153,6 +176,18 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
   actionsRef.current = actions;
   const touchRef = useRef(touch);
   touchRef.current = touch;
+  // A hovered dot's item hides a moment after the pointer leaves the dot, unless it moved onto the item.
+  const hideTimer = useRef(0);
+  const keepShown = () => window.clearTimeout(hideTimer.current);
+  const hideSoon = () => {
+    keepShown();
+    hideTimer.current = window.setTimeout(() => {
+      if (!shownRef.current?.pinned) setShownDot(null);
+    }, HIDE_DELAY);
+  };
+  const hideSoonRef = useRef(hideSoon);
+  hideSoonRef.current = hideSoon;
+  useEffect(() => keepShown, []);
 
   // The map, made once. Our dots are a GeoJSON source and a circle layer, added again whenever the
   // style is (re)loaded (a style change replaces every source and layer).
@@ -164,12 +199,12 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
         if (gone || !canvas.current) return;
         map = new lib.Map({
           container: canvas.current,
-          style: styleUrl(options.style, dark),
+          style: styleUrl(mapStyle, dark),
           center: [0, 20],
           zoom: 1,
-          attributionControl: { compact: false },
-          // In a scrolling page the wheel scrolls (Ctrl/Cmd + wheel zooms), and one finger scrolls on phones.
-          cooperativeGestures: true,
+          // No attribution box on the map (asked for: it covered the map's corner).
+          attributionControl: false,
+          // Like any map: the wheel zooms, one finger moves it (no Ctrl + wheel or two-finger gate).
           dragRotate: false,
           pitchWithRotate: false,
           touchPitch: false,
@@ -178,6 +213,15 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
         mapRef.current = map;
         const m = map;
         m.on("style.load", () => {
+          // The route under the dots.
+          m.addSource(ROUTE_SOURCE, { type: "geojson", data: latest.current.route ? routeJson(latest.current.places) : routeJson([]) });
+          m.addLayer({
+            id: ROUTE_LAYER,
+            type: "line",
+            source: ROUTE_SOURCE,
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: { "line-color": ["get", "color"], "line-width": 3, "line-opacity": 0.8 },
+          });
           m.addSource(SOURCE, { type: "geojson", data: geoJson(latest.current.places) });
           m.addLayer({
             id: LAYER,
@@ -203,12 +247,13 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
           if (typeof index !== "number" || touchRef.current) return;
           m.getCanvas().style.cursor = "pointer";
           hover(index);
+          window.clearTimeout(hideTimer.current);
           if (!shownRef.current?.pinned) setShownDot({ index, pinned: false });
         });
         m.on("mouseleave", LAYER, () => {
           m.getCanvas().style.cursor = "";
           hover(null);
-          if (!shownRef.current?.pinned) setShownDot(null);
+          hideSoonRef.current();
         });
         m.on("click", (e) => {
           const index = m.queryRenderedFeatures(e.point, { layers: [LAYER] })[0]?.id;
@@ -238,8 +283,8 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
     // Made once; the style and data follow below.
   }, []);
 
-  // The style follows the option and the theme.
-  const style = styleUrl(options.style, dark);
+  // The style follows the setting and the theme.
+  const style = styleUrl(mapStyle, dark);
   const shownStyle = useRef(style);
   useEffect(() => {
     const map = mapRef.current;
@@ -257,13 +302,14 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
     const map = mapRef.current;
     if (!map || !ready) return;
     (map.getSource(SOURCE) as GeoJSONSource | undefined)?.setData(geoJson(places));
+    (map.getSource(ROUTE_SOURCE) as GeoJSONSource | undefined)?.setData(routeJson(options.route ? places : []));
     if (theme.ring) map.setPaintProperty(LAYER, "circle-stroke-color", theme.ring);
     if (fitted.current !== ids) {
       fit(map, places, fitted.current !== null);
       fitted.current = ids;
     }
     setShownDot((d) => (d && d.index < places.length ? d : null));
-  }, [places, ids, ready, theme.ring]);
+  }, [places, ids, ready, theme.ring, options.route]);
 
   // The shown dot's place on the map, kept while the map moves.
   const shownPlace = shownDot ? places[shownDot.index] : undefined;
@@ -303,24 +349,29 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
           <IconButton kind="secondary" size="sm" label="Zoom out" align="left" autoAlign onClick={() => zoom(-1)}>
             <ZoomOut />
           </IconButton>
-          <IconButton
-            kind="secondary"
-            size="sm"
-            label={`Show all ${collection.pluralName}`}
-            align="left"
-            autoAlign
-            onClick={() => mapRef.current && fit(mapRef.current, places, true)}
-          >
-            <CenterToFit />
-          </IconButton>
+          {/* Only with more than one place to fit. */}
+          {places.length > 1 && (
+            <IconButton
+              kind="secondary"
+              size="sm"
+              label={`Show all ${collection.pluralName}`}
+              align="left"
+              autoAlign
+              onClick={() => mapRef.current && fit(mapRef.current, places, true)}
+            >
+              <CenterToFit />
+            </IconButton>
+          )}
         </div>
         {shownPlace && anchor && (
           <Popover
             open
             autoAlign
             align="top"
-            className={shownDot?.pinned ? "map-block__popover map-block__popover--pinned" : "map-block__popover"}
+            className="map-block__popover"
             style={{ left: anchor.x, top: anchor.y }}
+            onMouseEnter={keepShown}
+            onMouseLeave={() => hideSoon()}
           >
             <span className="map-block__anchor" />
             <PopoverContent className="map-block__item">
@@ -402,18 +453,14 @@ function MapOptionsEditor({ collection, options, onChange }: BlockOptionsProps<M
             ))}
         </Select>
       )}
-      <Select
-        size="sm"
-        id={`${uid}-map-style`}
-        labelText="Map style"
-        value={options.style}
-        onChange={(e) => onChange({ ...options, style: e.target.value as MapStyle })}
-      >
-        {MAP_STYLES.map((s) => (
-          <SelectItem key={s.value} value={s.value} text={s.text} />
-        ))}
-      </Select>
       <HeightSlider id={`${uid}-map-height`} value={options.height} onChange={(height) => onChange({ ...options, height })} />
+      <Checkbox
+        id={`${uid}-map-route`}
+        labelText="Route: join the dots in order"
+        helperText="A line through the dots in the block's sort order, one per group."
+        checked={options.route}
+        onChange={(_, { checked }) => onChange({ ...options, route: checked })}
+      />
       <p className="helper">The dots are coloured by the block's grouping (Sort and group).</p>
     </div>
   );
@@ -435,7 +482,7 @@ export const mapView = defineBlockType<MapOptions>({
   kind: "map",
   label: "Map",
   icon: Earth,
-  defaultOptions: (collection) => ({ ...guessLocation(collection), height: BLOCK_HEIGHT.initial, style: "auto" }),
+  defaultOptions: (collection) => ({ ...guessLocation(collection), height: BLOCK_HEIGHT.initial, route: false }),
   uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true } }),
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<MapOptions>;
@@ -446,7 +493,7 @@ export const mapView = defineBlockType<MapOptions>({
       locationFieldId: location?.id ?? null,
       longitudeFieldId: longitude?.id ?? null,
       height: normalizeBlockHeight(o.height),
-      style: MAP_STYLES.some((s) => s.value === o.style) ? o.style! : "auto",
+      route: o.route === true,
     };
   },
   View: MapView,

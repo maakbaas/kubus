@@ -130,11 +130,14 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
 ## The server's settings
 
 What a server offers beyond sync is set in the app: the language model in Settings → AI ("The server's",
-`ui/AiSettings.tsx`) and the remote sources in Settings → Connections (`ui/ConnectionSettings.tsx`); each saves
+`ui/AiSettings.tsx`), the remote sources in Settings → Connections (`ui/ConnectionSettings.tsx`) and the maps' style
+in Settings → Maps (`ui/MapSettings.tsx`: one OpenFreeMap style for every Map block on every device, `MAP_STYLE_IDS`;
+a device keeps the last one it heard in `kubus.mapStyle`, `app/mapStyle.ts`, asks the server once a map is shown, and
+without a server, or with one of an earlier version that has no `map`, sets its own); each saves
 its part on top of what the server holds then (`ui/useServerSettings.ts`). `GET` / `PUT /api/settings`
 (`server/src/settings.ts`, types in `shared/settings.ts`) with the sync token; any device with the
 token may change them. They are stored in the server's own table `server_settings` (JSON by key:
-`ai`, `sources`), never synced and dropped by a wipe (as are the API tokens, `api_tokens`: "The API" below). Secrets (the model's key, a source's password)
+`ai`, `sources`, `map`; an update without `map`, from an earlier app, keeps it), never synced and dropped by a wipe (as are the API tokens, `api_tokens`: "The API" below). Secrets (the model's key, a source's password)
 are write-only: a device sees `keySet` / `passwordSet`, never the value. A secret left out of an
 update stays only while it would go to the same place (the same model address; a source's same kind
 and the fields its password belongs to, `placeOf`: host, port and user, an address, an account): moved

@@ -12,6 +12,7 @@ import { errorMessage } from "./useConfirm";
 export const updateOf = (view: ServerSettingsView): ServerSettingsUpdate => ({
   ai: { url: view.ai.url, fieldModel: view.ai.fieldModel, codeModel: view.ai.codeModel },
   sources: view.sources.map(({ id, name, kind, fields, schemas, timeoutSeconds }) => ({ id, name, kind, fields, schemas, timeoutSeconds })),
+  ...(view.map && { map: view.map }),
 });
 
 export function useServerSettings() {

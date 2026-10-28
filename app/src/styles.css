@@ -2295,19 +2295,6 @@ img[data-lightbox] {
   line-height: 1.33333;
   letter-spacing: 0.32px;
 }
-.map-block .maplibregl-ctrl-attrib,
-.map-block .maplibregl-ctrl-attrib.maplibregl-compact {
-  border-radius: 0;
-  background: var(--cds-layer-01);
-  color: var(--cds-text-secondary);
-}
-.map-block .maplibregl-ctrl-attrib a {
-  color: var(--cds-link-primary);
-}
-.map-block .maplibregl-cooperative-gesture-screen {
-  font: inherit;
-  font-size: var(--cds-body-compact-01-font-size);
-}
 .map-block__controls {
   position: absolute;
   inset-block-start: var(--cds-spacing-03);
@@ -2323,13 +2310,9 @@ img[data-lightbox] {
   padding: var(--cds-spacing-02) var(--cds-spacing-03);
   background: var(--cds-layer-01);
 }
-/* Hung from the dot (its place set from the map); only a tapped one (touch screens) takes the pointer. */
+/* Hung from the dot (its place set from the map); the pointer can move onto it (its title is a link). */
 .map-block__popover {
   position: absolute;
-}
-.map-block__popover:not(.map-block__popover--pinned),
-.map-block__popover:not(.map-block__popover--pinned) * {
-  pointer-events: none;
 }
 .map-block__anchor {
   display: block;
@@ -2339,12 +2322,17 @@ img[data-lightbox] {
 }
 .map-block__item {
   inline-size: max-content;
-  max-inline-size: 20rem;
+  min-inline-size: 14rem;
+  max-inline-size: 24rem;
   padding: var(--cds-spacing-05);
 }
-.map-block__title {
+/* The item's title reads as a title (text colour), not a blue link; it still opens the item. */
+.map-block__title,
+.map-block__title:visited,
+.map-block__title:hover {
   display: block;
   font-weight: 600;
+  color: var(--cds-text-primary);
 }
 .map-block__item .item-card__fields {
   margin-block-start: var(--cds-spacing-03);

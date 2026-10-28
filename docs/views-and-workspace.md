@@ -71,11 +71,14 @@ Extension points are registries, not special cases in pages:
   coordinates, "52.37, 4.89", "geo:52.37,4.89" or a map link with "@lat,lon" / "q=lat,lon", or a number field
   with the latitude, then Longitude a second number field; a first guess by field name. The block's grouping colours
   the dots, Carbon's categorical palette for the theme, with a legend and how many items have no place; ungrouped
-  they are `--cds-interactive`. Hovering a dot shows a Carbon popover with the item's title and the block's fields,
-  clicking it opens the item (`openModeOf`); on touch screens the first tap shows it and its title opens it. The
+  they are `--cds-interactive`. Hovering a dot shows a Carbon popover with the item's title (in the text colour, a
+  link) and the block's fields, 14 to 24rem wide; the pointer can move onto it (it hides `HIDE_DELAY` after leaving
+  both); clicking a dot opens the item (`openModeOf`); on touch screens the first tap shows it and its title opens it. The
   map fits the dots when which items are shown changes, not when one is edited. Zoom buttons are Carbon icon
-  buttons; the wheel scrolls the page, Ctrl/Cmd + wheel zooms (cooperative gestures). Block settings: Location,
-  Longitude, Map style (automatic: light / dark like the app; Liberty, Bright) and Height (see below)),
+  buttons, and "Show all" only with more than one place; the wheel zooms and one finger moves the map (no
+  cooperative gestures), and there is no attribution box. Route joins the dots in the block's order with a line, one
+  per group in its colour (`routeJson`). The style is one for all maps (Settings → Maps, `app/mapStyle.ts`, docs/sync.md:
+  the server's settings). Block settings: Location, Longitude, Route and Height (see below)),
   and
   `chart` (`views/ChartBlock.tsx`: settings and view; `domain/chart.ts`: the values, pure; `views/chartSpec.ts`: Carbon
   Charts' component, data and options for them; `views/ChartCanvas.tsx`: Carbon Charts itself, a lazily loaded chunk with

@@ -13,6 +13,13 @@ export interface ServerAiSettings {
   codeModel: string;
 }
 
+/** How every device's maps look (the Map block): an OpenFreeMap style; "auto" follows the theme (light / dark). */
+export const MAP_STYLE_IDS = ["auto", "positron", "dark", "liberty", "bright"] as const;
+export type MapStyleId = (typeof MAP_STYLE_IDS)[number];
+export interface ServerMapSettings {
+  style: MapStyleId;
+}
+
 export interface ServerSourceSettings {
   /** Stable, so a source keeps its password when it is renamed. */
   id: string;
@@ -60,6 +67,8 @@ export interface ConnectionKind {
 /** GET /api/settings: what is set, secrets left out. */
 export interface ServerSettingsView {
   ai: ServerAiSettings & { keySet: boolean };
+  /** Absent from a server of an earlier version. */
+  map?: ServerMapSettings;
   /** The kinds of source it can read. */
   kinds: ConnectionKind[];
   sources: (ServerSourceSettings & {
@@ -82,6 +91,8 @@ export interface ServerSettingsView {
  */
 export interface ServerSettingsUpdate {
   ai: ServerAiSettings & { key?: string };
+  /** Left out (an app of an earlier version): stays as it is. */
+  map?: ServerMapSettings;
   /** `secrets`: the secret fields to set ("" clears one); one left out is kept like the password. */
   sources: (ServerSourceSettings & { password?: string; secrets?: Record<string, string> })[];
 }
