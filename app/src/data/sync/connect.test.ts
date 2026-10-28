@@ -238,3 +238,27 @@ describe("the server's database id", () => {
     expect(stored(db)).toBe("db-b");
   });
 });
+
+describe("testing a server", () => {
+  /** A server at notes.example.com whose token is "t"; nothing answers anywhere else. */
+  const answer = (url: string, init?: { headers?: Record<string, string> }) => {
+    if (!url.startsWith("https://notes.example.com/")) throw new TypeError("fetch failed");
+    if (url.endsWith("/api/health")) return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    const accepted = init?.headers?.Authorization === "Bearer t";
+    return { ok: accepted, status: accepted ? 200 : 401, json: async () => ({}) };
+  };
+  beforeEach(() => vi.stubGlobal("fetch", vi.fn(async (url: string, init?: { headers?: Record<string, string> }) => answer(url, init))));
+  const engine = () => new SyncEngine(new FakeClient() as never, () => {}, env);
+
+  it("passes for a server that takes the token, saving nothing", async () => {
+    const e = engine();
+    await expect(e.testServer("https://notes.example.com/", "t")).resolves.toBeUndefined();
+    expect(e.config.token).toBe("");
+  });
+  it("says when the token is refused", async () => {
+    await expect(engine().testServer("https://notes.example.com", "wrong")).rejects.toThrow("did not accept the token");
+  });
+  it("says when nothing answers", async () => {
+    await expect(engine().testServer("https://elsewhere.example.com", "t")).rejects.toThrow("Cannot reach https://elsewhere.example.com");
+  });
+});

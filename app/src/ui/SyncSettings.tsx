@@ -1,29 +1,30 @@
-import { useId, useState, useSyncExternalStore } from "react";
-import { Button, Form, InlineNotification, PasswordInput, Select, SelectItem, Stack, TextInput, Toggle } from "@carbon/react";
+import { useId, useReducer, useState, useSyncExternalStore } from "react";
+import { Button, FormGroup, InlineNotification, Select, SelectItem, Stack, Toggle } from "@carbon/react";
+import type { SyncConfig } from "../data/repository";
 import { useStore } from "../app/store";
 import { useConfirm } from "./useConfirm";
 import { ServerReplaced } from "./ServerReplaced";
 
 const STATE_TEXT = { off: "Off", idle: "Up to date", syncing: "Syncing…", error: "Failed" } as const;
 
-/** Where this device syncs to: the Kubus server's address and token, switched on and off (a section of the settings). */
+/** Whether this device syncs with its server (Settings → Server), how it downloads images, and wiping data (a section of the settings). */
 export function SyncSettings() {
   const { repo } = useStore();
   const uid = useId();
   const { sync } = repo;
   const status = useSyncExternalStore(sync.subscribe.bind(sync), () => sync.status);
-  const [draft, setDraft] = useState(sync.config);
-  const [saving, setSaving] = useState(false);
-  // Whether a server is saved (the Disconnect button), as opposed to what is typed.
-  const [connected, setConnected] = useState(sync.config.token !== "");
+  // The config isn't a store of its own: shown again after each change.
+  const [, configChanged] = useReducer((n: number) => n + 1, 0);
   const { confirm, dialog } = useConfirm();
   const [wipeError, setWipeError] = useState<string>();
+  const { config } = sync;
+  const hasServer = config.url !== "" && config.token !== "";
 
-  const save = async (e?: { preventDefault(): void }) => {
-    e?.preventDefault();
+  // Each takes effect at once.
+  const configure = async (patch: Partial<SyncConfig>) => {
     if (
-      draft.enabled &&
-      sync.isNewServer(draft.url) &&
+      patch.enabled &&
+      sync.isNewServer(config.url) &&
       !(await confirm({
         title: "Connect to this server?",
         body: "The server is the source of truth. If it already holds data, that replaces all data on this device. If it is empty, this device's data is uploaded to it.",
@@ -32,19 +33,16 @@ export function SyncSettings() {
     ) {
       return;
     }
-    setSaving(true);
-    try {
-      await sync.configure(draft);
-      setConnected(draft.token !== "");
-    } finally {
-      setSaving(false);
-    }
+    const done = sync.configure({ ...sync.config, ...patch });
+    configChanged();
+    await done;
+    configChanged();
   };
 
   const wipe = async () => {
     const ok = await confirm({
       title: "Wipe this device's data?",
-      body: connected
+      body: hasServer
         ? "Deletes all data on this device. Sync is paused first, so the server keeps its data; switching sync on again downloads it."
         : "Deletes all data on this device. It can't be undone.",
       confirmLabel: "Wipe",
@@ -57,29 +55,17 @@ export function SyncSettings() {
   const wipeServer = async () => {
     const ok = await confirm({
       title: "Wipe the server's database?",
-      body: `Deletes ALL data on ${sync.config.url}: every collection, item and file of every device that syncs with it. It can't be undone. Sync on this device is paused; switching it on again uploads this device's data. Other devices keep their data but stop matching the server: disconnect and connect them again, or wipe them.`,
+      body: `Deletes ALL data on ${config.url}: every collection, item and file of every device that syncs with it. It can't be undone. Sync on this device is paused; switching it on again uploads this device's data. Other devices keep their data but stop matching the server: disconnect and connect them again, or wipe them.`,
       confirmLabel: "Wipe server database",
     });
     if (!ok) return;
     setWipeError(undefined);
     try {
       await sync.wipeServer();
-      setDraft(sync.config);
+      configChanged();
     } catch (e) {
       setWipeError(e instanceof Error ? e.message : String(e));
     }
-  };
-
-  const disconnect = async () => {
-    const ok = await confirm({
-      title: "Disconnect from the server?",
-      body: "This device keeps its data but stops syncing. Connecting again later replaces this device's data with the server's.",
-      confirmLabel: "Disconnect",
-    });
-    if (!ok) return;
-    await sync.disconnect();
-    setDraft(sync.config);
-    setConnected(false);
   };
 
   return (
@@ -88,48 +74,36 @@ export function SyncSettings() {
       {status.error && <InlineNotification kind="error" title="Sync failed" subtitle={status.error} hideCloseButton />}
       {status.replaced && (
         <div className="sync-popover">
-          <ServerReplaced replaced={status.replaced} onConnect={() => setDraft((d) => ({ ...d, enabled: true }))} />
+          <ServerReplaced replaced={status.replaced} onConnect={() => void configure({ enabled: true })} />
         </div>
       )}
       {wipeError && <InlineNotification kind="error" title="Wiping the server failed" subtitle={wipeError} onClose={() => setWipeError(undefined)} />}
-      <Form onSubmit={save} noValidate>
+      <Stack gap={7}>
         <Stack gap={6}>
-          <TextInput
-            size="sm"
-            id={`${uid}-url`}
-            labelText="Server"
-            placeholder="https://notes.example.com"
-            value={draft.url}
-            onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
-          />
-          <PasswordInput
-            size="sm"
-            id={`${uid}-token`}
-            labelText="Token"
-            helperText="The KUBUS_TOKEN of the server."
-            value={draft.token}
-            onChange={(e) => setDraft((d) => ({ ...d, token: e.target.value }))}
-          />
+          {!hasServer && (
+            <InlineNotification kind="info" title="No server" subtitle="Connect this device to a Kubus server first (Settings → Server)." lowContrast hideCloseButton />
+          )}
           <Toggle
             size="sm"
             id={`${uid}-enabled`}
             labelText="Sync this device"
             labelA="Off"
             labelB="On"
-            toggled={draft.enabled}
-            onToggle={(enabled) => setDraft((d) => ({ ...d, enabled }))}
+            disabled={!hasServer}
+            toggled={config.enabled}
+            onToggle={(enabled) => void configure({ enabled })}
           />
           <Select
             size="sm"
             id={`${uid}-originals`}
             labelText="Download images"
             helperText={
-              draft.originals === "opened"
+              config.originals === "opened"
                 ? "Thumbnails after each sync; a full-size image when it is first shown (then kept for offline use)."
                 : "Every image, full size, after each sync: all of them are available offline."
             }
-            value={draft.originals}
-            onChange={(e) => setDraft((d) => ({ ...d, originals: e.target.value === "opened" ? "opened" : "always" }))}
+            value={config.originals}
+            onChange={(e) => void configure({ originals: e.target.value === "opened" ? "opened" : "always" })}
           >
             <SelectItem value="always" text="All, full size" />
             <SelectItem value="opened" text="Full size when opened" />
@@ -138,24 +112,13 @@ export function SyncSettings() {
             {STATE_TEXT[status.state]}
             {status.lastSync && `, last synced ${new Date(status.lastSync).toLocaleString()}`}
           </p>
-          <div>
-            <Button size="sm" kind="primary" type="submit" disabled={saving}>
-              Save
-            </Button>
-            {connected && (
-              <>
-                {" "}
-                <Button size="sm" kind="danger--tertiary" onClick={() => void disconnect()}>
-                  Disconnect
-                </Button>
-              </>
-            )}
-          </div>
+        </Stack>
+        <FormGroup legendText="Wipe">
           <div>
             <Button size="sm" kind="danger--tertiary" onClick={() => void wipe()}>
               Wipe local database
             </Button>
-            {connected && (
+            {hasServer && (
               <>
                 {" "}
                 <Button size="sm" kind="danger--tertiary" onClick={() => void wipeServer()}>
@@ -164,8 +127,8 @@ export function SyncSettings() {
               </>
             )}
           </div>
-        </Stack>
-      </Form>
+        </FormGroup>
+      </Stack>
       {dialog}
     </>
   );

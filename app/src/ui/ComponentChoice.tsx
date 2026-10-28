@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button, Dropdown, Stack, Tag } from "@carbon/react";
 import { useStore } from "../app/store";
-import { componentsFor, isAiOutput, placeProblem, type Component, type ComponentCode, type ComponentPlace } from "../domain/components";
+import { componentsFor, placeProblem, type Component, type ComponentCode } from "../domain/components";
 import type { Collection } from "../domain/model";
 import { ComponentForm } from "./ComponentForm";
 import { PromoteComponentModal } from "./PromoteComponentModal";

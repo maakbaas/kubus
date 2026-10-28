@@ -29,6 +29,16 @@ export function urlFor(database: string, user?: { name: string; password: string
   return url.toString();
 }
 
+/** `database` as a source's kind, fields and password (server/src/connectors/kinds.ts), as the superuser or as `user`. */
+export function sourceFor(database: string, user?: { name: string; password: string }) {
+  const url = new URL(urlFor(database, user));
+  return {
+    kind: "postgres",
+    fields: { host: url.hostname, port: url.port, database, user: decodeURIComponent(url.username), ssl: "" },
+    password: decodeURIComponent(url.password),
+  };
+}
+
 /** A new, empty database (one left over from an interrupted run is dropped first); its connection string. */
 export async function createDatabase(name: string): Promise<string> {
   await dropDatabase(name);

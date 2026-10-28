@@ -62,8 +62,9 @@ the server: it syncs through a Postgres database and also serves the web app.
    (in both `POSTGRES_PASSWORD` and `DATABASE_URL`).
 3. Run `docker compose up -d`. The server listens on port 8080. Update later with
    `docker compose pull && docker compose up -d`.
-4. In the app, open Settings → Sync (or "Configure sync" under the status icon at the top right),
-   enter the server's address and the token, and turn sync on.
+4. In the app, open Settings → Server, enter the server's address and the token ("Test connection"
+   checks both), save, then turn sync on in Settings → Sync (or "Configure sync" under the status icon
+   at the top right).
 
 To use an existing Postgres instead, remove the `db` service and point `DATABASE_URL` at it. For
 the phone (an installable home-screen app) and the desktop app, put the server behind HTTPS, for
@@ -71,9 +72,9 @@ example with Caddy, Tailscale Serve or a Cloudflare tunnel.
 
 The same server answers an HTTP API at `/api/v1` with the same token, and calls `KUBUS_WEBHOOK_URL`
 on every change when set (commented in `docker-compose.yml`); Help → API in the app documents both.
-In the app, Settings → Server sets up what the server offers every device: a language model
+In the app, the server's own settings set up what it offers every device: a language model
 (Settings → AI → "The server's", used through the server so the key stays there; a device can still
-set its own instead) and remote sources, databases the server reads (read-only: Postgres, InfluxDB 2) for remote
+set its own instead) and remote sources (Settings → Connections), databases the server reads (read-only: Postgres, InfluxDB 2) for remote
 collections. Both are stored on the server only; keys and passwords are never shown again, and
 with `KUBUS_SECRET_KEY` set (commented in `docker-compose.yml`) they are stored encrypted.
 Running the server from the repository instead of the image: `npm run build:headless` first, or the

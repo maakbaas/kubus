@@ -14,7 +14,7 @@ export type SourceKind = "string" | "number" | "checkbox" | "date" | "datetime" 
 
 /** One source the server offers (GET /api/sources). */
 export interface SourceInfo {
-  /** Its name, from the server's settings (Settings → Server), e.g. "CRM". */
+  /** Its name, from the server's settings (Settings → Connections), e.g. "CRM". */
   name: string;
   /** Names it had before (renamed): requests by one still reach it, and collections take its new name. */
   formerNames?: string[];

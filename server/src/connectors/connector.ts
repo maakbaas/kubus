@@ -2,8 +2,8 @@ import type { SourceCapabilities, SourceDescription, SourceQuery, SourceResult, 
 
 // A connector reads one kind of source (a Postgres database, n8n's data tables, an InfluxDB 2 server) for the app, in the
 // app's terms (shared/sources.ts): everything kind-specific (its query language, its types, how
-// it stays read-only) is inside it. The server picks one per configured source by the scheme of
-// its connection string (connectors/index.ts). Only reading: a connector never writes.
+// it stays read-only) is inside it. The server picks one per configured source by its kind
+// (connectors/index.ts; the kinds and their fields: kinds.ts). Only reading: a connector never writes.
 
 /** One configured source (from the server's settings: server/src/settings.ts). */
 export interface SourceConfig {
@@ -11,8 +11,12 @@ export interface SourceConfig {
   name: string;
   /** Names it had before: it is still asked for by them (collections made under one). */
   formerNames?: string[];
-  /** Connection string; its scheme picks the connector (postgres://…, n8n://…, influxdb://…). */
-  url: string;
+  /** Its kind (kinds.ts): picks the connector. */
+  kind: string;
+  /** That kind's fields, e.g. { host, port, database, user, ssl } (kinds.ts). */
+  fields: Record<string, string>;
+  /** Its password, API key or token ("": none). */
+  password: string;
   /** Only these schemas' tables are offered (n8n: these projects' ids; InfluxDB: buckets; empty: all but the system's). */
   schemas: string[];
   /** Queries in the source's own language are allowed (else only its tables). */

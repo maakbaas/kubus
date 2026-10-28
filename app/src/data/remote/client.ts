@@ -30,7 +30,7 @@ export class SourcesClient {
 
   private async call<T>(path: string, body?: unknown, method?: string): Promise<T> {
     const { url, token } = this.config();
-    if (!url || !token) throw new Error("Remote collections are read through a Kubus server: set one up in Settings → Sync.");
+    if (!url || !token) throw new Error("Remote collections are read through a Kubus server: set one up in Settings → Server.");
     let response: Response;
     try {
       response = await fetch(`${url}/api${path}`, {

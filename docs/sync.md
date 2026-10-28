@@ -17,8 +17,10 @@ client never talks to Postgres: browsers and the iOS PWA can only do HTTP. One c
 (`server/Dockerfile`, `docker-compose.yml` with `DATABASE_URL` and `KUBUS_TOKEN`) serves the
 sync API at `/api` and the built web app at `/`, so the phone installs the app from the server
 (same origin, no CORS). Auth is one shared bearer token (`KUBUS_TOKEN`); the app's
-Settings (`#/settings?section=sync`, the Sync tab, `ui/SyncSettings.tsx`; reached from the "Configure sync" button in the
-popover of the status icon ending the top-right tab strip, `ui/SyncStatusButton.tsx`, which itself only shows the state) holds server URL + token + on/off + Disconnect (forgets the server; the
+Settings holds server URL + token + "Test connection" + Disconnect in the Server tab (`#/settings?section=server`,
+`ui/ServerConnection.tsx`), and on/off + Download images + the wipes in the Sync tab (`#/settings?section=sync`,
+`ui/SyncSettings.tsx`; reached from the "Configure sync" button in the popover of the status icon ending the top-right
+tab strip, `ui/SyncStatusButton.tsx`, which itself only shows the state). Disconnect (forgets the server; the
 device keeps its data and the next connection is a first one) + Wipe local database (`Repository.wipeLocal`:
 pauses sync with `SyncControl.pause`, which keeps URL and token but forgets the server so switching it on again is a
 first connection; then the worker drops every table and creates the schema afresh, and the app reloads) + Wipe server
@@ -48,7 +50,7 @@ needs server-side queries (docs/vision.md).
   skew instead of a hybrid logical clock.
 - *First connection to a server* (or a changed server URL): the server is the source of truth. If it
   holds data, that replaces everything on the device (one local transaction, nothing is sent; the
-  Sync settings ask for confirmation first, `isNewServer`). Only an empty server takes the device's data
+  Server tab (saving a new address while sync is on) and the Sync tab (switching it on) ask for confirmation first, `isNewServer`). Only an empty server takes the device's data
   instead: all local rows are queued and uploaded.
 - *Which database*: the server's database has an id (`server_meta`: a `gen_random_uuid()` and its
   creation time, inserted `ON CONFLICT DO NOTHING`, so a restart keeps it and a wipe, a new volume or
@@ -126,16 +128,17 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
 
 ## The server's settings
 
-What a server offers beyond sync is set in the app, Settings → Server (`ui/ServerSettings.tsx`): the
-language model and the remote sources. `GET` / `PUT /api/settings`
+What a server offers beyond sync is set in the app: the language model in Settings → AI ("The server's",
+`ui/AiSettings.tsx`) and the remote sources in Settings → Connections (`ui/ConnectionSettings.tsx`); each saves
+its part on top of what the server holds then (`ui/useServerSettings.ts`). `GET` / `PUT /api/settings`
 (`server/src/settings.ts`, types in `shared/settings.ts`) with the sync token; any device with the
 token may change them. They are stored in the server's own table `server_settings` (JSON by key:
 `ai`, `sources`), never synced and kept by a wipe. Secrets (the model's key, a source's password)
 are write-only: a device sees `keySet` / `passwordSet`, never the value. A secret left out of an
-update stays only while it would go to the same place (the same model address; the same scheme,
-host, port and user of a connection string): moved elsewhere it is dropped, so whoever holds the
-token can't send a stored secret to a host of their choosing. A password typed into a connection
-string is split out of it (`splitPassword`). With `KUBUS_SECRET_KEY` set the secrets are stored
+update stays only while it would go to the same place (the same model address; a source's same kind
+and the fields its password belongs to, `placeOf`: host, port and user, an address, an account): moved
+elsewhere it is dropped, so whoever holds the token can't send a stored secret to a host of their
+choosing. With `KUBUS_SECRET_KEY` set the secrets are stored
 encrypted with it (AES-256-GCM, the key derived with scrypt; `kubus-sealed:v1:…`), so the database
 alone (a dump, a backup) doesn't give them; without it they are stored as plain text, the owner's
 choice, and the server says so in its log at start. Secrets stored as plain text are encrypted at
@@ -148,7 +151,7 @@ carries each source's problem and warnings. The server's environment variables: 
 
 ## The server's language model
 
-Set in Settings → Server (address, key, a model for AI fields and one for writing components):
+Set in Settings → AI with "The server's" chosen (address, key, a model for AI fields and one for writing components):
 `server/src/ai.ts` gives every device the same model. `GET /api/ai` says what is offered (`ServerAi`
 in `shared/api.ts`: the models, never the address or key); `POST /api/ai/chat/completions` and
 `GET /api/ai/models` forward to the provider with the server's key, for any device with the token.
@@ -161,10 +164,17 @@ headless device doesn't generate AI values (that stays with the apps).
 
 Databases the server reads for the devices, read-only, whose tables and queries the app shows as
 collections ("remote collections": `Collection.source`, `domain/sources.ts`). Set up in Settings →
-Server (name: letters, digits, spaces, `-` and `_`; connection string, password, schemas, whether queries
-written in the app are allowed, a time limit); a renamed source keeps its former names (`formerNames`, by its
-stable id, never shown in the settings): requests by one still reach it (`Sources.on`) and `GET /api/sources`
-lists them, so a collection made under an old name reads on and takes the new one when its settings are opened; the connection string's scheme picks the connector (`postgres://`, `n8n://`, `influxdb://`, `d1://`).
+Connections (name, kind, that kind's own fields, password, schemas, whether queries written in the app are
+allowed, a time limit). A source is stored as its kind and that kind's fields, its password beside them (no
+connection string); its kind picks the connector, which reads the fields (`SourceConfig`). The server describes the
+kinds and their fields (`server/src/connectors/kinds.ts`; `ConnectionKind` in `shared/settings.ts`, `GET
+/api/settings` → `kinds`), so the app knows no database: PostgreSQL (host, port, database, user, TLS), n8n data tables
+(address), InfluxDB 2 (address, organization), Cloudflare D1 (account ID, database ID). Sources were stored as
+connection strings before; that format was dropped without a migration (a breaking change: such a source reads as
+of no kind until it is set up again), and app and server must both be this version.
+A renamed source keeps its former names (`formerNames`, by its stable id, never shown in the settings): requests by one
+still reach it (`Sources.on`) and `GET /api/sources` lists them, so a collection made under an old name reads on and
+takes the new one when its settings are opened. A source's name: letters, digits, spaces, `-` and `_`.
 - *Protocol* (`shared/sources.ts`), connector-neutral, all behind the token:
   `GET /api/sources` (names, connector, capabilities, problem; never addresses),
   `GET /api/sources/<name>/tables`, `POST …/describe` (`{ target }`: a table or a query → its
@@ -193,8 +203,8 @@ lists them, so a collection made under an old name reads on and takes the new on
   A list column groups a row under each value. At start (and on every change) `check` warns about a
   superuser or a user that can write: give it a user that can only read (`GRANT SELECT`); queries
   written in the app read whatever that user can (turn queries off per source to allow tables only).
-- *n8n* (`connectors/n8n.ts`): n8n's data tables through its public API, `n8n://host[:port][/path]`
-  (https) or `n8n+http://…` (plain http), the API key as the password (header `X-N8N-API-KEY`).
+- *n8n* (`connectors/n8n.ts`): n8n's data tables through its public API, its address
+  (https:// unless it says http://), the API key as the password (header `X-N8N-API-KEY`).
   Strictly read-only: its one request helper only sends `GET`s (`/data-tables`, `…/<id>/rows`); give
   it a key with only the read scopes (`dataTable:list`, `dataTableRow:read`) where
   n8n offers scopes. Tables only (no query language; `schema` null, a name two projects share gets
@@ -212,7 +222,7 @@ lists them, so a collection made under an old name reads on and takes the new on
   returns is filtered exactly in memory, so a looser rule only reads more. Without a filter the whole
   table is read. The time limit bounds each request.
 - *InfluxDB 2* (`connectors/influx.ts`, Flux in `influxFlux.ts`, pure and tested without a server):
-  `influxdb://host:8086/org` (`influxdbs://` for HTTPS; port 8086 / 443 by default), the token as the
+  its address (http://host:8086, or https://; port 8086 / 443 by default) and organization, the token as the
   password; Flux over `/api/v2/query` (annotated CSV, `RFC3339Nano` times) with the time limit as the
   request's. Strictly read-only: the connector only ever sends Flux that reads, and a query written in
   the app is refused (`checkFlux`, a tokenizer: strings, interpolations, regexes and comments read as
@@ -232,7 +242,7 @@ lists them, so a collection made under an old name reads on and takes the new on
   column; groups are counted and ordered first and rows placed by their group's place (`dict`).
   Grouping by day uses `date.truncate` with a `timezone` location (InfluxDB 2.1 or later).
 - *Cloudflare D1* (`connectors/d1.ts`, SQL in `d1Sql.ts`, pure and tested on SQLite itself:
-  `d1Sql.test.ts`): `d1://<account id>/<database id>`, the password an API token, read over
+  `d1Sql.test.ts`): its account ID and database ID, the password an API token, read over
   Cloudflare's HTTP API (`/raw`, one request per statement). Strictly read-only though D1 has no
   read-only mode: only statements the connector makes are sent (`SELECT`, `PRAGMA table_xinfo`;
   anything else is refused before it leaves), a written query is one statement (any `;` outside

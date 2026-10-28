@@ -47,8 +47,8 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-const connector = (over: { url?: string; schemas?: string[]; queries?: boolean } = {}) =>
-  new D1Connector({ name: "Edge", url: "d1://:token-1@acc/db-1", schemas: [], queries: true, timeoutMs: 5000, ...over });
+const connector = (over: { fields?: Record<string, string>; schemas?: string[]; queries?: boolean } = {}) =>
+  new D1Connector({ name: "Edge", kind: "d1", fields: { account: "acc", database: "db-1" }, password: "token-1", schemas: [], queries: true, timeoutMs: 5000, ...over });
 
 const people = (over: Partial<SourceQuery> = {}): SourceQuery => ({
   target: { table: { schema: null, name: "people" } },
@@ -72,7 +72,7 @@ describe("D1 connector", () => {
   it("reads its account and database from the connection string, the token as its password", async () => {
     expect(await connector().check()).toEqual([]);
     expect(requests[0]).toMatchObject({ url: ENDPOINT, authorization: "Bearer token-1", sql: "SELECT 1" });
-    expect(() => connector({ url: "d1://acc" })).toThrow(SourceError);
+    expect(() => connector({ fields: { account: "acc", database: "" } })).toThrow(SourceError);
     expect(await connector({ schemas: ["main"] }).check()).toEqual(["D1 has no schemas: the source's schemas are ignored"]);
   });
 
@@ -142,6 +142,6 @@ describe("D1 connector", () => {
     vi.stubGlobal("fetch", (_url: string, init: RequestInit) =>
       new Promise((_resolve, reject) => init.signal!.addEventListener("abort", () => reject(init.signal!.reason))),
     );
-    await expect(new D1Connector({ name: "Slow", url: "d1://:t@acc/db-1", schemas: [], queries: true, timeoutMs: 20 }).check()).rejects.toThrow(/took too long/);
+    await expect(new D1Connector({ name: "Slow", kind: "d1", fields: { account: "acc", database: "db-1" }, password: "t", schemas: [], queries: true, timeoutMs: 20 }).check()).rejects.toThrow(/took too long/);
   });
 });

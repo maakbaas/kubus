@@ -163,6 +163,7 @@ const CRAWL_PAGES = [
   ["component editor", (ids) => `/components/${ids.components.double}`],
   ["spaces", () => "/spaces"],
   ["bookmarks", () => "/bookmarks"],
+  ["settings server", () => "/settings?section=server"],
   ["settings sync", () => "/settings?section=sync"],
   ["settings AI", () => "/settings?section=ai"],
   ["search", () => "/search?q=the"],

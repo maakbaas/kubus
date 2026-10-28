@@ -1,4 +1,4 @@
-// The server's own settings (Settings → Server in the app): the language model it offers every
+// The server's own settings (Settings → AI and Connections in the app): the language model it offers every
 // device and the sources it reads for them. Stored only on the server (its table server_settings,
 // never synced) and changed through GET / PUT /api/settings with KUBUS_TOKEN. Secrets (the model's
 // key, a source's password) can be set but are never sent back: a device sees whether one is set.
@@ -18,8 +18,10 @@ export interface ServerSourceSettings {
   id: string;
   /** What devices see and ask by, e.g. CRM: letters, digits, spaces, - and _ (renamed, it is still asked for by its former names). */
   name: string;
-  /** Its connection string without the password, e.g. postgres://reader@crm-host:5432/crm; its scheme picks the connector. */
-  url: string;
+  /** Its kind (a ConnectionKind's id, e.g. "postgres"): picks the connector. */
+  kind: string;
+  /** That kind's fields (its password aside), e.g. { host, port, database, user, ssl }. */
+  fields: Record<string, string>;
   /** Only these schemas' tables are offered (empty: all). */
   schemas: string[];
   /** Queries written in the app are allowed, not only its tables. */
@@ -28,9 +30,34 @@ export interface ServerSourceSettings {
   timeoutSeconds: number;
 }
 
+/** One box of a kind of connection (see ConnectionKind). */
+export interface ConnectionField {
+  key: string;
+  label: string;
+  placeholder?: string;
+  helperText?: string;
+  /** A choice of these (the first is the default) instead of a text box. */
+  choices?: { value: string; text: string }[];
+}
+
+/**
+ * A kind of source the server can read, as the app sets it up: its own fields, what its password is called, and what its schemas are (null:
+ * it has none). Described by the server (server/src/connectors/kinds.ts), so the app knows no database.
+ */
+export interface ConnectionKind {
+  /** E.g. "postgres". */
+  id: string;
+  label: string;
+  fields: ConnectionField[];
+  password: { label: string; helperText: string };
+  schemas: { label: string; helperText: string } | null;
+}
+
 /** GET /api/settings: what is set, secrets left out. */
 export interface ServerSettingsView {
   ai: ServerAiSettings & { keySet: boolean };
+  /** The kinds of source it can read. */
+  kinds: ConnectionKind[];
   sources: (ServerSourceSettings & {
     passwordSet: boolean;
     /** Its connector ("postgres"), once it has one. */
@@ -43,7 +70,7 @@ export interface ServerSettingsView {
 
 /**
  * PUT /api/settings: the settings as a whole. A secret left out (undefined) stays as it is, but
- * only while it would go to the same place (the same API address; the same host, port and user):
+ * only while it would go to the same place (the same API address; for a source, the same kind and the fields its password belongs to: host, port and user, an address, an account):
  * moved elsewhere it is dropped, so a stored secret can't be sent somewhere new. "" clears it.
  */
 export interface ServerSettingsUpdate {

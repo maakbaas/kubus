@@ -45,9 +45,9 @@ export const AREAS = [
 
   // AI, sync, live changes, settings.
   [/^app\/src\/(app\/(ai|aiBackfill|aiScan|useAi|AiBackfillRunner)|ui\/(Ai|WriteWithAi)|domain\/ai|platform\/llm)/, [15]],
-  [/^app\/src\/(data\/sync\/|ui\/(SyncSettings|SyncStatusButton|ServerReplaced))/, [13, 18]],
+  [/^app\/src\/(data\/sync\/|ui\/(SyncSettings|ServerConnection|SyncStatusButton|ServerReplaced))/, [13, 18]],
   [/^app\/src\/(app\/(useDataChanges|itemCache|useItems|useItemCounts|useLinks)|views\/useCollectionData)/, [12, 13]],
-  [/^app\/src\/(pages\/SettingsPage|ui\/(ServerSettings|SourceSettings|localPrefs))/, [7, 18]],
+  [/^app\/src\/(pages\/SettingsPage|ui\/(ConnectionSettings|useServerSettings|SourceSettings|localPrefs))/, [7, 18]],
   [/^app\/src\/(pages\/HelpPage|help\/)/, [1]],
 ];
 

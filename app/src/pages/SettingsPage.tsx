@@ -2,14 +2,19 @@ import { useId } from "react";
 import { useSearchParams } from "react-router";
 import { Tab, TabList, TabPanel, TabPanels, Tabs } from "@carbon/react";
 import { AiSettings } from "../ui/AiSettings";
+import { ConnectionSettings } from "../ui/ConnectionSettings";
 import { PageHeader } from "../ui/PageHeader";
-import { ServerSettings } from "../ui/ServerSettings";
+import { ServerConnection } from "../ui/ServerConnection";
 import { SyncSettings } from "../ui/SyncSettings";
 
 /** The sections, in order; `?section=` opens one (the sync status's "Configure sync" leads to sync). */
-const SECTIONS = ["sync", "ai", "server"] as const;
+const SECTIONS = ["server", "sync", "connections", "ai"] as const;
 
-/** Settings of this device (where it syncs to, the language model for AI), and of the server it syncs with. */
+/**
+ * Settings of this device and of the server it is connected to: the server (address, token), whether
+ * this device syncs with it (and wiping data), the databases the server reads (connections), and the
+ * language model for AI (the server's or this device's own).
+ */
 export function SettingsPage() {
   const uid = useId();
   const [params, setParams] = useSearchParams();
@@ -19,19 +24,23 @@ export function SettingsPage() {
       <PageHeader title="Settings" />
       <Tabs selectedIndex={selected} onChange={({ selectedIndex }) => setParams({ section: SECTIONS[selectedIndex] }, { replace: true })}>
         <TabList aria-label="Settings" id={`${uid}-tabs`}>
-          <Tab>Sync</Tab>
-          <Tab>AI</Tab>
           <Tab>Server</Tab>
+          <Tab>Sync</Tab>
+          <Tab>Connections</Tab>
+          <Tab>AI</Tab>
         </TabList>
         <TabPanels>
+          <TabPanel>
+            <ServerConnection />
+          </TabPanel>
           <TabPanel>
             <SyncSettings />
           </TabPanel>
           <TabPanel>
-            <AiSettings />
+            <ConnectionSettings />
           </TabPanel>
           <TabPanel>
-            <ServerSettings />
+            <AiSettings />
           </TabPanel>
         </TabPanels>
       </Tabs>

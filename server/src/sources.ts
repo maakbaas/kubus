@@ -6,7 +6,7 @@ import { connectorFor } from "./connectors/index.ts";
 // Remote sources: databases the server reads for the devices (shared/sources.ts), one connector
 // each. Devices see their names and what they can do, never their addresses or passwords; they
 // ask through /api/sources/... with KUBUS_TOKEN, like the language model (server/src/ai.ts). They
-// are set up in the app (Settings → Server: server/src/settings.ts), and replaced as a whole
+// are set up in the app (Settings → Connections: server/src/settings.ts), and replaced as a whole
 // whenever that changes.
 
 const MAX_BODY = 1024 * 1024;

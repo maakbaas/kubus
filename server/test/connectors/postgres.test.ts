@@ -4,7 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Connector } from "../../src/connectors/connector.ts";
 import { PostgresConnector } from "../../src/connectors/postgres.ts";
-import { admin, ADMIN, createDatabase, dropDatabase, urlFor } from "../postgres.ts";
+import { admin, ADMIN, createDatabase, dropDatabase, sourceFor } from "../postgres.ts";
 import type { SourceFilter, SourceQuery } from "../../../shared/sources.ts";
 
 const DB = "kubus_source_test";
@@ -65,7 +65,7 @@ describe.skipIf(!ADMIN)("Postgres connector", () => {
     await createDatabase(DB);
     await admin("DROP ROLE IF EXISTS kubus_reader");
     await admin(FIXTURE, DB);
-    connector = new PostgresConnector({ name: "TEST", url: urlFor(DB, { name: "kubus_reader", password: "reader" }), schemas: [], queries: true, timeoutMs: 5000 });
+    connector = new PostgresConnector({ name: "TEST", ...sourceFor(DB, { name: "kubus_reader", password: "reader" }), schemas: [], queries: true, timeoutMs: 5000 });
   });
 
   afterAll(async () => {
@@ -195,7 +195,7 @@ describe.skipIf(!ADMIN)("Postgres connector", () => {
   });
 
   it("warns about a user that can write", async () => {
-    const writer = new PostgresConnector({ name: "W", url: urlFor(DB), schemas: [], queries: false, timeoutMs: 5000 });
+    const writer = new PostgresConnector({ name: "W", ...sourceFor(DB), schemas: [], queries: false, timeoutMs: 5000 });
     expect((await writer.check()).join()).toMatch(/superuser/);
     await expect(writer.describe({ query: "SELECT 1" })).rejects.toThrow(/doesn't allow queries/);
     await writer.close();

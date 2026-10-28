@@ -1,11 +1,12 @@
 import type { SourceColumn, SourceDescription, SourceFilter, SourceQuery, SourceResult, SourceRow, SourceRowRequest, SourceTable, SourceTarget } from "../../../shared/sources.ts";
 import { SourceError, type Connector, type SourceConfig } from "./connector.ts";
+import { addressOf } from "./kinds.ts";
 import { dayStart, requiredRules } from "./influxFlux.ts";
 import { findRow, queryRows, type MemoryRow } from "./memory.ts";
 
 // n8n's data tables, read-only, through n8n's public API (/api/v1/data-tables, header
-// X-N8N-API-KEY). The connection string is n8n://host[:port][/path] (https) or
-// n8n+http://host:5678 (plain http, e.g. on the same machine); the password is the API key. Its
+// X-N8N-API-KEY). Its field is n8n's address (https://host[:port][/path], or
+// http://host:5678, e.g. on the same machine); the password is the API key. Its
 // only requests are GETs (`get`): it never writes, whatever the key could do. Give it a key with
 // only the read scopes (dataTable:list, dataTableRow:read) where n8n offers scopes.
 //
@@ -42,17 +43,15 @@ interface Page<T> {
   nextCursor: string | null;
 }
 
-/** The API's address and key from a connection string (n8n://:key@host/path). */
-export function n8nEndpoint(url: string): { base: string; key: string } {
+/** The API's root from n8n's address (https:// unless it says http://). */
+export function n8nEndpoint(address: string): string {
   let u: URL;
   try {
-    u = new URL(url);
+    u = addressOf(address, true);
   } catch {
-    throw new SourceError("The connection string isn't a URL (n8n://n8n.example.com)");
+    throw new SourceError("The address isn't one (https://n8n.example.com)");
   }
-  const scheme = u.protocol === "n8n+http:" ? "http" : "https";
-  const path = u.pathname.replace(/\/+$/, "");
-  return { base: `${scheme}://${u.host}${path}/api/v1`, key: decodeURIComponent(u.password) };
+  return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, "")}/api/v1`;
 }
 
 /** A column of n8n's types (string, number, boolean, date) as the app reads it. */
@@ -185,7 +184,7 @@ export class N8nConnector implements Connector {
 
   constructor(config: SourceConfig) {
     this.config = config;
-    this.endpoint = n8nEndpoint(config.url);
+    this.endpoint = { base: n8nEndpoint(config.fields.address ?? ""), key: config.password };
   }
 
   /** One GET of the API (the only kind of request this connector makes). */
