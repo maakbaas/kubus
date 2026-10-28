@@ -16,6 +16,7 @@ import {
   fieldLookup,
   itemsInput,
   type BlockInputs,
+  type Component,
   type ComponentOutput,
 } from "../domain/components";
 import { itemLabel, newId, now, pickableFields, type Collection, type FieldDef } from "../domain/model";
@@ -35,14 +36,22 @@ import { useItemCounts } from "../app/useItemCounts";
  * that asks AI previews the prompt as it reads for an item, and "Try" asks the model once.
  */
 export function ComponentEditorPage() {
+  const { componentId } = useParams();
+  const { components } = useStore();
+  const existing = components.find((x) => x.id === componentId);
+  if (componentId && !existing) return <NotFound />;
+  // Its form starts from the component as it is when found: one just made (a block's "New
+  // component") can open before it reaches the store, and must not keep an empty form then.
+  return <ComponentEditor key={existing?.id ?? "new"} existing={existing} />;
+}
+
+function ComponentEditor({ existing }: { existing: Component | undefined }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { componentId } = useParams();
-  const { repo, components, collections } = useStore();
+  const { repo, collections } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
   const counts = useItemCounts();
-  const existing = components.find((x) => x.id === componentId);
   const [name, setName] = useState(existing?.name ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
   const [code, setCode] = useState(existing?.code ?? "");
@@ -78,8 +87,6 @@ export function ComponentEditorPage() {
   // Unknown $ names, or one item ($item) and a block's items together: such code fits no place,
   // so it isn't saved; a prompt also mustn't read $now or a block's items.
   const codeError = useMemo(() => (ai ? placeProblem({ code, ai }, "field") : codeProblem(code)) ?? undefined, [code, ai]);
-
-  if (componentId && !existing) return <NotFound />;
 
   async function save(e: FormEvent) {
     e.preventDefault();

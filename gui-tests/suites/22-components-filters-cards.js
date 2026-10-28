@@ -133,10 +133,12 @@ for (const vp of ["desktop", "phone"]) {
     await t.until("the new component dialog opens", async () => (await named.count()) === 1);
     await named.getByRole("textbox", { name: "Name" }).fill("Shown count");
     await named.getByRole("button", { name: "Create" }).click();
-    await t.until("its page opens", async () => (await t.page.locator(".ws-pane--active .page-header__title").innerText().catch(() => "")).includes("Shown count"));
+    // Beside the view on a desktop (another pane), in a new tab on a phone: found by its title, shown.
+    const page = t.page.locator(".form-page").filter({ visible: true }).filter({ has: t.page.locator(".page-header__title", { hasText: "Shown count" }) });
+    await t.until("its page opens, named", async () => (await page.count()) === 1 && (await page.getByRole("textbox", { name: "Name" }).inputValue()) === "Shown count");
     await t.audit("a new block component's page");
-    await t.page.locator(".ws-pane--active").getByRole("textbox", { name: "Code" }).fill("{{ $items.length }} shown");
-    await t.page.locator(".ws-pane--active").getByRole("button", { name: "Save changes" }).click();
+    await page.getByRole("textbox", { name: "Code" }).fill("{{ $items.length }} shown");
+    await page.getByRole("button", { name: "Save changes" }).click();
     await t.settle();
     await t.open(t.listPath(ids.collections.books));
     const block = t.page.locator(".ws-pane--active .block").last();
