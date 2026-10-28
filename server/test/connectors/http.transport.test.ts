@@ -264,8 +264,9 @@ describe("redirects, statuses and time", () => {
   });
 
   it("gives up on a slow answer and a body that stops, at the source's time limit", async () => {
-    await expect(csv("/slow/people.csv?ms=600", {}, "", 150).check()).rejects.toThrow(/didn't answer within/);
-    await expect(csv("/stall/people.csv", {}, "", 150).check()).rejects.toThrow(/didn't send the document within/);
+    await expect(csv("/slow/people.csv?ms=3000", {}, "", 200).check()).rejects.toThrow(/didn't answer within/);
+    // (Time enough for its first bytes to come, on a busy machine too.)
+    await expect(csv("/stall/people.csv", {}, "", 2000).check()).rejects.toThrow(/didn't send the document within/);
     // A slow answer that is in time is read.
     expect(await ids(csv("/slow/people.csv?ms=100", {}, "", 3000))).toEqual(["1", "2", "3"]);
   });

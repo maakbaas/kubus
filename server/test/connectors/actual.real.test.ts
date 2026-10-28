@@ -10,7 +10,7 @@ import { baseQuery, runContract, type Fixture } from "./contract.ts";
 import { PEOPLE, type Person } from "./dataset.ts";
 import { ACTUAL, addTransactions, API_KEY, budgetId, call, empty, makeAccount, makeCategory, makeGroup } from "./actualSeed.ts";
 
-if (!ACTUAL && process.env.CI) throw new Error("KUBUS_TEST_ACTUAL isn't set: CI runs the Actual Budget connector's tests against a real actual-http-api (tests/services.yml)");
+// (Not required in CI: it takes two services and a mounted seed script, which a job's service containers can't have; tests/services.yml.)
 
 const config = (budget: string, over: { address?: string; password?: string; timeoutMs?: number; encryption?: string } = {}) => ({
   name: "Money",

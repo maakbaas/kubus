@@ -129,6 +129,21 @@ export function fetchDocument(url: URL | string, request: DocumentRequest, now =
   return read;
 }
 
+/**
+ * One GET, asked again once when the connection it was sent on had been closed by the server meanwhile (a kept-alive
+ * one the server timed out as the request went out: a reset or "other side closed"); a GET can be repeated.
+ */
+async function get(url: URL, headers: Record<string, string>, signal: AbortSignal): Promise<Response> {
+  const send = () => fetch(url, { method: "GET", headers, signal, redirect: "manual" });
+  try {
+    return await send();
+  } catch (e) {
+    const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+    if (signal.aborted || !(cause?.code === "ECONNRESET" || cause?.code === "UND_ERR_SOCKET" || cause?.message === "other side closed")) throw e;
+    return send();
+  }
+}
+
 async function readDocument(address: string, request: DocumentRequest, have: Kept | undefined): Promise<HttpDocument> {
   const maxBytes = request.maxBytes ?? MAX_DOCUMENT_BYTES;
   const headers: Record<string, string> = { "User-Agent": "Kubus", ...request.headers };
@@ -142,7 +157,7 @@ async function readDocument(address: string, request: DocumentRequest, have: Kep
     // the password may be in any header (X-Api-Key), which must not follow it.
     let at = new URL(address);
     for (let hops = 0; ; hops++) {
-      res = await fetch(at, { method: "GET", headers, signal, redirect: "manual" });
+      res = await get(at, headers, signal);
       const location = [301, 302, 303, 307, 308].includes(res.status) ? res.headers.get("location") : null;
       if (!location) break;
       await res.body?.cancel();
