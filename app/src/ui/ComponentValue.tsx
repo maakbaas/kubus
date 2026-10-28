@@ -4,7 +4,7 @@ import type { FieldValue } from "../domain/model";
 import { useStore } from "../app/store";
 import { fileSrc, fileIdsIn } from "../domain/files";
 import { isComponentError, type ComponentOutput } from "../domain/components";
-import { BLOCK_HEIGHT } from "../domain/views";
+import { BLOCK_HEIGHT, blockHeightCss, type AspectRatio } from "../domain/views";
 import { TAG_SOURCE } from "../domain/tags";
 import { openModeOf } from "../workspace/Workspace";
 import { Highlight } from "./Highlight";
@@ -318,12 +318,15 @@ export function HtmlFrame({
   html: source,
   fill = false,
   maxHeight = null,
+  aspect = "none",
   onContentClick,
 }: {
   html: string;
   fill?: boolean;
   /** The most it takes on a page, in rem (a component block's Height); null = no limit for content with a height of its own. */
   maxHeight?: number | null;
+  /** With `maxHeight`: the less of the two (a component block's Aspect ratio; blockHeightCss). */
+  aspect?: AspectRatio;
   /** A click on the frame's plain content (not a link, control, map, …): e.g. to start editing. */
   onContentClick?(): void;
 }) {
@@ -407,7 +410,7 @@ export function HtmlFrame({
   const doc = useMemo(() => (html === undefined || tokens === undefined ? undefined : frameDocument(html, fill, dark, tokens)), [html, fill, dark, tokens]);
   const fills = !!size && size.natural < FILL_THRESHOLD;
   // A size asked for in the HTML wins; else its own height (flow), else the block's height (fill). Never more than the block's height.
-  const max = `${maxHeight ?? BLOCK_HEIGHT.initial}rem`;
+  const max = blockHeightCss(maxHeight ?? BLOCK_HEIGHT.initial, maxHeight === null ? "none" : aspect);
   const capped = (px: number) => (maxHeight === null ? `${px}px` : `min(${px}px, ${max})`);
   const style: CSSProperties | undefined =
     fill || !size
@@ -442,6 +445,7 @@ export function ComponentValue({
   variant,
   search = "",
   maxHeight = null,
+  aspect,
   onContentClick,
 }: {
   value: FieldValue;
@@ -450,6 +454,8 @@ export function ComponentValue({
   search?: string;
   /** HTML: the most it takes, in rem (a component block's Height; see HtmlFrame). */
   maxHeight?: number | null;
+  /** HTML: with `maxHeight`, the less of the two (see HtmlFrame). */
+  aspect?: AspectRatio;
   /** HTML: a click on its plain content (see HtmlFrame). */
   onContentClick?(): void;
 }) {
@@ -468,7 +474,7 @@ export function ComponentValue({
           HTML
         </span>
       ) : (
-        <HtmlFrame html={text} maxHeight={maxHeight} onContentClick={onContentClick} />
+        <HtmlFrame html={text} maxHeight={maxHeight} aspect={aspect} onContentClick={onContentClick} />
       );
     case "markdown":
       if (variant === "page" && typeof value === "string") return <MarkdownView source={text} />;

@@ -5,14 +5,14 @@ import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "mapl
 import { isCoordinateField, isLocationTextField, locationOf, locationOfPair, type LngLat } from "../domain/geo";
 import { fieldValue, isStruckThrough, itemLabel, pickableFields, type Collection, type FieldDef, type Item } from "../domain/model";
 import { fieldText, isEmptyValue, isGrouped, type QueryResult } from "../domain/query";
-import { BLOCK_HEIGHT, normalizeBlockHeight } from "../domain/views";
+import { BLOCK_HEIGHT, blockHeightCss, DEFAULT_ASPECT, normalizeAspect, normalizeBlockHeight, type AspectRatio } from "../domain/views";
 import { Highlight } from "../ui/Highlight";
 import { useMediaQuery } from "../ui/useMediaQuery";
 import { openModeOf } from "../workspace/Workspace";
 import { itemLinkProps } from "./cells";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { useBuffered } from "../ui/useBuffered";
-import { HeightSlider } from "./HeightSlider";
+import { AspectSelect, HeightSlider } from "./HeightSlider";
 import { useMapStyle } from "../app/mapStyle";
 import { loadMapLibre, styleUrl } from "./mapLibre";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
@@ -33,6 +33,8 @@ export interface MapOptions {
   longitudeFieldId: string | null;
   /** The map's height in rem (BLOCK_HEIGHT, like a chart's and a component's). */
   height: number;
+  /** With the height: the less of the two (domain/views.ts blockHeightCss). */
+  aspect: AspectRatio;
   /** A line through the dots, in the block's order (a track, a trip): one per group. */
   route: boolean;
 }
@@ -391,7 +393,7 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
     <div ref={box} className="map-block">
       <div
         className="map-block__map"
-        style={{ "--map-height": `${options.height}rem` } as CSSProperties}
+        style={{ "--map-height": blockHeightCss(options.height, options.aspect) } as CSSProperties}
         onKeyDown={(e) => {
           if (e.key === "Escape" && shownDot) setShownDot(null);
         }}
@@ -532,6 +534,7 @@ function MapOptionsEditor({ collection, options, onChange }: BlockOptionsProps<M
         </Select>
       )}
       <HeightSlider id={`${uid}-map-height`} value={height} onChange={setHeight} />
+      <AspectSelect id={`${uid}-map-aspect`} value={options.aspect} onChange={(aspect) => onChange({ ...options, aspect })} />
       <Checkbox
         id={`${uid}-map-route`}
         labelText="Route: join the dots in order"
@@ -560,7 +563,7 @@ export const mapView = defineBlockType<MapOptions>({
   kind: "map",
   label: "Map",
   icon: Earth,
-  defaultOptions: (collection) => ({ ...guessLocation(collection), height: BLOCK_HEIGHT.initial, route: false }),
+  defaultOptions: (collection) => ({ ...guessLocation(collection), height: BLOCK_HEIGHT.initial, aspect: DEFAULT_ASPECT, route: false }),
   uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true } }),
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<MapOptions>;
@@ -571,6 +574,7 @@ export const mapView = defineBlockType<MapOptions>({
       locationFieldId: location?.id ?? null,
       longitudeFieldId: longitude?.id ?? null,
       height: normalizeBlockHeight(o.height),
+      aspect: normalizeAspect(o.aspect),
       route: o.route === true,
     };
   },

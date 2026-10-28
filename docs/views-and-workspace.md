@@ -158,7 +158,10 @@ Extension points are registries, not special cases in pages:
   the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of 500 one after the other, a progress bar of the rows in against the source's total and Cancel under it; after Cancel the chart shows the rows in and "Load all rows" goes on).
   A chart, a map and a component block showing HTML have the same Height setting (`BLOCK_HEIGHT` and
   `normalizeBlockHeight` in `domain/views.ts`, the slider `views/HeightSlider.tsx`: 8 to 48rem, 24 for a new block;
-  a chart's old Small / Medium / Large reads as 16 / 24 / 32). It is the most the block takes: what fills its box (a
+  a chart's old Small / Medium / Large reads as 16 / 24 / 32) and Aspect ratio beside it (`ASPECT_RATIOS`: none, 2:1,
+  16:9, 3:2, 4:3, 1:1, 3:4; 4:3 unless set, `AspectSelect`): the block is as tall as the less of the two, worked out
+  in CSS from its own width (`blockHeightCss`: `min(<Height>rem, 100cqi × h / w)`, its box a size container), so a
+  desktop-wide block takes its Height and a phone-narrow one keeps its shape. That height is the most the block takes: what fills its box (a
   map, a chart, HTML at 100%) gets it all, what is less tall takes its own height and no empty room is left: a pie,
   donut, gauge or radar narrower than the height is fitted to its drawing (`ChartCanvas`, measured after Carbon
   draws it, again when its width changes), HTML with a height of its own is that tall (it scrolls inside beyond the

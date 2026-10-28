@@ -3,7 +3,7 @@ import { MenuButton, MenuItem } from "@carbon/react";
 import { useStore } from "../app/store";
 import { BLOCK_TYPES, blockType } from ".";
 import { blockComponents, NewBlockComponentModal, type ComponentBlockOptions } from "./ComponentBlock";
-import { BLOCK_HEIGHT } from "../domain/views";
+import { BLOCK_HEIGHT, DEFAULT_ASPECT } from "../domain/views";
 
 /** What "Add block" adds: a new block of a type (a component block: with its component). */
 export interface NewBlockSpec {
@@ -26,7 +26,7 @@ export function AddBlockButton({
   const { components } = useStore();
   const [creating, setCreating] = useState(false);
   const ComponentIcon = blockType("component").icon;
-  const showing = (componentId: string): NewBlockSpec => ({ kind: "component", options: { componentId, height: BLOCK_HEIGHT.initial, local: null } satisfies ComponentBlockOptions });
+  const showing = (componentId: string): NewBlockSpec => ({ kind: "component", options: { componentId, height: BLOCK_HEIGHT.initial, aspect: DEFAULT_ASPECT, local: null } satisfies ComponentBlockOptions });
   return (
     <>
       <MenuButton label="Add block" kind="tertiary" size="sm" menuAlignment="bottom-start" className={className}>

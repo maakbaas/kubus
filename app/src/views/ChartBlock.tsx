@@ -46,7 +46,7 @@ import { moveBlock, useReorder } from "../ui/useReorder";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { openModeOf } from "../workspace/Workspace";
 import { chartSpec } from "./chartSpec";
-import { HeightSlider } from "./HeightSlider";
+import { AspectSelect, HeightSlider } from "./HeightSlider";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
 // A chart of the block's items (Carbon Charts). Its filter and sort pick the items (on an item
@@ -770,6 +770,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
       {has.height && (
         <>
           <HeightSlider id={`${uid}-height`} value={o.height} disabled={compact} onChange={(height) => set({ height })} />
+          <AspectSelect id={`${uid}-aspect`} value={o.aspect} disabled={compact} onChange={(aspect) => set({ aspect })} />
           {compact && <p className="helper chart-options__note">A compact chart has its own, low height.</p>}
         </>
       )}

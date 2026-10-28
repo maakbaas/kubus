@@ -2858,6 +2858,13 @@ img[data-lightbox] {
 }
 /* A chart block: Carbon Charts sizes its chart to the block's width (its height is the chart's
    own option). While Carbon Charts loads (the first chart only), the room of a medium chart is kept. */
+/* A chart's, a map's and a component block's box: its height (Height and Aspect ratio: the less of the
+   two) is worked out from its width (`cqi`, domain/views.ts blockHeightCss). */
+.chart-block,
+.map-block,
+.component-block {
+  container-type: inline-size;
+}
 .chart-block {
   inline-size: 100%;
   padding-block-start: var(--cds-spacing-05);

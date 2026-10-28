@@ -225,6 +225,28 @@ export const BLOCK_HEIGHT = { min: 8, max: 48, step: 1, initial: 24 };
 /** Heights saved as a size before the slider (charts): their rem. */
 const LEGACY_HEIGHTS: Record<string, number> = { s: 16, m: 24, l: 32 };
 
+/**
+ * A block's aspect ratio (width:height) beside its Height: it is as tall as the less of the two, so a block
+ * as wide as a desktop pane takes its Height and a narrow one (a phone) keeps its shape instead of becoming
+ * a tall box. "none": its Height whatever its width.
+ */
+export const ASPECT_RATIOS = ["none", "2:1", "16:9", "3:2", "4:3", "1:1", "3:4"] as const;
+export type AspectRatio = (typeof ASPECT_RATIOS)[number];
+export const DEFAULT_ASPECT: AspectRatio = "4:3";
+
+/** A stored aspect ratio made valid (none stored: the default). */
+export const normalizeAspect = (raw: unknown): AspectRatio => (ASPECT_RATIOS.includes(raw as AspectRatio) ? (raw as AspectRatio) : DEFAULT_ASPECT);
+
+/**
+ * A block's height as CSS: its Height, or less where its width at its aspect ratio is less. The width is its
+ * container's (`cqi`): the box it is drawn in has `container-type: inline-size` (styles.css).
+ */
+export function blockHeightCss(height: number, aspect: AspectRatio): string {
+  if (aspect === "none") return `${height}rem`;
+  const [w, h] = aspect.split(":").map(Number);
+  return `min(${height}rem, calc(100cqi * ${h} / ${w}))`;
+}
+
 /** A stored block height made valid: rem within BLOCK_HEIGHT (an old size name as its rem). */
 export function normalizeBlockHeight(raw: unknown): number {
   if (typeof raw === "string" && raw in LEGACY_HEIGHTS) return LEGACY_HEIGHTS[raw];

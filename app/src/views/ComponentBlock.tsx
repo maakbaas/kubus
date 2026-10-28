@@ -17,10 +17,10 @@ import {
 import { ComponentValue } from "../ui/ComponentValue";
 import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import { refLabelOf } from "../ui/useReferenceOptions";
-import { BLOCK_HEIGHT, normalizeBlockHeight } from "../domain/views";
+import { BLOCK_HEIGHT, DEFAULT_ASPECT, normalizeAspect, normalizeBlockHeight, type AspectRatio } from "../domain/views";
 import { useOpenRelated } from "../workspace/Workspace";
 import { useBuffered } from "../ui/useBuffered";
-import { HeightSlider } from "./HeightSlider";
+import { AspectSelect, HeightSlider } from "./HeightSlider";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
 // A block that shows a component: a block component, which lists the block's items ($items,
@@ -34,6 +34,8 @@ export interface ComponentBlockOptions {
   componentId: string | null;
   /** HTML: the most it takes, in rem (BLOCK_HEIGHT, like a chart's and a map's); less tall content takes its own height. */
   height: number;
+  /** HTML, with the height: the less of the two (domain/views.ts blockHeightCss). */
+  aspect: AspectRatio;
   /** Its own (local) component, from an earlier version (none are made now); null = the shared `componentId`. */
   local: ComponentCode | null;
 }
@@ -64,7 +66,7 @@ function ComponentBlockView({ collection, result, fields, options, refs, all }: 
   }, [component, options.componentId, collection, result, fields, refs, all]);
   return (
     <div className="component-block">
-      <ComponentValue value={value} output={component?.output ?? "markdown"} maxHeight={options.height} variant="page" />
+      <ComponentValue value={value} output={component?.output ?? "markdown"} maxHeight={options.height} aspect={options.aspect} variant="page" />
     </div>
   );
 }
@@ -155,6 +157,7 @@ function ComponentBlockOptionsEditor({ collection, options, onChange }: BlockOpt
         )}
         {/* What it shows in a box of its own (HTML) is as tall as a chart or a map, at most. */}
         {html && <HeightSlider id={`${uid}-height`} value={height} onChange={setHeight} />}
+        {html && <AspectSelect id={`${uid}-aspect`} value={options.aspect} onChange={(aspect) => onChange({ ...options, aspect })} />}
       </Stack>
       {dialog === "new" && (
         <NewBlockComponentModal
@@ -194,11 +197,11 @@ export const componentBlock = defineBlockType<ComponentBlockOptions>({
   label: "Component",
   icon: ComponentIcon,
   // A new one picks a shared component in its settings ("Add block" offers them, and a new one, directly).
-  defaultOptions: () => ({ componentId: null, height: BLOCK_HEIGHT.initial, local: null }),
+  defaultOptions: () => ({ componentId: null, height: BLOCK_HEIGHT.initial, aspect: DEFAULT_ASPECT, local: null }),
   normalizeOptions(raw) {
-    const o = (raw ?? {}) as { componentId?: unknown; height?: unknown; local?: unknown };
+    const o = (raw ?? {}) as { componentId?: unknown; height?: unknown; aspect?: unknown; local?: unknown };
     const local = normalizeLocal(o.local);
-    return { componentId: !local && typeof o.componentId === "string" ? o.componentId : null, height: normalizeBlockHeight(o.height), local };
+    return { componentId: !local && typeof o.componentId === "string" ? o.componentId : null, height: normalizeBlockHeight(o.height), aspect: normalizeAspect(o.aspect), local };
   },
   // By what its code uses: a static component has no filter, sort or fields.
   uses(options, components) {

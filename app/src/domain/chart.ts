@@ -18,7 +18,7 @@ import { outputOf } from "./components";
 import { periodAround, weekNumber, type Period } from "./datePeriod";
 import { formatDate } from "./fieldKinds";
 import { fieldValue, itemLabel, newId, pickableFields, type Collection, type FieldDef, type Item } from "./model";
-import { BLOCK_HEIGHT, normalizeBlockHeight } from "./views";
+import { BLOCK_HEIGHT, DEFAULT_ASPECT, normalizeAspect, normalizeBlockHeight, type AspectRatio } from "./views";
 import { applyQuery, defaultQuery, groupKeysOf, isGroupable, type GroupOrder, type QueryContext, type QueryResult } from "./query";
 
 export type ChartKind =
@@ -248,6 +248,8 @@ export interface ChartOptions {
   legendPosition: LegendPosition;
   /** The most it takes, in rem (BLOCK_HEIGHT, like a map's and a component's); a pie or gauge in a narrow block takes less. */
   height: number;
+  /** With the height: the less of the two (domain/views.ts blockHeightCss). */
+  aspect: AspectRatio;
   /** At most this wide, in rem (CHART_WIDTH). */
   width: number;
 }
@@ -326,6 +328,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     legend: "auto",
     legendPosition: "bottom",
     height: BLOCK_HEIGHT.initial,
+    aspect: DEFAULT_ASPECT,
     width: CHART_WIDTH.max,
   };
 }
@@ -420,6 +423,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     legend: oneOf<LegendShow>(["auto", "show", "hide"], o.legend, d.legend),
     legendPosition: oneOf<LegendPosition>(["bottom", "top", "left", "right"], o.legendPosition, d.legendPosition),
     height: normalizeBlockHeight(o.height),
+    aspect: normalizeAspect(o.aspect),
     width: typeof o.width === "number" && Number.isFinite(o.width) ? Math.min(CHART_WIDTH.max, Math.max(CHART_WIDTH.min, Math.round(o.width))) : d.width,
   };
 }

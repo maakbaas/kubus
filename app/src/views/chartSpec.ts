@@ -33,6 +33,7 @@ import {
   type ThresholdStatus,
 } from "../domain/chart";
 import { pickableFields, type FieldDef } from "../domain/model";
+import { blockHeightCss } from "../domain/views";
 
 /** The Carbon Charts components a chart block uses (named as @carbon/charts-react exports them). */
 export type CarbonChart =
@@ -82,7 +83,7 @@ function base(options: ChartOptions, theme: string, several: boolean, extra: Rec
   const legend = !compact && (options.legend === "auto" ? several : options.legend === "show");
   return {
     theme,
-    height: `${compact ? COMPACT_REM : options.height}rem`,
+    height: compact ? `${COMPACT_REM}rem` : blockHeightCss(options.height, options.aspect),
     resizable: true,
     animations: false,
     toolbar: { enabled: false },
