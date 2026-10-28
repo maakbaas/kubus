@@ -435,7 +435,9 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         thresholds: [],
         left: { ...options.left, min: null, max: null, log: false },
       };
-      const sparkline = xyChart(input, line, theme);
+      const drawn = xyChart(input, line, theme);
+      // As tall as its place in the stat (StatView, styles.css: a compact chart's 4rem).
+      const sparkline = "problem" in drawn ? drawn : { ...drawn, options: { ...drawn.options, height: "100%" } };
       // In the colour of its change's tag (Carbon's color.scale for its one series): green good, red bad, grey neither.
       const trend = statOf(input, options).trend;
       const series = (sparkline as ChartSpec).data?.[0] as { group?: string } | undefined;

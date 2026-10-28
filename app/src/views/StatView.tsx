@@ -17,10 +17,10 @@ function baselineText(options: ChartOptions, baseline: number): string {
 }
 
 /**
- * A stat (a Grafana-like stat panel, built of Carbon parts): the value's name, the number in Carbon's
- * heading-06 (light), beside it the change from the baseline as a Carbon tag with an up or down
- * arrow (green where the change is good, red where bad: `better`), what it is compared with, and the
- * sparkline below (`sparkline`: a compact Carbon chart, or nothing).
+ * A stat (a Grafana-like stat panel, built of Carbon parts), centred: the value's name, the number in
+ * Carbon's heading-06 (light), below it the change from the baseline as a Carbon tag with an up or
+ * down arrow (green where the change is good, red where bad: `better`) and what it is compared with,
+ * and its sparkline (`sparkline`: a compact Carbon chart, or nothing) across the whole width below.
  */
 export function StatView({ stat, options, sparkline }: { stat: Stat; options: ChartOptions; sparkline: ReactNode }) {
   const unit = options.unit.trim();
@@ -34,26 +34,28 @@ export function StatView({ stat, options, sparkline }: { stat: Stat; options: Ch
   const from = stat.baseline === null ? "" : baselineText(options, stat.baseline);
   return (
     <div className="stat-block" style={{ maxInlineSize: `${options.width}rem` }}>
-      <span className="stat-block__label">{stat.label}</span>
-      <div className="stat-block__value">
-        <span className="stat-block__number">
-          {number}
-          {unit && stat.value !== null && <span className="stat-block__unit">{unit}</span>}
-        </span>
-        {change !== null && (
-          <Tag
-            size="md"
-            type={stat.trend === "good" ? "green" : stat.trend === "bad" ? "red" : "gray"}
-            renderIcon={stat.change! > 0 ? ArrowUp : stat.change! < 0 ? ArrowDown : undefined}
-            title={`${change} from ${from}`}
-            className="stat-block__change"
-          >
-            {change}
-          </Tag>
-        )}
+      <div className="stat-block__body">
+        <div className="stat-block__text">
+          <span className="stat-block__label">{stat.label}</span>
+          <span className="stat-block__number">
+            {number}
+            {unit && stat.value !== null && <span className="stat-block__unit">{unit}</span>}
+          </span>
+          {change !== null && (
+            <div className="stat-block__change">
+              <Tag
+                size="md"
+                type={stat.trend === "good" ? "green" : stat.trend === "bad" ? "red" : "gray"}
+                renderIcon={stat.change! > 0 ? ArrowUp : stat.change! < 0 ? ArrowDown : undefined}
+              >
+                {change}
+              </Tag>
+              <span className="stat-block__from">from {from}</span>
+            </div>
+          )}
+        </div>
+        {sparkline && <div className="stat-block__sparkline">{sparkline}</div>}
       </div>
-      {from && <span className="stat-block__from">Compared with {from}</span>}
-      {sparkline && <div className="stat-block__sparkline">{sparkline}</div>}
     </div>
   );
 }

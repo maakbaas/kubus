@@ -172,10 +172,9 @@ const unique = <T,>(list: T[]) => [...new Set(list)];
  */
 function switchKind(o: ChartOptions, chart: ChartKind, axis: FieldDef[]): ChartOptions {
   const next: ChartOptions = { ...o, chart };
-  // A gauge and a stat are narrow: as wide as a pane they are mostly empty.
-  const narrow = (k: ChartKind) => k === "gauge" || k === "stat";
-  if (narrow(chart) && o.width === CHART_WIDTH.max) next.width = GAUGE_WIDTH;
-  else if (narrow(o.chart) && !narrow(chart) && o.width === GAUGE_WIDTH) next.width = CHART_WIDTH.max;
+  // A gauge is narrow: as wide as a pane it is mostly empty (a stat spans the block, its sparkline across).
+  if (chart === "gauge" && o.width === CHART_WIDTH.max) next.width = GAUGE_WIDTH;
+  else if (o.chart === "gauge" && chart !== "gauge" && o.width === GAUGE_WIDTH) next.width = CHART_WIDTH.max;
   // A stat's sparkline runs along a date the first time.
   if (chart === "stat" && o.x.by === "none") {
     const date = axis.find((f) => f.kind === "date" || f.kind === "datetime");

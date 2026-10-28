@@ -2950,13 +2950,32 @@ img[data-lightbox] {
 .chart-block__loading {
   block-size: 24rem;
 }
-/* A stat (StatView): the value's name (label-01), the number (heading-06, light) with its unit a step
-   smaller and the change's tag beside it, what it is compared with (helper text), the sparkline below. */
+/* A stat (StatView): centred, the value's name (label-01), the number (heading-06, light) with its unit
+   a step smaller, the change's tag and what it is from (label-01); the sparkline across the whole width
+   below it, a compact chart's fixed 4rem high. Carbon draws the sparkline at 100% of its box. */
 .stat-block {
+  inline-size: 100%;
+  padding-block-start: var(--cds-spacing-05);
+}
+.stat-block__body {
   display: flex;
   flex-direction: column;
+  gap: var(--cds-spacing-05);
+}
+.stat-block__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: var(--cds-spacing-02);
-  padding-block-start: var(--cds-spacing-05);
+  text-align: center;
+}
+.stat-block__sparkline {
+  position: relative;
+  block-size: 4rem;
+}
+.stat-block__sparkline > * {
+  position: absolute;
+  inset: 0;
 }
 .stat-block__label,
 .stat-block__from {
@@ -2965,11 +2984,16 @@ img[data-lightbox] {
   letter-spacing: var(--cds-label-01-letter-spacing);
   color: var(--cds-text-secondary);
 }
-.stat-block__value {
+/* The change's tag and what it is from, on one line below the number (which stays centred). */
+.stat-block__change {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
-  gap: var(--cds-spacing-04);
+  gap: var(--cds-spacing-03);
+}
+.stat-block__change .cds--tag {
+  margin: 0;
 }
 .stat-block__number {
   font-size: var(--cds-heading-06-font-size);
@@ -2982,12 +3006,7 @@ img[data-lightbox] {
   font-size: var(--cds-heading-03-font-size);
   font-weight: var(--cds-heading-03-font-weight);
 }
-.stat-block__change {
-  margin: 0;
-}
-.stat-block__sparkline {
-  margin-block-start: var(--cds-spacing-03);
-}
+
 .chart-block__problem {
   margin: 0;
 }
