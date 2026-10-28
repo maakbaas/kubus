@@ -79,11 +79,6 @@ describe("chartSpec", () => {
     expect((gauge.options.gauge as { status: string }).status).toBe("warning");
     const meter = spec({ chart: "meter", value: "sum", valueField: "pages", max: 1000, warnAt: 50 }, null);
     expect(meter.options.meter).toEqual({ status: { ranges: [{ range: [0, 50], status: "success" }, { range: [50, 100], status: "warning" }] } });
-    const bullet = spec({ chart: "bullet", value: "sum", valueField: "pages", max: 250 });
-    expect(bullet.data).toEqual([
-      { title: "Novel", group: "Sum of Pages", value: 500, marker: 250 },
-      { title: "Poetry", group: "Sum of Pages", value: 80, marker: 250 },
-    ]);
   });
 
   it("puts a scatter's items on X and Y, each dot naming its item", () => {

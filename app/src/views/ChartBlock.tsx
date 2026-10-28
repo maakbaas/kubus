@@ -68,7 +68,7 @@ function ChartView({ collection, result, options, refs, actions }: BlockProps<Ch
 
 /** Which settings a chart type has. */
 const has = (kind: ChartKind) => ({
-  value: ["bar", "line", "pie", "treemap", "wordcloud", "heatmap", "gauge", "meter", "bullet"].includes(kind),
+  value: ["bar", "line", "pie", "treemap", "wordcloud", "heatmap", "gauge", "meter"].includes(kind),
   field: ["histogram", "boxplot"].includes(kind),
   split: ["bar", "line", "treemap", "heatmap"].includes(kind),
   dates: ["bar", "line", "pie", "treemap", "wordcloud", "heatmap"].includes(kind),
@@ -77,7 +77,7 @@ const has = (kind: ChartKind) => ({
   second: kind === "bar" || kind === "line",
   measured: isSingleValue(kind),
   thresholds: kind === "gauge" || kind === "meter",
-  height: kind !== "meter" && kind !== "bullet",
+  height: kind !== "meter",
 });
 
 const TOPS = [0, 5, 8, 12, 20];
@@ -140,7 +140,7 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
           </SelectItemGroup>
         ))}
       </Select>
-      {usesCategories(o.chart) && <p className="helper chart-options__note">{o.chart === "meter" || o.chart === "bullet" ? "Grouped (Sort and group): a part or bar per group." : o.chart === "heatmap" ? "Columns: the block's grouping (Sort and group); rows: Split by." : "Categories: the block's grouping (Sort and group)."}</p>}
+      {usesCategories(o.chart) && <p className="helper chart-options__note">{o.chart === "meter" ? "Grouped (Sort and group): a part per group." : o.chart === "heatmap" ? "Columns: the block's grouping (Sort and group); rows: Split by." : "Categories: the block's grouping (Sort and group)."}</p>}
 
       {show.value && (
         <>
@@ -199,14 +199,14 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
           <Select
             size="sm"
             id={`${uid}-max`}
-            labelText={o.chart === "bullet" ? "Target" : "Measured against"}
+            labelText={"Measured against"}
             value={measuredAgainst}
             onChange={(e) => {
               const v = e.target.value;
               set(v === NONE ? { max: null, maxField: null } : v === NUMBER ? { max: o.max ?? 100, maxField: null } : { maxField: v });
             }}
           >
-            <SelectItem value={NONE} text={o.chart === "bullet" ? "None" : "100 (the value is a %)"} />
+            <SelectItem value={NONE} text={"100 (the value is a %)"} />
             <SelectItem value={NUMBER} text="A number" />
             {numbers.map((f) => (
               <SelectItem key={f.id} value={f.id} text={f.name} />

@@ -3,7 +3,6 @@ import {
   AreaChart,
   BoxplotChart,
   BubbleChart,
-  BulletChart,
   ComboChart,
   DonutChart,
   GaugeChart,
@@ -49,7 +48,6 @@ const CHARTS: Record<CarbonChart, unknown> = {
   HeatmapChart,
   GaugeChart,
   MeterChart,
-  BulletChart,
 };
 
 /** The chart instance a Carbon Charts component holds, as far as it is used here: its events. */

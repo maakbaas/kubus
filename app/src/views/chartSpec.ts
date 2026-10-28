@@ -43,8 +43,7 @@ export type CarbonChart =
   | "BubbleChart"
   | "HeatmapChart"
   | "GaugeChart"
-  | "MeterChart"
-  | "BulletChart";
+  | "MeterChart";
 
 export interface ChartSpec {
   chart: CarbonChart;
@@ -337,24 +336,6 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         // The bar is in %; the label gives the value itself against its max.
         data: [{ group: one.max === null || one.value === null ? one.label : `${one.label}: ${num(one.value)} of ${num(one.max)}`, value: Math.round(Math.min(100, Math.max(0, percent)) * 10) / 10 }],
         options: base(options, theme, false, { height: "5rem", meter: { ...(ranges && { status: { ranges } }) } }),
-      };
-    }
-    case "bullet": {
-      if (needsValueField) return { problem: "Choose the field to measure." };
-      const t = chartTable(input, { ...options, splitBy: null });
-      const target = (c: ChartTable["categories"][number]) => singleValue(input.collection, c.items, options).max;
-      const data = t.categories.flatMap((c) => {
-        const value = t.points.find((p) => p.category === c)?.value ?? null;
-        return value === null ? [] : [{ title: c.label, group: t.valueLabel, value, marker: target(c) }];
-      });
-      if (data.length === 0) return noItems;
-      return {
-        chart: "BulletChart",
-        data,
-        options: base(options, theme, false, {
-          height: `${Math.max(6, data.length * 3 + 3)}rem`,
-          axes: { left: { mapsTo: "title", scaleType: "labels" }, bottom: { mapsTo: "value", scaleType: "linear", title: t.valueLabel } },
-        }),
       };
     }
   }

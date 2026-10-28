@@ -26,14 +26,12 @@ export type ChartKind =
   | "scatter"
   | "heatmap"
   | "gauge"
-  | "meter"
-  | "bullet";
+  | "meter";
 
 /** The chart types, in the order (and sections) the Chart menu lists them. */
 export const CHART_KINDS: { kind: ChartKind; label: string; section: string }[] = [
   { kind: "bar", label: "Bar", section: "Compare" },
   { kind: "radar", label: "Radar", section: "Compare" },
-  { kind: "bullet", label: "Bullet", section: "Compare" },
   { kind: "line", label: "Line", section: "Over time" },
   { kind: "pie", label: "Pie", section: "Parts of a whole" },
   { kind: "treemap", label: "Treemap", section: "Parts of a whole" },
@@ -131,7 +129,7 @@ export interface ChartOptions {
   // Scatter: X (a number or date field), and the size of the dots (bubbles).
   xField: string | null;
   sizeField: string | null;
-  // Gauge, meter and bullet: what the value is measured against (a number, or a field: "Pages").
+  // Gauge and meter: what the value is measured against (a number, or a field: "Pages").
   max: number | null;
   maxField: string | null;
   /** Gauge and meter: shown as a warning from this share of the max (%), as a danger from `dangerAt`. */
@@ -260,8 +258,8 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
 /** Whether a chart type draws categories (the block's grouping), rather than one point per item or one value. */
 export const usesCategories = (kind: ChartKind) => !["scatter", "histogram", "gauge"].includes(kind);
 
-/** Whether a chart type shows one value: of all its items together (gauge, meter; bullet when not grouped). */
-export const isSingleValue = (kind: ChartKind) => kind === "gauge" || kind === "meter" || kind === "bullet";
+/** Whether a chart type shows one value: of all its items together (gauge, meter). */
+export const isSingleValue = (kind: ChartKind) => kind === "gauge" || kind === "meter";
 
 // --- Values ---------------------------------------------------------------------------------------
 
