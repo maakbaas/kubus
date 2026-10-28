@@ -194,9 +194,11 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
   // What a chart's dots sit on: the page's background (a theme token, read: the map can't read CSS variables).
   const under = useMemo(() => (box.current ? getComputedStyle(box.current).getPropertyValue("--cds-background").trim() : "") || (dark ? "#161616" : "#ffffff"), [dark]);
 
+  // No fields chosen (the block's Fields): no tooltip; a dot is still pointed at, and clicked (or tapped) opens its item.
+  const tips = fields.length > 0;
   // The latest places, for the map's own handlers (set up once).
-  const latest = useRef({ places, route: options.route, under });
-  latest.current = { places, route: options.route, under };
+  const latest = useRef({ places, route: options.route, under, tips });
+  latest.current = { places, route: options.route, under, tips };
 
   /** The dot shown with its item (hovered, or tapped on a touch screen), and where on the map it is. */
   const [shownDot, setShownDot] = useState<{ index: number; pinned: boolean } | null>(null);
@@ -288,7 +290,7 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
           m.getCanvas().style.cursor = "pointer";
           hover(index);
           window.clearTimeout(hideTimer.current);
-          if (!shownRef.current?.pinned) setShownDot({ index, pinned: false });
+          if (latest.current.tips && !shownRef.current?.pinned) setShownDot({ index, pinned: false });
         });
         m.on("mouseleave", LAYER, () => {
           m.getCanvas().style.cursor = "";
@@ -301,7 +303,7 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
           const place = latest.current.places[index];
           if (!place) return;
           // A touch screen has no hover: the first tap shows the item, its title opens it.
-          if (touchRef.current && shownRef.current?.index !== index) return setShownDot({ index, pinned: true });
+          if (touchRef.current && latest.current.tips && shownRef.current?.index !== index) return setShownDot({ index, pinned: true });
           actionsRef.current.open(place.item, openModeOf(e.originalEvent));
         });
         m.on("dragstart", () => {
@@ -348,8 +350,8 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
       fit(map, places, fitted.current !== null);
       fitted.current = ids;
     }
-    setShownDot((d) => (d && d.index < places.length ? d : null));
-  }, [places, ids, ready, options.route, under]);
+    setShownDot((d) => (d && tips && d.index < places.length ? d : null));
+  }, [places, ids, ready, options.route, under, tips]);
 
   // The shown dot's place on the map, kept while the map moves.
   const shownPlace = shownDot ? places[shownDot.index] : undefined;

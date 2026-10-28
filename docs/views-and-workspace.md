@@ -83,7 +83,8 @@ Extension points are registries, not special cases in pages:
   `--cds-charts-…` tokens for the theme, its stylesheet loaded with MapLibre: `chartPalette`), with a legend and how
   many items have no place; ungrouped they are a one-series chart's colour. Dots and route lines are drawn as a
   lollipop chart's: a 4px dot in its colour at 30% with a 1.5px outline, filled when hovered, on a disc of the
-  page's background (a line stops at its edge); 1px lines. Hovering a dot shows Carbon Charts' own tooltip, as a chart's: the item's title (bold, a
+  page's background (a line stops at its edge); 1px lines. Hovering a dot shows (unless the block's Fields chooses none: then no tooltip, and a tap opens
+  the item at once) Carbon Charts' own tooltip, as a chart's: the item's title (bold, a
   link, with its dot's colour bar) and a row per field of the block (name and value as text, `fieldText`), at most
   270px wide, rows ellipsized; beside the dot (right, else left), past the map's box but inside the pane; the pointer can move onto it (it hides `HIDE_DELAY` after leaving
   both); clicking a dot opens the item (`openModeOf`); on touch screens the first tap shows it and its title opens it. The
