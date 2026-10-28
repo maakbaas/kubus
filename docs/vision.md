@@ -39,7 +39,8 @@ Rules that keep this from becoming three products glued together:
 - For SQL over the user's own data, generate a normal-looking SQL view per collection (pivoting
   the EAV `field_values`), so queries and query components don't have to deal with EAV.
 - Remote sources make the server essential and change the security story: auth, secret storage
-  for credentials, read-only database users by default.
+  for credentials (a source's password and the model's key are write-only and, with `KUBUS_SECRET_KEY`
+  set, stored encrypted; `docs/sync.md`), read-only database users by default.
 - **Connect live state, copy histories.** A connector suits a live database worth querying: data that
   changes in place (balances, rows), a source that filters, sorts and pages for itself, or a generic
   store that opens many apps at once (Postgres, MySQL). An API that is a feed (only a recent window,
@@ -125,11 +126,12 @@ Views:
 New connectors, in this order (read-only like the others; queried by the source where it can, else in
 `memory.ts`; each tested against a stand-in of its service or the real engine):
 
-16. Groundwork. Secret parts of an address beyond its password (`splitPassword`,
-    `server/src/settings.ts`): secret calendar addresses and published Google Sheets carry the secret
-    in the path, API keys sometimes in the query string; a connector declares its secret parts and
-    devices see the address without them (`webcals://calendar.google.com/…`), still dropped when the
-    address changes. `string_list` in `memory.ts`. A shared `httpDocument.ts` for #19 and #20: one GET
+16. Groundwork. Secret parts of an address beyond its password: secret calendar addresses and
+    published Google Sheets carry the secret in the path, API keys sometimes in the query string.
+    Sources are stored as a kind and its fields (`server/src/connectors/kinds.ts`, no connection
+    string any more), so a kind declares which of its fields are secret and devices see the address
+    without them (`webcals://calendar.google.com/…`), still dropped when the address changes
+    (`placeOf`). `string_list` in `memory.ts`. A shared `httpDocument.ts` for #19 and #20: one GET
     with `ETag` / `If-Modified-Since`, kept about a minute, the source's timeout, a size limit (about
     20 MB), status codes and content types turned into a clear problem.
 17. Actual Budget through [actual-http-api](https://github.com/jhonderson/actual-http-api), not Actual
@@ -175,7 +177,7 @@ API:
     the headless device, never into Postgres; documented beside them in `app/src/help/api.md`).
     Remote MCP over streamable HTTP on the server, behind an API token (#22, so an assistant can be
     given one that only reads).
-22. API tokens made in the app (Settings → Server), read or read & write, instead of the API using
+22. API tokens made in the app (Settings → Server tab), read or read & write, instead of the API using
     `KUBUS_TOKEN` (which stays the devices' token, with access to everything as now). A server-only
     table `api_tokens` (name, access, the token's SHA-256, created, last used; a migration in
     `server/src/migrations.ts`, not synced); a token is random (`kubus_…`) and shown once. An API token
