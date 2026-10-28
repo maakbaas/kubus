@@ -11,6 +11,7 @@ import {
   DATE_STEPS,
   defaultChartOptions,
   GAUGE_WIDTH,
+  isBarStyle,
   isParts,
   isXY,
   MAX_DECIMALS,
@@ -807,6 +808,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   );
 }
 
+const drawsEdges = (o: ChartOptions) => isXY(o.chart) && o.x.by === "item" && o.series.some((s) => s.transform === "none" && !isBarStyle(styleOf(s, o.chart)));
+
 export const chartBlock = defineBlockType<ChartOptions>({
   kind: "chart",
   label: "Chart",
@@ -814,8 +817,9 @@ export const chartBlock = defineBlockType<ChartOptions>({
   defaultOptions: (collection: Collection) => defaultChartOptions(collection),
   normalizeOptions: (raw, collection) => normalizeChartOptions(raw, collection),
   // Its X axis is its own setting (not the block's grouping); "This item" charts the page's item, not a query's.
-  // Lines along a date field each item is placed at run on to the edges of a date period on it.
-  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null, edges: isXY(options.chart) && options.x.by === "item" ? options.x.field : null }),
+  // Lines along a date field each item is placed at run on to the edges of a date period on it: asked only
+  // when a series draws them (a line, area or dots shown as its values; chartTable's edgePoint). No other block asks.
+  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null, edges: drawsEdges(options) ? options.x.field : null }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,
 });

@@ -134,7 +134,8 @@ Extension points are registries, not special cases in pages:
     into its first after it, so it starts and ends at the axis rather than at the first and last point inside
     (Carbon clips what is beyond). The block finds them (`BlockUses.edges`, `periodEdges` in domain/datePeriod.ts:
     the same query with the period moved just before / after it; `QueryResult.edges`): all items outside for a
-    native collection, the nearest row each side for a remote one (`SourceEdges`, docs/sync.md; one for the whole
+    native collection, the nearest row each side for a remote one (`SourceEdges`, docs/sync.md; only a chart with such a
+    series asks, no other block; one for the whole
     chart, so of a split chart only that row's part runs on). Not for bars, nor a series shown as a running total,
     change or moving average (they need what came before); "Of this item" has no period.
   - **Axes**: the X axis's title; the left and (while a series uses it) right axis' title, min, max and logarithmic scale.
