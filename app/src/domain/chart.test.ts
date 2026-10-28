@@ -132,12 +132,14 @@ describe("normalizeChartOptions", () => {
     );
     expect(o).toMatchObject({
       chart: "bar", scope: "items", x: { by: "none", order: "asc", dateStep: "auto", showEmpty: false, top: 8 }, stack: "none", horizontal: false, curve: "smooth",
-      missing: "skip", parts: "groups", total: { from: "none", number: null }, compare: null, decimals: 6, legend: "auto", legendPosition: "bottom", height: 48, width: 8,
+      missing: "connect", parts: "groups", total: { from: "none", number: null }, compare: null, decimals: 6, legend: "auto", legendPosition: "bottom", height: 48, width: 8,
       thresholdMode: "percent", xTitle: "", unit: "", left: { title: "kg", min: 0, max: null, log: true }, right: { title: "", min: null, max: null, log: false }, bins: 0,
     });
     expect(normalizeChartOptions({ x: { top: -3 } }, collection).x.top).toBe(0);
     expect(normalizeChartOptions({ x: { top: 500 } }, collection).x.top).toBe(100);
-    expect(normalizeChartOptions({ compare: "prev", decimals: 2.4, scope: "page", missing: "zero", height: "l", width: 50.4 }, collection)).toMatchObject({ compare: "prev", decimals: 2, scope: "page", missing: "zero", height: 32, width: 50 });
+    expect(normalizeChartOptions({ compare: "prev", decimals: 2.4, scope: "page", missing: "gap", height: "l", width: 50.4 }, collection)).toMatchObject({ compare: "prev", decimals: 2, scope: "page", missing: "gap", height: 32, width: 50 });
+    // "Drawn as 0" is gone: joined over.
+    expect(normalizeChartOptions({ missing: "zero" }, collection).missing).toBe("connect");
     expect([null, undefined, "2", NaN].map((decimals) => normalizeChartOptions({ decimals }, collection).decimals)).toEqual([null, null, null, null]);
     expect([NaN, "s", Infinity].map((width) => normalizeChartOptions({ width }, collection).width)).toEqual([120, 120, 120]);
   });
@@ -412,7 +414,8 @@ describe("chartTable", () => {
       ["Feb 2026", "Maximum Rating", null],
       ["Mar 2026", "Maximum Rating", 5],
     ]);
-    expect(chartTable(input(), options({ series: [avg], missing: "zero" }, x), true).points.map((p) => p.value)).toEqual([250, 0, 80]);
+    // A gap or not, the value stays missing (chartSpec breaks the line or joins over it).
+    expect(chartTable(input(), options({ series: [avg], missing: "gap" }, x), true).points.map((p) => p.value)).toEqual([250, null, 80]);
     // Items without the field's value: not 0, missing.
     expect(chartTable(input([books[3]].map((b) => ({ ...b, values: { ...b.values, genre: "Essay", rating: null } }))), options({ series: [max] }, byGenre)).points[0].value).toBeNull();
   });
@@ -713,7 +716,6 @@ describe("heatmapCells", () => {
     const avg = series({ value: "avg", field: "pages" });
     expect(heatmapCells(input(books.slice(0, 2)), options({ chart: "heatmap", series: [sumPages] }, byRead)).map((c) => c.value).slice(0, 2)).toEqual([300, 0]);
     expect(heatmapCells(input(books.slice(0, 2)), options({ chart: "heatmap", series: [avg] }, byRead))[1].value).toBeNull();
-    expect(heatmapCells(input(books.slice(0, 2)), options({ chart: "heatmap", series: [avg], missing: "zero" }, byRead))[1].value).toBe(0);
   });
 
   it("has no calendar cells without dates (also with No value shown)", () => {

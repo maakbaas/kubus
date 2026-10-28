@@ -195,8 +195,11 @@ function xyChart(input: ChartInput, options: ChartOptions, theme: string): Chart
   const labels = uniqueLabels(t.categories);
   const place = (c: Category) => (t.time ? new Date(c.at!) : t.numeric ? c.number! : labels.get(c)!);
   const dataKey = t.time ? "date" : "key";
+  // A missing value is left out (the line joins its neighbours) or, as a gap, kept empty: Carbon breaks a
+  // line or an unstacked area there. Bars, dots and stacks leave it out either way.
+  const gapped = (d: DrawnSeries) => options.missing === "gap" && ["line", "area"].includes(styleOfDrawn(d)) && !stacked(d);
   const rows = t.points
-    .filter((p) => p.value !== null && !(axisOf(sideOf(bySeries.get(p.series)!)).log && p.value <= 0))
+    .filter((p) => (p.value === null ? gapped(bySeries.get(p.series)!) : !(axisOf(sideOf(bySeries.get(p.series)!)).log && p.value <= 0)))
     .map((p) => ({ group: p.series, [dataKey]: place(p.category), value: p.value }));
 
   const domainAxis = {

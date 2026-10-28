@@ -125,8 +125,8 @@ Extension points are registries, not special cases in pages:
     by (a field) splits every series ("Pages · Novel" with several; at most 12, the rest "Other"). One style on one axis
     is Carbon's own chart; mixed styles or a right axis are its combo chart (`comboChartTypes` per style). Bars and areas
     side by side, stacked or as shares of 100%; horizontal when every series is bars on the left axis; lines smooth,
-    straight or in steps, with or without dots; missing values (an average of no items) left out or 0 (a count or sum of
-    none is 0); compact (a sparkline: no axes, legend or grid). A scatter's series are its Y fields, its X a number or
+    straight or in steps, with or without dots; missing values (an average of no items) joined over or, "Leave a gap", a break in a line or unstacked area
+    (Carbon breaks where a value is empty; a count or sum of none is 0, not missing); compact (a sparkline: no axes, legend or grid). A scatter's series are its Y fields, its X a number or
     date field, Size makes bubbles and Split by colours the dots; clicking a dot opens its item.
   - **Parts of a whole** (pie or donut, meter, treemap, word cloud; `partsOf`): the X axis's categories (by the first
     series' value), number fields (each made into one by its aggregate: fat, muscle and bone mass) or one value, against

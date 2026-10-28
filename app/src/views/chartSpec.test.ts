@@ -192,4 +192,16 @@ describe("chartSpec", () => {
     expect(draw({ chart: "histogram", spreadField: null })).toHaveProperty("problem");
     expect(draw({}, [])).toEqual({ problem: "No items to chart." });
   });
+  it("breaks a line at a missing value when asked (a gap), else joins over it", () => {
+    const byMonth2: ChartX = { ...byGenre, field: "read", dateStep: "month" };
+    const books3 = [books[0], books[2]]; // January and March: February has none
+    const avg = newSeries({ value: "avg", field: "pages" });
+    const joined = chartSpec(input(books3), options({ chart: "line", x: byMonth2, series: [avg] }), "white") as ChartSpec;
+    expect(joined.data.map((d) => (d as { value: number | null }).value)).toEqual([300, 80]);
+    const gapped = chartSpec(input(books3), options({ chart: "line", x: byMonth2, series: [avg], missing: "gap" }), "white") as ChartSpec;
+    expect(gapped.data.map((d) => (d as { value: number | null }).value)).toEqual([300, null, 80]);
+    // Bars leave it out either way.
+    const bars = chartSpec(input(books3), options({ chart: "bar", x: byMonth2, series: [avg], missing: "gap" }), "white") as ChartSpec;
+    expect(bars.data).toHaveLength(2);
+  });
 });

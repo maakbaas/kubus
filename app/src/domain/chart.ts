@@ -201,8 +201,8 @@ export interface ChartOptions {
   curve: "smooth" | "straight" | "step";
   /** A dot on each value of a line. */
   points: boolean;
-  /** Where a value is missing (an average of no items): left out (the line joins its neighbours) or drawn as 0. */
-  missing: "skip" | "zero";
+  /** Where a value is missing (an average of no items): the line joins its neighbours, or breaks there (lines and areas). */
+  missing: "connect" | "gap";
   /** A sparkline: no axes, legend or grid. */
   compact: boolean;
   // Parts of a whole
@@ -299,7 +299,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     horizontal: false,
     curve: "smooth",
     points: true,
-    missing: "skip",
+    missing: "connect",
     compact: false,
     parts: "groups",
     fields: [],
@@ -383,7 +383,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     horizontal: flag(o.horizontal, d.horizontal),
     curve: oneOf(["smooth", "straight", "step"] as const, o.curve, d.curve),
     points: flag(o.points, d.points),
-    missing: o.missing === "zero" ? "zero" : "skip",
+    missing: o.missing === "gap" ? "gap" : "connect",
     compact: flag(o.compact, d.compact),
     parts: oneOf<PartsFrom>(["groups", "fields", "one"], o.parts, d.parts),
     fields: Array.isArray(o.fields) ? o.fields.filter((f): f is string => typeof f === "string" && ids.has(f)) : [],
@@ -739,7 +739,7 @@ export interface ChartTable {
  * The values of a chart of categories: each category's (and split's) items made into each series'
  * value. `timeline`: a line or area (every date step in time order). The largest `top` categories
  * are measured by the first series. Split by a field, each series is split (named "Pages · Novel"
- * when there are several series). Missing values stay null unless `missing` is "zero"; a count or
+ * when there are several series). Missing values stay null (`missing`: joined over or a gap, chartSpec); a count or
  * sum of no items is 0.
  */
 export function chartTable(input: ChartInput, options: ChartOptions, timeline = false): ChartTable {
@@ -771,7 +771,7 @@ export function chartTable(input: ChartInput, options: ChartOptions, timeline = 
         const items = split && part !== undefined ? split.items(c, part) : c.items;
         // An empty step counts or adds up to 0; an item placed on its own isn't in the other parts at all.
         const v = items.length === 0 ? (options.x.by !== "item" && (m.s.value === "count" || m.s.value === "sum") ? 0 : null) : measure(items, m);
-        return v === null && options.missing === "zero" ? 0 : v;
+        return v;
       });
       transformValues(raw, m.s.transform, m.s.window).forEach((value, i) => points.push({ category: categories[i], series: name, value }));
     }
@@ -992,7 +992,7 @@ export function heatmapCells(input: ChartInput, options: ChartOptions): { x: str
       // A week by its Sunday ("4 Jan"), a day by its name.
       x: new Date(y, m - 1, day).toLocaleDateString(input.locale, { day: "numeric", month: "short" }),
       y: names[new Date(dayTime(d.day!)).getDay()],
-      value: value === null && options.missing === "zero" ? 0 : value,
+      value,
     };
   });
 }

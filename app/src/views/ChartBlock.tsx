@@ -601,8 +601,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
           </Select>
           {check("points", "A dot on each value", !lines && "Only for lines and areas")}
           <Select size="sm" id={`${uid}-missing`} labelText="Missing values" value={o.missing} onChange={(e) => set({ missing: e.target.value as ChartOptions["missing"] })}>
-            <SelectItem value="skip" text="Left out (the line joins its neighbours)" />
-            <SelectItem value="zero" text="Drawn as 0" />
+            <SelectItem value="connect" text="Connect (the line joins its neighbours)" />
+            <SelectItem value="gap" text="Leave a gap (the line breaks)" />
           </Select>
           {check("compact", "Compact (a sparkline: no axes, legend or grid)")}
         </>
