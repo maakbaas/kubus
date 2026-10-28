@@ -241,3 +241,57 @@ export function namesOfTable(table: string): { name: string; pluralName: string 
   const name = /ies$/i.test(plural) ? plural.slice(0, -3) + "y" : /(ss|us)$/i.test(plural) ? plural : plural.replace(/s$/i, "");
   return { name, pluralName: plural };
 }
+
+/** A block's rows made into items so far, for one first page and what they are made with (`basis`). */
+export interface BuiltRows {
+  basis: readonly unknown[];
+  /** Rows made into items. */
+  count: number;
+  /** The rows of the build before, by key: a row that didn't change keeps its item. */
+  known: Map<string, { values: string; item: Item }>;
+  seen: Map<string, { values: string; item: Item }>;
+  /** An item per row, in order. */
+  computed: Item[];
+  /** Each item once (a list column puts a row in a group per value). */
+  all: Item[];
+  inAll: Set<Item>;
+  /** Grouped: the items by their row's group. */
+  byGroup: Map<string, Item[]>;
+}
+
+/**
+ * The rows made into items (`make`, then `compute`, e.g. computed fields) as they come in: rows added after
+ * those made before (the next page) are made alone, so many pages cost as much as their rows, not their
+ * square. Anything else in `basis` (another first page, collection, …) or fewer rows: made anew, rows that
+ * didn't change keeping their item (memoized rows and computed values rely on it). Updates `prev` in place.
+ */
+export function addRows(prev: BuiltRows | null, basis: readonly unknown[], rows: SourceRow[], grouped: boolean, make: (row: SourceRow) => Item, compute: (items: Item[]) => Item[]): BuiltRows {
+  let b = prev;
+  if (!b || b.basis.length !== basis.length || b.basis.some((x, i) => x !== basis[i]) || b.count > rows.length) {
+    b = { basis, count: 0, known: b?.seen ?? new Map(), seen: new Map(), computed: [], all: [], inAll: new Set(), byGroup: new Map() };
+  }
+  const added = rows.slice(b.count);
+  const { known, seen } = b;
+  const items = added.map((row) => {
+    const values = JSON.stringify(row.values);
+    const before = known.get(row.key) ?? seen.get(row.key);
+    const entry = before && before.values === values ? before : { values, item: make(row) };
+    seen.set(row.key, entry);
+    return entry.item;
+  });
+  compute(items).forEach((item, i) => {
+    b.computed.push(item);
+    if (!b.inAll.has(item)) {
+      b.inAll.add(item);
+      b.all.push(item);
+    }
+    if (grouped) {
+      const key = added[i].group ?? "";
+      const list = b.byGroup.get(key);
+      if (list) list.push(item);
+      else b.byGroup.set(key, [item]);
+    }
+  });
+  b.count = rows.length;
+  return b;
+}

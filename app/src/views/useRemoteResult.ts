@@ -5,7 +5,7 @@ import { withComputed } from "../domain/components";
 import type { Collection, Item } from "../domain/model";
 import type { PeriodEdges } from "../domain/datePeriod";
 import type { ItemGroup, QueryResult, ViewQuery } from "../domain/query";
-import { deviceTimeZone, groupLabel, rowItem, sourceQuery, sourceShape } from "../domain/sources";
+import { addRows, deviceTimeZone, groupLabel, rowItem, sourceQuery, sourceShape, type BuiltRows } from "../domain/sources";
 
 // A block of a remote collection: its query asked of the source (filter, sort, grouping and search
 // worked out there, shared/sources.ts), a page at a time. What it gives the block type is the same
@@ -35,12 +35,35 @@ const noLabel = () => "";
 interface Loaded {
   /** The request these rows answer. */
   key: string;
+  /** Which first page these rows start with: pages added after it keep it (their rows are only added). */
+  batch: number;
   rows: SourceRow[];
   total: number;
   groups: SourceResult["groups"];
   edges?: SourceResult["edges"];
   more: boolean;
   error?: string;
+}
+
+/** While rows come in, a block is shown them at most this often (its chart or map drawn anew each time). */
+const LOADING_SHOWN_MS = 1000;
+
+/** `value`, but while `ms` is more than 0 at most once per `ms` (then the latest); at once when it is 0. */
+function useThrottled<T>(value: T, ms: number): T {
+  const [shown, setShown] = useState(value);
+  const last = useRef(0);
+  useEffect(() => {
+    if (ms === 0 || Object.is(value, shown)) return;
+    const show = () => {
+      last.current = Date.now();
+      setShown(value);
+    };
+    const wait = ms - (Date.now() - last.current);
+    if (wait <= 0) return show();
+    const timer = setTimeout(show, wait);
+    return () => clearTimeout(timer);
+  }, [value, ms, shown]);
+  return ms === 0 ? value : shown;
 }
 
 /** The value after it stopped changing for `ms`. */
@@ -90,6 +113,7 @@ export function useRemoteResult(
   const pageSize = all ? MAX_SOURCE_PAGE : Math.min(page ?? PAGE, MAX_SOURCE_PAGE);
   // The request now, so a late answer to an older one is dropped.
   const current = useRef("");
+  const batches = useRef(0);
   current.current = `${key}#${refreshes}`;
 
   useEffect(() => sources.onRefresh((id) => (id === null || id === collection.id) && setRefreshes((n) => n + 1)), [sources, collection.id]);
@@ -101,8 +125,8 @@ export function useRemoteResult(
     if (!request) return;
     sources.query(collection.source.name, { ...request, offset: 0, limit: pageSize, counts: true }).then(
       // A total under the rows in (a source that couldn't count them all) counts at least those.
-      (r) => current.current === asked && setLoaded({ key, rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, edges: r.edges, more: r.more }),
-      (e) => current.current === asked && setLoaded({ key, rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) }),
+      (r) => current.current === asked && setLoaded({ key, batch: ++batches.current, rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, edges: r.edges, more: r.more }),
+      (e) => current.current === asked && setLoaded({ key, batch: ++batches.current, rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) }),
     );
   }, [remote, collection.source, key, refreshes, sources, pageSize]);
 
@@ -129,47 +153,44 @@ export function useRemoteResult(
     if (loadingAll && !loadingMore) more();
   }, [loadingAll, loadingMore, more]);
 
-  // Rows that didn't change keep their item (memoized rows and computed values rely on it).
-  const known = useRef(new Map<string, { values: string; item: Item }>());
+  // Rows are made into items as they come in: a page added ("Show more", or loading every row) adds only its
+  // own, so many pages cost as much as their rows, not their square. A new first page (another query, "Read
+  // again") builds them anew, rows that didn't change keeping their item (memoized rows and computed values rely on it).
+  const built = useRef<BuiltRows | null>(null);
   const memo = useMemo(() => new WeakMap<Item, Item>(), [collection, components]); // eslint-disable-line react-hooks/exhaustive-deps
   const shape = useMemo(() => (collection.source ? sourceShape(collection) : null), [collection]);
-  const result = useMemo(() => {
+  const grouped = !!request?.groupBy && !!loaded?.groups;
+  const made = useMemo(() => {
     // While a changed query is asked, the rows of the one before stay (nothing flashes away).
     if (!remote || !shape || !loaded) return null;
-    const seen = new Map<string, { values: string; item: Item }>();
-    const items = loaded.rows.map((row) => {
-      const values = JSON.stringify(row.values);
-      const before = known.current.get(row.key) ?? seen.get(row.key);
-      const entry = before && before.values === values ? before : { values, item: rowItem(collection, shape, row) };
-      seen.set(row.key, entry);
-      return entry.item;
+    built.current = addRows(built.current, [loaded.batch, collection, components, memo, shape, grouped], loaded.rows, grouped, (row) => rowItem(collection, shape, row), (items) => {
+      sources.remember(items);
+      return withComputed(collection, items, components, noLabel, memo);
     });
-    known.current = seen;
-    sources.remember(items);
-    const computed = withComputed(collection, items, components, noLabel, memo);
+    return built.current;
+  }, [remote, shape, loaded, collection, components, memo, grouped, sources]);
+  const result = useMemo(() => {
+    if (!made || !loaded || !shape) return null;
+    const b = made;
     const groupField = query.groupBy ? collection.fields.find((f) => f.id === query.groupBy) : undefined;
-    let groups: ItemGroup[];
-    if (request?.groupBy && loaded.groups) {
-      const byKey = new Map<string, Item[]>();
-      loaded.rows.forEach((row, i) => {
-        const k = row.group ?? "";
-        byKey.set(k, [...(byKey.get(k) ?? []), computed[i]]);
-      });
-      // In the source's order; a group shows once rows of it are in.
-      groups = loaded.groups.filter((g) => byKey.has(g.key)).map((g) => ({ key: g.key, label: groupLabel(groupField, g.key), items: byKey.get(g.key)! }));
-    } else {
-      groups = [{ key: "", label: "", items: computed }];
-    }
-    const all = [...new Set(computed)];
+    // Copies: what the block got before stays as it was.
+    const groups: ItemGroup[] = grouped
+      ? // In the source's order; a group shows once rows of it are in.
+        loaded.groups!.filter((g) => b.byGroup.has(g.key)).map((g) => ({ key: g.key, label: groupLabel(groupField, g.key), items: b.byGroup.get(g.key)!.slice() }))
+      : [{ key: "", label: "", items: b.computed.slice() }];
+    const all = b.all.slice();
     const edgeItems = (row: SourceRow | null | undefined) => (row ? withComputed(collection, [rowItem(collection, shape, row)], components, noLabel, memo) : []);
     const edgesOf = edges && loaded.edges ? { window: edges.window, before: edgeItems(loaded.edges.before), after: edgeItems(loaded.edges.after) } : undefined;
     return { result: { groups, total: loaded.total, ...(edgesOf && { edges: edgesOf }) } satisfies QueryResult, items: all };
-  }, [remote, shape, loaded, collection, components, memo, query.groupBy, request?.groupBy, sources, edges]);
+  }, [made, loaded, shape, collection, components, memo, query.groupBy, grouped, edges]);
+
+  // While every row is loading, the block (a chart, a map: drawn anew each time) gets them at most once a second.
+  const shown = useThrottled(result, loadingAll ? LOADING_SHOWN_MS : 0);
 
   if (!remote) return null;
   return {
-    result: result?.result ?? EMPTY,
-    items: result?.items ?? null,
+    result: shown?.result ?? EMPTY,
+    items: shown?.items ?? null,
     error: fresh ? loaded?.error : undefined,
     more: fresh && loaded?.more && !loadingAll ? (all ? () => setStopped("") : more) : null,
     loadingMore,

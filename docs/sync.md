@@ -356,7 +356,9 @@ takes the new one when its settings are opened. A source's name: letters, digits
 - *App*: a block of a remote collection asks the source for its query (`useRemoteResult`, its Limit of rows
   a page (100 unless set; 0, a chart's unless set: every page, one after the other), "Show more"; search waits for typing to pause) instead of `applyQuery`; the item page reads
   its row by key (`rowKey` of the item id, a base64url of the key). Rows become items keeping their
-  identity while unchanged. Nothing is cached offline; the collection page's "Read again" asks again.
+  identity while unchanged. A page added after the first ("Show more", loading every row) only makes its own rows into
+  items (`addRows`), so loading many pages costs as much as their rows; while every row loads, the block (a chart,
+  a map: drawn anew each time) is given them at most once a second (`useThrottled`), and at once when done. Nothing is cached offline; the collection page's "Read again" asks again.
 - *Known limits*: text sorts by the source's collation ("Customer 10" before "Customer 9"), not the
   app's numeric order (roadmap #6); counting a heavy query runs it in full (#6); references can't
   point at remote collections (#5); global search and the API (`/api/v1`) don't read remote rows

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { SourceColumn } from "../../../shared/sources";
+import type { SourceColumn, SourceRow } from "../../../shared/sources";
 import { blankField, pickableFields, type Collection } from "./model";
-import { canGroup, canSort, fieldOperators, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
+import { addRows, canGroup, canSort, fieldOperators, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
 import { defaultQuery, TITLE } from "./query";
 
 const columns: SourceColumn[] = [
@@ -131,5 +131,29 @@ describe("remote collections", () => {
     expect(namesOfTable("customer_orders")).toEqual({ name: "Customer order", pluralName: "Customer orders" });
     expect(namesOfTable("companies")).toEqual({ name: "Company", pluralName: "Companies" });
     expect(namesOfTable("status")).toEqual({ name: "Status", pluralName: "Status" });
+  });
+});
+
+describe("addRows", () => {
+  const row = (key: string, v: number, group?: string): SourceRow => ({ key, values: [v], ...(group !== undefined && { group }) });
+  const item = (r: SourceRow) => ({ id: r.key, collectionId: "c", spaceId: "s", createdAt: "", updatedAt: "", values: { v: r.values[0] as number } });
+
+  it("makes only the rows added since, a new first page anew (unchanged rows keep their item)", () => {
+    let made = 0;
+    const make = (r: SourceRow) => (made++, item(r));
+    const page1 = [row("a", 1, "x"), row("b", 2, "y")];
+    const b1 = addRows(null, [1], page1, true, make, (items) => items);
+    const both = [...page1, row("c", 3, "x"), row("a", 1, "y")];
+    const b2 = addRows(b1, [1], both, true, make, (items) => items);
+    expect(made).toBe(3);
+    expect(b2.computed.map((i) => i.id)).toEqual(["a", "b", "c", "a"]);
+    expect(b2.all.map((i) => i.id)).toEqual(["a", "b", "c"]);
+    expect([...b2.byGroup].map(([k, list]) => [k, list.map((i) => i.id)])).toEqual([["x", ["a", "c"]], ["y", ["b", "a"]]]);
+    // Another first page: built anew, a row that didn't change keeps its item.
+    const before = b2.computed[1];
+    const b3 = addRows(b2, [2], [row("b", 2), row("c", 9)], false, make, (items) => items);
+    expect(made).toBe(4);
+    expect(b3.computed[0]).toBe(before);
+    expect(b3.computed.map((i) => i.values.v)).toEqual([2, 9]);
   });
 });
