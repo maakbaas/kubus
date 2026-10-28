@@ -329,11 +329,14 @@ export function FillTable({ children }: { children: ReactNode }) {
     const shift = () => {
       const head = table.tHead;
       const rect = table.getBoundingClientRect();
-      const by = pane && head && !follow ? Math.max(0, Math.min(pane.getBoundingClientRect().top - rect.top, rect.height - head.offsetHeight)) : 0;
+      // Below the pane's top edge by the gap (styles.css), which it covers once it moved.
+      const gap = parseFloat(getComputedStyle(el).getPropertyValue("--table-head-gap")) * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) || 0;
+      const by = pane && head && !follow ? Math.max(0, Math.min(pane.getBoundingClientRect().top + gap - rect.top, rect.height - head.offsetHeight)) : 0;
       if (by === shown) return;
       shown = by;
       el.toggleAttribute("data-head-shift", by > 0);
       el.style.setProperty("--table-head-shift", `${by}px`);
+      el.style.setProperty("--table-head-cover", `${Math.min(by, gap)}px`);
     };
     const update = () => {
       follow = !!pane && scrollDriven && !clipped();
