@@ -539,7 +539,7 @@ function MapOptionsEditor({ collection, options, onChange }: BlockOptionsProps<M
       <AspectSelect id={`${uid}-map-aspect`} value={options.aspect} onChange={(aspect) => onChange({ ...options, aspect })} />
       <Checkbox
         id={`${uid}-map-route`}
-        labelText="Route: join the dots in order"
+        labelText="Show as route"
         helperText="A line through the dots in the block's sort order, one per group."
         checked={options.route}
         onChange={(_, { checked }) => onChange({ ...options, route: checked })}

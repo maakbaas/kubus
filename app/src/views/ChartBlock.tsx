@@ -41,6 +41,7 @@ import type { Collection, FieldDef } from "../domain/model";
 import type { GroupOrder } from "../domain/query";
 import { useMediaQuery } from "../ui/useMediaQuery";
 import { useBuffered } from "../ui/useBuffered";
+import { usePanelOpenings } from "../ui/ToolbarPopover";
 import { moveBlock, useReorder } from "../ui/useReorder";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { openModeOf } from "../workspace/Workspace";
@@ -304,6 +305,7 @@ function RowHead({ title, count, noun, handle, onRemove }: { title: string; coun
 
 function ChartOptionsEditor({ collection, options, place, pageCollectionId, onChange }: BlockOptionsProps<ChartOptions>) {
   const uid = useId();
+  const openings = usePanelOpenings();
   const { components } = useStore();
   // Everything typed here (numbers, labels, titles) is stored after a pause: each change of a block's options is stored.
   const [o, update] = useBuffered(options, onChange);
@@ -785,8 +787,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
           </SelectItemGroup>
         ))}
       </Select>
-      {/* Keyed sections keep their open / closed state when the kind changes. */}
-      <Accordion size="sm" className="chart-options__sections">
+      {/* Keyed sections keep their open / closed state when the kind changes; every opening of the panel starts with all closed. */}
+      <Accordion key={openings} size="sm" className="chart-options__sections">
         {hasData && (
           <Section key="data" title="Data">
             {data}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { IconButton, Popover, PopoverContent } from "@carbon/react";
 import { keepFocusInView, onViewportChange, panelRoom, setRoom as applyRoom, sideOf, typingIn, type PanelSide } from "./panelRoom";
 
@@ -23,6 +23,10 @@ interface Props {
 
 /** Dispatched (bubbling) from a toolbar popover when it opens. */
 export const PANEL_OPENED = "kubus-panel-opened";
+
+/** How many times the panel a component is in was opened: what should start afresh each time keys on it (a chart's settings, all closed). */
+const Openings = createContext(0);
+export const usePanelOpenings = () => useContext(Openings);
 /** What a panel opens at the window level (a dialog, a menu, a date picker's calendar), which counts as part of it. */
 export const WINDOW_LEVEL = ".cds--modal, .cds--menu, .flatpickr-calendar";
 
@@ -71,6 +75,13 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
   // their tooltips made every page that has them slow to open.
   const [opened, setOpened] = useState(false);
   if (open && !opened) setOpened(true);
+  // Counted in the render it opens in, so what keys on it is fresh as the panel shows.
+  const [openings, setOpenings] = useState(0);
+  const [counted, setCounted] = useState(false);
+  if (open !== counted) {
+    setCounted(open);
+    if (open) setOpenings((n) => n + 1);
+  }
   const id = useId();
   const root = useRef<HTMLSpanElement>(null);
   const pressedOutside = useRef(false);
@@ -236,7 +247,7 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
             } as React.CSSProperties
           }
         >
-          {opened && (typeof children === "function" ? children(() => setOpen(false)) : children)}
+          <Openings.Provider value={openings}>{opened && (typeof children === "function" ? children(() => setOpen(false)) : children)}</Openings.Provider>
         </div>
       </PopoverContent>
     </Popover>
