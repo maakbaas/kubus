@@ -162,7 +162,7 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
           />
         </>
       )}
-      {show.field && <FieldSelect id={`${uid}-field`} label="Field" fields={numbers} value={o.valueField} onChange={(valueField) => set({ valueField })} />}
+      {show.field && <FieldSelect id={`${uid}-field`} label="Field" fields={axisFields(collection, components)} value={o.valueField} onChange={(valueField) => set({ valueField })} />}
       {o.chart === "histogram" && (
         <Select size="sm" id={`${uid}-bins`} labelText="Bins" value={String(o.bins)} onChange={(e) => set({ bins: Number(e.target.value) })}>
           {BINS.map((n) => (

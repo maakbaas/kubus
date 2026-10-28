@@ -92,7 +92,7 @@ Extension points are registries, not special cases in pages:
   per type: Bar horizontal, stacked, lollipops, a second value drawn as a line on its own axis (Carbon's combo chart;
   also for Line); Line curved (default) or straight, fill the area (stacked areas when split, optionally as shares of 100%), running total, compact
   (a sparkline: no axes, legend or grid); Pie donut (the total in its centre); Radar its spokes (three or more number
-  fields; a count is averaged); Histogram its field and bins; Box plot its field (a box per group); Scatter X (a
+  fields; a count is averaged); Histogram its field (a number or a date: dates on a time axis) and bins; Box plot its field (likewise) (a box per group); Scatter X (a
   number or date), Y and Size (bubbles), a dot per item, clicking one opens it; Heatmap categories × Split by, or,
   grouped by a date and not split, a calendar (weeks × weekdays; empty cells left undrawn); Gauge, Meter and Bullet
   measure against a number, a field (its values made into one the same way: on a block of one item, that item's

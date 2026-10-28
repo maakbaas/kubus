@@ -200,8 +200,9 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
     }
     case "histogram": {
       const field = fields.get(options.valueField ?? "");
-      if (!field) return { problem: "Choose the number field whose values to spread." };
-      const data = valuesByCategory(input, options).map((v) => ({ group: v.series, value: v.value }));
+      if (!field) return { problem: "Choose the number or date field whose values to spread." };
+      const time = isDateKind(field);
+      const data = valuesByCategory(input, options).map((v) => ({ group: v.series, value: time ? new Date(v.value) : v.value }));
       if (data.length === 0) return noItems;
       const groups = new Set(data.map((d) => d.group));
       return {
@@ -209,7 +210,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         data,
         options: base(options, theme, groups.size > 1, {
           axes: {
-            bottom: { mapsTo: "value", title: field.name, bins: options.bins || undefined, limitDomainToBins: true },
+            bottom: { mapsTo: "value", ...(time && { scaleType: "time" }), title: field.name, bins: options.bins || undefined, limitDomainToBins: true },
             left: { scaleType: "linear", binned: true, title: input.collection.pluralName },
           },
         }),
@@ -217,14 +218,15 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
     }
     case "boxplot": {
       const field = fields.get(options.valueField ?? "");
-      if (!field) return { problem: "Choose the number field whose values to spread." };
-      const data = valuesByCategory(input, options).map((v) => ({ group: v.series, key: v.series, value: v.value }));
+      if (!field) return { problem: "Choose the number or date field whose values to spread." };
+      const time = isDateKind(field);
+      const data = valuesByCategory(input, options).map((v) => ({ group: v.series, key: v.series, value: time ? new Date(v.value) : v.value }));
       if (data.length === 0) return noItems;
       return {
         chart: "BoxplotChart",
         data,
         options: base(options, theme, false, {
-          axes: { left: { mapsTo: "value", scaleType: "linear", title: field.name }, bottom: { mapsTo: "group", scaleType: "labels", title: input.groupField?.name } },
+          axes: { left: { mapsTo: "value", scaleType: time ? "time" : "linear", title: field.name }, bottom: { mapsTo: "group", scaleType: "labels", title: input.groupField?.name } },
         }),
       };
     }
@@ -354,6 +356,8 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
 }
 
 const num = (n: number) => String(Math.round(n * 100) / 100);
+
+const isDateKind = (f: { kind: string }) => f.kind === "date" || f.kind === "datetime";
 
 /** A meter's status ranges (in %) from its warning and danger thresholds; null without either. */
 function thresholdRanges(options: ChartOptions): { range: [number, number]; status: string }[] | null {

@@ -563,7 +563,10 @@ export function scatterPoints(input: ChartInput, options: ChartOptions): Scatter
 /** The values of a number field per category (a histogram's bars, a box plot's boxes). */
 export function valuesByCategory(input: ChartInput, options: ChartOptions): { series: string; value: number }[] {
   const field = options.valueField ? pickableFields(input.collection).find((f) => f.id === options.valueField) : undefined;
-  return chartCategories(input, options).flatMap((c) => numbersOf(c.items, field).map((value) => ({ series: c.label, value })));
+  // A date is its time (ms): the chart draws it on a time axis.
+  const values = (items: Item[]) =>
+    isDateField(field) ? items.flatMap((i) => { const t = Date.parse(String(fieldValue(i, field!) ?? "")); return Number.isNaN(t) ? [] : [t]; }) : numbersOf(items, field);
+  return chartCategories(input, options).flatMap((c) => values(c.items).map((value) => ({ series: c.label, value })));
 }
 
 /** The values of each radar spoke (a number field) per category: one shape per group. */
