@@ -83,7 +83,7 @@ Component values run on the server, without Node's globals, and each section get
 
 | Method and address | What it does |
 |---|---|
-| `GET /collections/{c}/items` | list items, most recently changed first: `{ items, total, limit, offset }`. Optional: space, limit (up to 1000, default 100), offset |
+| `GET /collections/{c}/items` | list items, most recently changed first: `{ items, total, limit, offset }`. Optional: space, limit (up to 1000, default 100), offset, and filters and sort (each a JSON list, as in a block, see Views) |
 | `POST /collections/{c}/items` | create an item from `{ space?, values }`; answers with the new item (201) |
 | `GET /items/{id}` | one item |
 | `PATCH /items/{id}` | change only the fields given in `{ values }` |
@@ -129,6 +129,7 @@ Any field can also have a choiceFilter, a toggleIcon and strikeThrough.
 | Method and address | What it does |
 |---|---|
 | `GET /collections/{c}/views` | the collection views (optional: space) |
+| `GET /collections/{c}/views/{v}/items` | a view's result: the items one of its blocks shows (block: its title or id, default the first), through the view's and the block's filter, sort and grouping. `{ view, block, blocks, items, total, limit, offset }`; grouped, `groups` (each `{ key, label, total, items }`) instead of items. Optional: block, space, limit, offset |
 | `POST /collections/{c}/views` | create one from `{ name, space?, filters?, blocks?, editable? }` |
 | `PATCH /collections/{c}/views/{v}` | change one (optional: space) |
 | `DELETE /collections/{c}/views/{v}` | delete one (optional: space) |
@@ -173,6 +174,31 @@ Then put the id in an image field, or use the src in Markdown: `![](files/<sha25
 
 - Allowed: PNG, JPEG, GIF, WebP, AVIF and SVG, up to 20 MB.
 - A file that no item uses is deleted a week later (by the apps, the next time one opens or syncs).
+
+## MCP
+
+The server is also an MCP server (Model Context Protocol), so an assistant such as Claude can read and change your knowledge base itself. Its address is /api/v1/mcp on your server (streamable HTTP), and it takes an API token like the rest of the API, sent as a bearer token in the Authorization header: give an assistant a read token when it should only read (it then doesn't get the tools that change things). With Claude Code:
+
+```bash
+claude mcp add --transport http kubus https://notes.example.com/api/v1/mcp \
+  --header "Authorization: Bearer $KUBUS_API_TOKEN"
+```
+
+Other MCP clients take the address and the header in their settings for a remote (HTTP) server.
+
+Each tool does what one of the requests above does, so it follows the same rules:
+
+| Tool | What it does |
+|---|---|
+| search | search, as the app does (`GET /search`) |
+| list_spaces | the spaces |
+| list_collections, get_collection | collections, with their fields |
+| list_items | a collection's items, optionally filtered and sorted |
+| get_item | one item |
+| list_views, view_items | a collection's views, and the items one of them shows |
+| create_item, update_item, delete_item | add, change or delete an item |
+
+> The assistant can do whatever the token allows. Most MCP clients ask before a tool that changes something runs; keep that on.
 
 ## Webhooks
 

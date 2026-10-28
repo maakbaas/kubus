@@ -350,6 +350,17 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   `KUBUS_WEBHOOK_URL` (comma-separated), signed with `KUBUS_WEBHOOK_SECRET` (`X-Kubus-Signature:
   sha256=<HMAC>`). Created = first seen by the hook. In order per URL, retried after 1, 5, 30 s, then
   dropped and logged; nothing survives a restart. The first download isn't sent.
+- *MCP* (`server/src/mcp.ts`, roadmap #19): `POST /api/v1/mcp` is a remote MCP server (streamable
+  HTTP, protocol 2025-11-25 / 2025-06-18 / 2025-03-26) for assistants. Stateless (no session id),
+  JSON answers, no SSE (GET: 405); a notification or response gets 202; batches only in 2025-03-26;
+  an `Origin` other than the server's own (`Host` / `X-Forwarded-Host`) gets 403. Its tools (search,
+  spaces, collections, items with filters and sort, views and a view's result; create, update and
+  delete an item) each build an `ApiRequest` for one `/api/v1` route and call `handleApi`, as an HTTP
+  caller would: nothing of its own reaches the device or Postgres. `handleMcp` takes the caller's
+  `Access` (`ApiTokens.check` in `index.ts`: `KUBUS_TOKEN` is `"all"`, an API token its own; the read rule
+  by method doesn't apply, every MCP request being a `POST`); with `"read"` the tools that write are neither
+  listed nor run. An API refusal is a tool result with `isError` (the model can act on
+  it), an unknown tool or one the token may not use a JSON-RPC error.
 
 **iOS / home-screen app.** The same web build. Status bar: no style meta (`default`); iOS
 colours the bar from the top tab strip (sticky, solid, full width; see Conventions). `body` is

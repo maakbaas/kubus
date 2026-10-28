@@ -151,6 +151,38 @@ describe("the HTTP API", () => {
     expect((await call("DELETE", "/collections/Book/views/Unread")).status).toBe(200);
   });
 
+  it("lists items filtered and sorted, and a view's result as its block shows it", async () => {
+    await call("POST", "/collections", books);
+    for (const [Title, Pages, Read] of [["Dune", 412, true], ["Emma", 474, false], ["Ubik", 202, false]] as const) {
+      await call("POST", "/collections/Book/items", { values: { Title, Pages, Read } });
+    }
+    const filters = encodeURIComponent(JSON.stringify([{ fieldId: "Read", operator: "isNotChecked" }]));
+    const sort = encodeURIComponent(JSON.stringify([{ fieldId: "pages", direction: "desc" }]));
+    const unread = await call("GET", `/collections/Book/items?filters=${filters}&sort=${sort}&limit=1`);
+    expect(unread.body).toMatchObject({ total: 2, limit: 1, offset: 0 });
+    expect(unread.body.items.map((i: { label: string }) => i.label)).toEqual(["Emma"]);
+    const bad = await call("GET", `/collections/Book/items?filters=${encodeURIComponent(JSON.stringify([{ fieldId: "Pages", operator: "contains", value: "4" }]))}`);
+    expect(bad.status).toBe(400);
+    expect(bad.body.error).toMatch(/no operator “contains”/);
+    expect((await call("GET", "/collections/Book/items?filters=nope")).status).toBe(400);
+
+    await call("POST", "/collections/Book/views", {
+      name: "Short",
+      filters: [{ fieldId: "Pages", operator: "lt", value: "450" }],
+      blocks: [
+        { kind: "table", title: "By title", sort: [{ fieldId: "Title", direction: "asc" }] },
+        { kind: "cards", title: "By read", groupBy: "Read" },
+      ],
+    });
+    const result = await call("GET", "/collections/Book/views/short/items");
+    expect(result.body).toMatchObject({ view: { name: "Short" }, block: { title: "By title", kind: "table" }, total: 2 });
+    expect(result.body.blocks).toHaveLength(2);
+    expect(result.body.items.map((i: { label: string }) => i.label)).toEqual(["Dune", "Ubik"]);
+    const grouped = await call("GET", "/collections/Book/views/Short/items?block=by%20read&offset=1");
+    expect(grouped.body.groups.map((g: { label: string; total: number; items: unknown[] }) => [g.label, g.total, g.items.length])).toEqual([["Not checked", 1, 1]]);
+    expect((await call("GET", "/collections/Book/views/Short/items?block=nope")).status).toBe(404);
+  });
+
   it("writes AI values with the fingerprint of the prompt as it reads now", async () => {
     await call("POST", "/collections", {
       name: "Note",

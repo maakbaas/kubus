@@ -26,7 +26,7 @@ the imports).
 | `api` | the HTTP API (`/api/v1`, the headless device) and webhooks, against `FakeServer` | `app/src/headless/*.test.ts` | nothing |
 | `app` | the app's own logic outside the UI (AI client and backfill, platform) | `app/src/{app,platform,ui,views,pages,workspace}/*.test.ts(x)` | nothing |
 | `connectors` | the remote-source connectors: their query languages run for real (SQLite for D1, the memory connector) or against a stand-in of the service (n8n, InfluxDB, Cloudflare D1's API), Postgres against a real one | `server/test/connectors/*.test.ts` | the server's packages; Postgres for `postgres.test.ts` |
-| `server` | the server itself: its database (migrations, sync, wipe), its settings, every HTTP endpoint of the real server process (`serve.ts`), and devices syncing through it end to end | `server/test/*.test.ts` | the server's packages, Postgres, `npm run build:headless` for `/api/v1` |
+| `server` | the server itself: its database (migrations, sync, wipe), its settings, the MCP protocol and its tools (`mcp.test.ts`, with a fake API), every HTTP endpoint of the real server process (`serve.ts`), and devices syncing through it end to end | `server/test/*.test.ts` | the server's packages, Postgres, `npm run build:headless` for `/api/v1` |
 
 The `connectors` and `server` projects test `server/` code: they need its packages
 (`npm ci --prefix server`), and are left out (with a note) without them. Tests that need Postgres

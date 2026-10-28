@@ -8,6 +8,7 @@ import { deleteFile, getFile, hasFile, putFile } from "./files.ts";
 import { HeadlessHost } from "./headless.ts";
 import { FILE_ID } from "../../shared/files.ts";
 import { applySchema } from "./migrations.ts";
+import { handleMcp } from "./mcp.ts";
 import { loadSchema } from "./schema.ts";
 import { Sources } from "./sources.ts";
 import { applyUpdate, loadSettings, NO_SETTINGS, saveSettings, secretKey, secretWarnings, sourceConfigs, usable, viewOf, type Stored } from "./settings.ts";
@@ -19,7 +20,7 @@ import { MAX_FILE_BYTES, type SyncRequest } from "../../shared/sync.ts";
 import { HttpError, json, readJson, Router, type ApiRequest, type ApiResponse } from "../../shared/router.ts";
 
 // Kubus server: the sync API (/api), the HTTP API for other tools (/api/v1, answered by the
-// headless device: server/src/headless.ts) and, from the same origin, the web app (so a phone can
+// headless device: server/src/headless.ts; for assistants also over MCP: server/src/mcp.ts) and, from the same origin, the web app (so a phone can
 // install it as a home-screen app). Configuration is environment only:
 //   DATABASE_URL  Postgres connection string        KUBUS_TOKEN  shared secret of the devices (and the API)
 //   PORT          default 8080                      STATIC_DIR   built web app, default ../../app/dist
@@ -161,6 +162,9 @@ const api = new Router()
   .add("GET", "/api/v1/files/{id}", (req, params) => routes.handle({ ...req, path: `/api/files/${params.id}` }))
   .add("HEAD", "/api/v1/files/{id}", (req, params) => routes.handle({ ...req, path: `/api/files/${params.id}` }));
 
+/** The MCP endpoint: tools for an assistant, each a request to the HTTP API (server/src/mcp.ts). */
+const MCP_PATH = "/api/v1/mcp";
+
 async function handleApi(req: ApiRequest): Promise<ApiResponse> {
   fitting();
   if (api.has(req.path)) return api.handle(req);
@@ -198,6 +202,8 @@ const MIME: Record<string, string> = {
 async function serveStatic(url: string, res: ServerResponse) {
   const path = normalize(decodeURIComponent(url.split("?")[0])).replace(/^([/\\])+/, "");
   if (path.includes("..")) return send(res, 400, "Bad request", "text/plain");
+  // Not the app's: an MCP client looks for OAuth metadata there, which this server has none of.
+  if (path.startsWith(".well-known/")) return send(res, 404, "Not found", "text/plain");
   // Unknown paths without an extension are app routes: the single-page app answers them.
   const file = path === "" || !extname(path) ? "index.html" : path;
   try {
@@ -221,6 +227,12 @@ createServer(async (req, res) => {
   try {
     if (req.method === "OPTIONS") return send(res, 204, "");
     if (url.pathname === "/api/health") return send(res, 200, '{"ok":true}');
+    if (url.pathname === MCP_PATH) {
+      // Any token's access: the server refuses a read token's writes itself (every MCP request is a POST).
+      const access = (await tokens.check(req.headers.authorization))?.access;
+      if (!access) return send(res, 401, '{"error":"Wrong token"}');
+      return reply(res, await handleMcp(toApiRequest(req, url), access, handleApi), false);
+    }
     if (url.pathname.startsWith("/api/")) {
       const who = await tokens.check(req.headers.authorization);
       if (!who) return send(res, 401, '{"error":"Wrong token"}');
