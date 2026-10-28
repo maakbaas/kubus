@@ -296,10 +296,10 @@ What the app does, feature by feature (read the part you work on).
   Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`); a result with no visible match is left out.
   An item opens at the first field that matched (`?field=`; at the top when its title matched), a Markdown block at the block.
 - **Remote collections** (`domain/sources.ts`, `collections.source`, `fields.source_column`; docs/sync.md
-  "Remote sources"): a table or a query (SQL; Flux for InfluxDB, whose tables are a bucket's measurements) of one of the server's sources, shown like any collection
+  "Remote sources"): a table (for InfluxDB a bucket's measurement) of one of the server's sources, shown like any collection
   but read-only. Made with the database icon beside "New collection" (shown while the server offers a
   source: `#/collections/new?remote=1`): the collection editor's Source section (`ui/SourceSettings.tsx`)
-  picks the source, a table (or a written query, when the source allows them) and the key column (the
+  picks the source, a table and the key column (the
   primary key by default; assumed unique: a row's item id is its key, base64url); reading the columns
   makes a field per column (named like it, the collection named after the table), "Read columns again"
   keeps the fields' names, order and types and adds or drops the columns that came or went. A column's

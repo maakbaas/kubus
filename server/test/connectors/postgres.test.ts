@@ -65,7 +65,7 @@ describe.skipIf(!ADMIN)("Postgres connector", () => {
     await createDatabase(DB);
     await admin("DROP ROLE IF EXISTS kubus_reader");
     await admin(FIXTURE, DB);
-    connector = new PostgresConnector({ name: "TEST", ...sourceFor(DB, { name: "kubus_reader", password: "reader" }), schemas: [], queries: true, timeoutMs: 5000 });
+    connector = new PostgresConnector({ name: "TEST", ...sourceFor(DB, { name: "kubus_reader", password: "reader" }), schemas: [], timeoutMs: 5000 });
   });
 
   afterAll(async () => {
@@ -179,14 +179,6 @@ describe.skipIf(!ADMIN)("Postgres connector", () => {
     expect(byDay.groups).toEqual([{ key: "2026-03-01", count: 1 }, { key: "2026-03-02", count: 2 }, { key: "", count: 1 }]);
   });
 
-  it("reads a query, and refuses writing through it", async () => {
-    const r = await connector.query(base({ target: { query: "SELECT id, upper(name) AS shout FROM people WHERE id < 3;" }, columns: ["shout"], title: ["shout"] }));
-    expect(r.rows).toEqual([{ key: "1", values: ["ADA"] }, { key: "2", values: ["BOB"] }]);
-    await expect(connector.describe({ query: "SELECT 1; DELETE FROM people" })).rejects.toThrow();
-    await expect(connector.describe({ query: "SELECT 1 AS a, 2 AS a" })).rejects.toThrow(/Two columns/);
-    await expect(connector.query(base({ target: { query: "SELECT 1 AS id, nextval('counter') AS n" }, columns: ["n"], title: [] }))).rejects.toThrow(/read-only/);
-  });
-
   it("reads one row by its key", async () => {
     const shape = { target: { table: { schema: "public", name: "people" } }, key: "id", columns: ["name"], title: ["name"], untitled: "Person" };
     expect(await connector.row({ ...shape, keyValue: "2" })).toEqual({ key: "2", values: ["Bob"] });
@@ -195,9 +187,9 @@ describe.skipIf(!ADMIN)("Postgres connector", () => {
   });
 
   it("warns about a user that can write", async () => {
-    const writer = new PostgresConnector({ name: "W", ...sourceFor(DB), schemas: [], queries: false, timeoutMs: 5000 });
+    const writer = new PostgresConnector({ name: "W", ...sourceFor(DB), schemas: [], timeoutMs: 5000 });
     expect((await writer.check()).join()).toMatch(/superuser/);
-    await expect(writer.describe({ query: "SELECT 1" })).rejects.toThrow(/doesn't allow queries/);
+    await expect(writer.describe({ query: "SELECT 1" })).rejects.toThrow(/tables only/);
     await writer.close();
   });
 });

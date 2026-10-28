@@ -10,11 +10,11 @@ import type { ServerSettingsUpdate } from "../../shared/settings.ts";
 const crm = { host: "crm", port: "5432", database: "crm", user: "reader", ssl: "" };
 const stored: Stored = {
   ai: { url: "https://api.example.com/v1", key: "sk-secret", fieldModel: "small", codeModel: "" },
-  sources: [{ id: "s1", name: "CRM", formerNames: [], kind: "postgres", fields: crm, password: "pw", schemas: [], queries: true, timeoutSeconds: 30 }],
+  sources: [{ id: "s1", name: "CRM", formerNames: [], kind: "postgres", fields: crm, password: "pw", schemas: [], timeoutSeconds: 30 }],
 };
 const update = (over: { ai?: Partial<ServerSettingsUpdate["ai"]>; source?: Partial<ServerSettingsUpdate["sources"][number]> } = {}): ServerSettingsUpdate => ({
   ai: { url: stored.ai.url, fieldModel: "small", codeModel: "", ...over.ai },
-  sources: [{ id: "s1", name: "CRM", kind: "postgres", fields: crm, schemas: [], queries: true, timeoutSeconds: 30, ...over.source }],
+  sources: [{ id: "s1", name: "CRM", kind: "postgres", fields: crm, schemas: [], timeoutSeconds: 30, ...over.source }],
 });
 
 describe("server settings", () => {

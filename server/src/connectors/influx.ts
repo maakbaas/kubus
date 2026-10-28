@@ -4,7 +4,6 @@ import { addressOf } from "./kinds.ts";
 import {
   ALL_START,
   ALL_STOP,
-  checkFlux,
   fluxString,
   groupKey,
   groupsFlux,
@@ -14,7 +13,6 @@ import {
   parseAnnotatedCsv,
   rowFlux,
   rowsFlux,
-  sampleFlux,
   totalFlux,
   type CsvTable,
   type InfluxColumn,
@@ -30,7 +28,6 @@ const COLUMNS_TTL_MS = 60_000;
 
 export class InfluxConnector implements Connector {
   readonly kind = "influxdb";
-  readonly capabilities;
   private config: SourceConfig;
   private base: string;
   private org: string;
@@ -39,13 +36,6 @@ export class InfluxConnector implements Connector {
 
   constructor(config: SourceConfig) {
     this.config = config;
-    this.capabilities = {
-      query: config.queries,
-      ...(config.queries && {
-        queryLanguage: "Flux",
-        queryHelp: "Flux that only reads, ending in its tables (they are put together as one): views filter, sort and page them.",
-      }),
-    };
     let url: URL;
     try {
       url = addressOf(config.fields.address ?? "", false);
@@ -134,11 +124,7 @@ export class InfluxConnector implements Connector {
   }
 
   private allowed(target: SourceTarget) {
-    if ("query" in target) {
-      if (!this.config.queries) throw new SourceError(`${this.config.name} doesn't allow queries, only its measurements`);
-      checkFlux(target.query);
-      return;
-    }
+    if ("query" in target) throw new SourceError(`${this.config.name} is read by its measurements only`);
     const bucket = target.table.schema ?? "";
     if (!bucket) throw new SourceError("A measurement is read from a bucket");
     if (this.config.schemas.length && !this.config.schemas.includes(bucket)) throw new SourceError(`${this.config.name} doesn't offer the bucket “${bucket}”`);
@@ -165,15 +151,7 @@ export class InfluxConnector implements Connector {
       if (column) columns.push(column);
       else dropped.push({ name, type: datatype });
     };
-    if ("query" in target) {
-      const seen = new Map<string, string>();
-      for (const table of await this.flux(sampleFlux(target))) {
-        for (const c of table.columns) if (c.name !== "result" && c.name !== "table" && !seen.has(c.name)) seen.set(c.name, c.datatype);
-      }
-      if (!seen.size) throw new SourceError("The query returned no rows, so its columns can't be read");
-      for (const [name, datatype] of seen) add(name, datatype);
-      return { columns, key: [], dropped };
-    }
+    if ("query" in target) throw new SourceError(`${this.config.name} is read by its measurements only`);
     const bucket = fluxString(target.table.schema ?? "");
     const measurement = fluxString(target.table.name);
     const [tags, fields] = await Promise.all([

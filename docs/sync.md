@@ -162,10 +162,9 @@ headless device doesn't generate AI values (that stays with the apps).
 
 ## Remote sources (remote collections)
 
-Databases the server reads for the devices, read-only, whose tables and queries the app shows as
+Databases the server reads for the devices, read-only, whose tables the app shows as
 collections ("remote collections": `Collection.source`, `domain/sources.ts`). Set up in Settings →
-Connections (name, kind, that kind's own fields, password, schemas, whether queries written in the app are
-allowed, a time limit). A source is stored as its kind and that kind's fields, its password beside them (no
+Connections (name, kind, that kind's own fields, password, schemas, a time limit). A source is stored as its kind and that kind's fields, its password beside them (no
 connection string); its kind picks the connector, which reads the fields (`SourceConfig`). The server describes the
 kinds and their fields (`server/src/connectors/kinds.ts`; `ConnectionKind` in `shared/settings.ts`, `GET
 /api/settings` → `kinds`), so the app knows no database: PostgreSQL (host, port, database, user, TLS), n8n data tables
@@ -177,13 +176,13 @@ still reach it (`Sources.on`) and `GET /api/sources` lists them, so a collection
 takes the new one when its settings are opened. A source's name: letters, digits, spaces, `-` and `_`.
 - *Protocol* (`shared/sources.ts`), connector-neutral, all behind the token:
   `GET /api/sources` (names, connector, capabilities, problem; never addresses),
-  `GET /api/sources/<name>/tables`, `POST …/describe` (`{ target }`: a table or a query → its
+  `GET /api/sources/<name>/tables`, `POST …/describe` (`{ target }`: a table → its
   columns as Kubus field types, the primary key, the columns not read), `POST …/query` (a page of
   rows for a view's query: its filter as one and / or tree of rules with plain values (`SourceCondition`,
   built by the app: the view's or page's filter with the block's on top; `conditionText` writes it in a
   connector's language, every rule bracketed; checked by `isSourceCondition` before a connector sees it), search, sort, grouping, the device's time zone,
   offset / limit, and with the first page the total and the groups' sizes), `POST …/row` (one row
-  by its key). The app never sends SQL but for a query collection's own query.
+  by its key).
 - *Connectors* (`server/src/connectors/`): `Connector` (check, tables, describe, query, row, close),
   picked by the source's kind in `connectors/index.ts` (its fields listed in `connectors/kinds.ts`); another kind of source is another file there and
   nothing else changes. `Sources` (`server/src/sources.ts`) holds one per source and turns a
@@ -191,7 +190,7 @@ takes the new one when its settings are opened. A source's name: letters, digits
 - *Postgres* (`connectors/postgres.ts`, SQL in `postgresSql.ts`, pure and tested without a
   database): every statement in a `READ ONLY` transaction with `statement_timeout`, on connections
   opened with `default_transaction_read_only`, using the extended protocol (one statement per query:
-  a written query can't add another; it is wrapped as a subquery, its trailing `;` dropped). Values
+  a statement can't add another). Values
   are parameters and names quoted. Types map by `pg_type.typcategory` (`pgColumn`): numbers, booleans,
   `date`, `timestamptz` / `timestamp` (taken as UTC) as their field types; text, enums, `uuid`, `time`,
   network addresses as text; one-dimensional arrays as lists of strings; JSON, XML, intervals, ranges,
@@ -201,8 +200,7 @@ takes the new one when its settings are opened. A source's name: letters, digits
   case-insensitive, empty values last both ways, a date & time on its day in the device's time zone,
   comparisons kept to the column (so indexes are used), the key breaking ties so pages never overlap.
   A list column groups a row under each value. At start (and on every change) `check` warns about a
-  superuser or a user that can write: give it a user that can only read (`GRANT SELECT`); queries
-  written in the app read whatever that user can (turn queries off per source to allow tables only).
+  superuser or a user that can write: give it a user that can only read (`GRANT SELECT`); the app only reads tables.
 - *n8n* (`connectors/n8n.ts`): n8n's data tables through its public API, its address
   (https:// unless it says http://), the API key as the password (header `X-N8N-API-KEY`).
   Strictly read-only: its one request helper only sends `GET`s (`/data-tables`, `…/<id>/rows`); give
@@ -224,19 +222,14 @@ takes the new one when its settings are opened. A source's name: letters, digits
 - *InfluxDB 2* (`connectors/influx.ts`, Flux in `influxFlux.ts`, pure and tested without a server):
   its address (http://host:8086, or https://; port 8086 / 443 by default) and organization, the token as the
   password; Flux over `/api/v2/query` (annotated CSV, `RFC3339Nano` times) with the time limit as the
-  request's. Strictly read-only: the connector only ever sends Flux that reads, and a query written in
-  the app is refused (`checkFlux`, a tokenizer: strings, interpolations, regexes and comments read as
-  such) when it imports anything but packages without side effects (`READ_ONLY_PACKAGES`: no `http`,
-  `sql`, `experimental`, …) or names `to`; `check` warns when the token can write, or can read the
+  request's. Strictly read-only: the connector only ever sends Flux that reads; `check` warns when the token can write, or can read the
   server's tokens (likely an all-access one): give it a token that can only read its buckets.
   "Schemas" are buckets (system buckets `_…` left out); a table is a bucket's measurement, read as
   InfluxDB's UI shows it: all time (1970–2262), fields pivoted beside the tags, a row per series and
   time, told apart by the synthetic `_id` (`<time>,tag=value,…`, hidden; its key, read back on its
   moment alone). Columns: `_time`, the tags (`schema.measurementTagKeys`), the fields by the type of
   their latest value; CSV datatypes map to field types (`long`, `unsignedLong`, `double` numbers,
-  `boolean`, `dateTime`; `duration` plain text; binary dropped). A written query is a Flux script whose
-  tables are put together as one (`group()`; a trailing `yield()` dropped), its columns read from its
-  first 100 rows. Filters, search, sort, grouping and paging are Flux piped onto the tables; days are
+  `boolean`, `dateTime`; `duration` plain text; binary dropped). Filters, search, sort, grouping and paging are Flux piped onto the tables; days are
   worked out on the server, so a filter on `_time` narrows the `range()` read. Flux sorts all columns
   one way: numbers, times and checkboxes sorted the other way are negated, empty values get a marker
   column; groups are counted and ordered first and rows placed by their group's place (`dict`).
@@ -245,13 +238,11 @@ takes the new one when its settings are opened. A source's name: letters, digits
   `d1Sql.test.ts`): its account ID and database ID, the password an API token, read over
   Cloudflare's HTTP API (`/raw`, one request per statement). Strictly read-only though D1 has no
   read-only mode: only statements the connector makes are sent (`SELECT`, `PRAGMA table_xinfo`;
-  anything else is refused before it leaves), a written query is one statement (any `;` outside
-  strings and comments is refused: D1 runs several) inside a subquery, where SQLite allows only a
-  `SELECT`, and a statement D1 reports as changing the database is an error. Still give it a token
+  anything else is refused before it leaves), and a statement D1 reports as changing the database is an error. Still give it a token
   with D1 Read only (a token's permissions can't be checked from here). No schemas (a source's are
   ignored, with a warning). Types come from a table's declared types (SQLite's affinity words, plus
   `BOOL`, `DATE`, `DATETIME` / `TIMESTAMP`, `JSON` like Postgres's; `BLOB` dropped), else from a
-  sample of the values (a query's columns); dates and dates & times may be text SQLite reads or Unix
+  sample of the values; dates and dates & times may be text SQLite reads or Unix
   times (seconds or milliseconds), checkboxes 1 / 0 / true / yes. SQLite knows no time zones: a
   date & time's day in the device's zone uses the zone's offsets from 1990 to 2060 (`zoneOffsets`,
   computed with `Intl`). The time limit is the request's; filters on dates and numbers go through

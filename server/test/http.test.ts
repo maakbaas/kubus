@@ -248,8 +248,8 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
     it("reads a source with its connector, keeping its password to itself", async () => {
       const self = sourceFor(DB);
       const sources = [
-        { name: "Self", ...self, schemas: [], queries: true, timeoutSeconds: 10 },
-        { name: "Odd", kind: "d1", fields: { account: "", database: "" }, schemas: [], queries: true, timeoutSeconds: 10 },
+        { name: "Self", ...self, schemas: [], timeoutSeconds: 10 },
+        { name: "Odd", kind: "d1", fields: { account: "", database: "" }, schemas: [], timeoutSeconds: 10 },
       ];
       expect((await request(server, "/api/settings", { method: "PUT", json: settings({ sources }) })).status).toBe(200);
       const view = await (await request(server, "/api/settings")).json();
@@ -260,8 +260,8 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
       expect(view.sources.find((s: { name: string }) => s.name === "Odd").problem).toMatch(/account ID and database ID/);
 
       expect(await (await request(server, "/api/sources")).json()).toEqual([
-        { name: "Self", connector: "postgres", capabilities: expect.objectContaining({ query: true }) },
-        { name: "Odd", connector: "none", capabilities: { query: false }, problem: expect.stringMatching(/account ID/) },
+        { name: "Self", connector: "postgres" },
+        { name: "Odd", connector: "none", problem: expect.stringMatching(/account ID/) },
       ]);
       const tables = await (await request(server, "/api/sources/Self/tables")).json();
       expect(tables).toContainEqual({ schema: "public", name: "spaces", type: "table" });

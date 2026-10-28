@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { Button, Checkbox, Form, InlineNotification, NumberInput, PasswordInput, Select, SelectItem, Stack, TextInput } from "@carbon/react";
+import { Button, Form, InlineNotification, NumberInput, PasswordInput, Select, SelectItem, Stack, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import type { ServerSettingsUpdate, ServerSettingsView } from "../../../shared/settings";
 import { errorMessage } from "./useConfirm";
@@ -20,7 +20,6 @@ const draftOf = (view: ServerSettingsView): SourceDraft[] =>
     fields: s.fields,
     passwordSet: s.passwordSet,
     schemasText: s.schemas.join(", "),
-    queries: s.queries,
     timeoutSeconds: s.timeoutSeconds,
   }));
 
@@ -72,7 +71,7 @@ export function ConnectionSettings() {
       <Stack gap={7}>
         <p className="helper">
           Databases the server at {server.url} reads for remote collections, read-only, the same for every device that syncs with it. Give it a
-          user that can only read: queries written in the app can read whatever that user can. Passwords stay on the server: once saved they are
+          user that can only read. Passwords stay on the server: once saved they are
           never shown again.
         </p>
         {draft.map((s, i) => {
@@ -155,7 +154,6 @@ export function ConnectionSettings() {
                 value={s.timeoutSeconds}
                 onChange={(_, { value }) => setSource(i, { timeoutSeconds: Number(value) || 30 })}
               />
-              <Checkbox id={`${uid}-src-queries-${s.id}`} labelText="Queries written in the app (else only its tables)" checked={s.queries} onChange={(_, { checked }) => setSource(i, { queries: checked })} />
               <div>
                 <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} onClick={() => setDraft((d) => d && d.filter((_, j) => j !== i))}>
                   Remove connection
@@ -170,7 +168,7 @@ export function ConnectionSettings() {
             size="sm"
             renderIcon={Add}
             onClick={() =>
-              setDraft((d) => d && [...d, { id: crypto.randomUUID(), name: "", kind: kinds[0]?.id ?? "", fields: {}, schemasText: "", queries: true, timeoutSeconds: 30, passwordSet: false }])
+              setDraft((d) => d && [...d, { id: crypto.randomUUID(), name: "", kind: kinds[0]?.id ?? "", fields: {}, schemasText: "", timeoutSeconds: 30, passwordSet: false }])
             }
           >
             Add connection

@@ -65,8 +65,8 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-const connector = (over: { fields?: Record<string, string>; schemas?: string[]; queries?: boolean } = {}) =>
-  new InfluxConnector({ name: "Sensors", kind: "influxdb", fields: { address: "influx.example.com:8086", org: "acme" }, password: "tok", schemas: [], queries: true, timeoutMs: 5000, ...over });
+const connector = (over: { fields?: Record<string, string>; schemas?: string[] } = {}) =>
+  new InfluxConnector({ name: "Sensors", kind: "influxdb", fields: { address: "influx.example.com:8086", org: "acme" }, password: "tok", schemas: [], timeoutMs: 5000, ...over });
 
 const temps = (over: Partial<SourceQuery> = {}): SourceQuery => ({
   target: { table: { schema: "home", name: "temp" } },
@@ -154,9 +154,8 @@ describe("InfluxDB connector", () => {
     for (const flux of scripts) expect(flux).not.toMatch(/\bto\(|\bdelete\(|experimental/);
   });
 
-  it("refuses a written query that could write, and queries when not allowed", async () => {
-    await expect(connector().describe({ query: 'from(bucket: "home") |> range(start: -1h) |> to(bucket: "copy")' })).rejects.toThrow(SourceError);
-    await expect(connector({ queries: false }).describe({ query: 'from(bucket: "home") |> range(start: -1h)' })).rejects.toThrow(/doesn't allow queries/);
+  it("refuses a written query", async () => {
+    await expect(connector().describe({ query: 'from(bucket: "home") |> range(start: -1h)' })).rejects.toThrow(/measurements only/);
     expect(requests).toEqual([]);
   });
 

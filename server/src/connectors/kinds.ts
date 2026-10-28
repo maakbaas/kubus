@@ -18,7 +18,7 @@ const KINDS: Kind[] = [
       { key: "host", label: "Host", placeholder: "db.example.com" },
       { key: "port", label: "Port", placeholder: "5432" },
       { key: "database", label: "Database", placeholder: "crm" },
-      { key: "user", label: "User", helperText: "One that can only read: queries written in the app can read whatever it can." },
+      { key: "user", label: "User", helperText: "One that can only read." },
       {
         key: "ssl",
         label: "TLS",

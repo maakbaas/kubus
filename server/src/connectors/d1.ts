@@ -35,7 +35,6 @@ function readOnly(sql: string): string {
 
 export class D1Connector implements Connector {
   readonly kind = "d1";
-  readonly capabilities;
   private config: SourceConfig;
   private endpoint: string;
   private token: string;
@@ -43,7 +42,6 @@ export class D1Connector implements Connector {
 
   constructor(config: SourceConfig) {
     this.config = config;
-    this.capabilities = { query: config.queries, ...(config.queries && { queryLanguage: "SQL" }) };
     const { account, database } = config.fields;
     if (!account || !database) throw new SourceError("A D1 source needs its account ID and database ID");
     this.endpoint = `${API}/accounts/${encodeURIComponent(account)}/d1/database/${encodeURIComponent(database)}/raw`;
@@ -103,10 +101,7 @@ export class D1Connector implements Connector {
   }
 
   private allowed(target: SourceTarget) {
-    if ("query" in target) {
-      if (!this.config.queries) throw new SourceError(`${this.config.name} doesn't allow queries, only its tables`);
-      return;
-    }
+    if ("query" in target) throw new SourceError(`${this.config.name} is read by its tables only`);
     if (target.table.schema !== null) throw new SourceError(`${this.config.name} has no schemas`);
   }
 

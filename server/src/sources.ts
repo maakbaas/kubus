@@ -75,7 +75,6 @@ export class Sources {
       name: config.name,
       ...(config.formerNames?.length && { formerNames: config.formerNames }),
       connector: connector?.kind ?? "none",
-      capabilities: connector?.capabilities ?? { query: false },
       ...(problem && { problem }),
     }));
   }

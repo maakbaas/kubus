@@ -175,7 +175,7 @@ test("connections: a source is set up with its kind's own fields", async (t) => 
   fake.settings = {
     ai: { url: "", fieldModel: "", codeModel: "", keySet: false },
     kinds: [kind("postgres", "PostgreSQL", [["host", "Host"], ["port", "Port"], ["database", "Database"], ["user", "User"]], "Password", "Schemas"), kind("d1", "Cloudflare D1", [["account", "Account ID"], ["database", "Database ID"]], "API token", null)],
-    sources: [{ id: "s1", name: "CRM", kind: "postgres", fields: { host: "crm", port: "5432", database: "crm", user: "reader" }, schemas: [], queries: true, timeoutSeconds: 30, passwordSet: true }],
+    sources: [{ id: "s1", name: "CRM", kind: "postgres", fields: { host: "crm", port: "5432", database: "crm", user: "reader" }, schemas: [], timeoutSeconds: 30, passwordSet: true }],
   };
   await connect(t, "https://conn.test", { confirm: false });
   await t.open("/settings?section=connections");

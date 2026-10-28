@@ -24,8 +24,6 @@ export interface ServerSourceSettings {
   fields: Record<string, string>;
   /** Only these schemas' tables are offered (empty: all). */
   schemas: string[];
-  /** Queries written in the app are allowed, not only its tables. */
-  queries: boolean;
   /** Longest a statement may run. */
   timeoutSeconds: number;
 }

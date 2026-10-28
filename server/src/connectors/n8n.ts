@@ -176,7 +176,6 @@ export function n8nRead(query: Pick<SourceQuery, "filter" | "search" | "columns"
 
 export class N8nConnector implements Connector {
   readonly kind = "n8n";
-  readonly capabilities = { query: false };
   private config: SourceConfig;
   private endpoint: { base: string; key: string };
   private tableList: { at: number; tables: Promise<Map<string, N8nTable>> } | null = null;

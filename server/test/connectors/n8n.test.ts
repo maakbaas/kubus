@@ -65,7 +65,7 @@ function stub() {
   return requests;
 }
 
-const config = (over: { schemas?: string[] } = {}) => ({ name: "Flows", kind: "n8n", fields: { address: "n8n.example.com/n8n" }, password: "secret", schemas: [], queries: true, timeoutMs: 5000, ...over });
+const config = (over: { schemas?: string[] } = {}) => ({ name: "Flows", kind: "n8n", fields: { address: "n8n.example.com/n8n" }, password: "secret", schemas: [], timeoutMs: 5000, ...over });
 const leads = (over: Partial<SourceQuery> = {}): SourceQuery => ({
   target: { table: { schema: null, name: "Leads" } },
   key: "id",

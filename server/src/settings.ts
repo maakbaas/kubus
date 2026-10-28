@@ -103,7 +103,6 @@ export async function loadSettings(pool: Db, key: Buffer | null): Promise<{ stor
       password: open(secret(s.password), key),
       formerNames: Array.isArray(s.formerNames) ? s.formerNames.map((n) => text(n, 40)).filter(Boolean) : [],
       schemas: Array.isArray(s.schemas) ? s.schemas.map((x) => text(x)).filter(Boolean) : [],
-      queries: s.queries !== false,
       timeoutSeconds: typeof s.timeoutSeconds === "number" && s.timeoutSeconds > 0 ? s.timeoutSeconds : 30,
     })),
   };
@@ -150,7 +149,6 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
       fields,
       password,
       schemas: Array.isArray(s.schemas) ? s.schemas.map((x) => text(x, 200)).filter(Boolean) : [],
-      queries: s.queries !== false,
       timeoutSeconds: Number.isFinite(timeout) && timeout > 0 ? Math.min(timeout, 3600) : 30,
     };
   });
@@ -161,7 +159,7 @@ export function applyUpdate(old: Stored, update: ServerSettingsUpdate): Stored {
 
 /** What the connectors are given. */
 export function sourceConfigs(stored: Stored): SourceConfig[] {
-  return stored.sources.map((s) => ({ name: s.name, formerNames: s.formerNames, kind: s.kind, fields: s.fields, password: usable(s.password), schemas: s.schemas, queries: s.queries, timeoutMs: Math.round(s.timeoutSeconds * 1000) }));
+  return stored.sources.map((s) => ({ name: s.name, formerNames: s.formerNames, kind: s.kind, fields: s.fields, password: usable(s.password), schemas: s.schemas, timeoutMs: Math.round(s.timeoutSeconds * 1000) }));
 }
 
 /** The settings as a device sees them: secrets left out. */

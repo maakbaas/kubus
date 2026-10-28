@@ -13,14 +13,12 @@ const COLUMNS_TTL_MS = 60_000;
 
 export class PostgresConnector implements Connector {
   readonly kind = "postgres";
-  readonly capabilities;
   private config: SourceConfig;
   private pool: pg.Pool;
   private columns = new Map<string, { at: number; columns: Promise<Map<string, PgColumn>> }>();
 
   constructor(config: SourceConfig) {
     this.config = config;
-    this.capabilities = { query: config.queries, ...(config.queries && { queryLanguage: "SQL" }) };
     this.pool = new pg.Pool({
       host: config.fields.host,
       port: Number(config.fields.port) || 5432,
@@ -104,10 +102,7 @@ export class PostgresConnector implements Connector {
   }
 
   private allowed(target: SourceTarget) {
-    if ("query" in target) {
-      if (!this.config.queries) throw new SourceError(`${this.config.name} doesn't allow queries, only its tables`);
-      return;
-    }
+    if ("query" in target) throw new SourceError(`${this.config.name} is read by its tables only`);
     const { schema } = target.table;
     if (this.config.schemas.length && !this.config.schemas.includes(schema ?? "")) {
       throw new SourceError(`${this.config.name} doesn't offer the schema “${schema ?? ""}”`);

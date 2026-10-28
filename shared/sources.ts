@@ -20,19 +20,8 @@ export interface SourceInfo {
   formerNames?: string[];
   /** Which connector reads it, e.g. "postgres": for people only (the app treats all alike). */
   connector: string;
-  /** What it can do. */
-  capabilities: SourceCapabilities;
   /** Why it can't be read now (unreachable, wrong password), or absent. */
   problem?: string;
-}
-
-export interface SourceCapabilities {
-  /** It runs queries written in its own language (SQL), as well as reading its tables. */
-  query: boolean;
-  /** The language such a query is written in, for people (e.g. "SQL"). */
-  queryLanguage?: string;
-  /** What such a query must be, for people (the query box's help); absent: one SQL statement. */
-  queryHelp?: string;
 }
 
 /** A table (or a view of one) of a source. `schema` is null where a source has none. */

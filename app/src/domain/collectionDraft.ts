@@ -44,11 +44,9 @@ export function draftProblems(draft: CollectionDraft, components: Component[]): 
   const source = draft.source;
   const sourceError = !source
     ? undefined
-    : "query" in source.target && !source.target.query.trim()
-      ? "Write the query"
-      : !source.columns.some((c) => c.name === source.key)
-        ? "Choose the column that tells rows apart"
-        : undefined;
+    : !source.columns.some((c) => c.name === source.key)
+      ? "Choose the column that tells rows apart"
+      : undefined;
   const valid = !nameError && !pluralError && !noFields && !sourceError && Object.keys(fieldErrors).length === 0 && Object.keys(targetErrors).length === 0;
   return { nameError, pluralError, fieldErrors, targetErrors, noFields, sourceError, valid };
 }

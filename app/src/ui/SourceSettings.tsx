@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { Button, ComboBox, Dropdown, InlineNotification, Select, SelectItem, Stack, TextArea } from "@carbon/react";
+import { Button, ComboBox, Dropdown, InlineNotification, Stack } from "@carbon/react";
 import { Renew } from "@carbon/icons-react";
 import type { SourceInfo, SourceTable, SourceTarget } from "../../../shared/sources";
 import { useStore } from "../app/store";
@@ -8,7 +8,7 @@ import { namesOfTable, withSourceColumns } from "../domain/sources";
 import { errorMessage } from "./useConfirm";
 
 // Where a remote collection reads from (collection editor): one of the server's sources, its table
-// or a query in its language, and the column that tells rows apart. Reading the columns makes the
+// and the column that tells rows apart. Reading the columns makes the
 // fields (shared/sources.ts); reading them again later keeps what was set up of the fields.
 
 const tableLabel = (t: { schema: string | null; name: string } | null | undefined) => (t ? (t.schema ? `${t.schema}.${t.name}` : t.name) : "");
@@ -33,8 +33,6 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
   const [reading, setReading] = useState(false);
   const [dropped, setDropped] = useState<{ name: string; type: string }[]>([]);
   const target = source?.target;
-  const [mode, setMode] = useState<"table" | "query">(target && "query" in target ? "query" : "table");
-  const [query, setQuery] = useState(target && "query" in target ? target.query : "");
   const sourceName = source?.name ?? "";
   // A source renamed since is found by its former name; the collection then takes the new one.
   const info = offered?.find((s) => s.name === sourceName) ?? offered?.find((s) => s.formerNames?.includes(sourceName));
@@ -91,13 +89,7 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
           onChange({ ...draft, source: { name: selectedItem.name, target: { table: { schema: null, name: "" } }, key: "", columns: [] }, fields: draft.fields.filter((f) => !f.column) });
         }}
       />
-      {sourceName && info?.capabilities.query && (
-        <Select id={`${uid}-mode`} size="sm" labelText="Reads" value={mode} onChange={(e) => setMode(e.target.value === "query" ? "query" : "table")}>
-          <SelectItem value="table" text="A table" />
-          <SelectItem value="query" text={`A query (${info.capabilities.queryLanguage ?? "its own language"})`} />
-        </Select>
-      )}
-      {sourceName && mode === "table" && (
+      {sourceName && (
         <ComboBox<SourceTable>
           autoAlign
           size="sm"
@@ -109,24 +101,6 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
           itemToString={(t) => (t ? `${tableLabel(t)}${t.type === "view" ? " (view)" : ""}` : "")}
           onChange={({ selectedItem }) => selectedItem && void read(sourceName, { table: { schema: selectedItem.schema, name: selectedItem.name } })}
         />
-      )}
-      {sourceName && mode === "query" && (
-        <>
-          <TextArea
-            id={`${uid}-query`}
-            className="source-query"
-            labelText="Query"
-            helperText={info?.capabilities.queryHelp ?? "One statement, only read: views filter, sort and page what it returns. Name every column (… AS name)."}
-            rows={6}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <div>
-            <Button kind="tertiary" size="sm" disabled={reading || !query.trim()} onClick={() => void read(sourceName, { query })}>
-              Read columns
-            </Button>
-          </div>
-        </>
       )}
       {source && source.columns.length > 0 && (
         <Dropdown<string>
@@ -149,8 +123,8 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
             kind="tertiary"
             size="sm"
             renderIcon={Renew}
-            disabled={reading || (mode === "query" && !query.trim())}
-            onClick={() => void read(source.name, mode === "query" ? { query } : source.target)}
+            disabled={reading}
+            onClick={() => void read(source.name, source.target)}
           >
             Read columns again
           </Button>

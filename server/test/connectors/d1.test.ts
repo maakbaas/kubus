@@ -47,8 +47,8 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-const connector = (over: { fields?: Record<string, string>; schemas?: string[]; queries?: boolean } = {}) =>
-  new D1Connector({ name: "Edge", kind: "d1", fields: { account: "acc", database: "db-1" }, password: "token-1", schemas: [], queries: true, timeoutMs: 5000, ...over });
+const connector = (over: { fields?: Record<string, string>; schemas?: string[] } = {}) =>
+  new D1Connector({ name: "Edge", kind: "d1", fields: { account: "acc", database: "db-1" }, password: "token-1", schemas: [], timeoutMs: 5000, ...over });
 
 const people = (over: Partial<SourceQuery> = {}): SourceQuery => ({
   target: { table: { schema: null, name: "people" } },
@@ -115,12 +115,8 @@ describe("D1 connector", () => {
     expect(await c.row({ ...people(), keyValue: "99" })).toBeNull();
   });
 
-  it("runs a written query as one statement, only when queries are allowed", async () => {
-    const target = { query: "SELECT id, name FROM people WHERE score > 3;" };
-    const d = await connector().describe(target);
-    expect(d.columns.map((c) => c.name)).toEqual(["id", "name"]);
-    await expect(connector().describe({ query: "SELECT 1; DELETE FROM people" })).rejects.toThrow(/one statement/);
-    await expect(connector({ queries: false }).describe(target)).rejects.toThrow(/doesn't allow queries/);
+  it("reads tables only, never a written query", async () => {
+    await expect(connector().describe({ query: "SELECT id, name FROM people" })).rejects.toThrow(/tables only/);
     await expect(connector().describe({ table: { schema: "main", name: "people" } })).rejects.toThrow(/no schemas/);
     expect(db.prepare("SELECT count(*) AS n FROM people").get()).toEqual({ n: 3 });
   });
@@ -142,6 +138,6 @@ describe("D1 connector", () => {
     vi.stubGlobal("fetch", (_url: string, init: RequestInit) =>
       new Promise((_resolve, reject) => init.signal!.addEventListener("abort", () => reject(init.signal!.reason))),
     );
-    await expect(new D1Connector({ name: "Slow", kind: "d1", fields: { account: "acc", database: "db-1" }, password: "t", schemas: [], queries: true, timeoutMs: 20 }).check()).rejects.toThrow(/took too long/);
+    await expect(new D1Connector({ name: "Slow", kind: "d1", fields: { account: "acc", database: "db-1" }, password: "t", schemas: [], timeoutMs: 20 }).check()).rejects.toThrow(/took too long/);
   });
 });

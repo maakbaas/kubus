@@ -1,4 +1,4 @@
-import type { SourceCapabilities, SourceDescription, SourceQuery, SourceResult, SourceRow, SourceRowRequest, SourceTable, SourceTarget } from "../../../shared/sources.ts";
+import type { SourceDescription, SourceQuery, SourceResult, SourceRow, SourceRowRequest, SourceTable, SourceTarget } from "../../../shared/sources.ts";
 
 // A connector reads one kind of source (a Postgres database, n8n's data tables, an InfluxDB 2 server) for the app, in the
 // app's terms (shared/sources.ts): everything kind-specific (its query language, its types, how
@@ -19,8 +19,6 @@ export interface SourceConfig {
   password: string;
   /** Only these schemas' tables are offered (n8n: these projects' ids; InfluxDB: buckets; empty: all but the system's). */
   schemas: string[];
-  /** Queries in the source's own language are allowed (else only its tables). */
-  queries: boolean;
   /** Longest a statement may run, in milliseconds. */
   timeoutMs: number;
 }
@@ -28,7 +26,6 @@ export interface SourceConfig {
 export interface Connector {
   /** For people, e.g. "postgres". */
   readonly kind: string;
-  readonly capabilities: SourceCapabilities;
   /** Checks the connection once at start; returns warnings to log (e.g. a user that can write). */
   check(): Promise<string[]>;
   tables(): Promise<SourceTable[]>;
