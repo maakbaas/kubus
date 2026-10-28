@@ -257,6 +257,24 @@ takes the new one when its settings are opened. A source's name: letters, digits
   date & time's day in the device's zone uses the zone's offsets from 1990 to 2060 (`zoneOffsets`,
   computed with `Intl`). The time limit is the request's; filters on dates and numbers go through
   expressions (no index), text is case-insensitive for ASCII only (SQLite's `LIKE`).
+- *Calendar (ICS)* (`connectors/ics.ts`, parsed by `ical.js`): one calendar per source, its address in clear
+  (`webcal://`, `webcals://` or https; `httpDocument.ts`); a secret in it is written `{secret}` and filled in from
+  the source's secret (`withSecret`, URL-encoded), else a set secret is sent as `Authorization: Bearer`. One GET,
+  `text/calendar` (or `text/plain`, `application/octet-stream`); a document that isn't a calendar, or can't be
+  parsed, is the source's problem. One table, `events` (schema null): title, start, end (dates & times, ISO UTC),
+  all-day, start date and end date (dates: the days it starts and ends on in its own time zone; an all-day event
+  has no start or end time, its end date is DTEND less a day), location, description, status, categories (a list),
+  recurring, url, organizer, and the hidden uid and `id` (the key: UID and the occurrence's start,
+  `uid@2026-03-01T08:00:00.000Z`, `uid@2026-04-01` all day). A row is an occurrence: repeating events (`RRULE`
+  / `RDATE`, less `EXDATE`, `RECURRENCE-ID` overrides where they moved to, `RANGE=THISANDFUTURE`) are expanded
+  over the days the filter's rules on start / end (start date, end date) leave, those every row meets (not
+  under an `or`), a day's margin either way; else a year back and ahead of now. At most 50,000 rows (`MAX_ROWS`:
+  past it, a problem asking for a shorter range); a repeating event is stepped through from its first
+  occurrence, at most 200,000 steps (a minutely rule from long ago ends early). Single events are read
+  whatever the dates. Times in the file's `VTIMEZONE`, else the `TZID` as an IANA zone, else (floating, or a
+  zone neither defined nor known: `check` warns) as UTC. An item page's row is found by expanding around its
+  key's start. The parsed calendar is kept with the document (a minute), its expansions per window. Then
+  queried in memory (`memory.ts`). `check` warns about a calendar with no events, or events it can't read.
 - *App*: a block of a remote collection asks the source for its query (`useRemoteResult`, 100 rows
   a page, "Show more"; search waits for typing to pause) instead of `applyQuery`; the item page reads
   its row by key (`rowKey` of the item id, a base64url of the key). Rows become items keeping their
