@@ -37,9 +37,9 @@ export interface ConnectionField {
   /** A choice of these (the first is the default) instead of a text box. */
   choices?: { value: string; text: string }[];
   /**
-   * Kept like the password (a calendar's address with its secret path, a key in a query string): stored
-   * on the server only, never sent back (a device sees only a hint, e.g. its address's host), kept while
-   * left out of an update, dropped when the source's place changes.
+   * Kept like the password (a second secret: a budget's encryption password): stored on the server only,
+   * never sent back (a device sees whether it is set), kept while left out of an update, dropped when the
+   * source's place changes. Addresses are never secret: a secret in one is a field of its own ({secret}).
    */
   secret?: boolean;
 }
@@ -64,8 +64,8 @@ export interface ServerSettingsView {
   kinds: ConnectionKind[];
   sources: (ServerSourceSettings & {
     passwordSet: boolean;
-    /** The secret fields that are set, each with a hint of what it is (an address's scheme and host, e.g. "https://calendar.example.com/…"; else ""). */
-    secretHints: Record<string, string>;
+    /** The secret fields that are set (their keys). */
+    secretsSet: string[];
     /** Its connector ("postgres"), once it has one. */
     connector?: string;
     /** Why it can't be read now (no connector for the scheme, can't connect), or a warning (a user that can write). */

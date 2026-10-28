@@ -9,13 +9,13 @@ import { useServerSettings } from "./useServerSettings";
 // device: part of the server's settings (useServerSettings). Each is set up with its kind's own fields,
 // as the server describes them (shared/settings.ts ConnectionKind), so the app knows no database. A password is typed once: it is never
 // shown again, and stays while left empty (until the address it goes to changes). A secret field (a calendar's address) is the same,
-// shown only by its hint (its host).
+// shown only as set.
 
 type SourceDraft = Omit<ServerSettingsUpdate["sources"][number], "schemas" | "secrets"> & {
   passwordSet: boolean;
   schemasText: string;
-  /** The set secret fields' hints (from the server). */
-  secretHints: Record<string, string>;
+  /** The secret fields set on the server. */
+  secretsSet: string[];
   /** The secret fields typed here (sent; the rest are kept). */
   secrets: Record<string, string>;
 };
@@ -27,14 +27,14 @@ const draftOf = (view: ServerSettingsView): SourceDraft[] =>
     kind: s.kind,
     fields: s.fields,
     passwordSet: s.passwordSet,
-    secretHints: s.secretHints ?? {},
+    secretsSet: s.secretsSet ?? [],
     secrets: {},
     schemasText: s.schemas.join(", "),
     timeoutSeconds: s.timeoutSeconds,
   }));
 
 const updateOf = (draft: SourceDraft[]): ServerSettingsUpdate["sources"] =>
-  draft.map(({ passwordSet: _p, secretHints: _h, schemasText, password, secrets, ...s }) => ({
+  draft.map(({ passwordSet: _p, secretsSet: _set, schemasText, password, secrets, ...s }) => ({
     ...s,
     schemas: schemasText.split(",").map((x) => x.trim()).filter(Boolean),
     ...(password !== undefined && { password }),
@@ -128,9 +128,7 @@ export function ConnectionSettings() {
                     size="sm"
                     id={`${uid}-src-${f.key}-${s.id}`}
                     labelText={f.label}
-                    placeholder={
-                      f.key in s.secretHints && s.secrets[f.key] === undefined ? `Set${s.secretHints[f.key] ? ` (${s.secretHints[f.key]})` : ""}: type to replace it` : f.placeholder
-                    }
+                    placeholder={s.secretsSet.includes(f.key) && s.secrets[f.key] === undefined ? "Set: type to replace it" : (f.placeholder ?? "None")}
                     helperText={f.helperText}
                     value={s.secrets[f.key] ?? ""}
                     onChange={(e) => {
@@ -195,7 +193,7 @@ export function ConnectionSettings() {
             size="sm"
             renderIcon={Add}
             onClick={() =>
-              setDraft((d) => d && [...d, { id: crypto.randomUUID(), name: "", kind: kinds[0]?.id ?? "", fields: {}, secrets: {}, secretHints: {}, schemasText: "", timeoutSeconds: 30, passwordSet: false }])
+              setDraft((d) => d && [...d, { id: crypto.randomUUID(), name: "", kind: kinds[0]?.id ?? "", fields: {}, secrets: {}, secretsSet: [], schemasText: "", timeoutSeconds: 30, passwordSet: false }])
             }
           >
             Add connection

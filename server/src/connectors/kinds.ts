@@ -113,6 +113,7 @@ const KINDS: Kind[] = [
     fields: [
       { key: "address", label: "Address", placeholder: "https://actual-api.example.com", helperText: "Where actual-http-api runs (https:// unless it says http://), not Actual itself." },
       { key: "budget", label: "Budget sync ID", helperText: "In Actual: Settings → Show advanced settings → Sync ID." },
+      { key: "encryption", label: "Encryption password", helperText: "Only for a budget with end-to-end encryption. Kept like the API key: never shown again.", secret: true },
     ],
     password: { label: "API key", helperText: "actual-http-api's API_KEY. Kept while left empty (unless the address changes)." },
     schemas: null,
@@ -126,11 +127,10 @@ const KINDS: Kind[] = [
         key: "address",
         label: "Address",
         placeholder: "webcal://calendar.example.com/…/basic.ics",
-        helperText: "The calendar's secret or public address (webcal://, webcals:// or https://). Kept like a password: only its host is shown again.",
-        secret: true,
+        helperText: "The calendar's address (webcal://, webcals:// or https://). With a secret in it, write {secret} in its place and put the secret below.",
       },
     ],
-    password: { label: "Password", helperText: "Only for a calendar behind a login (sent as Basic with no user, or as Bearer). Usually empty." },
+    password: { label: "Secret", helperText: "Fills {secret} in the address; else sent as Authorization: Bearer. Usually empty for a public calendar. Kept while left empty (unless the address changes)." },
     schemas: null,
     place: ["address"],
   },
@@ -142,8 +142,7 @@ const KINDS: Kind[] = [
         key: "address",
         label: "Address",
         placeholder: "https://api.example.com/items",
-        helperText: "https:// unless it says http://. Kept like a password (it may hold a key): only its host is shown again.",
-        secret: true,
+        helperText: "https:// unless it says http://. With a secret in it (a key), write {secret} in its place and put the secret below.",
       },
       { key: "rows", label: "Rows at", placeholder: "/data/items", helperText: "Where the rows are, as a JSON Pointer. Empty: the top level." },
       { key: "header", label: "Header name", placeholder: "X-Api-Key", helperText: "The password goes under this header. Empty: Authorization: Bearer." },
@@ -160,8 +159,7 @@ const KINDS: Kind[] = [
         key: "address",
         label: "Address",
         placeholder: "https://docs.google.com/spreadsheets/d/e/…/pub?output=csv",
-        helperText: "https:// unless it says http://. Kept like a password (a published sheet's holds its secret): only its host is shown again.",
-        secret: true,
+        helperText: "https:// unless it says http://. With a secret in it (a published sheet's id), write {secret} in its place and put the secret below.",
       },
       { key: "header", label: "Header name", placeholder: "X-Api-Key", helperText: "The password goes under this header. Empty: Authorization: Bearer." },
     ],
@@ -185,21 +183,11 @@ export function fieldsFor(kind: string, fields: unknown): Record<string, string>
 /** The keys of a kind's secret fields (kept like its password). */
 export const secretKeysOf = (kind: string): string[] => (KINDS.find((x) => x.id === kind)?.fields ?? []).filter((f) => f.secret).map((f) => f.key);
 
-/** What a device is shown of a secret field's value: an address's scheme and host ("https://calendar.example.com/…"), else "". */
-export function hintOf(secret: string): string {
-  try {
-    const u = new URL(secret.trim());
-    return u.host ? `${u.protocol}//${u.host}/…` : "";
-  } catch {
-    return "";
-  }
-}
-
 /** Where a source's password (and its secret fields) go: the same place keeps stored ones. `fields` includes the secret ones. */
 export function placeOf(kind: string, fields: Record<string, string>): string {
   const k = KINDS.find((x) => x.id === kind);
   const secret = new Set(secretKeysOf(kind));
-  // Hosts and the like case-insensitively; a secret (a path) as it is.
+  // Hosts and the like case-insensitively; a secret as it is.
   return JSON.stringify([kind, ...(k?.place ?? []).map((key) => (secret.has(key) ? (fields[key] ?? "") : (fields[key] ?? "").toLowerCase()))]);
 }
 

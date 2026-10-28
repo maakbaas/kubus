@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:
 import { HttpError } from "../../shared/router.ts";
 import { SOURCE_NAME, type ServerAiSettings, type ServerSettingsUpdate, type ServerSettingsView, type ServerSourceSettings } from "../../shared/settings.ts";
 import type { SourceConfig } from "./connectors/connector.ts";
-import { connectionKinds, fieldsFor, hintOf, placeOf, secretKeysOf } from "./connectors/kinds.ts";
+import { connectionKinds, fieldsFor, placeOf, secretKeysOf } from "./connectors/kinds.ts";
 
 // The server's own settings (shared/settings.ts): the language model it offers and the sources it
 // reads, set in the app (Settings → AI and Connections) and stored in its table server_settings, secrets
@@ -201,7 +201,7 @@ export function viewOf(stored: Stored, status: (name: string) => { connector?: s
     sources: stored.sources.map(({ password, secrets, formerNames: _formerNames, ...s }) => ({
       ...s,
       passwordSet: usable(password) !== "",
-      secretHints: Object.fromEntries(Object.entries(secrets).filter(([, v]) => usable(v) !== "").map(([k, v]) => [k, hintOf(v)])),
+      secretsSet: Object.keys(secrets).filter((k) => usable(secrets[k]) !== ""),
       ...status(s.name),
     })),
   };

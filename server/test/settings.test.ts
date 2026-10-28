@@ -81,32 +81,32 @@ describe("server settings", () => {
     expect(JSON.stringify(viewOf(back, () => ({})))).not.toMatch(/formerNames/);
   });
 
-  describe("secret fields (a calendar's address)", () => {
-    const address = "https://calendar.example.com/private-s3cr3t/basic.ics";
-    const ics = (over: Partial<ServerSettingsUpdate["sources"][number]> = {}) =>
-      update({ source: { kind: "ics", fields: {}, secrets: { address }, password: "pw", ...over } });
-    const first = applyUpdate(stored, ics());
+  describe("secret fields (a budget's encryption password)", () => {
+    const actual = { address: "https://actual.example.com", budget: "b1" };
+    const encryption = "s3cr3t";
+    const budget = (over: Partial<ServerSettingsUpdate["sources"][number]> = {}) =>
+      update({ source: { kind: "actual", fields: actual, secrets: { encryption }, password: "pw", ...over } });
+    const first = applyUpdate(stored, budget());
 
-    it("are stored apart from the fields, given to the connector, and never shown (only their host)", () => {
-      expect(first.sources[0]).toMatchObject({ fields: {}, secrets: { address } });
-      expect(sourceConfigs(first)[0].fields).toEqual({ address });
+    it("are stored apart from the fields, given to the connector, and never shown", () => {
+      expect(first.sources[0]).toMatchObject({ fields: actual, secrets: { encryption } });
+      expect(sourceConfigs(first)[0].fields).toEqual({ ...actual, encryption });
       const view = viewOf(first, () => ({}));
       expect(JSON.stringify(view)).not.toMatch(/s3cr3t/);
-      expect(view.sources[0].secretHints).toEqual({ address: "https://calendar.example.com/…" });
+      expect(view.sources[0].secretsSet).toEqual(["encryption"]);
       // Typed in the fields instead, a secret one isn't taken.
-      expect(applyUpdate(stored, update({ source: { kind: "ics", fields: { address } } })).sources[0]).toMatchObject({ fields: {}, secrets: {} });
+      expect(applyUpdate(stored, update({ source: { kind: "actual", fields: { ...actual, encryption } } })).sources[0]).toMatchObject({ fields: actual, secrets: {} });
     });
 
     it("are kept while left out, with the password", () => {
-      const kept = applyUpdate(first, update({ source: { kind: "ics", fields: {}, name: "Calendar" } })).sources[0];
-      expect(kept).toMatchObject({ secrets: { address }, password: "pw" });
+      const kept = applyUpdate(first, update({ source: { kind: "actual", fields: actual, name: "Budget" } })).sources[0];
+      expect(kept).toMatchObject({ secrets: { encryption }, password: "pw" });
     });
 
-    it("take the password along when one changes, and are cleared by an empty one", () => {
-      const moved = applyUpdate(first, update({ source: { kind: "ics", fields: {}, secrets: { address: "https://evil.example/x.ics" } } })).sources[0];
-      expect(moved).toMatchObject({ secrets: { address: "https://evil.example/x.ics" }, password: "" });
-      expect(applyUpdate(first, update({ source: { kind: "ics", fields: {}, secrets: { address: "" } } })).sources[0].secrets).toEqual({});
-      // Another kind: none of them applies.
+    it("are dropped with the password when the place changes, and cleared by an empty one", () => {
+      const moved = applyUpdate(first, update({ source: { kind: "actual", fields: { ...actual, address: "https://evil.example" } } })).sources[0];
+      expect(moved).toMatchObject({ secrets: {}, password: "" });
+      expect(applyUpdate(first, update({ source: { kind: "actual", fields: actual, secrets: { encryption: "" } } })).sources[0].secrets).toEqual({});
       expect(applyUpdate(first, update({ source: { kind: "json", fields: {} } })).sources[0]).toMatchObject({ secrets: {}, password: "" });
     });
 
@@ -126,8 +126,8 @@ describe("server settings", () => {
       expect(JSON.stringify([...rows.values()])).not.toMatch(/s3cr3t/);
       expect((await loadSettings(db, key)).stored).toEqual(first);
       const unopened = (await loadSettings(db, null)).stored;
-      expect(viewOf(unopened, () => ({})).sources[0].secretHints).toEqual({});
-      expect(secretWarnings(unopened, null).join()).toMatch(/address/);
+      expect(viewOf(unopened, () => ({})).sources[0].secretsSet).toEqual([]);
+      expect(secretWarnings(unopened, null).join()).toMatch(/encryption/);
     });
   });
 

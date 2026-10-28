@@ -170,12 +170,13 @@ kinds and their fields (`server/src/connectors/kinds.ts`; `ConnectionKind` in `s
 /api/settings` → `kinds`), so the app knows no database: PostgreSQL (host, port, database, user, TLS), n8n data tables
 (address), InfluxDB 2 (address, organization), Cloudflare D1 (account ID, database ID), MySQL and MariaDB (host, port,
 database, user, TLS), Actual Budget (address, budget sync ID), Calendar (ICS) (address), JSON and CSV over HTTP
-(address, rows at, header name). A kind can mark a field secret (`ConnectionField.secret`: a calendar's address
-carries its secret in its path, an API's key may sit in the query string): it is stored with the source's secrets
-(`StoredSource.secrets`, encrypted like the password), never sent to a device (`GET /api/settings` gives only a hint
-per set one, `secretHints`: an address's scheme and host), set through the update's `secrets` (left out: kept while
-the source's place stays, `placeOf`; a changed place drops it with the password) and handed to the connector among
-its fields. Connectors that read one document over HTTP rather than a database (ICS, JSON, CSV) share
+(address, rows at, header name). Addresses are stored and shown as typed: a secret in one (a calendar's secret
+path, a key in a query string, a published sheet's id) is written `{secret}` there and given as the source's
+password, which fills it in. A kind can mark a field secret (`ConnectionField.secret`: a second secret, a budget's
+encryption password): it is stored with the source's secrets (`StoredSource.secrets`, encrypted like the password),
+never sent to a device (`GET /api/settings` says only which are set, `secretsSet`), set through the update's
+`secrets` (left out: kept while the source's place stays, `placeOf`; a changed place drops it with the password) and
+handed to the connector among its fields. Connectors that read one document over HTTP rather than a database (ICS, JSON, CSV) share
 `connectors/httpDocument.ts`: one `GET`, kept a minute and then revalidated (`ETag` / `Last-Modified`), the source's
 time limit, at most 20 MB, a status code or a web page where data was expected said in words; `webcal://` is read
 over https. Sources were stored as
