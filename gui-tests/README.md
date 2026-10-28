@@ -19,6 +19,7 @@ npm run test:gui -- --skip theme-color,type-style # leave audit rules out
 npm run test:gui -- --list                        # list the tests
 npm run test:gui -- --dev                         # against the dev server (port 1420) instead of a build
 npm run test:gui -- --name b --port 1431          # a second run alongside the first (own browsers, build, report-b/)
+npm run test:gui -- --coverage                    # also collect the app's JS coverage (see below)
 npm run test:gui -- --perf                        # only the perf tests (suite 23), each once; perf-summary.json
 npm run test:gui -- --perf --perf-compare old.json # …compared per test with an earlier perf-summary.json
 ```
@@ -47,6 +48,16 @@ already running elsewhere.
 Output: `gui-tests/report/index.html` (open it in a browser) with every test, every checkpoint and
 its screenshot; failing elements are outlined and numbered in the screenshot. `results.json`
 beside it has the same data. The exit code is 1 when any checkpoint failed.
+
+## Coverage
+
+`--coverage` collects which lines of `app/src` and `shared/` the tests run: the build is made with source maps (redone once if it
+was made without), and every test starts V8's precise coverage over CDP in its Chromium page (taken before each page load, which
+discards the old page's scripts, and at the end). Each test's data goes gzipped to `coverage/gui-v8/tN.json.gz` (`coverage/gui-v8-<name>/`
+with `--name`), about 100–400 KB; the folder is emptied at the start of a run. It needs the build (not `--dev` or `--base-url`) and Chromium; the
+SQLite worker's own code is not included. `npm run coverage:report` maps the data through the source maps to the files in `app/src`
+and merges it with the unit tests' (`docs/testing.md`, Coverage). Try it on a few tests:
+`npm run test:gui -- --suite 02 --grep "resize gutter" --workers 1 --coverage`.
 
 ## Memory
 
