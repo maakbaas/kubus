@@ -3371,13 +3371,17 @@ img[data-lightbox] {
   view-timeline-inset: var(--table-head-gap) 0;
 }
 /* The gap above a moved header row covered (the rows that passed under it would show there): by as much as
-   it moved, up to the gap. */
+   it moved, up to the gap. Grown by a transform (scaled from its bottom), not its height: the header moves by
+   one, and on iOS a transform follows a scroll on the scroll's own layer where a height is redrawn after it,
+   which made both jump when a scroll came to rest. */
 .table-wrap:is([data-head-follow], [data-head-shift]) .items-table thead th::before {
   content: "";
   position: absolute;
   inset-inline: 0;
   inset-block-end: 100%;
-  block-size: var(--table-head-cover, 0px);
+  block-size: var(--table-head-gap);
+  transform-origin: bottom;
+  transform: scaleY(var(--table-head-cover, 0));
   background: var(--cds-background);
   pointer-events: none;
 }
@@ -3388,10 +3392,10 @@ img[data-lightbox] {
 }
 @keyframes table-head-cover {
   from {
-    block-size: 0;
+    transform: scaleY(0);
   }
   to {
-    block-size: var(--table-head-gap);
+    transform: scaleY(1);
   }
 }
 .table-wrap[data-head-follow] .items-table thead th {

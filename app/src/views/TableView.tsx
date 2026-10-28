@@ -336,14 +336,18 @@ export function FillTable({ children }: { children: ReactNode }) {
       shown = by;
       el.toggleAttribute("data-head-shift", by > 0);
       el.style.setProperty("--table-head-shift", `${by}px`);
-      el.style.setProperty("--table-head-cover", `${Math.min(by, gap)}px`);
+      el.style.setProperty("--table-head-cover", String(gap > 0 ? Math.min(by, gap) / gap : 0));
+    };
+    // Set only when it changed: setting the animation's values again (on any resize) can restart it for a frame.
+    const set = (name: string, value: string) => {
+      if (el.style.getPropertyValue(name) !== value) el.style.setProperty(name, value);
     };
     const update = () => {
       follow = !!pane && scrollDriven && !clipped();
-      el.toggleAttribute("data-head-follow", follow);
+      if (el.hasAttribute("data-head-follow") !== follow) el.toggleAttribute("data-head-follow", follow);
       // Where the table starts in its wrap (the animation's timeline), and how far its header can go down it.
-      el.style.setProperty("--table-head-start", `${table.getBoundingClientRect().top - el.getBoundingClientRect().top}px`);
-      el.style.setProperty("--table-head-travel", `${Math.max(0, table.offsetHeight - (table.tHead?.offsetHeight ?? 0))}px`);
+      set("--table-head-start", `${Math.round(table.getBoundingClientRect().top - el.getBoundingClientRect().top)}px`);
+      set("--table-head-travel", `${Math.max(0, table.offsetHeight - (table.tHead?.offsetHeight ?? 0))}px`);
       el.toggleAttribute("data-more-start", scroller.scrollLeft > 1);
       el.toggleAttribute("data-more-end", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
       shift();
