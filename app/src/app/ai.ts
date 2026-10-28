@@ -21,7 +21,7 @@
 // itself: it shows its error, and "Retry" tries again.
 //
 // The provider: this server's (`source: "server"`, the default when the device set none of its own:
-// the server's settings (Settings → Server), called through the server with the sync token, so its key stays
+// the server's settings (Settings → AI), called through the server with the sync token, so its key stays
 // there; see server/src/ai.ts), or the device's own (address, key, models in localStorage `kubus.ai`,
 // never synced: the key must not travel to the server).
 
@@ -189,13 +189,13 @@ export class AiService {
     if (target === this.offerFor && !(failed && Date.now() - this.offerAsked > SERVER_RETRY_MS)) return;
     this.offerFor = target;
     this.offerAsked = Date.now();
-    if (!url || !token) return this.setOffer({ ai: null, problem: "No server is set up (Settings → Sync)." });
+    if (!url || !token) return this.setOffer({ ai: null, problem: "No server is set up (Settings → Server)." });
     fetch(`${url}/api/ai`, { headers: { Authorization: `Bearer ${token}` } })
       .then(async (res) => {
         if (target !== this.offerFor) return;
         if (!res.ok) return this.setOffer({ ai: null, problem: `The server answered ${res.status}.` });
         const ai = (await res.json()) as ServerAi;
-        this.setOffer({ ai, problem: ai.available ? null : "The server offers no language model: set one in Settings → Server." });
+        this.setOffer({ ai, problem: ai.available ? null : "The server offers no language model: set one in Settings → AI." });
       })
       .catch(() => target === this.offerFor && this.setOffer({ ai: null, problem: `Can't reach ${url}.` }));
   }

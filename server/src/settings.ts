@@ -3,7 +3,7 @@ import { SOURCE_NAME, type ServerAiSettings, type ServerSettingsUpdate, type Ser
 import type { SourceConfig } from "./connectors/connector.ts";
 
 // The server's own settings (shared/settings.ts): the language model it offers and the sources it
-// reads, set in the app (Settings → Server) and stored in its table server_settings, secrets
+// reads, set in the app (Settings → AI and Connections) and stored in its table server_settings, secrets
 // included. Secrets are never sent back, and a stored one is only used where it was given for: one
 // whose address changes is dropped, so whoever holds the token can't send it somewhere new.
 

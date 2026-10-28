@@ -3,7 +3,7 @@ import { HttpError, json, type ApiRequest, type ApiResponse } from "../../shared
 import type { StoredAi } from "./settings.ts";
 
 // The language model the server offers every device (Settings → AI → "This server's" in the app):
-// an OpenAI-style API, set in the app's Settings → Server (server/src/settings.ts). Devices don't
+// an OpenAI-style API, set in the app's Settings → AI (server/src/settings.ts). Devices don't
 // get the key: they call /api/ai/... with KUBUS_TOKEN and the server forwards the request with it.
 
 const MAX_BODY = 5 * 1024 * 1024;
@@ -23,7 +23,7 @@ export const aiInfo = async (): Promise<ApiResponse> => json(200, offer());
 
 /** Forwards a request to the provider (`path`: /chat/completions or /models) with the server's key. */
 export async function aiProxy(req: ApiRequest, path: string): Promise<ApiResponse> {
-  if (!offer().available) throw new HttpError(404, "This server offers no language model (set one in Settings → Server)");
+  if (!offer().available) throw new HttpError(404, "This server offers no language model (set one in Settings → AI)");
   const { url, key } = settings;
   const body = req.method === "POST" ? await req.body(MAX_BODY) : undefined;
   let response: Response;

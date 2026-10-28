@@ -1,4 +1,4 @@
-// The server's own settings (Settings → Server in the app): the language model it offers every
+// The server's own settings (Settings → AI and Connections in the app): the language model it offers every
 // device and the sources it reads for them. Stored only on the server (its table server_settings,
 // never synced) and changed through GET / PUT /api/settings with KUBUS_TOKEN. Secrets (the model's
 // key, a source's password) can be set but are never sent back: a device sees whether one is set.

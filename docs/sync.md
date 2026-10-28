@@ -17,8 +17,10 @@ client never talks to Postgres: browsers and the iOS PWA can only do HTTP. One c
 (`server/Dockerfile`, `docker-compose.yml` with `DATABASE_URL` and `KUBUS_TOKEN`) serves the
 sync API at `/api` and the built web app at `/`, so the phone installs the app from the server
 (same origin, no CORS). Auth is one shared bearer token (`KUBUS_TOKEN`); the app's
-Settings (`#/settings?section=sync`, the Sync tab, `ui/SyncSettings.tsx`; reached from the "Configure sync" button in the
-popover of the status icon ending the top-right tab strip, `ui/SyncStatusButton.tsx`, which itself only shows the state) holds server URL + token + on/off + Disconnect (forgets the server; the
+Settings holds server URL + token + "Test connection" + Disconnect in the Server tab (`#/settings?section=server`,
+`ui/ServerConnection.tsx`), and on/off + Download images + the wipes in the Sync tab (`#/settings?section=sync`,
+`ui/SyncSettings.tsx`; reached from the "Configure sync" button in the popover of the status icon ending the top-right
+tab strip, `ui/SyncStatusButton.tsx`, which itself only shows the state). Disconnect (forgets the server; the
 device keeps its data and the next connection is a first one) + Wipe local database (`Repository.wipeLocal`:
 pauses sync with `SyncControl.pause`, which keeps URL and token but forgets the server so switching it on again is a
 first connection; then the worker drops every table and creates the schema afresh, and the app reloads) + Wipe server
@@ -48,7 +50,7 @@ needs server-side queries (docs/vision.md).
   skew instead of a hybrid logical clock.
 - *First connection to a server* (or a changed server URL): the server is the source of truth. If it
   holds data, that replaces everything on the device (one local transaction, nothing is sent; the
-  Sync settings ask for confirmation first, `isNewServer`). Only an empty server takes the device's data
+  Server tab (saving a new address while sync is on) and the Sync tab (switching it on) ask for confirmation first, `isNewServer`). Only an empty server takes the device's data
   instead: all local rows are queued and uploaded.
 - *Which database*: the server's database has an id (`server_meta`: a `gen_random_uuid()` and its
   creation time, inserted `ON CONFLICT DO NOTHING`, so a restart keeps it and a wipe, a new volume or
@@ -126,8 +128,9 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
 
 ## The server's settings
 
-What a server offers beyond sync is set in the app, Settings → Server (`ui/ServerSettings.tsx`): the
-language model and the remote sources. `GET` / `PUT /api/settings`
+What a server offers beyond sync is set in the app: the language model in Settings → AI ("The server's",
+`ui/AiSettings.tsx`) and the remote sources in Settings → Connections (`ui/ConnectionSettings.tsx`); each saves
+its part on top of what the server holds then (`ui/useServerSettings.ts`). `GET` / `PUT /api/settings`
 (`server/src/settings.ts`, types in `shared/settings.ts`) with the sync token; any device with the
 token may change them. They are stored in the server's own table `server_settings` (JSON by key:
 `ai`, `sources`), never synced and kept by a wipe. Secrets (the model's key, a source's password)
@@ -142,7 +145,7 @@ carries each source's problem and warnings. The server's environment variables: 
 
 ## The server's language model
 
-Set in Settings → Server (address, key, a model for AI fields and one for writing components):
+Set in Settings → AI with "The server's" chosen (address, key, a model for AI fields and one for writing components):
 `server/src/ai.ts` gives every device the same model. `GET /api/ai` says what is offered (`ServerAi`
 in `shared/api.ts`: the models, never the address or key); `POST /api/ai/chat/completions` and
 `GET /api/ai/models` forward to the provider with the server's key, for any device with the token.
@@ -155,7 +158,7 @@ headless device doesn't generate AI values (that stays with the apps).
 
 Databases the server reads for the devices, read-only, whose tables and queries the app shows as
 collections ("remote collections": `Collection.source`, `domain/sources.ts`). Set up in Settings →
-Server (name, connection string, password, schemas, whether queries written in the app are allowed,
+Connections (name, connection string, password, schemas, whether queries written in the app are allowed,
 a time limit); the connection string's scheme picks the connector (`postgres://`, `n8n://`, `influxdb://`, `d1://`).
 - *Protocol* (`shared/sources.ts`), connector-neutral, all behind the token:
   `GET /api/sources` (names, connector, capabilities, problem; never addresses),

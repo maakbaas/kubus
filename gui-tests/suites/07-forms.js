@@ -180,19 +180,22 @@ for (const vp of ["desktop", "phone"]) {
     await t.audit("side nav with bookmarks and many spaces");
   }, { viewport: vp });
 
-  test(`settings: sync and AI forms with long values @ ${vp}`, async (t) => {
+  test(`settings: server and AI forms with long values @ ${vp}`, async (t) => {
     await t.boot();
-    await t.open("/settings?section=sync");
-    await t.audit("sync settings");
+    await t.open("/settings?section=server");
+    await t.audit("server settings");
     const fill = async (name, value) => {
       const box = t.page.getByRole("textbox", { name }).first();
       if (await box.count()) await box.fill(value);
     };
     await fill(/URL|Server|Address/, "https://a-very-long-subdomain-name.example-hosting-provider.com/path/to/kubus/server/instance");
     await fill(/Token/, "x".repeat(120));
-    await t.audit("sync settings filled");
+    await t.audit("server settings filled");
     await t.open("/settings?section=ai");
     await t.audit("AI settings");
+    // The device's own model: the dropdown shows its boxes.
+    await t.page.locator(".ws-pane--active select[id$='-source']").selectOption("own");
+    await t.settle();
     await fill(/Address/, "https://openrouter.ai/api/v1/and/a/long/path/that/does/not/exist");
     await fill(/API key/, "sk-" + "y".repeat(100));
     await t.audit("AI settings filled");

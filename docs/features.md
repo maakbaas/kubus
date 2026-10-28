@@ -160,11 +160,16 @@ What the app does, feature by feature (read the part you work on).
   model (the last write wins, they agree after sync); a changed prompt costs one call per item; a model's answer can
   differ each time, so "regenerate" can change a value.
 - **Settings** (`#/settings`, `pages/SettingsPage.tsx`, the last node of the side nav, pinned at its bottom with Help: `NavFooter`): tabs
-  Sync (`ui/SyncSettings.tsx`; `?section=sync`), AI (`ui/AiSettings.tsx`; `?section=ai`) and Server
-  (`ui/ServerSettings.tsx`; `?section=server`: the sync server's own settings, the same for every device: its language
-  model and its remote sources, stored on the server, keys and passwords write-only; docs/sync.md "The server's
-  settings"). AI is the language model of this
-  device: "The server's" (the default for a device without its own: the one set in Settings → Server, asked
+  Server (`ui/ServerConnection.tsx`; `?section=server`, the default: the server's address and token, Save, "Test
+  connection" (`SyncControl.testServer`: `/api/health`, then whether the token is accepted; nothing saved) and Disconnect;
+  sync, the server's model and remote collections all use it), Sync (`ui/SyncSettings.tsx`; `?section=sync`: the
+  "Sync this device" switch and "Download images", both applied at once, the state, Wipe local / server database),
+  Connections (`ui/ConnectionSettings.tsx`; `?section=connections`: the server's remote sources) and AI
+  (`ui/AiSettings.tsx`; `?section=ai`). Connections and the server's half of AI are the server's own settings, the same
+  for every device, stored on the server, keys and passwords write-only (docs/sync.md "The server's settings"; each tab
+  saves its part on top of what the server holds then: `ui/useServerSettings.ts`). AI is the language model of this
+  device, and its "Language model" dropdown also picks which one the boxes below it set up: "The server's" (the default
+  for a device without its own; the boxes are the server's address, key and models, saved to the server; asked
   for at `GET /api/ai` and called through the server's proxy `/api/ai/chat/completions` and `/api/ai/models` with the
   sync token, so its key stays on the server: `server/src/ai.ts`, `AiService.providerOf`), or "My own": the address of an OpenAI-style API (any provider: OpenAI, OpenRouter, Ollama, LM Studio, …; nothing is preset), the key and two models, each a combo box over the provider's `/models` (any name can be typed): one for AI fields (runs for every value: fast and cheap) and one for writing components (a stronger one; empty = the field model). `AiService.client("field" | "code")` picks it. Stored per device
   (`kubus.ai` in localStorage), never synced. The sync status icon (tab strip, top right) only shows the state; its

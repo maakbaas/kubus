@@ -67,6 +67,8 @@ export interface SyncControl {
    * schema), then pauses sync here: switching it on again uploads this device's data.
    */
   wipeServer(): Promise<void>;
+  /** Asks `url` whether it is a Kubus server that accepts `token` (nothing is saved); throws why not. */
+  testServer(url: string, token: string): Promise<void>;
   /** True when connecting to `url` would replace this device's data with the server's (first time). */
   isNewServer(url: string): boolean;
 }

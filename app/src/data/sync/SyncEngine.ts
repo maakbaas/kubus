@@ -280,6 +280,21 @@ export class SyncEngine implements SyncControl {
     return response;
   }
 
+  async testServer(url: string, token: string): Promise<void> {
+    const root = url.trim().replace(/\/+$/, "");
+    const ask = async (path: string, init?: RequestInit) => {
+      try {
+        return await fetch(`${root}${path}`, { ...init, signal: AbortSignal.timeout(15_000) });
+      } catch {
+        throw new Error(`Cannot reach ${root}`);
+      }
+    };
+    const health = await ask("/api/health");
+    if (!(health.ok && ((await health.json().catch(() => null)) as { ok?: boolean } | null)?.ok)) throw new Error(`${root} is not a Kubus server`);
+    // Any answer past the token check means it was accepted.
+    if ((await ask("/api/settings", { headers: { Authorization: `Bearer ${token}` } })).status === 401) throw new Error("The server did not accept the token");
+  }
+
   async wipeServer(): Promise<void> {
     const response = await this.request("/api/wipe", {
       method: "POST",

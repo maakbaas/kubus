@@ -18,7 +18,7 @@ is what this split avoids. Keep them current when behaviour changes.
 - `docs/data-model.md`: tables, EAV `field_values`, files, references, soft deletes, UUIDs;
   scale limits, SAH-pool VFS danger, storage location, iOS eviction.
 - `docs/sync.md`: server, sync engine (outbox triggers, merge, first connection), files (upload,
-  download, thumbnails, clean-up), the server's settings (Settings → Server), remote sources and their
+  download, thumbnails, clean-up), the server's settings (Settings → AI and Connections), remote sources and their
   connectors, the HTTP API (headless device) and webhooks, iOS home-screen app, known sync limits.
 - `docs/migrations.md`: schema changes: the device's and the server's migrations, sync between versions
   (`SYNC_VERSION` / `SYNC_COMPATIBLE`), the steps of a change.
@@ -60,7 +60,7 @@ is what this split avoids. Keep them current when behaviour changes.
 - **The Help page text** (`app/src/help/components.md`) documents components and `{{ }}` code (`$` names, outputs, AI
   prompt) and is also what "Write with AI" gives the model: update it whenever that language changes.
 - **The language model key stays where it is set**: a device's own on the device (`kubus.ai`, `app/src/app/ai.ts`),
-  the server's in its own settings table (`server_settings`, set in Settings → Server, used only by its proxy
+  the server's in its own settings table (`server_settings`, set in Settings → AI, used only by its proxy
   `server/src/ai.ts`). Never sync a key, put it in the synced data or send the server's to a device; the same goes for
   a remote source's password (`server/src/settings.ts`: write-only, dropped when its address changes).
 - Same words in code and UI (see Terminology); no "type", "object", "template", "entry".

@@ -14,7 +14,7 @@ export type SourceKind = "string" | "number" | "checkbox" | "date" | "datetime" 
 
 /** One source the server offers (GET /api/sources). */
 export interface SourceInfo {
-  /** Its name, from the server's settings (Settings → Server), e.g. "CRM". */
+  /** Its name, from the server's settings (Settings → Connections), e.g. "CRM". */
   name: string;
   /** Which connector reads it, e.g. "postgres": for people only (the app treats all alike). */
   connector: string;
