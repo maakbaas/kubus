@@ -222,7 +222,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
             onBlur={(e) => e.target.value.trim() !== block.title && onSet({ title: e.target.value.trim() })}
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           />
-          {type.OptionsEditor && <type.OptionsEditor collection={collection} options={block.options} place={place} onChange={(options) => onSet({ options })} />}
+          {type.OptionsEditor && <type.OptionsEditor collection={collection} options={block.options} place={place} pageCollectionId={page?.id} onChange={(options) => onSet({ options })} />}
           {/* Offered while the text can be one (not empty, nothing a static component can't read). */}
           {markdownLocal && markdownLocal.code.trim() && !placeProblem(markdownLocal, "static") && (
             <Button kind="tertiary" size="sm" renderIcon={Save} onClick={() => setPromoting(true)}>

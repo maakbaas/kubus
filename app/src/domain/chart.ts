@@ -1,49 +1,63 @@
 // Charts: what a chart block shows, worked out from its items. Storage-free and UI-free (the
 // block, views/ChartBlock.tsx, draws it with Carbon Charts: views/chartSpec.ts).
 //
-// A chart is a block like a table: its filter picks the items, and its grouping (the block's
-// "Group by", in Sort and group) gives the categories: the bars, the slices, the points of a line.
-// The options only say what is measured (a count, or the sum, average, … of a number field), how
-// the categories are split into series ("Split by"), how dates are stepped and how it looks. So a
-// table grouped by Status shown as a chart is a bar per status, without setting anything.
+// A chart's block filter and sort pick its items (or, on an item page, the page's item alone:
+// `scope`); everything else is the chart's own settings, in one place:
+// - its X axis (`x`): nothing (one category of all items), the groups of a field (a bar per
+//   status, a step per month), or each item along a date or number field (a point per measurement);
+// - its series: any number of values, each a count or the sum, average, … of a number field, drawn
+//   as bars, a line, an area or dots, on the left or right axis, optionally a running total, the
+//   change from the step before or a moving average; "Split by" splits every series by a field;
+// - parts of a whole (pie, meter, treemap, word cloud): the groups, several number fields (fat,
+//   muscle, bone) or one value, against a total (a number or a field: the rest is "Remaining");
+// - thresholds (warning / danger: absolute or a % of the total), the axes (title, min, max, log),
+//   the values' unit and decimals, the legend and the size.
 
 import type { Component } from "./components";
 import { outputOf } from "./components";
 import { periodAround, weekNumber } from "./datePeriod";
 import { formatDate } from "./fieldKinds";
-import { fieldValue, itemLabel, pickableFields, type Collection, type FieldDef, type Item } from "./model";
+import { fieldValue, itemLabel, newId, pickableFields, type Collection, type FieldDef, type Item } from "./model";
 import { BLOCK_HEIGHT, normalizeBlockHeight } from "./views";
-import { groupKeysOf, isGrouped, isGroupable, type GroupOrder, type QueryContext, type QueryResult } from "./query";
+import { applyQuery, defaultQuery, groupKeysOf, isGroupable, type GroupOrder, type QueryContext, type QueryResult } from "./query";
 
 export type ChartKind =
   | "bar"
   | "line"
-  | "pie"
+  | "area"
   | "radar"
+  | "pie"
+  | "meter"
   | "treemap"
   | "wordcloud"
+  | "gauge"
   | "histogram"
   | "boxplot"
   | "scatter"
-  | "heatmap"
-  | "gauge"
-  | "meter";
+  | "heatmap";
 
 /** The chart types, in the order (and sections) the Chart menu lists them. */
 export const CHART_KINDS: { kind: ChartKind; label: string; section: string }[] = [
-  { kind: "bar", label: "Bar", section: "Compare" },
-  { kind: "radar", label: "Radar", section: "Compare" },
-  { kind: "line", label: "Line", section: "Over time" },
+  { kind: "bar", label: "Bar", section: "Compare and over time" },
+  { kind: "line", label: "Line", section: "Compare and over time" },
+  { kind: "area", label: "Area", section: "Compare and over time" },
+  { kind: "radar", label: "Radar", section: "Compare and over time" },
   { kind: "pie", label: "Pie", section: "Parts of a whole" },
+  { kind: "meter", label: "Meter", section: "Parts of a whole" },
   { kind: "treemap", label: "Treemap", section: "Parts of a whole" },
   { kind: "wordcloud", label: "Word cloud", section: "Parts of a whole" },
+  { kind: "gauge", label: "Gauge", section: "One value" },
   { kind: "histogram", label: "Histogram", section: "Spread" },
   { kind: "boxplot", label: "Box plot", section: "Spread" },
   { kind: "scatter", label: "Scatter", section: "Spread" },
   { kind: "heatmap", label: "Heatmap", section: "Spread" },
-  { kind: "gauge", label: "Gauge", section: "One value" },
-  { kind: "meter", label: "Meter", section: "One value" },
 ];
+
+/** Bar, line and area: one chart of series over an X axis, each series drawn its own way (a combo when they differ). */
+export const isXY = (kind: ChartKind): kind is "bar" | "line" | "area" => kind === "bar" || kind === "line" || kind === "area";
+/** Parts of a whole: pie (or donut), meter, treemap, word cloud. */
+export const isParts = (kind: ChartKind): kind is "pie" | "meter" | "treemap" | "wordcloud" =>
+  kind === "pie" || kind === "meter" || kind === "treemap" || kind === "wordcloud";
 
 /** How the items of a category become one number. */
 export type Aggregate = "count" | "sum" | "avg" | "min" | "max" | "first" | "last";
@@ -71,76 +85,163 @@ export const DATE_STEPS: { value: DateStep; text: string }[] = [
   { value: "year", text: "Year" },
 ];
 
-/** How wide a chart may get, in rem (a slider like the cards'; the maximum is about 1920px, wider than any pane). */
-export const CHART_WIDTH = { min: 8, max: 120, step: 1 };
-/** What a gauge gets when switched to (as wide as a pane it is mostly empty). */
-export const GAUGE_WIDTH = 24;
-/** Widths saved before the slider: their rem. */
-const LEGACY_WIDTHS: Record<string, number> = { full: CHART_WIDTH.max, s: 24, m: 40, l: 64 };
+/** How a series of a bar, line or area chart is drawn; null (in `ChartSeries.style`): the chart's own (a bar of a Bar chart). */
+export type SeriesStyle = "bar" | "lollipop" | "line" | "area" | "points";
+export const SERIES_STYLES: { value: SeriesStyle; text: string }[] = [
+  { value: "bar", text: "Bars" },
+  { value: "lollipop", text: "Lollipops" },
+  { value: "line", text: "Line" },
+  { value: "area", text: "Area" },
+  { value: "points", text: "Dots" },
+];
+
+/** What a series does with its values along the X axis, in order. */
+export type Transform = "none" | "cumulative" | "change" | "moving";
+export const TRANSFORMS: { value: Transform; text: string }[] = [
+  { value: "none", text: "The values" },
+  { value: "cumulative", text: "Running total" },
+  { value: "change", text: "Change from the step before" },
+  { value: "moving", text: "Moving average" },
+];
+/** The steps a moving average takes (`ChartSeries.window`). */
+export const MOVING_WINDOW = { min: 2, max: 50, initial: 3 };
+
+/** One value a chart draws: a count, or a number field made into one per category. */
+export interface ChartSeries {
+  /** Stable while the series is edited (the settings' rows). */
+  id: string;
+  value: Aggregate;
+  /** The number field (not for a count). */
+  field: string | null;
+  /** Its name in the legend and tooltip; "" = made from the value ("Sum of Pages"). */
+  label: string;
+  /** Bar, line and area: how it is drawn; null = the chart's (`chart`). */
+  style: SeriesStyle | null;
+  /** Bar, line and area: the value axis it is measured on. */
+  axis: "left" | "right";
+  transform: Transform;
+  /** A moving average's steps. */
+  window: number;
+}
+
+/** What the X axis (the categories) is: nothing, the groups of a field, or each item. */
+export type XBy = "none" | "field" | "item";
+
+export interface ChartX {
+  by: XBy;
+  /**
+   * "field": the field whose values are the categories (any field the block could be grouped by;
+   * a date's values merged into `dateStep`s). "item": a date or number field each item is placed
+   * at (null: the items side by side, by their title, in the block's order).
+   */
+  field: string | null;
+  /** "field": the categories by value (either way) or the largest first; dates and numbers on a time or number axis keep their order. */
+  order: GroupOrder;
+  dateStep: DateStep;
+  /** "field": items without a value get a "No value" category (also when split). */
+  showEmpty: boolean;
+  /** "field": at most this many categories (the largest), the rest as "Other"; 0 = all. */
+  top: number;
+}
+
+/** Parts of a whole are the X axis's groups, several number fields, or one value against its total. */
+export type PartsFrom = "groups" | "fields" | "one";
+
+export interface ChartTotal {
+  /** "none": the sum of the parts (a gauge's value is a %). */
+  from: "none" | "number" | "field";
+  number: number | null;
+  /** A number field, made into one the same way as the value (a count against its sum). */
+  field: string | null;
+}
+
+export type ThresholdStatus = "warning" | "danger";
+export interface Threshold {
+  value: number;
+  status: ThresholdStatus;
+}
+
+export interface ChartAxis {
+  /** "" = made from its series. */
+  title: string;
+  /** null = automatic: bars and stacked areas from 0, lines and dots fitted to their values. */
+  min: number | null;
+  max: number | null;
+  log: boolean;
+}
+
+export type LegendShow = "auto" | "show" | "hide";
+export type LegendPosition = "bottom" | "top" | "left" | "right";
 
 export interface ChartOptions {
   chart: ChartKind;
-  /** What a category measures: its items counted, or a number field added up (…) over them. */
-  value: Aggregate;
-  /** The number field `value` adds up (not for a count); also what a histogram, box plot or gauge measures, and a scatter's Y. */
-  valueField: string | null;
-  /** A second field splitting each category into series (colours); null = one series. */
+  /** On an item page: the block's items, or the page's item alone ("Of this item"). */
+  scope: "items" | "page";
+  x: ChartX;
+  /** Bar, line, area: every series; radar, gauge, heatmap, parts: the first is the value (its aggregate for parts from fields and radar spokes); scatter: each a Y field (its field only). */
+  series: ChartSeries[];
+  /** A field splitting every series (bar, line, area, heatmap rows), colouring a scatter's dots and a histogram's bars; null = not split. */
   splitBy: string | null;
-  /** The steps of a date category (grouped by a date). */
-  dateStep: DateStep;
-  /** Items without a value in the grouped-by (or split-by) field get their own "No value" category. */
-  showEmpty: boolean;
-  /** At most this many categories (the largest), the rest as "Other"; 0 = all. */
-  top: number;
+  /** Bars and areas on the same axis: side by side / overlapping, stacked, or stacked as shares of 100%. */
+  stack: "none" | "stacked" | "percent";
+  /** Bar charts: bars across. */
+  horizontal: boolean;
+  /** Lines and areas. */
+  curve: "smooth" | "straight" | "step";
+  /** A dot on each value of a line. */
+  points: boolean;
+  /** Where a value is missing (an average of no items): left out (the line joins its neighbours) or drawn as 0. */
+  missing: "skip" | "zero";
+  /** A sparkline: no axes, legend or grid. */
+  compact: boolean;
+  // Parts of a whole
+  parts: PartsFrom;
+  /** "fields": the number fields that are the parts; radar: its spokes. */
+  fields: string[];
+  /** Pie, meter, gauge: what it is measured against (the rest of a pie or meter is shown as "Remaining"). */
+  total: ChartTotal;
+  /** Pie: a hole in the middle, the total in it. */
+  donut: boolean;
+  // Gauge
+  fullCircle: boolean;
+  /** The value itself in the middle instead of its share of the total (%). */
+  asValue: boolean;
+  /** A second value, shown as the increase or decrease from it; null = none. */
+  compare: Compare | null;
+  /** The number field `compare` is taken of; null = the gauge's own. */
+  compareField: string | null;
+  // Histogram and box plot: the number or date field whose values are spread; histogram: its bins (0: automatic).
+  spreadField: string | null;
+  bins: number;
+  /** Scatter: the size of the dots (bubbles). */
+  sizeField: string | null;
+  /** Warning and danger levels: lines on a bar, line or area chart's left axis, a gauge's or meter's colour. */
+  thresholds: Threshold[];
+  /** Gauge and meter: thresholds as a % of the total, or values. */
+  thresholdMode: "percent" | "absolute";
+  /** The X axis's title; "" = the field's name. */
+  xTitle: string;
+  left: ChartAxis;
+  right: ChartAxis;
+  /** Shown after the values (axes, tooltips, a gauge): "kg". */
+  unit: string;
+  /** Decimals the values are rounded to; null = as they are (at most 2). */
+  decimals: number | null;
+  /** "auto": with more than one series (or part). */
+  legend: LegendShow;
+  legendPosition: LegendPosition;
   /** The most it takes, in rem (BLOCK_HEIGHT, like a map's and a component's); a pie or gauge in a narrow block takes less. */
   height: number;
   /** At most this wide, in rem (CHART_WIDTH). */
   width: number;
-  // Bar
-  horizontal: boolean;
-  /** Series side by side, or stacked. */
-  stacked: boolean;
-  /** Lines with a dot at the end instead of bars. */
-  lollipop: boolean;
-  // Bar and line: a second value, drawn as a line against its own axis (a combo chart).
-  second: Aggregate | null;
-  secondField: string | null;
-  // Line
-  area: boolean;
-  /** Stacked areas as shares of 100% (with Split by). */
-  percent: boolean;
-  /** A running total: each step adds to the ones before. */
-  cumulative: boolean;
-  /** A sparkline: no axes, legend or grid. */
-  compact: boolean;
-  /** Smooth curves between the points instead of straight lines. */
-  curved: boolean;
-  // Pie
-  donut: boolean;
-  // Radar: the number fields that are its spokes.
-  fields: string[];
-  // Histogram: the number of bins (0: automatic).
-  bins: number;
-  // Scatter: X (a number or date field), and the size of the dots (bubbles).
-  xField: string | null;
-  sizeField: string | null;
-  // Gauge and meter: what the value is measured against (a number, or a field: "Pages").
-  max: number | null;
-  maxField: string | null;
-  /** Gauge and meter: shown as a warning from this share of the max (%), as a danger from `dangerAt`. */
-  warnAt: number | null;
-  dangerAt: number | null;
-  /** Gauge: a full circle instead of a half. */
-  fullCircle: boolean;
-  /** Gauge: the value itself in the middle instead of its share of the max (%). */
-  asValue: boolean;
-  /** Gauge: a second value, shown as the increase or decrease from it; null = none. */
-  compare: Compare | null;
-  /** The number field `compare` is taken of; null = the gauge's own. */
-  compareField: string | null;
-  /** Meter: the categories as parts of one bar (of the max). */
-  proportional: boolean;
 }
+
+/** How wide a chart may get, in rem (a slider like the cards'; the maximum is about 1920px, wider than any pane). */
+export const CHART_WIDTH = { min: 8, max: 120, step: 1 };
+/** What a gauge gets when switched to (as wide as a pane it is mostly empty). */
+export const GAUGE_WIDTH = 24;
+/** The most decimals a value is given. */
+export const MAX_DECIMALS = 6;
 
 /** Fields whose values are numbers: number fields, and AI and component fields giving one. */
 export function numberFields(collection: Collection, components: Component[]): FieldDef[] {
@@ -149,112 +250,165 @@ export function numberFields(collection: Collection, components: Component[]): F
   );
 }
 
-/** Fields that can be a scatter's X: numbers and dates. */
+/** Fields that can place items on an axis (a scatter's X, "each item along", a histogram's): numbers and dates. */
 export function axisFields(collection: Collection, components: Component[]): FieldDef[] {
   const numbers = new Set(numberFields(collection, components).map((f) => f.id));
   return pickableFields(collection).filter((f) => numbers.has(f.id) || f.kind === "date" || f.kind === "datetime");
 }
 
-/** Fields a chart can split its categories by (what grouping can use). */
+/** Fields whose values can be categories or split series (what grouping can use). */
 export const splitFields = (collection: Collection): FieldDef[] => pickableFields(collection).filter((f) => isGroupable(f.kind));
+
+/** A new series: a count, or (with `field`) the sum of a number field. */
+export const newSeries = (patch: Partial<ChartSeries> = {}): ChartSeries => ({
+  id: newId(),
+  value: "count",
+  field: null,
+  label: "",
+  style: null,
+  axis: "left",
+  transform: "none",
+  window: MOVING_WINDOW.initial,
+  ...patch,
+});
+
+const AXIS: ChartAxis = { title: "", min: null, max: null, log: false };
 
 export function defaultChartOptions(collection: Collection, components: Component[] = []): ChartOptions {
   const number = numberFields(collection, components)[0]?.id ?? null;
   return {
     chart: "bar",
-    value: "count",
-    valueField: number,
+    scope: "items",
+    x: { by: "none", field: null, order: "asc", dateStep: "auto", showEmpty: false, top: 0 },
+    series: [newSeries({ field: number })],
     splitBy: null,
-    dateStep: "auto",
-    showEmpty: false,
-    top: 0,
-    height: BLOCK_HEIGHT.initial,
-    width: CHART_WIDTH.max,
+    stack: "none",
     horizontal: false,
-    stacked: false,
-    lollipop: false,
-    second: null,
-    secondField: null,
-    area: false,
-    percent: false,
-    cumulative: false,
+    curve: "smooth",
+    points: true,
+    missing: "skip",
     compact: false,
-    curved: true,
-    donut: true,
+    parts: "groups",
     fields: [],
-    bins: 0,
-    xField: null,
-    sizeField: null,
-    max: null,
-    maxField: null,
-    warnAt: null,
-    dangerAt: null,
+    total: { from: "none", number: null, field: null },
+    donut: true,
     fullCircle: false,
     asValue: false,
     compare: null,
     compareField: null,
-    proportional: false,
+    spreadField: number,
+    bins: 0,
+    sizeField: null,
+    thresholds: [],
+    thresholdMode: "percent",
+    xTitle: "",
+    left: { ...AXIS },
+    right: { ...AXIS },
+    unit: "",
+    decimals: null,
+    legend: "auto",
+    legendPosition: "bottom",
+    height: BLOCK_HEIGHT.initial,
+    width: CHART_WIDTH.max,
   };
 }
 
-const oneOf = <T,>(list: readonly { value: T }[], v: unknown, fallback: T): T => (list.some((x) => x.value === v) ? (v as T) : fallback);
+const oneOf = <T,>(values: readonly T[], v: unknown, fallback: T): T => (values.includes(v as T) ? (v as T) : fallback);
+const values = <T,>(list: readonly { value: T }[]) => list.map((x) => x.value);
 const finite = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const record = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 
-/** Stored (possibly outdated) options made valid: fields that are gone dropped, unknown values defaulted. */
+/** Stored options made valid: fields that are gone dropped, unknown values defaulted. */
 export function normalizeChartOptions(raw: unknown, collection: Collection): ChartOptions {
-  const o = (raw ?? {}) as Partial<Record<keyof ChartOptions, unknown>>;
+  const o = record(raw);
   const d = defaultChartOptions(collection);
   const ids = new Set(pickableFields(collection).map((f) => f.id));
   const field = (v: unknown, fallback: string | null = null) => (typeof v === "string" && ids.has(v) ? v : fallback);
   const flag = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
-  const count = (v: unknown, max: number) => Math.max(0, Math.min(max, Math.round(finite(v) ?? 0)));
+  const count = (v: unknown, max: number, fallback = 0) => Math.max(0, Math.min(max, Math.round(finite(v) ?? fallback)));
+  const text = (v: unknown) => (typeof v === "string" ? v : "");
+  const x = record(o.x);
+  const total = record(o.total);
+  const axis = (v: unknown): ChartAxis => {
+    const a = record(v);
+    return { title: text(a.title), min: finite(a.min), max: finite(a.max), log: flag(a.log, false) };
+  };
+  const seriesIds = new Set<string>();
+  const series = Array.isArray(o.series)
+    ? o.series.map((s): ChartSeries => {
+        const r = record(s);
+        // Ids key the settings' rows: a missing or repeated one is made anew.
+        const id = typeof r.id === "string" && r.id && !seriesIds.has(r.id) ? r.id : newId();
+        seriesIds.add(id);
+        return {
+          id,
+          value: oneOf(values(AGGREGATES), r.value, "count"),
+          field: field(r.field),
+          label: text(r.label),
+          style: r.style === null || r.style === undefined ? null : oneOf<SeriesStyle | null>(values(SERIES_STYLES), r.style, null),
+          axis: r.axis === "right" ? "right" : "left",
+          transform: oneOf(values(TRANSFORMS), r.transform, "none"),
+          window: Math.max(MOVING_WINDOW.min, Math.min(MOVING_WINDOW.max, Math.round(finite(r.window) ?? MOVING_WINDOW.initial))),
+        };
+      })
+    : d.series;
   return {
-    chart: CHART_KINDS.some((k) => k.kind === o.chart) ? (o.chart as ChartKind) : d.chart,
-    value: oneOf(AGGREGATES, o.value, d.value),
-    valueField: field(o.valueField, o.valueField === null ? null : d.valueField),
+    chart: oneOf(CHART_KINDS.map((k) => k.kind), o.chart, d.chart),
+    scope: o.scope === "page" ? "page" : "items",
+    x: {
+      by: oneOf<XBy>(["none", "field", "item"], x.by, d.x.by),
+      field: field(x.field),
+      order: oneOf<GroupOrder>(["asc", "desc", "count"], x.order, d.x.order),
+      dateStep: oneOf(values(DATE_STEPS), x.dateStep, d.x.dateStep),
+      showEmpty: flag(x.showEmpty, d.x.showEmpty),
+      top: count(x.top, 100),
+    },
+    series: series.length ? series : d.series,
     splitBy: field(o.splitBy),
-    dateStep: oneOf(DATE_STEPS, o.dateStep, d.dateStep),
-    showEmpty: flag(o.showEmpty, d.showEmpty),
-    top: count(o.top, 100),
-    height: normalizeBlockHeight(o.height),
-    width:
-      typeof o.width === "number" && Number.isFinite(o.width)
-        ? Math.min(CHART_WIDTH.max, Math.max(CHART_WIDTH.min, Math.round(o.width)))
-        : typeof o.width === "string" && o.width in LEGACY_WIDTHS
-          ? LEGACY_WIDTHS[o.width]
-          : d.width,
+    stack: oneOf(["none", "stacked", "percent"] as const, o.stack, d.stack),
     horizontal: flag(o.horizontal, d.horizontal),
-    stacked: flag(o.stacked, d.stacked),
-    lollipop: flag(o.lollipop, d.lollipop),
-    second: o.second === null || o.second === undefined ? null : oneOf(AGGREGATES, o.second, "count"),
-    secondField: field(o.secondField),
-    area: flag(o.area, d.area),
-    percent: flag(o.percent, d.percent),
-    cumulative: flag(o.cumulative, d.cumulative),
+    curve: oneOf(["smooth", "straight", "step"] as const, o.curve, d.curve),
+    points: flag(o.points, d.points),
+    missing: o.missing === "zero" ? "zero" : "skip",
     compact: flag(o.compact, d.compact),
-    curved: flag(o.curved, d.curved),
-    donut: flag(o.donut, d.donut),
+    parts: oneOf<PartsFrom>(["groups", "fields", "one"], o.parts, d.parts),
     fields: Array.isArray(o.fields) ? o.fields.filter((f): f is string => typeof f === "string" && ids.has(f)) : [],
-    bins: count(o.bins, 100),
-    xField: field(o.xField),
-    sizeField: field(o.sizeField),
-    max: finite(o.max),
-    maxField: field(o.maxField),
-    warnAt: finite(o.warnAt),
-    dangerAt: finite(o.dangerAt),
+    total: {
+      from: oneOf(["none", "number", "field"] as const, total.from, "none"),
+      number: finite(total.number),
+      field: field(total.field),
+    },
+    donut: flag(o.donut, d.donut),
     fullCircle: flag(o.fullCircle, d.fullCircle),
     asValue: flag(o.asValue, d.asValue),
-    compare: o.compare === null || o.compare === undefined ? null : oneOf([...AGGREGATES, PREVIOUS], o.compare, null as Compare | null),
+    compare: o.compare === null || o.compare === undefined ? null : oneOf<Compare | null>([...values(AGGREGATES), "prev"], o.compare, null),
     compareField: field(o.compareField),
-    proportional: flag(o.proportional, d.proportional),
+    spreadField: field(o.spreadField, o.spreadField === null ? null : d.spreadField),
+    bins: count(o.bins, 100),
+    sizeField: field(o.sizeField),
+    thresholds: Array.isArray(o.thresholds)
+      ? o.thresholds.flatMap((t) => {
+          const r = record(t);
+          const value = finite(r.value);
+          return value === null ? [] : [{ value, status: r.status === "danger" ? ("danger" as const) : ("warning" as const) }];
+        })
+      : [],
+    thresholdMode: o.thresholdMode === "absolute" ? "absolute" : "percent",
+    xTitle: text(o.xTitle),
+    left: axis(o.left),
+    right: axis(o.right),
+    unit: text(o.unit),
+    decimals: finite(o.decimals) === null ? null : count(o.decimals, MAX_DECIMALS),
+    legend: oneOf<LegendShow>(["auto", "show", "hide"], o.legend, d.legend),
+    legendPosition: oneOf<LegendPosition>(["bottom", "top", "left", "right"], o.legendPosition, d.legendPosition),
+    height: normalizeBlockHeight(o.height),
+    width: typeof o.width === "number" && Number.isFinite(o.width) ? Math.min(CHART_WIDTH.max, Math.max(CHART_WIDTH.min, Math.round(o.width))) : d.width,
   };
 }
 
-/** Whether a chart type draws categories (the block's grouping), rather than one point per item or one value. */
-export const usesCategories = (kind: ChartKind) => !["scatter", "histogram", "gauge"].includes(kind);
-
-/** Whether a chart type shows one value: of all its items together (gauge, meter). */
-export const isSingleValue = (kind: ChartKind) => kind === "gauge" || kind === "meter";
+/** How a series of a bar, line or area chart is drawn: its own style, or the chart's. */
+export const styleOf = (series: ChartSeries, chart: ChartKind): SeriesStyle =>
+  series.style ?? (chart === "line" ? "line" : chart === "area" ? "area" : "bar");
 
 // --- Values ---------------------------------------------------------------------------------------
 
@@ -285,31 +439,59 @@ export function aggregate(items: Item[], how: Compare, field: FieldDef | undefin
   }
 }
 
-/** What a value is called (an axis title, a legend): "Count", "Sum of Pages". */
+/** What a value is called (an axis title, a legend): "Books" (a count), "Sum of Pages". */
 export function valueLabel(how: Aggregate, field: FieldDef | undefined, collection: Collection): string {
   if (how === "count") return collection.pluralName;
   const name = field?.name ?? "?";
   return how === "sum" ? `Sum of ${name}` : how === "avg" ? `Average ${name}` : how === "min" ? `Minimum ${name}` : how === "first" ? `First ${name}` : how === "last" ? `Last ${name}` : `Maximum ${name}`;
 }
 
+/** A series' name: its label, or what it measures; on items placed one by one, a value is the field's name ("Weight"). */
+export function seriesLabel(series: ChartSeries, collection: Collection, x?: ChartX): string {
+  if (series.label.trim()) return series.label.trim();
+  const field = pickableFields(collection).find((f) => f.id === series.field);
+  if (x?.by === "item" && series.value !== "count" && field) return field.name;
+  return valueLabel(series.value, field, collection);
+}
+
+/** A series whose field is still to choose (anything but a count needs one). */
+export const needsField = (series: ChartSeries, collection: Collection): boolean =>
+  series.value !== "count" && !pickableFields(collection).some((f) => f.id === series.field);
+
+/** The items a chart shows: the block's (each once, in its order), or on an item page with scope "page" the page's item. */
+export function chartItems(result: QueryResult, scope: ChartOptions["scope"], pageItem: Item | null): Item[] {
+  if (scope === "page" && pageItem) return [pageItem];
+  return resultItems(result);
+}
+
+/** Every item of a result once (an item can be in several groups). */
+export const resultItems = (result: QueryResult): Item[] => unique(result.groups.flatMap((g) => g.items));
+
 // --- Categories -----------------------------------------------------------------------------------
 
-/** A category: a group of the block's items (a bar, a slice, a step of a line). */
+/** A category: a step of the X axis (a bar, a slice, a point of a line) and its items. */
 export interface Category {
   key: string;
   label: string;
   items: Item[];
-  /** Grouped by a date: the first day of its step (yyyy-mm-dd). */
+  /** On a date axis: the first day of its step (yyyy-mm-dd). */
   day?: string;
-  /** Grouped by a number: that number. */
+  /** On a time axis: its time (ms; a day's local midnight). */
+  at?: number;
+  /** On a number axis: that number. */
   number?: number;
 }
 
-const NO_VALUE = "No value";
-const OTHER = "Other";
+export const NO_VALUE = "No value";
+export const OTHER = "Other";
+export const REMAINING = "Remaining";
 const isDateField = (f: FieldDef | undefined) => f?.kind === "date" || f?.kind === "datetime";
 const unique = (items: Item[]) => [...new Set(items)];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const dayTime = (day: string) => {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y, m - 1, d).getTime();
+};
 
 /** The step for dates spread from `first` to `last` (yyyy-mm-dd): a month in days, half a year in weeks, five in months, more in years. */
 export function autoStep(first: string, last: string): Exclude<DateStep, "auto"> {
@@ -339,40 +521,56 @@ function nextStep(day: string, step: Exclude<DateStep, "auto">): string {
 
 export interface ChartInput {
   collection: Collection;
-  result: QueryResult;
-  /** The field the block groups by (its categories); undefined when not grouped. */
-  groupField: FieldDef | undefined;
-  groupOrder?: GroupOrder;
+  /** The items charted (`chartItems`), in the block's order. */
+  items: Item[];
   ctx: QueryContext;
   /** For month names (tests pin it). */
   locale?: string;
 }
 
-/** Every item of a result once (an item can be in several groups). */
-export const resultItems = (result: QueryResult): Item[] => unique(result.groups.flatMap((g) => g.items));
+const fieldsOf = (collection: Collection) => new Map(pickableFields(collection).map((f) => [f.id, f]));
+
+/** The field the X axis uses, when it uses one that is still there (and fits: groupable, or a number or date to place items at). */
+export function xField(collection: Collection, x: ChartX): FieldDef | undefined {
+  const field = x.field ? fieldsOf(collection).get(x.field) : undefined;
+  if (!field) return undefined;
+  if (x.by === "field") return isGroupable(field.kind) ? field : undefined;
+  // A number is checked on each item (an AI or component field may give one).
+  if (x.by === "item") return isDateField(field) || ["number", "ai", "component"].includes(field.kind) ? field : undefined;
+  return undefined;
+}
+
+/** The X axis's name: its title, or its field's name ("" without one). */
+export function xLabel(collection: Collection, options: Pick<ChartOptions, "x" | "xTitle">): string {
+  return options.xTitle.trim() || (options.x.by === "none" ? "" : (xField(collection, options.x)?.name ?? ""));
+}
 
 /**
- * The categories of a chart: the block's groups (none: one category of all its items, named after the
- * collection). Grouped by a date, the days are merged into steps (`dateStep`); a line gets the steps
- * without items too (`timeline`), in time order. "No value" is left out unless `showEmpty`.
+ * The categories of a chart: by its X axis. Nothing: one category of all its items (named after the
+ * collection). A field's groups: dates merged into steps (`dateStep`), every step from the first to
+ * the last on a `timeline` (a line), "No value" left out unless `showEmpty`. Each item: those with
+ * a value of its field, in that field's order (without a field: in the block's order).
  */
-export function chartCategories(input: ChartInput, options: Pick<ChartOptions, "dateStep" | "showEmpty">, timeline = false): Category[] {
-  const { collection, result, groupField } = input;
-  if (!groupField || !isGrouped(result)) {
-    const items = resultItems(result);
-    return items.length || result.groups.length ? [{ key: "", label: collection.pluralName, items }] : [];
-  }
+export function chartCategories(input: ChartInput, x: ChartX, timeline = false): Category[] {
+  const { collection, items, ctx } = input;
+  if (x.by === "item") return itemCategories(input, x);
+  const field = xField(collection, x);
+  if (x.by === "none" || !field) return items.length ? [{ key: "", label: collection.pluralName, items }] : [];
+  const result = applyQuery(collection, items, { ...defaultQuery(), sort: [], groupBy: field.id, groupOrder: x.order }, ctx);
   const groups = result.groups
-    .filter((g) => options.showEmpty || g.key !== "")
+    .filter((g) => x.showEmpty || g.key !== "")
     .map((g): Category => ({ key: g.key, label: g.key === "" ? NO_VALUE : g.label, items: g.items }));
-  if (groupField.kind === "number") return groups.map((g) => (g.key === "" ? g : { ...g, number: Number(g.key) }));
-  if (!isDateField(groupField)) return groups;
+  if (field.kind === "number") return groups.map((g) => (g.key === "" ? g : { ...g, number: Number(g.key) }));
+  if (!isDateField(field)) return groups;
 
   // Days into steps, in the groups' order (by date either way, or the largest first).
   const days = groups.filter((g) => DAY.test(g.key)).map((g) => g.key).sort();
   if (days.length === 0) return groups;
-  const step = options.dateStep === "auto" ? autoStep(days[0], days[days.length - 1]) : options.dateStep;
+  const step = x.dateStep === "auto" ? autoStep(days[0], days[days.length - 1]) : x.dateStep;
   const steps = new Map<string, Category>();
+  // A step's items in the block's order (its days' groups come in date order), for "first" and "last".
+  const position = new Map(items.map((item, i) => [item, i]));
+  const inOrder = (list: Item[]) => unique(list).sort((a, b) => (position.get(a) ?? 0) - (position.get(b) ?? 0));
   for (const g of groups) {
     if (!DAY.test(g.key)) {
       steps.set(g.key, g);
@@ -380,10 +578,10 @@ export function chartCategories(input: ChartInput, options: Pick<ChartOptions, "
     }
     const { day, label } = dateStepOf(g.key, step, input.locale);
     const at = steps.get(day);
-    steps.set(day, at ? { ...at, items: unique([...at.items, ...g.items]) } : { key: day, label, items: g.items, day });
+    steps.set(day, at ? { ...at, items: inOrder([...at.items, ...g.items]) } : { key: day, label, items: g.items, day, at: dayTime(day) });
   }
   let merged = [...steps.values()];
-  if (input.groupOrder === "count") merged.sort((a, b) => b.items.length - a.items.length);
+  if (x.order === "count") merged.sort((a, b) => Number(a.key === "") - Number(b.key === "") || b.items.length - a.items.length);
   if (!timeline) return merged;
   // A line: every step from the first to the last, in time order ("No value" can't be placed on it).
   const byDay = new Map(merged.filter((c) => c.day).map((c) => [c.day!, c]));
@@ -391,9 +589,27 @@ export function chartCategories(input: ChartInput, options: Pick<ChartOptions, "
   const last = dateStepOf(days[days.length - 1], step, input.locale).day;
   merged = [];
   for (let day = first, n = 0; day <= last && n < MAX_STEPS; day = nextStep(day, step), n++) {
-    merged.push(byDay.get(day) ?? { key: day, label: dateStepOf(day, step, input.locale).label, items: [], day });
+    merged.push(byDay.get(day) ?? { key: day, label: dateStepOf(day, step, input.locale).label, items: [], day, at: dayTime(day) });
   }
   return merged;
+}
+
+/** Each item a category: at its value of the X field (in that order), or without a field by its title in the block's order. */
+function itemCategories(input: ChartInput, x: ChartX): Category[] {
+  const { collection, items } = input;
+  const field = xField(collection, x);
+  if (!field) return items.map((item) => ({ key: item.id, label: itemLabel(collection, item), items: [item] }));
+  const placed: Category[] = [];
+  for (const item of items) {
+    const v = fieldValue(item, field);
+    const label = itemLabel(collection, item);
+    if (isDateField(field)) {
+      if (typeof v !== "string" || !v) continue;
+      const at = DAY.test(v) ? dayTime(v) : Date.parse(v);
+      if (!Number.isNaN(at)) placed.push({ key: item.id, label, items: [item], at, ...(DAY.test(v) && { day: v }) });
+    } else if (typeof v === "number") placed.push({ key: item.id, label, items: [item], number: v });
+  }
+  return placed.sort((a, b) => (a.at ?? a.number ?? 0) - (b.at ?? b.number ?? 0));
 }
 
 /** The most steps a line draws (a century of days would freeze the page). */
@@ -445,9 +661,41 @@ export function splitSeries(categories: Category[], field: FieldDef | undefined,
   };
 }
 
+/** A series' values along the X axis, in order, made into a running total, the change from the step before or a moving average. */
+export function transformValues(values: (number | null)[], transform: Transform, window = MOVING_WINDOW.initial): (number | null)[] {
+  if (transform === "none") return values;
+  let running = 0;
+  let previous: number | null = null;
+  const recent: number[] = [];
+  return values.map((v) => {
+    if (v === null) return null;
+    switch (transform) {
+      case "cumulative":
+        return (running += v);
+      case "change": {
+        const change = previous === null ? null : v - previous;
+        previous = v;
+        return change;
+      }
+      case "moving":
+        recent.push(v);
+        if (recent.length > window) recent.shift();
+        return recent.reduce((a, b) => a + b, 0) / recent.length;
+    }
+  });
+}
+
 // --- The data a chart draws -----------------------------------------------------------------------
 
-/** One value of a chart: a category's (in a series). */
+/** One series as drawn: its name (unique in the chart), the series it comes of and, split, its part. */
+export interface DrawnSeries {
+  name: string;
+  series: ChartSeries;
+  /** Split by a field: the value of it (`Split.names`). */
+  split?: string;
+}
+
+/** One value of a chart: a category's in a drawn series. */
 export interface ChartPoint {
   category: Category;
   series: string;
@@ -456,166 +704,276 @@ export interface ChartPoint {
 
 export interface ChartTable {
   categories: Category[];
-  /** The series names (one, the value's name, when not split). */
-  series: string[];
+  series: DrawnSeries[];
   points: ChartPoint[];
-  /** The value's name ("Books", "Sum of Pages"). */
-  valueLabel: string;
-  /** The categories' name (the grouped-by field's), "" when not grouped. */
+  /** The X axis's name ("" without one). */
   categoryLabel: string;
-  /** The categories are steps in time (a date field) / numbers. */
+  /** The categories are on a time axis (`at`) / a number axis (`number`); else labels. */
   time: boolean;
   numeric: boolean;
 }
 
 /**
- * The values of a chart drawing categories: each category's (and series') items made into its value.
- * `timeline`: a line (every step in time order, a running total when `cumulative`).
+ * The values of a chart of categories: each category's (and split's) items made into each series'
+ * value. `timeline`: a line or area (every date step in time order). The largest `top` categories
+ * are measured by the first series. Split by a field, each series is split (named "Pages · Novel"
+ * when there are several series). Missing values stay null unless `missing` is "zero"; a count or
+ * sum of no items is 0.
  */
 export function chartTable(input: ChartInput, options: ChartOptions, timeline = false): ChartTable {
-  const { collection, groupField, ctx } = input;
-  const byId = new Map(pickableFields(collection).map((f) => [f.id, f]));
-  const field = options.valueField ? byId.get(options.valueField) : undefined;
-  const label = valueLabel(options.value, field, collection);
-  const measure = (items: Item[]) => aggregate(items, options.value, field);
-  let categories = chartCategories(input, options, timeline);
-  if (!timeline) categories = topCategories(categories, options.top, (c) => measure(c.items));
-  const splitField = options.splitBy && options.splitBy !== groupField?.id ? byId.get(options.splitBy) : undefined;
-  const split = splitSeries(categories, splitField, options.showEmpty, ctx);
-  const series = split ? split.names : [label];
-  // Empty steps of a line count nothing (a count or sum is 0 there; an average has no value).
-  const zeroWhenEmpty = options.value === "count" || options.value === "sum";
+  const { collection, ctx } = input;
+  const byId = fieldsOf(collection);
+  const measures = options.series.map((s) => ({ s, field: s.field ? byId.get(s.field) : undefined }));
+  const measure = (items: Item[], m: (typeof measures)[number]) => aggregate(items, m.s.value, m.field);
+  let categories = chartCategories(input, options.x, timeline);
+  if (options.x.by === "field" && !timeline && measures.length) categories = topCategories(categories, options.x.top, (c) => measure(c.items, measures[0]));
+  const field = xField(collection, options.x);
+  const splitField = options.splitBy && !(options.x.by === "field" && options.splitBy === field?.id) ? byId.get(options.splitBy) : undefined;
+  const split = splitSeries(categories, splitField, options.x.showEmpty, ctx);
+
+  const drawn: DrawnSeries[] = [];
   const points: ChartPoint[] = [];
-  for (const s of series) {
-    let running = 0;
-    for (const c of categories) {
-      const items = split ? split.items(c, s) : c.items;
-      let value = items.length === 0 ? (zeroWhenEmpty ? 0 : null) : measure(items);
-      if (timeline && options.cumulative && value !== null) value = running += value;
-      points.push({ category: c, series: s, value });
+  const taken = new Set<string>();
+  const uniqueName = (name: string) => {
+    let n = name;
+    for (let i = 2; taken.has(n); i++) n = `${name} (${i})`;
+    taken.add(n);
+    return n;
+  };
+  for (const m of measures) {
+    const label = seriesLabel(m.s, collection, options.x);
+    for (const part of split ? split.names : [undefined]) {
+      const name = uniqueName(part === undefined ? label : measures.length > 1 ? `${label} · ${part}` : part);
+      drawn.push({ name, series: m.s, ...(part !== undefined && { split: part }) });
+      const raw = categories.map((c) => {
+        const items = split && part !== undefined ? split.items(c, part) : c.items;
+        // An empty step counts or adds up to 0; an item placed on its own isn't in the other parts at all.
+        const v = items.length === 0 ? (options.x.by !== "item" && (m.s.value === "count" || m.s.value === "sum") ? 0 : null) : measure(items, m);
+        return v === null && options.missing === "zero" ? 0 : v;
+      });
+      transformValues(raw, m.s.transform, m.s.window).forEach((value, i) => points.push({ category: categories[i], series: name, value }));
     }
   }
   return {
     categories,
-    series,
+    series: drawn,
     points,
-    valueLabel: label,
-    categoryLabel: groupField && isGrouped(input.result) ? groupField.name : "",
-    time: categories.some((c) => c.day !== undefined) && isDateField(groupField),
-    numeric: groupField?.kind === "number",
+    categoryLabel: xLabel(collection, options),
+    time: categories.length > 0 && categories.every((c) => c.at !== undefined),
+    numeric: categories.length > 0 && categories.every((c) => c.number !== undefined),
   };
 }
 
-/** One value made of all the block's items (a gauge, a meter), and what it is measured against. */
+/** The total a pie, meter or gauge is measured against: the option's number, or the total field's values made into one like the value (a count against their sum); null = none. */
+export function totalOf(collection: Collection, items: Item[], options: Pick<ChartOptions, "total" | "series">): number | null {
+  const { total } = options;
+  if (total.from === "number") return total.number;
+  if (total.from !== "field") return null;
+  const field = total.field ? fieldsOf(collection).get(total.field) : undefined;
+  if (!field) return null;
+  const how = options.series[0]?.value ?? "sum";
+  return aggregate(items, how === "count" ? "sum" : how, field);
+}
+
+/** One part of a whole: its name and value; `rest`: what is left of the total ("Remaining"). */
+export interface Part {
+  name: string;
+  value: number;
+  rest?: boolean;
+}
+
+export interface Parts {
+  parts: Part[];
+  /** The parts' total: the chart's total, or their sum. */
+  total: number;
+  /** The value's name ("Sum of Pages"), or the fields' aggregate ("Sum"). */
+  label: string;
+}
+
+/**
+ * The parts of a whole: the X axis's groups (by the first series' value), several number fields
+ * (each made into one by the first series' aggregate, a count read as a sum), or one value. Only
+ * parts above 0; with a total larger than their sum, the rest as "Remaining" (when `rest`).
+ */
+export function partsOf(input: ChartInput, options: ChartOptions, rest = true): Parts {
+  const { collection, items } = input;
+  const byId = fieldsOf(collection);
+  const first = options.series[0] ?? newSeries();
+  const field = first.field ? byId.get(first.field) : undefined;
+  let parts: Part[];
+  let label = seriesLabel(first, collection);
+  if (options.parts === "fields") {
+    const how = first.value === "count" ? "sum" : first.value;
+    label = AGGREGATES.find((a) => a.value === how)!.text;
+    parts = options.fields.flatMap((id) => {
+      const f = byId.get(id);
+      const value = f ? aggregate(items, how, f) : null;
+      return f && value !== null ? [{ name: f.name, value }] : [];
+    });
+  } else if (options.parts === "one") {
+    const value = aggregate(items, first.value, field);
+    parts = value === null ? [] : [{ name: label, value }];
+  } else {
+    // Parts are each a group's own value: no running total or moving average.
+    const t = chartTable(input, { ...options, series: [{ ...first, transform: "none" }], splitBy: null });
+    parts = t.points.flatMap((p) => (p.value === null ? [] : [{ name: p.category.label, value: p.value }]));
+  }
+  parts = parts.filter((p) => p.value > 0);
+  const sum = parts.reduce((n, p) => n + p.value, 0);
+  const total = totalOf(collection, items, options);
+  if (rest && total !== null && total > sum && parts.length > 0) parts.push({ name: REMAINING, value: total - sum, rest: true });
+  return { parts, total: total ?? sum, label };
+}
+
+/** One value made of all the chart's items (a gauge), and what it is measured against. */
 export interface SingleValue {
   value: number | null;
-  /** The max (or target): the option's number, or the max field's values made into one the same way; null = none. */
+  /** The total: the option's number, or the total field's values made into one the same way; null = none (the value is a %). */
   max: number | null;
   label: string;
 }
 
-export function singleValue(collection: Collection, items: Item[], options: ChartOptions): SingleValue {
-  const byId = new Map(pickableFields(collection).map((f) => [f.id, f]));
-  const field = options.valueField ? byId.get(options.valueField) : undefined;
-  const maxField = options.maxField ? byId.get(options.maxField) : undefined;
-  // A count is measured against the sum of the max field (a field's own value on one item).
-  const max = maxField ? aggregate(items, options.value === "count" ? "sum" : options.value, maxField) : options.max;
-  return { value: aggregate(items, options.value, field), max, label: valueLabel(options.value, field, collection) };
+export function singleValue(input: ChartInput, options: ChartOptions): SingleValue {
+  const { collection, items } = input;
+  const first = options.series[0] ?? newSeries();
+  const field = first.field ? fieldsOf(collection).get(first.field) : undefined;
+  return { value: aggregate(items, first.value, field), max: totalOf(collection, items, options), label: seriesLabel(first, collection) };
 }
 
 /** A value as a share of its max, in % (of 100 without a max); null without a value. */
 export const percentOf = (value: number | null, max: number | null): number | null =>
   value === null ? null : max === null ? value : max === 0 ? 0 : (value / max) * 100;
 
-/** The status of a share by the warning and danger thresholds (%): "success" below both. */
-export function statusOf(percent: number | null, warnAt: number | null, dangerAt: number | null): "success" | "warning" | "danger" | null {
-  if (percent === null || (warnAt === null && dangerAt === null)) return null;
-  if (dangerAt !== null && percent >= dangerAt) return "danger";
-  if (warnAt !== null && percent >= warnAt) return "warning";
-  return "success";
+/** A threshold as a % of the total (gauge and meter), whichever way it was set. */
+export const thresholdPercent = (t: Threshold, mode: ChartOptions["thresholdMode"], max: number | null): number =>
+  mode === "percent" ? t.value : (percentOf(t.value, max) ?? t.value);
+
+/** The status of a share (%) by the thresholds (%): the highest reached, "success" below all; null without thresholds. */
+export function statusOf(percent: number | null, thresholds: { value: number; status: ThresholdStatus }[]): "success" | ThresholdStatus | null {
+  if (percent === null || thresholds.length === 0) return null;
+  const reached = thresholds.filter((t) => percent >= t.value).sort((a, b) => b.value - a.value)[0];
+  return reached?.status ?? "success";
+}
+
+/** A meter's status ranges in % (0 to 100) from thresholds in %: success up to the first, then each one's status up to the next; null without thresholds. */
+export function statusRanges(thresholds: { value: number; status: ThresholdStatus }[]): { range: [number, number]; status: string }[] | null {
+  if (thresholds.length === 0) return null;
+  const cuts = [...thresholds].map((t) => ({ ...t, value: Math.max(0, Math.min(100, t.value)) })).sort((a, b) => a.value - b.value);
+  const ranges: { range: [number, number]; status: string }[] = [];
+  if (cuts[0].value > 0) ranges.push({ range: [0, cuts[0].value], status: "success" });
+  cuts.forEach((c, i) => {
+    const end = cuts[i + 1]?.value ?? 100;
+    if (end > c.value) ranges.push({ range: [c.value, end], status: c.status });
+  });
+  return ranges;
+}
+
+/** A value rounded and with the unit: "72.5 kg" (`decimals` null: at most 2). */
+export function formatValue(n: number, options: Pick<ChartOptions, "unit" | "decimals">): string {
+  const text = options.decimals === null ? String(Math.round((n + Number.EPSILON) * 100) / 100) : n.toFixed(options.decimals);
+  return options.unit.trim() ? `${text} ${options.unit.trim()}` : text;
 }
 
 /** One dot of a scatter: an item, by its X and Y (and size). */
 export interface ScatterPoint {
   item: Item;
   title: string;
+  /** Its colour: the series' name, or split, the split field's value. */
   series: string;
   x: number | string;
   y: number;
   size: number | null;
 }
 
-/** A scatter's dots: the items with an X and a Y, coloured by the block's groups. */
+/** A scatter's dots: each item with an X (`x.field`) and a value of a series' field (a dot per series), coloured by series or Split by. */
 export function scatterPoints(input: ChartInput, options: ChartOptions): ScatterPoint[] {
-  const { collection } = input;
-  const byId = new Map(pickableFields(collection).map((f) => [f.id, f]));
-  const x = options.xField ? byId.get(options.xField) : undefined;
-  const y = options.valueField ? byId.get(options.valueField) : undefined;
+  const { collection, items, ctx } = input;
+  const byId = fieldsOf(collection);
+  const x = options.x.field ? byId.get(options.x.field) : undefined;
   const size = options.sizeField ? byId.get(options.sizeField) : undefined;
-  if (!x || !y) return [];
-  const categories = chartCategories(input, { dateStep: "day", showEmpty: true });
-  const seen = new Set<Item>();
+  const ys = options.series.flatMap((s) => (s.field && byId.has(s.field) ? [{ s, field: byId.get(s.field)! }] : []));
+  if (!x || ys.length === 0) return [];
+  const split = splitSeries([{ key: "", label: "", items }], options.splitBy ? byId.get(options.splitBy) : undefined, true, ctx);
   const points: ScatterPoint[] = [];
-  for (const c of categories) {
-    for (const item of c.items) {
-      if (seen.has(item)) continue;
-      seen.add(item);
+  for (const { s, field } of ys) {
+    // A Y series is its field alone (whatever its aggregate): named after it.
+    const name = s.label.trim() || field.name;
+    for (const item of items) {
       const xv = fieldValue(item, x);
-      const yv = fieldValue(item, y);
+      const yv = fieldValue(item, field);
       if (typeof yv !== "number" || (typeof xv !== "number" && !(typeof xv === "string" && xv))) continue;
       const sv = size ? fieldValue(item, size) : null;
-      points.push({ item, title: itemLabel(collection, item), series: c.label, x: xv, y: yv, size: typeof sv === "number" ? sv : null });
+      const parts = split ? split.names.filter((n) => split.items({ key: "", label: "", items: [item] }, n).length > 0) : [name];
+      for (const part of parts.length ? parts : [name]) {
+        const series = split && ys.length > 1 ? `${name} · ${part}` : part;
+        points.push({ item, title: itemLabel(collection, item), series, x: xv, y: yv, size: typeof sv === "number" ? sv : null });
+      }
     }
   }
   return points;
 }
 
-/** The values of a number field per category (a histogram's bars, a box plot's boxes). */
-export function valuesByCategory(input: ChartInput, options: ChartOptions): { series: string; value: number }[] {
-  const field = options.valueField ? pickableFields(input.collection).find((f) => f.id === options.valueField) : undefined;
-  // A date is its time (ms): the chart draws it on a time axis.
-  const values = (items: Item[]) =>
-    isDateField(field) ? items.flatMap((i) => { const t = Date.parse(String(fieldValue(i, field!) ?? "")); return Number.isNaN(t) ? [] : [t]; }) : numbersOf(items, field);
-  return chartCategories(input, options).flatMap((c) => values(c.items).map((value) => ({ series: c.label, value })));
+/** A spread field's values (a date as its time, ms), per series: the X axis's categories (box plot) or Split by (histogram). */
+export function spreadValues(input: ChartInput, options: ChartOptions, by: "x" | "split"): { series: string; value: number }[] {
+  const { collection, items, ctx } = input;
+  const byId = fieldsOf(collection);
+  const field = options.spreadField ? byId.get(options.spreadField) : undefined;
+  if (!field) return [];
+  const values = (list: Item[]) =>
+    isDateField(field)
+      ? list.flatMap((i) => {
+          const v = String(fieldValue(i, field) ?? "");
+          const t = DAY.test(v) ? dayTime(v) : Date.parse(v);
+          return Number.isNaN(t) ? [] : [t];
+        })
+      : numbersOf(list, field);
+  if (by === "x") {
+    const categories = options.x.by === "field" ? chartCategories(input, options.x) : [{ key: "", label: field.name, items }];
+    return categories.flatMap((c) => values(c.items).map((value) => ({ series: c.label, value })));
+  }
+  const all: Category = { key: "", label: field.name, items };
+  const split = splitSeries([all], options.splitBy ? byId.get(options.splitBy) : undefined, options.x.showEmpty, ctx);
+  if (!split) return values(items).map((value) => ({ series: field.name, value }));
+  return split.names.flatMap((n) => values(split.items(all, n)).map((value) => ({ series: n, value })));
 }
 
-/** The values of each radar spoke (a number field) per category: one shape per group. */
+/** The values of each radar spoke (a number field) per category of the X axis: one shape per group (the first series' aggregate; a count is an average). */
 export function radarValues(input: ChartInput, options: ChartOptions): { series: string; spoke: string; value: number | null }[] {
-  const byId = new Map(pickableFields(input.collection).map((f) => [f.id, f]));
+  const byId = fieldsOf(input.collection);
   const spokes = options.fields.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
-  // A count has nothing to do with a spoke's field: its average instead.
-  const how = options.value === "count" ? "avg" : options.value;
-  return topCategories(chartCategories(input, options), options.top || MAX_SERIES, (c) => c.items.length).flatMap((c) =>
+  const first = options.series[0]?.value ?? "avg";
+  const how = first === "count" ? "avg" : first;
+  return topCategories(chartCategories(input, options.x), options.x.top || MAX_SERIES, (c) => c.items.length).flatMap((c) =>
     spokes.map((f) => ({ series: c.label, spoke: f.name, value: aggregate(c.items, how, f) })),
   );
 }
 
-/** A heatmap's cells: categories × series, or, grouped by a date and not split, weeks × weekdays (a calendar). */
+/** A heatmap's cells: categories × Split by (the first series), or, with a date X axis and not split, weeks × weekdays (a calendar). */
 export function heatmapCells(input: ChartInput, options: ChartOptions): { x: string; y: string; value: number | null }[] {
-  const calendar = isDateField(input.groupField) && !options.splitBy && isGrouped(input.result);
+  const field = xField(input.collection, options.x);
+  const one = { ...options, series: options.series.slice(0, 1) };
+  const calendar = options.x.by === "field" && isDateField(field) && !options.splitBy;
   if (!calendar) {
-    const table = chartTable(input, options);
-    return table.points.map((p) => ({ x: p.category.label, y: p.series, value: p.value }));
+    const table = chartTable(input, one);
+    return table.points.map((p) => ({ x: p.category.label, y: table.series.length > 1 || options.splitBy ? p.series : table.series[0]?.name ?? "", value: p.value }));
   }
-  const byId = new Map(pickableFields(input.collection).map((f) => [f.id, f]));
-  const field = options.valueField ? byId.get(options.valueField) : undefined;
-  const days = chartCategories(input, { ...options, dateStep: "day" }, true);
+  const first = one.series[0] ?? newSeries();
+  const valueField = first.field ? fieldsOf(input.collection).get(first.field) : undefined;
+  // Only dated days ("No value", shown when no item has a date, has no place in a calendar).
+  const days = chartCategories(input, { ...options.x, dateStep: "day" }, true).filter((d) => d.day);
   const names = weekdays(input.locale);
   return days.map((d) => {
     const [y, m, day] = periodAround("week", d.day!).start.split("-").map(Number);
+    // Like chartTable: a day without items counts or adds up to 0.
+    const value = d.items.length === 0 ? (first.value === "count" || first.value === "sum" ? 0 : null) : aggregate(d.items, first.value, valueField);
     return {
       // A week by its Sunday ("4 Jan"), a day by its name.
       x: new Date(y, m - 1, day).toLocaleDateString(input.locale, { day: "numeric", month: "short" }),
-      y: names[dayDate(d.day!).getDay()],
-      value: d.items.length === 0 ? (options.value === "count" ? 0 : null) : aggregate(d.items, options.value, field),
+      y: names[new Date(dayTime(d.day!)).getDay()],
+      value: value === null && options.missing === "zero" ? 0 : value,
     };
   });
 }
-
-const dayDate = (day: string) => {
-  const [y, m, d] = day.split("-").map(Number);
-  return new Date(y, m - 1, d);
-};
 
 /** The weekdays' short names, Sunday first (a calendar heatmap's rows). */
 export const weekdays = (locale?: string): string[] =>

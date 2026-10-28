@@ -86,9 +86,10 @@ function unusedHeight(holder: HTMLElement, part: string): number {
 }
 
 /**
- * The same spec as before while nothing in it changed (functions aside): Carbon redraws a chart
- * whenever its data or options are new objects, which hides its tooltip under the pointer, so a
- * re-render of the block with equal options must not hand it new ones.
+ * The same spec as before while nothing in it changed (functions aside: what they depend on is
+ * the spec's `format`): Carbon redraws a chart whenever its data or options are new objects, which
+ * hides its tooltip under the pointer, so a re-render of the block with equal options must not hand
+ * it new ones.
  */
 function useStableSpec(spec: ChartSpec): ChartSpec {
   const last = useRef<{ key: string; spec: ChartSpec } | null>(null);

@@ -95,6 +95,8 @@ export interface BlockOptionsProps<O> {
   collection: Collection;
   options: O;
   place: BlockPlace;
+  /** On an item page: its collection (a chart offers "This item" only when it lists that collection). */
+  pageCollectionId?: string;
   onChange(options: O): void;
 }
 

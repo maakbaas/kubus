@@ -2878,6 +2878,78 @@ img[data-lightbox] {
   grid-column: 1 / -1;
   margin: 0;
 }
+/* A chart's settings: the Chart select, then sections (a Carbon accordion) whose titles and
+   contents line up with the fields above them (Carbon indents both), each a column of fields with
+   the panel's gaps. Sections open and close at once, like grouped tables. */
+.chart-options .cds--accordion__heading {
+  padding-inline: 0;
+}
+.chart-options .cds--accordion__title {
+  margin: 0;
+  padding-inline: 0;
+  font-weight: 600;
+}
+.chart-options .cds--accordion__arrow {
+  margin: 0;
+}
+.chart-options .cds--accordion__content {
+  margin: 0;
+  padding: 0;
+}
+.chart-options .cds--accordion__wrapper {
+  transition: none;
+}
+.chart-options .cds--accordion__item--active > .cds--accordion__wrapper {
+  padding-block: var(--cds-spacing-03) var(--cds-spacing-05);
+}
+.chart-options__section,
+.chart-options__series,
+.chart-options__group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--cds-spacing-05);
+}
+/* Two short settings side by side (Draw as and Axis, Min and Max, Unit and Decimals). */
+.chart-options__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--cds-spacing-05);
+}
+/* A series of the list: under a line, headed by its name and its move / remove buttons (touching). */
+.chart-options__series {
+  border-block-start: 1px solid var(--cds-border-subtle);
+  padding-block-start: var(--cds-spacing-03);
+}
+.chart-options__row-head {
+  display: flex;
+  align-items: center;
+  min-block-size: 2rem;
+}
+.chart-options__row-title,
+.chart-options__subheading {
+  font-size: var(--cds-heading-compact-01-font-size);
+  line-height: var(--cds-heading-compact-01-line-height);
+  letter-spacing: var(--cds-heading-compact-01-letter-spacing);
+  font-weight: 600;
+  margin: 0;
+}
+.chart-options__row-title {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A threshold: its value, its status and its remove button on one line. */
+.chart-options__threshold {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--cds-spacing-03);
+  align-items: center;
+}
+.chart-options__add {
+  justify-self: start;
+}
 /* In a toolbar popover, view-type options stack in one column. */
 .toolbar-popover .view-options {
   grid-template-columns: minmax(0, 1fr);

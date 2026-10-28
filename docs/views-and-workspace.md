@@ -84,29 +84,53 @@ Extension points are registries, not special cases in pages:
   and
   `chart` (`views/ChartBlock.tsx`: settings and view; `domain/chart.ts`: the values, pure; `views/chartSpec.ts`: Carbon
   Charts' component, data and options for them; `views/ChartCanvas.tsx`: Carbon Charts itself, a lazily loaded chunk with
-  d3, so the app doesn't load it until a chart is shown). Like a table, its filter picks the items and its grouping (Sort
-  and group) makes the categories: grouped by Status it is a bar per status, with nothing to set; not grouped, one
-  category of all its items. A date's groups are merged into steps (Date steps: day, week (Sunday to Saturday), month,
-  year, or automatic by how far the dates spread); a line gets every step from the first to the last, in time order.
-  Its settings (`ChartOptions`, all in Block settings): Chart (12 types in sections: Compare: Bar, Radar; Over
-  time: Line; Parts of a whole: Pie, Treemap, Word cloud; Spread: Histogram, Box plot, Scatter, Heatmap; One value:
-  Gauge, Meter), Value (Count of items, or the Sum / Average / Minimum / Maximum / First / Last value of a number field: number fields and
-  AI or component fields giving numbers, `numberFields`), Split by (a second field: series, at most 12, the rest
-  "Other"), Show (the largest n categories, the rest "Other"), Show items without a value ("No value"), Height (see below), Width (a slider like the cards', 8 to 120rem (about 1920px) at most; saved as Full / Small / Medium / Large it reads as 120 / 24 / 40 / 64rem; a
-  gauge as wide as a pane is mostly empty, so switching to one makes a full-width chart 24rem), and
-  A line's (and an area's, a scatter's) value axis fits its values instead of starting at 0 (Carbon's
-  `includeZero: false`, `FIT` in chartSpec.ts), so a weight from 80 to 70 shows its trend; bars and stacked shares keep 0.
-  per type: Bar horizontal, stacked, lollipops, a second value drawn as a line on its own axis (Carbon's combo chart;
-  also for Line); Line curved (default) or straight, fill the area (stacked areas when split, optionally as shares of 100%), running total, compact
-  (a sparkline: no axes, legend or grid); Pie donut (the total in its centre); Radar its spokes (three or more number
-  fields; a count is averaged); Histogram its field (a number or a date: dates on a time axis) and bins; Box plot its field (likewise) (a box per group); Scatter X (a
-  number or date), Y and Size (bubbles), a dot per item, clicking one opens it; Heatmap categories × Split by, or,
-  grouped by a date and not split, a calendar (weeks × weekdays; empty cells left undrawn); Gauge and Meter
-  measure against a number, a field (its values made into one the same way: on a block of one item, that item's
-  own, "Pages read of Pages") or nothing (the value is a %), Gauge and Meter turn yellow / red from a warning and
-  danger share, Gauge can show the value itself instead of a % ("Show the value, not a %") and the increase or decrease from a comparison value (any Value, and "Previous value" when the Value is the Last value; Carbon's delta arrow), Meter can show the groups as parts of a whole, or (with number fields chosen as parts, e.g. fat, bone and muscle weight against a total weight field) those fields. A setting
-  still to choose (a field, three spokes) or nothing to chart says so instead of an empty chart. The chart follows
-  the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of 500 one after the other, a progress bar and Cancel under it: the bar is how far the last row's place in the order (group, first sort column, else key; numbers, dates, or text by its first letters) lies between the first row's and the opposite order's first row, asked once, never the source's count; after Cancel the chart shows the rows in and "Load all rows" goes on). 
+  d3, so the app doesn't load it until a chart is shown). The block's filter and sort pick its items; everything else is the
+  chart's own (`ChartOptions`, all in Block settings, stored right away), so its grouping (Sort and group) isn't used. The
+  settings are a Chart select (13 types in sections: Compare and over time: Bar, Line, Area, Radar; Parts of a whole: Pie,
+  Meter, Treemap, Word cloud; One value: Gauge; Spread: Histogram, Box plot, Scatter, Heatmap) and an accordion whose
+  sections are fixed per type (Data, Series, Value, Total, Display, Axes, Thresholds, Values and legend, Size); a setting
+  that doesn't apply because of another one is disabled with the reason under it, never hidden, and a setting depends only
+  on those above it. Switching type keeps every setting (`switchKind`: a gauge narrows a full-width chart, a scatter
+  places each item, a radar or parts from fields with none chosen take the series' fields).
+  - **Of** (on an item page, for a block of the page's own collection): these items, or this item alone (`scope: "page"`,
+    `chartItems`: then the block has no filter), e.g. a pie of this person's fat, muscle and bone mass.
+  - **X axis** (`ChartX`): nothing (one category of all items), a field's values (any field grouping could use: its
+    groups by value either way or the largest first; a date's merged into steps: day, week (Sunday to Saturday), month,
+    year, or automatic by how far the dates spread; a line or area gets every step from the first to the last; "No
+    value" when asked; the largest n, the rest "Other"), or each item, at its value of a date or number field (a point per
+    measurement, on a time or number axis) or without one by its title in the block's order. A radar's shapes, a box
+    plot's boxes, a heatmap's columns and parts from categories are the X axis too.
+  - **Series** (bar, line, area): any number (`ChartSeries`), each a count or the sum / average / minimum / maximum / first
+    / last value of a number field (number fields and AI or component fields giving numbers, `numberFields`), with a
+    label, drawn as the chart's (Bar: bars, …) or bars, lollipops, a line, an area or dots, on the left or right axis, and
+    shown as its values, a running total, the change from the step before or a moving average (`transformValues`). Split
+    by (a field) splits every series ("Pages · Novel" with several; at most 12, the rest "Other"). One style on one axis
+    is Carbon's own chart; mixed styles or a right axis are its combo chart (`comboChartTypes` per style). Bars and areas
+    side by side, stacked or as shares of 100%; horizontal when every series is bars on the left axis; lines smooth,
+    straight or in steps, with or without dots; missing values (an average of no items) left out or 0 (a count or sum of
+    none is 0); compact (a sparkline: no axes, legend or grid). A scatter's series are its Y fields, its X a number or
+    date field, Size makes bubbles and Split by colours the dots; clicking a dot opens its item.
+  - **Parts of a whole** (pie or donut, meter, treemap, word cloud; `partsOf`): the X axis's categories (by the first
+    series' value), number fields (each made into one by its aggregate: fat, muscle and bone mass) or one value, against
+    a Total: the sum of the parts, a number or a field (made into one like the value). A total larger than the parts
+    adds a "Remaining" slice; a meter shows it as its empty part (Carbon's proportional meter); one value on a meter is a
+    bar of its share. A gauge measures its value against its total likewise (none: the value is a %), shows the value
+    itself or its %, and the increase or decrease from a comparison value (any value, and "Previous value" after the Last
+    value; Carbon's delta arrow).
+  - **Spread**: a histogram's field (a number or a date: dates on a time axis), bins and Split by; a box plot's field (a
+    box per X category); a heatmap's columns (the X axis) × rows (Split by), or with a date X axis and not split a
+    calendar (weeks × weekdays; empty cells left undrawn).
+  - **Axes**: the X axis's title; the left and (while a series uses it) right axis' title, min, max and logarithmic scale.
+    Without a min, bars and stacked areas start at 0 and lines, areas and dots fit their values (`includeZero: false`, `FIT`
+    in chartSpec.ts), so a weight from 80 to 70 shows its trend.
+  - **Thresholds**: warning and danger levels; lines on a bar, line or area chart's left axis, a gauge's colour and a
+    meter's status ranges (there a % of the total or values: `thresholdPercent`, `statusOf`, `statusRanges`).
+  - **Values and legend**: a unit and decimals for axes, tooltips and a gauge (`formatValue`); the legend automatic (with
+    more than one series or part), shown or hidden, and where.
+  - **Size**: Height (see below) and Width (a slider like the cards', 8 to 120rem (about 1920px) at most; a gauge as wide
+    as a pane is mostly empty, so switching to one makes a full-width chart 24rem).
+  A setting still to choose (a field, three spokes) or nothing to chart says so instead of an empty chart. The chart follows
+  the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of 500 one after the other, a progress bar and Cancel under it: the bar is how far the last row's place in the order (group, first sort column, else key; numbers, dates, or text by its first letters) lies between the first row's and the opposite order's first row, asked once, never the source's count; after Cancel the chart shows the rows in and "Load all rows" goes on).
   A chart, a map and a component block showing HTML have the same Height setting (`BLOCK_HEIGHT` and
   `normalizeBlockHeight` in `domain/views.ts`, the slider `views/HeightSlider.tsx`: 8 to 48rem, 24 for a new block;
   a chart's old Small / Medium / Large reads as 16 / 24 / 32). It is the most the block takes: what fills its box (a

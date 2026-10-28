@@ -1,25 +1,36 @@
 // What Carbon Charts draws for a chart block: the chart component, its data and its options, made
-// from the block's items (domain/chart.ts). Plain objects, no Carbon import: ChartCanvas (loaded
-// only when a chart is shown) picks the component by name.
+// from the block's items and the chart's settings (domain/chart.ts). Plain objects, no Carbon import:
+// ChartCanvas (loaded only when a chart is shown) picks the component by name.
 
 import {
+  aggregate,
   chartTable,
+  formatValue,
   heatmapCells,
+  isXY,
+  needsField,
+  partsOf,
   percentOf,
   radarValues,
-  resultItems,
   scatterPoints,
+  seriesLabel,
   singleValue,
-  aggregate,
+  spreadValues,
   statusOf,
-  valueLabel,
-  valuesByCategory,
+  statusRanges,
+  styleOf,
+  thresholdPercent,
   weekdays,
+  xField,
+  xLabel,
+  type Category,
+  type ChartAxis,
   type ChartInput,
   type ChartOptions,
-  type ChartTable,
+  type DrawnSeries,
+  type SeriesStyle,
 } from "../domain/chart";
-import { pickableFields } from "../domain/model";
+import { pickableFields, type FieldDef } from "../domain/model";
 
 /** The Carbon Charts components a chart block uses (named as @carbon/charts-react exports them). */
 export type CarbonChart =
@@ -48,203 +59,449 @@ export interface ChartSpec {
   chart: CarbonChart;
   data: Record<string, unknown>[];
   options: Record<string, unknown>;
+  /**
+   * What the options' formatters depend on (unit, decimals, …), as plain values: ChartCanvas
+   * compares specs as JSON, which leaves functions out, so a change of these must show here.
+   */
+  format: Record<string, unknown>;
 }
 
-/** Why there is nothing to draw (shown instead of an empty chart); null when there is. */
-export type ChartProblem = string | null;
+type Problem = { problem: string };
 
 /** A sparkline's height. */
 const COMPACT_REM = 4;
 
-/** What every chart shares: its theme and height (the most it takes: ChartCanvas fits a pie or gauge to less), no toolbar, a legend only with more than one series. */
-function base(options: ChartOptions, theme: string, legend: boolean, extra: Record<string, unknown> = {}): Record<string, unknown> {
+/**
+ * What every chart shares: its theme and height (the most it takes: ChartCanvas fits a pie or gauge
+ * to less), no toolbar, the legend as set ("auto": with more than one series or part, `several`).
+ */
+function base(options: ChartOptions, theme: string, several: boolean, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  const compact = isXY(options.chart) && options.compact;
+  const legend = !compact && (options.legend === "auto" ? several : options.legend === "show");
   return {
     theme,
-    height: `${options.chart === "line" && options.compact ? COMPACT_REM : options.height}rem`,
+    height: `${compact ? COMPACT_REM : options.height}rem`,
     resizable: true,
     animations: false,
     toolbar: { enabled: false },
-    legend: { enabled: legend, clickable: legend },
+    legend: { enabled: legend, clickable: legend, position: options.legendPosition },
     ...extra,
   };
 }
 
-/** A category's place on its axis: a date (time axis), a number, or its label. */
-const domainValue = (t: ChartTable, p: ChartTable["points"][number]): Date | number | string =>
-  t.time && p.category.day ? dayDate(p.category.day) : t.numeric && p.category.number !== undefined ? p.category.number : p.category.label;
-const dayDate = (day: string) => {
-  const [y, m, d] = day.split("-").map(Number);
-  return new Date(y, m - 1, d);
-};
-const scaleOf = (t: ChartTable) => (t.time ? "time" : t.numeric ? "linear" : "labels");
+const DATE_FORMAT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+
+/**
+ * The tooltip's values with the unit and decimals; those of `plain` labels (the X axis's, a
+ * bubble's size) and anything not a number as Carbon would show them.
+ */
+const tooltip = (options: ChartOptions, input: ChartInput, plain: (string | undefined)[] = []) => ({
+  valueFormatter: (v: unknown, label: string) =>
+    typeof v === "number" && !plain.includes(label)
+      ? formatValue(v, options)
+      : v instanceof Date
+        ? v.toLocaleDateString(input.locale, DATE_FORMAT)
+        : typeof v === "number"
+          ? v.toLocaleString(input.locale)
+          : String(v),
+});
+
+/** A value axis's ticks with the unit and decimals (Carbon's own, shortened "1.2K", when neither is set). */
+const ticks = (options: ChartOptions) =>
+  options.unit.trim() || options.decimals !== null ? { ticks: { formatter: (n: number | Date) => formatValue(Number(n), options) } } : {};
+
+const formatOf = (options: ChartOptions, extra: Record<string, unknown> = {}) => ({ unit: options.unit, decimals: options.decimals, ...extra });
 
 /**
  * A value axis fitted to its values (not from 0): lines and dots show change (a weight from 80 to 70
- * reads as a fall, not a flat line). Bars and areas stacked to a whole keep 0, their length is their value.
+ * reads as a fall, not a flat line). Bars and stacked areas keep 0, their length is their value.
  */
 const FIT = { includeZero: false };
 
-/** A category axis and a value axis, horizontal or not. */
-function axes(t: ChartTable, horizontal: boolean, valueAxis: Record<string, unknown> = {}) {
-  const domain = { mapsTo: t.time ? "date" : "key", scaleType: scaleOf(t), title: t.categoryLabel || undefined };
-  const range = { mapsTo: "value", scaleType: "linear", title: t.valueLabel, ...valueAxis };
-  return horizontal ? { left: domain, bottom: range } : { bottom: domain, left: range };
+/** An axis's min and max as Carbon's domain (one not set: the values' extreme); null when neither is set. */
+const domainOf = (a: ChartAxis, values: number[]): [number, number] | null =>
+  a.min === null && a.max === null ? null : [a.min ?? Math.min(...values), a.max ?? Math.max(...values)];
+
+/** Threshold lines on a value axis. Carbon sets their colour as a style, so a theme token works. */
+const thresholdLines = (options: ChartOptions) =>
+  options.thresholds.map((t) => ({
+    value: t.value,
+    label: t.status === "danger" ? "Danger" : "Warning",
+    fillColor: t.status === "danger" ? "var(--cds-support-error)" : "var(--cds-support-warning)",
+    valueFormatter: (v: number) => formatValue(v, options),
+  }));
+
+const CURVES: Record<ChartOptions["curve"], string> = { smooth: "curveMonotoneX", straight: "curveLinear", step: "curveStepAfter" };
+
+const isDate = (f: FieldDef | undefined) => f?.kind === "date" || f?.kind === "datetime";
+/** A date value as a Date: a day at its local midnight, a time as it is. */
+const toDate = (v: string | number) => {
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [y, m, d] = v.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+  return new Date(v);
+};
+const clampPercent = (n: number) => Math.round(Math.min(100, Math.max(0, n)) * 10) / 10;
+
+/** The categories' labels made unique (two items of the same title are two bars, not one). */
+function uniqueLabels(categories: Category[]): Map<Category, string> {
+  const taken = new Set<string>();
+  return new Map(
+    categories.map((c) => {
+      let label = c.label;
+      for (let i = 2; taken.has(label); i++) label = `${c.label} (${i})`;
+      taken.add(label);
+      return [c, label];
+    }),
+  );
 }
 
-/** Points as Carbon's rows: series as `group`, the category as `key` (or `date`). */
-const rows = (t: ChartTable) =>
-  t.points.filter((p) => p.value !== null).map((p) => ({ group: p.series, [t.time ? "date" : "key"]: domainValue(t, p), value: p.value }));
+/** Bar and lollipop are drawn along a bar's length (from 0, stackable, across when horizontal). */
+const isBarStyle = (s: SeriesStyle) => s === "bar" || s === "lollipop";
 
-/** A second value drawn as a line against its own (right) axis: a combo of the main chart and that line. */
-function combo(input: ChartInput, options: ChartOptions, theme: string, t: ChartTable, mainType: string): ChartSpec | null {
-  if (!options.second || options.splitBy) return null;
-  const field = pickableFields(input.collection).find((f) => f.id === options.secondField);
-  const second = chartTable(input, { ...options, value: options.second, valueField: options.secondField, top: 0, cumulative: false }, mainType === "line");
-  // The main table may keep only its largest categories: the line follows them.
-  const kept = new Set(t.categories.map((c) => c.key));
-  const label = valueLabel(options.second, field, input.collection);
-  const name = label === t.valueLabel ? `${label} (2)` : label;
-  const lineRows = rows({ ...second, points: second.points.filter((p) => kept.has(p.category.key)).map((p) => ({ ...p, series: name })) });
-  const fit = mainType === "line" ? FIT : {};
-  const a = axes(t, false, { main: true, correspondingDatasets: [t.valueLabel], ...fit });
-  return {
-    chart: "ComboChart",
-    data: [...rows(t), ...lineRows],
-    options: base(options, theme, true, {
-      axes: { ...a, right: { mapsTo: "value", scaleType: "linear", title: name, correspondingDatasets: [name], ...fit } },
-      comboChartTypes: [
-        { type: mainType, correspondingDatasets: [t.valueLabel] },
-        { type: "line", correspondingDatasets: [name] },
-      ],
-    }),
+/**
+ * Bar, line and area: every series drawn its own way on its own axis. One style on one axis is
+ * Carbon's chart of it; mixed styles or a right axis a combo (a lollipop in a combo is a bar: Carbon's
+ * combo has no lollipop).
+ */
+function xyChart(input: ChartInput, options: ChartOptions, theme: string): ChartSpec | Problem {
+  const styleOfSeries = (s: ChartOptions["series"][number]) => styleOf(s, options.chart);
+  const timeline = options.series.some((s) => ["line", "area"].includes(styleOfSeries(s)));
+  const t = chartTable(input, options, timeline);
+  if (t.points.every((p) => p.value === null)) return { problem: "No items to chart." };
+
+  // Every series on the right is the same as every series on the left, with the right axis's settings.
+  const anyLeft = t.series.some((d) => d.series.axis === "left");
+  const sideOf = (d: DrawnSeries) => (anyLeft ? d.series.axis : "left");
+  const axisOf = (side: "left" | "right"): ChartAxis => (side === "left" && !anyLeft ? options.right : options[side]);
+  const dual = t.series.some((d) => sideOf(d) === "right");
+  const styleOfDrawn = (d: DrawnSeries) => styleOfSeries(d.series);
+  const on = (side: "left" | "right") => t.series.filter((d) => sideOf(d) === side);
+  // Bars and areas stack with another of their style on the same axis (lollipops don't stack).
+  const stacked = (d: DrawnSeries) =>
+    options.stack !== "none" &&
+    ["bar", "area"].includes(styleOfDrawn(d)) &&
+    t.series.some((o) => o !== d && sideOf(o) === sideOf(d) && styleOfDrawn(o) === styleOfDrawn(d));
+  const comboKind = (d: DrawnSeries) => (isBarStyle(styleOfDrawn(d)) ? "bar" : styleOfDrawn(d));
+  const horizontal = options.horizontal && !dual && t.series.every((d) => isBarStyle(styleOfDrawn(d)));
+  const bySeries = new Map(t.series.map((d) => [d.name, d]));
+
+  const labels = uniqueLabels(t.categories);
+  const place = (c: Category) => (t.time ? new Date(c.at!) : t.numeric ? c.number! : labels.get(c)!);
+  const dataKey = t.time ? "date" : "key";
+  const rows = t.points
+    .filter((p) => p.value !== null && !(axisOf(sideOf(bySeries.get(p.series)!)).log && p.value <= 0))
+    .map((p) => ({ group: p.series, [dataKey]: place(p.category), value: p.value }));
+
+  const domainAxis = {
+    mapsTo: dataKey,
+    scaleType: t.time ? "time" : t.numeric ? "linear" : "labels",
+    title: t.categoryLabel || undefined,
+    ...(t.numeric && FIT),
+    ...(!t.time && !t.numeric && { domain: [...labels.values()] }),
   };
+  const valueAxis = (side: "left" | "right") => {
+    const a = axisOf(side);
+    const series = on(side);
+    const names = new Set(series.map((d) => d.name));
+    const isStacked = series.some(stacked);
+    const percent = isStacked && options.stack === "percent";
+    const fitted = a.min === null && !isStacked && series.every((d) => !isBarStyle(styleOfDrawn(d)));
+    // The values' extremes (stacked: the stacks'), from 0 unless fitted, for a min or max set alone.
+    const values = rows.filter((r) => names.has(r.group)).map((r) => r.value!);
+    if (isStacked) {
+      const stacks = new Map<unknown, [number, number]>();
+      for (const r of rows.filter((r) => names.has(r.group))) {
+        const [lo, hi] = stacks.get(r[dataKey]) ?? [0, 0];
+        stacks.set(r[dataKey], r.value! < 0 ? [lo + r.value!, hi] : [lo, hi + r.value!]);
+      }
+      values.push(...[...stacks.values()].flat());
+    }
+    if (!fitted && !a.log) values.push(0);
+    const domain = percent ? null : domainOf(a, values);
+    return {
+      mapsTo: "value",
+      scaleType: a.log && !percent ? "log" : "linear",
+      title: a.title.trim() || (series.length === 1 ? series[0].name : options.unit.trim()) || undefined,
+      ...(isStacked && { stacked: true }),
+      ...(percent ? { percentage: true, ticks: { formatter: (n: number | Date) => `${Number(n)}%` } } : ticks(options)),
+      ...(domain && { domain }),
+      ...(fitted && !domain && FIT),
+      ...(side === "left" && !percent && options.thresholds.length > 0 && { thresholds: thresholdLines(options) }),
+      ...(dual && { correspondingDatasets: series.map((d) => d.name) }),
+      ...(dual && side === "left" && { main: true }),
+    };
+  };
+  const hidden = options.compact ? { visible: false, title: undefined } : {};
+  const axes: Record<string, unknown> = horizontal
+    ? { left: { ...domainAxis, ...hidden }, bottom: { ...valueAxis("left"), ...hidden } }
+    : { bottom: { ...domainAxis, ...hidden }, left: { ...valueAxis("left"), ...hidden }, ...(dual && { right: { ...valueAxis("right"), ...hidden } }) };
+
+  const styles = new Set(t.series.map(styleOfDrawn));
+  const several = t.series.length > 1;
+  const anyStacked = t.series.some(stacked);
+  let chart: CarbonChart = "ComboChart";
+  let combo: Record<string, unknown>[] | null = null;
+  if (styles.size === 1 && !dual) {
+    const [style] = styles;
+    chart =
+      style === "bar"
+        ? !several ? "SimpleBarChart" : anyStacked ? "StackedBarChart" : "GroupedBarChart"
+        : style === "lollipop" ? "LollipopChart"
+          : style === "line" ? "LineChart"
+            : style === "area" ? (anyStacked ? "StackedAreaChart" : "AreaChart")
+              : "ScatterChart";
+  } else {
+    // A combo: a chart type per style (stacked ones per axis; unstacked bars and lollipops side by side across both).
+    const groups = new Map<string, DrawnSeries[]>();
+    for (const d of t.series) {
+      const key = `${comboKind(d)}:${stacked(d) ? sideOf(d) : ""}`;
+      groups.set(key, [...(groups.get(key) ?? []), d]);
+    }
+    combo = [...groups.values()].map((list) => {
+      const kind = comboKind(list[0]);
+      const names = list.map((d) => d.name);
+      const isStacked = list.some(stacked);
+      if (kind === "bar") return { type: names.length === 1 ? "simple-bar" : isStacked ? "stacked-bar" : "grouped-bar", correspondingDatasets: names };
+      if (kind === "area") return { type: isStacked ? "stacked-area" : "area", correspondingDatasets: names };
+      // Dots are drawn even when a line's are hidden.
+      if (kind === "points") return { type: "scatter", options: { points: { enabled: true } }, correspondingDatasets: names };
+      return { type: "line", correspondingDatasets: names };
+    });
+  }
+  const lines = styles.has("line") || styles.has("area");
+  return {
+    chart,
+    data: rows,
+    options: base(options, theme, several, {
+      axes,
+      tooltip: tooltip(options, input, [t.categoryLabel || (horizontal ? "y-value" : "x-value")]),
+      ...(combo && { comboChartTypes: combo }),
+      ...(lines && { curve: CURVES[options.curve] }),
+      ...(lines && (!options.points || options.compact) && { points: { enabled: false } }),
+      ...(options.compact && { grid: { x: { enabled: false }, y: { enabled: false } } }),
+    }),
+    format: formatOf(options),
+  };
+}
+
+/** What a parts chart (pie, meter, treemap, word cloud) is still missing; null when nothing. */
+function partsProblem(input: ChartInput, options: ChartOptions): string | null {
+  if (options.parts === "fields") return options.fields.length === 0 ? "Choose the number fields that are the parts." : null;
+  if (needsField(options.series[0], input.collection)) return "Choose the field to add up.";
+  // The groups of no X axis are one part: only worth drawing against a total.
+  if (options.parts === "groups" && options.x.by === "none" && options.total.from === "none") return "Choose the X axis field whose groups are the parts.";
+  return null;
 }
 
 /**
  * The chart for a block: its type's Carbon chart, data and options; or why there is nothing to draw
- * (no items, a setting still to choose).
+ * (a setting still to choose, no items).
  */
-export function chartSpec(input: ChartInput, options: ChartOptions, theme: string): ChartSpec | { problem: string } {
-  const fields = new Map(pickableFields(input.collection).map((f) => [f.id, f]));
-  const needsValueField = options.value !== "count" && !fields.has(options.valueField ?? "");
+export function chartSpec(input: ChartInput, options: ChartOptions, theme: string): ChartSpec | Problem {
+  const { collection, items } = input;
+  const fields = new Map(pickableFields(collection).map((f) => [f.id, f]));
+  const first = options.series[0];
   const noItems = { problem: "No items to chart." };
+  const missing = options.series.findIndex((s) => needsField(s, collection));
+  const valueMissing = { problem: "Choose the field to add up." };
+  const format = formatOf(options);
+  const several = (n: number) => n > 1;
+
   switch (options.chart) {
-    case "bar": {
-      if (needsValueField) return { problem: "Choose the field to add up." };
-      const t = chartTable(input, options);
-      if (t.points.length === 0) return noItems;
-      const made = combo(input, options, theme, t, options.lollipop ? "lollipop" : "simple-bar");
-      if (made) return made;
-      const split = t.series.length > 1 || !!options.splitBy;
-      const chart = options.lollipop ? "LollipopChart" : !split ? "SimpleBarChart" : options.stacked ? "StackedBarChart" : "GroupedBarChart";
-      return {
-        chart,
-        data: rows(t),
-        options: base(options, theme, split, { axes: axes(t, options.horizontal, split && options.stacked && !options.lollipop ? { stacked: true } : {}) }),
-      };
-    }
-    case "line": {
-      if (needsValueField) return { problem: "Choose the field to add up." };
-      const t = chartTable(input, options, true);
-      if (t.points.length === 0) return noItems;
-      const made = !options.compact && combo(input, options, theme, t, "line");
-      if (made) return made;
-      const split = t.series.length > 1 || !!options.splitBy;
-      const chart = options.area ? (split ? "StackedAreaChart" : "AreaChart") : "LineChart";
-      const a = axes(t, false, options.area && split ? { stacked: true, percentage: options.percent } : FIT);
-      const hidden = { visible: false, title: undefined };
-      return {
-        chart,
-        data: rows(t),
-        options: base(options, theme, split && !options.compact, {
-          axes: options.compact ? { bottom: { ...a.bottom, ...hidden }, left: { ...a.left, ...hidden } } : a,
-          ...(options.compact && { grid: { x: { enabled: false }, y: { enabled: false } }, points: { enabled: false }, tooltip: { enabled: true } }),
-          curve: options.curved ? "curveMonotoneX" : "curveLinear",
-        }),
-      };
+    case "bar":
+    case "line":
+    case "area": {
+      if (missing >= 0) return { problem: options.series.length > 1 ? `Choose the field of series ${missing + 1}.` : valueMissing.problem };
+      if (items.length === 0) return noItems;
+      return xyChart(input, options, theme);
     }
     case "pie": {
-      if (needsValueField) return { problem: "Choose the field to add up." };
-      const t = chartTable(input, { ...options, splitBy: null });
-      const data = t.points.filter((p) => p.value !== null && p.value > 0).map((p) => ({ group: p.category.label, value: p.value }));
-      if (data.length === 0) return noItems;
-      const total = data.reduce((n, d) => n + (d.value ?? 0), 0);
+      const problem = partsProblem(input, options);
+      if (problem) return { problem };
+      const parts = partsOf(input, options);
+      if (parts.parts.length === 0) return noItems;
+      const data = parts.parts.map((p) => ({ group: p.name, value: p.value }));
+      const extra = { tooltip: tooltip(options, input) };
       return options.donut
-        ? { chart: "DonutChart", data, options: base(options, theme, true, { resizable: true, donut: { center: { label: t.valueLabel, number: total } } }) }
-        : { chart: "PieChart", data, options: base(options, theme, true) };
+        ? {
+            chart: "DonutChart",
+            data,
+            options: base(options, theme, several(data.length), {
+              ...extra,
+              donut: { center: { label: parts.label, number: parts.total, numberFormatter: (n: number) => formatValue(n, options) } },
+            }),
+            format,
+          }
+        : { chart: "PieChart", data, options: base(options, theme, several(data.length), extra), format };
+    }
+    case "meter": {
+      if (options.parts === "one") {
+        if (needsField(first, collection)) return valueMissing;
+        if (items.length === 0) return noItems;
+        const one = singleValue(input, options);
+        const percent = percentOf(one.value, one.max);
+        if (percent === null || one.value === null) return { problem: "No value to show." };
+        const ranges = statusRanges(options.thresholds.map((t) => ({ value: thresholdPercent(t, options.thresholdMode, one.max), status: t.status })));
+        const label = `${one.label}: ${formatValue(one.value, options)}${one.max === null ? "" : ` of ${formatValue(one.max, options)}`}`;
+        return {
+          chart: "MeterChart",
+          // The bar is in %; the label gives the value itself against its total.
+          data: [{ group: label, value: clampPercent(percent) }],
+          options: base(options, theme, false, { height: "5rem", meter: { ...(ranges && { status: { ranges } }) } }),
+          format,
+        };
+      }
+      const problem = partsProblem(input, options);
+      if (problem) return { problem };
+      // Carbon draws what the parts leave of the total itself.
+      const parts = partsOf(input, options, false);
+      if (parts.parts.length === 0) return noItems;
+      const fmt = (n: number) => formatValue(n, options);
+      return {
+        chart: "MeterChart",
+        data: parts.parts.map((p) => ({ group: p.name, value: p.value })),
+        options: base(options, theme, true, {
+          height: "6rem",
+          tooltip: tooltip(options, input),
+          meter: {
+            proportional: {
+              total: parts.total,
+              totalFormatter: (total: number) => `${fmt(total)} total`,
+              breakdownFormatter: ({ datasetsTotal, total }: { datasetsTotal: number; total: number }) =>
+                datasetsTotal === total ? "" : `${fmt(datasetsTotal)} used (${fmt(total - datasetsTotal)} available)`,
+            },
+          },
+        }),
+        format,
+      };
+    }
+    case "treemap": {
+      const problem = partsProblem(input, options);
+      if (problem) return { problem };
+      let data: { name: string; children: { name: string; value: number }[] }[];
+      if (options.parts !== "fields" && options.splitBy) {
+        // Split: a rectangle per category, its splits inside.
+        const t = chartTable(input, { ...options, series: [first] });
+        data = t.categories.map((c) => ({
+          name: c.label,
+          children: t.points.filter((p) => p.category === c && p.value !== null && p.value > 0).map((p) => ({ name: p.series, value: p.value! })),
+        }));
+      } else {
+        const parts = partsOf(input, options.parts === "one" ? { ...options, parts: "groups" } : options, false);
+        data = parts.parts.map((p) => ({ name: p.name, children: [{ name: p.name, value: p.value }] }));
+      }
+      data = data.filter((c) => c.children.length > 0);
+      if (data.length === 0) return noItems;
+      return { chart: "TreemapChart", data, options: base(options, theme, false, { tooltip: tooltip(options, input) }), format };
+    }
+    case "wordcloud": {
+      const problem = partsProblem(input, options);
+      if (problem) return { problem };
+      const parts = partsOf(input, options, false);
+      const data = parts.parts.map((p) => ({ word: p.name, value: p.value, group: parts.label }));
+      if (data.length === 0) return noItems;
+      return {
+        chart: "WordCloudChart",
+        data,
+        options: base(options, theme, false, { tooltip: tooltip(options, input), wordCloud: { wordMapsTo: "word", fontSizeMapsTo: "value" } }),
+        format,
+      };
+    }
+    case "gauge": {
+      if (needsField(first, collection)) return { problem: "Choose the field to measure." };
+      if (items.length === 0) return noItems;
+      const one = singleValue(input, options);
+      const percent = percentOf(one.value, one.max);
+      if (percent === null) return { problem: "No value to show." };
+      const status = statusOf(percent, options.thresholds.map((t) => ({ value: thresholdPercent(t, options.thresholdMode, one.max), status: t.status })));
+      // The change from the comparison value, in the same % of the total ("Previous" only after a last value).
+      const how = options.compare === "prev" && first.value !== "last" ? null : options.compare;
+      const before = how ? aggregate(items, how, fields.get(options.compareField ?? first.field ?? "")) : null;
+      const beforePercent = percentOf(before, one.max);
+      const delta = beforePercent === null ? 0 : Math.round((percent - beforePercent) * 100) / 100;
+      // Shown as the value (a % of the total made back into it) or as the % itself.
+      const shown = (n: number) => (options.asValue ? formatValue(one.max === null ? n : (n * one.max) / 100, options) : formatValue(n, { unit: "", decimals: options.decimals }));
+      return {
+        chart: "GaugeChart",
+        data: [{ group: "value", value: clampPercent(percent) }, ...(delta !== 0 ? [{ group: "delta", value: delta }] : [])],
+        options: base(options, theme, false, {
+          gauge: {
+            type: options.fullCircle ? "full" : "semi",
+            ...(status && { status }),
+            showPercentageSymbol: !options.asValue,
+            numberFormatter: shown,
+            deltaArrow: { enabled: delta !== 0 },
+          },
+        }),
+        format: formatOf(options, { asValue: options.asValue, max: one.max }),
+      };
     }
     case "radar": {
-      if (options.fields.length < 3) return { problem: "Choose at least three number fields for the spokes." };
+      if (options.fields.filter((id) => fields.has(id)).length < 3) return { problem: "Choose at least three number fields for the spokes." };
+      if (items.length === 0) return noItems;
       const data = radarValues(input, options).filter((d) => d.value !== null).map((d) => ({ group: d.series, key: d.spoke, value: d.value }));
       if (data.length === 0) return noItems;
       const groups = new Set(data.map((d) => d.group));
-      return { chart: "RadarChart", data, options: base(options, theme, groups.size > 1, { radar: { axes: { angle: "key", value: "value" } } }) };
-    }
-    case "treemap": {
-      if (needsValueField) return { problem: "Choose the field to add up." };
-      const t = chartTable(input, options);
-      const split = !!options.splitBy;
-      const data = t.categories
-        .map((c) => ({
-          name: c.label,
-          children: t.points
-            .filter((p) => p.category === c && p.value !== null && p.value > 0)
-            .map((p) => ({ name: split ? p.series : c.label, value: p.value })),
-        }))
-        .filter((c) => c.children.length > 0);
-      if (data.length === 0) return noItems;
-      return { chart: "TreemapChart", data, options: base(options, theme, false) };
-    }
-    case "wordcloud": {
-      if (needsValueField) return { problem: "Choose the field to add up." };
-      const t = chartTable(input, { ...options, splitBy: null });
-      const data = t.points.filter((p) => p.value !== null && p.value > 0).map((p) => ({ word: p.category.label, value: p.value, group: t.valueLabel }));
-      if (data.length === 0) return noItems;
-      return { chart: "WordCloudChart", data, options: base(options, theme, false, { wordCloud: { wordMapsTo: "word", fontSizeMapsTo: "value" } }) };
+      return {
+        chart: "RadarChart",
+        data,
+        options: base(options, theme, several(groups.size), { tooltip: tooltip(options, input), radar: { axes: { angle: "key", value: "value" } } }),
+        format,
+      };
     }
     case "histogram": {
-      const field = fields.get(options.valueField ?? "");
+      const field = fields.get(options.spreadField ?? "");
       if (!field) return { problem: "Choose the number or date field whose values to spread." };
-      const time = isDateKind(field);
-      const data = valuesByCategory(input, options).map((v) => ({ group: v.series, value: time ? new Date(v.value) : v.value }));
+      const time = isDate(field);
+      const data = spreadValues(input, options, "split").map((v) => ({ group: v.series, value: time ? new Date(v.value) : v.value }));
       if (data.length === 0) return noItems;
       const groups = new Set(data.map((d) => d.group));
       return {
         chart: "HistogramChart",
         data,
-        options: base(options, theme, groups.size > 1, {
+        options: base(options, theme, several(groups.size), {
           axes: {
             bottom: { mapsTo: "value", ...(time && { scaleType: "time" }), title: field.name, bins: options.bins || undefined, limitDomainToBins: true },
-            left: { scaleType: "linear", binned: true, title: input.collection.pluralName },
+            left: { scaleType: "linear", binned: true, title: collection.pluralName },
           },
         }),
+        format,
       };
     }
     case "boxplot": {
-      const field = fields.get(options.valueField ?? "");
+      const field = fields.get(options.spreadField ?? "");
       if (!field) return { problem: "Choose the number or date field whose values to spread." };
-      const time = isDateKind(field);
-      const data = valuesByCategory(input, options).map((v) => ({ group: v.series, key: v.series, value: time ? new Date(v.value) : v.value }));
+      const time = isDate(field);
+      const data = spreadValues(input, options, "x").map((v) => ({ group: v.series, key: v.series, value: time ? new Date(v.value) : v.value }));
       if (data.length === 0) return noItems;
       return {
         chart: "BoxplotChart",
         data,
         options: base(options, theme, false, {
-          axes: { left: { mapsTo: "value", scaleType: time ? "time" : "linear", title: field.name }, bottom: { mapsTo: "group", scaleType: "labels", title: input.groupField?.name } },
+          axes: {
+            left: { mapsTo: "value", scaleType: time ? "time" : "linear", title: field.name, ...(!time && ticks(options)) },
+            bottom: { mapsTo: "group", scaleType: "labels", title: (options.x.by === "field" && xLabel(collection, options)) || undefined },
+          },
+          ...(!time && { tooltip: tooltip(options, input) }),
         }),
+        format,
       };
     }
     case "scatter": {
-      const x = fields.get(options.xField ?? "");
-      const y = fields.get(options.valueField ?? "");
-      if (!x || !y) return { problem: "Choose the fields for X and Y." };
-      const time = x.kind === "date" || x.kind === "datetime";
-      const points = scatterPoints(input, options);
+      const x = fields.get(options.x.field ?? "");
+      const ys = options.series.filter((s) => s.field && fields.has(s.field));
+      if (!x || ys.length === 0) return { problem: "Choose the fields for X and Y." };
+      if (items.length === 0) return noItems;
+      const time = isDate(x);
+      const log = options.left.log;
+      const points = scatterPoints(input, options).filter((p) => !(log && p.y <= 0));
       if (points.length === 0) return noItems;
       const bubbles = points.some((p) => p.size !== null);
       const data = points.map((p) => ({
         group: p.series,
-        x: time ? new Date(p.x) : p.x,
+        x: time ? toDate(p.x) : p.x,
         y: p.y,
         ...(bubbles && { size: p.size ?? 0 }),
         // Shown in the tooltip; the id opens the item when its dot is clicked.
@@ -253,25 +510,35 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       }));
       const size = fields.get(options.sizeField ?? "");
       const groups = new Set(data.map((d) => d.group));
+      const xTitle = options.xTitle.trim() || x.name;
+      const yTitle = options.left.title.trim() || (ys.length === 1 ? seriesLabel(ys[0], collection, { ...options.x, by: "item" }) : options.unit.trim()) || undefined;
+      const domain = domainOf(options.left, points.map((p) => p.y));
       return {
         chart: bubbles ? "BubbleChart" : "ScatterChart",
         data,
-        options: base(options, theme, groups.size > 1, {
+        options: base(options, theme, several(groups.size), {
           axes: {
-            bottom: { mapsTo: "x", scaleType: time ? "time" : "linear", title: x.name, ...FIT },
-            left: { mapsTo: "y", scaleType: "linear", title: y.name, ...FIT },
+            bottom: { mapsTo: "x", scaleType: time ? "time" : "linear", title: xTitle, ...FIT },
+            left: {
+              mapsTo: "y",
+              scaleType: log ? "log" : "linear",
+              title: yTitle,
+              ...(domain ? { domain } : FIT),
+              ...ticks(options),
+              ...(options.thresholds.length > 0 && { thresholds: thresholdLines(options) }),
+            },
           },
+          tooltip: tooltip(options, input, [xTitle, size?.name]),
           ...(bubbles && { bubble: { radiusMapsTo: "size", radiusLabel: size?.name } }),
         }),
+        format,
       };
     }
     case "heatmap": {
-      if (needsValueField) return { problem: "Choose the field to add up." };
+      if (needsField(first, collection)) return valueMissing;
+      if (items.length === 0) return noItems;
       const cells = heatmapCells(input, options);
-      if (cells.length === 0) return noItems;
-      const t = chartTable(input, { ...options, top: 0 });
-      const calendar = !options.splitBy && t.time;
-      const splitName = fields.get(options.splitBy ?? "")?.name;
+      const calendar = options.x.by === "field" && isDate(xField(collection, options.x)) && !options.splitBy;
       // Cells without anything are left undrawn (Carbon would paint them its lightest colour, white
       // also in dark themes); the axes keep every column and row, in order.
       const shown = cells.filter((c) => c.value !== null && c.value !== 0);
@@ -279,86 +546,20 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       const xs = [...new Set(cells.map((c) => c.x))];
       // A calendar's weeks run down from Sunday (Carbon draws the first label at the bottom).
       const ys = calendar ? weekdays(input.locale).reverse() : [...new Set(cells.map((c) => c.y))].reverse();
+      const values = shown.map((c) => c.value!);
       return {
         chart: "HeatmapChart",
         data: shown.map((c) => ({ x: c.x, y: c.y, value: c.value })),
         options: base(options, theme, true, {
           axes: {
-            bottom: { mapsTo: "x", scaleType: "labels", domain: xs, title: calendar ? undefined : t.categoryLabel || undefined },
-            left: { mapsTo: "y", scaleType: "labels", domain: ys, title: calendar ? undefined : splitName },
+            bottom: { mapsTo: "x", scaleType: "labels", domain: xs, title: calendar ? undefined : xLabel(collection, options) || undefined },
+            left: { mapsTo: "y", scaleType: "labels", domain: ys, title: calendar ? undefined : fields.get(options.splitBy ?? "")?.name },
           },
-          heatmap: { colorLegend: { title: t.valueLabel }, colorDomain: { min: Math.min(0, ...shown.map((c) => c.value!)), max: Math.max(...shown.map((c) => c.value!)) } },
+          tooltip: tooltip(options, input),
+          heatmap: { colorLegend: { title: seriesLabel(first, collection) }, colorDomain: { min: Math.min(0, ...values), max: Math.max(...values) } },
         }),
-      };
-    }
-    case "gauge": {
-      if (needsValueField) return { problem: "Choose the field to measure." };
-      const one = singleValue(input.collection, resultItems(input.result), options);
-      const percent = percentOf(one.value, one.max);
-      if (percent === null) return { problem: "No value to show." };
-      const status = statusOf(percent, options.warnAt, options.dangerAt);
-      // The change from the comparison value, in the same % of the max ("Previous" only after a last value).
-      const how = options.compare === "prev" && options.value !== "last" ? null : options.compare;
-      const before = how ? aggregate(resultItems(input.result), how, fields.get(options.compareField ?? options.valueField ?? "")) : null;
-      const beforePercent = percentOf(before, one.max);
-      const delta = beforePercent === null ? 0 : Math.round((percent - beforePercent) * 100) / 100;
-      return {
-        chart: "GaugeChart",
-        data: [{ group: "value", value: Math.round(Math.min(100, Math.max(0, percent)) * 10) / 10 }, ...(delta !== 0 ? [{ group: "delta", value: delta }] : [])],
-        options: base(options, theme, false, {
-          gauge: { type: options.fullCircle ? "full" : "semi", ...(status && { status }), showPercentageSymbol: !options.asValue, numberFormatter: (n: number) => (options.asValue ? String(Math.round(((one.max === null ? n : (n * one.max) / 100) + Number.EPSILON) * 100) / 100) : String(n)), deltaArrow: { enabled: delta !== 0 } },
-        }),
-      };
-    }
-    case "meter": {
-      const items = resultItems(input.result);
-      // Parts of a whole by number fields (fat, bone, muscle of a total weight): each field's value is a part.
-      if (options.proportional && options.fields.length > 0) {
-        const how = options.value === "count" ? "sum" : options.value;
-        const data = options.fields.flatMap((id) => {
-          const field = fields.get(id);
-          const value = field ? aggregate(items, how, field) : null;
-          return field && value !== null && value > 0 ? [{ group: field.name, value }] : [];
-        });
-        if (data.length === 0) return noItems;
-        const total = singleValue(input.collection, items, options).max ?? data.reduce((n, d) => n + d.value, 0);
-        return { chart: "MeterChart", data, options: base(options, theme, true, { height: "6rem", meter: { proportional: { total } } }) };
-      }
-      if (needsValueField) return { problem: "Choose the field to measure." };
-      if (options.proportional) {
-        const t = chartTable(input, { ...options, splitBy: null });
-        const data = t.points.filter((p) => p.value !== null && p.value > 0).map((p) => ({ group: p.category.label, value: p.value }));
-        if (data.length === 0) return noItems;
-        const total = singleValue(input.collection, items, options).max ?? data.reduce((n, d) => n + (d.value ?? 0), 0);
-        return { chart: "MeterChart", data, options: base(options, theme, true, { height: "6rem", meter: { proportional: { total } } }) };
-      }
-      const one = singleValue(input.collection, items, options);
-      const percent = percentOf(one.value, one.max);
-      if (percent === null) return { problem: "No value to show." };
-      const ranges = thresholdRanges(options);
-      return {
-        chart: "MeterChart",
-        // The bar is in %; the label gives the value itself against its max.
-        data: [{ group: one.max === null || one.value === null ? one.label : `${one.label}: ${num(one.value)} of ${num(one.max)}`, value: Math.round(Math.min(100, Math.max(0, percent)) * 10) / 10 }],
-        options: base(options, theme, false, { height: "5rem", meter: { ...(ranges && { status: { ranges } }) } }),
+        format,
       };
     }
   }
-}
-
-const num = (n: number) => String(Math.round(n * 100) / 100);
-
-const isDateKind = (f: { kind: string }) => f.kind === "date" || f.kind === "datetime";
-
-/** A meter's status ranges (in %) from its warning and danger thresholds; null without either. */
-function thresholdRanges(options: ChartOptions): { range: [number, number]; status: string }[] | null {
-  const { warnAt, dangerAt } = options;
-  if (warnAt === null && dangerAt === null) return null;
-  const cuts = [warnAt, dangerAt].filter((n): n is number => n !== null).map((n) => Math.max(0, Math.min(100, n)));
-  const ranges: { range: [number, number]; status: string }[] = [];
-  const first = Math.min(...cuts);
-  ranges.push({ range: [0, first], status: "success" });
-  if (warnAt !== null && dangerAt !== null && warnAt < dangerAt) ranges.push({ range: [warnAt, dangerAt], status: "warning" });
-  ranges.push({ range: [dangerAt ?? warnAt!, 100], status: dangerAt !== null ? "danger" : "warning" });
-  return ranges;
 }
