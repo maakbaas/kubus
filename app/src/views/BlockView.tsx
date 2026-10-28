@@ -404,25 +404,23 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           onGroupCollapse={(key, on) => block.groupBy && onCollapse(withGroupCollapsed(state, block.id, block.groupBy, key, on))}
         />
       )}
-      {/* A remote collection's rows come a page at a time, or (a chart) all of them, which can be stopped.
-          Until the first page is in (a new query, "Read again"), it is said so: rows yet to come, not none. */}
-      {!collapsed && remote?.waiting && !remote.progress && (
-        <div className="block-more">
-          <ProgressBar className="block-more__bar" size="small" label="Loading rows" />
-        </div>
-      )}
-      {!collapsed && remote?.progress && (
+      {/* A remote collection's rows come a page at a time, or (a chart, no Limit) all of them, which can be
+          stopped. One bar from the request on: empty until the first page brings the total (rows yet to come, not
+          none), then filling as the rows come in; it doesn't change shape when the total arrives. */}
+      {!collapsed && remote && (remote.waiting || remote.progress) && (
         <div className="block-more">
           <ProgressBar
             className="block-more__bar"
             size="small"
-            label={`Loading rows: ${remote.progress.loaded} of ${remote.progress.total}`}
-            value={remote.progress.loaded}
-            max={Math.max(remote.progress.total, 1)}
+            label={remote.progress ? `Loading rows: ${remote.progress.loaded} of ${remote.progress.total}` : "Loading rows"}
+            value={remote.progress?.loaded ?? 0}
+            max={Math.max(remote.progress?.total ?? 1, 1)}
           />
-          <Button kind="tertiary" size="sm" onClick={remote.progress.cancel}>
-            Cancel
-          </Button>
+          {limit === 0 && (
+            <Button kind="tertiary" size="sm" onClick={remote.progress?.cancel ?? remote.stop}>
+              Cancel
+            </Button>
+          )}
         </div>
       )}
       {!collapsed && items && stepped && (

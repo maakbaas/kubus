@@ -28,6 +28,8 @@ export interface RemoteResult {
   progress: { loaded: number; total: number; cancel: () => void } | null;
   /** The first page of the request now (a new query, "Read again") is still on its way. */
   waiting: boolean;
+  /** Stops loading every row (`all`): the pages in stay, "Load all rows" goes on. */
+  stop: () => void;
 }
 
 const EMPTY: QueryResult = { groups: [], total: 0 };
@@ -197,5 +199,6 @@ export function useRemoteResult(
     loadingMore,
     progress: loadingAll && loaded ? { loaded: loaded.rows.length, total: loaded.total, cancel: () => setStopped(current.current) } : null,
     waiting: answered !== current.current,
+    stop: () => setStopped(current.current),
   };
 }
