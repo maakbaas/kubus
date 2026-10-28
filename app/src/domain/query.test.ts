@@ -143,6 +143,13 @@ describe("date periods", () => {
     expect(ids(applyQuery(dated, items, between("at", "2026-10-15..2026-10-15"), ctx))).toEqual(["b"]);
   });
 
+  it("matches a date & time by its minute in a period of minutes, a date by its day", () => {
+    expect(ids(applyQuery(dated, items, between("at", "2026-10-15T10:00..2026-10-15T10:59"), ctx))).toEqual(["b"]);
+    expect(ids(applyQuery(dated, items, between("at", "2026-10-15T09:00..2026-10-15T09:59"), ctx))).toEqual([]);
+    expect(ids(applyQuery(dated, items, between("read", "2026-10-01T08:00..2026-10-01T08:59"), ctx))).toEqual(["b"]);
+    expect(filterValueProblem(dated.fields[3], "between", "hour-23..hour+0")).toBeUndefined();
+  });
+
   it("matches nothing for a value that isn't a period", () => {
     expect(ids(applyQuery(dated, items, between("read", "2026-10-31..2026-10-01"), ctx))).toEqual([]);
     expect(filterValueProblem(dated.fields[2], "between", "October")).toBeTruthy();

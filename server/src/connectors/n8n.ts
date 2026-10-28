@@ -1,4 +1,4 @@
-import type { SourceColumn, SourceDescription, SourceFilter, SourceQuery, SourceResult, SourceRow, SourceRowRequest, SourceTable, SourceTarget } from "../../../shared/sources.ts";
+import { betweenBounds, type SourceColumn, type SourceDescription, type SourceFilter, type SourceQuery, type SourceResult, type SourceRow, type SourceRowRequest, type SourceTable, type SourceTarget } from "../../../shared/sources.ts";
 import { SourceError, type Connector, type SourceConfig } from "./connector.ts";
 import { addressOf } from "./kinds.ts";
 import { dayStart, requiredRules } from "./influxFlux.ts";
@@ -148,9 +148,9 @@ export function n8nRules(c: SourceColumn, rule: SourceFilter, timeZone: string):
   let from: number | undefined;
   let to: number | undefined;
   if (op === "between") {
-    const [start, end] = value.split("..");
-    if (!DAY.test(start ?? "") || !DAY.test(end ?? "")) return null;
-    [from, to] = [dayStart(start, timeZone), dayStart(end, timeZone, 1)];
+    const bounds = betweenBounds(value);
+    if (!bounds) return null;
+    [from, to] = [dayStart(bounds.start, timeZone), dayStart(bounds.end, timeZone, 1)];
   } else if (DAY.test(value) && (op === "is" || op === "before" || op === "after")) {
     if (op !== "before") from = dayStart(value, timeZone, op === "after" ? 1 : 0);
     if (op !== "after") to = dayStart(value, timeZone, op === "is" ? 1 : 0);

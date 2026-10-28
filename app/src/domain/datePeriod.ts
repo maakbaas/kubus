@@ -1,36 +1,61 @@
-// The date filter's periods: a day, a week, a month, a year or any start and end, kept as one
-// "between" rule. Its value is fixed days ("yyyy-mm-dd..yyyy-mm-dd", both included), or rolling: a
-// day, week, month or year counted from today ("month+0" this month, "week-1" last week), worked
-// out whenever the filter runs; a range ending today is rolling too, its days counted from today
-// ("day-6..day+0": the last 7 days), and so is this week, month or year so far ("year+0..day+0":
-// year to date). Which period fixed days are follows from them, so nothing but the
-// rule is stored. Weeks run Sunday to Saturday, like the date pickers' calendars; week 1 is the one
+// The date filter's periods: an hour, a day, a week, a month, a year or any start and end, kept as one
+// "between" rule. Its value is fixed days ("yyyy-mm-dd..yyyy-mm-dd", both included) or minutes
+// ("yyyy-mm-ddTHH:MM..yyyy-mm-ddTHH:MM", local, both included: an hour is 14:00..14:59), or rolling: an
+// hour, day, week, month or year counted from now ("month+0" this month, "week-1" last week, "hour+0"
+// this hour), worked out whenever the filter runs; a range ending now is rolling too, its minutes, hours
+// or days counted from now ("day-6..day+0": the last 7 days, "hour-23..hour+0": the last 24 hours,
+// "minute-29..minute+0": the last 30 minutes), and so is this week, month or year so far ("year+0..day+0":
+// year to date). A date (no time) is in a period of minutes by its day. Which period fixed days are
+// follows from them, so nothing but the rule is stored. Weeks run Sunday to Saturday, like the date pickers' calendars; week 1 is the one
 // holding 1 January. Storage-free and UI-free.
 
-import { formatDate } from "./fieldKinds";
+import { formatDate, formatTime } from "./fieldKinds";
 import { pickableFields, type Collection, type FieldDef } from "./model";
 import type { FilterRule } from "./query";
 
-export type PeriodKind = "day" | "week" | "month" | "year" | "range";
+export type PeriodKind = "hour" | "day" | "week" | "month" | "year" | "range";
 
 export interface Period {
-  /** First and last day, both included ("yyyy-mm-dd"). */
+  /** First and last day ("yyyy-mm-dd") or minute ("yyyy-mm-ddTHH:MM", local), both included. */
   start: string;
   end: string;
 }
 
 const SEPARATOR = "..";
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+/** Whether a period's bounds are minutes (not days). */
+export const inMinutes = (period: Period) => period.start.length > 10;
+
+/** A local moment as its minute ("yyyy-mm-ddTHH:MM"). */
+export const formatMinute = (d: Date) => `${formatDate(d)}T${formatTime(d)}`;
+/** Now, as its minute. */
+export const nowMinute = () => formatMinute(new Date());
+/** A day or minute as a local date (a day: its midnight). */
+const toMoment = (at: string) => {
+  const [y, m, d] = at.slice(0, 10).split("-").map(Number);
+  return at.length > 10 ? new Date(y, m - 1, d, Number(at.slice(11, 13)), Number(at.slice(14, 16))) : new Date(y, m - 1, d);
+};
+/** A minute so many minutes on (over a change of summer time by the clock's minutes). */
+const addMinutes = (at: string, n: number) => {
+  const d = toMoment(at);
+  d.setMinutes(d.getMinutes() + n);
+  return formatMinute(d);
+};
+/** The minute an hour or minute starts at ("14:00" of 14:35). */
+const floorTo = (at: string, unit: "minute" | "hour") => (unit === "hour" ? `${at.slice(0, 13)}:00` : at.slice(0, 16));
+/** A moment's minute: a day's is its midnight. */
+const asMinute = (at: string) => (at.length > 10 ? at.slice(0, 16) : `${at}T00:00`);
 
 /** A between rule's value. */
 export const rangeValue = ({ start, end }: Period) => `${start}${SEPARATOR}${end}`;
 
-/** A rolling period: so many days, weeks, months or years from today's (0: today's own). */
+/** A rolling period: so many hours, days, weeks, months or years from now's (0: now's own). */
 export interface Rolling {
   kind: Exclude<PeriodKind, "range">;
   offset: number;
 }
-const ROLLING = /^(day|week|month|year)([+-]\d+)$/;
+const ROLLING = /^(hour|day|week|month|year)([+-]\d+)$/;
 
 /** A rolling between rule's value ("week-1"). */
 export const rollingValue = ({ kind, offset }: Rolling) => `${kind}${offset < 0 ? "-" : "+"}${Math.abs(offset)}`;
@@ -41,21 +66,32 @@ export function parseRolling(value: string): Rolling | null {
   return m ? { kind: m[1] as Rolling["kind"], offset: Number(m[2]) } : null;
 }
 
-/** A rolling range: its first and last day as days from today ("day-6..day+0", the last 7 days). */
+/** What a rolling range is counted in. */
+export type RangeUnit = "minute" | "hour" | "day";
+export const RANGE_UNITS: { unit: RangeUnit; text: string }[] = [
+  { unit: "minute", text: "Minutes" },
+  { unit: "hour", text: "Hours" },
+  { unit: "day", text: "Days" },
+];
+
+/** A rolling range: its first and last day (hour, minute) as days from today ("day-6..day+0", the last 7 days). */
 export interface RollingRange {
   from: number;
   to: number;
+  /** Days unless given. */
+  unit?: RangeUnit;
 }
-const ROLLING_RANGE = /^day([+-]\d+)\.\.day([+-]\d+)$/;
+const ROLLING_RANGE = /^(minute|hour|day)([+-]\d+)\.\.(minute|hour|day)([+-]\d+)$/;
 
-/** A rolling range's value ("day-6..day+0"). */
-export const rollingRangeValue = ({ from, to }: RollingRange) => `${rollingValue({ kind: "day", offset: from })}${SEPARATOR}${rollingValue({ kind: "day", offset: to })}`;
+const offsetText = (offset: number) => `${offset < 0 ? "-" : "+"}${Math.abs(offset)}`;
+/** A rolling range's value ("day-6..day+0", "hour-23..hour+0"). */
+export const rollingRangeValue = ({ from, to, unit = "day" }: RollingRange) => `${unit}${offsetText(from)}${SEPARATOR}${unit}${offsetText(to)}`;
 
-/** The rolling range of a between rule's value, or null when it is none (first not after last). */
+/** The rolling range of a between rule's value, or null when it is none (two units, or first after last). */
 export function parseRollingRange(value: string): RollingRange | null {
   const m = ROLLING_RANGE.exec(value.trim());
-  if (!m) return null;
-  const range = { from: Number(m[1]), to: Number(m[2]) };
+  if (!m || m[1] !== m[3]) return null;
+  const range = { from: Number(m[2]), to: Number(m[4]), unit: m[1] as RangeUnit };
   return range.from <= range.to ? range : null;
 }
 
@@ -75,33 +111,50 @@ export function parseToDate(value: string): ToDate | null {
 /** A to-date period in words: "Year to date". */
 export const toDateLabel = (kind: ToDate) => `${kind[0].toUpperCase()}${kind.slice(1)} to date`;
 
-/** A range kept as it is stored: one ending today as days counted from today (so it moves with it), any other as its days. */
+/** A range kept as it is stored: one of days ending today as days counted from today (so it moves with it), any other as its days or minutes. */
 export function rangeOrRolling(period: Period, today: string): string {
-  return period.end === today && period.start <= today ? rollingRangeValue({ from: daysBetween(today, period.start), to: 0 }) : rangeValue(period);
+  return !inMinutes(period) && period.end === today && period.start <= today ? rollingRangeValue({ from: daysBetween(today, period.start), to: 0 }) : rangeValue(period);
 }
 
-/** A rolling range in words: "Last 7 days" (up to today), "Today". */
-export function rollingRangeLabel({ from, to }: RollingRange): string {
-  const days = to - from + 1;
-  if (to !== 0) return `${days} days`;
-  return days === 1 ? "Today" : `Last ${days} days`;
+const RANGE_WORDS: Record<RangeUnit, [one: string, many: string, current: string]> = {
+  minute: ["minute", "minutes", "This minute"],
+  hour: ["hour", "hours", "This hour"],
+  day: ["day", "days", "Today"],
+};
+/** A rolling range in words: "Last 7 days" (up to today), "Today", "Last 24 hours". */
+export function rollingRangeLabel({ from, to, unit = "day" }: RollingRange): string {
+  const n = to - from + 1;
+  const [, many, current] = RANGE_WORDS[unit];
+  if (to !== 0) return `${n} ${many}`;
+  return n === 1 ? current : `Last ${n} ${many}`;
 }
 
-/** The days of a between rule's value as of today (a rolling one worked out), or null when it isn't a period. */
-export function resolveRange(value: string, today = formatDate(new Date())): Period | null {
+/**
+ * The days (or minutes) of a between rule's value as of now (a rolling one worked out), or null when
+ * it isn't a period. `now` is a minute, or a day (counted from its midnight).
+ */
+export function resolveRange(value: string, now = nowMinute()): Period | null {
+  const today = now.slice(0, 10);
   const rolling = parseRolling(value);
-  if (rolling) return rollingPeriod(rolling, today);
+  if (rolling) return rollingPeriod(rolling, rolling.kind === "hour" ? asMinute(now) : today);
   const toDate = parseToDate(value);
   if (toDate) return { start: periodAround(toDate, today).start, end: today };
   const range = parseRollingRange(value);
+  if (range?.unit === "minute" || range?.unit === "hour") {
+    const step = range.unit === "hour" ? 60 : 1;
+    const current = floorTo(asMinute(now), range.unit);
+    return { start: addMinutes(current, range.from * step), end: addMinutes(current, range.to * step + step - 1) };
+  }
   if (range) return { start: addDays(today, range.from), end: addDays(today, range.to) };
   return parseRange(value);
 }
 
-/** The fixed days of a between rule's value, or null when it isn't two days (first not after last). */
+/** The fixed days or minutes of a between rule's value, or null when it isn't two of either (first not after last). */
 export function parseRange(value: string): Period | null {
   const [start, end, ...rest] = value.trim().split(SEPARATOR);
-  if (rest.length || !DAY.test(start ?? "") || !DAY.test(end ?? "") || start > end) return null;
+  const days = DAY.test(start ?? "") && DAY.test(end ?? "");
+  const minutes = MINUTE.test(start ?? "") && MINUTE.test(end ?? "");
+  if (rest.length || !(days || minutes) || start > end) return null;
   return { start, end };
 }
 
@@ -119,8 +172,13 @@ const daysBetween = (a: string, b: string) => Math.round((toDate(b).getTime() - 
 /** Sunday of the day's week. */
 const weekStart = (day: string) => addDays(day, -toDate(day).getDay());
 
-/** The day, week, month or year a day falls in (a range: that day alone). */
-export function periodAround(kind: PeriodKind, day: string): Period {
+/** The hour, day, week, month or year a day or minute falls in (a range: that day alone; an hour of a day: its first). */
+export function periodAround(kind: PeriodKind, at: string): Period {
+  if (kind === "hour") {
+    const start = floorTo(asMinute(at), "hour");
+    return { start, end: `${start.slice(0, 13)}:59` };
+  }
+  const day = at.slice(0, 10);
   const d = toDate(day);
   switch (kind) {
     case "week": {
@@ -136,8 +194,9 @@ export function periodAround(kind: PeriodKind, day: string): Period {
   }
 }
 
-/** What a period is: one day, a whole week, month or year, or another range. */
+/** What a period is: one hour, one day, a whole week, month or year, or another range. */
 export function periodKind({ start, end }: Period): PeriodKind {
+  if (start.length > 10) return start.endsWith(":00") && end === `${start.slice(0, 13)}:59` ? "hour" : "range";
   if (start === end) return "day";
   for (const kind of ["week", "month", "year"] as const) {
     const p = periodAround(kind, start);
@@ -146,8 +205,13 @@ export function periodKind({ start, end }: Period): PeriodKind {
   return "range";
 }
 
-/** The period before (-1) or after (1): the next day, week, month or year; a range moves by its length. */
+/** The period before (-1) or after (1): the next hour, day, week, month or year; a range moves by its length. */
 export function shiftPeriod(period: Period, kind: PeriodKind, direction: 1 | -1): Period {
+  if (inMinutes(period)) {
+    if (kind === "hour") return periodAround("hour", addMinutes(period.start, 60 * direction));
+    const minutes = Math.round((toMoment(period.end).getTime() - toMoment(period.start).getTime()) / 60_000) + 1;
+    return { start: addMinutes(period.start, minutes * direction), end: addMinutes(period.end, minutes * direction) };
+  }
   const d = toDate(period.start);
   switch (kind) {
     case "week":
@@ -172,7 +236,7 @@ const shiftBy = (period: Period, kind: PeriodKind, steps: number): Period => {
   return p;
 };
 
-const UNITS = { day: ["Today", "Yesterday", "Tomorrow"], week: ["This week", "Last week", "Next week"], month: ["This month", "Last month", "Next month"], year: ["This year", "Last year", "Next year"] };
+const UNITS = { hour: ["This hour", "Last hour", "Next hour"], day: ["Today", "Yesterday", "Tomorrow"], week: ["This week", "Last week", "Next week"], month: ["This month", "Last month", "Next month"], year: ["This year", "Last year", "Next year"] };
 /** A rolling period in words: "This week", "Last month", "3 days ago", "In 2 years". */
 export function rollingLabel({ kind, offset }: Rolling): string {
   const [current, last, next] = UNITS[kind];
@@ -191,8 +255,18 @@ export function weekNumber(day: string): { week: number; year: number } {
   return { week: daysBetween(weekStart(`${year}-01-01`), start) / 7 + 1, year };
 }
 
-/** A period in words ("Week 44 · 26 Oct – 1 Nov 2026", "October 2026", "Tue 27 Oct 2026", "1 Oct – 15 Nov 2026"). */
+/** A period in words ("Week 44 · 26 Oct – 1 Nov 2026", "October 2026", "Tue 27 Oct 2026", "1 Oct – 15 Nov 2026", "Tue 27 Oct 2026, 14:00 – 15:00"). */
 export function periodLabel(period: Period, kind: PeriodKind, locale?: string): string {
+  if (inMinutes(period)) {
+    // Up to the end of its last minute (an hour: 14:00 – 15:00).
+    const start = toMoment(period.start);
+    const end = toMoment(addMinutes(period.end, 1));
+    const time = (d: Date) => d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+    const day = (d: Date) => d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    if (kind === "hour" || formatDate(start) === formatDate(toMoment(period.end))) return `${day(start)}, ${time(start)} – ${time(end)}`;
+    const short = (d: Date) => `${d.toLocaleDateString(locale, { day: "numeric", month: "short" })} ${time(d)}`;
+    return `${short(start)} – ${short(end)}`;
+  }
   const start = toDate(period.start);
   const end = toDate(period.end);
   const fmt = (d: Date, o: Intl.DateTimeFormatOptions) => d.toLocaleDateString(locale, o);
@@ -243,10 +317,10 @@ export function splitAnchor(value: string): { value: string; fieldId: string | n
 /** A period value counted from the page item's date field (null: from today, as it is). */
 export const anchoredValue = (value: string, fieldId: string | null) => (fieldId ? `${value}${ANCHOR}${fieldId}` : value);
 
-/** The day (yyyy-mm-dd) a date or date & time value is on here, or null. */
-export function dayOfValue(v: unknown): string | null {
+/** The day (yyyy-mm-dd) of a date, or the minute (yyyy-mm-ddTHH:MM) a date & time is at here, or null. */
+export function momentOfValue(v: unknown): string | null {
   if (typeof v !== "string" || !v) return null;
   if (DAY.test(v)) return v;
   const t = Date.parse(v);
-  return Number.isNaN(t) ? null : formatDate(new Date(t));
+  return Number.isNaN(t) ? null : formatMinute(new Date(t));
 }

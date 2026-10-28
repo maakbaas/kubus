@@ -65,7 +65,7 @@ export interface SourceDescription {
   time?: string;
 }
 
-/** The filter operators a source understands: the app's (domain/query.ts), "between" taking yyyy-mm-dd..yyyy-mm-dd. */
+/** The filter operators a source understands: the app's (domain/query.ts), "between" taking two days or two minutes (`betweenBounds`). */
 export type SourceOperator =
   | "contains" | "notContains" | "is" | "isNot" | "gt" | "lt" | "before" | "after" | "between"
   | "isChecked" | "isNotChecked" | "isEmpty" | "isNotEmpty";
@@ -73,8 +73,31 @@ export type SourceOperator =
 export interface SourceFilter {
   column: string;
   operator: SourceOperator;
-  /** Plain value: text, a number, true / false, yyyy-mm-dd, or yyyy-mm-dd..yyyy-mm-dd (between). */
+  /** Plain value: text, a number, true / false, yyyy-mm-dd, or for between yyyy-mm-dd..yyyy-mm-dd or yyyy-mm-ddTHH:MM..yyyy-mm-ddTHH:MM. */
   value: string;
+}
+
+const BOUND = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?$/;
+
+/**
+ * A between rule's first and last day ("yyyy-mm-dd"), or first and last minute ("yyyy-mm-ddTHH:MM",
+ * the last 7 hours: a wall time in the query's time zone), both included; null when it is neither
+ * (or the first is after the last). A date (no time) is compared by its day (`start.slice(0, 10)`).
+ */
+export function betweenBounds(value: string): { start: string; end: string } | null {
+  const [start, end, ...rest] = value.trim().split("..");
+  const a = BOUND.exec(start ?? "");
+  const b = BOUND.exec(end ?? "");
+  if (rest.length || !a || !b || (a[4] === undefined) !== (b[4] === undefined) || start > end) return null;
+  return { start, end };
+}
+
+/** A day's or minute's wall time as if it were UTC (ms): its start, or `later` days (a day) or minutes (a minute) on. */
+export function wallTime(bound: string, later = 0): number {
+  const m = BOUND.exec(bound);
+  if (!m) return NaN;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]) - 1, Number(m[3])];
+  return m[4] === undefined ? Date.UTC(y, mo, d + later) : Date.UTC(y, mo, d, Number(m[4]), Number(m[5]) + later);
 }
 
 /**

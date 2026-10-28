@@ -136,6 +136,7 @@ describe.skipIf(!ADMIN)("Postgres connector", () => {
     // 23:30 UTC on 1 March is 2 March in Amsterdam.
     expect(await keys([{ column: "seen", operator: "is", value: "2026-03-02" }])).toEqual(["1", "2"]);
     expect(await keys([{ column: "seen", operator: "between", value: "2026-03-01..2026-03-01" }])).toEqual(["4"]);
+    expect(await keys([{ column: "seen", operator: "between", value: "2026-03-02T00:00..2026-03-02T00:59" }])).toEqual(["1"]);
     expect(await keys([{ column: "seen", operator: "after", value: "2026-03-01" }])).toEqual(["1", "2"]);
   });
 

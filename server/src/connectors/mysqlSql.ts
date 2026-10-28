@@ -1,4 +1,4 @@
-import { conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
+import { betweenBounds, conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
 import { dayStart, zoneOffsets } from "./d1Sql.ts";
 
@@ -240,9 +240,9 @@ export function filterSql(c: MyColumn, rule: SourceFilter, p: Params, tz: string
   let from: string;
   let to: string;
   if (op === "between") {
-    const [start, end] = value.split("..");
-    if (!DAY.test(start ?? "") || !DAY.test(end ?? "")) return "FALSE";
-    [from, to] = [start, end];
+    const bounds = betweenBounds(value);
+    if (!bounds) return "FALSE";
+    [from, to] = [bounds.start, bounds.end];
   } else {
     if (!DAY.test(value)) return "FALSE";
     [from, to] = [value, value];
@@ -257,7 +257,7 @@ export function filterSql(c: MyColumn, rule: SourceFilter, p: Params, tz: string
       case "after":
         return `${r} > ${p.add(from)} AND ${real}`;
       case "between":
-        return `${r} BETWEEN ${p.add(from)} AND ${p.add(to)} AND ${real}`;
+        return `${r} BETWEEN ${p.add(from.slice(0, 10))} AND ${p.add(to.slice(0, 10))} AND ${real}`;
       default:
         return refuse();
     }

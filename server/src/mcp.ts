@@ -47,7 +47,7 @@ const collection = str("A collection, by name, plural name or id");
 const values = { type: "object", description: "Values by field name (or id); see the value of each field type in list_collections' fields", additionalProperties: true };
 const rules = (description: string, item: Record<string, unknown>) => ({ type: "array", description, items: { type: "object", ...item } });
 const filters = rules(
-  "Filter rules, read in order: { fieldId (a field's name or id), operator, value, join? }. Operators by field type: text contains, notContains; number is, isNot, gt, lt; date is, before, after, between (yyyy-mm-dd..yyyy-mm-dd, or day/week/month/year with an offset such as month-1); checkbox isChecked, isNotChecked; item is, isNot (an item id); list of items is, isNot; every type isEmpty, isNotEmpty. join: and (default) or or.",
+  "Filter rules, read in order: { fieldId (a field's name or id), operator, value, join? }. Operators by field type: text contains, notContains; number is, isNot, gt, lt; date is, before, after, between (yyyy-mm-dd..yyyy-mm-dd or yyyy-mm-ddTHH:MM..yyyy-mm-ddTHH:MM, or hour/day/week/month/year with an offset such as month-1, or a range up to now such as hour-23..hour+0); checkbox isChecked, isNotChecked; item is, isNot (an item id); list of items is, isNot; every type isEmpty, isNotEmpty. join: and (default) or or.",
   { properties: { fieldId: { type: "string" }, operator: { type: "string" }, value: { type: "string" }, join: { enum: ["and", "or"] } }, required: ["fieldId", "operator"] },
 );
 const sort = rules("Sort rules: { fieldId, direction } (asc or desc)", { properties: { fieldId: { type: "string" }, direction: { enum: ["asc", "desc"] } }, required: ["fieldId"] });

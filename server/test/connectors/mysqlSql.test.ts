@@ -77,6 +77,12 @@ describe("query SQL", () => {
       "2026-03-28 23:00:00",
       "2026-03-29 22:00:00",
     ]);
+    // Minutes: 1:00 to 3:59 that morning, the clocks going from 2:00 to 3:00.
+    const m = new Params();
+    expect(m.statement(filterSql(columns.get("seen")!, { column: "seen", operator: "between", value: "2026-03-29T01:00..2026-03-29T03:59" }, m, "Europe/Amsterdam")).params).toEqual([
+      "2026-03-29 00:00:00",
+      "2026-03-29 02:00:00",
+    ]);
   });
   it("matches nothing for a value that can't be compared", () => {
     const p = new Params();

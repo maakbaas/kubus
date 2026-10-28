@@ -30,13 +30,14 @@ Extension points are registries, not special cases in pages:
   `SourceCondition`), so every connector filters the same way; a new item is preset only from rules every
   listed item meets (`requiredRules`).
 - **Date period** (`app/src/domain/datePeriod.ts`, `views/DatePeriodFilter.tsx`): the top of every
-  filter panel. A content switcher (Day, Week, Month, Year, Range) sets the current day / week
+  filter panel. A content switcher (Hour, Day, Week, Month, Year, Range) sets the current hour / day / week
   (Sunday to Saturday, like the date pickers' calendars; week 1 holds 1 January) / month / year in
   one click; ‹ › step to the one before / after (a range by its length), the calendar button back
-  to the current one, × clears it; Range shows two date inputs. The year dropdown runs from a century back to the current year, never into the future (the year shown stays if outside). It goes by the first date or date &
+  to the current one, × clears it; Hour shows its day and hour (00:00 … 23:00), Range a "Last n" with minutes, hours or days
+  (`minute-29..minute+0`, `hour-23..hour+0`, `day-6..day+0`: counted from now, `RANGE_UNITS`) and two date inputs. The year dropdown runs from a century back to the current year, never into the future (the year shown stays if outside). It goes by the first date or date &
   time field (none: Updated), or one picked beside the switcher (Created and Updated included). It
   is stored as the filter's first `between` rule, which the rule list leaves out (a date & time by
-  its local day). The current day, week, month or year is stored counted from today (`week+0`,
+  its local day; in an hour or a range of minutes or hours by its local minute, a date there by its day). The current day, week, month or year is stored counted from today (`week+0`,
   `month+0`: `resolveRange` works it out when the filter runs), so a saved "this week" stays this
   week and the panel says "This week · …"; so is a range ending today, as days from today
   (`day-6..day+0`, "Last 7 days · …", `rangeOrRolling`), and the current week, month or year so far ("Year to date", a
@@ -44,7 +45,8 @@ Extension points are registries, not special cases in pages:
   period counted from a day can be counted from the page's item's date instead ("Counted from": Today or "This
   measurement's Date"; stored as the value then `@$item.<field>`, `anchoredValue` in domain/datePeriod.ts, worked out
   for each page's item by `resolvePageValues`; elsewhere, or for an item without that date, it matches nothing); any other period is stored as its days
-  (`yyyy-mm-dd..yyyy-mm-dd`, both included; what they are, a week, a month, …, follows from them).
+  (`yyyy-mm-dd..yyyy-mm-dd`, both included; what they are, a week, a month, …, follows from them), an hour or a range
+  of minutes as its minutes (`yyyy-mm-ddTHH:MM..yyyy-mm-ddTHH:MM`, both included: an hour is `…T14:00..…T14:59`).
   The current period can't be kept as fixed days, by design. `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.
 - **Limit** (a block's Filter panel, under its rules; `ViewBlock.limit`, saved with the view): how many items it shows at
@@ -112,9 +114,11 @@ Extension points are registries, not special cases in pages:
   - **Of** (on an item page, for a block of the page's own collection): these items, or this item alone (`scope: "page"`,
     `chartItems`: then the block has no filter), e.g. a pie of this person's fat, muscle and bone mass.
   - **X axis** (`ChartX`): nothing (one category of all items), a field's values (any field grouping could use: its
-    groups by value either way or the largest first; a date's merged into steps: day, week (Sunday to Saturday), month,
-    year, or automatic by how far the dates spread; a line or area gets every step from the first to the last; "No
-    value" when asked; the largest n, the rest "Other"), or each item, at its value of a date or number field (a point per
+    groups by value either way or the largest first; a date's merged into steps: minute and hour (of a date & time, local),
+    day, week (Sunday to Saturday), month, year, or automatic by how far the dates spread (a date & time within three
+    hours in minutes, within three days in hours: `autoTimeStep`); a line or area gets every step from the first to the
+    last; "No value" when asked ("Show items without a value", only offered where it does something: not for a line of
+    dates, where it has no place, unless the chart is split, whose "No value" series it also adds); the largest n, the rest "Other"), or each item, at its value of a date or number field (a point per
     measurement, on a time or number axis) or without one by its title in the block's order. A radar's shapes, a box
     plot's boxes, a heatmap's columns and parts from categories are the X axis too.
   - **Series** (bar, line, area): any number (`ChartSeries`), each a count or the sum / average / minimum / maximum / first

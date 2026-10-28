@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultDateField, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveRange, rollingLabel, rollingRangeLabel, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
+import { defaultDateField, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveRange, rollingLabel, rollingRangeLabel, rollingRangeValue, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
 
 describe("date periods", () => {
   it("finds the day, week (Sunday first), month and year around a day", () => {
@@ -75,6 +75,36 @@ describe("rolling periods", () => {
     expect(parseRollingRange("day+1..day-1")).toBeNull();
     expect(rollingRangeLabel({ from: -6, to: 0 })).toBe("Last 7 days");
     expect(rollingRangeLabel({ from: 0, to: 0 })).toBe("Today");
+  });
+});
+
+describe("hours and minutes", () => {
+  const now = "2026-10-27T14:35";
+  it("are an hour's minutes, or a range's counted from now", () => {
+    expect(periodAround("hour", now)).toEqual({ start: "2026-10-27T14:00", end: "2026-10-27T14:59" });
+    expect(periodAround("hour", "2026-10-27")).toEqual({ start: "2026-10-27T00:00", end: "2026-10-27T00:59" });
+    expect(periodAround("day", now)).toEqual({ start: "2026-10-27", end: "2026-10-27" });
+    expect(resolveRange("hour+0", now)).toEqual({ start: "2026-10-27T14:00", end: "2026-10-27T14:59" });
+    expect(resolveRange("hour-15", now)).toEqual({ start: "2026-10-26T23:00", end: "2026-10-26T23:59" });
+    expect(resolveRange("hour-23..hour+0", now)).toEqual({ start: "2026-10-26T15:00", end: "2026-10-27T14:59" });
+    expect(resolveRange("minute-29..minute+0", now)).toEqual({ start: "2026-10-27T14:06", end: "2026-10-27T14:35" });
+    expect(resolveRange("day-6..day+0", now)).toEqual({ start: "2026-10-21", end: "2026-10-27" });
+    expect(resolveRange("2026-10-27T08:00..2026-10-27T09:29", now)).toEqual({ start: "2026-10-27T08:00", end: "2026-10-27T09:29" });
+    expect(resolveRange("2026-10-27T08:00..2026-10-27", now)).toBeNull();
+    expect(resolveRange("hour-1..day+0", now)).toBeNull();
+  });
+  it("are told apart, moved and named", () => {
+    expect(periodKind({ start: "2026-10-27T14:00", end: "2026-10-27T14:59" })).toBe("hour");
+    expect(periodKind({ start: "2026-10-27T14:06", end: "2026-10-27T14:35" })).toBe("range");
+    expect(shiftPeriod({ start: "2026-10-27T23:00", end: "2026-10-27T23:59" }, "hour", 1)).toEqual({ start: "2026-10-28T00:00", end: "2026-10-28T00:59" });
+    expect(shiftPeriod({ start: "2026-10-27T14:06", end: "2026-10-27T14:35" }, "range", -1)).toEqual({ start: "2026-10-27T13:36", end: "2026-10-27T14:05" });
+    expect(periodLabel({ start: "2026-10-27T14:00", end: "2026-10-27T14:59" }, "hour", "en-GB")).toBe("Tue, 27 Oct 2026, 14:00 – 15:00");
+    expect(periodLabel({ start: "2026-10-26T15:00", end: "2026-10-27T14:59" }, "range", "en-GB")).toBe("26 Oct 15:00 – 27 Oct 15:00");
+    expect(rollingRangeLabel({ from: -23, to: 0, unit: "hour" })).toBe("Last 24 hours");
+    expect(rollingRangeLabel({ from: 0, to: 0, unit: "minute" })).toBe("This minute");
+    expect(rollingRangeValue({ from: -29, to: 0, unit: "minute" })).toBe("minute-29..minute+0");
+    expect(rollingLabel({ kind: "hour", offset: -1 })).toBe("Last hour");
+    expect(rangeOrRolling({ start: "2026-10-27T08:00", end: "2026-10-27T08:59" }, "2026-10-27")).toBe("2026-10-27T08:00..2026-10-27T08:59");
   });
 });
 

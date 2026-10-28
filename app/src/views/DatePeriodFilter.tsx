@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Checkbox, ContentSwitcher, DatePicker, DatePickerInput, IconButton, Select, SelectItem, Switch } from "@carbon/react";
+import { Checkbox, ContentSwitcher, DatePicker, DatePickerInput, IconButton, NumberInput, Select, SelectItem, Switch } from "@carbon/react";
 import { Calendar, ChevronLeft, ChevronRight, Close } from "@carbon/icons-react";
 import { formatDate } from "../domain/fieldKinds";
 import { newId, type Collection } from "../domain/model";
@@ -8,6 +8,7 @@ import {
   anchoredValue,
   dateFields,
   defaultDateField,
+  nowMinute,
   parseRolling,
   parseRollingRange,
   parseToDate,
@@ -15,11 +16,13 @@ import {
   periodKind,
   periodLabel,
   periodRule,
+  RANGE_UNITS,
   rangeOrRolling,
   rangeValue,
   resolveRange,
   rollingLabel,
   rollingRangeLabel,
+  rollingRangeValue,
   rollingValue,
   shiftPeriod,
   splitAnchor,
@@ -27,9 +30,11 @@ import {
   toDateValue,
   type Period,
   type PeriodKind,
+  type RangeUnit,
 } from "../domain/datePeriod";
 
 const KINDS: { kind: PeriodKind; text: string; current: string }[] = [
+  { kind: "hour", text: "Hour", current: "This hour" },
   { kind: "day", text: "Day", current: "Today" },
   { kind: "week", text: "Week", current: "This week" },
   { kind: "month", text: "Month", current: "This month" },
@@ -37,6 +42,7 @@ const KINDS: { kind: PeriodKind; text: string; current: string }[] = [
   { kind: "range", text: "Range", current: "" },
 ];
 
+const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
 const MONTHS = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString(undefined, { month: "long" }));
 
 /** The years to pick from: a century back up to this one (none in the future), and the year shown if outside. */
@@ -62,7 +68,8 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
   const uid = useId();
   const fields = dateFields(collection);
   const rule = periodRule(filters);
-  const today = formatDate(new Date());
+  const now = nowMinute();
+  const today = now.slice(0, 10);
   const { value, fieldId: anchor } = rule ? splitAnchor(rule.value) : { value: "", fieldId: null };
   const rolling = rule ? parseRolling(value) : null;
   const rollingRange = rule ? parseRollingRange(value) : null;
@@ -71,7 +78,7 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
   // The page's item's dates a period can be counted from; the one it is.
   const pageDates = page ? page.fields.filter((f) => f.kind === "date" || f.kind === "datetime") : [];
   const anchorField = anchor ? pageDates.find((f) => f.id === anchor) : undefined;
-  const period = rule ? resolveRange(value, today) : null;
+  const period = rule ? resolveRange(value, now) : null;
   // The field and "Range" before a period is set (no rule yet), and "Range" for a period
   // that is also a whole month (say), so the switcher doesn't jump to "Month" while start and end are chosen.
   const [chosenField, setChosenField] = useState<string>();
@@ -86,7 +93,7 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
    */
   const write = (next: Period | null, nextKind = kind) => {
     if (!next) return onChange(filters.filter((r) => r !== rule));
-    const current = nextKind && nextKind !== "range" && rangeValue(periodAround(nextKind, today)) === rangeValue(next);
+    const current = nextKind && nextKind !== "range" && rangeValue(periodAround(nextKind, now)) === rangeValue(next);
     store(current ? rollingValue({ kind: nextKind, offset: 0 }) : nextKind === "range" ? rangeOrRolling(next, today) : rangeValue(next));
   };
   // Counted from the page's item's date stays so while the period is counted from a day (a fixed one has its days).
@@ -101,10 +108,10 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
     // others around today, or around the period shown when that isn't now (a month of last year →
     // that week).
     if (next === "range") return period && rolling && write(period, "range");
-    const showsToday = period && period.start <= today && today <= period.end;
+    const showsNow = period && period.start.slice(0, 10) <= today && today <= period.end.slice(0, 10);
     // This week, month or year so far stays so far in another of them (year to date → month to date).
-    if (toDate && next !== "day") return store(toDateValue(next));
-    write(periodAround(next, period && !showsToday ? period.start : today), next);
+    if (toDate && next !== "day" && next !== "hour") return store(toDateValue(next));
+    write(periodAround(next, period && !showsNow ? period.start : now), next);
   };
   const counting = toDate ? toDateLabel(toDate) : rolling ? rollingLabel(rolling) : rollingRange ? rollingRangeLabel(rollingRange) : "";
   const label = !period || !kind
@@ -163,7 +170,7 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
           kind="ghost"
           size="sm"
           disabled={!kind || kind === "range"}
-          onClick={() => kind && kind !== "range" && write(periodAround(kind, today))}
+          onClick={() => kind && kind !== "range" && write(periodAround(kind, now))}
         >
           <Calendar />
         </IconButton>
@@ -203,19 +210,33 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
           id={`${uid}-to-date`}
           labelText={toDateLabel(kind)}
           checked={!!toDate}
-          onChange={(_, { checked }) => (checked ? store(toDateValue(kind)) : write(periodAround(kind, today), kind))}
+          onChange={(_, { checked }) => (checked ? store(toDateValue(kind)) : write(periodAround(kind, now), kind))}
         />
       )}
-      {period && (kind === "day" || kind === "week") && (
+      {period && (kind === "hour" || kind === "day" || kind === "week") && (
         <div className="date-period__pick">
           <DatePicker
             datePickerType="single"
             dateFormat="Y-m-d"
-            value={period.start}
-            onChange={([day]) => day && write(periodAround(kind, formatDate(day)))}
+            value={period.start.slice(0, 10)}
+            // An hour keeps its time on another day.
+            onChange={([day]) => day && write(periodAround(kind, kind === "hour" ? `${formatDate(day)}${period.start.slice(10)}` : formatDate(day)))}
           >
-            <DatePickerInput id={`${uid}-date-day`} size="sm" labelText={kind === "day" ? "Day" : "A day of the week"} placeholder="yyyy-mm-dd" />
+            <DatePickerInput id={`${uid}-date-day`} size="sm" labelText={kind === "week" ? "A day of the week" : "Day"} placeholder="yyyy-mm-dd" />
           </DatePicker>
+          {kind === "hour" && (
+            <Select
+              id={`${uid}-date-hour`}
+              labelText="Hour"
+              size="sm"
+              value={period.start.slice(11, 13)}
+              onChange={(e) => write(periodAround("hour", `${period.start.slice(0, 10)}T${e.target.value}:00`))}
+            >
+              {HOURS.map((h) => (
+                <SelectItem key={h} value={h} text={`${h}:00`} />
+              ))}
+            </Select>
+          )}
         </div>
       )}
       {period && (kind === "month" || kind === "year") && (
@@ -247,11 +268,19 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
         </div>
       )}
       {kind === "range" && (
+        <LastRange
+          id={`${uid}-date-last`}
+          // The range shown when it ends now (the last 7 days): its length and unit.
+          value={rollingRange && rollingRange.to === 0 ? { n: rollingRange.to - rollingRange.from + 1, unit: rollingRange.unit ?? "day" } : null}
+          onChange={({ n, unit }) => store(rollingRangeValue({ from: 1 - n, to: 0, unit }))}
+        />
+      )}
+      {kind === "range" && (
         <DatePicker
           className="date-period__range"
           datePickerType="range"
           dateFormat="Y-m-d"
-          value={period ? [period.start, period.end] : undefined}
+          value={period ? [period.start.slice(0, 10), period.end.slice(0, 10)] : undefined}
           onChange={(dates) => {
             const [start, end] = dates;
             if (start && end) write({ start: formatDate(start), end: formatDate(end) }, "range");
@@ -261,6 +290,48 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
           <DatePickerInput id={`${uid}-date-end`} size="sm" labelText="Last day" placeholder="yyyy-mm-dd" />
         </DatePicker>
       )}
+    </div>
+  );
+}
+
+/**
+ * A range ending now by its length: the last 7 days, the last 24 hours, the last 30 minutes (empty
+ * while the range shown is another one). Kept counted from now.
+ */
+function LastRange({ id, value, onChange }: { id: string; value: { n: number; unit: RangeUnit } | null; onChange(next: { n: number; unit: RangeUnit }): void }) {
+  // The unit picked before a length is typed.
+  const [unit, setUnit] = useState<RangeUnit>(value?.unit ?? "day");
+  const shown = value?.unit ?? unit;
+  return (
+    <div className="date-period__pick">
+      <NumberInput
+        id={`${id}-n`}
+        label="Last"
+        size="sm"
+        min={1}
+        hideSteppers
+        allowEmpty
+        value={value?.n ?? ""}
+        onChange={(_, { value: n }) => {
+          const count = Number(n);
+          if (Number.isInteger(count) && count >= 1) onChange({ n: count, unit: shown });
+        }}
+      />
+      <Select
+        id={`${id}-unit`}
+        labelText="Counted in"
+        size="sm"
+        value={shown}
+        onChange={(e) => {
+          const next = e.target.value as RangeUnit;
+          setUnit(next);
+          if (value) onChange({ n: value.n, unit: next });
+        }}
+      >
+        {RANGE_UNITS.map((u) => (
+          <SelectItem key={u.unit} value={u.unit} text={u.text} />
+        ))}
+      </Select>
     </div>
   );
 }

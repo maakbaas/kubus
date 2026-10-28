@@ -1,4 +1,4 @@
-import { conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget, type SourceValue } from "../../../shared/sources.ts";
+import { betweenBounds, conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget, type SourceValue, wallTime } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
 
 // The InfluxDB 2 connector's Flux: how a column of each type is read, the scripts a query
@@ -242,10 +242,9 @@ function offsetAt(at: number, tz: string): number {
   return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(at / 1000) * 1000;
 }
 
-/** The moment a day (yyyy-mm-dd) starts in the time zone, `days` later than it, in ms since 1970. */
+/** The moment a day (yyyy-mm-dd) or minute (yyyy-mm-ddTHH:MM) starts in the time zone, `days` days (minutes) later than it, in ms since 1970. */
 export function dayStart(day: string, tz: string, days = 0): number {
-  const [y, m, d] = day.split("-").map(Number);
-  const wall = Date.UTC(y, m - 1, d + days);
+  const wall = wallTime(day, days);
   const guess = wall - offsetAt(wall, tz);
   return wall - offsetAt(guess, tz);
 }
@@ -466,9 +465,8 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 function dayBounds(rule: SourceFilter, tz: string): { from?: number; to?: number } | null {
   const value = rule.value.trim();
   if (rule.operator === "between") {
-    const [start, end] = value.split("..");
-    if (!DAY.test(start ?? "") || !DAY.test(end ?? "")) return null;
-    return { from: dayStart(start, tz), to: dayStart(end, tz, 1) };
+    const bounds = betweenBounds(value);
+    return bounds && { from: dayStart(bounds.start, tz), to: dayStart(bounds.end, tz, 1) };
   }
   if (!DAY.test(value)) return null;
   switch (rule.operator) {

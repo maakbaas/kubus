@@ -62,6 +62,10 @@ describe("queryRows", () => {
     expect(where({ column: "seen", operator: "is", value: "2026-03-02" })).toEqual([1, 2]);
     expect(where({ column: "seen", operator: "before", value: "2026-03-02" })).toEqual([4]);
     expect(where({ column: "seen", operator: "between", value: "2026-03-01..2026-03-01" })).toEqual([4]);
+    // Minutes of the time zone (00:30 and 09:00 on 2 March there), both included.
+    expect(where({ column: "seen", operator: "between", value: "2026-03-02T00:00..2026-03-02T08:59" })).toEqual([1]);
+    expect(where({ column: "seen", operator: "between", value: "2026-03-01T11:00..2026-03-02T09:00" })).toEqual([1, 2, 4]);
+    expect(where({ column: "seen", operator: "between", value: "2026-03-02T00:00..2026-03-02" })).toEqual([]);
     expect(ids({ filter: { or: [{ column: "age", operator: "lt", value: "10" }, { and: [{ column: "name", operator: "is", value: "bob" }] }] }, sort: [] })).toEqual([2, 4, 5, 6]);
     expect(ids({ filter: { or: [] } })).toEqual([]);
     expect(() => where({ column: "active", operator: "contains", value: "x" })).toThrow(/can't be filtered/);

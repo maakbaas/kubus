@@ -1,4 +1,4 @@
-import { MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceResult, type SourceRow, type SourceShape, type SourceValue } from "../../../shared/sources.ts";
+import { betweenBounds, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceResult, type SourceRow, type SourceShape, type SourceValue } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
 
 // Queries answered in memory, for connectors whose source can't run them itself (an API with a
@@ -22,17 +22,19 @@ function column(columns: Map<string, SourceColumn>, name: string): SourceColumn 
   return c;
 }
 
-/** The day (yyyy-mm-dd) a date & time is on in a time zone. */
-function dayIn(timeZone: string): (iso: string) => string | null {
+/** The minute (yyyy-mm-ddTHH:MM) a date & time is at in a time zone (its first 10: its day). */
+function minuteIn(timeZone: string): (iso: string) => string | null {
   let format: Intl.DateTimeFormat;
   try {
-    format = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
+    format = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   } catch {
     throw new SourceError(`Unknown time zone “${timeZone}”`);
   }
   return (iso) => {
     const t = Date.parse(iso);
-    return Number.isNaN(t) ? null : format.format(t);
+    if (Number.isNaN(t)) return null;
+    const p = Object.fromEntries(format.formatToParts(t).map((x) => [x.type, x.value]));
+    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
   };
 }
 
@@ -105,7 +107,7 @@ export function ruleTest(c: SourceColumn, rule: SourceFilter, day: (iso: string)
     }
   }
   if (c.kind !== "date" && c.kind !== "datetime") return refuse();
-  // Dates, and dates & times by the day they are on in the device's time zone.
+  // Dates, and dates & times by the day (a between of minutes: the minute) they are on in the device's time zone.
   const dayOf = (row: MemoryRow) => {
     const v = get(row);
     if (typeof v !== "string" || v === "") return null;
@@ -116,25 +118,29 @@ export function ruleTest(c: SourceColumn, rule: SourceFilter, day: (iso: string)
   let from: string;
   let to: string;
   if (op === "between") {
-    const [start, end] = value.split("..");
-    if (!DAY.test(start ?? "") || !DAY.test(end ?? "")) return never;
-    [from, to] = [start, end];
+    const bounds = betweenBounds(value);
+    if (!bounds) return never;
+    [from, to] = [bounds.start, bounds.end];
   } else {
     if (!DAY.test(value)) return never;
     [from, to] = [value, value];
   }
-  const test = (pass: (d: string) => boolean) => (row: MemoryRow) => {
+  // Minutes against minutes; a date, or a bound that is a day, by the day.
+  const exact = from.length > 10;
+  const test = (pass: (d: string, from: string, to: string) => boolean) => (row: MemoryRow) => {
     const d = dayOf(row);
-    return d !== null && pass(d);
+    if (d === null) return false;
+    const n = exact && d.length > 10 ? 16 : 10;
+    return pass(d.slice(0, n), from.slice(0, n), to.slice(0, n));
   };
   switch (op) {
     case "is":
     case "between":
-      return test((d) => d >= from && d <= to);
+      return test((d, from, to) => d >= from && d <= to);
     case "before":
-      return test((d) => d < from);
+      return test((d, from) => d < from);
     case "after":
-      return test((d) => d > from);
+      return test((d, from) => d > from);
     default:
       return refuse();
   }
@@ -197,7 +203,7 @@ function groupKeysOf(c: SourceColumn, day: (iso: string) => string | null): (row
     if (c.kind === "checkbox") return [v === true ? "yes" : "no"];
     if (v === null) return [""];
     if (Array.isArray(v)) return v.length ? [...new Set(v.map(String))] : [""];
-    if (c.kind === "datetime") return [day(String(v)) ?? ""];
+    if (c.kind === "datetime") return [day(String(v))?.slice(0, 10) ?? ""];
     if (c.kind === "date") return [String(v).slice(0, 10)];
     return [textOf(v)];
   };
@@ -207,7 +213,7 @@ function groupKeysOf(c: SourceColumn, day: (iso: string) => string | null): (row
 export function queryRows(rows: MemoryRow[], columns: Map<string, SourceColumn>, query: SourceQuery): SourceResult {
   if (!Number.isInteger(query.offset) || query.offset < 0) throw new SourceError("offset must be a whole number");
   if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > MAX_SOURCE_PAGE) throw new SourceError(`limit must be 1 to ${MAX_SOURCE_PAGE}`);
-  const day = dayIn(query.timeZone);
+  const day = minuteIn(query.timeZone);
   const keyColumn = column(columns, query.key);
   for (const name of query.columns) column(columns, name);
   for (const name of query.title) column(columns, name);

@@ -1,4 +1,4 @@
-import { conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
+import { betweenBounds, conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
 
 // The Postgres connector's SQL: how a column of each type is read, and the statements a query
@@ -142,9 +142,11 @@ function textSql(c: PgColumn): string {
 const containing = (text: string) => `%${text.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The start of a day (yyyy-mm-dd) in the time zone, as a timestamptz: `days` later than it. */
+/** The start of a day (yyyy-mm-dd) or minute (yyyy-mm-ddTHH:MM) in the time zone, as a timestamptz: `days` days (minutes) later than it. */
 const dayStart = (p: Params, day: string, tz: string, days = 0) =>
-  `((${p.add(day)}::date + ${days})::timestamp AT TIME ZONE ${p.add(tz)})`;
+  DAY.test(day)
+    ? `((${p.add(day)}::date + ${days})::timestamp AT TIME ZONE ${p.add(tz)})`
+    : `((${p.add(day)}::timestamp + ${days} * interval '1 minute') AT TIME ZONE ${p.add(tz)})`;
 
 /** One filter rule as a condition. A value that can't be compared matches nothing (as in the app). */
 export function filterSql(c: PgColumn, rule: SourceFilter, p: Params, tz: string): string {
@@ -215,9 +217,9 @@ export function filterSql(c: PgColumn, rule: SourceFilter, p: Params, tz: string
   let from: string;
   let to: string;
   if (op === "between") {
-    const [start, end] = value.split("..");
-    if (!DAY.test(start ?? "") || !DAY.test(end ?? "")) return "FALSE";
-    [from, to] = [start, end];
+    const bounds = betweenBounds(value);
+    if (!bounds) return "FALSE";
+    [from, to] = [bounds.start, bounds.end];
   } else {
     if (!DAY.test(value)) return "FALSE";
     [from, to] = [value, value];
@@ -231,7 +233,7 @@ export function filterSql(c: PgColumn, rule: SourceFilter, p: Params, tz: string
       case "after":
         return `${r} > ${p.add(from)}::date`;
       case "between":
-        return `${r} BETWEEN ${p.add(from)}::date AND ${p.add(to)}::date`;
+        return `${r} BETWEEN ${p.add(from.slice(0, 10))}::date AND ${p.add(to.slice(0, 10))}::date`;
       default:
         return refuse();
     }

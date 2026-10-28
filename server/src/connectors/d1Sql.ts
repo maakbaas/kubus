@@ -1,4 +1,4 @@
-import { conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
+import { betweenBounds, conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget, wallTime } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
 
 // The Cloudflare D1 connector's SQL (SQLite): how a column is read, and the statements a query
@@ -198,10 +198,9 @@ function daySql(c: D1Column, tz: string): string {
   return `date(${unix} + ${offset} * 60, 'unixepoch')`;
 }
 
-/** The start of a day (yyyy-mm-dd) in the time zone as Unix seconds: `days` later than it. */
+/** The start of a day (yyyy-mm-dd) or minute (yyyy-mm-ddTHH:MM) in the time zone as Unix seconds: `days` days (minutes) later than it. */
 export function dayStart(day: string, tz: string, days = 0): number {
-  const [y, m, d] = day.split("-").map(Number);
-  const midnight = Date.UTC(y, m - 1, d + days) / 1000; // as if UTC; then less the zone's offset there
+  const midnight = wallTime(day, days) / 1000; // as if UTC; then less the zone's offset there
   const offsets = zoneOffsets(tz);
   const offsetOf = (at: number) => offsets.filter((o) => o.from <= at).pop()!.minutes;
   const guess = midnight - offsetOf(midnight) * 60;
@@ -275,9 +274,9 @@ export function filterSql(c: D1Column, rule: SourceFilter, p: Params, tz: string
   let from: string;
   let to: string;
   if (op === "between") {
-    const [start, end] = value.split("..");
-    if (!DAY.test(start ?? "") || !DAY.test(end ?? "")) return "FALSE";
-    [from, to] = [start, end];
+    const bounds = betweenBounds(value);
+    if (!bounds) return "FALSE";
+    [from, to] = [bounds.start, bounds.end];
   } else {
     if (!DAY.test(value)) return "FALSE";
     [from, to] = [value, value];
@@ -291,7 +290,7 @@ export function filterSql(c: D1Column, rule: SourceFilter, p: Params, tz: string
       case "after":
         return `${v} > ${p.add(from)}`;
       case "between":
-        return `${v} BETWEEN ${p.add(from)} AND ${p.add(to)}`;
+        return `${v} BETWEEN ${p.add(from.slice(0, 10))} AND ${p.add(to.slice(0, 10))}`;
       default:
         return refuse();
     }

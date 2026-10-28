@@ -213,7 +213,9 @@ takes the new one when its settings are opened. A source's name: letters, digits
   composite and geometric values as text that is only filtered by contains / empty (`plain`: not
   sorted or grouped; JSON and XML hidden in a new collection's view); binary data, search indexes,
   PostGIS shapes and internals dropped. A filter means what the app's does (`applyQuery`): text
-  case-insensitive, empty values last both ways, a date & time on its day in the device's time zone,
+  case-insensitive, empty values last both ways, a date & time on its day in the device's time zone (a `between` of
+  minutes, `yyyy-mm-ddTHH:MM..yyyy-mm-ddTHH:MM` from an hour or a "last n hours" period: on its minute there, the
+  last included; `betweenBounds` / `wallTime` in shared/sources.ts, a date by its day; a server from before this reads it as no period and matches nothing),
   comparisons kept to the column (so indexes are used: a whole number against an integer column as `int8`, a
   `timestamp` column against its bound turned to UTC, and sorted as itself), the key breaking ties so pages never overlap.
   A list column groups a row under each value. At start (and on every change) `check` warns about a

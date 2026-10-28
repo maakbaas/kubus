@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import ICAL from "ical.js";
-import type { SourceColumn, SourceCondition, SourceDescription, SourceFilter, SourceQuery, SourceResult, SourceRow, SourceRowRequest, SourceTable, SourceTarget } from "../../../shared/sources.ts";
+import { betweenBounds, wallTime, type SourceColumn, type SourceCondition, type SourceDescription, type SourceFilter, type SourceQuery, type SourceResult, type SourceRow, type SourceRowRequest, type SourceTable, type SourceTarget } from "../../../shared/sources.ts";
 import { SourceError, type Connector, type SourceConfig } from "./connector.ts";
 import { documentAddress, fetchDocument, hasSecretPlace, withSecret, type HttpDocument } from "./httpDocument.ts";
 import { requiredRules } from "./influxFlux.ts";
@@ -68,8 +68,8 @@ function boundsOf(rule: SourceFilter): { from?: number; to?: number } | null {
   const value = rule.value.trim();
   const at = (day: string, days = 0) => Date.parse(`${day}T00:00:00Z`) + days * DAY_MS;
   if (rule.operator === "between") {
-    const [start, end] = value.split("..");
-    return DAY.test(start ?? "") && DAY.test(end ?? "") ? { from: at(start), to: at(end, 1) } : null;
+    const bounds = betweenBounds(value);
+    return bounds && { from: wallTime(bounds.start), to: wallTime(bounds.end, 1) };
   }
   if (!DAY.test(value)) return null;
   if (rule.operator === "is") return { from: at(value), to: at(value, 1) };

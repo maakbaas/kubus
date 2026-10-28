@@ -101,6 +101,7 @@ describe("days in a time zone", () => {
   it("finds a day's start, across a change of clocks", () => {
     expect(new Date(dayStart("2026-03-01", "Europe/Amsterdam")).toISOString()).toBe("2026-02-28T23:00:00.000Z");
     expect(new Date(dayStart("2026-03-29", "Europe/Amsterdam", 1)).toISOString()).toBe("2026-03-29T22:00:00.000Z");
+    expect(new Date(dayStart("2026-03-29T03:59", "Europe/Amsterdam", 1)).toISOString()).toBe("2026-03-29T02:00:00.000Z");
     expect(dayIn(Date.parse("2026-02-28T23:30:00Z"), "Europe/Amsterdam")).toBe("2026-03-01");
   });
   it("reads a time's nanoseconds", () => {
@@ -122,6 +123,11 @@ describe("filters", () => {
   it("compares a date & time by its day in the time zone", () => {
     expect(filterFlux(columns.get("_time")!, { column: "_time", operator: "is", value: "2026-03-01" }, "Europe/Amsterdam")).toBe(
       '(exists r["_time"] and r["_time"] >= 2026-02-28T23:00:00.000Z and r["_time"] < 2026-03-01T23:00:00.000Z)',
+    );
+  });
+  it("compares a date & time with minutes in the time zone, the last one included", () => {
+    expect(filterFlux(columns.get("_time")!, { column: "_time", operator: "between", value: "2026-03-01T10:00..2026-03-01T10:59" }, "Europe/Amsterdam")).toBe(
+      '(exists r["_time"] and r["_time"] >= 2026-03-01T09:00:00.000Z and r["_time"] < 2026-03-01T10:00:00.000Z)',
     );
   });
   it("narrows a measurement's range to the days filtered on", () => {

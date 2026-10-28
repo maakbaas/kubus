@@ -1,4 +1,4 @@
-import type { SourceColumn, SourceCondition, SourceDescription, SourceQuery, SourceResult, SourceRow, SourceRowRequest, SourceTable, SourceTarget } from "../../../shared/sources.ts";
+import { betweenBounds, type SourceColumn, type SourceCondition, type SourceDescription, type SourceQuery, type SourceResult, type SourceRow, type SourceRowRequest, type SourceTable, type SourceTarget } from "../../../shared/sources.ts";
 import { SourceError, type Connector, type SourceConfig } from "./connector.ts";
 import { requiredRules } from "./influxFlux.ts";
 import { addressOf } from "./kinds.ts";
@@ -138,10 +138,10 @@ export function dateFilter(filter: SourceCondition): Record<string, unknown> | n
     if (rule.column !== "date") continue;
     const v = rule.value.trim();
     if (rule.operator === "between") {
-      const [from, to] = v.split("..");
-      if (!DAY.test(from ?? "") || !DAY.test(to ?? "")) continue;
-      bound("$gte", from);
-      bound("$lte", to);
+      const bounds = betweenBounds(v);
+      if (!bounds) continue;
+      bound("$gte", bounds.start.slice(0, 10));
+      bound("$lte", bounds.end.slice(0, 10));
     } else if (DAY.test(v)) {
       if (rule.operator === "is") {
         bound("$gte", v);
