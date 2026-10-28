@@ -630,10 +630,13 @@ export function groupsFlux(query: SourceQuery, columns: Map<string, InfluxColumn
   ]);
 }
 
-/** The total of a query's rows (`_kubus_n`). */
+/**
+ * The total of a query's rows (`_kubus_n`). The 1 is added to the row (`r with`): a map whose
+ * record doesn't read `r` gives no rows at all (InfluxDB 2.7), and the sum of none is null.
+ */
 export function totalFlux(query: SourceQuery, columns: Map<string, InfluxColumn>): string {
   const { script, pipeline } = filtered(query, columns);
-  return script.render([...pipeline, `map(fn: (r) => ({_kubus_n: 1}))`, `sum(column: "_kubus_n")`]);
+  return script.render([...pipeline, `keep(columns: ["_time"])`, `map(fn: (r) => ({r with _kubus_n: 1}))`, `sum(column: "_kubus_n")`]);
 }
 
 /**

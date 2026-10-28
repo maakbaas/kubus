@@ -162,7 +162,7 @@ describe("scripts", () => {
     expect(groupKey(columns.get("usage")!, "3", "UTC")).toBe("3");
   });
   it("counts", () => {
-    expect(totalFlux(query({ search: "x" }), columns)).toMatch(/filter\(fn: \(r\) => \(.*=~ \/\(\?i\)x\/ or .*\)\)\n {2}\|> map\(fn: \(r\) => \(\{_kubus_n: 1\}\)\)\n {2}\|> sum\(column: "_kubus_n"\)$/);
+    expect(totalFlux(query({ search: "x" }), columns)).toMatch(/filter\(fn: \(r\) => \(.*=~ \/\(\?i\)x\/ or .*\)\)\n {2}\|> keep\(columns: \["_time"\]\)\n {2}\|> map\(fn: \(r\) => \(\{r with _kubus_n: 1\}\)\)\n {2}\|> sum\(column: "_kubus_n"\)$/);
   });
   it("reads one row by its key in only its moment", () => {
     const flux = rowFlux({ ...query(), keyValue: "1970-01-01T00:00:01.000000002Z,host=a" }, columns)!;
