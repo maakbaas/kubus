@@ -34,10 +34,15 @@ want, and fill them with items that link to each other.
 
 ### Desktop app
 
-Download the Windows installer (`.exe` / `.msi`) or the portable `kubus.exe` from the
-[Releases page](https://github.com/maakbaas/kubus/releases); each release is built from a version
-tag (`v1.2.3`). The portable executable needs no installation (it uses the WebView2 runtime that
-Windows 10/11 ships with). Data stays on your device, in the app's own database.
+Download it from the [Releases page](https://github.com/maakbaas/kubus/releases); each release is
+built from a version tag (`v1.2.3`). Data stays on your device, in the app's own database.
+
+- **Windows**: the installer (`.exe` / `.msi`) or the portable `kubus.exe`, which needs no
+  installation (it uses the WebView2 runtime that Windows 10/11 ships with).
+- **macOS**: the `.dmg` (Apple silicon and Intel). It isn't notarized, so the first time macOS
+  refuses to open it: open it anyway under System Settings → Privacy & Security, or run
+  `xattr -cr /Applications/Kubus.app`.
+- **Linux**: the `.deb` (Debian, Ubuntu), `.rpm` (Fedora) or the `.AppImage` (any distribution).
 
 ### Build it yourself
 

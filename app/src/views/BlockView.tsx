@@ -390,8 +390,9 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           <ProgressBar
             className="block-more__bar"
             size="small"
-            label={`Loading rows: ${remote.progress.loaded} so far`}
-            {...(remote.progress.fraction !== null && { value: Math.round(remote.progress.fraction * 100), max: 100 })}
+            label={`Loading rows: ${remote.progress.loaded} of ${remote.progress.total}`}
+            value={remote.progress.loaded}
+            max={Math.max(remote.progress.total, 1)}
           />
           <Button kind="tertiary" size="sm" onClick={remote.progress.cancel}>
             Cancel

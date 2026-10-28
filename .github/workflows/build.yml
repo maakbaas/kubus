@@ -1,8 +1,9 @@
 name: Build
 
 # On every push: type check, tests and linting, then the Windows installers and the portable
-# executable as downloadable artifacts of the run (Actions tab > the run > Artifacts).
-# A tag `v1.2.3` also publishes them on the Releases page. Can be started by hand too.
+# executable, the macOS disk image and the Linux packages as downloadable artifacts of the run
+# (Actions tab > the run > Artifacts). A tag `v1.2.3` also publishes them on the Releases page.
+# Can be started by hand too.
 on:
   push:
   workflow_dispatch:
@@ -44,11 +45,7 @@ jobs:
       - name: Version from tag
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          sed -i "0,/^version = \".*\"/s//version = \"$version\"/" desktop/Cargo.toml
-          sed -i "s/\"version\": \".*\"/\"version\": \"$version\"/" desktop/tauri.conf.json
-          sed -i "0,/\"version\": \".*\"/s//\"version\": \"$version\"/" package.json
+        run: node .github/version-from-tag.mjs "${GITHUB_REF_NAME#v}"
 
       - name: Type check
         run: npm run typecheck
@@ -96,8 +93,76 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # macOS (one universal disk image for Apple silicon and Intel) and Linux (.deb, .rpm, AppImage).
+  # Only the bundles: the checks above don't depend on the platform and run on Windows, the
+  # tests on Linux in test.yml.
+  desktop:
+    name: desktop (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macos
+            args: --target universal-apple-darwin
+            files: desktop/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          # The oldest supported Ubuntu: a binary needs at least the glibc and WebKitGTK it was
+          # built against, so this one runs on the most distributions.
+          - os: ubuntu-22.04
+            name: linux
+            args: ''
+            files: |
+              desktop/target/release/bundle/deb/*.deb
+              desktop/target/release/bundle/rpm/*.rpm
+              desktop/target/release/bundle/appimage/*.AppImage
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Tauri's Linux prerequisites (https://tauri.app/start/prerequisites/#linux).
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev file
+
+      # A universal app holds both architectures.
+      - name: Rust targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+
+      - run: npm ci
+
+      - name: Version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: node .github/version-from-tag.mjs "${GITHUB_REF_NAME#v}"
+
+      # Not notarized (that needs a paid Apple developer account): only ad-hoc signed
+      # (tauri.conf.json bundle.macOS.signingIdentity "-"), so macOS asks once before opening it.
+      - name: Build packages
+        run: npm run build -- ${{ matrix.args }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kubus-${{ matrix.name }}-${{ github.sha }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 14
+
   release:
-    needs: build
+    needs: [build, desktop]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
