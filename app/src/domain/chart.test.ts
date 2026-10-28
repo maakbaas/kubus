@@ -17,7 +17,7 @@ import {
   type ChartInput,
   type ChartOptions,
 } from "./chart";
-import { blankField, type Collection, type Item } from "./model";
+import { blankField, fieldValue, type Collection, type Item } from "./model";
 import { applyQuery, defaultQuery, type QueryContext } from "./query";
 
 const collection: Collection = {
@@ -64,6 +64,16 @@ describe("chart values", () => {
     expect(aggregate(books, "avg", pages)).toBe(175);
     expect([aggregate(books, "min", pages), aggregate(books, "max", pages)]).toEqual([80, 300]);
     expect(aggregate([book("x", null, null, null)], "sum", pages)).toBeNull();
+  });
+
+  it("take the first, last and previous value of a number field, in the items\' order", () => {
+    const pages = collection.fields[2];
+    const have = books.filter((b) => typeof fieldValue(b, pages) === "number");
+    const nums = have.map((b) => fieldValue(b, pages) as number);
+    expect(aggregate(have, "first", pages)).toBe(nums[0]);
+    expect(aggregate(have, "last", pages)).toBe(nums[nums.length - 1]);
+    expect(aggregate(have, "prev", pages)).toBe(nums[nums.length - 2]);
+    expect(aggregate(have.slice(0, 1), "prev", pages)).toBeNull();
   });
 
   it("are a bar per group, empty values left out unless asked for", () => {

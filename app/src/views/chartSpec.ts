@@ -293,11 +293,16 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       const percent = percentOf(one.value, one.max);
       if (percent === null) return { problem: "No value to show." };
       const status = statusOf(percent, options.warnAt, options.dangerAt);
+      // The change from the comparison value, in the same % of the max ("Previous" only after a last value).
+      const how = options.compare === "prev" && options.value !== "last" ? null : options.compare;
+      const before = how ? aggregate(resultItems(input.result), how, fields.get(options.compareField ?? options.valueField ?? "")) : null;
+      const beforePercent = percentOf(before, one.max);
+      const delta = beforePercent === null ? 0 : Math.round((percent - beforePercent) * 100) / 100;
       return {
         chart: "GaugeChart",
-        data: [{ group: "value", value: Math.round(Math.min(100, Math.max(0, percent)) * 10) / 10 }],
+        data: [{ group: "value", value: Math.round(Math.min(100, Math.max(0, percent)) * 10) / 10 }, ...(delta !== 0 ? [{ group: "delta", value: delta }] : [])],
         options: base(options, theme, false, {
-          gauge: { type: options.fullCircle ? "full" : "semi", ...(status && { status }), showPercentageSymbol: !options.asValue, numberFormatter: (n: number) => (options.asValue ? String(Math.round(((one.max === null ? n : (n * one.max) / 100) + Number.EPSILON) * 100) / 100) : String(n)), deltaArrow: { enabled: false } },
+          gauge: { type: options.fullCircle ? "full" : "semi", ...(status && { status }), showPercentageSymbol: !options.asValue, numberFormatter: (n: number) => (options.asValue ? String(Math.round(((one.max === null ? n : (n * one.max) / 100) + Number.EPSILON) * 100) / 100) : String(n)), deltaArrow: { enabled: delta !== 0 } },
         }),
       };
     }

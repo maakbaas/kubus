@@ -47,7 +47,7 @@ export const CHART_KINDS: { kind: ChartKind; label: string; section: string }[] 
 ];
 
 /** How the items of a category become one number. */
-export type Aggregate = "count" | "sum" | "avg" | "min" | "max" | "first";
+export type Aggregate = "count" | "sum" | "avg" | "min" | "max" | "first" | "last";
 export const AGGREGATES: { value: Aggregate; text: string }[] = [
   { value: "count", text: "Count of items" },
   { value: "sum", text: "Sum" },
@@ -55,7 +55,12 @@ export const AGGREGATES: { value: Aggregate; text: string }[] = [
   { value: "min", text: "Minimum" },
   { value: "max", text: "Maximum" },
   { value: "first", text: "First value" },
+  { value: "last", text: "Last value" },
 ];
+
+/** What a gauge compares its value with: any aggregate, or (when its value is the last) the value before it. */
+export type Compare = Aggregate | "prev";
+export const PREVIOUS: { value: Compare; text: string } = { value: "prev", text: "Previous value" };
 
 /** The steps a date category is counted in ("auto": by how far the dates spread). */
 export type DateStep = "auto" | "day" | "week" | "month" | "year";
@@ -136,6 +141,10 @@ export interface ChartOptions {
   fullCircle: boolean;
   /** Gauge: the value itself in the middle instead of its share of the max (%). */
   asValue: boolean;
+  /** Gauge: a second value, shown as the increase or decrease from it; null = none. */
+  compare: Compare | null;
+  /** The number field `compare` is taken of; null = the gauge's own. */
+  compareField: string | null;
   /** Meter: the categories as parts of one bar (of the max). */
   proportional: boolean;
 }
@@ -189,6 +198,8 @@ export function defaultChartOptions(collection: Collection, components: Componen
     dangerAt: null,
     fullCircle: false,
     asValue: false,
+    compare: null,
+    compareField: null,
     proportional: false,
   };
 }
@@ -240,6 +251,8 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     dangerAt: finite(o.dangerAt),
     fullCircle: flag(o.fullCircle, d.fullCircle),
     asValue: flag(o.asValue, d.asValue),
+    compare: o.compare === null || o.compare === undefined ? null : oneOf([...AGGREGATES, PREVIOUS], o.compare, null as Compare | null),
+    compareField: field(o.compareField),
     proportional: flag(o.proportional, d.proportional),
   };
 }
@@ -257,7 +270,7 @@ const numbersOf = (items: Item[], field: FieldDef | undefined): number[] =>
   field ? items.flatMap((i) => (typeof fieldValue(i, field) === "number" ? [fieldValue(i, field) as number] : [])) : [];
 
 /** The items made into one number: counted, or their values of `field` added up (…); null when there is nothing to add up. */
-export function aggregate(items: Item[], how: Aggregate, field: FieldDef | undefined): number | null {
+export function aggregate(items: Item[], how: Compare, field: FieldDef | undefined): number | null {
   if (how === "count") return items.length;
   const values = numbersOf(items, field);
   if (values.length === 0) return null;
@@ -272,6 +285,10 @@ export function aggregate(items: Item[], how: Aggregate, field: FieldDef | undef
       return Math.max(...values);
     case "first":
       return values[0];
+    case "last":
+      return values[values.length - 1];
+    case "prev":
+      return values.length > 1 ? values[values.length - 2] : null;
   }
 }
 
@@ -279,7 +296,7 @@ export function aggregate(items: Item[], how: Aggregate, field: FieldDef | undef
 export function valueLabel(how: Aggregate, field: FieldDef | undefined, collection: Collection): string {
   if (how === "count") return collection.pluralName;
   const name = field?.name ?? "?";
-  return how === "sum" ? `Sum of ${name}` : how === "avg" ? `Average ${name}` : how === "min" ? `Minimum ${name}` : how === "first" ? `First ${name}` : `Maximum ${name}`;
+  return how === "sum" ? `Sum of ${name}` : how === "avg" ? `Average ${name}` : how === "min" ? `Minimum ${name}` : how === "first" ? `First ${name}` : how === "last" ? `Last ${name}` : `Maximum ${name}`;
 }
 
 // --- Categories -----------------------------------------------------------------------------------

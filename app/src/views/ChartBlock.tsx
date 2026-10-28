@@ -4,6 +4,8 @@ import { ChartColumn } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import {
   AGGREGATES,
+  PREVIOUS,
+  type Compare,
   axisFields,
   CHART_HEIGHTS,
   GAUGE_WIDTH,
@@ -142,7 +144,7 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
 
       {show.value && (
         <>
-          {aggregates(`${uid}-value`, "Value", o.value, (value) => set({ value: value ?? "count" }))}
+          {aggregates(`${uid}-value`, "Value", o.value, (value) => set({ value: value ?? "count", ...(value !== "last" && o.compare === "prev" && { compare: null }) }))}
           <FieldSelect id={`${uid}-value-field`} label="Of" fields={numbers} value={o.valueField} disabled={o.value === "count"} onChange={(valueField) => set({ valueField })} />
         </>
       )}
@@ -233,6 +235,17 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
             <SelectItem key={h.value} value={h.value} text={h.text} />
           ))}
         </Select>
+      )}
+      {o.chart === "gauge" && (
+        <>
+          <Select size="sm" id={`${uid}-compare`} labelText="Compare with" value={o.compare ?? ""} onChange={(e) => set({ compare: (e.target.value || null) as Compare | null })}>
+            <SelectItem value="" text="None" />
+            {[...AGGREGATES, ...(o.value === "last" ? [PREVIOUS] : [])].map((a) => (
+              <SelectItem key={a.value} value={a.value} text={a.text} />
+            ))}
+          </Select>
+          <FieldSelect id={`${uid}-compare-field`} label="Compared of" fields={numbers} value={o.compareField} none="Same as value" disabled={!o.compare || o.compare === "count"} onChange={(compareField) => set({ compareField })} />
+        </>
       )}
       <Slider
         id={`${uid}-width`}
