@@ -138,7 +138,7 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
           </SelectItemGroup>
         ))}
       </Select>
-      {usesCategories(o.chart) && <p className="helper chart-options__note">{o.chart === "meter" || o.chart === "bullet" ? "Grouped (Sort and group): a part or bar per group." : "Categories: the block's grouping (Sort and group)."}</p>}
+      {usesCategories(o.chart) && <p className="helper chart-options__note">{o.chart === "meter" || o.chart === "bullet" ? "Grouped (Sort and group): a part or bar per group." : o.chart === "heatmap" ? "Columns: the block's grouping (Sort and group); rows: Split by." : "Categories: the block's grouping (Sort and group)."}</p>}
 
       {show.value && (
         <>
@@ -177,7 +177,7 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
           <FieldSelect id={`${uid}-size`} label="Size (bubbles)" fields={numbers} value={o.sizeField} none="Same size" onChange={(sizeField) => set({ sizeField })} />
         </>
       )}
-      {show.split && <FieldSelect id={`${uid}-split`} label="Split by" fields={splitFields(collection)} value={o.splitBy} none="Not split" onChange={(splitBy) => set({ splitBy })} />}
+      {show.split && <FieldSelect id={`${uid}-split`} label={o.chart === "heatmap" ? "Rows (Split by)" : "Split by"} fields={splitFields(collection)} value={o.splitBy} none="Not split" onChange={(splitBy) => set({ splitBy })} />}
       {show.dates && (
         <Select size="sm" id={`${uid}-dates`} labelText="Date steps" helperText="When grouped by a date" value={o.dateStep} onChange={(e) => set({ dateStep: e.target.value as ChartOptions["dateStep"] })}>
           {DATE_STEPS.map((d) => (
