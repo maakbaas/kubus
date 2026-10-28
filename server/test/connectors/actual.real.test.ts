@@ -165,7 +165,8 @@ describe.skipIf(!ACTUAL)("Actual Budget connector, against Actual", () => {
     });
 
     it("finds one transaction and one budget month by their keys", async () => {
-      const [first] = (await connector.query({ ...shapeOf("Transactions", ["date"]), sort: [{ column: "date", direction: "asc" }] })).rows;
+      // (Both parts of the split share a date: the amount settles which comes first.)
+      const [first] = (await connector.query({ ...shapeOf("Transactions", ["date", "amount"]), sort: [{ column: "date", direction: "asc" }, { column: "amount", direction: "desc" }] })).rows;
       const shape = shapeOf("Transactions", ["amount", "notes"]);
       expect(await connector.row({ ...shape, keyValue: first.key })).toMatchObject({ key: first.key, values: [-10, null] });
       expect(await connector.row({ ...shape, keyValue: "no-such-id" })).toBeNull();

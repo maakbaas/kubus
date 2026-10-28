@@ -9,11 +9,11 @@ import type { MemoryRow } from "../../src/connectors/memory.ts";
 import type { SourceColumn } from "../../../shared/sources.ts";
 import { baseQuery, runContract, type Fixture } from "./contract.ts";
 import { PEOPLE } from "./dataset.ts";
-import { api, countRows, createKey, createTable, deleteKey, deleteTable, N8N, READ_SCOPES, WRITE_SCOPES, type Table } from "./n8nSeed.ts";
+import { api, countRows, createKey, createTable, deleteKey, deleteTable, N8N, READ_SCOPES, unique, WRITE_SCOPES, type Table } from "./n8nSeed.ts";
 
 if (!N8N && process.env.CI) throw new Error("KUBUS_TEST_N8N isn't set: CI runs the n8n connector's tests against a real n8n (tests/services.yml)");
 
-const TABLE = "Kubus contract people";
+const TABLE = unique("Kubus contract people");
 const config = (key: string, over: { address?: string; schemas?: string[]; timeoutMs?: number } = {}) => ({
   name: "Flows",
   kind: "n8n",
@@ -42,8 +42,8 @@ describe.skipIf(!N8N)("n8n connector, against n8n", () => {
   let fixture: Fixture;
 
   beforeAll(async () => {
-    writer = await createKey("kubus connector test (write)", WRITE_SCOPES);
-    reader = await createKey("kubus connector test (read)", READ_SCOPES);
+    writer = await createKey(unique("kubus connector test (write)"), WRITE_SCOPES);
+    reader = await createKey(unique("kubus connector test (read)"), READ_SCOPES);
     const iso = (day: string | null) => (day === null ? null : `${day}T00:00:00.000Z`);
     table = await createTable(
       writer.key,
@@ -120,7 +120,7 @@ describe.skipIf(!N8N)("n8n connector, against n8n", () => {
     expect(wrong).toBeInstanceOf(Error);
     expect(wrong).not.toBeInstanceOf(SourceError);
     expect((wrong as Error).message).toMatch(/401/);
-    const narrow = await createKey("kubus connector test (no list)", ["dataTable:read"]);
+    const narrow = await createKey(unique("kubus connector test (no list)"), ["dataTable:read"]);
     try {
       const refused = await new N8nConnector(config(narrow.key)).check().catch((e: Error) => e);
       expect(refused).not.toBeInstanceOf(SourceError);
