@@ -53,7 +53,7 @@ for (const [style, vp] of [["typical", "desktop"], ["long", "desktop"], ["typica
       const name = (await cell.getAttribute("aria-label")) || `cell ${i}`;
       // Wholly in view (a table wider than a phone scrolls sideways): else focusing its editor
       // scrolls the rest of it in, which is the browser's doing, not a jump.
-      await cell.evaluate((el) => el.scrollIntoView({ block: "nearest", inline: "nearest" }));
+      await cell.evaluate((el) => el.scrollIntoView({ block: "center", inline: "center" }));
       await t.wait(100);
       const before = await headerWidths(t);
       await t.noShift(`${name}: opening the cell editor moves nothing`, async () => {

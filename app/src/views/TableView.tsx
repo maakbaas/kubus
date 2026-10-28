@@ -302,14 +302,18 @@ export function FillTable({ children }: { children: ReactNode }) {
   }, []);
   // A table that scrolls sideways shows where more of it is: a fade at that edge (styles.css),
   // the start one beside the first column, which stays put. Touch screens hide scrollbars until
-  // scrolling, and they can't be made to stay.
+  // scrolling, and they can't be made to stay. A first column of half the table or more (an
+  // unbroken title, the actions of a table without fields) scrolls with the rest: kept in place
+  // it would cover what scrolls.
   useEffect(() => {
     const el = box.current;
     const scroller = el?.querySelector<HTMLElement>(".cds--data-table-content");
     if (!el || !scroller) return;
     const update = () => {
       const first = scroller.querySelector("tr")?.firstElementChild as HTMLElement | null | undefined;
-      el.style.setProperty("--table-first-column", `${first?.offsetWidth ?? 0}px`);
+      const sticky = !!first && first.offsetWidth < scroller.clientWidth / 2;
+      el.toggleAttribute("data-sticky-first", sticky);
+      el.style.setProperty("--table-first-column", `${sticky ? first.offsetWidth : 0}px`);
       el.toggleAttribute("data-more-start", scroller.scrollLeft > 1);
       el.toggleAttribute("data-more-end", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
     };

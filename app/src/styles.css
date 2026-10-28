@@ -3147,10 +3147,10 @@ img[data-lightbox] {
 .items-table td:has(> a) {
   overflow-wrap: break-word;
 }
-/* The first column stays at the start while the rest scrolls under it; its cells keep their own
-   (solid) backgrounds over what passes beneath. Sticky is also the anchor of an editing cell's
+/* The first column stays at the start while the rest scrolls under it (unless it is half the table
+   or more: FillTable); its cells keep their own (solid) backgrounds over what passes beneath. Sticky is also the anchor of an editing cell's
    input (as `position: relative` is elsewhere). */
-.table-wrap .items-table :is(th, td):first-child {
+.table-wrap[data-sticky-first] .items-table :is(th, td):first-child {
   position: sticky;
   inset-inline-start: 0;
   z-index: 1;
@@ -3158,7 +3158,7 @@ img[data-lightbox] {
 /* A first cell being edited (or the add row's input there) comes above the other rows' first
    cells: each is a layer of its own (z-index), which would cover its menu (a combo box, a date's
    calendar) where it opens over them. */
-.table-wrap .items-table :is(th, td):first-child:focus-within {
+.table-wrap[data-sticky-first] .items-table :is(th, td):first-child:focus-within {
   z-index: 3;
 }
 /* Where more of a sideways-scrolling table is, its edge fades (set by FillTable): touch screens
