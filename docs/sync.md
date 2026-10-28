@@ -257,6 +257,26 @@ takes the new one when its settings are opened. A source's name: letters, digits
   date & time's day in the device's zone uses the zone's offsets from 1990 to 2060 (`zoneOffsets`,
   computed with `Intl`). The time limit is the request's; filters on dates and numbers go through
   expressions (no index), text is case-insensitive for ASCII only (SQLite's `LIKE`).
+- *Actual Budget* (`connectors/actual.ts`): through [actual-http-api](https://github.com/jhonderson/actual-http-api),
+  not Actual itself; its address (https:// unless it says http://) and the budget's sync ID, the API key as the
+  password (`x-api-key`), the budget's encryption password a secret field (`budget-encryption-password`, sent only
+  when set). Strictly read-only: only `GET`s and `POST …/run-query` (an ActualQL read) leave its one request
+  helper. Curated tables, no query language (`schema` null), each keyed by `id`: Transactions (one run-query,
+  account, payee, category and group names joined beside their ids; split transactions as their parts,
+  `splits: "inline"`, each its own id with its split's `parent_id`; a transfer's payee is the other account),
+  Accounts (`?include_balances=true`; an older actual-http-api: `…/balance` per account), Categories (with their
+  group, from `/categorygroups`), Payees, Schedules (payee and account names, a range's middle as its amount,
+  the recurrence in words), Budget months (month × category from `/months/<yyyy-mm>`: budgeted, spent, received,
+  balance, carryover; key `<yyyy-mm>:<category id>`, the month a date on its first day). Amounts from cents to
+  numbers, dates `yyyy-mm-dd`. Every request makes actual-http-api load and sync the budget (and it holds one at a
+  time): requests go one at a time and a read is kept 5 s from when it is done. Queried in memory (`memory.ts`:
+  ActualQL's text comparison, empty values and lack of time zones differ from the app's); only what narrows
+  exactly is sent: the filter's required date bounds as run-query's `filter` (none before 1995, which ActualQL
+  refuses), and only the months its required month rules keep are read (at most 240). Transactions need
+  run-query: its 501 (`EXPERIMENTAL_OPERATIONS_ENABLED=false`) is a `check` warning and the source's problem when
+  they are read. A budget actual-http-api can't open answers a bare 500, so its list of budgets (`GET /v1/budgets`)
+  tells a wrong sync ID, or an encrypted budget (`encryptKeyId`) without its password or with a wrong one, in words;
+  a refused key (403) likewise. No schemas.
 - *App*: a block of a remote collection asks the source for its query (`useRemoteResult`, 100 rows
   a page, "Show more"; search waits for typing to pause) instead of `applyQuery`; the item page reads
   its row by key (`rowKey` of the item id, a base64url of the key). Rows become items keeping their

@@ -1,3 +1,4 @@
+import { ActualConnector } from "./actual.ts";
 import type { Connector, SourceConfig } from "./connector.ts";
 import { D1Connector } from "./d1.ts";
 import { InfluxConnector } from "./influx.ts";
@@ -13,6 +14,7 @@ const CONNECTORS: Record<string, (config: SourceConfig) => Connector> = {
   n8n: (config) => new N8nConnector(config),
   influxdb: (config) => new InfluxConnector(config),
   d1: (config) => new D1Connector(config),
+  actual: (config) => new ActualConnector(config),
 };
 
 /** The connector for a source, or why there is none. */

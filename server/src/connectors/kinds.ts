@@ -113,6 +113,7 @@ const KINDS: Kind[] = [
     fields: [
       { key: "address", label: "Address", placeholder: "https://actual-api.example.com", helperText: "Where actual-http-api runs (https:// unless it says http://), not Actual itself." },
       { key: "budget", label: "Budget sync ID", helperText: "In Actual: Settings → Show advanced settings → Sync ID." },
+      { key: "encryption", label: "Encryption password", helperText: "Only for a budget with end-to-end encryption. Kept like the API key: never shown again.", secret: true },
     ],
     password: { label: "API key", helperText: "actual-http-api's API_KEY. Kept while left empty (unless the address changes)." },
     schemas: null,
