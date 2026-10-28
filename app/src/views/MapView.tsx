@@ -1,15 +1,16 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Checkbox, IconButton, Link, Popover, PopoverContent, Select, SelectItem } from "@carbon/react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Checkbox, IconButton, Link, Select, SelectItem } from "@carbon/react";
 import { CenterToFit, Earth, ZoomIn, ZoomOut } from "@carbon/icons-react";
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { isCoordinateField, isLocationTextField, locationOf, locationOfPair, type LngLat } from "../domain/geo";
 import { fieldValue, isStruckThrough, itemLabel, pickableFields, type Collection, type FieldDef, type Item } from "../domain/model";
-import { isEmptyValue, isGrouped, type QueryResult } from "../domain/query";
+import { fieldText, isEmptyValue, isGrouped, type QueryResult } from "../domain/query";
 import { BLOCK_HEIGHT, normalizeBlockHeight } from "../domain/views";
 import { Highlight } from "../ui/Highlight";
 import { useMediaQuery } from "../ui/useMediaQuery";
 import { openModeOf } from "../workspace/Workspace";
-import { FieldCell, itemLinkProps } from "./cells";
+import { itemLinkProps } from "./cells";
+import { refLabelOf } from "../ui/useReferenceOptions";
 import { useBuffered } from "../ui/useBuffered";
 import { HeightSlider } from "./HeightSlider";
 import { useMapStyle } from "../app/mapStyle";
@@ -355,6 +356,25 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
 
   const shownFields = layout.hideEmpty && shownPlace ? fields.filter((f) => !isEmptyValue(fieldValue(shownPlace.item, f))) : fields;
   const zoom = (by: number) => mapRef.current?.easeTo({ zoom: mapRef.current.getZoom() + by });
+  const ctx = useMemo(() => ({ refLabel: refLabelOf(refs, "(deleted)") }), [refs]);
+
+  // The shown item's tooltip beside its dot, as a chart's is beside the pointer: on the right, else on the left,
+  // past the map's edges but within its pane (the map's box doesn't clip it).
+  const tip = useRef<HTMLDivElement>(null);
+  const [tipAt, setTipAt] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = tip.current;
+    const mapEl = el?.closest(".map-block__map");
+    if (!el || !mapEl || !anchor) return setTipAt(null);
+    const map = mapEl.getBoundingClientRect();
+    const pane = mapEl.closest(".ws-pane__body")?.getBoundingClientRect() ?? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    const { width, height } = el.getBoundingClientRect();
+    const gap = 12;
+    const x = map.left + anchor.x;
+    const left = Math.max(pane.left, Math.min(x + gap + width <= pane.right ? x + gap : x - gap - width, pane.right - width));
+    const top = Math.max(pane.top, Math.min(map.top + anchor.y - height / 2, pane.bottom - height));
+    setTipAt({ left: left - map.left, top: top - map.top });
+  }, [anchor, shownPlace]);
 
   return (
     <div ref={box} className="map-block">
@@ -389,39 +409,57 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
             </IconButton>
           )}
         </div>
+        {/* Carbon Charts' own tooltip (a chart's datapoint tooltip: the item's title in its dot's colour, then
+            its fields), in a chart holder for its fonts and colours. */}
         {shownPlace && anchor && (
-          <Popover
-            open
-            autoAlign
-            align="top"
-            className="map-block__popover"
-            style={{ left: anchor.x, top: anchor.y }}
-            onMouseEnter={keepShown}
-            onMouseLeave={() => hideSoon()}
-          >
-            <span className="map-block__anchor" />
-            <PopoverContent className="map-block__item">
-              <Link
-                href={`#/collections/${collection.id}/items/${shownPlace.item.id}`}
-                {...itemLinkProps(shownPlace.item, actions)}
-                className={isStruckThrough(collection, shownPlace.item) ? "map-block__title item--struck" : "map-block__title"}
-              >
-                <Highlight text={itemLabel(collection, shownPlace.item)} query={search} />
-              </Link>
-              {shownFields.length > 0 && (
-                <dl className="item-card__fields">
-                  {shownFields.map((f: FieldDef) => (
-                    <div key={f.id} className="item-card__field">
-                      {!layout.hiddenLabels.includes(f.id) && <dt className="cds--label">{f.name}</dt>}
-                      <dd>
-                        <FieldCell field={f} item={shownPlace.item} refs={refs} search={search} actions={actions} />
-                      </dd>
+          <div className="cds--chart-holder map-block__tip-layer" data-carbon-theme={dark ? "g100" : undefined}>
+            <div
+              ref={tip}
+              className="cds--cc--tooltip map-block__tooltip"
+              style={tipAt ? { left: tipAt.left, top: tipAt.top } : { visibility: "hidden" }}
+              onMouseEnter={keepShown}
+              onMouseLeave={() => hideSoon()}
+            >
+              <div className="content-box">
+                <ul className="multi-tooltip">
+                  <li>
+                    <div className="datapoint-tooltip bold">
+                      <div className="tooltip-color" style={{ backgroundColor: shownPlace.color }} />
+                      <div className="label">
+                        <p title={itemLabel(collection, shownPlace.item)}>
+                          <Link
+                            href={`#/collections/${collection.id}/items/${shownPlace.item.id}`}
+                            {...itemLinkProps(shownPlace.item, actions)}
+                            className={isStruckThrough(collection, shownPlace.item) ? "map-block__title item--struck" : "map-block__title"}
+                          >
+                            <Highlight text={itemLabel(collection, shownPlace.item)} query={search} />
+                          </Link>
+                        </p>
+                      </div>
                     </div>
-                  ))}
-                </dl>
-              )}
-            </PopoverContent>
-          </Popover>
+                  </li>
+                  {shownFields.map((f: FieldDef) => {
+                    const text = fieldText(f, shownPlace.item, ctx);
+                    const labelled = !layout.hiddenLabels.includes(f.id);
+                    return (
+                      <li key={f.id}>
+                        <div className="datapoint-tooltip">
+                          <div className="label">
+                            <p title={labelled ? f.name : text}>{labelled ? f.name : text}</p>
+                          </div>
+                          {labelled && (
+                            <p className="value" title={text}>
+                              {text}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          </div>
         )}
       </div>
       {(legend.length > 0 || (chosen && missing > 0)) && (

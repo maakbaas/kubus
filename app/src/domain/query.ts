@@ -332,6 +332,9 @@ export const filterFields = (collection: Collection): FieldDef[] => [...pickable
 /** Whether items can be grouped by fields of this kind. */
 export const isGroupable = (kind: FieldKind) => !!KIND_RULES[kind].groupKeys;
 
+/** A field's value on an item as text (as filters and search read it: a date as yyyy-mm-dd, a reference by its label). */
+export const fieldText = (field: FieldDef, item: Item, ctx: QueryContext): string => KIND_RULES[field.kind].text(field, item.values[field.id] ?? null, ctx);
+
 /** The groups an item falls in by a field, as grouping makes them (none for a field that can't group). */
 export const groupKeysOf = (field: FieldDef, item: Item, ctx: QueryContext): { key: string; label: string }[] =>
   KIND_RULES[field.kind].groupKeys?.(field, fieldValue(item, field), ctx) ?? [];

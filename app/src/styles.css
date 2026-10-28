@@ -2276,13 +2276,13 @@ img[data-lightbox] {
   padding: var(--cds-spacing-05);
 }
 /* Map block (views/MapView.tsx): a MapLibre map in a bordered box, Carbon icon buttons for zooming
-   at its top right, the dot's item in a Carbon popover hung from the dot, the legend below. */
+   at its top right, the dot's item in a chart's tooltip beside the dot, the legend below. Not clipped:
+   the tooltip may reach past the box (MapLibre clips its own map). */
 .map-block__map {
   position: relative;
   block-size: var(--map-height, 24rem);
   border: 1px solid var(--cds-border-subtle);
   background: var(--cds-layer-01);
-  overflow: hidden;
 }
 /* Not absolutely placed: MapLibre makes its container position: relative. */
 .map-block__canvas {
@@ -2311,32 +2311,27 @@ img[data-lightbox] {
   padding: var(--cds-spacing-02) var(--cds-spacing-03);
   background: var(--cds-layer-01);
 }
-/* Hung from the dot (its place set from the map); the pointer can move onto it (its title is a link). */
-.map-block__popover {
+/* The dot's item: Carbon Charts' tooltip (MapView places it), in a chart holder laid over the map (for
+   its fonts and colours) that takes no pointer; the tooltip does, unlike a chart's: the pointer can move
+   onto it, its title is a link. As wide as a chart's title tooltip at most, its rows ellipsized. */
+.map-block .map-block__tip-layer {
   position: absolute;
+  inset: 0;
+  inline-size: auto;
+  block-size: auto;
+  pointer-events: none;
+  z-index: 2;
 }
-.map-block__anchor {
-  display: block;
-  inline-size: 0;
-  block-size: 0.5rem;
-  transform: translateY(-50%);
-}
-.map-block__item {
-  inline-size: max-content;
-  min-inline-size: 14rem;
-  max-inline-size: 24rem;
-  padding: var(--cds-spacing-05);
+.map-block .map-block__tooltip {
+  pointer-events: auto;
+  max-inline-size: 270px;
 }
 /* The item's title reads as a title (text colour), not a blue link; it still opens the item. */
 .map-block__title,
 .map-block__title:visited,
 .map-block__title:hover {
-  display: block;
-  font-weight: 600;
+  font: inherit;
   color: var(--cds-text-primary);
-}
-.map-block__item .item-card__fields {
-  margin-block-start: var(--cds-spacing-03);
 }
 .map-block__legend {
   display: flex;
