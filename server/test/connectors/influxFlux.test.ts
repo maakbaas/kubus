@@ -5,6 +5,7 @@ import {
   checkFlux,
   dayIn,
   dayStart,
+  fieldColumns,
   filterFlux,
   fluxRegex,
   fluxString,
@@ -198,5 +199,23 @@ describe("queries written in the app", () => {
       imports: [{ path: "strings", alias: null }],
       importsEnd: 16,
     });
+  });
+});
+
+describe("fieldColumns", () => {
+  it("gives each field key one column, named apart from the tags, the time and the key", () => {
+    expect(
+      fieldColumns(
+        [["b", "long"], ["a", "string"], ["b", "double"], ["mixed", "long"], ["mixed", "boolean"], ["room", "double"], ["room (field)", "string"], ["_id", "string"]],
+        ["room"],
+      ),
+    ).toEqual([
+      { name: "_id (field)", field: "_id", datatype: "string" },
+      { name: "a", field: "a", datatype: "string" },
+      { name: "b", field: "b", datatype: "double" },
+      { name: "mixed", field: "mixed", datatype: "string" },
+      { name: "room (field 2)", field: "room", datatype: "double" },
+      { name: "room (field)", field: "room (field)", datatype: "string" },
+    ]);
   });
 });

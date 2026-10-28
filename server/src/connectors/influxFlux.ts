@@ -25,6 +25,43 @@ export interface InfluxColumn extends SourceColumn {
   read: InfluxReader;
   /** A tag of a measurement (part of its series). */
   tag?: boolean;
+  /**
+   * The field's key in InfluxDB when its column is named otherwise: a field and a tag of a
+   * measurement may share a key, the field's column is then "<key> (field)" (`fieldColumns`).
+   */
+  field?: string;
+}
+
+/** Names a field's column can't take: the time and what the read drops. */
+const TAKEN = ["_time", "_start", "_stop", "_measurement", "_field", "_value"];
+
+/**
+ * A measurement's field columns, from its fields' keys and types (as their latest values gave them):
+ * each key once (one with values of more than one type is a number when all are numbers, else
+ * text); a key a tag (or the time, the key) already has is named "<key> (field)", then
+ * "<key> (field 2)", …. By key, so the same fields and tags give the same names on every read.
+ */
+export function fieldColumns(fields: readonly (readonly [string, string])[], taken: Iterable<string>): { name: string; field: string; datatype: string }[] {
+  const types = new Map<string, Set<string>>();
+  for (const [field, datatype] of fields) {
+    if (!types.has(field)) types.set(field, new Set());
+    types.get(field)!.add(datatype);
+  }
+  const reserved = new Set([...TAKEN, ID_COLUMN, ...taken]);
+  const keys = [...types.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  // A key of its own is always its field's name; only then are the others named.
+  const used = new Set([...reserved, ...keys]);
+  return keys.map((field) => {
+    const all = [...types.get(field)!];
+    const numeric = all.every((t) => /^(long|unsignedLong|double)$/.test(t));
+    const datatype = all.length === 1 ? all[0] : numeric ? "double" : "string";
+    let name = field;
+    if (reserved.has(field)) {
+      for (let n = 1; used.has(name); n++) name = `${field} (field${n > 1 ? ` ${n}` : ""})`;
+      used.add(name);
+    }
+    return { name, field, datatype };
+  });
 }
 
 /** The synthetic column of a measurement's rows: its time and series (`<time>,tag=value,…`). */
@@ -384,12 +421,17 @@ class Script {
       const { schema, name } = this.target.table;
       const tags = [...this.columns.values()].filter((c) => c.tag).map((c) => c.name);
       const id = ["string(v: r._time)", ...tags.map((t) => `${fluxString(`,${t}=`)} + (if exists ${ref(t)} then ${ref(t)} else "")`)].join(" + ");
+      // A field whose column is named otherwise (its key a tag's too) is renamed before it becomes a column.
+      const renamed = [...this.columns.values()].filter((c) => c.field !== undefined && c.field !== c.name);
+      const rename = renamed.length
+        ? `\n  |> map(fn: (r) => ({r with _field: ${renamed.map((c) => `if r._field == ${fluxString(c.field!)} then ${fluxString(c.name)} else `).join("")}r._field}))`
+        : "";
       return [
         ...[...this.imports].map((p) => `import ${fluxString(p)}`),
         ...this.statements,
         `from(bucket: ${fluxString(schema ?? "")})
   |> range(start: ${this.range.start}, stop: ${this.range.stop})
-  |> filter(fn: (r) => r._measurement == ${fluxString(name)})
+  |> filter(fn: (r) => r._measurement == ${fluxString(name)})${rename}
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
   |> drop(columns: ["_start", "_stop", "_measurement"])
   |> group()

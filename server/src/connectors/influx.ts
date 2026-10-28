@@ -4,6 +4,7 @@ import { addressOf } from "./kinds.ts";
 import {
   ALL_START,
   ALL_STOP,
+  fieldColumns,
   fluxString,
   groupKey,
   groupsFlux,
@@ -145,10 +146,9 @@ export class InfluxConnector implements Connector {
   private async describeColumns(target: SourceTarget): Promise<Omit<SourceDescription, "columns"> & { columns: InfluxColumn[] }> {
     const columns: InfluxColumn[] = [];
     const dropped: { name: string; type: string }[] = [];
-    const add = (name: string, datatype: string, tag = false) => {
-      if (columns.some((c) => c.name === name)) throw new SourceError(`Two columns are called “${name}”: name them apart`);
+    const add = (name: string, datatype: string, tag = false, field?: string) => {
       const column = influxColumn(name, datatype, tag);
-      if (column) columns.push(column);
+      if (column) columns.push(field !== undefined && field !== name ? { ...column, field } : column);
       else dropped.push({ name, type: datatype });
     };
     if ("query" in target) throw new SourceError(`${this.config.name} is read by its measurements only`);
@@ -166,13 +166,15 @@ export class InfluxConnector implements Connector {
   |> keep(columns: ["_field", "_value"])`),
     ]);
     add("_time", "dateTime:RFC3339");
-    for (const tag of InfluxConnector.values(tags, "_value").filter((t) => !t.startsWith("_")).sort()) add(tag, "string", true);
+    const tagKeys = [...new Set(InfluxConnector.values(tags, "_value").filter((t) => !t.startsWith("_")))].sort();
+    for (const tag of tagKeys) add(tag, "string", true);
     const types = fields.flatMap((t) => {
       const field = t.columns.findIndex((c) => c.name === "_field");
       const datatype = t.columns.find((c) => c.name === "_value")?.datatype ?? "string";
       return field < 0 ? [] : t.rows.map((r) => [r[field], datatype] as const);
     });
-    for (const [field, datatype] of types.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) add(field, datatype);
+    // A field may share its key with a tag, or have values of more than one type (a table each): each once, named apart.
+    for (const { name, field, datatype } of fieldColumns(types, tagKeys)) add(name, datatype, false, field);
     if (columns.length === 1) throw new SourceError(`“${target.table.name}” has no data in “${target.table.schema}”`);
     columns.push({ name: ID_COLUMN, type: "series and time", kind: "string", read: "string", hidden: true });
     return { columns, key: [ID_COLUMN], dropped };
@@ -183,7 +185,7 @@ export class InfluxConnector implements Connector {
     const description = await this.describeColumns(target);
     this.columns.set(JSON.stringify(target), { at: Date.now(), columns: Promise.resolve(new Map(description.columns.map((c) => [c.name, c]))) });
     // What the app needs to know, without how the server reads it.
-    return { ...description, columns: description.columns.map(({ read: _read, tag: _tag, ...c }) => c) };
+    return { ...description, columns: description.columns.map(({ read: _read, tag: _tag, field: _field, ...c }) => c) };
   }
 
   async query(query: SourceQuery): Promise<SourceResult> {

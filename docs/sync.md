@@ -245,7 +245,10 @@ takes the new one when its settings are opened. A source's name: letters, digits
   InfluxDB's UI shows it: all time (1970–2262), fields pivoted beside the tags, a row per series and
   time, told apart by the synthetic `_id` (`<time>,tag=value,…`, hidden; its key, read back on its
   moment alone). Columns: `_time`, the tags (`schema.measurementTagKeys`), the fields by the type of
-  their latest value; CSV datatypes map to field types (`long`, `unsignedLong`, `double` numbers,
+  their latest value (`fieldColumns`): each field once (latest values of more than one type: a number when
+  all are numbers, else text), and a field whose key a tag (or `_time`, `_id`) has too is named
+  "<key> (field)" (then "(field 2)", …), renamed in the Flux before the pivot, so the tag keeps its
+  name and both names stay the same on every read; CSV datatypes map to field types (`long`, `unsignedLong`, `double` numbers,
   `boolean`, `dateTime`; `duration` plain text; binary dropped). Filters, search, sort, grouping and paging are Flux piped onto the tables; days are
   worked out on the server, so a filter on `_time` narrows the `range()` read. Flux sorts all columns
   one way: numbers, times and checkboxes sorted the other way are negated, empty values get a marker

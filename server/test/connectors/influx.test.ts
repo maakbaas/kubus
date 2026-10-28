@@ -30,6 +30,15 @@ let failure: Response | null;
 function answer(flux: string): string {
   if (flux.startsWith("buckets()")) return csv(["name:string"], flux.includes("limit(n: 1)") ? [["_monitoring"]] : [["_monitoring"], ["office"], ["home"]]);
   if (flux.includes("schema.measurements(")) return csv(["_value:string"], flux.includes('"home"') ? [["temp"], ["cpu"]] : [["door"]]);
+  // "cpu": a tag and a field with the same key, a field whose values have two types (as Telegraf's can).
+  if (flux.includes("schema.measurementTagKeys(") && flux.includes('"cpu"')) return csv(["_value:string"], [["host"], ["source_type_str"]]);
+  if (flux.includes("last()") && flux.includes('"cpu"')) {
+    return [
+      csv(["_field:string", "_value:string"], [["source_type_str", "agent"]]),
+      csv(["_field:string", "_value:long"], [["load", "3"]]),
+      csv(["_field:string", "_value:double"], [["load", "2.5"]]),
+    ].join("\r\n");
+  }
   if (flux.includes("schema.measurementTagKeys(")) return csv(["_value:string"], [["_start"], ["_measurement"], ["room"], ["host"]]);
   if (flux.includes("last()")) {
     // One table per field type, as InfluxDB answers: its _value column's datatype is the field's type.
@@ -124,6 +133,27 @@ describe("InfluxDB connector", () => {
     ]);
     expect(d.key).toEqual(["_id"]);
     await expect(connector({ schemas: ["office"] }).describe({ table: { schema: "home", name: "temp" } })).rejects.toThrow(/doesn't offer the bucket/);
+  });
+
+  it("names a field apart from a tag with its key, and a field of two types once", async () => {
+    const target = { table: { schema: "home", name: "cpu" } };
+    const c = connector();
+    const d = await c.describe(target);
+    expect(d.columns.map((col) => [col.name, col.kind, col.type])).toEqual([
+      ["_time", "datetime", "dateTime"],
+      ["host", "string", "tag"],
+      ["source_type_str", "string", "tag"],
+      ["load", "number", "double"],
+      ["source_type_str (field)", "string", "string"],
+      ["_id", "string", "series and time"],
+    ]);
+    expect(d.columns.some((col) => "field" in col)).toBe(false);
+    // The same names on every read; the field is renamed before the pivot makes it a column.
+    expect((await connector().describe(target)).columns.map((col) => col.name)).toEqual(d.columns.map((col) => col.name));
+    await c.query({ ...temps(), target, columns: ["source_type_str", "source_type_str (field)"], title: ["host"], sort: [{ column: "source_type_str (field)", direction: "asc" }] });
+    const rows = requests.at(-2)?.query ?? "";
+    expect(rows).toContain('|> map(fn: (r) => ({r with _field: if r._field == "source_type_str" then "source_type_str (field)" else r._field}))\n  |> pivot(');
+    expect(rows).toContain('r["source_type_str (field)"]');
   });
 
   it("reads a page of rows as the app's values, with the total", async () => {
