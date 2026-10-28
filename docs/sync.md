@@ -192,7 +192,7 @@ A renamed source keeps its former names (`formerNames`, by its stable id, never 
 still reach it (`Sources.on`) and `GET /api/sources` lists them, so a collection made under an old name reads on and
 takes the new one when its settings are opened. A source's name: letters, digits, spaces, `-` and `_`.
 - *Protocol* (`shared/sources.ts`), connector-neutral, all behind the token:
-  `GET /api/sources` (names, connector, capabilities, problem; never addresses),
+  `GET /api/sources` (names, former names, connector, problem; never addresses),
   `GET /api/sources/<name>/tables`, `POST …/describe` (`{ target }`: a table → its
   columns as Kubus field types, the primary key, the columns not read), `POST …/query` (a page of
   rows for a view's query: its filter as one and / or tree of rules with plain values (`SourceCondition`,
