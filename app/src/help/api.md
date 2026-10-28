@@ -129,7 +129,7 @@ Any field can also have a choiceFilter, a toggleIcon and strikeThrough.
 | `GET /collections/{c}/item-views` | the item views |
 | `PUT /collections/{c}/item-views` | replace the item views with a list of `{ name, isDefault?, layout }` |
 
-A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, options? }`. Its kind is table, cards, component or markdown. Fields in a block can be named by id or by name, in:
+A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, options? }`. Its kind is table, cards, map, component or markdown. Fields in a block can be named by id or by name, in:
 
 - filters, a list of `{ fieldId, operator, value, join? }`. `join` is `and` (the default) or `or`: how the rule joins the rules before it, read in order (`A or B and C` is `(A or B) and C`). A block always builds on its view's filter (on an item page, on the item view's `layout.filters`, whose fields can be of any of its blocks' collections, applied while it has more than one block listing items): its rules come after the view's, so `and` narrows the view's filter and `or` makes an exception to it. A date period frames its own filter: it is and-ed with that filter's other rules, wherever it is in the list (a date period: operator `between`, value `2026-10-01..2026-10-31`, both days included, or counted from today: `day`, `week`, `month` or `year` and an offset, `week+0` this week, `month-1` last month);
 - sort, a list of `{ fieldId, direction }`;

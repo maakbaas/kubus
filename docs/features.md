@@ -183,7 +183,7 @@ What the app does, feature by feature (read the part you work on).
   preview's collection (else all collections); it only changes the form (not saving drops it) and its box empties, as the next request changes what was just written.
 - **Blocks** (`app/src/domain/views.ts` `ViewBlock`, `app/src/views/BlockView.tsx`): a collection
   view is a filter plus a list of blocks; each block shows items one way (table, cards, a
-  component) with its own sort and grouping, fields (`FieldLayout`) and
+  map, a component) with its own sort and grouping, fields (`FieldLayout`) and
   type options. It always builds on the view's filter (on an item page, the page's): its own rules,
   in its Filter menu, come after the view's (`ViewQuery.inherited`, `domain/filterTree.ts`), each joined by
   And (narrows it) or Or (an exception to it); its Filter button is blue while it has rules of its own. Every block, also a

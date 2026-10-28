@@ -2261,6 +2261,100 @@ img[data-lightbox] {
 .view-empty {
   padding: var(--cds-spacing-05);
 }
+/* Map block (views/MapView.tsx): a MapLibre map in a bordered box, Carbon icon buttons for zooming
+   at its top right, the dot's item in a Carbon popover hung from the dot, the legend below. */
+.map-block__map {
+  position: relative;
+  block-size: var(--map-height, 24rem);
+  border: 1px solid var(--cds-border-subtle);
+  background: var(--cds-layer-01);
+  overflow: hidden;
+}
+/* Not absolutely placed: MapLibre makes its container position: relative. */
+.map-block__canvas {
+  block-size: 100%;
+}
+/* MapLibre's own text (attribution, the "use Ctrl + scroll" hint) in the app's type, theme and square corners. */
+.map-block .maplibregl-map {
+  /* Carbon's label-01 */
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1.33333;
+  letter-spacing: 0.32px;
+}
+.map-block .maplibregl-ctrl-attrib,
+.map-block .maplibregl-ctrl-attrib.maplibregl-compact {
+  border-radius: 0;
+  background: var(--cds-layer-01);
+  color: var(--cds-text-secondary);
+}
+.map-block .maplibregl-ctrl-attrib a {
+  color: var(--cds-link-primary);
+}
+.map-block .maplibregl-cooperative-gesture-screen {
+  font: inherit;
+  font-size: var(--cds-body-compact-01-font-size);
+}
+.map-block__controls {
+  position: absolute;
+  inset-block-start: var(--cds-spacing-03);
+  inset-inline-end: var(--cds-spacing-03);
+  display: flex;
+  flex-direction: column;
+}
+.map-block__message {
+  position: absolute;
+  inset-block-start: var(--cds-spacing-03);
+  inset-inline-start: var(--cds-spacing-03);
+  margin: 0;
+  padding: var(--cds-spacing-02) var(--cds-spacing-03);
+  background: var(--cds-layer-01);
+}
+/* Hung from the dot (its place set from the map); only a tapped one (touch screens) takes the pointer. */
+.map-block__popover {
+  position: absolute;
+}
+.map-block__popover:not(.map-block__popover--pinned),
+.map-block__popover:not(.map-block__popover--pinned) * {
+  pointer-events: none;
+}
+.map-block__anchor {
+  display: block;
+  inline-size: 0;
+  block-size: 0.5rem;
+  transform: translateY(-50%);
+}
+.map-block__item {
+  inline-size: max-content;
+  max-inline-size: 20rem;
+  padding: var(--cds-spacing-05);
+}
+.map-block__title {
+  display: block;
+  font-weight: 600;
+}
+.map-block__item .item-card__fields {
+  margin-block-start: var(--cds-spacing-03);
+}
+.map-block__legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cds-spacing-03) var(--cds-spacing-05);
+  margin-block-start: var(--cds-spacing-03);
+}
+.map-block__legend .helper {
+  margin: 0;
+}
+.map-block__legend-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+}
+.map-block__swatch {
+  inline-size: var(--cds-spacing-04);
+  block-size: var(--cds-spacing-04);
+}
 /* "Show more" under a remote collection's block (its rows come a page at a time), with how many are shown. */
 .block-more {
   display: flex;

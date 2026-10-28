@@ -60,7 +60,18 @@ Extension points are registries, not special cases in pages:
   average ratio (filled, cropped); with no title and no fields a card is just its cover; a card looks
   the same at every width (labels beside values, a label wrapping when the card is very narrow), and
   only "Show as a list when narrow" changes it: in a pane narrower than tables restack in
-  (`STACK_BELOW_REM`), one card per row as list rows, cover beside the text) and
+  (`STACK_BELOW_REM`), one card per row as list rows, cover beside the text),
+  `map` (`views/MapView.tsx`: the items as dots on a vector map, MapLibre GL with OpenFreeMap's styles and tiles, the
+  one thing the app loads from elsewhere; MapLibre is loaded on demand, `views/mapLibre.ts`, its worker bundled. An
+  item's place is read from its fields, `domain/geo.ts`: Location is a text field or a component giving text with both
+  coordinates, "52.37, 4.89", "geo:52.37,4.89" or a map link with "@lat,lon" / "q=lat,lon", or a number field
+  with the latitude, then Longitude a second number field; a first guess by field name. The block's grouping colours
+  the dots, Carbon's categorical palette for the theme, with a legend and how many items have no place; ungrouped
+  they are `--cds-interactive`. Hovering a dot shows a Carbon popover with the item's title and the block's fields,
+  clicking it opens the item (`openModeOf`); on touch screens the first tap shows it and its title opens it. The
+  map fits the dots when which items are shown changes, not when one is edited. Zoom buttons are Carbon icon
+  buttons; the wheel scrolls the page, Ctrl/Cmd + wheel zooms (cooperative gestures). Block settings: Location,
+  Longitude, Map style (automatic: light / dark like the app; Liberty, Bright) and Height) and
   `component` (`views/ComponentBlock.tsx`). `markdown` (`views/MarkdownBlock.tsx`) is a block with its own Markdown text, stored in the block's options: a local static component (GFM whose `{{ }}` sections may use `$now`, nothing about items); it is shown (rendered) and edited (as written) exactly like a Markdown field (same read-only box, `FieldEditor`); "Save as shared component" in its Block settings stores the text as a new shared static component (named like the block) and turns the block into a component block showing it. A component block shows a shared component (`options.componentId`) or its own (`options.local`, written in its Block settings, `ui/ComponentChoice.tsx`). "Add block" is a menu (`views/AddBlockButton.tsx`): a block of each type (a component block with its own, empty component) and one per shared block or static component. A block type only
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
