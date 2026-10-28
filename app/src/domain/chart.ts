@@ -115,6 +115,8 @@ export interface ChartOptions {
   cumulative: boolean;
   /** A sparkline: no axes, legend or grid. */
   compact: boolean;
+  /** Smooth curves between the points instead of straight lines. */
+  curved: boolean;
   // Pie
   donut: boolean;
   // Radar: the number fields that are its spokes.
@@ -175,6 +177,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     percent: false,
     cumulative: false,
     compact: false,
+    curved: true,
     donut: true,
     fields: [],
     bins: 0,
@@ -225,6 +228,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     percent: flag(o.percent, d.percent),
     cumulative: flag(o.cumulative, d.cumulative),
     compact: flag(o.compact, d.compact),
+    curved: flag(o.curved, d.curved),
     donut: flag(o.donut, d.donut),
     fields: Array.isArray(o.fields) ? o.fields.filter((f): f is string => typeof f === "string" && ids.has(f)) : [],
     bins: count(o.bins, 100),

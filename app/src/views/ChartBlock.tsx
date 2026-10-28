@@ -260,6 +260,7 @@ function ChartOptionsEditor({ collection, options, onChange }: BlockOptionsProps
             {check("area", "Fill the area")}
             {o.area && o.splitBy && check("percent", "As shares of 100%")}
             {check("cumulative", "Running total")}
+            {check("curved", "Curved line")}
             {check("compact", "Compact (a sparkline)")}
           </>
         )}

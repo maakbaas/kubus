@@ -90,7 +90,7 @@ Extension points are registries, not special cases in pages:
   "Other"), Show (the largest n categories, the rest "Other"), Show items without a value ("No value"), Height, Width (a slider like the cards', 8 to 120rem (about 1920px) at most; saved as Full / Small / Medium / Large it reads as 120 / 24 / 40 / 64rem; a
   gauge as wide as a pane is mostly empty, so switching to one makes a full-width chart 24rem), and
   per type: Bar horizontal, stacked, lollipops, a second value drawn as a line on its own axis (Carbon's combo chart;
-  also for Line); Line fill the area (stacked areas when split, optionally as shares of 100%), running total, compact
+  also for Line); Line curved (default) or straight, fill the area (stacked areas when split, optionally as shares of 100%), running total, compact
   (a sparkline: no axes, legend or grid); Pie donut (the total in its centre); Radar its spokes (three or more number
   fields; a count is averaged); Histogram its field and bins; Box plot its field (a box per group); Scatter X (a
   number or date), Y and Size (bubbles), a dot per item, clicking one opens it; Heatmap categories × Split by, or,

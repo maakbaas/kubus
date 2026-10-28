@@ -155,7 +155,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         options: base(options, theme, split && !options.compact, {
           axes: options.compact ? { bottom: { ...a.bottom, ...hidden }, left: { ...a.left, ...hidden } } : a,
           ...(options.compact && { grid: { x: { enabled: false }, y: { enabled: false } }, points: { enabled: false }, tooltip: { enabled: true } }),
-          curve: "curveMonotoneX",
+          curve: options.curved ? "curveMonotoneX" : "curveLinear",
         }),
       };
     }
