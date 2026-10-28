@@ -136,9 +136,9 @@ Extension points are registries, not special cases in pages:
     series' value), number fields (each made into one by its aggregate: fat, muscle and bone mass) or one value, against
     a Total: the sum of the parts, a number or a field (made into one like the value). A total larger than the parts
     adds a "Remaining" slice; a meter shows it as its empty part (Carbon's proportional meter); one value on a meter is a
-    bar of its share. A gauge measures its value against its total likewise (none: the value is a %), shows the value
-    itself or its %, and the increase or decrease from a comparison value (any value, and "Previous value" after the Last
-    value; Carbon's delta arrow).
+    bar of its share. A gauge measures its value against its total likewise (none: the value is a %), shows its % (Carbon's
+    gauge: no unit, the decimals as set), and the increase or decrease from a comparison value (any value, and "Previous
+    value" after the Last value; Carbon's delta arrow).
   - **Spread**: a histogram's field (a number or a date: dates on a time axis), bins and Split by; a box plot's field (a
     box per X category); a heatmap's columns (the X axis) × rows (Split by), or with a date X axis and not split a
     calendar (weeks × weekdays; empty cells left undrawn).
@@ -146,9 +146,9 @@ Extension points are registries, not special cases in pages:
     Without a min, bars and stacked areas start at 0 and lines, areas and dots fit their values (`includeZero: false`, `FIT`
     in chartSpec.ts), so a weight from 80 to 70 shows its trend.
   - **Thresholds**: info, target, warning and danger levels (`THRESHOLD_STATUSES`: blue, green, yellow, red lines;
-    a gauge or meter takes Carbon's statuses only, a target as its success, and doesn't offer info); lines on a bar, line or area chart's left axis, a gauge's colour and a
-    meter's status ranges (there a % of the total or values: `thresholdPercent`, `statusOf`, `statusRanges`).
-  - **Values and legend**: a unit and decimals for axes, tooltips and a gauge (`formatValue`); the legend automatic (with
+    a gauge or meter takes Carbon's statuses only, a target as its success, and doesn't offer info); lines on a bar, line or area chart's left axis, a gauge's status (Carbon colours
+    only its delta arrow with it: offered only while it compares with something) and a meter's status ranges (there a % of the total or values: `thresholdPercent`, `statusOf`, `statusRanges`).
+  - **Values and legend**: a unit and decimals for axes and tooltips, decimals for a gauge (`formatValue`); the legend automatic (with
     more than one series or part), shown or hidden, and where.
   - **Size**: Height (see below) and Width (a slider like the cards', 8 to 120rem (about 1920px) at most; a gauge as wide
     as a pane is mostly empty, so switching to one makes a full-width chart 24rem).

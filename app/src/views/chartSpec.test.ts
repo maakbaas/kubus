@@ -161,15 +161,16 @@ describe("chartSpec", () => {
     expect((parts.options.meter as { proportional: { total: number } }).proportional.total).toBe(1000);
   });
 
-  it("colours a gauge by its thresholds, as a % of the total or as values", () => {
+  it("gives a gauge its status by its thresholds (a % of the total or values), its % with the decimals", () => {
     const gauge = (o: Partial<ChartOptions>) =>
       spec({ chart: "gauge", series: [sum("pages")], total: { from: "number", number: 1000, field: null }, thresholds: [{ value: 50, status: "warning" }, { value: 90, status: "danger" }], ...o });
     const percent = gauge({});
     expect(percent.data).toEqual([{ group: "value", value: 58 }]);
     expect((percent.options.gauge as { status: string }).status).toBe("warning");
     expect((gauge({ thresholdMode: "absolute" }).options.gauge as { status: string }).status).toBe("danger");
-    const value = gauge({ asValue: true, unit: "p" }).options.gauge as { numberFormatter(n: number): string; showPercentageSymbol: boolean };
-    expect([value.numberFormatter(58), value.showPercentageSymbol]).toEqual(["580 p", false]);
+    // Carbon hands the number over as text.
+    const shown = gauge({ decimals: 1, unit: "p" }).options.gauge as { numberFormatter(n: number | string): string };
+    expect([shown.numberFormatter("58"), shown.numberFormatter(57.94)]).toEqual(["58.0", "57.9"]);
   });
 
   it("puts a scatter's items on X and Y, a series per Y field, each dot naming its item", () => {

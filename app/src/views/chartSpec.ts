@@ -434,8 +434,8 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       const before = how ? aggregate(items, how, fields.get(options.compareField ?? first.field ?? "")) : null;
       const beforePercent = percentOf(before, one.max);
       const delta = beforePercent === null ? 0 : Math.round((percent - beforePercent) * 100) / 100;
-      // Shown as the value (a % of the total made back into it) or as the % itself.
-      const shown = (n: number) => (options.asValue ? formatValue(one.max === null ? n : (n * one.max) / 100, options) : formatValue(n, { unit: "", decimals: options.decimals }));
+      // Carbon's gauge shows a %, here with the decimals; it hands the number over as text ("30").
+      const shown = (v: number | string) => formatValue(Number(v), { unit: "", decimals: options.decimals });
       return {
         chart: "GaugeChart",
         data: [{ group: "value", value: clampPercent(percent) }, ...(delta !== 0 ? [{ group: "delta", value: delta }] : [])],
@@ -443,12 +443,11 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
           gauge: {
             type: options.fullCircle ? "full" : "semi",
             ...(status && { status }),
-            showPercentageSymbol: !options.asValue,
             numberFormatter: shown,
             deltaArrow: { enabled: delta !== 0 },
           },
         }),
-        format: formatOf(options, { asValue: options.asValue, max: one.max }),
+        format: formatOf(options, { max: one.max }),
       };
     }
     case "radar": {

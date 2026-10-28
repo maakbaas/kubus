@@ -219,8 +219,6 @@ export interface ChartOptions {
   donut: boolean;
   // Gauge
   fullCircle: boolean;
-  /** The value itself in the middle instead of its share of the total (%). */
-  asValue: boolean;
   /** A second value, shown as the increase or decrease from it; null = none. */
   compare: Compare | null;
   /** The number field `compare` is taken of; null = the gauge's own. */
@@ -310,7 +308,6 @@ export function defaultChartOptions(collection: Collection, components: Componen
     total: { from: "none", number: null, field: null },
     donut: true,
     fullCircle: false,
-    asValue: false,
     compare: null,
     compareField: null,
     spreadField: number,
@@ -398,7 +395,6 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     },
     donut: flag(o.donut, d.donut),
     fullCircle: flag(o.fullCircle, d.fullCircle),
-    asValue: flag(o.asValue, d.asValue),
     compare: o.compare === null || o.compare === undefined ? null : oneOf<Compare | null>([...values(AGGREGATES), "prev"], o.compare, null),
     compareField: field(o.compareField),
     spreadField: field(o.spreadField, o.spreadField === null ? null : d.spreadField),

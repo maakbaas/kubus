@@ -336,7 +336,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   const offerScope = place === "item" && (pageCollectionId === collection.id || o.scope === "page");
 
   // A setting that does nothing with the others as they are (downstream of one of them) isn't shown.
-  const check = (key: "points" | "compact" | "donut" | "fullCircle" | "asValue" | "horizontal", label: string, shown = true) =>
+  const check = (key: "points" | "compact" | "donut" | "fullCircle" | "horizontal", label: string, shown = true) =>
     shown && <Checkbox id={`${uid}-${key}`} labelText={label} checked={o[key]} onChange={(_, { checked }) => set({ [key]: checked })} />;
   const aggregateSelect = (id: string, label: string, value: Aggregate, onAggregate: (a: Aggregate) => void, noCount = false, hideLabel = false) => (
     <Select size="sm" id={id} labelText={label} hideLabel={hideLabel} value={value} onChange={(e) => onAggregate(e.target.value as Aggregate)}>
@@ -618,7 +618,6 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
       {o.chart === "gauge" && (
         <>
           {check("fullCircle", "Full circle")}
-          {check("asValue", "Show the value, not a %", o.total.from !== "none")}
           <Select size="sm" id={`${uid}-compare`} labelText="Compare with" value={o.compare ?? ""} onChange={(e) => set({ compare: (e.target.value || null) as Compare | null })}>
             <SelectItem value="" text="Nothing" />
             {[...AGGREGATES, ...(first.value === "last" ? [PREVIOUS] : [])].map((a) => (
@@ -676,8 +675,9 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   );
 
   // --- Thresholds
-  // A meter's colours by thresholds are of one value.
-  const thresholdsSection = has.thresholds && (o.chart !== "meter" || o.parts === "one") && (
+  // A meter's colours by thresholds are of one value; a gauge's status (Carbon's) colours only its change arrow,
+  // drawn while it compares with something.
+  const thresholdsSection = has.thresholds && (o.chart !== "meter" || o.parts === "one") && (o.chart !== "gauge" || !!o.compare) && (
     <Section key="thresholds" title="Thresholds">
       {has.xy ? (
         <p className="helper chart-options__note">Lines on the left axis, from the value up.</p>
@@ -730,8 +730,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   const valuesSection = (
     <Section key="values" title={has.legend ? "Values and legend" : "Values"}>
       <div className="chart-options__pair">
-        {/* A gauge showing a % has no unit. */}
-        {(o.chart !== "gauge" || o.asValue) && <TextInput size="sm" id={`${uid}-unit`} labelText="Unit" placeholder="kg, €, h" value={o.unit} onChange={(e) => set({ unit: e.target.value })} />}
+        {/* A gauge shows a % (Carbon's): no unit. */}
+        {o.chart !== "gauge" && <TextInput size="sm" id={`${uid}-unit`} labelText="Unit" placeholder="kg, €, h" value={o.unit} onChange={(e) => set({ unit: e.target.value })} />}
         <Select size="sm" id={`${uid}-decimals`} labelText="Decimals" value={o.decimals === null ? "" : String(o.decimals)} onChange={(e) => set({ decimals: e.target.value === "" ? null : Number(e.target.value) })}>
           <SelectItem value="" text="As they are" />
           {Array.from({ length: MAX_DECIMALS + 1 }, (_, n) => (
