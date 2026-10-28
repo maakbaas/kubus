@@ -9,7 +9,7 @@ import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
 import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type ItemGroup, type QueryResult } from "../domain/query";
-import { blockLimit, blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
+import { blockLimit, blockQuery, NO_FILTERS, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { ToolbarPopover } from "../ui/ToolbarPopover";
@@ -303,7 +303,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   // Page-item values ("this item") filled in from the page's item; {{ }} code worked out.
   const base = blockQuery(viewFilters, block);
   const filters = useMemo(() => resolveFilterValues(base.filters, page ?? null), [base.filters, page]);
-  const inherited = useMemo(() => resolveFilterValues(viewFilters ?? [], page ?? null), [viewFilters, page]);
+  const inherited = useMemo(() => resolveFilterValues(viewFilters ?? NO_FILTERS, page ?? null), [viewFilters, page]);
   const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder]); // eslint-disable-line react-hooks/exhaustive-deps
   // A remote collection's rows come from its source a page at a time, filtered and sorted there.
   // Its Limit: items shown at first and added by each "Show more" (0: all, a remote collection's loaded page by page).

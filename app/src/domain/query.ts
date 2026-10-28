@@ -409,12 +409,18 @@ function sortKey(collection: Collection, item: Item, field: FieldDef | string | 
   return typeof field === "object" ? KIND_RULES[field.kind].sortKey(field, item.values[field.id] ?? null, ctx) : null;
 }
 
+/**
+ * Texts in natural order (digit runs by their value: "Item 2" before "Item 10"), as localeCompare with
+ * `numeric`, but with one collator: localeCompare with options builds one for each comparison.
+ */
+export const naturalCompare = new Intl.Collator(undefined, { numeric: true }).compare;
+
 function compareKeys(a: string | number | null, b: string | number | null): number {
   if (a === b) return 0;
   if (a === null) return 1; // empty values last, whatever the direction
   if (b === null) return -1;
   if (typeof a === "number" && typeof b === "number") return a - b;
-  return String(a).localeCompare(String(b), undefined, { numeric: true });
+  return naturalCompare(String(a), String(b));
 }
 
 /**

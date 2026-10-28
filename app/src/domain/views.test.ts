@@ -43,6 +43,8 @@ describe("blocks", () => {
     expect(blockQuery(view, block)).toMatchObject({ inherited: view, filters: own });
     expect(blockQuery(view, newBlock("table", null))).toMatchObject({ inherited: view, filters: [] });
     expect(blockQuery(null, block).inherited).toEqual([]);
+    // No rules: the same array each time (what is memoized on it stays).
+    expect(blockQuery(null, newBlock("table", null)).filters).toBe(blockQuery(null, newBlock("table", null)).filters);
   });
 
   it("take sort and grouping from a query, the default group order not stored", () => {

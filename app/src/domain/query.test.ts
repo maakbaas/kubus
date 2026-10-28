@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FieldDef, Item, Collection } from "./model";
-import { applyQuery, defaultQuery, filterCodeValue, filterPreset, filterValueProblem, PAGE_ITEM, resolveFilterValues, type FilterRule, type QueryContext } from "./query";
+import { applyQuery, defaultQuery, filterCodeValue, filterPreset, filterValueProblem, naturalCompare, PAGE_ITEM, resolveFilterValues, type FilterRule, type QueryContext } from "./query";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], position: number): FieldDef => ({
   id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position,
@@ -147,5 +147,14 @@ describe("date periods", () => {
     expect(ids(applyQuery(dated, items, between("read", "2026-10-31..2026-10-01"), ctx))).toEqual([]);
     expect(filterValueProblem(dated.fields[2], "between", "October")).toBeTruthy();
     expect(filterValueProblem(dated.fields[2], "between", "2026-10-01..2026-10-31")).toBeUndefined();
+  });
+});
+
+describe("naturalCompare", () => {
+  it("orders as localeCompare with numeric does", () => {
+    const texts = ["item 10", "Item 2", "item 1", "éclair", "eclair", "Zebra", "apple", "a10b", "a9b", "", " ", "002", "2", "10", "-1", "1.5", "1.10", "ß", "ss", "Ä", "z"];
+    const byLocale = [...texts].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    expect([...texts].sort(naturalCompare)).toEqual(byLocale);
+    for (const a of texts) for (const b of texts) expect(Math.sign(naturalCompare(a, b))).toBe(Math.sign(a.localeCompare(b, undefined, { numeric: true })));
   });
 });

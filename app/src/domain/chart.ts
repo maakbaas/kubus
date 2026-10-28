@@ -19,7 +19,7 @@ import { periodAround, weekNumber } from "./datePeriod";
 import { formatDate } from "./fieldKinds";
 import { fieldValue, itemLabel, newId, pickableFields, type Collection, type FieldDef, type Item } from "./model";
 import { BLOCK_HEIGHT, DEFAULT_ASPECT, normalizeAspect, normalizeBlockHeight, type AspectRatio } from "./views";
-import { applyQuery, defaultQuery, groupKeysOf, isGroupable, type GroupOrder, type QueryContext, type QueryResult } from "./query";
+import { applyQuery, defaultQuery, groupKeysOf, isGroupable, naturalCompare, type GroupOrder, type QueryContext, type QueryResult } from "./query";
 
 export type ChartKind =
   | "bar"
@@ -586,15 +586,22 @@ export function chartCategories(input: ChartInput, x: ChartX, timeline = false):
   // A step's items in the block's order (its days' groups come in date order), for "first" and "last".
   const position = new Map(items.map((item, i) => [item, i]));
   const inOrder = (list: Item[]) => unique(list).sort((a, b) => (position.get(a) ?? 0) - (position.get(b) ?? 0));
+  // Each step's groups gathered first, their items put in order once (not again for each day added).
+  const gathered = new Map<string, Item[][]>();
   for (const g of groups) {
     if (!DAY.test(g.key)) {
       steps.set(g.key, g);
       continue;
     }
     const { day, label } = dateStepOf(g.key, step, input.locale);
-    const at = steps.get(day);
-    steps.set(day, at ? { ...at, items: inOrder([...at.items, ...g.items]) } : { key: day, label, items: g.items, day, at: dayTime(day) });
+    const lists = gathered.get(day);
+    if (lists) lists.push(g.items);
+    else {
+      gathered.set(day, [g.items]);
+      steps.set(day, { key: day, label, items: g.items, day, at: dayTime(day) });
+    }
   }
+  for (const [day, lists] of gathered) if (lists.length > 1) steps.set(day, { ...steps.get(day)!, items: inOrder(lists.flat()) });
   let merged = [...steps.values()];
   if (x.order === "count") merged.sort((a, b) => Number(a.key === "") - Number(b.key === "") || b.items.length - a.items.length);
   if (!timeline) return merged;
@@ -666,7 +673,7 @@ export function splitSeries(categories: Category[], field: FieldDef | undefined,
       for (const l of labels) sizes.set(l, (sizes.get(l) ?? 0) + 1);
     }
   }
-  const ranked = [...sizes.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { numeric: true })).map(([n]) => n);
+  const ranked = [...sizes.entries()].sort((a, b) => b[1] - a[1] || naturalCompare(a[0], b[0])).map(([n]) => n);
   const kept = new Set(ranked.slice(0, MAX_SERIES));
   const named = (label: string) => (kept.has(label) ? label : OTHER);
   const names = ranked.length > MAX_SERIES ? [...ranked.slice(0, MAX_SERIES), OTHER] : ranked;

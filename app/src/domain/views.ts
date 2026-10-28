@@ -159,9 +159,12 @@ export function pageFilterScope(collections: Collection[]): Collection {
   return { ...collections[0], fields, source: collections.every((c) => c.source) ? collections[0].source : null };
 }
 
+/** No filter rules: always this array (frozen), so what is memoized on a query's filters stays. */
+export const NO_FILTERS = Object.freeze([]) as unknown as FilterRule[];
+
 /** The query a block runs: its own filter on top of the one it inherits (its view's or item page's). */
 export function blockQuery(inherited: FilterRule[] | null, block: ViewBlock): ViewQuery {
-  const query: ViewQuery = { filters: block.filters ?? [], inherited: inherited ?? [], sort: block.sort, groupBy: block.groupBy };
+  const query: ViewQuery = { filters: block.filters ?? NO_FILTERS, inherited: inherited ?? NO_FILTERS, sort: block.sort, groupBy: block.groupBy };
   return block.groupOrder ? { ...query, groupOrder: block.groupOrder } : query;
 }
 

@@ -171,7 +171,7 @@ Extension points are registries, not special cases in pages:
   included (so it is also "save as new view"), and opens View settings with its name selected.
   "+" sits after the last tab. The tab bar's right end holds the view's tools after Discard /
   Save, delete, star and bookmark: Search (opens a search bar below the tabs; closes when emptied
-  or with Escape on an empty box; while it has text, a block listing items with none matching is
+  or with Escape on an empty box; the blocks filter once typing pauses 150 ms, an emptied box at once; while it has text, a block listing items with none matching is
   left out, `BlockView`), Filter (the view's) and View settings (name, blocks);
   each block's own menus (Filter, Sort and group, Fields, Block settings: name, show as, type options) are in its header. The collection page opens the starred view (`views.is_default`, at most one per collection and space,
   set via `setDefaultView`), else the first; a space without stored views shows a virtual "All" table (id `default`; stored when

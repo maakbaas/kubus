@@ -93,6 +93,10 @@ function unusedHeight(holder: HTMLElement, part: string): number {
  */
 function useStableSpec(spec: ChartSpec): { spec: ChartSpec; drawing: string } {
   const last = useRef<{ key: string; spec: ChartSpec; drawing: string } | null>(null);
+  // The spec given last time again (a render for something else): nothing to compare.
+  const given = useRef<ChartSpec | null>(null);
+  if (given.current === spec && last.current) return last.current;
+  given.current = spec;
   const key = JSON.stringify(spec);
   if (last.current?.key !== key) last.current = { key, spec, drawing: `${spec.chart}:${JSON.stringify([spec.options, spec.format])}` };
   return last.current;

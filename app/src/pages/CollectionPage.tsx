@@ -37,6 +37,9 @@ const normalized = (collection: Collection, state: ViewState): ViewState => norm
 /** Id of the virtual "All" view of a space that has no stored view of the collection. */
 const VIRTUAL_VIEW = "default";
 
+/** The view's search box filters once typing pauses this long. */
+const SEARCH_DELAY_MS = 150;
+
 function CollectionContent({ collection }: { collection: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
@@ -67,6 +70,13 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>(base);
   const [search, setSearch] = useState("");
+  // What the blocks search for: the typed text once typing pauses (each search goes over every item), an emptied box at once.
+  const [searched, setSearched] = useState("");
+  useEffect(() => {
+    if (!search) return setSearched("");
+    const timer = window.setTimeout(() => setSearched(search), SEARCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [search]);
   /** The search bar below the tab bar is shown (opened from its icon). */
   const [searchOpen, setSearchOpen] = useState(false);
   /** Set after "+": opens View settings with the new view's name selected, to rename it. */
@@ -457,7 +467,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
             data={data}
             block={block}
             viewFilters={view.filters}
-            search={search}
+            search={searched}
             place="collection"
             page={null}
             editable={view.editable && !remote}

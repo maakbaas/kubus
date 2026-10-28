@@ -40,9 +40,13 @@ function visibleText(node: Nodes): string {
   return "";
 }
 
-/** Plain texts by source: searching and sorting ask for the same documents over and over. */
+/**
+ * Plain texts by source: searching and sorting ask for the same documents over and over (a view's search
+ * each keystroke, over every value). The least recently used go first, and there is room for a large
+ * collection's values: a pass over more than the cache holds would find none of them in it.
+ */
 const plainTexts = new Map<string, string>();
-const PLAIN_TEXTS_MAX = 2000;
+const PLAIN_TEXTS_MAX = 20_000;
 
 /** Visible text of a whole markdown document, for matching (e.g. table search). */
 export function markdownPlainText(source: string): string {
@@ -50,8 +54,8 @@ export function markdownPlainText(source: string): string {
   if (text === undefined) {
     text = visibleText(parser.parse(source));
     if (plainTexts.size >= PLAIN_TEXTS_MAX) plainTexts.delete(plainTexts.keys().next().value!);
-    plainTexts.set(source, text);
-  }
+  } else plainTexts.delete(source);
+  plainTexts.set(source, text);
   return text;
 }
 

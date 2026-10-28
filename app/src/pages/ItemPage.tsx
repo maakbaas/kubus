@@ -176,19 +176,34 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const [local, setLocal] = useState<Record<string, { collapsed?: Collapsed; layout?: ItemLayout }>>({});
   useEffect(() => setLocal({}), [collection.itemViews]);
 
+  const latest = useRef(collection);
+  latest.current = collection;
+  // A remote row is read again only when what it is read as changes (its source, columns, fields), not
+  // whenever any collection changes (each is a new object then).
+  const readAs = collection.source
+    ? JSON.stringify([collection.source.name, sourceShape(collection), collection.fields.map((f) => [f.id, f.column ?? null])])
+    : collection;
   /** Reads the item (a remote one's row) again. */
   const load = useCallback((): Promise<Item | null> => {
+    const collection = latest.current;
     if (!collection.source) return repo.getItem(collection, itemId);
     const key = rowKey(itemId);
     if (key === null) return Promise.resolve(null);
     const shape = sourceShape(collection);
     return sources.row(collection.source.name, { ...shape, keyValue: key }).then((row) => row && rowItem(collection, shape, row));
-  }, [repo, sources, collection, itemId]);
-  useEffect(() => {
-    load().then(setItem, (e) => setError(errorMessage(e)));
+  }, [repo, sources, readAs, itemId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The latest read only: a late answer to an earlier one doesn't overwrite it.
+  const reads = useRef(0);
+  const read = useCallback(() => {
+    const n = ++reads.current;
+    load().then(
+      (found) => reads.current === n && setItem(found),
+      (e) => reads.current === n && setError(errorMessage(e)),
+    );
   }, [load]);
+  useEffect(read, [read]);
   // "Read again" on the collection's page reads this row again too.
-  useEffect(() => (remote ? sources.onRefresh((id) => (id === null || id === collection.id) && load().then(setItem, (e) => setError(errorMessage(e)))) : undefined), [remote, sources, collection.id, load]);
+  useEffect(() => (remote ? sources.onRefresh((id) => (id === null || id === collection.id) && read()) : undefined), [remote, sources, collection.id, read]);
   // Component fields show their computed results.
   const shown = useMemo(
     () => (item ? withComputed(collection, [item], components, refLabelOf(refs))[0] : null),

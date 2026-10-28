@@ -117,7 +117,8 @@ export function useRemoteResult(
       (r) => current.current === asked && setLoaded({ key, batch: ++batches.current, rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, more: r.more }),
       (e) => current.current === asked && setLoaded({ key, batch: ++batches.current, rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) }),
     );
-  }, [remote, collection.source, key, refreshes, sources, pageSize]);
+    // The source by its name: the rest of the request is in `key` (the collection is a new object whenever any collection changes).
+  }, [remote, collection.source?.name, key, refreshes, sources, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const more = useCallback(() => {
     if (!loaded || !loaded.more || !request || !collection.source || loadingMore) return;
@@ -145,19 +146,23 @@ export function useRemoteResult(
   // Rows are made into items as they come in: a page added ("Show more", or loading every row) adds only its
   // own, so many pages cost as much as their rows, not their square. A new first page (another query, "Read
   // again") builds them anew, rows that didn't change keeping their item (memoized rows and computed values rely on it).
+  // The collection as rows are made from it (its name, title, source and fields): a change to another
+  // collection makes every collection a new object, and that mustn't make every row (and its computed values) anew.
+  const madeFrom = collection.source ? JSON.stringify([collection.id, collection.name, collection.titleField, collection.source, collection.fields]) : "";
+  const rowsFrom = useMemo(() => collection, [madeFrom]); // eslint-disable-line react-hooks/exhaustive-deps
   const built = useRef<BuiltRows | null>(null);
-  const memo = useMemo(() => new WeakMap<Item, Item>(), [collection, components]); // eslint-disable-line react-hooks/exhaustive-deps
-  const shape = useMemo(() => (collection.source ? sourceShape(collection) : null), [collection]);
+  const memo = useMemo(() => new WeakMap<Item, Item>(), [rowsFrom, components]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shape = useMemo(() => (rowsFrom.source ? sourceShape(rowsFrom) : null), [rowsFrom]);
   const grouped = !!request?.groupBy && !!loaded?.groups;
   const made = useMemo(() => {
     // While a changed query is asked, the rows of the one before stay (nothing flashes away).
     if (!remote || !shape || !loaded) return null;
-    built.current = addRows(built.current, [loaded.batch, collection, components, memo, shape, grouped], loaded.rows, grouped, (row) => rowItem(collection, shape, row), (items) => {
+    built.current = addRows(built.current, [loaded.batch, rowsFrom, components, memo, shape, grouped], loaded.rows, grouped, (row) => rowItem(rowsFrom, shape, row), (items) => {
       sources.remember(items);
-      return withComputed(collection, items, components, noLabel, memo);
+      return withComputed(rowsFrom, items, components, noLabel, memo);
     });
     return built.current;
-  }, [remote, shape, loaded, collection, components, memo, grouped, sources]);
+  }, [remote, shape, loaded, rowsFrom, components, memo, grouped, sources]);
   const result = useMemo(() => {
     if (!made || !loaded || !shape) return null;
     const b = made;
