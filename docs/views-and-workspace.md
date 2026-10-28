@@ -140,7 +140,8 @@ Extension points are registries, not special cases in pages:
     gauge: no unit, the decimals as set), and the increase or decrease from a comparison value (any value, and "Previous
     value" after the Last value, or a number; Carbon's delta arrow). A stat (`StatView`, like Grafana's stat panel, made
     of Carbon parts; Carbon Charts has none): centred: the value's name, the number (heading-06, its unit a step smaller), the
-    change from what it is compared with as a Carbon tag with an up or down arrow (with "from the average (79.2 kg)"), as a % or the difference ("Change
+    change from what it is compared with beside it as a Carbon tag with an up or down arrow ("Compared with the
+    average (79.2 kg)" below), as a % or the difference ("Change
     shown as"), green or red by which way is better ("Better": higher, lower, neither: grey), and a sparkline across the block below (4rem, as a compact chart; full width by default, Width narrows it): the value along its X axis ("Sparkline along") as Carbon's compact area
     or line chart (`chartSpec` of a stat is it; in its tag's colour, Carbon's `color.scale`: support-success,
     support-error, grey for neither), or none (`statOf`, `baselineOf` in domain/chart.ts).

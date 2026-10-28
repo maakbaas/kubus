@@ -30,7 +30,9 @@ What the app does, feature by feature (read the part you work on).
   checkboxes, typed `[text](url)` links, link hover popover (open/edit/remove), code coloring
   (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs. A Markdown value is data: `{{ }}` in it is plain text, never run (code lives only in components).
 - **Collections have a singular and plural name** ("Author" / "Authors"): singular for one item
-  ("New Author"), plural for lists, navigation and counts (`countLabel`).
+  ("New Author"), plural for lists, navigation and counts (`countLabel`). The editor (a collection's or a remote
+  collection's) has the plural as its title and the singular below it, which follows the plural until it is
+  typed in itself (`suggestSingular`).
 - **Items are edited in place**: `#/collections/<id>/items/<itemId>` shows every field in the
   user's order; clicking a field turns it into its form input, with no buttons (they would push the
   content down). Enter saves (Ctrl/Cmd+Enter in markdown), clicking outside saves, Escape cancels;

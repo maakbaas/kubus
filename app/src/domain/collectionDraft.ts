@@ -38,8 +38,8 @@ export function draftProblems(draft: CollectionDraft, components: Component[]): 
     const problem = settingsProblem(f, components, !!draft.source);
     if (problem) targetErrors[f.id] = problem;
   }
-  const nameError = draft.name.trim() ? undefined : "Name is required";
-  const pluralError = draft.pluralName.trim() ? undefined : "Plural name is required";
+  const nameError = draft.name.trim() ? undefined : "Singular name is required";
+  const pluralError = draft.pluralName.trim() ? undefined : "Name is required";
   const noFields = draft.fields.length === 0;
   const source = draft.source;
   const sourceError = !source

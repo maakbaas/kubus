@@ -12,9 +12,9 @@ for (const vp of ["desktop", "phone", "laptop"]) {
     await t.open("/collections/new");
     await t.audit("new collection form");
     const name = t.page.getByRole("textbox", { name: "Name" }).first();
-    await name.fill("Publication with a long singular name");
+    await name.fill("Publications with a long plural name");
     await t.settle();
-    await t.check("plural is suggested", (await t.page.getByRole("textbox", { name: "Plural name" }).inputValue()).length > 0);
+    await t.check("singular is suggested", (await t.page.getByRole("textbox", { name: "Singular name" }).inputValue()).length > 0);
     await t.page.getByRole("textbox", { name: "Description (optional)" }).fill(TEXT.long[0]);
     for (const [i, type] of FIELD_TYPES.entries()) {
       await t.page.getByRole("button", { name: "Add field" }).click();

@@ -207,6 +207,15 @@ export function suggestPlural(singular: string): string {
   return `${s}s`;
 }
 
+/** The singular a plural most likely has (English): "Categories" → "Category", "Boxes" → "Box", "Authors" → "Author". */
+export function suggestSingular(plural: string): string {
+  const s = plural.trim();
+  if (/[^aeiou]ies$/i.test(s)) return `${s.slice(0, -3)}y`;
+  if (/(ss|x|z|ch|sh)es$/i.test(s)) return s.slice(0, -2);
+  if (/[^s]s$/i.test(s)) return s.slice(0, -1);
+  return s;
+}
+
 export const newId = (): string => crypto.randomUUID();
 // Timestamps are what sync merges by (newest wins). They never go back below a stamp that was
 // seen, e.g. one received from a device whose clock runs ahead (a cheap stand-in for a hybrid

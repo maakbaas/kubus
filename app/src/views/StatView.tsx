@@ -18,8 +18,8 @@ function baselineText(options: ChartOptions, baseline: number): string {
 
 /**
  * A stat (a Grafana-like stat panel, built of Carbon parts), centred: the value's name, the number in
- * Carbon's heading-06 (light), below it the change from the baseline as a Carbon tag with an up or
- * down arrow (green where the change is good, red where bad: `better`) and what it is compared with,
+ * Carbon's heading-06 (light) with the change from the baseline beside it as a Carbon tag with an up or
+ * down arrow (green where the change is good, red where bad: `better`), what it is compared with,
  * and its sparkline (`sparkline`: a compact Carbon chart, or nothing) across the whole width below.
  */
 export function StatView({ stat, options, sparkline }: { stat: Stat; options: ChartOptions; sparkline: ReactNode }) {
@@ -37,12 +37,12 @@ export function StatView({ stat, options, sparkline }: { stat: Stat; options: Ch
       <div className="stat-block__body">
         <div className="stat-block__text">
           <span className="stat-block__label">{stat.label}</span>
-          <span className="stat-block__number">
-            {number}
-            {unit && stat.value !== null && <span className="stat-block__unit">{unit}</span>}
-          </span>
-          {change !== null && (
-            <div className="stat-block__change">
+          <div className="stat-block__value">
+            <span className="stat-block__number">
+              {number}
+              {unit && stat.value !== null && <span className="stat-block__unit">{unit}</span>}
+            </span>
+            {change !== null && (
               <Tag
                 size="md"
                 type={stat.trend === "good" ? "green" : stat.trend === "bad" ? "red" : "gray"}
@@ -50,9 +50,9 @@ export function StatView({ stat, options, sparkline }: { stat: Stat; options: Ch
               >
                 {change}
               </Tag>
-              <span className="stat-block__from">from {from}</span>
-            </div>
-          )}
+            )}
+          </div>
+          {from && <span className="stat-block__from">Compared with {from}</span>}
         </div>
         {sparkline && <div className="stat-block__sparkline">{sparkline}</div>}
       </div>

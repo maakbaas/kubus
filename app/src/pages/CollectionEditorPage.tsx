@@ -13,7 +13,7 @@ import {
   canBeTitle,
   NO_TITLE,
   newId,
-  suggestPlural,
+  suggestSingular,
   collectionDraft,
   type FieldKind,
   type FieldDraft,
@@ -95,12 +95,12 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
-  // The plural follows the singular until the user edits it themselves.
-  const [pluralTouched, setPluralTouched] = useState(!!existing);
+  // The singular follows the plural (the name shown most: lists, menus, blocks) until the user edits it themselves.
+  const [singularTouched, setSingularTouched] = useState(!!existing);
 
   // A new collection starts by naming it.
   useEffect(() => {
-    if (!existing) document.getElementById(`${uid}-collection-name`)?.focus();
+    if (!existing) document.getElementById(`${uid}-collection-plural-name`)?.focus();
   }, [existing, uid]);
 
   // A link to one of the fields (?field=, e.g. a local component's from the Components page):
@@ -202,23 +202,23 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
       <PageHeader
         current={existing ? `Edit ${existing.pluralName}` : remote ? "New remote collection" : "New collection"}
         title={
-          // The header is the editor for the collection's icon and name.
+          // The header is the editor for the collection's icon and its (plural) name.
           <div className="title-edit">
             <IconPicker id={`${uid}-collection-icon`} value={draft.icon} onChange={(icon) => setDraft((d) => ({ ...d, icon }))} />
             <TextInput size="sm"
-              id={`${uid}-collection-name`}
+              id={`${uid}-collection-plural-name`}
               className="title-edit__name"
               labelText="Name"
               hideLabel
-              placeholder="Name, e.g. Author"
-              value={draft.name}
+              placeholder="Name, e.g. Authors"
+              value={draft.pluralName}
               onChange={(e) => {
-                const name = e.target.value;
+                const pluralName = e.target.value;
                 setNamesTyped(true);
-                setDraft((d) => ({ ...d, name, pluralName: pluralTouched ? d.pluralName : suggestPlural(name) }));
+                setDraft((d) => ({ ...d, pluralName, name: singularTouched ? d.name : suggestSingular(pluralName) }));
               }}
-              invalid={submitted && !!nameError}
-              invalidText={nameError}
+              invalid={submitted && !!pluralError}
+              invalidText={pluralError}
             />
           </div>
         }
@@ -228,17 +228,18 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
       <Form onSubmit={save} noValidate>
         <Stack gap={6}>
           <TextInput size="sm"
-            id={`${uid}-collection-plural-name`}
-            labelText="Plural name"
-            placeholder="e.g. Authors"
-            value={draft.pluralName}
+            id={`${uid}-collection-name`}
+            labelText="Singular name"
+            helperText={`One of them: “New ${draft.name.trim() || "Author"}”, “This ${draft.name.trim() || "Author"}”.`}
+            placeholder="e.g. Author"
+            value={draft.name}
             onChange={(e) => {
-              setPluralTouched(true);
+              setSingularTouched(true);
               setNamesTyped(true);
-              setDraft((d) => ({ ...d, pluralName: e.target.value }));
+              setDraft((d) => ({ ...d, name: e.target.value }));
             }}
-            invalid={submitted && !!pluralError}
-            invalidText={pluralError}
+            invalid={submitted && !!nameError}
+            invalidText={nameError}
           />
           <TextArea
             id={`${uid}-collection-description`}

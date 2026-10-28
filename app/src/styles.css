@@ -2951,7 +2951,7 @@ img[data-lightbox] {
   block-size: 24rem;
 }
 /* A stat (StatView): centred, the value's name (label-01), the number (heading-06, light) with its unit
-   a step smaller, the change's tag and what it is from (label-01); the sparkline across the whole width
+   a step smaller and the change's tag beside it, what it is compared with (label-01); the sparkline across the whole width
    below it, a compact chart's fixed 4rem high. Carbon draws the sparkline at 100% of its box. */
 .stat-block {
   inline-size: 100%;
@@ -2984,15 +2984,15 @@ img[data-lightbox] {
   letter-spacing: var(--cds-label-01-letter-spacing);
   color: var(--cds-text-secondary);
 }
-/* The change's tag and what it is from, on one line below the number (which stays centred). */
-.stat-block__change {
+/* The number with the change's tag beside it, the two centred together. */
+.stat-block__value {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: var(--cds-spacing-03);
+  gap: var(--cds-spacing-04);
 }
-.stat-block__change .cds--tag {
+.stat-block__value .cds--tag {
   margin: 0;
 }
 .stat-block__number {
