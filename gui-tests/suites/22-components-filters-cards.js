@@ -1,6 +1,6 @@
 // Components without variables, written in place or shared, asking AI or not; a field's settings
-// under its name and type; strike through the item; {{ }} code in filter values; cards that only
-// change their layout with "Show as a list when narrow".
+// under its name and type; strike through the item; {{ }} code in filter values; cards with the
+// cover beside the text at every width.
 
 async function blockTool(t, scope, label) {
   const direct = scope.getByRole("button", { name: label, exact: true }).filter({ visible: true }).first();
@@ -175,7 +175,7 @@ for (const vp of ["desktop", "phone"]) {
   test(`strike through the item; {{ }} code in a filter value @ ${vp}`, async (t) => {
     await t.boot();
     const spec = componentSpec();
-    spec.collections[0].views = [{ name: "All", blocks: [{ kind: "table" }] }, { name: "Cards", blocks: [{ kind: "cards", options: { coverFieldId: null, cardWidth: 14, coverRatio: "auto", showTitle: true, listNarrow: false } }] }];
+    spec.collections[0].views = [{ name: "All", blocks: [{ kind: "table" }] }, { name: "Cards", blocks: [{ kind: "cards", options: { coverFieldId: null, cardWidth: 14, coverRatio: "auto", showTitle: true, coverBeside: false } }] }];
     const ids = await t.seed(spec);
     await t.open(t.listPath(ids.collections.books));
     const struck = () => t.page.evaluate(() => [...document.querySelectorAll(".ws-pane--active .cell--struck, .ws-pane--active .item--struck")].map((e) => getComputedStyle(e.querySelector("a, div") ?? e).textDecorationLine));
@@ -213,25 +213,26 @@ for (const vp of ["desktop", "phone"]) {
   }, { viewport: vp, smoke: vp === "desktop" });
 }
 
-for (const [label, list, width, expectList] of [
-  ["option off, narrow pane: cards as always", false, 18, false],
-  ["option on, narrow pane: list rows", true, 18, true],
-  ["option on, wide pane, one card per row: no list rows", true, 60, false],
+for (const [label, beside, width, expectBeside] of [
+  ["cover above, narrow pane", false, 18, false],
+  ["cover beside, narrow pane: list rows", true, 18, true],
+  ["cover beside, wide pane: the same", true, 18, true],
+  ["cover above, wide pane", false, 18, false],
 ]) {
   test(`cards: ${label}`, async (t) => {
     await t.boot();
     const spec = matrixSpec("typical", { items: 4 });
-    spec.collections[0].views = [{ name: "Cards", blocks: [{ kind: "cards", options: { coverFieldId: "@cover", cardWidth: width, coverRatio: "auto", showTitle: true, listNarrow: list } }] }];
+    spec.collections[0].views = [{ name: "Cards", blocks: [{ kind: "cards", options: { coverFieldId: "@cover", cardWidth: width, coverRatio: "auto", showTitle: true, coverBeside: beside } }] }];
     const ids = await t.seed(spec);
     await t.open(t.listPath(ids.collections.books));
     await t.settle();
     const info = await t.page.evaluate(() => ({
-      list: document.querySelectorAll(".ws-pane--active .item-card--cover-left").length,
+      beside: document.querySelectorAll(".ws-pane--active .item-card--cover-left").length,
       cards: document.querySelectorAll(".ws-pane--active .item-card").length,
       stacked: [...document.querySelectorAll(".ws-pane--active .item-card__fields")].some((f) => getComputedStyle(f).gridTemplateColumns.split(" ").length === 1),
     }));
-    await t.check(expectList ? "the cards are list rows" : "no card is a list row", expectList ? info.list === info.cards && info.cards > 0 : info.list === 0, JSON.stringify(info));
+    await t.check(expectBeside ? "every cover is beside its text" : "every cover is above its text", expectBeside ? info.beside === info.cards && info.cards > 0 : info.beside === 0, JSON.stringify(info));
     await t.check("labels stay beside their values", !info.stacked, JSON.stringify(info));
     await t.audit(`cards: ${label}`);
-  }, { viewport: width > 20 ? "desktop" : "phone" });
+  }, { viewport: label.includes("wide") ? "desktop" : "phone" });
 }

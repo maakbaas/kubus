@@ -38,7 +38,7 @@ What the app does, feature by feature (read the part you work on).
   keep the same geometry (label spacing, box height, text position) so nothing jumps. The field
   that is the item's title (`labelField`) isn't repeated among the fields: the page title itself
   is its editor (click to edit in place). The full form
-  (`…/items/new`) is only for creating. Narrow screens show the items list as cards.
+  (`…/items/new`) is only for creating.
 - **Markdown editor has no toolbar**: formatting is typed, images pasted/dropped, links edited from
   their hover popover. Its height follows the content (no inner scrolling, no resize handle).
 - **Collection editor header is the editor** for the collection's icon (button + popover picker) and name

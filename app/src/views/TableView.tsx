@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "@carbon/react";
 import { Add, ArrowRight, Close, Copy, DataTable as TableIcon, Edit, Save, TrashCan } from "@carbon/icons-react";
-import { RowActions, rowButtonProps, RowIconButton, TableStacked } from "../ui/RowActions";
+import { RowActions, ROW_BUTTON, RowIconButton } from "../ui/RowActions";
 import { useStore } from "../app/store";
 import { isStruckThrough, itemLabel, labelField, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
 import { cellEditStart, type EditStart } from "../ui/editStart";
@@ -45,8 +45,6 @@ import { defineBlockType, type BlockOptionsProps, type BlockProps, type ItemActi
 export interface TableOptions {
   /** The title column links to the item (else it is an ordinary, editable column and rows get an open button). */
   titleLink: boolean;
-  /** In a narrow pane the rows restack as cards (else the table scrolls sideways). */
-  stackNarrow: boolean;
 }
 
 /** The column that names an item and opens it (the collection's first text field). */
@@ -150,7 +148,7 @@ function AddRow({ collection, columns, refs, preset, groupBy, bare, create, onCl
   return (
     <TableRow ref={row} className={bare ? "table-add-row table-add-row--bare" : "table-add-row"} onKeyDown={onKeyDown}>
       {columns.map((f) => (
-        <TableCell key={f.id} data-title-cell={f.id === title?.id || undefined} data-label={f.name}>
+        <TableCell key={f.id} data-title-cell={f.id === title?.id || undefined}>
           {/* The grouped-by field shows the group's value (it decides where the item lands). */}
           {f.id === groupBy && <div>{formatValue(f, preset[f.id] ?? null, refs)}</div>}
           {/* Inputs are laid over the cell, so they never change the column widths; a checkbox
@@ -276,81 +274,42 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
   );
 }
 
-/** A table narrower than this restacks as cards (the `data-stacked` rules in styles.css); cards with "Show as a list when narrow" turn into a list. */
-export const STACK_BELOW_REM = 30;
-
-/** Each table box's refill, so grouped tables can make their siblings follow a stacking change. */
-const fills = new WeakMap<Element, (fromSibling?: boolean) => void>();
-
 /**
  * An items table. Columns are as wide as their content (see styles.css), so the table can end
  * before the pane does; then its last (actions) column is widened to fill the rest of the row.
+ * A table that doesn't fit its pane (a phone, a narrow tiled pane) stays a table: it scrolls
+ * sideways, its first column (the title) staying put.
  */
-export function FillTable({ children, stack: stackable = true }: { children: ReactNode; /** Restack as cards when narrow (else scroll sideways). */ stack?: boolean }) {
+export function FillTable({ children }: { children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
-  // Whether it is stacked now, for what renders differently (RowActions); decided below.
-  const [stacked, setStacked] = useState(false);
-  // Set up once (per stacking choice): the observer refills whenever the box or the table changes size.
+  // Set up once: the observer refills whenever the box or the table changes size.
   useLayoutEffect(() => {
     const el = box.current;
     const table = el?.querySelector("table");
     if (!el || !table) return;
-    const fill = (fromSibling = false) => {
+    const fill = () => {
       const last = table.rows[0]?.lastElementChild as HTMLElement | null;
-      if (!last) return;
+      if (!last || el.offsetParent === null) return; // hidden (a collapsed group)
       last.style.inlineSize = ""; // measure the table at its natural width
-      el.removeAttribute("data-stacked");
-      if (el.offsetParent === null) {
-        // Hidden (a collapsed group): no say in the matter.
-        delete el.dataset.wantsStack;
-        return;
-      }
-      const width = el.clientWidth;
-      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      // Measured without the widths grouped tables share (useSharedColumns), which are made to fit
-      // and lag a frame behind: stale ones (an image that loaded) flashed the groups as cards.
-      const heads = [...(table.tHead?.rows[0]?.cells ?? [])];
-      const shared = heads.map((c) => c.style.minInlineSize);
-      for (const c of heads) c.style.minInlineSize = "";
-      const natural = table.getBoundingClientRect().width;
-      heads.forEach((c, i) => (c.style.minInlineSize = shared[i]));
-      // Stacked as cards (styles.css) when the pane is narrow, and also when the columns can't fit
-      // it however they wrap (unbreakable content): a table never sticks out of its pane.
-      if (stackable && (width <= STACK_BELOW_REM * rem || natural > width + 0.5)) el.dataset.wantsStack = "";
-      else delete el.dataset.wantsStack;
-      // Grouped tables stack together: as soon as one needs it, all do.
-      const group = el.closest<HTMLElement>(".table-groups");
-      const wraps = group ? [...group.querySelectorAll<HTMLElement>(".table-wrap")] : [el];
-      const stack = wraps.some((w) => "wantsStack" in w.dataset);
-      if (group && !fromSibling && group.dataset.stacked !== String(stack)) {
-        group.dataset.stacked = String(stack);
-        for (const w of wraps) if (w !== el) fills.get(w)?.(true);
-      }
-      setStacked(stack);
-      if (stack) {
-        el.setAttribute("data-stacked", "");
-        return;
-      }
-      const extra = Math.floor(width - table.getBoundingClientRect().width);
+      const extra = Math.floor(el.clientWidth - table.getBoundingClientRect().width);
       if (extra > 0) last.style.inlineSize = `${parseFloat(getComputedStyle(last).width) + extra}px`;
     };
-    fills.set(el, fill);
     fill();
-    const observer = new ResizeObserver(() => fill());
+    const observer = new ResizeObserver(fill);
     observer.observe(el);
     observer.observe(table);
-    return () => {
-      fills.delete(el);
-      observer.disconnect();
-    };
-  }, [stackable]);
-  // A table that scrolls sideways shows where more of it is: a fade at that edge (styles.css).
-  // Touch screens hide scrollbars until scrolling, and they can't be made to stay.
+    return () => observer.disconnect();
+  }, []);
+  // A table that scrolls sideways shows where more of it is: a fade at that edge (styles.css),
+  // the start one beside the first column, which stays put. Touch screens hide scrollbars until
+  // scrolling, and they can't be made to stay.
   useEffect(() => {
     const el = box.current;
     const scroller = el?.querySelector<HTMLElement>(".cds--data-table-content");
-    if (stackable || !el || !scroller) return;
+    if (!el || !scroller) return;
     const update = () => {
+      const first = scroller.querySelector("tr")?.firstElementChild as HTMLElement | null | undefined;
+      el.style.setProperty("--table-first-column", `${first?.offsetWidth ?? 0}px`);
       el.toggleAttribute("data-more-start", scroller.scrollLeft > 1);
       el.toggleAttribute("data-more-end", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
     };
@@ -363,14 +322,10 @@ export function FillTable({ children, stack: stackable = true }: { children: Rea
       scroller.removeEventListener("scroll", update);
       observer.disconnect();
     };
-  }, [stackable]);
+  }, []);
   return (
-    // A size container: in a narrow pane the table restacks as cards (see .table-wrap in styles.css),
-    // unless the view keeps it a table, which then scrolls sideways.
-    <div ref={box} className={stackable ? "table-wrap" : "table-wrap table-wrap--scroll"}>
-      <TableContainer className="items-table">
-        <TableStacked.Provider value={stacked}>{children}</TableStacked.Provider>
-      </TableContainer>
+    <div ref={box} className="table-wrap">
+      <TableContainer className="items-table">{children}</TableContainer>
     </div>
   );
 }
@@ -422,9 +377,9 @@ export function useSharedColumns(box: RefObject<HTMLDivElement | null>, active: 
       // All in one go, so nothing is drawn (or observed) in between.
       apply(measure());
       apply(measure());
-      // The shared widths must leave every table inside its box (FillTable's), else it restacks as
-      // cards, which drops the widths, which unstacks it again, and so on (seen with wide windows:
-      // the icon column needed more than measured). Narrowed until they fit.
+      // The shared widths must leave every table inside its box (FillTable's), else it scrolls
+      // sideways for nothing (seen with wide windows: the icon column needed more than measured).
+      // Narrowed until they fit.
       for (let i = 0; i < 3; i++) {
         const over = Math.max(0, ...tables.map((t) => t.getBoundingClientRect().width - (t.closest<HTMLElement>(".table-wrap")?.clientWidth ?? Infinity)));
         if (over <= 0.5) break;
@@ -492,40 +447,37 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
   // Its page's layout holds something back (read-only, fields left out): like the page's
   // own edit icon, an edit button opens it with every field, editable.
   const restricted = isRestricted(collection, item, itemViewOf(collection, item)?.layout ?? FULL_LAYOUT);
-  const rowButtons = (inMenu: boolean) => {
-    const props = rowButtonProps(inMenu);
-    return (
-      <>
-        {/* Without the title column (its link opens the item), each row gets an open button. */}
-        {!titleShown && (
-          <RowIconButton {...props} label={`Open ${collection.name}`} onClick={(e) => actions.open(item, openModeOf(e))}>
-            <ArrowRight />
-          </RowIconButton>
-        )}
-        {restricted && (
-          <RowIconButton {...props} label="Edit all fields" onClick={(e) => actions.open(item, openModeOf(e), { edit: true })}>
-            <Edit />
-          </RowIconButton>
-        )}
-        {actions.duplicate && (
-          <RowIconButton {...props} label="Duplicate" onClick={() => actions.duplicate?.(item)}>
-            <Copy />
-          </RowIconButton>
-        )}
-        {actions.remove && (
-          <RowIconButton {...props} label="Delete" onClick={() => actions.remove?.(item)}>
-            <TrashCan />
-          </RowIconButton>
-        )}
-      </>
-    );
-  };
+  const rowButtons = (
+    <>
+      {/* Without the title column (its link opens the item), each row gets an open button. */}
+      {!titleShown && (
+        <RowIconButton {...ROW_BUTTON} label={`Open ${collection.name}`} onClick={(e) => actions.open(item, openModeOf(e))}>
+          <ArrowRight />
+        </RowIconButton>
+      )}
+      {restricted && (
+        <RowIconButton {...ROW_BUTTON} label="Edit all fields" onClick={(e) => actions.open(item, openModeOf(e), { edit: true })}>
+          <Edit />
+        </RowIconButton>
+      )}
+      {actions.duplicate && (
+        <RowIconButton {...ROW_BUTTON} label="Duplicate" onClick={() => actions.duplicate?.(item)}>
+          <Copy />
+        </RowIconButton>
+      )}
+      {actions.remove && (
+        <RowIconButton {...ROW_BUTTON} label="Delete" onClick={() => actions.remove?.(item)}>
+          <TrashCan />
+        </RowIconButton>
+      )}
+    </>
+  );
   return (
     <TableRow>
       {shown.map((f) => {
         const isEditing = editing?.fieldId === f.id;
         return (
-          <TableCell key={f.id} className={`cell--${f.kind}${isEditing ? " cell--editing" : ""}${f.id === struckId ? " cell--struck" : ""}`} data-label={f.name}>
+          <TableCell key={f.id} className={`cell--${f.kind}${isEditing ? " cell--editing" : ""}${f.id === struckId ? " cell--struck" : ""}`}>
             <Cell
               collection={collection}
               isTitle={f.id === titleId}
@@ -625,7 +577,7 @@ export function TableView(props: BlockProps<TableOptions>) {
     ) : (
       <TableRow className="table-add-row table-add-row--idle">
         {shown.map((f) => (
-          <TableCell key={f.id} className={f.id === plusColumn ? "table-add-row__plus" : undefined} data-label={f.name}>
+          <TableCell key={f.id} className={f.id === plusColumn ? "table-add-row__plus" : undefined}>
             {f.id === plusColumn && (
               <IconButton autoAlign label={`Add ${collection.name}`} kind="ghost" size="sm" align="top-start" onClick={(e) => (inlineAdd ? setAdding(groupKey) : actions.openNew?.(openModeOf(e)))}>
                 <Add />
@@ -639,7 +591,7 @@ export function TableView(props: BlockProps<TableOptions>) {
 
   if (!grouped || result.total === 0) {
     return (
-      <FillTable stack={options.stackNarrow}>
+      <FillTable>
         <Table size="sm">
           {head}
           <TableBody>
@@ -667,7 +619,7 @@ export function TableView(props: BlockProps<TableOptions>) {
               </span>
             }
           >
-            <FillTable stack={options.stackNarrow}>
+            <FillTable>
               <Table size="sm">
                 {head}
                 <TableBody>
@@ -694,12 +646,6 @@ function TableOptionsEditor({ options, onChange }: BlockOptionsProps<TableOption
           checked={options.titleLink}
           onChange={(_, { checked }) => onChange({ ...options, titleLink: checked })}
         />
-        <Checkbox
-          id={`${uid}-table-stack`}
-          labelText="Show rows as cards when narrow"
-          checked={options.stackNarrow}
-          onChange={(_, { checked }) => onChange({ ...options, stackNarrow: checked })}
-        />
       </div>
     </div>
   );
@@ -709,10 +655,11 @@ export const tableView = defineBlockType<TableOptions>({
   kind: "table",
   label: "Table",
   icon: TableIcon,
-  defaultOptions: () => ({ titleLink: true, stackNarrow: true }),
+  defaultOptions: () => ({ titleLink: true }),
   normalizeOptions(raw) {
     const o = (raw ?? {}) as Partial<TableOptions>;
-    return { titleLink: o.titleLink !== false, stackNarrow: o.stackNarrow !== false };
+    // (Older versions also stored `stackNarrow`: restacking rows as cards when narrow, now gone.)
+    return { titleLink: o.titleLink !== false };
   },
   // Columns are its fields.
   uses: () => ({ query: true, groups: true, fields: { labels: false, hideEmpty: false } }),

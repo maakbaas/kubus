@@ -23,7 +23,7 @@ async function typeMeasured(t, name, text) {
   });
 }
 
-/** Books with the columns of a typical table (all 15 restack it as cards). */
+/** Books with the columns of a typical table (all 15 make it scroll sideways). */
 function bookTable(n, { authors = 20, views = null } = {}) {
   const spec = profileSpec("typical", { items: 0, authors });
   const books = spec.collections[0];
@@ -148,7 +148,7 @@ test("perf: an item page with many fields, blocks and components, edited in plac
           layout: {
             blocks: [
               { kind: "table", title: "Tasks", collection: "tasks", filters: [{ field: "project", operator: "is", value: "$item" }], layout: { fields: ["name", "due", "done", "project"] } },
-              { kind: "cards", title: "Task cards", collection: "tasks", filters: [{ field: "project", operator: "is", value: "$item" }], options: { coverFieldId: null, cardWidth: 14, coverRatio: "auto", showTitle: true, listNarrow: false } },
+              { kind: "cards", title: "Task cards", collection: "tasks", filters: [{ field: "project", operator: "is", value: "$item" }], options: { coverFieldId: null, cardWidth: 14, coverRatio: "auto", showTitle: true, coverBeside: false } },
               { kind: "component", title: "Tally", collection: "tasks", componentKey: "tally", filters: [{ field: "project", operator: "is", value: "$item" }] },
               { kind: "markdown", title: "Notes", options: { text: MARKDOWN.long } },
             ],
@@ -198,7 +198,7 @@ test("perf: switching view tabs, workspace tabs and panes", async (t) => {
   const spec = bookTable(300, {
     views: [
       { name: "All", blocks: [{ kind: "table", layout: { fields: ["title", "count", "date", "done", "fav", "ref", "tags"] } }] },
-      { name: "Cards", blocks: [{ kind: "cards", options: { coverFieldId: null, cardWidth: 14, coverRatio: "auto", showTitle: true, listNarrow: false } }] },
+      { name: "Cards", blocks: [{ kind: "cards", options: { coverFieldId: null, cardWidth: 14, coverRatio: "auto", showTitle: true, coverBeside: false } }] },
       { name: "Grouped", blocks: [{ kind: "table", groupBy: "done", layout: { fields: ["title", "count", "date", "tags"] } }] },
       { name: "Blocks", blocks: [{ kind: "markdown", title: "Notes", options: { text: MARKDOWN.long } }, { kind: "table", title: "Table", layout: { fields: ["title", "count", "done"] } }, { kind: "component", local: "{{ 21 * 2 }}" }] },
     ],

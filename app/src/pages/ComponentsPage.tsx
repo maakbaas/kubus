@@ -13,7 +13,7 @@ import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import { pickShared } from "../ui/promoteLocal";
 import { errorMessage } from "../ui/useConfirm";
 import { useTableSort } from "../ui/useTableSort";
-import { RowActions, rowButtonProps } from "../ui/RowActions";
+import { RowActions, ROW_BUTTON } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
 
 /** A component's kind as the list shows it (Field, Block, Static), from what its code uses. */
@@ -128,7 +128,7 @@ export function ComponentsPage() {
                 const code = codeOf(r);
                 return (
                   <TableRow key={r.shared ? r.shared.id : r.local.key}>
-                    <TableCell data-label="Name">
+                    <TableCell>
                       {r.shared ? (
                         <Link href={`#/components/${r.shared.id}`}>{r.shared.name}</Link>
                       ) : r.local.href ? (
@@ -137,15 +137,15 @@ export function ComponentsPage() {
                         r.local.where
                       )}
                     </TableCell>
-                    <TableCell data-label="Kind">
+                    <TableCell>
                       <span className="component-choice">
                         <span className="component-choice__name">{kindLabel(code)}</span>
                       </span>
                     </TableCell>
-                    <TableCell data-label="Where">{r.shared ? "Shared" : "Local"}</TableCell>
-                    <TableCell data-label="Description">{r.shared?.description ?? ""}</TableCell>
+                    <TableCell>{r.shared ? "Shared" : "Local"}</TableCell>
+                    <TableCell>{r.shared?.description ?? ""}</TableCell>
                     {/* Its first line; the whole component is edited on its page (or in its place). */}
-                    <TableCell data-label="Component" className="components-table__code">
+                    <TableCell className="components-table__code">
                       {/* At most two lines of it (cut off with …). */}
                       <span className="components-table__excerpt">
                         {code.code.split("\n")[0]}
@@ -153,43 +153,36 @@ export function ComponentsPage() {
                       </span>
                     </TableCell>
                     <RowActions>
-                      {(inMenu) => {
-                        const btn = rowButtonProps(inMenu);
-                        const x = r.shared;
-                        if (!x) {
-                          const local = r.local;
-                          return (
-                            <IconButton {...btn} label={`Save ${local.where} as a shared component`} onClick={() => setPromoting(local)}>
-                              <Share />
-                            </IconButton>
-                          );
-                        }
-                        return (
-                          <>
-                            <IconButton {...btn}
-                              label={`Duplicate ${x.name}`}
-                              onClick={() => {
-                                // A copy named "Name 2" (then "Name 3", …), like new views.
-                                const ts = now();
-                                repo
-                                  .saveComponent({ ...x, id: newId(), name: nextName(x.name, components.map((t) => t.name)), createdAt: ts, updatedAt: ts })
-                                  .catch((e) => setError(errorMessage(e)));
-                              }}
-                            >
-                              <Copy />
-                            </IconButton>
-                            <IconButton {...btn}
-                              label={`Delete ${x.name}`}
-                              onClick={() => {
-                                setWithFields(false);
-                                setDeleting(x);
-                              }}
-                            >
-                              <TrashCan />
-                            </IconButton>
-                          </>
-                        );
-                      }}
+                      {r.shared ? (
+                        <>
+                          <IconButton {...ROW_BUTTON}
+                            label={`Duplicate ${r.shared.name}`}
+                            onClick={() => {
+                              // A copy named "Name 2" (then "Name 3", …), like new views.
+                              const x = r.shared;
+                              const ts = now();
+                              repo
+                                .saveComponent({ ...x, id: newId(), name: nextName(x.name, components.map((t) => t.name)), createdAt: ts, updatedAt: ts })
+                                .catch((e) => setError(errorMessage(e)));
+                            }}
+                          >
+                            <Copy />
+                          </IconButton>
+                          <IconButton {...ROW_BUTTON}
+                            label={`Delete ${r.shared.name}`}
+                            onClick={() => {
+                              setWithFields(false);
+                              setDeleting(r.shared);
+                            }}
+                          >
+                            <TrashCan />
+                          </IconButton>
+                        </>
+                      ) : (
+                        <IconButton {...ROW_BUTTON} label={`Save ${r.local.where} as a shared component`} onClick={() => setPromoting(r.local)}>
+                          <Share />
+                        </IconButton>
+                      )}
                     </RowActions>
                   </TableRow>
                 );

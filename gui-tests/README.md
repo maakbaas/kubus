@@ -131,7 +131,7 @@ strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 | `02-shell` | side nav (toggle, branches, overlay, resize gutter), space switcher, global search, sync status, many tabs and the tab width rules, tab close / middle click / history, split panes, divider drag, drag a tab to split |
 | `03-click-everything` | every visible control on 14 pages is clicked (and what it opens, one level down), every icon button hovered; audit after each |
 | `04-item-editing` | in-place editing of every field kind: label, box and text stay put, nothing else moves, Escape / Enter / click outside; title, checkboxes, lists, collapse, image hover; item views |
-| `05-table` | cell editing keeps column widths, add row, sorting, hover, row actions, grouping, 60 columns, 200 / 1000 rows, narrow panes |
+| `05-table` | cell editing keeps column widths, add row, sorting, hover, row actions, grouping, 60 columns, 200 / 1000 rows, narrow panes scroll sideways with the first column staying put |
 | `06-views-blocks` | views (add, rename, star, unsaved changes, delete, 25 views), filters, every block menu, Show as, add / hide / remove blocks, collapse, cards options |
 | `07-forms` | creating a collection with every field type, new item form, editor reorder / remove, icon picker, components (failing and wide HTML), spaces, bookmarks, settings, collections overview |
 | `08-markdown` | typing every GFM construct, no inner scrolling, huge notes, links, chips, task boxes |
@@ -148,7 +148,7 @@ strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 | `19-editing-more` | undo / redo and pasting in Markdown, undo in the code editor, a reference field's choice filter, moving an item to another space, item views pinned / starred / deleted, a component field's Change component? dialog, cards, search results |
 | `20-mobile-keyboard` | a field in a popover (block settings, view settings, icon picker) on phones with the on-screen keyboard coming up the Android way (shorter window) and the iOS way (shorter visual viewport, `t.keyboardUp`): it stays open and focused, keeps its side of its button, fits above the keyboard with the field in sight, typing works |
 | `21-baselines` | screenshot baselines of 9 key states (pages of typical content, a popover, a dialog) at desktop and phone, light and dark |
-| `22-components-filters-cards` | a field's settings under its name and type; local components (fields, blocks, Markdown code) and saved as shared from the Components page; AI prompt in the field dialog; strike through the item on tables and cards; `{{ }}` code in a filter value and an invalid value; card list rows only with "Show as a list when narrow" in a narrow pane |
+| `22-components-filters-cards` | a field's settings under its name and type; local components (fields, blocks, Markdown code) and saved as shared from the Components page; AI prompt in the field dialog; strike through the item on tables and cards; `{{ }}` code in a filter value and an invalid value; cards with the cover beside the text, the same in narrow and wide panes |
 | `23-perf` | perf tests, run only with `--perf` (left out of other runs): the app's hot paths, each phase (a load, a click, a key, to the state it leads to) timed with main-thread busy time, long tasks, elements and heap; seeding, settling and audits reported apart |
 
 ## Adding to it
