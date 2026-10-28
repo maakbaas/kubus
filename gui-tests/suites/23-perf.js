@@ -209,8 +209,9 @@ test("perf: switching view tabs, workspace tabs and panes", async (t) => {
   const item = t.itemPath(ids.collections.books, ids.items["books/i0"]);
   await t.seed({ prefs: { "kubus.workspace.default": wsLayout([["/collections", books, item, "/components"], [authors, "/help"]], { active: 0 }) } });
   await t.open(books, { keepTabs: true });
-  const viewTab = (name) => t.page.locator(".ws-pane--active .views-tabs [role=tab]").filter({ hasText: name }).first();
-  const viewSelected = (name) => [...document.querySelectorAll(".ws-pane--active .views-tabs [role=tab]")].some((x) => x.textContent.trim().startsWith(name) && x.getAttribute("aria-selected") === "true") && !!document.querySelector(".ws-pane--active .block");
+  // The pane's shown tab only: Books is open in two of its tabs.
+  const viewTab = (name) => t.page.locator(".ws-pane--active .ws-tab-slot:not([hidden]) .views-tabs [role=tab]").filter({ hasText: name }).first();
+  const viewSelected = (name) => [...document.querySelectorAll(".ws-pane--active .ws-tab-slot:not([hidden]) .views-tabs [role=tab]")].some((x) => x.textContent.trim().startsWith(name) && x.getAttribute("aria-selected") === "true") && !!document.querySelector(".ws-pane--active .block");
   for (const name of ["Cards", "Grouped", "Blocks", "All"]) await t.measure(`view tab: ${name}`, () => viewTab(name).click(), viewSelected, { arg: name });
   await t.audit("views switched");
   const wsTab = (pane, i) => t.page.locator(".ws-pane").nth(pane).locator(".ws-pane__tabs .cds--tabs__nav-item").nth(i);
