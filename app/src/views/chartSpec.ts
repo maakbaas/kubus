@@ -476,8 +476,8 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         data,
         options: base(options, theme, several(groups.size), {
           axes: {
-            bottom: { mapsTo: "value", ...(time && { scaleType: "time" }), title: field.name, bins: options.bins || undefined, limitDomainToBins: true },
-            left: { scaleType: "linear", binned: true, title: collection.pluralName },
+            bottom: { mapsTo: "value", ...(time && { scaleType: "time" }), title: options.xTitle.trim() || field.name, bins: options.bins || undefined, limitDomainToBins: true },
+            left: { scaleType: "linear", binned: true, title: options.left.title.trim() || collection.pluralName },
           },
         }),
         format,
@@ -494,7 +494,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         data,
         options: base(options, theme, false, {
           axes: {
-            left: { mapsTo: "value", scaleType: time ? "time" : "linear", title: field.name, ...(!time && ticks(options)) },
+            left: { mapsTo: "value", scaleType: time ? "time" : "linear", title: options.left.title.trim() || field.name, ...(!time && ticks(options)) },
             bottom: { mapsTo: "group", scaleType: "labels", title: (options.x.by === "field" && xLabel(collection, options)) || undefined },
           },
           ...(!time && { tooltip: tooltip(options, input) }),

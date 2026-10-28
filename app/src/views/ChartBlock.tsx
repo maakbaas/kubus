@@ -88,10 +88,10 @@ function ChartView({ collection, result, options, refs, actions, page }: BlockPr
 // --- Settings -------------------------------------------------------------------------------------
 //
 // Sections (a Carbon accordion) that are always the same for a chart kind: what doesn't apply to a
-// kind is not in its sections; what doesn't apply because of another setting of it is shown
-// disabled, with a short helper saying why, so nothing appears or vanishes under the pointer.
-// Settings depend only on settings above them (or in sections above), so a helper text coming or
-// going moves only what is below the control just used. One options shape for every kind:
+// kind is not in its sections; what does nothing because of another setting of it (downstream of
+// it: a line's "Show the largest n", a gauge's unit while it shows a %) isn't shown either, never shown
+// as if it did something. Settings depend only on settings above them (or in sections above), so one
+// coming or going moves only what is below the control just used. One options shape for every kind:
 // switching kind keeps the series, X axis and thresholds (`switchKind`).
 
 /** Which sections and settings a chart kind has. */
@@ -335,9 +335,9 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   // "This item" only for the page's own collection (kept on show when set, so it can be switched back).
   const offerScope = place === "item" && (pageCollectionId === collection.id || o.scope === "page");
 
-  const check = (key: "points" | "compact" | "donut" | "fullCircle" | "asValue" | "horizontal", label: string, disabled?: string | false) => (
-    <Checkbox id={`${uid}-${key}`} labelText={label} checked={o[key]} disabled={!!disabled} helperText={disabled || undefined} onChange={(_, { checked }) => set({ [key]: checked })} />
-  );
+  // A setting that does nothing with the others as they are (downstream of one of them) isn't shown.
+  const check = (key: "points" | "compact" | "donut" | "fullCircle" | "asValue" | "horizontal", label: string, shown = true) =>
+    shown && <Checkbox id={`${uid}-${key}`} labelText={label} checked={o[key]} onChange={(_, { checked }) => set({ [key]: checked })} />;
   const aggregateSelect = (id: string, label: string, value: Aggregate, onAggregate: (a: Aggregate) => void, noCount = false, hideLabel = false) => (
     <Select size="sm" id={id} labelText={label} hideLabel={hideLabel} value={value} onChange={(e) => onAggregate(e.target.value as Aggregate)}>
       {AGGREGATES.filter((a) => !noCount || a.value !== "count").map((a) => (
@@ -349,19 +349,23 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   const unusedNumber = () => numbers.find((f) => !o.series.some((s) => s.field === f.id))?.id ?? null;
 
   // --- Data: what is charted (the X axis's categories, a spread field, a scatter's fields)
-  const xDisabled = has.parts && o.parts !== "groups" ? "Only when the parts are groups" : false;
-  const fieldMode = o.x.by === "field" ? false : "Only by a field's values";
-  // "No value" as a category (not on a line of dates: it has no place there) or as a series of the split.
-  const offerEmpty = (!xDisabled && o.x.by === "field" && !(isDate(xField) && drawsTimeline(o))) || !!o.splitBy;
-  const xControls = has.x && (
+  // The X axis makes the categories only of parts from them.
+  const xShown = has.x && !(has.parts && o.parts !== "groups");
+  const fieldMode = o.x.by === "field";
+  // A line or area has every step in order: the largest n can't be picked, dates can't be reordered.
+  const timeline = has.xy && drawsTimeline(o);
+  // A heatmap of a date not split is a calendar: its days, by week.
+  const calendar = o.chart === "heatmap" && fieldMode && isDate(xField) && !o.splitBy;
+  // "No value" as a category (not on a line of dates or a calendar: it has no place there) or as a series of the split.
+  const splitUsed = !!o.splitBy && (has.xy || o.chart === "heatmap");
+  const offerEmpty = (xShown && fieldMode && !(isDate(xField) && timeline) && !calendar) || splitUsed;
+  const xControls = xShown && (
     <>
       <Select
         size="sm"
         id={`${uid}-x-by`}
         labelText={X_LABEL[o.chart] ?? "X axis"}
         value={o.x.by}
-        disabled={!!xDisabled}
-        helperText={xDisabled || undefined}
         // The field carries over where it fits the new mode (a date is both groupable and an axis field).
         onChange={(e) => {
           const by = e.target.value as XBy;
@@ -369,45 +373,45 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
           setX({ by, field: fits ? o.x.field : by === "field" ? (splits[0]?.id ?? null) : null });
         }}
       >
-        {X_BY.map((b) => (
-          // A box plot has a box per category: each item alone isn't one.
-          <SelectItem key={b.value} value={b.value} text={b.text} disabled={o.chart === "boxplot" && b.value === "item"} />
+        {/* A box plot has a box per category: each item alone isn't one. */}
+        {X_BY.filter((b) => o.chart !== "boxplot" || b.value !== "item" || o.x.by === "item").map((b) => (
+          <SelectItem key={b.value} value={b.value} text={b.text} />
         ))}
       </Select>
-      <FieldSelect
-        id={`${uid}-x-field`}
-        label="Field"
-        fields={o.x.by === "item" ? axis : splits}
-        value={o.x.by === "none" ? null : o.x.field}
-        none={o.x.by === "item" ? "None (by title, in the block's order)" : o.x.by === "none" ? "None" : undefined}
-        disabled={!!xDisabled || o.x.by === "none"}
-        helper={!xDisabled && o.x.by === "none" ? "All items are one category" : o.x.by === "item" && !xDisabled ? "A date or number each item is placed at" : undefined}
-        onChange={(field) => setX({ field })}
-      />
-      <Select size="sm" id={`${uid}-x-order`} labelText="Order" value={o.x.order} disabled={!!xDisabled || !!fieldMode} helperText={xDisabled ? undefined : fieldMode || undefined} onChange={(e) => setX({ order: e.target.value as GroupOrder })}>
-        {ORDERS.map((r) => (
-          <SelectItem key={r.value} value={r.value} text={r.text} />
-        ))}
-      </Select>
-      <Select
-        size="sm"
-        id={`${uid}-x-dates`}
-        labelText="Date steps"
-        value={o.x.dateStep}
-        disabled={!!xDisabled || !!fieldMode || !isDate(xField)}
-        helperText={xDisabled || fieldMode ? undefined : !isDate(xField) ? "Only for a date field" : undefined}
-        onChange={(e) => setX({ dateStep: e.target.value as DateStep })}
-      >
-        {DATE_STEPS.map((d) => (
-          // A date has no time of day: minutes and hours are of a date & time.
-          <SelectItem key={d.value} value={d.value} text={d.text} disabled={xField?.kind === "date" && (d.value === "minute" || d.value === "hour") && o.x.dateStep !== d.value} />
-        ))}
-      </Select>
-      <Select size="sm" id={`${uid}-x-top`} labelText="Show" value={String(o.x.top)} disabled={!!xDisabled || !!fieldMode} onChange={(e) => setX({ top: Number(e.target.value) })}>
-        {TOPS.map((n) => (
-          <SelectItem key={n} value={String(n)} text={n === 0 ? "All categories" : `The largest ${n}, the rest as Other`} />
-        ))}
-      </Select>
+      {o.x.by !== "none" && (
+        <FieldSelect
+          id={`${uid}-x-field`}
+          label="Field"
+          fields={o.x.by === "item" ? axis : splits}
+          value={o.x.field}
+          none={o.x.by === "item" ? "None (by title, in the block's order)" : undefined}
+          helper={o.x.by === "item" ? "A date or number each item is placed at" : undefined}
+          onChange={(field) => setX({ field })}
+        />
+      )}
+      {fieldMode && !calendar && !(timeline && isDate(xField)) && (
+        <Select size="sm" id={`${uid}-x-order`} labelText="Order" value={o.x.order} onChange={(e) => setX({ order: e.target.value as GroupOrder })}>
+          {ORDERS.map((r) => (
+            <SelectItem key={r.value} value={r.value} text={r.text} />
+          ))}
+        </Select>
+      )}
+      {fieldMode && isDate(xField) && !calendar && (
+        <Select size="sm" id={`${uid}-x-dates`} labelText="Date steps" value={o.x.dateStep} onChange={(e) => setX({ dateStep: e.target.value as DateStep })}>
+          {/* A date has no time of day: minutes and hours are of a date & time. */}
+          {DATE_STEPS.filter((d) => xField?.kind === "datetime" || (d.value !== "minute" && d.value !== "hour") || o.x.dateStep === d.value).map((d) => (
+            <SelectItem key={d.value} value={d.value} text={d.text} />
+          ))}
+        </Select>
+      )}
+      {/* A box plot has a box for every category. */}
+      {fieldMode && !calendar && !timeline && o.chart !== "boxplot" && (
+        <Select size="sm" id={`${uid}-x-top`} labelText="Show" value={String(o.x.top)} onChange={(e) => setX({ top: Number(e.target.value) })}>
+          {TOPS.map((n) => (
+            <SelectItem key={n} value={String(n)} text={n === 0 ? "All categories" : `The largest ${n}, the rest as Other`} />
+          ))}
+        </Select>
+      )}
       {offerEmpty && <Checkbox id={`${uid}-x-empty`} labelText="Show items without a value" checked={o.x.showEmpty} onChange={(_, { checked }) => setX({ showEmpty: checked })} />}
     </>
   );
@@ -424,21 +428,12 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
         <Select size="sm" id={`${uid}-parts`} labelText="Parts from" value={o.parts} onChange={(e) => set({ parts: e.target.value as ChartOptions["parts"] })}>
           <SelectItem value="groups" text="Categories (below)" />
           <SelectItem value="fields" text="Number fields" />
-          <SelectItem value="one" text="One value (against its total)" />
+          {/* A treemap of one value is one rectangle. */}
+          {(o.chart !== "treemap" || o.parts === "one") && <SelectItem value="one" text="One value (against its total)" />}
         </Select>
       )}
       {xControls}
-      {has.parts && (
-        <FieldList
-          id={`${uid}-part-fields`}
-          label="Number fields"
-          fields={numbers}
-          value={o.fields}
-          helper={o.parts === "fields" ? undefined : "Only when the parts are number fields"}
-          disabled={o.parts !== "fields"}
-          onChange={(fields) => set({ fields })}
-        />
-      )}
+      {has.parts && o.parts === "fields" && <FieldList id={`${uid}-part-fields`} label="Number fields" fields={numbers} value={o.fields} onChange={(fields) => set({ fields })} />}
       {has.spread && <FieldSelect id={`${uid}-spread`} label="Field" fields={axis} value={o.spreadField} helper="The number or date whose values are spread" onChange={(spreadField) => set({ spreadField })} />}
       {o.chart === "histogram" && splitSelect("Split by")}
       {o.chart === "heatmap" && splitSelect("Rows (Split by)")}
@@ -469,7 +464,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
       <div key={s.id} className="chart-options__series" {...seriesOrder.row(i)}>
         {head}
         {aggregateSelect(`${sid}-value`, "Value", s.value, (value) => setSeries(s.id, { value, ...(value !== "count" && !s.field && { field: numbers[0]?.id ?? null }) }))}
-        <FieldSelect id={`${sid}-field`} label="Of" fields={numbers} value={s.value === "count" ? null : s.field} none={s.value === "count" ? "—" : undefined} disabled={s.value === "count"} helper={s.value === "count" ? "Not for a count" : undefined} onChange={(field) => setSeries(s.id, { field })} />
+        {s.value !== "count" && <FieldSelect id={`${sid}-field`} label="Of" fields={numbers} value={s.field} onChange={(field) => setSeries(s.id, { field })} />}
         <TextInput size="sm" id={`${sid}-label`} labelText="Label" placeholder={seriesLabel({ ...s, label: "" }, collection, o.x)} value={s.label} onChange={(e) => setSeries(s.id, { label: e.target.value })} />
         <div className="chart-options__pair">
           <Select size="sm" id={`${sid}-style`} labelText="Draw as" value={styleOf(s, o.chart)} onChange={(e) => setSeries(s.id, { style: chartsStyle(s, e.target.value as SeriesStyle, o.chart) })}>
@@ -487,14 +482,15 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
             <SelectItem key={t.value} value={t.value} text={t.text} />
           ))}
         </Select>
-        <NumberField
-          id={`${sid}-window`}
-          label="Steps averaged"
-          value={s.window}
-          disabled={s.transform !== "moving"}
-          helper={s.transform === "moving" ? `${MOVING_WINDOW.min} to ${MOVING_WINDOW.max}` : "Only for a moving average"}
-          onChange={(n) => n !== null && setSeries(s.id, { window: Math.max(MOVING_WINDOW.min, Math.min(MOVING_WINDOW.max, Math.round(n))) })}
-        />
+        {s.transform === "moving" && (
+          <NumberField
+            id={`${sid}-window`}
+            label="Steps averaged"
+            value={s.window}
+            helper={`${MOVING_WINDOW.min} to ${MOVING_WINDOW.max}`}
+            onChange={(n) => n !== null && setSeries(s.id, { window: Math.max(MOVING_WINDOW.min, Math.min(MOVING_WINDOW.max, Math.round(n))) })}
+          />
+        )}
       </div>
     );
   });
@@ -521,6 +517,11 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   // --- One value (the first series): parts, gauge, heatmap; radar's spokes
   const setFirst = (patch: Partial<ChartSeries>) => set({ series: o.series.length ? o.series.map((s, i) => (i === 0 ? { ...s, ...patch } : s)) : [{ ...first, ...patch }] });
   const fieldsParts = has.parts && o.parts === "fields";
+  // The value's name where it is shown: a heatmap's colour legend, a pie's donut middle (Donut, below, is never
+  // what takes it away: nothing above the pointer moves), one value's part, a word cloud's words
+  // (number fields as parts are named by their aggregate; a gauge shows only its number).
+  const labelShown =
+    o.chart === "heatmap" || (!fieldsParts && ((has.parts && o.parts === "one" && o.chart !== "treemap") || o.chart === "pie" || o.chart === "wordcloud"));
   const valueSection = has.value && (
     <Section key="value" title="Value">
       {aggregateSelect(`${uid}-value`, "Value", first.value, (value) =>
@@ -530,17 +531,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
           ...(value !== "last" && o.compare === "prev" && { compare: null }),
         }),
       )}
-      <FieldSelect
-        id={`${uid}-value-field`}
-        label="Of"
-        fields={numbers}
-        value={first.value === "count" || fieldsParts ? null : first.field}
-        none={first.value === "count" || fieldsParts ? "—" : undefined}
-        disabled={first.value === "count" || fieldsParts}
-        helper={fieldsParts ? "Each part is a number field" : first.value === "count" ? "Not for a count" : undefined}
-        onChange={(field) => setFirst({ field })}
-      />
-      <TextInput size="sm" id={`${uid}-value-label`} labelText="Label" placeholder={seriesLabel({ ...first, label: "" }, collection)} value={first.label} onChange={(e) => setFirst({ label: e.target.value })} />
+      {first.value !== "count" && !fieldsParts && <FieldSelect id={`${uid}-value-field`} label="Of" fields={numbers} value={first.field} onChange={(field) => setFirst({ field })} />}
+      {labelShown && <TextInput size="sm" id={`${uid}-value-label`} labelText="Label" placeholder={seriesLabel({ ...first, label: "" }, collection)} value={first.label} onChange={(e) => setFirst({ label: e.target.value })} />}
     </Section>
   );
   const spokesSection = o.chart === "radar" && (
@@ -573,65 +565,69 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
           ))}
         </SelectItemGroup>
       </Select>
-      <NumberField
-        id={`${uid}-total-number`}
-        label="Number"
-        value={o.total.number}
-        disabled={o.total.from !== "number"}
-        helper={o.total.from === "number" ? (o.chart === "gauge" ? undefined : "The rest is shown as Remaining") : "Only against a number"}
-        onChange={(number) => set({ total: { ...o.total, number } })}
-      />
+      {o.total.from === "number" && (
+        <NumberField
+          id={`${uid}-total-number`}
+          label="Number"
+          value={o.total.number}
+          helper={o.chart === "gauge" ? undefined : "The rest is shown as Remaining"}
+          onChange={(number) => set({ total: { ...o.total, number } })}
+        />
+      )}
     </Section>
   );
 
   // --- Display
-  const bars = styles.some((s) => s === "bar" || s === "lollipop" || s === "area");
   const lines = styles.some((s) => s === "line" || s === "area");
   const across = o.series.every((s, i) => (styles[i] === "bar" || styles[i] === "lollipop") && s.axis === "left");
+  // Bars or areas stack with another of their style on their axis: two such series, or one split.
+  const stackable = o.series.some((s, i) => (styles[i] === "bar" || styles[i] === "area") && (!!o.splitBy || o.series.some((t, j) => j !== i && styles[j] === styles[i] && t.axis === s.axis)));
   const displaySection = has.display && (
     <Section key="display" title="Display">
       {has.xy && (
         <>
-          <Select size="sm" id={`${uid}-stack`} labelText="Bars and areas" value={o.stack} disabled={!bars} helperText={bars ? undefined : "Only for bars and areas"} onChange={(e) => set({ stack: e.target.value as ChartOptions["stack"] })}>
-            <SelectItem value="none" text="Side by side" />
-            <SelectItem value="stacked" text="Stacked" />
-            <SelectItem value="percent" text="Stacked as shares of 100%" />
-          </Select>
-          {check("horizontal", "Horizontal", !across && "Only when every series is bars or lollipops on the left axis")}
-          <Select size="sm" id={`${uid}-curve`} labelText="Lines" value={o.curve} disabled={!lines} helperText={lines ? undefined : "Only for lines and areas"} onChange={(e) => set({ curve: e.target.value as ChartOptions["curve"] })}>
-            <SelectItem value="smooth" text="Smooth" />
-            <SelectItem value="straight" text="Straight" />
-            <SelectItem value="step" text="Steps" />
-          </Select>
-          {check("points", "A dot on each value", !lines && "Only for lines and areas")}
-          <Select size="sm" id={`${uid}-missing`} labelText="Missing values" value={o.missing} onChange={(e) => set({ missing: e.target.value as ChartOptions["missing"] })}>
-            <SelectItem value="connect" text="Connect (the line joins its neighbours)" />
-            <SelectItem value="gap" text="Leave a gap (the line breaks)" />
-          </Select>
+          {/* First: what it hides comes after it. */}
           {check("compact", "Compact (a sparkline: no axes, legend or grid)")}
+          {stackable && (
+            <Select size="sm" id={`${uid}-stack`} labelText="Bars and areas" value={o.stack} onChange={(e) => set({ stack: e.target.value as ChartOptions["stack"] })}>
+              <SelectItem value="none" text="Side by side" />
+              <SelectItem value="stacked" text="Stacked" />
+              <SelectItem value="percent" text="Stacked as shares of 100%" />
+            </Select>
+          )}
+          {/* Only when every series is bars or lollipops on the left axis. */}
+          {check("horizontal", "Horizontal", across)}
+          {lines && (
+            <Select size="sm" id={`${uid}-curve`} labelText="Lines" value={o.curve} onChange={(e) => set({ curve: e.target.value as ChartOptions["curve"] })}>
+              <SelectItem value="smooth" text="Smooth" />
+              <SelectItem value="straight" text="Straight" />
+              <SelectItem value="step" text="Steps" />
+            </Select>
+          )}
+          {check("points", "A dot on each value", lines && !o.compact)}
+          {/* A bar without a value is no bar either way: joined over or broken is of lines. */}
+          {lines && (
+            <Select size="sm" id={`${uid}-missing`} labelText="Missing values" value={o.missing} onChange={(e) => set({ missing: e.target.value as ChartOptions["missing"] })}>
+              <SelectItem value="connect" text="Connect (the line joins its neighbours)" />
+              <SelectItem value="gap" text="Leave a gap (the line breaks)" />
+            </Select>
+          )}
         </>
       )}
       {o.chart === "pie" && check("donut", "Donut (the total in the middle)")}
       {o.chart === "gauge" && (
         <>
           {check("fullCircle", "Full circle")}
-          {check("asValue", "Show the value, not a %", o.total.from === "none" && "Only against a total")}
+          {check("asValue", "Show the value, not a %", o.total.from !== "none")}
           <Select size="sm" id={`${uid}-compare`} labelText="Compare with" value={o.compare ?? ""} onChange={(e) => set({ compare: (e.target.value || null) as Compare | null })}>
             <SelectItem value="" text="Nothing" />
             {[...AGGREGATES, ...(first.value === "last" ? [PREVIOUS] : [])].map((a) => (
               <SelectItem key={a.value} value={a.value} text={a.text} />
             ))}
           </Select>
-          <FieldSelect
-            id={`${uid}-compare-field`}
-            label="Compared of"
-            fields={numbers}
-            value={o.compareField}
-            none="The value's field"
-            disabled={!o.compare || o.compare === "count"}
-            helper={!o.compare ? "Only when compared" : o.compare === "count" ? "Not for a count" : undefined}
-            onChange={(compareField) => set({ compareField })}
-          />
+          {o.compare && o.compare !== "count" && (
+            <FieldSelect id={`${uid}-compare-field`} label="Compared of" fields={numbers} value={o.compareField} none="The value's field" onChange={(compareField) => set({ compareField })} />
+          )}
         </>
       )}
       {o.chart === "histogram" && (
@@ -644,33 +640,44 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
     </Section>
   );
 
-  // --- Axes (the right one only while a series is measured on it)
-  const noAxes = compact ? "Not on a compact chart" : undefined;
+  // --- Axes (the right one only while a series is measured on it; none on a compact chart)
+  // A histogram's and a box plot's value axis has only its title (its range is the values').
+  const ranged = o.chart !== "histogram" && o.chart !== "boxplot";
   const axisGroup = (side: "left" | "right", title: string) => {
     const a = o[side];
     const setAxis = (patch: Partial<ChartOptions["left"]>) => set({ [side]: { ...a, ...patch } });
+    const placeholder = o.chart === "histogram" ? collection.pluralName : o.chart === "boxplot" ? "The field's name" : "From its series";
     return (
       <div className="chart-options__group" key={side}>
         <h4 className="chart-options__subheading">{title}</h4>
-        <TextInput size="sm" id={`${uid}-${side}-title`} labelText="Title" placeholder="From its series" disabled={compact} value={a.title} onChange={(e) => setAxis({ title: e.target.value })} />
-        <div className="chart-options__pair">
-          <NumberField id={`${uid}-${side}-min`} label="Min" value={a.min} disabled={compact} onChange={(min) => setAxis({ min })} />
-          <NumberField id={`${uid}-${side}-max`} label="Max" value={a.max} disabled={compact} onChange={(max) => setAxis({ max })} />
-        </div>
-        <Checkbox id={`${uid}-${side}-log`} labelText="Logarithmic" checked={a.log} disabled={compact} onChange={(_, { checked }) => setAxis({ log: checked })} />
+        <TextInput size="sm" id={`${uid}-${side}-title`} labelText="Title" placeholder={placeholder} value={a.title} onChange={(e) => setAxis({ title: e.target.value })} />
+        {ranged && (
+          <>
+            <div className="chart-options__pair">
+              <NumberField id={`${uid}-${side}-min`} label="Min" value={a.min} onChange={(min) => setAxis({ min })} />
+              <NumberField id={`${uid}-${side}-max`} label="Max" value={a.max} onChange={(max) => setAxis({ max })} />
+            </div>
+            <Checkbox id={`${uid}-${side}-log`} labelText="Logarithmic" checked={a.log} onChange={(_, { checked }) => setAxis({ log: checked })} />
+          </>
+        )}
       </div>
     );
   };
-  const axesSection = has.axes && (
+  // Every series on the right: the right axis's settings are the one value axis's.
+  const leftUsed = !has.xy || o.series.some((s) => s.axis === "left");
+  // A box plot's X axis is named only by a field's values.
+  const xTitled = o.chart !== "boxplot" || o.x.by === "field";
+  const axesSection = has.axes && !compact && (
     <Section key="axes" title="Axes">
-      <TextInput size="sm" id={`${uid}-x-title`} labelText="X axis title" placeholder={o.chart === "scatter" || has.x ? "The field's name" : ""} disabled={compact} helperText={noAxes} value={o.xTitle} onChange={(e) => set({ xTitle: e.target.value })} />
-      {axisGroup("left", has.xy && rightUsed ? "Left axis" : "Value axis")}
-      {has.xy && rightUsed && axisGroup("right", "Right axis")}
+      {xTitled && <TextInput size="sm" id={`${uid}-x-title`} labelText="X axis title" placeholder={o.chart === "scatter" || o.chart === "histogram" || has.x ? "The field's name" : ""} value={o.xTitle} onChange={(e) => set({ xTitle: e.target.value })} />}
+      {leftUsed && axisGroup("left", has.xy && rightUsed ? "Left axis" : "Value axis")}
+      {has.xy && rightUsed && axisGroup("right", leftUsed ? "Right axis" : "Value axis")}
     </Section>
   );
 
   // --- Thresholds
-  const thresholdsSection = has.thresholds && (
+  // A meter's colours by thresholds are of one value.
+  const thresholdsSection = has.thresholds && (o.chart !== "meter" || o.parts === "one") && (
     <Section key="thresholds" title="Thresholds">
       {has.xy ? (
         <p className="helper chart-options__note">Lines on the left axis, from the value up.</p>
@@ -718,11 +725,13 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   );
 
   // --- Values and legend
-  const noLegend = compact ? "Not on a compact chart" : undefined;
+  // "Automatic" shows a legend for more than one series or part: one series not split never has one.
+  const maySeveral = has.xy || o.chart === "scatter" ? o.series.length > 1 || !!o.splitBy : o.chart === "histogram" ? !!o.splitBy : true;
   const valuesSection = (
     <Section key="values" title={has.legend ? "Values and legend" : "Values"}>
       <div className="chart-options__pair">
-        <TextInput size="sm" id={`${uid}-unit`} labelText="Unit" placeholder="kg, €, h" value={o.unit} onChange={(e) => set({ unit: e.target.value })} />
+        {/* A gauge showing a % has no unit. */}
+        {(o.chart !== "gauge" || o.asValue) && <TextInput size="sm" id={`${uid}-unit`} labelText="Unit" placeholder="kg, €, h" value={o.unit} onChange={(e) => set({ unit: e.target.value })} />}
         <Select size="sm" id={`${uid}-decimals`} labelText="Decimals" value={o.decimals === null ? "" : String(o.decimals)} onChange={(e) => set({ decimals: e.target.value === "" ? null : Number(e.target.value) })}>
           <SelectItem value="" text="As they are" />
           {Array.from({ length: MAX_DECIMALS + 1 }, (_, n) => (
@@ -730,27 +739,22 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
           ))}
         </Select>
       </div>
-      {has.legend && (
+      {/* A compact chart has no legend. */}
+      {has.legend && !compact && (
         <>
-          <Select size="sm" id={`${uid}-legend`} labelText="Legend" value={o.legend} disabled={compact} helperText={noLegend} onChange={(e) => set({ legend: e.target.value as ChartOptions["legend"] })}>
+          <Select size="sm" id={`${uid}-legend`} labelText="Legend" value={o.legend} onChange={(e) => set({ legend: e.target.value as ChartOptions["legend"] })}>
             <SelectItem value="auto" text="With more than one series or part" />
             <SelectItem value="show" text="Shown" />
             <SelectItem value="hide" text="Hidden" />
           </Select>
-          <Select
-            size="sm"
-            id={`${uid}-legend-position`}
-            labelText="Legend position"
-            value={o.legendPosition}
-            disabled={compact || o.legend === "hide"}
-            helperText={!compact && o.legend === "hide" ? "The legend is hidden" : undefined}
-            onChange={(e) => set({ legendPosition: e.target.value as ChartOptions["legendPosition"] })}
-          >
-            <SelectItem value="bottom" text="Bottom" />
-            <SelectItem value="top" text="Top" />
-            <SelectItem value="left" text="Left" />
-            <SelectItem value="right" text="Right" />
-          </Select>
+          {(o.legend === "show" || (o.legend === "auto" && maySeveral)) && (
+            <Select size="sm" id={`${uid}-legend-position`} labelText="Legend position" value={o.legendPosition} onChange={(e) => set({ legendPosition: e.target.value as ChartOptions["legendPosition"] })}>
+              <SelectItem value="bottom" text="Bottom" />
+              <SelectItem value="top" text="Top" />
+              <SelectItem value="left" text="Left" />
+              <SelectItem value="right" text="Right" />
+            </Select>
+          )}
         </>
       )}
     </Section>
@@ -761,8 +765,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
     <Section key="size" title="Size">
       {has.height && (
         <>
-          <HeightSlider id={`${uid}-height`} value={o.height} disabled={compact} onChange={(height) => set({ height })} />
-          <AspectSelect id={`${uid}-aspect`} value={o.aspect} disabled={compact} onChange={(aspect) => set({ aspect })} />
+          {!compact && <HeightSlider id={`${uid}-height`} value={o.height} onChange={(height) => set({ height })} />}
+          {!compact && <AspectSelect id={`${uid}-aspect`} value={o.aspect} onChange={(aspect) => set({ aspect })} />}
           {compact && <p className="helper chart-options__note">A compact chart has its own, low height.</p>}
         </>
       )}
