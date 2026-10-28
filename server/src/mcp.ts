@@ -1,4 +1,4 @@
-// Kubus as an MCP server (Model Context Protocol, streamable HTTP; roadmap #19): an assistant such
+// Kubus as an MCP server (Model Context Protocol, streamable HTTP): an assistant such
 // as Claude reads and writes the knowledge base through tools, each a thin translation onto one
 // /api/v1 route (answered by the headless device, as for any other caller). Stateless: no session,
 // every POST holds one JSON-RPC message (or, in protocol 2025-03-26, a batch) and is answered with

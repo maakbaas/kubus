@@ -24,7 +24,8 @@ want, and fill them with items that link to each other.
 - **Local first.** Everything runs offline on a SQLite database in the app itself.
 - **Sync.** Optionally sync every device with your own server backed by Postgres.
 - **HTTP API and webhooks.** The server lets scripts and automation tools do everything the app does
-  (`/api/v1`), and can call a webhook on every change (Help → API in the app).
+  (`/api/v1`), is an MCP server for assistants such as Claude (`/api/v1/mcp`), and can call a webhook on
+  every change (Help → API in the app).
 - **Everywhere.** A desktop app (Tauri) for Windows, macOS and Linux, and the same build as an
   installable web app on your phone (iOS home-screen app).
 - **Compact, themed UI** built with the Carbon Design System; follows your OS light / dark theme.
@@ -70,11 +71,12 @@ To use an existing Postgres instead, remove the `db` service and point `DATABASE
 the phone (an installable home-screen app) and the desktop app, put the server behind HTTPS, for
 example with Caddy, Tailscale Serve or a Cloudflare tunnel.
 
-The same server answers an HTTP API at `/api/v1` with the same token, and calls `KUBUS_WEBHOOK_URL`
+The same server answers an HTTP API at `/api/v1` (and MCP at `/api/v1/mcp`) with an API token made in
+Settings → Server (read, or read & write; the devices' token works too), and calls `KUBUS_WEBHOOK_URL`
 on every change when set (commented in `docker-compose.yml`); Help → API in the app documents both.
 In the app, the server's own settings set up what it offers every device: a language model
 (Settings → AI → "The server's", used through the server so the key stays there; a device can still
-set its own instead) and remote sources (Settings → Connections), databases the server reads (read-only: Postgres, InfluxDB 2) for remote
+set its own instead) and remote sources (Settings → Connections), databases the server reads (read-only: Postgres, MySQL / MariaDB, n8n, InfluxDB 2, Cloudflare D1, Actual Budget, ICS calendars, JSON and CSV over HTTP) for remote
 collections. Both are stored on the server only; keys and passwords are never shown again, and
 with `KUBUS_SECRET_KEY` set (commented in `docker-compose.yml`) they are stored encrypted.
 Running the server from the repository instead of the image: `npm run build:headless` first, or the

@@ -322,7 +322,7 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   button): `kubus_` + 32 random bytes (base64url), with a name and an access, `read` or `write` (read & write). The server
   keeps only its SHA-256 (hex), in its own table `api_tokens` (`server/schema.sql`; the schema adds it to older
   databases, no migration), never synced, kept by a wipe (a tool keeps its access to the new data). An API token reaches only `/api/v1`
-  (and the MCP endpoint, roadmap #19): anything else under `/api` (sync, events, files, settings, the model, sources,
+  (and its MCP server): anything else under `/api` (sync, events, files, settings, the model, sources,
   `/api/tokens`, wipe) answers 403; a read token only `GET` / `HEAD`, every write (AI fields included) another method,
   403 saying so. A token's last use is written at most once a minute (per server process). Devices list, make and
   revoke them: `GET /api/tokens` (`ApiTokenInfo[]`, no token), `POST /api/tokens` `{ name, access }` (201,
@@ -350,7 +350,7 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   `KUBUS_WEBHOOK_URL` (comma-separated), signed with `KUBUS_WEBHOOK_SECRET` (`X-Kubus-Signature:
   sha256=<HMAC>`). Created = first seen by the hook. In order per URL, retried after 1, 5, 30 s, then
   dropped and logged; nothing survives a restart. The first download isn't sent.
-- *MCP* (`server/src/mcp.ts`, roadmap #19): `POST /api/v1/mcp` is a remote MCP server (streamable
+- *MCP* (`server/src/mcp.ts`): `POST /api/v1/mcp` is a remote MCP server (streamable
   HTTP, protocol 2025-11-25 / 2025-06-18 / 2025-03-26) for assistants. Stateless (no session id),
   JSON answers, no SSE (GET: 405); a notification or response gets 202; batches only in 2025-03-26;
   an `Origin` other than the server's own (`Host` / `X-Forwarded-Host`) gets 403. Its tools (search,
@@ -383,7 +383,7 @@ tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
   opened" and the image never opened); with the bytes, it uploads them again (`missingFiles`). A
   device that sweeps while sync is off leaves the server's copy (another device's sweep deletes it).
 - One user: the devices share one token; API tokens are per tool, but reach every space (a token for one space, and
-  expiry, are later: roadmap #20). Reading through the API runs the components already there (component values), so a
+  expiry, are later: roadmap #15). Reading through the API runs the components already there (component values), so a
   read token runs code on the server too. A device
   that is not synced can lose its data on a schema wipe; with the server the replica re-syncs, so
   enable sync before putting real notes in. Connecting a device that has data of its own to a

@@ -41,9 +41,9 @@ Rules that keep this from becoming three products glued together:
 - Remote sources make the server essential and change the security story: auth, secret storage
   for credentials (a source's password and the model's key are write-only and, with `KUBUS_SECRET_KEY`
   set, stored encrypted; `docs/sync.md`), read-only database users by default. Three things are
-  easily mixed up: `KUBUS_TOKEN` is the devices' shared token for sync and the API (an environment
+  easily mixed up: `KUBUS_TOKEN` is the devices' shared token for sync and everything else (an environment
   variable, not stored in the database); `KUBUS_SECRET_KEY` only encrypts the stored secrets at rest;
-  per-use API tokens are not built yet (roadmap #20).
+  API tokens (made in the app, read or read & write, `api_tokens`) reach only the API and its MCP server.
 - **Connect live state, copy histories.** A connector suits a live database worth querying: data that
   changes in place (balances, rows), a source that filters, sorts and pages for itself, or a generic
   store that opens many apps at once (Postgres, MySQL). An API that is a feed (only a recent window,
@@ -58,7 +58,8 @@ The stages, in order:
 - **Native Kubus core**: item links (reference fields), field and block components. Built.
 - **The server + sync** (docs/sync.md). Built.
 - **Remote sources**, read-only: tables and SQL queries through the server, same views and
-  components (docs/sync.md "Remote sources"). Built for Postgres, n8n data tables, InfluxDB 2 and Cloudflare D1. Remote data stays read-only by
+  components (docs/sync.md "Remote sources"). Built for Postgres, MySQL / MariaDB, n8n data tables, InfluxDB 2,
+  Cloudflare D1, Actual Budget, calendar (ICS) subscriptions and JSON / CSV over HTTP. Remote data stays read-only by
   design (no Directus side).
 - **Chart / dashboard block types** (Metabase side). The chart block is built (docs/views-and-workspace.md
   "Block types"); what is left is dashboards (charts of several collections side by side).
@@ -117,66 +118,11 @@ Views:
     changed (native collections whose fields are editable): an own pointer hook like
     `ui/useReorder.tsx`, or interact.js if touch gets hard.
 
-New connectors, in this order (read-only like the others; queried by the source where it can, else in
-`memory.ts`; each tested against a stand-in of its service or the real engine):
+Remote sources, later:
 
-14. Groundwork. Secret parts of an address beyond its password: secret calendar addresses and
-    published Google Sheets carry the secret in the path, API keys sometimes in the query string.
-    Sources are no longer one connection string with a scheme picking the connector: each is a kind
-    with its own fields (`server/src/connectors/kinds.ts`; the app builds the form from them). So
-    the connectors below are kinds with fields, not URL formats: the URL-like forms once written in #15-#18
-    were the old design; read them as hints for the fields. A kind can mark a field secret (like a calendar
-    address's path, kept like a password: devices never see it, dropped when the address changes,
-    `placeOf`). `string_list` in `memory.ts`. A shared `httpDocument.ts` for #17 and #18: one GET
-    with `ETag` / `If-Modified-Since`, kept about a minute, the source's timeout, a size limit (about
-    20 MB), status codes and content types turned into a clear problem.
-15. Actual Budget through [actual-http-api](https://github.com/jhonderson/actual-http-api), not Actual
-    itself (`@actual-app/api` needs `better-sqlite3` and Actual's core, holds one budget per process
-    and must match the Actual server's version; the sync server's budget file is stale without its
-    CRDT messages). fields: address (https, or http), budget sync id; the API key
-    as password (`x-api-key`); only GETs and `POST /v1/budgets/{id}/run-query` (ActualQL: filter,
-    orderBy, groupBy, select, calculate, limit, offset), an "experimental" endpoint whose 501
-    (`EXPERIMENTAL_OPERATIONS_ENABLED=false`) is the source's problem. Every request loads and syncs
-    the budget: keep a read a few seconds. Curated tables: transactions (payee, category and account
-    names), accounts (balance), categories (group), payees, schedules, budget months (month ×
-    category: budgeted, spent, balance; queried in memory); amounts from cents, dates `yyyy-mm-dd`,
-    split transactions with stable keys; no query language. An encrypted budget is the source's
-    problem until a source can have a second secret (its encryption password).
-16. MySQL / MariaDB, a dialect beside `postgresSql.ts` / `d1Sql.ts`: kinds MySQL and MariaDB with fields host, port, database, user (like PostgreSQL),
-    schemas are databases, driver `mysql2` (pure JS). Backtick quoting,
-    case-insensitive collations, numeric text order and empty values last as the app has them,
-    `TINYINT(1)` a checkbox, zero dates empty, `DATETIME` vs `TIMESTAMP` time zones, `JSON` / `BLOB` /
-    `GEOMETRY` hidden or dropped. Every read in `START TRANSACTION READ ONLY`, a warning for a user that
-    can write (`SHOW GRANTS`); timeout by `MAX_EXECUTION_TIME` (MySQL) or `max_statement_time`
-    (MariaDB); a query is one `SELECT` / `WITH`. Tested on MySQL 8 and MariaDB (`KUBUS_TEST_MYSQL`).
-17. Calendar (ICS) subscriptions: kind Calendar (ICS), a field for its address (`webcal://`, `webcals://` or https, secret in its
-    path or query), one calendar per source, table `events`. `ical.js` parses; repeating events
-    (`RRULE`, `EXDATE`, `RECURRENCE-ID`, `VTIMEZONE`) are expanded only within the filter's date range
-    (else a year back and ahead, bounded by `MAX_ROWS`). Columns: title, start, end, all-day, start and
-    end date (all-day events per day), location, description, status, categories, recurring; key: UID
-    plus the occurrence's start. Later: CalDAV (editing), several calendars per source.
-18. JSON and CSV over HTTP, the long tail without code per app (a published Google Sheet is CSV):
-    kinds JSON and CSV with an address field (https or http); NDJSON detected. The rows are at the
-    field "Rows at", read as a JSON Pointer (`/data/items`; empty: the top level). The password
-    goes as `Authorization: Bearer`, or, with a field "Header name", under that header
-    (`X-Api-Key`). Paging by `Link: rel="next"` up to `MAX_ROWS`. Columns inferred
-    from a sample (numbers, booleans, ISO dates and date & times, string arrays as lists, objects
-    flattened one level, deeper ones a hidden text column). CSV: RFC 4180, a header row, the delimiter
-    detected (`,` `;` tab), decimal commas only when the whole column has them; an own parser. Key: a
-    column `id`, `uuid` or `key`, else the row's position (with a warning that links may break).
+14. Calendars over CalDAV (editing, several calendars per source), beside the read-only ICS subscriptions.
 
 API:
 
-19. Kubus as an MCP server over `/api/v1`, so an assistant (Claude or another MCP client) can read
-    and write the knowledge base: tools for search, reading collections, items and a view's result,
-    and creating and editing items, each a thin translation onto the same `/api/v1` routes (served by
-    the headless device, never into Postgres; documented beside them in `app/src/help/api.md`).
-    Remote MCP over streamable HTTP on the server, behind an API token (#20, so an assistant can be
-    given one that only reads).
-20. API tokens made in the app (Settings → Server tab; not built yet), read or read & write, instead of the API using
-    `KUBUS_TOKEN` (which stays the devices' token, with access to everything as now). A server-only
-    table `api_tokens` (name, access, the token's SHA-256, created, last used; a migration in
-    `server/src/migrations.ts`, not synced); a token is random (`kubus_…`) and shown once. An API token
-    reaches only `/api/v1`; a read token only its `GET` / `HEAD` routes (every write, AI fields included,
-    is another method). Tokens are listed, made and revoked by devices only (`/api/tokens`). Reading
-    still runs the components already there (component values). Later: a token for one space, expiry.
+15. API tokens for one space, and tokens that expire; OAuth for MCP clients that can't send a header
+    (claude.ai's connectors), and allowed origins for browser-based ones.
