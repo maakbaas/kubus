@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { Button, Heading, IconButton, Select, SelectItem, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
-import { isMetaField, newId, pickableFields, type FieldDef, type FieldKind, type Collection } from "../domain/model";
+import { isMetaField, newId, pickableFields, selfField, type FieldDef, type FieldKind, type Collection } from "../domain/model";
 import { canFilter, canGroup, canSort, fieldOperators } from "../domain/sources";
 import { dollarNames } from "../domain/components";
 import {
@@ -133,13 +133,16 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
 export function QueryEditor({ collection, query, refs, part, noGroup, page, title = "Filter", emptyText = "Showing all items.", owners, onChange }: Props) {
   // Element ids unique per editor: several item lists (tabs, panes) can be open at once.
   const uid = useId();
-  const fieldsById = new Map(pickableFields(collection).map((f) => [f.id, f]));
+  // On an item page, a block of its own collection can also be filtered on the item itself
+  // ("Item is This Book": the page's item alone), not in a page-wide filter (several collections).
+  const self = page && page.id === collection.id && !owners ? [selfField(collection)] : [];
+  const fieldsById = new Map([...pickableFields(collection), selfField(collection)].map((f) => [f.id, f]));
   const setFilter = (id: string, patch: Partial<FilterRule>) =>
     onChange({ ...query, filters: query.filters.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
 
   // Fields it can filter by (in a remote collection: its columns, by what each supports).
   const ownerOf = (f: FieldDef) => owners?.find((c) => c.fields.some((x) => x.id === f.id)) ?? collection;
-  const filterable = pickableFields(collection).filter((f) => canFilter(ownerOf(f), f));
+  const filterable = [...pickableFields(collection), ...self].filter((f) => canFilter(ownerOf(f), f));
   const operators = (f: FieldDef) => fieldOperators(ownerOf(f), f);
   const addFilter = () => {
     const field = filterable.find((f) => !isMetaField(f));

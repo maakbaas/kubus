@@ -8,7 +8,7 @@ import { resolveRange } from "./datePeriod";
 import { formatDate, htmlPlainText } from "./fieldKinds";
 import { filterTree, holds, requiredRules } from "./filterTree";
 import { markdownPlainText } from "./markdownExcerpt";
-import { fieldValue, itemLabel, pickableFields, type FieldDef, type FieldKind, type FieldValue, type Item, type Collection } from "./model";
+import { fieldValue, itemLabel, pickableFields, selfField, type FieldDef, type FieldKind, type FieldValue, type Item, type Collection } from "./model";
 
 /** Pseudo fields that every item has, usable for sorting (and the default sort). */
 export const TITLE = "$title";
@@ -320,8 +320,15 @@ export function filterPreset(collection: Collection, filters: FilterRule[], inhe
   return preset;
 }
 
+/** The fields a filter's rules can be on: the pickable ones and the item itself ("Item is This Book"). */
+export const filterFields = (collection: Collection): FieldDef[] => [...pickableFields(collection), selfField(collection)];
+
 /** Whether items can be grouped by fields of this kind. */
 export const isGroupable = (kind: FieldKind) => !!KIND_RULES[kind].groupKeys;
+
+/** The groups an item falls in by a field, as grouping makes them (none for a field that can't group). */
+export const groupKeysOf = (field: FieldDef, item: Item, ctx: QueryContext): { key: string; label: string }[] =>
+  KIND_RULES[field.kind].groupKeys?.(field, fieldValue(item, field), ctx) ?? [];
 
 /** Fields usable for sorting, including the pseudo fields. */
 export function sortableFields(collection: Collection): { id: string; name: string }[] {
@@ -413,7 +420,7 @@ function compareKeys(a: string | number | null, b: string | number | null): numb
  * without its value yet, doesn't take part (domain/filterTree.ts).
  */
 export function filterOf(collection: Collection, filters: FilterRule[], ctx: QueryContext, inherited: FilterRule[] = []): (item: Item) => boolean {
-  const byId = new Map(pickableFields(collection).map((f) => [f.id, f]));
+  const byId = new Map(filterFields(collection).map((f) => [f.id, f]));
   // {{ }} code not worked out yet (a reference field's choice filter: no page) is worked out here.
   const paired = (rules: FilterRule[]) =>
     resolveFilterValues(rules, null).flatMap((rule) => {

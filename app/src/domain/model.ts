@@ -223,12 +223,21 @@ const metaField = (id: string, name: string): FieldDef => blankField(id, name, "
  */
 export const META_FIELDS: FieldDef[] = [metaField("$created", "Created"), metaField("$updated", "Updated")];
 export const isMetaField = (f: { id: string }) => f.id.startsWith("$");
+/**
+ * The item itself, for filters only ("Item is This Book" on an item page: a block of just the page's
+ * item, e.g. a gauge of one of its values). A reference to its own collection, valued with the item's
+ * id; never a column, card or page field.
+ */
+export const SELF_FIELD = "$id";
+export const selfField = (collection: Collection): FieldDef =>
+  blankField(SELF_FIELD, "Item", "item", { collectionId: collection.id, targetCollectionId: collection.id });
 /** The collection's fields plus created / updated (which a remote collection's rows don't have): what pickers offer. */
 export const pickableFields = (collection: Collection): FieldDef[] => (collection.source ? collection.fields : [...collection.fields, ...META_FIELDS]);
 /** A field's value on an item (created / updated included). */
 export function fieldValue(item: Item, field: FieldDef): FieldValue {
   if (field.id === "$created") return item.createdAt;
   if (field.id === "$updated") return item.updatedAt;
+  if (field.id === SELF_FIELD) return item.id;
   return item.values[field.id] ?? null;
 }
 

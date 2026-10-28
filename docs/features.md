@@ -182,7 +182,7 @@ What the app does, feature by feature (read the part you work on).
   the component's code, description and output (and the name when empty) from the Help text and the fields of the
   preview's collection (else all collections); it only changes the form (not saving drops it) and its box empties, as the next request changes what was just written.
 - **Blocks** (`app/src/domain/views.ts` `ViewBlock`, `app/src/views/BlockView.tsx`): a collection
-  view is a filter plus a list of blocks; each block shows items one way (table, cards, a
+  view is a filter plus a list of blocks; each block shows items one way (table, cards, a chart, a
   component) with its own sort and grouping, fields (`FieldLayout`) and
   type options. It always builds on the view's filter (on an item page, the page's): its own rules,
   in its Filter menu, come after the view's (`ViewQuery.inherited`, `domain/filterTree.ts`), each joined by
@@ -210,7 +210,9 @@ What the app does, feature by feature (read the part you work on).
   (`ViewBlock.collectionId`) and filter on the page's item (rule values `$item` = this item,
   `$item.<fieldId>` = one of its values: what a reference field points to, or a value of the same
   kind to compare with, picked by name, "This Book's Year"; `resolvePageValues`), so
-  "Books by this Author" is a table on the Author's pages; a new item added there gets the
+  "Books by this Author" is a table on the Author's pages. A block of the page's own collection
+  can also be filtered on the item itself: "Item is This Book" (`SELF_FIELD` `$id`, a filter-only
+  field, `filterFields`; a remote row by its key), e.g. a gauge of the page's book's pages read; a new item added there gets the
   filter's references (`filterPreset`). On item pages the same split holds: arranging the page
   (its layout: fields and blocks and their order, names shown, editable, hide empty) is stored
   right away too; only what a block shows waits for Save changes.

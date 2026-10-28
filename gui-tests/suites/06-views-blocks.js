@@ -153,7 +153,7 @@ for (const vp of ["desktop", "phone"]) {
     const ids = await t.seed(matrixSpec("typical", { items: 6 }));
     await t.open(t.listPath(ids.collections.books));
     const header = () => t.page.locator(".block").first().locator(".section-header").first();
-    for (const kind of ["Cards", "Markdown", "Double", "Table"]) {
+    for (const kind of ["Cards", "Chart", "Markdown", "Double", "Table"]) {
       await tool(t, header(), "Block settings");
       const showAs = t.page.locator(".cds--popover--open").getByRole("combobox").first();
       if (!(await showAs.count())) {

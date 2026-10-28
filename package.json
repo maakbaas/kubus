@@ -17,6 +17,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@carbon/charts-react": "^1.27.23",
     "@carbon/icons-react": "^11.90.0",
     "@carbon/react": "^1.118.0",
     "@ibm/plex-mono": "^2.5.0",
