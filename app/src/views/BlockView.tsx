@@ -404,7 +404,13 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           onGroupCollapse={(key, on) => block.groupBy && onCollapse(withGroupCollapsed(state, block.id, block.groupBy, key, on))}
         />
       )}
-      {/* A remote collection's rows come a page at a time, or (a chart) all of them, which can be stopped. */}
+      {/* A remote collection's rows come a page at a time, or (a chart) all of them, which can be stopped.
+          Until the first page is in (a new query, "Read again"), it is said so: rows yet to come, not none. */}
+      {!collapsed && remote?.waiting && !remote.progress && (
+        <div className="block-more">
+          <ProgressBar className="block-more__bar" size="small" label="Loading rows" />
+        </div>
+      )}
       {!collapsed && remote?.progress && (
         <div className="block-more">
           <ProgressBar

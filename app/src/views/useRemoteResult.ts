@@ -26,6 +26,8 @@ export interface RemoteResult {
   loadingMore: boolean;
   /** Loading every row (`all`): the rows in, of the source's total, and a way to stop; null when done or stopped. */
   progress: { loaded: number; total: number; cancel: () => void } | null;
+  /** The first page of the request now (a new query, "Read again") is still on its way. */
+  waiting: boolean;
 }
 
 const EMPTY: QueryResult = { groups: [], total: 0 };
@@ -103,6 +105,8 @@ export function useRemoteResult(
   // The request now, so a late answer to an older one is dropped.
   const current = useRef("");
   const batches = useRef(0);
+  // The request whose first page is in (or failed).
+  const [answered, setAnswered] = useState("");
   current.current = `${key}#${refreshes}`;
 
   useEffect(() => sources.onRefresh((id) => (id === null || id === collection.id) && setRefreshes((n) => n + 1)), [sources, collection.id]);
@@ -112,10 +116,15 @@ export function useRemoteResult(
     const asked = `${key}#${refreshes}`;
     const request = requestRef.current;
     if (!request) return;
+    const got = (l: Omit<Loaded, "key" | "batch">) => {
+      if (current.current !== asked) return;
+      setAnswered(asked);
+      setLoaded({ key, batch: ++batches.current, ...l });
+    };
     sources.query(collection.source.name, { ...request, offset: 0, limit: pageSize, counts: true }).then(
       // A total under the rows in (a source that couldn't count them all) counts at least those.
-      (r) => current.current === asked && setLoaded({ key, batch: ++batches.current, rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, more: r.more }),
-      (e) => current.current === asked && setLoaded({ key, batch: ++batches.current, rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) }),
+      (r) => got({ rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, more: r.more }),
+      (e) => got({ rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) }),
     );
     // The source by its name: the rest of the request is in `key` (the collection is a new object whenever any collection changes).
   }, [remote, collection.source?.name, key, refreshes, sources, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -187,5 +196,6 @@ export function useRemoteResult(
     more: fresh && loaded?.more && !loadingAll ? (all ? () => setStopped("") : more) : null,
     loadingMore,
     progress: loadingAll && loaded ? { loaded: loaded.rows.length, total: loaded.total, cancel: () => setStopped(current.current) } : null,
+    waiting: answered !== current.current,
   };
 }
