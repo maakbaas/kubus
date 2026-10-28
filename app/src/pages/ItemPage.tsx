@@ -59,7 +59,7 @@ import { FieldLabel } from "../ui/fieldKindIcons";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { SpaceLabel } from "../ui/SpaceSwitcher";
 import type { Space } from "../domain/spaces";
-import { PageHeader } from "../ui/PageHeader";
+import { collectionsCrumb, PageHeader } from "../ui/PageHeader";
 import { OverflowBar } from "../ui/OverflowBar";
 import { FieldCollapse, SectionHeader } from "../ui/SectionHeader";
 import { TabMenu, useClippedTabs } from "../ui/TabMenu";
@@ -381,7 +381,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
         }
         current={title}
         breadcrumbs={[
-          { label: "Collections", href: "#/collections" },
+          collectionsCrumb(collection),
           { label: collection.pluralName, href: `#${listPath}` },
         ]}
         actions={

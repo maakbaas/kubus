@@ -147,8 +147,9 @@ Extension points are registries, not special cases in pages:
   beside (the pane to the right, reused or split off; a new tab on windows < 72rem); middle click =
   new tab. Such links carry `data-own-click`.
 - The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Collections (with the
-  shown space's collections below it), Remotes (its remote collections, while it has any; a branch
-  without a page) and Components; branches remember being open per
+  shown space's native collections below it), Remotes (`#/remotes`, once the server has a remote
+  connection or remote collections exist: `useRemotesShown`; the space's remote collections below it)
+  and Components; branches remember being open per
   device. The space switcher (`ui/SpaceSwitcher.tsx`, always shown) sits in the nav's top row beside the
   menu toggle; its last entry "Manage spaces" opens `#/spaces` (no nav entry).
 - There is no header bar. The side nav toggle (filled/outlined panel icon) sits left of the space

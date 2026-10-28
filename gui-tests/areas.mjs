@@ -24,7 +24,7 @@ export const AREAS = [
   [/^gui-tests\/baselines\//, [21]],
 
   // The shell: workspace, tabs, side nav, spaces, search.
-  [/^app\/src\/(workspace\/|app\/(App|NavTree|routes|store)\.tsx|ui\/(SpaceSwitcher|SearchBar|TabMenu|BookmarkButton|RelatedLink|ItemLink|useLinkTarget|NewButton))/, [2, 11, 12]],
+  [/^app\/src\/(workspace\/|app\/(App|NavTree|routes|store)\.tsx|app\/useRemotes\.ts|ui\/(SpaceSwitcher|SearchBar|TabMenu|BookmarkButton|RelatedLink|ItemLink|useLinkTarget|NewButton))/, [2, 11, 12]],
   [/^app\/src\/pages\/(SearchPage|BookmarksPage|SpacesPage)/, [2, 7, 19]],
 
   // Item pages and editing values in place.
@@ -39,7 +39,7 @@ export const AREAS = [
   [/^app\/src\/ui\/(ToolbarPopover|panelRoom|OverflowBar)|^app\/src\/platform\/keyboardInset/, [10, 14, 20]],
 
   // Collections, fields, components.
-  [/^app\/src\/(pages\/(CollectionEditorPage|CollectionsPage)|ui\/(FieldEditor|FieldModal|FieldOrderEditor|FieldSettings|fieldKindIcons|ChoiceFilterEditor)|domain\/(collectionDraft|fieldKinds|fieldLayout))/, [7, 17, 22]],
+  [/^app\/src\/(pages\/(CollectionEditorPage|CollectionsPage|RemotesPage)|ui\/(FieldEditor|FieldModal|FieldOrderEditor|FieldSettings|fieldKindIcons|ChoiceFilterEditor)|domain\/(collectionDraft|fieldKinds|fieldLayout))/, [7, 17, 22]],
   [/^app\/src\/ui\/useReorder/, [17]],
   [/^app\/src\/(pages\/(ComponentEditorPage|ComponentsPage)|ui\/(Component|PromoteComponentModal|promoteLocal|ValueSourceSwitch|frameFonts)|domain\/(components|componentWriter))/, [7, 19, 22]],
 

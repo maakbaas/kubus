@@ -49,3 +49,8 @@ export function PageHeader({ title, current, subtitle, breadcrumbs = [], actions
     </div>
   );
 }
+
+/** The breadcrumb a collection's pages start with: Remotes for a remote collection, else Collections. */
+export function collectionsCrumb(collection: { source?: unknown }): { label: string; href: string } {
+  return collection.source ? { label: "Remotes", href: "#/remotes" } : { label: "Collections", href: "#/collections" };
+}

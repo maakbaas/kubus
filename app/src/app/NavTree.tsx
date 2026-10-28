@@ -1,10 +1,12 @@
 import { useState, type ElementType, type MouseEvent } from "react";
 import { TreeNode, TreeView } from "@carbon/react";
-import { Bookmark as BookmarkIcon, Cube, DataBase, Code as ComponentIcon, Help as HelpIcon, Settings as SettingsIcon } from "@carbon/icons-react";
+import { Bookmark as BookmarkIcon, Cube, Code as ComponentIcon, DataBase, Help as HelpIcon, Settings as SettingsIcon } from "@carbon/icons-react";
 import { bookmarkPath } from "../domain/bookmarks";
 import { readPref, writePref } from "../ui/localPrefs";
 import { CollectionIcon } from "../ui/collectionIcons";
+import { isRemote } from "../domain/sources";
 import { useStore } from "./store";
+import { useRemotesShown } from "./useRemotes";
 
 const EXPANDED_KEY = "kubus.navExpanded";
 
@@ -30,16 +32,16 @@ function collectionIcon(name: string | null): ElementType {
 
 /**
  * The side nav as a Carbon tree: Bookmarks (the space's bookmarked views and items), Collections
- * (its page, with the space's collections below it), Remotes (the space's remote collections, while
- * there are any; no page of its own: choosing it opens or closes it), and Components. Choosing a node opens its page in the active tab
+ * (its page, with the space's native collections below it), Remotes (while the server has a remote
+ * connection or remote collections exist: its page, with the space's remote collections below it)
+ * and Components. Choosing a node opens its page in the active tab
  * (through `navigate`: Carbon's tree stops clicks, so plain links wouldn't reach the workspace).
  * The selected node follows the active tab's page (a bookmark of it wins). Middle click opens a
  * node's page in a new tab.
  */
 export function NavTree({ activePath, navigate, openTab }: { activePath: string; navigate(path: string): void; openTab(path: string): void }) {
   const { collections, spaceCollections, bookmarks } = useStore();
-  const own = spaceCollections.filter((c) => !c.source);
-  const remotes = spaceCollections.filter((c) => c.source);
+  const remotesShown = useRemotesShown();
   // Which sections are open, remembered per device.
   const [expanded, setExpanded] = useState(() => readPref<Record<string, boolean>>(EXPANDED_KEY, {}));
   const isOpen = (id: string) => expanded[id] ?? true;
@@ -62,7 +64,9 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
       ? `collection-${collection.id}`
       : pathname === "/collections"
         ? "collections"
-        : pathname === "/bookmarks"
+        : pathname === "/remotes" || pathname.startsWith("/remotes/")
+          ? "remotes"
+          : pathname === "/bookmarks"
           ? "bookmarks"
           : pathname.startsWith("/components")
             ? "components"
@@ -72,11 +76,16 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
   const paths: Record<string, string> = {
     bookmarks: "/bookmarks",
     collections: "/collections",
+    remotes: "/remotes",
     components: "/components",
     ...Object.fromEntries(bookmarks.map((b) => [`bookmark-${b.id}`, bookmarkPath(b)])),
     ...Object.fromEntries(collections.map((t) => [`collection-${t.id}`, `/collections/${t.id}/items`])),
   };
   const nodePath = (e: MouseEvent) => paths[(e.target as HTMLElement).closest("li[id]")?.id ?? ""];
+
+  const collectionNode = (t: (typeof collections)[number]) => (
+    <TreeNode autoAlign key={t.id} id={`collection-${t.id}`} label={t.pluralName} onSelect={() => navigate(`/collections/${t.id}/items`)} renderIcon={collectionIcon(t.icon)} />
+  );
 
   return (
     <div
@@ -122,23 +131,18 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
           isExpanded={isOpen("collections")}
           onToggle={onToggle("collections")}
         >
-          {own.map((t) => (
-            <TreeNode autoAlign key={t.id} id={`collection-${t.id}`} label={t.pluralName} onSelect={() => navigate(`/collections/${t.id}/items`)} renderIcon={collectionIcon(t.icon)} />
-          ))}
+          {spaceCollections.filter((t) => !isRemote(t)).map(collectionNode)}
         </TreeNode>
-        {remotes.length > 0 && (
-          <TreeNode
-            autoAlign
+        {remotesShown && (
+          <TreeNode autoAlign
             id="remotes"
             label="Remotes"
-            onSelect={() => toggle("remotes", !isOpen("remotes"))}
+            onSelect={() => navigate("/remotes")}
             renderIcon={DataBase}
             isExpanded={isOpen("remotes")}
             onToggle={onToggle("remotes")}
           >
-            {remotes.map((t) => (
-              <TreeNode autoAlign key={t.id} id={`collection-${t.id}`} label={t.pluralName} onSelect={() => navigate(`/collections/${t.id}/items`)} renderIcon={collectionIcon(t.icon)} />
-            ))}
+            {spaceCollections.filter(isRemote).map(collectionNode)}
           </TreeNode>
         )}
         <TreeNode autoAlign id="components" label="Components" onSelect={() => navigate("/components")} renderIcon={ComponentIcon} />

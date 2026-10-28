@@ -14,11 +14,12 @@ import {
   TableRow,
   Tile,
 } from "@carbon/react";
-import { Copy, DataBase, Edit, TrashCan } from "@carbon/icons-react";
+import { Copy, Edit, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { useTableSort } from "../ui/useTableSort";
 import { LIST_MAIN, LIST_TABLE } from "../ui/listTable";
 import { inSpace } from "../domain/spaces";
+import { isRemote } from "../domain/sources";
 import { useDataChanges } from "../app/useDataChanges";
 import {
   blankField,
@@ -46,14 +47,20 @@ import { FillTable, useSharedColumns } from "../views/TableView";
  * name isn't a link as its items can't be shown here), and per row an edit (the collection
  * editor), duplicate and delete icon. Item counts (of every space) are kept for the delete
  * confirmation.
+ *
+ * Native collections only: remote ones (read from the server's remote connections) are listed,
+ * added and edited on the Remotes page, the same table with a Source column (`remote`).
  */
 /** The description, edited in its cell with the shared field editor as a one-line text field. */
 const descriptionField = (t: Collection): FieldDef => blankField(`description-${t.id}`, "Description", "string", { collectionId: t.id });
 
 const draftOf = collectionDraft;
 
-export function CollectionsPage() {
-  const { repo, collections, spaces, space, sources } = useStore();
+export function CollectionsPage({ remote = false }: { remote?: boolean }) {
+  const { repo, collections: all, spaces, space } = useStore();
+  const collections = all.filter((t) => isRemote(t) === remote);
+  // Where a collection is edited and new ones are made: remote ones under Remotes.
+  const base = remote ? "/remotes" : "/collections";
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
   const spaceNames = (t: Collection) =>
@@ -71,8 +78,9 @@ export function CollectionsPage() {
   ].filter((g) => g.list.length > 0);
   const groupsBox = useRef<HTMLDivElement>(null);
   useSharedColumns(groupsBox, elsewhere.length > 0);
-  const { sort, header } = useTableSort<Collection, "name" | "description" | "spaces">({
+  const { sort, header } = useTableSort<Collection, "name" | "source" | "description" | "spaces">({
     name: (t) => t.pluralName,
+    source: (t) => t.source?.name ?? "",
     description: (t) => t.description,
     spaces: spaceNames,
   });
@@ -84,16 +92,6 @@ export function CollectionsPage() {
     start?: EditStart;
   } | null>(null);
 
-  // Whether the server offers sources: then remote collections can be made.
-  const [remoteOffered, setRemoteOffered] = useState(false);
-  useEffect(() => {
-    let stale = false;
-    sources.list().then((list) => !stale && setRemoteOffered(list.length > 0), () => undefined);
-    return () => {
-      stale = true;
-    };
-  }, [sources]);
-
   const loadCounts = () =>
     repo
       .countItemsByCollection(null)
@@ -101,7 +99,7 @@ export function CollectionsPage() {
   useEffect(() => {
     loadCounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repo, collections]);
+  }, [repo, all]);
   useDataChanges((change) => change.scope === "items" && loadCounts());
 
   async function remove(collection: Collection) {
@@ -139,11 +137,11 @@ export function CollectionsPage() {
           id,
           name: nextName(
             t.name,
-            collections.map((x) => x.name),
+            all.map((x) => x.name),
           ),
           pluralName: nextName(
             t.pluralName,
-            collections.map((x) => x.pluralName),
+            all.map((x) => x.pluralName),
           ),
           // Its title field is the copy's (NO_TITLE and null map to themselves).
           titleField: draft.titleField ? mapId(draft.titleField) : null,
@@ -194,6 +192,7 @@ export function CollectionsPage() {
         <TableHead>
           <TableRow>
             <TableHeader className={LIST_MAIN} {...header("name")}>Name</TableHeader>
+            {remote && <TableHeader {...header("source")}>Source</TableHeader>}
             <TableHeader {...header("description")}>Description</TableHeader>
             {spaces.length > 1 && <TableHeader {...header("spaces")}>Spaces</TableHeader>}
             <TableHeader aria-label="Actions" />
@@ -217,6 +216,7 @@ export function CollectionsPage() {
                   </span>
                 )}
               </TableCell>
+              {remote && <TableCell>{t.source?.name}</TableCell>}
               {/* Edits in place, like other tables' cells: Enter or clicking away saves, Escape cancels. */}
               <TableCell className={`cell--string${editing?.id === t.id ? " cell--editing" : ""}`}>
                 {editing?.id === t.id ? (
@@ -285,7 +285,7 @@ export function CollectionsPage() {
                 <IconButton
                   {...ROW_BUTTON}
                   label={`Edit ${t.pluralName} collection`}
-                  onClick={() => navigate(`/collections/${t.id}/edit`)}
+                  onClick={() => navigate(`${base}/${t.id}/edit`)}
                 >
                   <Edit />
                 </IconButton>
@@ -314,28 +314,17 @@ export function CollectionsPage() {
   return (
     <>
       <PageHeader
-        title="Collections"
-        subtitle="Define the kinds of things you keep track of, and the fields they have."
+        title={remote ? "Remotes" : "Collections"}
+        subtitle={
+          remote
+            ? "Tables and queries of the server's remote connections, shown as read-only collections."
+            : "Define the kinds of things you keep track of, and the fields they have."
+        }
         actions={
-          <>
-            {/* Only while the server offers sources to read collections from. */}
-            {remoteOffered && (
-              <IconButton
-                autoAlign
-                kind="ghost"
-                size="sm"
-                align="bottom"
-                label="New remote collection (read from a source of the server)"
-                onClick={() => navigate("/collections/new?remote=1")}
-              >
-                <DataBase />
-              </IconButton>
-            )}
-            <NewButton
-              label="New collection"
-              onClick={() => navigate("/collections/new")}
-            />
-          </>
+          <NewButton
+            label={remote ? "New remote collection" : "New collection"}
+            onClick={() => navigate(`${base}/new`)}
+          />
         }
       />
       {error && (
@@ -350,8 +339,9 @@ export function CollectionsPage() {
       {collections.length === 0 ? (
         <Tile className="empty-state">
           <p>
-            No collections yet. Start by creating one, for example “Book”,
-            “Person” or “Meeting”.
+            {remote
+              ? "No remote collections yet. Add one to show a table or query of one of the server's remote connections."
+              : "No collections yet. Start by creating one, for example “Book”, “Person” or “Meeting”."}
           </p>
         </Tile>
       ) : (

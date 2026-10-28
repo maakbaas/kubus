@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router";
 import { Button, Dropdown, FilterableMultiSelect, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
 import { Add, TrashCan, ViewOff } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
@@ -35,13 +35,17 @@ import { useLinkTarget } from "../ui/useLinkTarget";
 /** The title choice "the first text field with a value" (titleField null). */
 const AUTO_TITLE = "auto";
 
-export function CollectionEditorPage() {
+/**
+ * The collection editor: under Collections for a native collection, under Remotes (`remote`: the
+ * routes `/remotes/new`, `/remotes/:id/edit`) for a remote one, its items read from one of the
+ * server's remote connections. A collection opened under the other one's path is sent to its own.
+ */
+export function CollectionEditorPage({ remote = false }: { remote?: boolean }) {
   const { collectionId } = useParams();
   const existing = useCollection(collectionId);
-  // ?remote=1: a new remote collection (its items read from one of the server's sources).
-  const [params] = useSearchParams();
-  const remote = !collectionId && params.get("remote") === "1";
   if (collectionId && !existing) return <NotFound />;
+  if (existing && isRemote(existing) !== remote)
+    return <Navigate to={`${isRemote(existing) ? "/remotes" : "/collections"}/${existing.id}/edit`} replace />;
   return <CollectionEditor key={collectionId ?? (remote ? "new-remote" : "new")} existing={existing} remote={remote} />;
 }
 
@@ -218,7 +222,7 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
             />
           </div>
         }
-        breadcrumbs={[{ label: "Collections", href: "#/collections" }]}
+        breadcrumbs={[remote ? { label: "Remotes", href: "#/remotes" } : { label: "Collections", href: "#/collections" }]}
       />
       {error && <InlineNotification kind="error" title="Could not save" subtitle={error} onClose={() => setError(undefined)} />}
       <Form onSubmit={save} noValidate>
@@ -370,7 +374,7 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
           />
 
           <div className="form-actions">
-            <Button size="sm" kind="secondary" onClick={() => navigate(existing ? `/collections/${existing.id}/items` : "/collections")}>
+            <Button size="sm" kind="secondary" onClick={() => navigate(existing ? `/collections/${existing.id}/items` : remote ? "/remotes" : "/collections")}>
               Cancel
             </Button>
             <Button size="sm" type="submit" disabled={saving}>

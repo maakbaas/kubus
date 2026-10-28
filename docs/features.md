@@ -174,7 +174,10 @@ What the app does, feature by feature (read the part you work on).
   connection" (`SyncControl.testServer`: `/api/health`, then whether the token is accepted; nothing saved) and Disconnect;
   sync, the server's model, remote collections and API tokens all use it), Sync (`ui/SyncSettings.tsx`; `?section=sync`: the
   "Sync this device" switch and "Download images", both applied at once, the state, Wipe local / server database),
-  Connections (`ui/ConnectionSettings.tsx`; `?section=connections`: the server's remote sources, each set up by its kind's own fields, Host / Port / Database / User for PostgreSQL and so on, as the server describes them; docs/sync.md "Remote sources") and AI
+  Connections (`ui/ConnectionSettings.tsx`; `?section=connections`: the server's remote sources, each set up by its kind's own fields, Host / Port / Database / User for PostgreSQL and so on, as the server describes them; docs/sync.md "Remote sources"; listed as a table like the list pages, name, kind,
+  edit and delete icons, each one's problem or warnings above it, and "Add connection": a connection's name or edit icon
+  opens its settings in a dialog, `?source=<id>` (`new` for one being added), whose Save stores them on the server at once;
+  delete asks first) and AI
   (`ui/AiSettings.tsx`; `?section=ai`) and API tokens (`ui/ApiTokens.tsx`; `?section=tokens`, once connected: the server's
   tokens listed with access, made and last used, revoked after a confirmation, made with a name and Read / Read & write, the
   new token shown once in a dialog with a copy button; docs/sync.md "The API"). Connections and the server's half of AI are the server's own settings, the same
@@ -304,8 +307,14 @@ What the app does, feature by feature (read the part you work on).
   An item opens at the first field that matched (`?field=`; at the top when its title matched), a Markdown block at the block.
 - **Remote collections** (`domain/sources.ts`, `collections.source`, `fields.source_column`; docs/sync.md
   "Remote sources"): a table (for InfluxDB a bucket's measurement) of one of the server's sources, shown like any collection
-  but read-only. Made with the database icon beside "New collection" (shown while the server offers a
-  source: `#/collections/new?remote=1`): the collection editor's Source section (`ui/SourceSettings.tsx`)
+  but read-only. They have a page of their own, **Remotes** (`#/remotes`, `pages/RemotesPage.tsx`: the
+  Collections page's table with a Source column, `CollectionsPage remote`), in the side nav (with the
+  space's remote collections below it) as soon as the server has a remote connection, or while remote
+  collections exist (`app/useRemotes.ts`, `useRemotesShown`: asked again when the sync settings change or
+  the server's settings are saved). They are added ("New remote collection", `#/remotes/new`) and edited
+  (`#/remotes/<id>/edit`) there; the Collections page and its side-nav branch show native collections
+  only (the editor sends a collection opened under the other path to its own), and a remote collection's
+  pages start their breadcrumb with Remotes (`collectionsCrumb`). The collection editor's Source section (`ui/SourceSettings.tsx`)
   picks the source, a table and the key column (the
   primary key by default; assumed unique: a row's item id is its key, base64url); reading the columns
   makes a field per column (named like it, the collection named after the table), "Read columns again"

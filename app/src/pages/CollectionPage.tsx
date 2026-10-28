@@ -11,7 +11,7 @@ import { NotFound } from "../ui/NotFound";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import { NewButton } from "../ui/NewButton";
-import { PageHeader } from "../ui/PageHeader";
+import { collectionsCrumb, PageHeader } from "../ui/PageHeader";
 import { OverflowBar } from "../ui/OverflowBar";
 import { TabMenu, useClippedTabs } from "../ui/TabMenu";
 import { findBlock, useLinkTarget } from "../ui/useLinkTarget";
@@ -279,7 +279,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
           </Heading>
         }
         subtitle={collection.description || (remote ? `Read from ${collection.source!.name}` : undefined)}
-        breadcrumbs={[{ label: "Collections", href: "#/collections" }]}
+        breadcrumbs={[collectionsCrumb(collection)]}
         actions={
           // Like "New collection" and "New component": the page's main action, in its header. A
           // remote collection's rows are the source's: none are added here.

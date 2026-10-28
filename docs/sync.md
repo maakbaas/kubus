@@ -165,7 +165,9 @@ headless device doesn't generate AI values (that stays with the apps).
 
 Databases the server reads for the devices, read-only, whose tables the app shows as
 collections ("remote collections": `Collection.source`, `domain/sources.ts`). Set up in Settings →
-Connections (name, kind, that kind's own fields, password, schemas, a time limit). A source is stored as its kind and that kind's fields, its password beside them (no
+Connections (a table of the connections; each one's dialog: name, kind, that kind's own fields, password, schemas, a
+time limit). Remote collections are listed, added and edited on the Remotes page (side nav, once the server has a
+connection), not on the Collections page (docs/features.md "Remote collections"). A source is stored as its kind and that kind's fields, its password beside them (no
 connection string); its kind picks the connector, which reads the fields (`SourceConfig`). The server describes the
 kinds and their fields (`server/src/connectors/kinds.ts`; `ConnectionKind` in `shared/settings.ts`, `GET
 /api/settings` → `kinds`), so the app knows no database: PostgreSQL (host, port, database, user, TLS), n8n data tables

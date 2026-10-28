@@ -11,6 +11,7 @@ import { HelpPage } from "../pages/HelpPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { CollectionEditorPage } from "../pages/CollectionEditorPage";
 import { CollectionsPage } from "../pages/CollectionsPage";
+import { RemotesPage } from "../pages/RemotesPage";
 import { NotFound } from "../ui/NotFound";
 
 /** The app's pages. Rendered inside every workspace tab (each tab has its own router). */
@@ -29,6 +30,10 @@ export function AppRoutes() {
       <Route path="/components/:componentId" element={<ComponentEditorPage key="edit" />} />
       <Route path="/collections/new" element={<CollectionEditorPage />} />
       <Route path="/collections/:collectionId/edit" element={<CollectionEditorPage />} />
+      {/* Remote collections are listed, added and edited under Remotes (the same editor). */}
+      <Route path="/remotes" element={<RemotesPage />} />
+      <Route path="/remotes/new" element={<CollectionEditorPage remote />} />
+      <Route path="/remotes/:collectionId/edit" element={<CollectionEditorPage remote />} />
       <Route path="/collections/:collectionId/items" element={<CollectionPage />} />
       <Route path="/collections/:collectionId/items/new" element={<NewItemPage />} />
       <Route path="/collections/:collectionId/items/:itemId" element={<ItemPage />} />

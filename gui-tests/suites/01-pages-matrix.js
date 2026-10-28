@@ -20,6 +20,7 @@ function matrixPages(ids) {
     ["new item form", `/collections/${books}/items/new`],
     ["collection editor", `/collections/${books}/edit`],
     ["new collection", "/collections/new"],
+    ["remotes", "/remotes"],
     ["components", "/components"],
     ["component editor", `/components/${ids.components.double}`],
     ["new component", "/components/new"],
