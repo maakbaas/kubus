@@ -9,7 +9,7 @@
 
 import { formatDate } from "./fieldKinds";
 import { pickableFields, type Collection, type FieldDef } from "./model";
-import type { FilterRule, ViewQuery } from "./query";
+import type { FilterRule } from "./query";
 
 export type PeriodKind = "day" | "week" | "month" | "year" | "range";
 
@@ -226,34 +226,3 @@ const UPDATED_FIELD = "$updated";
 
 /** The filter's date period rule (its first "between" rule), if any. */
 export const periodRule = (filters: FilterRule[]) => filters.find((r) => r.operator === "between");
-
-/** The first and last day an edge is looked for on: what every source can take (InfluxDB's times run from 1677 to 2262). */
-const EDGE_FIRST = "1700-01-01";
-const EDGE_LAST = "2261-12-31";
-
-/** A query's date period on a field, as days, and the same query looking just outside it. */
-export interface PeriodEdges {
-  window: Period;
-  /** The query with the period moved to before its first day: its items before the window. */
-  before: ViewQuery;
-  /** …and to after its last day. */
-  after: ViewQuery;
-}
-
-/**
- * The date period on `fieldId` a query keeps (the block's own, else the one it builds on) and the
- * query moved to just before and just after it, still a period (so it frames its filter as before);
- * null without one. A chart draws its lines on from the last item before into the first after.
- */
-export function periodEdges(query: ViewQuery, fieldId: string, today = formatDate(new Date())): PeriodEdges | null {
-  for (const key of ["filters", "inherited"] as const) {
-    const rules = query[key] ?? [];
-    const rule = periodRule(rules);
-    if (!rule || rule.fieldId !== fieldId) continue;
-    const window = resolveRange(rule.value, today);
-    if (!window || window.start <= EDGE_FIRST || window.end >= EDGE_LAST) return null;
-    const moved = (value: string): ViewQuery => ({ ...query, [key]: rules.map((r) => (r === rule ? { ...r, value } : r)) });
-    return { window, before: moved(`${EDGE_FIRST}..${addDays(window.start, -1)}`), after: moved(`${addDays(window.end, 1)}..${EDGE_LAST}`) };
-  }
-  return null;
-}

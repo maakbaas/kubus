@@ -3,7 +3,6 @@ import { MAX_SOURCE_PAGE, type SourceResult, type SourceRow } from "../../../sha
 import { useStore } from "../app/store";
 import { withComputed } from "../domain/components";
 import type { Collection, Item } from "../domain/model";
-import type { PeriodEdges } from "../domain/datePeriod";
 import type { ItemGroup, QueryResult, ViewQuery } from "../domain/query";
 import { addRows, deviceTimeZone, groupLabel, rowItem, sourceQuery, sourceShape, type BuiltRows } from "../domain/sources";
 
@@ -40,7 +39,6 @@ interface Loaded {
   rows: SourceRow[];
   total: number;
   groups: SourceResult["groups"];
-  edges?: SourceResult["edges"];
   more: boolean;
   error?: string;
 }
@@ -84,22 +82,13 @@ export function useRemoteResult(
   search: string,
   enabled: boolean,
   all = false,
-  edges: (PeriodEdges & { fieldId: string }) | null = null,
   /** Rows per page (a block's Limit); else PAGE. */
   page?: number,
 ): RemoteResult | null {
   const { sources, components } = useStore();
   const remote = enabled && !!collection.source;
   const typed = useSettled(search, SEARCH_DELAY_MS);
-  const request = useMemo(() => {
-    if (!remote) return undefined;
-    const tz = deviceTimeZone();
-    const asked = sourceQuery(collection, query, typed, tz);
-    // The rows just outside a date period: the same query moved before / after it (with the first page).
-    const column = edges && collection.fields.find((f) => f.id === edges.fieldId)?.column;
-    if (!edges || !column) return asked;
-    return { ...asked, edges: { column, before: sourceQuery(collection, edges.before, typed, tz).filter, after: sourceQuery(collection, edges.after, typed, tz).filter } };
-  }, [remote, collection, query, typed, edges]);
+  const request = useMemo(() => (remote ? sourceQuery(collection, query, typed, deviceTimeZone()) : undefined), [remote, collection, query, typed]);
   const key = request === undefined ? "" : JSON.stringify(request);
   // The request by its key: a block renders it anew each time (its filters are new arrays), and
   // asking again on that would put the first page back over pages "Show more" added.
@@ -125,7 +114,7 @@ export function useRemoteResult(
     if (!request) return;
     sources.query(collection.source.name, { ...request, offset: 0, limit: pageSize, counts: true }).then(
       // A total under the rows in (a source that couldn't count them all) counts at least those.
-      (r) => current.current === asked && setLoaded({ key, batch: ++batches.current, rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, edges: r.edges, more: r.more }),
+      (r) => current.current === asked && setLoaded({ key, batch: ++batches.current, rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, more: r.more }),
       (e) => current.current === asked && setLoaded({ key, batch: ++batches.current, rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) }),
     );
   }, [remote, collection.source, key, refreshes, sources, pageSize]);
@@ -135,7 +124,7 @@ export function useRemoteResult(
     const asked = current.current;
     setLoadingMore(true);
     sources
-      .query(collection.source.name, { ...request, edges: undefined, offset: loaded.rows.length, limit: pageSize, counts: false })
+      .query(collection.source.name, { ...request, offset: loaded.rows.length, limit: pageSize, counts: false })
       .then(
         (r) =>
           current.current === asked &&
@@ -179,10 +168,8 @@ export function useRemoteResult(
         loaded.groups!.filter((g) => b.byGroup.has(g.key)).map((g) => ({ key: g.key, label: groupLabel(groupField, g.key), items: b.byGroup.get(g.key)!.slice() }))
       : [{ key: "", label: "", items: b.computed.slice() }];
     const all = b.all.slice();
-    const edgeItems = (row: SourceRow | null | undefined) => (row ? withComputed(collection, [rowItem(collection, shape, row)], components, noLabel, memo) : []);
-    const edgesOf = edges && loaded.edges ? { window: edges.window, before: edgeItems(loaded.edges.before), after: edgeItems(loaded.edges.after) } : undefined;
-    return { result: { groups, total: loaded.total, ...(edgesOf && { edges: edgesOf }) } satisfies QueryResult, items: all };
-  }, [made, loaded, shape, collection, components, memo, query.groupBy, grouped, edges]);
+    return { result: { groups, total: loaded.total } satisfies QueryResult, items: all };
+  }, [made, loaded, shape, collection, query.groupBy, grouped]);
 
   // While every row is loading, the block (a chart, a map: drawn anew each time) gets them at most once a second.
   const shown = useThrottled(result, loadingAll ? LOADING_SHOWN_MS : 0);

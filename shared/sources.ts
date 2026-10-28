@@ -98,17 +98,6 @@ export function conditionText(c: SourceCondition, rule: (filter: SourceFilter) =
   return `(${rule(c)})`;
 }
 
-/**
- * Whether every row a filter keeps has a value in `column` (a rule on it no empty value meets, not
- * under an `or` of others): sorted by it, nothing need be put last, so a database can read it by its
- * index (an edge: the one row nearest a period).
- */
-export function keepsOnlyValues(filter: SourceCondition, column: string): boolean {
-  if ("and" in filter) return filter.and.some((c) => keepsOnlyValues(c, column));
-  if ("or" in filter) return filter.or.length > 0 && filter.or.every((c) => keepsOnlyValues(c, column));
-  return filter.column === column && ["between", "before", "after", "gt", "lt"].includes(filter.operator);
-}
-
 /** The title: the first of these columns with a value that isn't blank (the app's labelField), else `untitled`. */
 export const TITLE_COLUMN = "$title";
 
@@ -148,19 +137,6 @@ export interface SourceQuery extends SourceShape {
   limit: number;
   /** Also count: the total and each group's size (asked with the first page). */
   counts: boolean;
-  /** Also the rows just outside a date period (the server asks the source; an older server ignores it). */
-  edges?: SourceEdges;
-}
-
-/**
- * Asked with a query's first page: the row with the latest `column` value that meets `before` and the
- * one with the earliest that meets `after` (the query's filter with its date period moved just before
- * and after it), so a chart's line runs on to its window's edges. The query's search applies too.
- */
-export interface SourceEdges {
-  column: string;
-  before: SourceCondition;
-  after: SourceCondition;
 }
 
 /** A value as the app stores it (domain/model.ts FieldValue): datetimes as ISO 8601 UTC, dates yyyy-mm-dd. */
@@ -183,8 +159,6 @@ export interface SourceResult {
   total?: number;
   /** With `counts` when grouped: every group's key and size, in order (keys as SourceRow.group). */
   groups?: { key: string; count: number }[];
-  /** With `edges`: the rows just before and after the period (null: none, or the source couldn't say). */
-  edges?: { before: SourceRow | null; after: SourceRow | null };
 }
 
 /** POST /api/sources/<name>/row: one row by its key (null when there is none). */

@@ -8,8 +8,7 @@ import { placeProblem } from "../domain/components";
 import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
-import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type ItemGroup, type QueryResult, type ViewQuery } from "../domain/query";
-import { periodEdges } from "../domain/datePeriod";
+import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type ItemGroup, type QueryResult } from "../domain/query";
 import { blockLimit, blockQuery, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
@@ -306,23 +305,14 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const filters = useMemo(() => resolveFilterValues(base.filters, page ?? null), [base.filters, page]);
   const inherited = useMemo(() => resolveFilterValues(viewFilters ?? [], page ?? null), [viewFilters, page]);
   const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder]); // eslint-disable-line react-hooks/exhaustive-deps
-  // A chart along a date field with a date period on it: the items just outside the period too.
-  const edges = useMemo(() => {
-    const found = uses.query && uses.edges ? periodEdges(query, uses.edges) : null;
-    return found && { ...found, fieldId: uses.edges! };
-  }, [uses.query, uses.edges, query]);
   // A remote collection's rows come from its source a page at a time, filtered and sorted there.
   // Its Limit: items shown at first and added by each "Show more" (0: all, a remote collection's loaded page by page).
   const limit = blockLimit(block, !!uses.all);
-  const remote = useRemoteResult(collection, query, search, uses.query, limit === 0, edges, limit || undefined);
-  const local = useMemo(() => {
-    if (remote || !data.items || !uses.query) return NO_RESULT;
-    const result = applyQuery(collection, data.items, query, data.ctx, search);
-    if (!edges) return result;
-    // Not grouped: one group of them all.
-    const outside = (q: ViewQuery) => applyQuery(collection, data.items!, { ...q, sort: [], groupBy: null }, data.ctx, search).groups[0]?.items ?? [];
-    return { ...result, edges: { window: edges.window, before: outside(edges.before), after: outside(edges.after) } };
-  }, [remote, collection, data.items, data.ctx, uses.query, query, search, edges]);
+  const remote = useRemoteResult(collection, query, search, uses.query, limit === 0, limit || undefined);
+  const local = useMemo(
+    () => (!remote && data.items && uses.query ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),
+    [remote, collection, data.items, data.ctx, uses.query, query, search],
+  );
   // A native collection's items are shown a Limit at a time too (a table of thousands rows is slow), in the order of the groups.
   const [shown, setShown] = useState(limit);
   const stepKey = `${collection.id}|${search}|${limit}|${JSON.stringify(query)}`;

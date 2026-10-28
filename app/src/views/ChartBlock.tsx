@@ -11,7 +11,6 @@ import {
   DATE_STEPS,
   defaultChartOptions,
   GAUGE_WIDTH,
-  isBarStyle,
   isParts,
   isXY,
   MAX_DECIMALS,
@@ -65,10 +64,8 @@ function ChartView({ collection, result, options, refs, actions, page }: BlockPr
   const items = useMemo(() => chartItems(result, options.scope, pageItem), [result, options.scope, pageItem]);
   const spec = useMemo(() => {
     const ctx = { refLabel: refLabelOf(refs, "(deleted)") };
-    // "Of this item" charts one item: no period around it.
-    const edges = options.scope === "page" ? undefined : result.edges;
-    return chartSpec({ collection, items, ctx, edges }, options, dark ? "g100" : "white");
-  }, [collection, items, refs, options, dark, result.edges]);
+    return chartSpec({ collection, items, ctx }, options, dark ? "g100" : "white");
+  }, [collection, items, refs, options, dark]);
   if (wrongPage) return <p className="helper chart-block__problem">“Of this item” charts the page's item: the block lists {collection.pluralName}, not the page's collection.</p>;
   if ("problem" in spec) return <p className="helper chart-block__problem">{spec.problem}</p>;
   return (
@@ -351,7 +348,6 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   // --- Data: what is charted (the X axis's categories, a spread field, a scatter's fields)
   const xDisabled = has.parts && o.parts !== "groups" ? "Only when the parts are groups" : false;
   const fieldMode = o.x.by === "field" ? false : "Only by a field's values";
-  const edgesApply = o.x.by === "item" && isDate(xField);
   const xControls = has.x && (
     <>
       <Select
@@ -407,16 +403,6 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
         ))}
       </Select>
       <Checkbox id={`${uid}-x-empty`} labelText="Show items without a value" checked={o.x.showEmpty} disabled={!!xDisabled || !!fieldMode} onChange={(_, { checked }) => setX({ showEmpty: checked })} />
-      {has.xy && (
-        <Checkbox
-          id={`${uid}-edges`}
-          labelText="Run lines to the date period's edges"
-          checked={o.edges}
-          disabled={!edgesApply}
-          helperText={edgesApply ? "With a date period on the X field: from the last item before it to the first after" : "Only for each item placed at a date"}
-          onChange={(_, { checked }) => set({ edges: checked })}
-        />
-      )}
     </>
   );
   const splitSelect = (label: string) => <FieldSelect id={`${uid}-split`} label={label} fields={splits} value={o.splitBy} none="Not split" onChange={(splitBy) => set({ splitBy })} />;
@@ -820,8 +806,6 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   );
 }
 
-const drawsEdges = (o: ChartOptions) => o.edges && isXY(o.chart) && o.x.by === "item" && o.series.some((s) => s.transform === "none" && !isBarStyle(styleOf(s, o.chart)));
-
 export const chartBlock = defineBlockType<ChartOptions>({
   kind: "chart",
   label: "Chart",
@@ -829,9 +813,7 @@ export const chartBlock = defineBlockType<ChartOptions>({
   defaultOptions: (collection: Collection) => defaultChartOptions(collection),
   normalizeOptions: (raw, collection) => normalizeChartOptions(raw, collection),
   // Its X axis is its own setting (not the block's grouping); "This item" charts the page's item, not a query's.
-  // Lines along a date field each item is placed at run on to the edges of a date period on it: asked only
-  // when a series draws them (a line, area or dots shown as its values; chartTable's edgePoint). No other block asks.
-  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null, edges: drawsEdges(options) ? options.x.field : null }),
+  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,
 });

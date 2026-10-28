@@ -4,7 +4,6 @@ import { addressOf } from "./kinds.ts";
 import {
   ALL_START,
   ALL_STOP,
-  edgeDays,
   fieldColumns,
   fluxString,
   groupKey,
@@ -13,9 +12,9 @@ import {
   influxColumn,
   influxValue,
   countFlux,
-  isEdgeQuery,
   isTimeOrdered,
   nearestFlux,
+  pageDays,
   parseAnnotatedCsv,
   rowFlux,
   rowsFlux,
@@ -194,7 +193,6 @@ export class InfluxConnector implements Connector {
   }
 
   async query(query: SourceQuery): Promise<SourceResult> {
-    if (isEdgeQuery(query)) return this.edge(query);
     if (isTimeOrdered(query)) return this.byTime(query);
     return this.page(query);
   }
@@ -210,7 +208,7 @@ export class InfluxConnector implements Connector {
     const at = InfluxConnector.values(await this.flux(nearestFlux(query, direction)), "_time")[0];
     let result: SourceResult | null = at ? null : { rows: [], more: false };
     for (const days of at ? [1, 31, 366] : []) {
-      const r = await this.page({ ...query, counts: false, filter: { and: [query.filter, edgeDays(at, direction, days, query.timeZone)] } });
+      const r = await this.page({ ...query, counts: false, filter: { and: [query.filter, pageDays(at, direction, days, query.timeZone)] } });
       if (r.more) {
         result = r;
         break;
@@ -226,18 +224,6 @@ export class InfluxConnector implements Connector {
     const columns = await this.columnsOf(query.target);
     const flux = countFlux(query, columns) ?? totalFlux(query, columns);
     return Number(InfluxConnector.values(await this.flux(flux), "_kubus_n")[0] ?? 0);
-  }
-
-  /** The row nearest a period (isEdgeQuery): the moment of the nearest point, then the days up to it, more while the filter keeps none. */
-  private async edge(query: SourceQuery): Promise<SourceResult> {
-    const direction = query.sort[0].direction;
-    const at = InfluxConnector.values(await this.flux(nearestFlux(query, direction)), "_time")[0];
-    if (!at) return { rows: [], more: false };
-    for (const days of [1, 31, 366]) {
-      const r = await this.page({ ...query, filter: { and: [query.filter, edgeDays(at, direction, days, query.timeZone)] } });
-      if (r.rows.length) return r;
-    }
-    return this.page(query);
   }
 
   private async page(query: SourceQuery): Promise<SourceResult> {

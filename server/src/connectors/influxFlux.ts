@@ -751,20 +751,10 @@ export function rowsFlux(query: SourceQuery, columns: Map<string, InfluxColumn>,
 }
 
 /**
- * An edge (server/src/sources.ts queryWithEdges): one row, the nearest by `_time`, of a measurement,
- * not grouped. Read as a page it would pivot every row of the range (all history before a period),
- * so the connector first asks this, the moment of the nearest point in the range (InfluxDB answers
- * last() / first() from its index), then reads only the days up to it (`edgeDays`).
- */
-export function isEdgeQuery(query: SourceQuery): boolean {
-  return isTimeOrdered(query) && query.limit === 1 && query.offset === 0 && !query.counts;
-}
-
-/**
  * A page of a measurement's rows by time (newest or oldest first), not grouped. Read as asked it pivots,
  * sorts and counts every row of the range (all history without a `_time` filter) for a page of 100, so the
  * connector reads it from the nearest point's day (`nearestFlux`) and more days only while they hold less
- * than the page (`edgeDays`), and counts with `countFlux` where it can.
+ * than the page (`pageDays`), and counts with `countFlux` where it can.
  */
 export function isTimeOrdered(query: SourceQuery): boolean {
   return "table" in query.target && !query.groupBy && query.sort.length === 1 && query.sort[0].column === "_time";
@@ -800,7 +790,7 @@ export function countFlux(query: SourceQuery, columns: Map<string, InfluxColumn>
 
 /** The moment (`_time`) of the measurement's latest (desc) or earliest point in the query's range, any field's. */
 export function nearestFlux(query: SourceQuery, direction: "asc" | "desc"): string {
-  if (!("table" in query.target)) throw new SourceError("Only a measurement has an edge");
+  if (!("table" in query.target)) throw new SourceError("Only a measurement is read by time");
   const { schema, name } = query.target.table;
   const range = rangeOf(query.filter, query.timeZone);
   const desc = direction === "desc";
@@ -814,11 +804,11 @@ export function nearestFlux(query: SourceQuery, direction: "asc" | "desc"): stri
 }
 
 /**
- * The days read for an edge whose nearest point is at `at`: that point's day and the `days` before it
- * (desc) or after it, in the time zone; the query's filter then picks the row (its other rules may
- * leave none: more days are read then).
+ * The days read for a page by time whose nearest point is at `at`: that point's day and the `days` before it
+ * (desc) or after it, in the time zone; the query's filter then picks the rows (its other rules may leave
+ * fewer than the page: more days are read then).
  */
-export function edgeDays(at: string, direction: "asc" | "desc", days: number, timeZone: string): SourceFilter {
+export function pageDays(at: string, direction: "asc" | "desc", days: number, timeZone: string): SourceFilter {
   const day = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(Date.parse(at));
   const shifted = new Date(Date.parse(`${day}T00:00:00Z`) + (direction === "desc" ? -days : days) * 86_400_000).toISOString().slice(0, 10);
   return { column: "_time", operator: "between", value: direction === "desc" ? `${shifted}..${day}` : `${day}..${shifted}` };

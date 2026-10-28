@@ -7,7 +7,6 @@ import {
   chartTable,
   formatValue,
   heatmapCells,
-  isBarStyle,
   isXY,
   needsField,
   partsOf,
@@ -30,6 +29,7 @@ import {
   type ChartInput,
   type ChartOptions,
   type DrawnSeries,
+  type SeriesStyle,
   type ThresholdStatus,
 } from "../domain/chart";
 import { pickableFields, type FieldDef } from "../domain/model";
@@ -139,11 +139,6 @@ const CURVES: Record<ChartOptions["curve"], string> = { smooth: "curveMonotoneX"
 const isDate = (f: FieldDef | undefined) => f?.kind === "date" || f?.kind === "datetime";
 /** A status as Carbon's gauge and meter take it ("success" below every threshold); null for one it has none for. */
 const carbonStatus = (status: string) => (status === "success" ? status : thresholdStatus(status as ThresholdStatus).carbon);
-/** A day's (yyyy-mm-dd) local midnight, or `plus` days later. */
-const localDay = (day: string, plus = 0) => {
-  const [y, m, d] = day.split("-").map(Number);
-  return new Date(y, m - 1, d + plus);
-};
 /** A date value as a Date: a day at its local midnight, a time as it is. */
 const toDate = (v: string | number) => {
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
@@ -166,6 +161,9 @@ function uniqueLabels(categories: Category[]): Map<Category, string> {
     }),
   );
 }
+
+/** Bar and lollipop are drawn along a bar's length (from 0, stackable, across when horizontal). */
+const isBarStyle = (s: SeriesStyle) => s === "bar" || s === "lollipop";
 
 /**
  * Bar, line and area: every series drawn its own way on its own axis. One style on one axis is
@@ -201,16 +199,12 @@ function xyChart(input: ChartInput, options: ChartOptions, theme: string): Chart
     .filter((p) => p.value !== null && !(axisOf(sideOf(bySeries.get(p.series)!)).log && p.value <= 0))
     .map((p) => ({ group: p.series, [dataKey]: place(p.category), value: p.value }));
 
-  // Lines along a date period's days (a filter's, on the X field): the axis runs over exactly those
-  // days, the lines on to its edges (`ChartTable.window`; Carbon clips what is beyond them).
-  const span = t.window && t.time && t.series.every((d) => !isBarStyle(styleOfDrawn(d))) ? t.window : undefined;
   const domainAxis = {
     mapsTo: dataKey,
     scaleType: t.time ? "time" : t.numeric ? "linear" : "labels",
     title: t.categoryLabel || undefined,
     ...(t.numeric && FIT),
     ...(!t.time && !t.numeric && { domain: [...labels.values()] }),
-    ...(span && { domain: [localDay(span.start), localDay(span.end, 1)] }),
   };
   const valueAxis = (side: "left" | "right") => {
     const a = axisOf(side);
@@ -289,7 +283,6 @@ function xyChart(input: ChartInput, options: ChartOptions, theme: string): Chart
       axes,
       tooltip: tooltip(options, input, [t.categoryLabel || (horizontal ? "y-value" : "x-value")]),
       ...(combo && { comboChartTypes: combo }),
-      ...(span && { timeScale: { addSpaceOnEdges: 0 } }),
       ...(lines && { curve: CURVES[options.curve] }),
       ...(lines && (!options.points || options.compact) && { points: { enabled: false } }),
       ...(options.compact && { grid: { x: { enabled: false }, y: { enabled: false } } }),

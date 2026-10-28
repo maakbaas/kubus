@@ -84,8 +84,6 @@ export interface BlockUses {
   fields: { labels: boolean; hideEmpty: boolean } | null;
   /** It needs every item (a chart charts them all): its Limit is "all" unless set, a remote collection's rows all loaded. */
   all?: boolean;
-  /** A date field it charts items along: with a date period on it, the items just outside the period come too (QueryResult.edges). */
-  edges?: string | null;
 }
 
 /** Where a block is: in a collection view, or on an item page (which can give it an item). */

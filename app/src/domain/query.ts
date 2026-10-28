@@ -4,7 +4,7 @@
 
 import { dollarNames, ERROR_PREFIX, fieldLookup, render, splitWarnings, type RefLabel } from "./components";
 import { checklistItems } from "./checklist";
-import { resolveRange, type Period } from "./datePeriod";
+import { resolveRange } from "./datePeriod";
 import { formatDate, htmlPlainText } from "./fieldKinds";
 import { filterTree, holds, requiredRules } from "./filterTree";
 import { markdownPlainText } from "./markdownExcerpt";
@@ -74,12 +74,6 @@ export interface QueryResult {
   groups: ItemGroup[];
   /** Items after filtering (an item in several groups counts once). */
   total: number;
-  /**
-   * A block charting along a date field (`BlockUses.edges`) with a date period on it: the period's
-   * days, and items just outside it (all of them before / after it here; a remote source's nearest
-   * one, `SourceEdges`), so a line runs on to the window's edges.
-   */
-  edges?: { window: Period; before: Item[]; after: Item[] };
 }
 
 // --- Per-kind rules ---------------------------------------------------------------------

@@ -192,29 +192,4 @@ describe("chartSpec", () => {
     expect(draw({ chart: "histogram", spreadField: null })).toHaveProperty("problem");
     expect(draw({}, [])).toEqual({ problem: "No items to chart." });
   });
-  it("runs lines on to a date period's edges: the axis over its days, each line from its last item before into its first after", () => {
-    const byRead: ChartX = { ...byGenre, by: "item", field: "read" };
-    const edges = { window: { start: "2026-02-01", end: "2026-02-28" }, before: [books[0], book("0", "Poetry", 50, 1, "2025-12-01")], after: [books[2]] };
-    const inWindow = [books[1]];
-    const line = chartSpec({ ...input(inWindow), edges }, options({ chart: "line", edges: true, x: byRead, series: [sum("pages")] }), "white") as ChartSpec;
-    expect(line.data.map((d) => (d as { value: number }).value)).toEqual([300, 200, 80]);
-    expect(axes(line).bottom.domain).toEqual([new Date(2026, 1, 1), new Date(2026, 2, 1)]);
-    expect(line.options.timeScale).toEqual({ addSpaceOnEdges: 0 });
-    // Split: each line from its own items (Poetry's last before is book 0).
-    const split = chartSpec({ ...input(inWindow), edges }, options({ chart: "line", edges: true, x: byRead, series: [sum("pages")], splitBy: "genre" }), "white") as ChartSpec;
-    expect(split.data.map((d) => [(d as { group: string }).group, (d as { value: number }).value])).toEqual([
-      ["Novel", 300],
-      ["Novel", 200],
-    ]);
-    // Bars aren't run on (nor is the axis pinned); nor is a running total.
-    const bars = chartSpec({ ...input(inWindow), edges }, options({ chart: "bar", edges: true, x: byRead, series: [sum("pages")] }), "white") as ChartSpec;
-    expect(bars.data).toHaveLength(1);
-    expect(axes(bars).bottom.domain).toBeUndefined();
-    const total = chartSpec({ ...input(inWindow), edges }, options({ chart: "line", edges: true, x: byRead, series: [sum("pages", { transform: "cumulative" })] }), "white") as ChartSpec;
-    expect(total.data).toHaveLength(1);
-    // Off (the default): neither.
-    const off = chartSpec({ ...input(inWindow), edges }, options({ chart: "line", x: byRead, series: [sum("pages")] }), "white") as ChartSpec;
-    expect(off.data).toHaveLength(1);
-    expect(axes(off).bottom.domain).toBeUndefined();
-  });
 });
