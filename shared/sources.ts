@@ -192,7 +192,13 @@ export interface SourceRowRequest extends SourceShape {
   keyValue: string;
 }
 
-/** The most rows one page may ask for. */
-export const MAX_SOURCE_PAGE = 500;
+/**
+ * The most rows one page may ask for, and the page a block that loads every row asks (a chart, a map
+ * without a Limit). Large enough that a request's own cost (its round trip, the source planning the query)
+ * is a small part of a page: 180,000 rows are 18 requests, not 360. Small enough that a page stays a few MB
+ * of JSON, well inside a source's time limit, and is made into items in about a tenth of a second (the page
+ * doesn't freeze while it comes in).
+ */
+export const MAX_SOURCE_PAGE = 10_000;
 /** The most groups a grouped query lists (the rest are left out). */
 export const MAX_SOURCE_GROUPS = 1000;

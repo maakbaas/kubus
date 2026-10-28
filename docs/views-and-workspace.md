@@ -155,7 +155,7 @@ Extension points are registries, not special cases in pages:
   - **Size**: Height (see below) and Width (a slider like the cards', 8 to 120rem (about 1920px) at most; a gauge as wide
     as a pane is mostly empty, so switching to one makes a full-width chart 24rem).
   A setting still to choose (a field, three spokes) or nothing to chart says so instead of an empty chart. The chart follows
-  the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of 500 one after the other, a progress bar of the rows in against the source's total and Cancel under it; after Cancel the chart shows the rows in and "Load all rows" goes on).
+  the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of `MAX_SOURCE_PAGE` (10,000) rows one after the other, a progress bar of the rows in against the source's total and Cancel under it; after Cancel the chart shows the rows in and "Load all rows" goes on).
   A chart, a map and a component block showing HTML have the same Height setting (`BLOCK_HEIGHT` and
   `normalizeBlockHeight` in `domain/views.ts`, the slider `views/HeightSlider.tsx`: 8 to 48rem, 24 for a new block;
   a chart's old Small / Medium / Large reads as 16 / 24 / 32) and Aspect ratio beside it (`ASPECT_RATIOS`: none, 2:1,
