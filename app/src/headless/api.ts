@@ -146,7 +146,7 @@ function blockIn(world: World, own: Collection, raw: unknown): ViewBlock {
     groupBy: typeof o.groupBy === "string" ? fieldOf(listed, o.groupBy).id : null,
     layout: { ...layout, fields: layout.fields === null ? null : ids(layout.fields), hiddenLabels: ids(layout.hiddenLabels) ?? [] },
   });
-  if (!block) throw new HttpError(400, "A block needs a `kind` (table, cards, component, markdown, …)");
+  if (!block) throw new HttpError(400, "A block needs a `kind` (table, cards, map, component, markdown, …)");
   return block;
 }
 

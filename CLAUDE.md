@@ -14,7 +14,7 @@ is what this split avoids. Keep them current when behaviour changes.
   in-place item editing, collection icons and app icon, components, blocks, field order and item
   views, spaces, bookmarks, link schemes, global search, schema-change policy.
 - `docs/views-and-workspace.md`: query (`applyQuery`, `KIND_RULES`), block types (table, cards,
-  chart, component, markdown), saved views; workspace tabs, tiling, side nav, tab history, tab width.
+  chart, map, component, markdown), saved views; workspace tabs, tiling, side nav, tab history, tab width.
 - `docs/data-model.md`: tables, EAV `field_values`, files, references, soft deletes, UUIDs;
   scale limits, SAH-pool VFS danger, storage location, iOS eviction.
 - `docs/sync.md`: server, sync engine (outbox triggers, merge, first connection), files (upload,
@@ -36,7 +36,7 @@ is what this split avoids. Keep them current when behaviour changes.
   listener plugin.
 - **Local first, one codebase**: all logic and storage in the web frontend (SQLite WASM in a worker,
   OPFS). Every asset is bundled, nothing from a CDN (IBM Plex: `app/src/fonts.css`, Carbon's CDN
-  `@font-face` rules are dropped in `vite.config.ts`): the app looks the same offline. Tauri is only a window (only plugin: `opener`); native capabilities go behind an interface
+  `@font-face` rules are dropped in `vite.config.ts`): the app looks the same offline. The one exception: a Map block's map (style, tiles, label fonts) comes from OpenFreeMap; MapLibre itself and its worker are bundled. Tauri is only a window (only plugin: `opener`); native capabilities go behind an interface
   in `app/src/platform/` with a web fallback.
 - **Every schema change is a migration; no data is ever lost** (`docs/migrations.md`, read it first).
   `app/src/data/schema.sql` is the newest schema; with it goes the next migration in
@@ -81,7 +81,7 @@ is what this split avoids. Keep them current when behaviour changes.
 A Collection defines fields and holds its items (Books); an Item is one of them (a particular
 book). "View" is both how a collection's items are listed (collection view: its blocks) and how
 one item's page looks (item view, whose layout is its fields and blocks); say "collection view" /
-"item view" only where both could be meant. A Block shows items one way (table, cards, a
+"item view" only where both could be meant. A Block shows items one way (table, cards, a map, a
 component) inside a view. A Component is rendering ({{ }} code over the built-in $ names), shared
 (reusable, by name) or local (written in one place): a field, block or static component by the
 built-ins it uses; with "AI prompt" its text is a prompt for an AI field.

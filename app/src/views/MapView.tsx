@@ -1,0 +1,465 @@
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import { IconButton, Link, Popover, PopoverContent, Select, SelectItem, Slider } from "@carbon/react";
+import { CenterToFit, Earth, ZoomIn, ZoomOut } from "@carbon/icons-react";
+import * as colors from "@carbon/colors";
+import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
+import { isCoordinateField, isLocationTextField, locationOf, locationOfPair, type LngLat } from "../domain/geo";
+import { fieldValue, isStruckThrough, itemLabel, pickableFields, type Collection, type FieldDef, type Item } from "../domain/model";
+import { isEmptyValue, isGrouped, type QueryResult } from "../domain/query";
+import { Highlight } from "../ui/Highlight";
+import { useMediaQuery } from "../ui/useMediaQuery";
+import { openModeOf } from "../workspace/Workspace";
+import { FieldCell, itemLinkProps } from "./cells";
+import { loadMapLibre, MAP_STYLES, styleUrl, type MapStyle } from "./mapLibre";
+import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
+
+// A block showing its items as dots on a vector map (MapLibre GL, OpenFreeMap's tiles). An item's
+// place is read from its fields (domain/geo.ts): one text field with both coordinates, or two
+// number fields. The block's grouping colours the dots (one colour per group, Carbon's categorical
+// data-visualization palette, with a legend); hovering a dot shows the item's title and the
+// block's fields, clicking it opens the item (Ctrl/Cmd: beside). On a touch screen the first tap
+// shows the item, a tap on its title opens it.
+
+export interface MapOptions {
+  /** The text field holding both coordinates, or (a number field) the latitude; null = none chosen. */
+  locationFieldId: string | null;
+  /** With a number field as location: the longitude's number field. */
+  longitudeFieldId: string | null;
+  /** The map's height in rem (MAP_HEIGHT range). */
+  height: number;
+  style: MapStyle;
+}
+
+const MAP_HEIGHT = { min: 12, max: 48, step: 1, initial: 24 };
+
+/** Carbon's categorical palette (in its order: neighbours contrast), for the light and dark themes. */
+const PALETTE = {
+  light: [colors.purple70, colors.cyan50, colors.teal70, colors.magenta70, colors.red50, colors.red90, colors.green60, colors.blue80, colors.magenta50, colors.yellow50, colors.teal50, colors.cyan90, colors.orange70, colors.purple50],
+  dark: [colors.purple60, colors.cyan40, colors.teal60, colors.magenta40, colors.red50, colors.red10, colors.green30, colors.blue50, colors.magenta60, colors.yellow30, colors.teal40, colors.cyan10, colors.orange50, colors.purple30],
+};
+
+const SOURCE = "kubus-items";
+const LAYER = "kubus-dots";
+
+/** Fields a location can be read from (Location), and those a longitude can (with a number latitude). */
+const locationFields = (collection: Collection) => pickableFields(collection).filter((f) => isLocationTextField(f) || isCoordinateField(f));
+const coordinateFields = (collection: Collection) => pickableFields(collection).filter(isCoordinateField);
+
+interface Place {
+  item: Item;
+  at: LngLat;
+  color: string;
+}
+
+interface Legend {
+  key: string;
+  label: string;
+  color: string;
+}
+
+/** The items with a place, each once (in the first group it is in), coloured by group; and the legend. */
+function placesOf(collection: Collection, result: QueryResult, options: MapOptions, palette: string[], plain: string, empty: string) {
+  const fields = pickableFields(collection);
+  const location = fields.find((f) => f.id === options.locationFieldId);
+  const longitude = location && isCoordinateField(location) ? fields.find((f) => f.id === options.longitudeFieldId) : undefined;
+  const placeOf = (item: Item): LngLat | null => {
+    if (!location) return null;
+    if (isCoordinateField(location)) return longitude ? locationOfPair(fieldValue(item, location), fieldValue(item, longitude)) : null;
+    return locationOf(fieldValue(item, location));
+  };
+  const grouped = isGrouped(result);
+  const places: Place[] = [];
+  const legend: Legend[] = [];
+  const seen = new Set<string>();
+  let missing = 0;
+  result.groups.forEach((group, i) => {
+    const color = !grouped ? plain : group.key === "" ? empty : palette[i % palette.length];
+    let shown = false;
+    for (const item of group.items) {
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      const at = placeOf(item);
+      if (!at) {
+        missing++;
+        continue;
+      }
+      places.push({ item, at, color });
+      shown = true;
+    }
+    if (grouped && shown) legend.push({ key: group.key, label: group.label, color });
+  });
+  return { places, legend, missing, chosen: !!location && (!isCoordinateField(location) || !!longitude) };
+}
+
+const geoJson = (places: Place[]): Parameters<GeoJSONSource["setData"]>[0] => ({
+  type: "FeatureCollection",
+  features: places.map((p, i) => ({
+    type: "Feature",
+    id: i,
+    properties: { color: p.color },
+    geometry: { type: "Point", coordinates: [p.at.lng, p.at.lat] },
+  })),
+});
+
+/** Fits the map to the places (one place: around it; none: the world). */
+function fit(map: MapLibreMap, places: Place[], animate: boolean) {
+  if (places.length === 0) return map.jumpTo({ center: [0, 20], zoom: 1 });
+  if (places.length === 1) return map.jumpTo({ center: [places[0].at.lng, places[0].at.lat], zoom: 12 });
+  let [west, south, east, north] = [180, 90, -180, -90];
+  for (const { at } of places) {
+    west = Math.min(west, at.lng);
+    east = Math.max(east, at.lng);
+    south = Math.min(south, at.lat);
+    north = Math.max(north, at.lat);
+  }
+  map.fitBounds([west, south, east, north], { padding: 40, maxZoom: 14, animate });
+}
+
+/** A theme token's value, for what the map draws (it can't read CSS variables). */
+const token = (el: HTMLElement, name: string) => getComputedStyle(el).getPropertyValue(name).trim();
+
+export function MapView({ collection, result, fields, layout, options, refs, search, actions }: BlockProps<MapOptions>) {
+  const dark = useMediaQuery("(prefers-color-scheme: dark)");
+  const touch = useMediaQuery("(hover: none)");
+  const box = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  // Colours for what the map draws, read from the theme (they follow it).
+  const [theme, setTheme] = useState({ plain: "", empty: "", ring: "" });
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    setTheme({ plain: token(el, "--cds-interactive"), empty: token(el, "--cds-icon-secondary"), ring: token(el, "--cds-background") });
+  }, [dark]);
+
+  const { places, legend, missing, chosen } = useMemo(
+    () => placesOf(collection, result, options, dark ? PALETTE.dark : PALETTE.light, theme.plain || colors.blue60, theme.empty || colors.gray50),
+    [collection, result, options, dark, theme],
+  );
+
+  // The latest places and colours, for the map's own handlers (set up once).
+  const latest = useRef({ places, ring: theme.ring });
+  latest.current = { places, ring: theme.ring };
+
+  /** The dot shown with its item (hovered, or tapped on a touch screen), and where on the map it is. */
+  const [shownDot, setShownDot] = useState<{ index: number; pinned: boolean } | null>(null);
+  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+  const shownRef = useRef(shownDot);
+  shownRef.current = shownDot;
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
+  const touchRef = useRef(touch);
+  touchRef.current = touch;
+
+  // The map, made once. Our dots are a GeoJSON source and a circle layer, added again whenever the
+  // style is (re)loaded (a style change replaces every source and layer).
+  useEffect(() => {
+    let map: MapLibreMap | null = null;
+    let gone = false;
+    loadMapLibre().then(
+      (lib) => {
+        if (gone || !canvas.current) return;
+        map = new lib.Map({
+          container: canvas.current,
+          style: styleUrl(options.style, dark),
+          center: [0, 20],
+          zoom: 1,
+          attributionControl: { compact: false },
+          // In a scrolling page the wheel scrolls (Ctrl/Cmd + wheel zooms), and one finger scrolls on phones.
+          cooperativeGestures: true,
+          dragRotate: false,
+          pitchWithRotate: false,
+          touchPitch: false,
+        });
+        map.touchZoomRotate.disableRotation();
+        mapRef.current = map;
+        const m = map;
+        m.on("style.load", () => {
+          m.addSource(SOURCE, { type: "geojson", data: geoJson(latest.current.places) });
+          m.addLayer({
+            id: LAYER,
+            type: "circle",
+            source: SOURCE,
+            paint: {
+              "circle-color": ["get", "color"],
+              "circle-radius": ["case", ["boolean", ["feature-state", "hover"], false], 8, 6],
+              "circle-stroke-width": 2,
+              "circle-stroke-color": latest.current.ring || "#ffffff",
+            },
+          });
+          setReady(true);
+        });
+        let hovered: number | null = null;
+        const hover = (index: number | null) => {
+          if (hovered !== null) m.setFeatureState({ source: SOURCE, id: hovered }, { hover: false });
+          hovered = index;
+          if (index !== null) m.setFeatureState({ source: SOURCE, id: index }, { hover: true });
+        };
+        m.on("mousemove", LAYER, (e: MapLayerMouseEvent) => {
+          const index = e.features?.[0]?.id;
+          if (typeof index !== "number" || touchRef.current) return;
+          m.getCanvas().style.cursor = "pointer";
+          hover(index);
+          if (!shownRef.current?.pinned) setShownDot({ index, pinned: false });
+        });
+        m.on("mouseleave", LAYER, () => {
+          m.getCanvas().style.cursor = "";
+          hover(null);
+          if (!shownRef.current?.pinned) setShownDot(null);
+        });
+        m.on("click", (e) => {
+          const index = m.queryRenderedFeatures(e.point, { layers: [LAYER] })[0]?.id;
+          if (typeof index !== "number") return setShownDot(null);
+          const place = latest.current.places[index];
+          if (!place) return;
+          // A touch screen has no hover: the first tap shows the item, its title opens it.
+          if (touchRef.current && shownRef.current?.index !== index) return setShownDot({ index, pinned: true });
+          actionsRef.current.open(place.item, openModeOf(e.originalEvent));
+        });
+        m.on("dragstart", () => {
+          if (!shownRef.current?.pinned) setShownDot(null);
+        });
+        m.on("error", (e) => console.warn("Map:", e.error?.message ?? e));
+      },
+      (e) => {
+        console.error("Loading the map failed", e);
+        if (!gone) setFailed(true);
+      },
+    );
+    return () => {
+      gone = true;
+      map?.remove();
+      mapRef.current = null;
+      setReady(false);
+    };
+    // Made once; the style and data follow below.
+  }, []);
+
+  // The style follows the option and the theme.
+  const style = styleUrl(options.style, dark);
+  const shownStyle = useRef(style);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || shownStyle.current === style) return;
+    shownStyle.current = style;
+    setReady(false);
+    map.setStyle(style);
+  }, [style, ready]);
+
+  // The dots follow the items; the map fits them when which items are shown changes (not when one
+  // of them is edited, so it doesn't jump away from where it was moved to).
+  const ids = useMemo(() => places.map((p) => p.item.id).join(","), [places]);
+  const fitted = useRef<string | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    (map.getSource(SOURCE) as GeoJSONSource | undefined)?.setData(geoJson(places));
+    if (theme.ring) map.setPaintProperty(LAYER, "circle-stroke-color", theme.ring);
+    if (fitted.current !== ids) {
+      fit(map, places, fitted.current !== null);
+      fitted.current = ids;
+    }
+    setShownDot((d) => (d && d.index < places.length ? d : null));
+  }, [places, ids, ready, theme.ring]);
+
+  // The shown dot's place on the map, kept while the map moves.
+  const shownPlace = shownDot ? places[shownDot.index] : undefined;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !shownPlace) return setAnchor(null);
+    const place = () => {
+      const p = map.project([shownPlace.at.lng, shownPlace.at.lat]);
+      setAnchor({ x: p.x, y: p.y });
+    };
+    place();
+    map.on("move", place);
+    return () => {
+      map.off("move", place);
+    };
+  }, [shownPlace]);
+
+  const shownFields = layout.hideEmpty && shownPlace ? fields.filter((f) => !isEmptyValue(fieldValue(shownPlace.item, f))) : fields;
+  const zoom = (by: number) => mapRef.current?.easeTo({ zoom: mapRef.current.getZoom() + by });
+
+  return (
+    <div ref={box} className="map-block">
+      <div
+        className="map-block__map"
+        style={{ "--map-height": `${options.height}rem` } as CSSProperties}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && shownDot) setShownDot(null);
+        }}
+      >
+        <div ref={canvas} className="map-block__canvas" />
+        {failed && <p className="helper map-block__message">The map couldn't be loaded.</p>}
+        {!failed && !chosen && <p className="helper map-block__message">Choose the field with the location in Block settings.</p>}
+        <div className="map-block__controls">
+          <IconButton kind="secondary" size="sm" label="Zoom in" align="left" autoAlign onClick={() => zoom(1)}>
+            <ZoomIn />
+          </IconButton>
+          <IconButton kind="secondary" size="sm" label="Zoom out" align="left" autoAlign onClick={() => zoom(-1)}>
+            <ZoomOut />
+          </IconButton>
+          <IconButton
+            kind="secondary"
+            size="sm"
+            label={`Show all ${collection.pluralName}`}
+            align="left"
+            autoAlign
+            onClick={() => mapRef.current && fit(mapRef.current, places, true)}
+          >
+            <CenterToFit />
+          </IconButton>
+        </div>
+        {shownPlace && anchor && (
+          <Popover
+            open
+            autoAlign
+            align="top"
+            className={shownDot?.pinned ? "map-block__popover map-block__popover--pinned" : "map-block__popover"}
+            style={{ left: anchor.x, top: anchor.y }}
+          >
+            <span className="map-block__anchor" />
+            <PopoverContent className="map-block__item">
+              <Link
+                href={`#/collections/${collection.id}/items/${shownPlace.item.id}`}
+                {...itemLinkProps(shownPlace.item, actions)}
+                className={isStruckThrough(collection, shownPlace.item) ? "map-block__title item--struck" : "map-block__title"}
+              >
+                <Highlight text={itemLabel(collection, shownPlace.item)} query={search} />
+              </Link>
+              {shownFields.length > 0 && (
+                <dl className="item-card__fields">
+                  {shownFields.map((f: FieldDef) => (
+                    <div key={f.id} className="item-card__field">
+                      {!layout.hiddenLabels.includes(f.id) && <dt className="cds--label">{f.name}</dt>}
+                      <dd>
+                        <FieldCell field={f} item={shownPlace.item} refs={refs} search={search} actions={actions} />
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+      {(legend.length > 0 || (chosen && missing > 0)) && (
+        <div className="map-block__legend">
+          {legend.map((g) => (
+            <span key={g.key} className="map-block__legend-entry">
+              <span className="map-block__swatch" style={{ background: g.color }} />
+              <Highlight text={g.label} query="" />
+            </span>
+          ))}
+          {chosen && missing > 0 && (
+            <span className="helper">
+              {missing} without a location
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MapOptionsEditor({ collection, options, onChange }: BlockOptionsProps<MapOptions>) {
+  // Element ids unique per instance: the same page can be open in several tabs.
+  const uid = useId();
+  const location = collection.fields.find((f) => f.id === options.locationFieldId);
+  const pair = !!location && isCoordinateField(location);
+  return (
+    <div className="view-options">
+      <Select
+        size="sm"
+        id={`${uid}-map-location`}
+        labelText={pair ? "Latitude" : "Location"}
+        helperText={pair ? undefined : "Text with both coordinates (“52.37, 4.89”, a map link), or a number field with the latitude."}
+        value={options.locationFieldId ?? ""}
+        onChange={(e) => onChange({ ...options, locationFieldId: e.target.value || null })}
+      >
+        <SelectItem value="" text="None" />
+        {locationFields(collection).map((f) => (
+          <SelectItem key={f.id} value={f.id} text={f.name} />
+        ))}
+      </Select>
+      {pair && (
+        <Select
+          size="sm"
+          id={`${uid}-map-longitude`}
+          labelText="Longitude"
+          value={options.longitudeFieldId ?? ""}
+          onChange={(e) => onChange({ ...options, longitudeFieldId: e.target.value || null })}
+        >
+          <SelectItem value="" text="None" />
+          {coordinateFields(collection)
+            .filter((f) => f.id !== options.locationFieldId)
+            .map((f) => (
+              <SelectItem key={f.id} value={f.id} text={f.name} />
+            ))}
+        </Select>
+      )}
+      <Select
+        size="sm"
+        id={`${uid}-map-style`}
+        labelText="Map style"
+        value={options.style}
+        onChange={(e) => onChange({ ...options, style: e.target.value as MapStyle })}
+      >
+        {MAP_STYLES.map((s) => (
+          <SelectItem key={s.value} value={s.value} text={s.text} />
+        ))}
+      </Select>
+      <Slider
+        id={`${uid}-map-height`}
+        labelText="Height"
+        min={MAP_HEIGHT.min}
+        max={MAP_HEIGHT.max}
+        step={MAP_HEIGHT.step}
+        value={options.height}
+        formatLabel={(v) => `${v}rem`}
+        hideTextInput
+        onChange={({ value }) => onChange({ ...options, height: value })}
+      />
+      <p className="helper">The dots are coloured by the block's grouping (Sort and group).</p>
+    </div>
+  );
+}
+
+const NAMED = { location: /locat|coord|place|position|geo/i, lat: /^lat/i, lng: /^(lng|lon)/i };
+
+/** A first guess at the location: two number fields named latitude / longitude, else a text field named like a location. */
+function guessLocation(collection: Collection): Pick<MapOptions, "locationFieldId" | "longitudeFieldId"> {
+  const numbers = coordinateFields(collection);
+  const lat = numbers.find((f) => NAMED.lat.test(f.name));
+  const lng = numbers.find((f) => NAMED.lng.test(f.name));
+  if (lat && lng) return { locationFieldId: lat.id, longitudeFieldId: lng.id };
+  const text = pickableFields(collection).find((f) => isLocationTextField(f) && NAMED.location.test(f.name));
+  return { locationFieldId: text?.id ?? null, longitudeFieldId: null };
+}
+
+export const mapView = defineBlockType<MapOptions>({
+  kind: "map",
+  label: "Map",
+  icon: Earth,
+  defaultOptions: (collection) => ({ ...guessLocation(collection), height: MAP_HEIGHT.initial, style: "auto" }),
+  uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true } }),
+  normalizeOptions(raw, collection) {
+    const o = (raw ?? {}) as Partial<MapOptions>;
+    const fields = pickableFields(collection);
+    const location = fields.find((f) => f.id === o.locationFieldId && (isLocationTextField(f) || isCoordinateField(f)));
+    const longitude = location && isCoordinateField(location) ? fields.find((f) => f.id === o.longitudeFieldId && isCoordinateField(f)) : undefined;
+    return {
+      locationFieldId: location?.id ?? null,
+      longitudeFieldId: longitude?.id ?? null,
+      height:
+        typeof o.height === "number" ? Math.min(MAP_HEIGHT.max, Math.max(MAP_HEIGHT.min, Math.round(o.height))) : MAP_HEIGHT.initial,
+      style: MAP_STYLES.some((s) => s.value === o.style) ? o.style! : "auto",
+    };
+  },
+  View: MapView,
+  OptionsEditor: MapOptionsEditor,
+});

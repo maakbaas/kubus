@@ -1,6 +1,7 @@
 import { cardsView } from "./CardsView";
 import { chartBlock } from "./ChartBlock";
 import { componentBlock } from "./ComponentBlock";
+import { mapView } from "./MapView";
 import { markdownBlock } from "./MarkdownBlock";
 import type { BlockTypeDefinition } from "./registry";
 import { tableView } from "./TableView";
@@ -8,7 +9,7 @@ import { pickableFields, type Collection } from "../domain/model";
 import { newBlock, type ViewBlock, type ViewState } from "../domain/views";
 
 /** All block types, in the order the "Show as" menu lists them. Add new block types here. */
-export const BLOCK_TYPES: BlockTypeDefinition[] = [tableView, cardsView, chartBlock, markdownBlock, componentBlock];
+export const BLOCK_TYPES: BlockTypeDefinition[] = [tableView, cardsView, chartBlock, mapView, markdownBlock, componentBlock];
 
 /** The block type for a kind; falls back to the table for unknown (e.g. removed) kinds. */
 export const blockType = (kind: string): BlockTypeDefinition => BLOCK_TYPES.find((v) => v.kind === kind) ?? tableView;

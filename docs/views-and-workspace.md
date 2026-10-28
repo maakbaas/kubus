@@ -64,7 +64,19 @@ Extension points are registries, not special cases in pages:
   the same at every width (labels beside values, a label wrapping when the card is very narrow);
   "Cover beside the text" puts the cover at the card's left instead of on top, at every width (a
   list row where one card fills the row)),
-  `component` (`views/ComponentBlock.tsx`) and
+  `component` (`views/ComponentBlock.tsx`),
+  `map` (`views/MapView.tsx`: the items as dots on a vector map, MapLibre GL with OpenFreeMap's styles and tiles, the
+  one thing the app loads from elsewhere; MapLibre is loaded on demand, `views/mapLibre.ts`, its worker bundled. An
+  item's place is read from its fields, `domain/geo.ts`: Location is a text field or a component giving text with both
+  coordinates, "52.37, 4.89", "geo:52.37,4.89" or a map link with "@lat,lon" / "q=lat,lon", or a number field
+  with the latitude, then Longitude a second number field; a first guess by field name. The block's grouping colours
+  the dots, Carbon's categorical palette for the theme, with a legend and how many items have no place; ungrouped
+  they are `--cds-interactive`. Hovering a dot shows a Carbon popover with the item's title and the block's fields,
+  clicking it opens the item (`openModeOf`); on touch screens the first tap shows it and its title opens it. The
+  map fits the dots when which items are shown changes, not when one is edited. Zoom buttons are Carbon icon
+  buttons; the wheel scrolls the page, Ctrl/Cmd + wheel zooms (cooperative gestures). Block settings: Location,
+  Longitude, Map style (automatic: light / dark like the app; Liberty, Bright) and Height),
+  and
   `chart` (`views/ChartBlock.tsx`: settings and view; `domain/chart.ts`: the values, pure; `views/chartSpec.ts`: Carbon
   Charts' component, data and options for them; `views/ChartCanvas.tsx`: Carbon Charts itself, a lazily loaded chunk with
   d3, so the app doesn't load it until a chart is shown). Like a table, its filter picks the items and its grouping (Sort
