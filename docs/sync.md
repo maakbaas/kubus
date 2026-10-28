@@ -185,7 +185,7 @@ takes the new one when its settings are opened. A source's name: letters, digits
   offset / limit, and with the first page the total and the groups' sizes), `POST …/row` (one row
   by its key). The app never sends SQL but for a query collection's own query.
 - *Connectors* (`server/src/connectors/`): `Connector` (check, tables, describe, query, row, close),
-  picked by scheme in `connectors/index.ts`; another kind of source is another file there and
+  picked by the source's kind in `connectors/index.ts` (its fields listed in `connectors/kinds.ts`); another kind of source is another file there and
   nothing else changes. `Sources` (`server/src/sources.ts`) holds one per source and turns a
   connector's `SourceError` into 400, anything else into 502.
 - *Postgres* (`connectors/postgres.ts`, SQL in `postgresSql.ts`, pure and tested without a

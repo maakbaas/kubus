@@ -131,16 +131,18 @@ New connectors, in this order (read-only like the others; queried by the source 
 
 16. Groundwork. Secret parts of an address beyond its password: secret calendar addresses and
     published Google Sheets carry the secret in the path, API keys sometimes in the query string.
-    Sources are stored as a kind and its fields (`server/src/connectors/kinds.ts`, no connection
-    string any more), so a kind declares which of its fields are secret and devices see the address
-    without them (`webcals://calendar.google.com/…`), still dropped when the address changes
-    (`placeOf`). `string_list` in `memory.ts`. A shared `httpDocument.ts` for #19 and #20: one GET
+    Sources are no longer one connection string with a scheme picking the connector: each is a kind
+    with its own fields (`server/src/connectors/kinds.ts`; the app builds the form from them). So
+    the connectors below are kinds with fields, not URL formats: the URL-like forms once written in #17-#20
+    were the old design; read them as hints for the fields. A kind can mark a field secret (like a calendar
+    address's path, kept like a password: devices never see it, dropped when the address changes,
+    `placeOf`). `string_list` in `memory.ts`. A shared `httpDocument.ts` for #19 and #20: one GET
     with `ETag` / `If-Modified-Since`, kept about a minute, the source's timeout, a size limit (about
     20 MB), status codes and content types turned into a clear problem.
 17. Actual Budget through [actual-http-api](https://github.com/jhonderson/actual-http-api), not Actual
     itself (`@actual-app/api` needs `better-sqlite3` and Actual's core, holds one budget per process
     and must match the Actual server's version; the sync server's budget file is stale without its
-    CRDT messages). `actual://host[:port]/<budget-sync-id>` (https) or `actual+http://…`, the API key
+    CRDT messages). fields: address (https, or http), budget sync id; the API key
     as password (`x-api-key`); only GETs and `POST /v1/budgets/{id}/run-query` (ActualQL: filter,
     orderBy, groupBy, select, calculate, limit, offset), an "experimental" endpoint whose 501
     (`EXPERIMENTAL_OPERATIONS_ENABLED=false`) is the source's problem. Every request loads and syncs
@@ -149,24 +151,24 @@ New connectors, in this order (read-only like the others; queried by the source 
     category: budgeted, spent, balance; queried in memory); amounts from cents, dates `yyyy-mm-dd`,
     split transactions with stable keys; no query language. An encrypted budget is the source's
     problem until a source can have a second secret (its encryption password).
-18. MySQL / MariaDB, a dialect beside `postgresSql.ts` / `d1Sql.ts`: `mysql://user@host:3306/db`,
-    `mariadb://…`, schemas are databases, driver `mysql2` (pure JS). Backtick quoting,
+18. MySQL / MariaDB, a dialect beside `postgresSql.ts` / `d1Sql.ts`: kinds MySQL and MariaDB with fields host, port, database, user (like PostgreSQL),
+    schemas are databases, driver `mysql2` (pure JS). Backtick quoting,
     case-insensitive collations, numeric text order and empty values last as the app has them,
     `TINYINT(1)` a checkbox, zero dates empty, `DATETIME` vs `TIMESTAMP` time zones, `JSON` / `BLOB` /
     `GEOMETRY` hidden or dropped. Every read in `START TRANSACTION READ ONLY`, a warning for a user that
     can write (`SHOW GRANTS`); timeout by `MAX_EXECUTION_TIME` (MySQL) or `max_statement_time`
     (MariaDB); a query is one `SELECT` / `WITH`. Tested on MySQL 8 and MariaDB (`KUBUS_TEST_MYSQL`).
-19. Calendar (ICS) subscriptions: `webcal://` / `webcals://` and `ics+https://`, one calendar per
-    source, table `events`, the address's path and query secret. `ical.js` parses; repeating events
+19. Calendar (ICS) subscriptions: kind Calendar (ICS), a field for its address (`webcal://`, `webcals://` or https, secret in its
+    path or query), one calendar per source, table `events`. `ical.js` parses; repeating events
     (`RRULE`, `EXDATE`, `RECURRENCE-ID`, `VTIMEZONE`) are expanded only within the filter's date range
     (else a year back and ahead, bounded by `MAX_ROWS`). Columns: title, start, end, all-day, start and
     end date (all-day events per day), location, description, status, categories, recurring; key: UID
     plus the occurrence's start. Later: CalDAV (editing), several calendars per source.
 20. JSON and CSV over HTTP, the long tail without code per app (a published Google Sheet is CSV):
-    `json+https://…`, `csv+https://…` (and `+http`), NDJSON detected. The rows are at the address's
-    fragment read as a JSON Pointer (`…#/data/items`, never sent; none: the top level). The password
-    goes as `Authorization: Bearer`, or under the address's user as header name
-    (`json+https://X-Api-Key@host/…`). Paging by `Link: rel="next"` up to `MAX_ROWS`. Columns inferred
+    kinds JSON and CSV with an address field (https or http); NDJSON detected. The rows are at the
+    field "Rows at", read as a JSON Pointer (`/data/items`; empty: the top level). The password
+    goes as `Authorization: Bearer`, or, with a field "Header name", under that header
+    (`X-Api-Key`). Paging by `Link: rel="next"` up to `MAX_ROWS`. Columns inferred
     from a sample (numbers, booleans, ISO dates and date & times, string arrays as lists, objects
     flattened one level, deeper ones a hidden text column). CSV: RFC 4180, a header row, the delimiter
     detected (`,` `;` tab), decimal commas only when the whole column has them; an own parser. Key: a
