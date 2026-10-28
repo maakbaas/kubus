@@ -226,3 +226,27 @@ const UPDATED_FIELD = "$updated";
 
 /** The filter's date period rule (its first "between" rule), if any. */
 export const periodRule = (filters: FilterRule[]) => filters.find((r) => r.operator === "between");
+
+/**
+ * A rolling period counted from a page item's date instead of today: its value, then "@$item." and the
+ * item's date field ("day-6..day+0@$item.f1": the 7 days up to the item's date). On an item page the
+ * filter works it out from that item's value (query.ts resolvePageValues); elsewhere it matches nothing.
+ */
+const ANCHOR = "@$item.";
+
+/** A period value and the page item's date field it is counted from (null: today). */
+export function splitAnchor(value: string): { value: string; fieldId: string | null } {
+  const at = value.lastIndexOf(ANCHOR);
+  return at < 0 ? { value, fieldId: null } : { value: value.slice(0, at), fieldId: value.slice(at + ANCHOR.length) || null };
+}
+
+/** A period value counted from the page item's date field (null: from today, as it is). */
+export const anchoredValue = (value: string, fieldId: string | null) => (fieldId ? `${value}${ANCHOR}${fieldId}` : value);
+
+/** The day (yyyy-mm-dd) a date or date & time value is on here, or null. */
+export function dayOfValue(v: unknown): string | null {
+  if (typeof v !== "string" || !v) return null;
+  if (DAY.test(v)) return v;
+  const t = Date.parse(v);
+  return Number.isNaN(t) ? null : formatDate(new Date(t));
+}

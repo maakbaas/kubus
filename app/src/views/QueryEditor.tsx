@@ -166,7 +166,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
         <Heading className="query-editor__title">{title}</Heading>
         {/* Not for a remote collection without dates (its rows have no Created or Updated). */}
         {dateFields(collection).length > 0 && (
-          <DatePeriodFilter collection={collection} filters={query.filters} onChange={(filters) => onChange({ ...query, filters })} />
+          <DatePeriodFilter collection={collection} filters={query.filters} page={page} onChange={(filters) => onChange({ ...query, filters })} />
         )}
         {query.filters.length === 0 && <p className="helper">{emptyText}</p>}
         {query.filters.map((rule) => {

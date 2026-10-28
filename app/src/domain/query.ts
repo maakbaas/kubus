@@ -4,7 +4,7 @@
 
 import { dollarNames, ERROR_PREFIX, fieldLookup, render, splitWarnings, type RefLabel } from "./components";
 import { checklistItems } from "./checklist";
-import { resolveRange } from "./datePeriod";
+import { dayOfValue, resolveRange, splitAnchor } from "./datePeriod";
 import { formatDate, htmlPlainText } from "./fieldKinds";
 import { filterTree, holds, requiredRules } from "./filterTree";
 import { markdownPlainText } from "./markdownExcerpt";
@@ -242,8 +242,17 @@ export const isPageValue = (value: string) => value === PAGE_ITEM || value.start
 
 /** Filters with page-item values filled in from the page's item (no page: they match nothing). */
 export function resolvePageValues(filters: FilterRule[], page: Item | null): FilterRule[] {
-  if (!filters.some((r) => isPageValue(r.value))) return filters;
+  const anchored = (r: FilterRule) => r.operator === "between" && splitAnchor(r.value).fieldId !== null;
+  if (!filters.some((r) => isPageValue(r.value) || anchored(r))) return filters;
   return filters.map((r) => {
+    // A period counted from the page's item's date: its days from that date (none: matches nothing).
+    if (anchored(r)) {
+      const { value, fieldId } = splitAnchor(r.value);
+      const day = page ? dayOfValue(page.values[fieldId!]) : null;
+      const period = day ? resolveRange(value, day) : null;
+      if (period) return { ...r, value: `${period.start}..${period.end}` };
+      return { ...r, value: `${ERROR_PREFIX}${page ? "This item has no date to count the period from" : "A period counted from the page's item: only on an item page"}` };
+    }
     if (r.value === PAGE_ITEM) return { ...r, value: page?.id ?? "" };
     if (!isPageValue(r.value)) return r;
     const v = page?.values[r.value.slice(PAGE_ITEM.length + 1)];
@@ -295,7 +304,7 @@ export function filterValueProblem(field: FieldDef, operator: FilterOperator, va
   if (value.startsWith(ERROR_PREFIX)) return value.slice(ERROR_PREFIX.length);
   const v = value.trim();
   if (v === "" || isPageValue(v)) return undefined;
-  if (operator === "between") return (field.kind === "date" || field.kind === "datetime") && resolveRange(v) ? undefined : "A period is yyyy-mm-dd..yyyy-mm-dd, day-n..day+0, week, month or year+0..day+0 (so far), or day, week, month or year +/- a number";
+  if (operator === "between") return (field.kind === "date" || field.kind === "datetime") && resolveRange(splitAnchor(v).value) ? undefined : "A period is yyyy-mm-dd..yyyy-mm-dd, day-n..day+0, week, month or year+0..day+0 (so far), or day, week, month or year +/- a number";
   const compares = operator === "is" || operator === "isNot" || operator === "gt" || operator === "lt" || operator === "before" || operator === "after";
   if (!compares) return undefined;
   if (field.kind === "checkbox" && !/^(true|false)$/i.test(v)) return "A checkbox is true or false";

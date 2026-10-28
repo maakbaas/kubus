@@ -5,6 +5,7 @@ import { formatDate } from "../domain/fieldKinds";
 import { newId, type Collection } from "../domain/model";
 import type { FilterRule } from "../domain/query";
 import {
+  anchoredValue,
   dateFields,
   defaultDateField,
   parseRolling,
@@ -21,6 +22,7 @@ import {
   rollingRangeLabel,
   rollingValue,
   shiftPeriod,
+  splitAnchor,
   toDateLabel,
   toDateValue,
   type Period,
@@ -52,17 +54,24 @@ function yearsAround(shown: number, current: number): number[] {
  * too), and is kept as the filter's one "between" rule (domain/datePeriod.ts), which the rule list
  * doesn't show. The current day, week, month or year is kept counted from today ("this week" stays
  * this week once saved), and so are a range ending today ("the last 7 days") and this week, month
- * or year so far ("To date": year to date); any other is kept as its days.
+ * or year so far ("To date": year to date); any other is kept as its days. On an item page (`page`, its
+ * collection) one counted from a day can be counted from the page's item's date instead ("Counted from":
+ * the last 7 days up to this measurement's date; `anchoredValue`), worked out for each page's item.
  */
-export function DatePeriodFilter({ collection, filters, onChange }: { collection: Collection; filters: FilterRule[]; onChange(filters: FilterRule[]): void }) {
+export function DatePeriodFilter({ collection, filters, page, onChange }: { collection: Collection; filters: FilterRule[]; page?: Collection; onChange(filters: FilterRule[]): void }) {
   const uid = useId();
   const fields = dateFields(collection);
   const rule = periodRule(filters);
   const today = formatDate(new Date());
-  const rolling = rule ? parseRolling(rule.value) : null;
-  const rollingRange = rule ? parseRollingRange(rule.value) : null;
-  const toDate = rule ? parseToDate(rule.value) : null;
-  const period = rule ? resolveRange(rule.value, today) : null;
+  const { value, fieldId: anchor } = rule ? splitAnchor(rule.value) : { value: "", fieldId: null };
+  const rolling = rule ? parseRolling(value) : null;
+  const rollingRange = rule ? parseRollingRange(value) : null;
+  const toDate = rule ? parseToDate(value) : null;
+  const counted = !!(rolling || rollingRange || toDate);
+  // The page's item's dates a period can be counted from; the one it is.
+  const pageDates = page ? page.fields.filter((f) => f.kind === "date" || f.kind === "datetime") : [];
+  const anchorField = anchor ? pageDates.find((f) => f.id === anchor) : undefined;
+  const period = rule ? resolveRange(value, today) : null;
   // The field and "Range" before a period is set (no rule yet), and "Range" for a period
   // that is also a whole month (say), so the switcher doesn't jump to "Month" while start and end are chosen.
   const [chosenField, setChosenField] = useState<string>();
@@ -80,8 +89,10 @@ export function DatePeriodFilter({ collection, filters, onChange }: { collection
     const current = nextKind && nextKind !== "range" && rangeValue(periodAround(nextKind, today)) === rangeValue(next);
     store(current ? rollingValue({ kind: nextKind, offset: 0 }) : nextKind === "range" ? rangeOrRolling(next, today) : rangeValue(next));
   };
-  const store = (value: string) => {
-    const written: FilterRule = { id: rule?.id ?? newId(), fieldId, operator: "between", value };
+  // Counted from the page's item's date stays so while the period is counted from a day (a fixed one has its days).
+  const store = (next: string, from = anchor) => {
+    const fromDay = parseRolling(next) || parseRollingRange(next) || parseToDate(next);
+    const written: FilterRule = { id: rule?.id ?? newId(), fieldId, operator: "between", value: anchoredValue(next, fromDay ? from : null) };
     onChange(rule ? filters.map((r) => (r === rule ? written : r)) : [written, ...filters]);
   };
   const pick = (next: PeriodKind) => {
@@ -95,11 +106,14 @@ export function DatePeriodFilter({ collection, filters, onChange }: { collection
     if (toDate && next !== "day") return store(toDateValue(next));
     write(periodAround(next, period && !showsToday ? period.start : today), next);
   };
+  const counting = toDate ? toDateLabel(toDate) : rolling ? rollingLabel(rolling) : rollingRange ? rollingRangeLabel(rollingRange) : "";
   const label = !period || !kind
     ? kind === "range"
       ? "Choose the first and last day"
       : "Any date"
-    : toDate
+    : anchor
+      ? `${counting} · counted from this ${page?.name ?? "item"}'s ${anchorField?.name ?? "date"}`
+      : toDate
       ? `${toDateLabel(toDate)} · ${periodLabel(period, "range")}`
       : rolling
         ? `${rollingLabel(rolling)} · ${periodLabel(period, kind)}`
@@ -137,10 +151,10 @@ export function DatePeriodFilter({ collection, filters, onChange }: { collection
       </div>
       <div className="date-period__nav">
         <span className="date-period__label">{label}</span>
-        <IconButton autoAlign label="Previous" kind="ghost" size="sm" disabled={!period || !kind} onClick={() => period && kind && write(shiftPeriod(period, kind, -1))}>
+        <IconButton autoAlign label="Previous" kind="ghost" size="sm" disabled={!period || !kind || !!anchor} onClick={() => period && kind && write(shiftPeriod(period, kind, -1))}>
           <ChevronLeft />
         </IconButton>
-        <IconButton autoAlign label="Next" kind="ghost" size="sm" disabled={!period || !kind} onClick={() => period && kind && write(shiftPeriod(period, kind, 1))}>
+        <IconButton autoAlign label="Next" kind="ghost" size="sm" disabled={!period || !kind || !!anchor} onClick={() => period && kind && write(shiftPeriod(period, kind, 1))}>
           <ChevronRight />
         </IconButton>
         <IconButton
@@ -168,6 +182,22 @@ export function DatePeriodFilter({ collection, filters, onChange }: { collection
           <Close />
         </IconButton>
       </div>
+      {pageDates.length > 0 && (
+        <Select
+          id={`${uid}-date-from`}
+          labelText="Counted from"
+          size="sm"
+          value={anchor ?? ""}
+          disabled={!counted}
+          helperText={counted ? undefined : "For a period counted from today: this week, the last 7 days, …"}
+          onChange={(e) => store(value, e.target.value || null)}
+        >
+          <SelectItem value="" text="Today" />
+          {pageDates.map((f) => (
+            <SelectItem key={f.id} value={f.id} text={`This ${page!.name}'s ${f.name}`} />
+          ))}
+        </Select>
+      )}
       {period && (kind === "week" || kind === "month" || kind === "year") && (
         <Checkbox
           id={`${uid}-to-date`}

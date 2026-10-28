@@ -40,7 +40,10 @@ Extension points are registries, not special cases in pages:
   `month+0`: `resolveRange` works it out when the filter runs), so a saved "this week" stays this
   week and the panel says "This week · …"; so is a range ending today, as days from today
   (`day-6..day+0`, "Last 7 days · …", `rangeOrRolling`), and the current week, month or year so far ("Year to date", a
-  checkbox under Week, Month and Year: `year+0..day+0`, "Year to date · 1 Jan – 28 Oct 2026"); any other period is stored as its days
+  checkbox under Week, Month and Year: `year+0..day+0`, "Year to date · 1 Jan – 28 Oct 2026"). On an item page a
+  period counted from a day can be counted from the page's item's date instead ("Counted from": Today or "This
+  measurement's Date"; stored as the value then `@$item.<field>`, `anchoredValue` in domain/datePeriod.ts, worked out
+  for each page's item by `resolvePageValues`; elsewhere, or for an item without that date, it matches nothing); any other period is stored as its days
   (`yyyy-mm-dd..yyyy-mm-dd`, both included; what they are, a week, a month, …, follows from them).
   The current period can't be kept as fixed days, by design. `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.

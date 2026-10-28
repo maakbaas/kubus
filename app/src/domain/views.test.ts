@@ -68,6 +68,17 @@ describe("page item filter values", () => {
     expect(resolvePageValues(filters, null).map((r) => r.value)).toEqual(["", "", "x"]);
   });
 
+  it("work out a period counted from the page's item's date: its days up to it, else nothing matches", () => {
+    const dated = { ...page, values: { ...page.values, read: "2026-03-10" } };
+    const week = [rule("read", "between", "day-6..day+0@$item.read")];
+    expect(resolvePageValues(week, dated).map((r) => r.value)).toEqual(["2026-03-04..2026-03-10"]);
+    expect(resolvePageValues([rule("read", "between", "month+0@$item.read")], dated)[0].value).toBe("2026-03-01..2026-03-31");
+    expect(resolvePageValues(week, page)[0].value).toMatch(/^⚠/);
+    expect(resolvePageValues(week, null)[0].value).toMatch(/^⚠/);
+    // Counted from today: as it is.
+    expect(resolvePageValues([rule("read", "between", "day-6..day+0")], dated)[0].value).toBe("day-6..day+0");
+  });
+
   it("presets new items to pass reference rules", () => {
     const preset = filterPreset(books, [rule("author", "is", "a1"), rule("tags", "is", "t1"), rule("tags", "is", "t2"), rule("pages", "is", "3"), rule("author", "is", PAGE_ITEM)]);
     expect(preset).toEqual({ author: "a1", tags: ["t1", "t2"] });
