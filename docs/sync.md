@@ -131,7 +131,7 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
 
 What a server offers beyond sync is set in the app: the language model in Settings → AI ("The server's",
 `ui/AiSettings.tsx`), the remote sources in Settings → Connections (`ui/ConnectionSettings.tsx`) and the maps' style
-in Settings → Maps (`ui/MapSettings.tsx`: one OpenFreeMap style for every Map block on every device, `MAP_STYLE_IDS`;
+in Settings → Maps (`ui/MapSettings.tsx`: one OpenFreeMap style for every Map block on every device, `MAP_STYLE_IDS`, Bright until one is chosen (`DEFAULT_MAP_STYLE`);
 a device keeps the last one it heard in `kubus.mapStyle`, `app/mapStyle.ts`, asks the server once a map is shown, and
 without a server, or with one of an earlier version that has no `map`, sets its own); each saves
 its part on top of what the server holds then (`ui/useServerSettings.ts`). `GET` / `PUT /api/settings`

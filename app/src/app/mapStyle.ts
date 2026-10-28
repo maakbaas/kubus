@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { MAP_STYLE_IDS, type MapStyleId } from "../../../shared/settings";
+import { DEFAULT_MAP_STYLE, MAP_STYLE_IDS, type MapStyleId } from "../../../shared/settings";
 import { useStore } from "./store";
 
 // How every map looks (Settings → Maps), one style for all Map blocks: the server's when this device
@@ -13,9 +13,9 @@ const listeners = new Set<() => void>();
 function stored(): MapStyleId {
   try {
     const v = localStorage.getItem(KEY);
-    return MAP_STYLE_IDS.includes(v as MapStyleId) ? (v as MapStyleId) : "auto";
+    return MAP_STYLE_IDS.includes(v as MapStyleId) ? (v as MapStyleId) : DEFAULT_MAP_STYLE;
   } catch {
-    return "auto";
+    return DEFAULT_MAP_STYLE;
   }
 }
 let current = stored();

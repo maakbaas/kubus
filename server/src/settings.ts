@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 import { HttpError } from "../../shared/router.ts";
-import { MAP_STYLE_IDS, SOURCE_NAME, type ServerAiSettings, type ServerMapSettings, type ServerSettingsUpdate, type ServerSettingsView, type ServerSourceSettings } from "../../shared/settings.ts";
+import { DEFAULT_MAP_STYLE, MAP_STYLE_IDS, SOURCE_NAME, type ServerAiSettings, type ServerMapSettings, type ServerSettingsUpdate, type ServerSettingsView, type ServerSourceSettings } from "../../shared/settings.ts";
 import type { SourceConfig } from "./connectors/connector.ts";
 import { connectionKinds, fieldsFor, placeOf, secretKeysOf } from "./connectors/kinds.ts";
 
@@ -34,7 +34,7 @@ interface Db {
   query<R>(text: string, values?: unknown[]): Promise<{ rows: R[] }>;
 }
 
-export const NO_SETTINGS: Stored = { ai: { url: "", key: "", fieldModel: "", codeModel: "" }, sources: [], map: { style: "auto" } };
+export const NO_SETTINGS: Stored = { ai: { url: "", key: "", fieldModel: "", codeModel: "" }, sources: [], map: { style: DEFAULT_MAP_STYLE } };
 
 /** A map style as stored or sent; else `fallback`. */
 const mapOf = (raw: unknown, fallback: ServerMapSettings): ServerMapSettings => {

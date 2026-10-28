@@ -16,6 +16,8 @@ export interface ServerAiSettings {
 /** How every device's maps look (the Map block): an OpenFreeMap style; "auto" follows the theme (light / dark). */
 export const MAP_STYLE_IDS = ["auto", "positron", "dark", "liberty", "bright"] as const;
 export type MapStyleId = (typeof MAP_STYLE_IDS)[number];
+/** The style until one is chosen. */
+export const DEFAULT_MAP_STYLE: MapStyleId = "bright";
 export interface ServerMapSettings {
   style: MapStyleId;
 }

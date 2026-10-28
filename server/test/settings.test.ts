@@ -11,7 +11,7 @@ const crm = { host: "crm", port: "5432", database: "crm", user: "reader", ssl: "
 const stored: Stored = {
   ai: { url: "https://api.example.com/v1", key: "sk-secret", fieldModel: "small", codeModel: "" },
   sources: [{ id: "s1", name: "CRM", formerNames: [], kind: "postgres", fields: crm, password: "pw", secrets: {}, schemas: [], timeoutSeconds: 30 }],
-  map: { style: "auto" },
+  map: { style: "bright" },
 };
 const update = (over: { ai?: Partial<ServerSettingsUpdate["ai"]>; source?: Partial<ServerSettingsUpdate["sources"][number]> } = {}): ServerSettingsUpdate => ({
   ai: { url: stored.ai.url, fieldModel: "small", codeModel: "", ...over.ai },
@@ -27,7 +27,7 @@ describe("server settings", () => {
   });
 
   it("keep the map style unless one is sent, and only a known one", () => {
-    expect(applyUpdate(stored, update()).map).toEqual({ style: "auto" });
+    expect(applyUpdate(stored, update()).map).toEqual({ style: "bright" });
     const liberty = applyUpdate(stored, { ...update(), map: { style: "liberty" } });
     expect(liberty.map).toEqual({ style: "liberty" });
     expect(applyUpdate(liberty, update()).map).toEqual({ style: "liberty" });
