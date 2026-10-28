@@ -11,9 +11,8 @@
  * The version of the synced data's shape: this list and what its values may hold. Raised with
  * every change to them (app/src/data/sync/spec.test.ts fails until it is). Devices send it with every
  * sync; the server turns away those older than its SYNC_COMPATIBLE.
- * 2: a chart block's options (in a view's config, an item view's layout) have a new shape (series, X axis, parts).
  */
-export const SYNC_VERSION = 2;
+export const SYNC_VERSION = 1;
 /**
  * The oldest SYNC_VERSION that still reads and writes this version's data correctly: unchanged by
  * an added column or table (an older device leaves what it doesn't know as it is), raised to
@@ -22,7 +21,7 @@ export const SYNC_VERSION = 2;
  * they are updated; a device whose SYNC_COMPATIBLE is newer than the server's SYNC_VERSION is turned away too
  * (the server's data isn't converted yet: update the server first).
  */
-export const SYNC_COMPATIBLE = 2;
+export const SYNC_COMPATIBLE = 1;
 
 /** Maps to SQLite / Postgres: text, number = real / double precision, int, bool = 0|1 / boolean,
  *  json = text / jsonb, date = text YYYY-MM-DD / date, timestamp = ISO text / timestamptz,
