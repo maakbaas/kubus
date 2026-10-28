@@ -2113,7 +2113,7 @@ img[data-lightbox] {
   align-self: stretch;
   display: grid;
   /* How it joins the rules before it (And / Or, "Where" for the first), field, condition, value, remove. */
-  grid-template-columns: 4.5rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: 6.5rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: var(--cds-spacing-03);
   align-items: center;
 }
