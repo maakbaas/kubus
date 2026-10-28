@@ -169,5 +169,12 @@ API:
     and write the knowledge base: tools for search, reading collections, items and a view's result,
     and creating and editing items, each a thin translation onto the same `/api/v1` routes (served by
     the headless device, never into Postgres; documented beside them in `app/src/help/api.md`).
-    Remote MCP over streamable HTTP on the server, behind its token. Today one shared token
-    (`KUBUS_TOKEN`) can do everything: worth a read-only token for assistants that only need to read.
+    Remote MCP over streamable HTTP on the server, behind an API token (#22, so an assistant can be
+    given one that only reads).
+22. API tokens made in the app (Settings → Server), read or read & write, instead of the API using
+    `KUBUS_TOKEN` (which stays the devices' token, with access to everything as now). A server-only
+    table `api_tokens` (name, access, the token's SHA-256, created, last used; a migration in
+    `server/src/migrations.ts`, not synced); a token is random (`kubus_…`) and shown once. An API token
+    reaches only `/api/v1`; a read token only its `GET` / `HEAD` routes (every write, AI fields included,
+    is another method). Tokens are listed, made and revoked by devices only (`/api/tokens`). Reading
+    still runs the components already there (component values). Later: a token for one space, expiry.
