@@ -65,9 +65,17 @@ function barSpec() {
 const FILTER = /^Filter( \(\d+\))?$/;
 const barOf = (t) => t.page.locator(".ws-pane--active .filter-bar");
 const toolbarOf = (t) => t.page.locator(".ws-pane--active .views-bar").first();
-const labelOf = async (t) => (await barOf(t).locator(".filter-bar__label").evaluate((e) => e.textContent)).trim();
+// The label as the eye reads it: its words with the unit word (the kind dropdown) in place, not Carbon's hidden label.
+const labelOf = async (t) => (await barOf(t).locator(".filter-bar__label").evaluate((e) => { const c = e.cloneNode(true); c.querySelectorAll("label, svg").forEach((l) => l.remove()); return c.textContent; })).trim();
+/** The label without the kind a period with no unit word starts with ("Daily - Today - …": "Today - …"). */
+const wordsOf = async (t) => (await labelOf(t)).replace(/^(Hourly|Daily|Weekly|Monthly|Yearly) - /, "");
 const kindBox = (t) => barOf(t).locator(".filter-bar__kind");
-const kindShown = async (t) => (await kindBox(t).locator(".cds--list-box__label").innerText()).trim();
+const ADVERB = { Hour: "Hourly", Day: "Daily", Week: "Weekly", Month: "Monthly", Year: "Yearly" };
+const KIND_OF = Object.fromEntries(Object.entries(ADVERB).map(([k, v]) => [v, k]));
+/** What the dropdown trigger shows as text: the unit word ("week"), or the kind ("Monthly"), or "Any date" / "Range". */
+const triggerText = async (t) => (await kindBox(t).locator("button").first().innerText()).trim();
+/** The kind the dropdown has chosen ("Month"), or "Period" when none (Any date, a range): its tooltip is the menu's word. */
+const kindShown = async (t) => KIND_OF[await kindBox(t).locator("button").first().getAttribute("title")] ?? "Period";
 const barButton = (t, name) => barOf(t).getByRole("button", { name, exact: true });
 const tabsOf = (t) => t.page.locator(".ws-pane--active .views-bar [role=tab]").allInnerTexts();
 const activeTab = async (t) => (await t.page.locator(".ws-pane--active .views-bar [role=tab][aria-selected=true]").innerText()).replace(/\s+/g, " ").trim();
@@ -115,12 +123,12 @@ const saveView = async (t) => {
 /** Picks a kind in the bar's dropdown. */
 async function pickKind(t, name) {
   await kindBox(t).locator("button").first().click();
-  await t.page.getByRole("option", { name, exact: true }).click();
+  await t.page.getByRole("option", { name: ADVERB[name], exact: true }).click();
   await t.settle(100);
 }
 /** Where the bar and its controls are: the buttons must not move while it is stepped. */
 const boxesOf = (t) =>
-  barOf(t).evaluate((bar) => [bar, ...bar.querySelectorAll("button")].map((e) => {
+  barOf(t).evaluate((bar) => [bar, ...bar.querySelectorAll("button:not(.filter-bar__kind button)")].map((e) => {
     const r = e.getBoundingClientRect();
     return [Math.round(r.left * 10) / 10, Math.round(r.top * 10) / 10, Math.round(r.width * 10) / 10, Math.round(r.height * 10) / 10];
   }));
@@ -147,11 +155,12 @@ test("Show filter bar: stored with the view, kept after a reload, the Filter but
   await t.audit("filter bar on, View settings open", { shotOnFail: true });
   await t.escapeCloses("Escape closes View settings");
   await t.until("the Filter button moves onto the bar once the panel is closed", async () => (await barOf(t).getByRole("button", { name: FILTER }).count()) === 1 && (await toolbarOf(t).getByRole("button", { name: FILTER }).count()) === 0);
-  await t.check("the bar sits just below the tab strip, the Filter button first on its left edge", await t.page.evaluate(() => {
+  await t.check("the bar sits just below the tab strip, the Filter button last on its right edge", await t.page.evaluate(() => {
     const bar = document.querySelector(".ws-pane--active .filter-bar");
     const views = document.querySelector(".ws-pane--active .views-bar");
-    const first = bar.querySelector("button");
-    return !!bar && views.getBoundingClientRect().bottom <= bar.getBoundingClientRect().top + 1 && bar.getBoundingClientRect().top - views.getBoundingClientRect().bottom < 40 && Math.abs(first.getBoundingClientRect().left - bar.getBoundingClientRect().left) < 1;
+    const buttons = [...bar.querySelectorAll("button")].filter((b) => !b.closest(".filter-bar__kind"));
+    const last = buttons[buttons.length - 1];
+    return !!bar && views.getBoundingClientRect().bottom <= bar.getBoundingClientRect().top + 1 && bar.getBoundingClientRect().top - views.getBoundingClientRect().bottom < 40 && Math.abs(last.getBoundingClientRect().right - bar.getBoundingClientRect().right) < 1;
   }));
   await t.audit("filter bar, no period", { shotOnFail: true });
   await t.open(bookPath(t, ids));
@@ -210,21 +219,21 @@ test("no period yet: Any date, the buttons off; a kind creates the period on the
   await t.boot();
   const ids = await t.seed(barSpec());
   await openBoth(t, ids, null);
-  await t.check("Any date, the kind switch empty", (await labelOf(t)) === "Any date" && (await kindShown(t)) === "Period");
+  await t.check("Any date is the dropdown itself, no kind chosen", (await labelOf(t)) === "Any date" && (await triggerText(t)) === "Any date" && (await kindShown(t)) === "Period");
   await t.check("‹ › and this-one are off", (await barButton(t, "Previous").isDisabled()) && (await barButton(t, "Next").isDisabled()) && (await barButton(t, "Most recent").isDisabled()));
   await expectRows(t, "everything", TITLES);
-  await t.check("the kinds are Hour, Day, Week, Month, Year (no Range)", await (async () => {
+  await t.check("the menu says Hourly, Daily, Weekly, Monthly, Yearly (no Range)", await (async () => {
     await kindBox(t).locator("button").first().click();
     const options = await t.page.getByRole("option").allInnerTexts();
     await t.audit("kind switch open", { shotOnFail: true });
     await t.page.keyboard.press("Escape");
     await t.settle(100);
-    return JSON.stringify(options) === JSON.stringify(["Hour", "Day", "Week", "Month", "Year"]);
+    return JSON.stringify(options) === JSON.stringify(["Hourly", "Daily", "Weekly", "Monthly", "Yearly"]);
   })());
   await pickKind(t, "Month");
   await expectRows(t, "this month", inPeriod("month", 0));
   await expectRows(t, "this month in the cards too", inPeriod("month", 0), 1);
-  await t.check("labelled as the filter panel's line, the switch says Month", (await labelOf(t)).startsWith("This month · ") && (await labelOf(t)).endsWith(monthName(periodDays("month")[0])) && (await kindShown(t)) === "Month", await labelOf(t));
+  await t.check("labelled as the filter panel's line, the switch says Month", (await labelOf(t)).startsWith("This month - ") && (await labelOf(t)).endsWith(monthName(periodDays("month")[0])) && (await kindShown(t)) === "Month", await labelOf(t));
   await t.check("the view is changed (*), nothing stored yet", (await activeTab(t)) === "Both *" && (await storedView(t, ids.collections.books, "Both")).filters.length === 0);
   const barText = await labelOf(t);
   await t.openPanel(barOf(t), "Filter (1)");
@@ -259,14 +268,14 @@ test("‹ › step a rolling period (this day … year): rows, label, unsaved *,
   for (const kind of ["day", "week", "month", "year"]) {
     const [cur, last, next, unit] = WORDS[kind];
     await openBoth(t, ids, `${kind}+0`);
-    await t.check(`${cur}: labelled, the switch says ${kind}, view unchanged`, (await labelOf(t)).startsWith(cur) && (await kindShown(t)).toLowerCase() === kind && (await activeTab(t)) === "Both", await labelOf(t));
+    await t.check(`${cur}: labelled, the switch says ${kind}, view unchanged`, (await wordsOf(t)).startsWith(cur) && (await kindShown(t)).toLowerCase() === kind && (await activeTab(t)) === "Both", await labelOf(t));
     await expectRows(t, cur, inPeriod(kind, 0));
     const step = async (button, offset, text) => {
       await barButton(t, button).click();
       await t.settle(100);
       await expectRows(t, `${kind} ${offset >= 0 ? "+" : ""}${offset}`, inPeriod(kind, offset));
       await expectRows(t, `${kind} ${offset} cards`, inPeriod(kind, offset), 1);
-      await t.check(`${kind} ${offset}: labelled "${text}"`, (await labelOf(t)).startsWith(text), await labelOf(t));
+      await t.check(`${kind} ${offset}: labelled "${text}"`, (await wordsOf(t)).startsWith(text), await labelOf(t));
       // Back at this week (month, …) is the view as saved.
       await t.check(`${kind} ${offset}: the tab says ${offset === 0 ? "unchanged" : "changed"}`, (await activeTab(t)) === (offset === 0 ? "Both" : "Both *"));
     };
@@ -290,7 +299,7 @@ test("‹ › step a rolling period (this day … year): rows, label, unsaved *,
     await t.settle(100);
     await t.page.getByRole("tab", { name: /^Both/ }).click();
     await t.settle(150);
-    await t.check(`${kind}: the view is back as saved (${next})`, (await labelOf(t)).startsWith(next) && (await activeTab(t)) === "Both", await labelOf(t));
+    await t.check(`${kind}: the view is back as saved (${next})`, (await wordsOf(t)).startsWith(next) && (await activeTab(t)) === "Both", await labelOf(t));
     await expectRows(t, `${kind}: discarded`, inPeriod(kind, 1));
   }
   await t.audit("a rolling period on the bar", { shotOnFail: true });
@@ -314,14 +323,14 @@ test("‹ › step a chosen period by its kind, a range by its length @ desktop"
       await barButton(t, button).click();
       await t.settle(100);
       await expectRows(t, `${kind} ${offset}`, inPeriod(kind, offset));
-      await t.check(`${kind} ${offset}: the label is the same as in the filter panel`, (await labelOf(t)) === (await panelLine()), await labelOf(t));
+      await t.check(`${kind} ${offset}: the label is the same as in the filter panel`, (await labelOf(t)) === (await panelLine()) || (await labelOf(t)) === `${ADVERB[kind[0].toUpperCase() + kind.slice(1)]} - ${await panelLine()}`, await labelOf(t));
     }
     await saveView(t);
     const [f, l] = periodDays(kind, 0);
     const value = (await storedView(t, ids.collections.books, "Both")).filters[0].value;
     await t.check(`${kind}: stored as the chosen days ${f}..${l}`, value === `${f}..${l}`, value);
   }
-  await t.check("a month is named by its month and year", (await (async () => { await openBoth(t, ids, periodDays("month", -2).join("..")); return (await labelOf(t)) === monthName(periodDays("month", -2)[0]); })()));
+  await t.check("a month is named by its month and year", (await (async () => { await openBoth(t, ids, periodDays("month", -2).join("..")); return (await labelOf(t)) === `Monthly - ${monthName(periodDays("month", -2)[0])}`; })()));
   // A range of ten days steps by ten days (no kind of its own: the switch is empty).
   const a = dayStr(-25);
   const b = dayStr(-16);
@@ -362,7 +371,7 @@ test("the kind switch keeps the period anchored, as the filter panel does @ desk
     const stored = await valueNow();
     await t.check(`${from} → ${kind}: ${stored}`, value === null ? /^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$/.test(stored) : stored === value, `expected ${value}`);
     await t.check(`${from} → ${kind}: the switch says ${kind}`, (await kindShown(t)) === kind, await kindShown(t));
-    if (text) await t.check(`${from} → ${kind}: labelled ${text}`, (await labelOf(t)).startsWith(text), await labelOf(t));
+    if (text) await t.check(`${from} → ${kind}: labelled ${text}`, (await wordsOf(t)).startsWith(text), await labelOf(t));
     const days = stored.includes("..") && !stored.includes("+") ? stored.split("..") : null;
     if (days) await expectRows(t, `${from} → ${kind}: the rows of ${stored}`, inDays(days[0], days[1]));
   }
@@ -398,7 +407,7 @@ test("the most recent button jumps to this hour / day / week / month / year as a
     await barButton(t, name).click();
     await t.settle(100);
     await expectRows(t, `${from} → ${name}`, inPeriod(kind, 0));
-    await t.check(`${from} → ${name}: labelled, changed`, (await labelOf(t)).startsWith(name) && (await activeTab(t)) === "Both *", await labelOf(t));
+    await t.check(`${from} → ${name}: labelled, changed`, (await wordsOf(t)).startsWith(name) && (await activeTab(t)) === "Both *", await labelOf(t));
     await saveView(t);
     const stored = (await storedView(t, ids.collections.books, "Both")).filters[0].value;
     await t.check(`${from} → ${name}: stored as the rolling ${value}, not as days`, stored === value, stored);
@@ -510,7 +519,7 @@ for (const vp of ["phone-small", "phone", "tablet", "laptop", "desktop"]) {
         return {
           height: Math.round(r.height), rows: rows.size, scrollsSideways: body.scrollWidth > body.clientWidth + 1 || bar.scrollWidth > bar.clientWidth + 1,
           inside: [...bar.querySelectorAll("button")].every((b) => b.getBoundingClientRect().left >= pane.left - 1 && b.getBoundingClientRect().right <= pane.right + 1),
-          labelWidth: Math.round(label.getBoundingClientRect().width), clipped: [...label.children].some((c) => c.scrollWidth > c.clientWidth + 1), title: label.getAttribute("title"), text: label.textContent.trim(),
+          labelWidth: Math.round(label.getBoundingClientRect().width), clipped: [...label.querySelectorAll(".filter-bar__text, .filter-bar__more")].some((c) => c.scrollWidth > c.clientWidth + 1), title: label.getAttribute("title"), text: (() => { const c = label.cloneNode(true); c.querySelectorAll("label, svg").forEach((l) => l.remove()); return c.textContent.trim(); })(),
           small: [...bar.querySelectorAll("button")].every((b) => b.getBoundingClientRect().height >= 24 && b.getBoundingClientRect().height <= 32),
         };
       });
@@ -537,6 +546,10 @@ for (const vp of ["phone-small", "phone", "tablet", "laptop", "desktop"]) {
     await openBoth(t, ids, "day-6..day+0");
     const long = await fits("last 7 days");
     await t.check("Last 7 days is readable whole somewhere (label or tooltip)", long.title === long.text && long.text.startsWith("Last 7 days"), long.text);
+    await t.check("the part after the first - is dropped on a narrow bar (the phones), shown on a wide one", await t.page.evaluate((narrow) => {
+      const more = document.querySelector(".ws-pane--active .filter-bar__more");
+      return !!more && (getComputedStyle(more).display === "none") === narrow;
+    }, vp.startsWith("phone")), `${long.labelWidth}px`);
     await t.audit("last 7 days", { shotOnFail: true });
     // The kind switch and the filter panel from the bar, audited open.
     await kindBox(t).locator("button").first().click();
@@ -576,3 +589,107 @@ test("the bar in the dark theme, and from the keyboard @ desktop", async (t) => 
   await t.settle(150);
   await t.check("a kind chosen with the keys", (await kindShown(t)) !== "Period" && (await activeTab(t)) === "Both *", await kindShown(t));
 }, { viewport: "desktop", dark: true });
+
+// --- the order and the unit word -----------------------------------------------------------------------
+
+for (const vp of ["phone-small", "phone", "laptop"]) {
+  test(`the buttons are right-aligned (‹ › now Filter), the label at the left, on the toolbar's edge @ ${vp}`, async (t) => {
+    await t.boot();
+    const ids = await t.seed(barSpec());
+    for (const value of ["week+0", "week-7", null, "2026-10-01..2026-10-10"]) {
+      await openBoth(t, ids, value);
+      const g = await t.page.evaluate(() => {
+        const pane = document.querySelector(".ws-pane--active");
+        const bar = pane.querySelector(".filter-bar");
+        const box = (e) => e.getBoundingClientRect();
+        const buttons = [...bar.querySelectorAll("button:not(.filter-bar__kind button)")];
+        const label = bar.querySelector(".filter-bar__label");
+        const tools = [...pane.querySelectorAll(".views-bar button")].filter((b) => b.checkVisibility());
+        const edge = Math.max(...tools.map((b) => box(b).right));
+        return {
+          names: buttons.map((b) => b.getAttribute("aria-label") || b.textContent.trim()),
+          lefts: buttons.map((b) => Math.round(box(b).left * 10) / 10), widths: buttons.map((b) => Math.round(box(b).width * 10) / 10),
+          right: Math.round(box(buttons[buttons.length - 1]).right * 10) / 10, edge: Math.round(edge * 10) / 10,
+          labelLeft: Math.round(box(label).left - box(bar).left), labelRight: Math.round(box(label).right * 10) / 10, firstLeft: box(buttons[0]).left,
+          textAlign: getComputedStyle(label).justifyContent,
+        };
+      });
+      const what = JSON.stringify([value, g]);
+      // By their names: Previous, Next, the now button (named for the kind, or Most recent), Filter.
+      const at = async (name) => (await barButton(t, name).boundingBox()).x;
+      const now = await barOf(t).getByRole("button", { name: /^(Most recent|This |Today|Last hour)/ }).first().boundingBox();
+      const order = [await at("Previous"), await at("Next"), now.x, (await barOf(t).getByRole("button", { name: FILTER }).boundingBox()).x];
+      await t.check(`${value}: ‹ › now Filter from the left, touching (32px pitch)`, g.lefts.length === 4 && order.every((x, i) => Math.abs(x - g.lefts[i]) <= 1) && g.lefts.every((l, i) => i === 0 || Math.abs(l - g.lefts[i - 1] - 32) <= 1), what + JSON.stringify(order));
+      await t.check(`${value}: the Filter button ends where the toolbar's icon buttons end`, Math.abs(g.right - g.edge) <= 1, what);
+      await t.check(`${value}: the label starts at the left edge and ends before ‹`, g.labelLeft === 0 && g.labelRight <= g.firstLeft + 1 && g.textAlign === "flex-start", what);
+    }
+    await t.audit("right-aligned buttons", { shotOnFail: true });
+  }, { viewport: vp });
+}
+
+test("the unit word is the kind dropdown: Hourly … Yearly, the label's own grammar, a kind in front when there is no unit word @ desktop", async (t) => {
+  await t.boot();
+  const ids = await t.seed(barSpec());
+  // [stored period, label, the unit word, the kind the menu has chosen]
+  const CASES = [
+    ["week+0", "This week", "week", "Week"],
+    ["week-1", "Last week", "week", "Week"],
+    ["week-7", "7 weeks ago", "weeks", "Week"],
+    ["month+3", "In 3 months", "months", "Month"],
+    ["hour+1", "Next hour", "hour", "Hour"],
+    ["day-6..day+0", "Last 7 days", "days", "Day"],
+    ["year+0..day+0", "Year to date", "Year", "Year"],
+  ];
+  for (const [value, text, unit, kind] of CASES) {
+    await openBoth(t, ids, value);
+    await t.check(`${text}: the unit word "${unit}" is the dropdown, in the label's sentence`, (await triggerText(t)) === unit && (await labelOf(t)).startsWith(text) && (await kindShown(t)) === kind, `${await labelOf(t)} / ${await triggerText(t)}`);
+    await t.check(`${text}: the tooltip is the whole label`, (await barOf(t).locator(".filter-bar__label").getAttribute("title")) === (await labelOf(t)));
+  }
+  // The menu, then a kind picked: the unit word follows in the new grammar.
+  await openBoth(t, ids, "week-7");
+  await kindBox(t).locator("button").first().click();
+  await t.audit("unit dropdown open", { shotOnFail: true });
+  await t.check("the menu says Hourly, Daily, Weekly, Monthly, Yearly, Weekly chosen", JSON.stringify(await t.page.getByRole("option").allInnerTexts()) === JSON.stringify(["Hourly", "Daily", "Weekly", "Monthly", "Yearly"]) && (await t.page.getByRole("option", { selected: true }).innerText()) === "Weekly");
+  await t.page.getByRole("option", { name: "Monthly", exact: true }).click();
+  await t.settle(100);
+  await t.check("Monthly: the same window in months (a rolling one starts at this one), 'month' replaces 'weeks'", (await triggerText(t)) === "month" && (await labelOf(t)).startsWith("This month") && (await activeTab(t)) === "Both *", await labelOf(t));
+  await expectRows(t, "this month", inPeriod("month", 0));
+  await barButton(t, "Previous").click();
+  await barButton(t, "Previous").click();
+  await t.check("two months back: 'months' in the plural, as the sentence needs it", (await triggerText(t)) === "months" && (await labelOf(t)).startsWith("2 months ago"), await labelOf(t));
+  await pickKind(t, "Week");
+  await t.check("Weekly again: 'weeks' as well", (await triggerText(t)) === "week" && (await labelOf(t)).startsWith("This week"), await labelOf(t));
+  await openBoth(t, ids, "week+0");
+  await pickKind(t, "Day");
+  await t.check("This week → Daily: the label turns to Today, which has no unit word, so the kind stands before it", (await triggerText(t)) === "Daily" && (await labelOf(t)).startsWith("Daily - Today - "), await labelOf(t));
+  // No unit word: a chosen period, a range, no period.
+  const [first, last] = periodDays("month", -1);
+  await openBoth(t, ids, `${first}..${last}`);
+  await t.check("a chosen month: Monthly in front of its words", (await triggerText(t)) === "Monthly" && (await labelOf(t)) === `Monthly - ${monthName(first)}`, await labelOf(t));
+  const [wf, wl] = periodDays("week", -1);
+  await openBoth(t, ids, `${wf}..${wl}`);
+  await t.check("a chosen week: Weekly - Week n - days", (await triggerText(t)) === "Weekly" && /^Weekly - Week \d+ - /.test(await labelOf(t)), await labelOf(t));
+  await pickKind(t, "Year");
+  await t.check("picked from a chosen period: Yearly (around it)", (await triggerText(t)) === "Yearly" && (await kindShown(t)) === "Year", await labelOf(t));
+  await openBoth(t, ids, `${dayStr(-25)}..${dayStr(-16)}`);
+  await t.check("a range: 'Range' stands in front, no kind chosen", (await triggerText(t)) === "Range" && (await labelOf(t)).startsWith("Range - ") && (await kindShown(t)) === "Period", await labelOf(t));
+  await t.audit("a range on the bar, unit dropdown", { shotOnFail: true });
+  // On a phone only the head (before the second " - ") stays; the tooltip keeps the whole.
+}, { viewport: "desktop" });
+
+test("on a phone the bar keeps only the words before the first - and its tooltip has them all @ phone", async (t) => {
+  await t.boot();
+  const ids = await t.seed(barSpec());
+  const [first, last] = periodDays("week", -1);
+  for (const [value, head] of [["week+0", "This week"], ["day-6..day+0", "Last 7 days"], [`${first}..${last}`, "Weekly - Week"], ["month-2", "2 months ago"]]) {
+    await openBoth(t, ids, value);
+    const m = await t.page.evaluate(() => {
+      const l = document.querySelector(".ws-pane--active .filter-bar__label");
+      const more = l.querySelector(".filter-bar__more");
+      const c = l.querySelector(".filter-bar__head").cloneNode(true);
+      c.querySelectorAll("label, svg").forEach((x) => x.remove());
+      return { head: c.textContent, more: more ? getComputedStyle(more).display : "none", title: l.getAttribute("title"), shown: l.getBoundingClientRect().width };
+    });
+    await t.check(`${value}: shows "${head}" only, the second part is hidden, the tooltip is whole`, m.head.startsWith(head) && m.more === "none" && m.title.length > m.head.length, JSON.stringify(m));
+  }
+}, { viewport: "phone" });

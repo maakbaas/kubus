@@ -2113,71 +2113,68 @@ img[data-lightbox] {
 .items-search {
   margin-bottom: var(--cds-spacing-05);
 }
-/* The filter bar below the tabs ("Show filter bar"), one row on a phone too: the view's Filter button,
-   ‹ the period › and "this one", the kind. The label takes the room that is left (and is ellipsized,
-   whole in its tooltip), so the buttons stay where they are as it changes while stepping. */
+/* The filter bar below the tabs ("Show filter bar"), one row on a phone too: the period in words at the
+   left (its unit word the kind dropdown), at the right ‹ › "this one" and the view's Filter button, touching
+   at the toolbar's right edge. The words take the room that is left (and are ellipsized, whole in their
+   tooltip), so the buttons stay where they are as they change while stepping. */
 .filter-bar {
   display: flex;
   align-items: center;
   margin-bottom: var(--cds-spacing-05);
 }
 .filter-bar__label {
-  /* A width of its own whatever it says (as much as there is room for, no more than the longest period
-     in words), so what stands after it never moves; on a phone it is what is left. */
-  flex: 0 1 22rem;
+  flex: 1 1 0;
   min-inline-size: 0;
-  container-type: inline-size;
   display: flex;
-  justify-content: center;
-  padding-inline: var(--cds-spacing-02);
-  white-space: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  white-space: pre;
   font-size: var(--cds-body-compact-01-font-size);
   line-height: var(--cds-body-compact-01-line-height);
   letter-spacing: var(--cds-body-compact-01-letter-spacing);
 }
-.filter-bar__counting,
-.filter-bar__days {
+/* The head (before the first " - ") keeps what room there is; what follows gives way first. */
+.filter-bar__head {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+}
+.filter-bar__text,
+.filter-bar__more {
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Whole while the days are shown (the days shrink first); it gives way when they are gone. */
-.filter-bar__counting {
-  flex: 0 0 auto;
-}
-/* The days give way first ("This week · Week 4…"); on a narrow phone a counted period is just "This week"
-   (all of it is the tooltip, and the filter panel's line). */
-.filter-bar__days {
+.filter-bar__more {
   flex: 0 100 auto;
-  white-space: pre;
 }
-@container (max-width: 7.5rem) {
-  .filter-bar__label--counted .filter-bar__days {
+/* On a phone only the head is shown: the rest is the tooltip, and the filter panel's line. (Not a container query:
+   containment would make the label the containing block of the dropdown's menu.) */
+@media (max-width: 42rem) {
+  .filter-bar__more {
     display: none;
   }
-  .filter-bar__counting {
-    flex-shrink: 1;
-  }
 }
-/* Carbon's dropdown is wider than "Month" needs: the least that shows it whole with its arrow. */
-.filter-bar__kind {
+/* The unit word as an inline dropdown inside the sentence: as wide as its word and arrow. */
+.filter-bar__kind,
+.filter-bar__kind .cds--list-box--inline {
   flex: none;
-  inline-size: 5rem;
+  inline-size: auto;
   min-inline-size: 0;
 }
-/* Its menu is as wide as the button: its options with less room around them. */
-.filter-bar__kind .cds--list-box__menu-item__option {
-  margin-inline: var(--cds-spacing-03);
-  padding-inline: 0;
-}
-.filter-bar__kind .cds--list-box__menu-item__selected-icon {
-  inset-inline-end: var(--cds-spacing-03);
-}
+/* In a sentence the word keeps no room of its own on its left, and only the arrow's on its right. */
 .filter-bar__kind .cds--list-box__field {
-  padding-inline: var(--cds-spacing-03) var(--cds-spacing-06);
+  padding-inline: 0 var(--cds-spacing-06);
 }
 .filter-bar__kind .cds--list-box__menu-icon {
-  inset-inline-end: var(--cds-spacing-03);
+  inset-inline-end: var(--cds-spacing-02);
+}
+/* Carbon's inline menu is 18rem wide at least (wider than a phone's room beside the word): as wide as its words. */
+.filter-bar .cds--dropdown--inline .cds--list-box__menu {
+  inline-size: max-content;
+  min-inline-size: 8rem;
+  max-inline-size: calc(100vw - 2 * var(--cds-spacing-05));
 }
 .view-kind {
   display: inline-flex;

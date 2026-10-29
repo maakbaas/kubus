@@ -262,7 +262,7 @@ export function weekNumber(day: string): { week: number; year: number } {
   return { week: daysBetween(weekStart(`${year}-01-01`), start) / 7 + 1, year };
 }
 
-/** A period in words ("Week 44 · 26 Oct – 1 Nov 2026", "October 2026", "Tue 27 Oct 2026", "1 Oct – 15 Nov 2026", "Tue 27 Oct 2026, 14:00 – 15:00"). */
+/** A period in words ("Week 44 - 26 Oct – 1 Nov 2026", "October 2026", "Tue 27 Oct 2026", "1 Oct – 15 Nov 2026", "Tue 27 Oct 2026, 14:00 – 15:00"). */
 export function periodLabel(period: Period, kind: PeriodKind, locale?: string): string {
   if (inMinutes(period)) {
     // Up to the end of its last minute (an hour: 14:00 – 15:00).
@@ -282,7 +282,7 @@ export function periodLabel(period: Period, kind: PeriodKind, locale?: string): 
       return fmt(start, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
     case "week": {
       const { week } = weekNumber(period.start);
-      return `Week ${week} · ${periodLabel(period, "range", locale)}`;
+      return `Week ${week} - ${periodLabel(period, "range", locale)}`;
     }
     case "month":
       return fmt(start, { month: "long", year: "numeric" });
@@ -339,16 +339,33 @@ export function periodState(value: string, now = nowMinute()): PeriodState | nul
   return { period, kind, window, rolling, rollingRange, toDate, last, counted: !!(rolling || rollingRange || toDate), counting };
 }
 
-/** A period's words in two parts: how it is counted ("Last week", "" for a chosen one) and its days ("Week 43 · 18 Oct – 24 Oct 2026"). */
+/** A period's words in two parts: how it is counted ("Last week", "" for a chosen one) and its days ("Week 43 - 18 Oct – 24 Oct 2026"). */
 export function periodParts(state: PeriodState, kind: PeriodKind = state.kind): { counting: string; days: string } {
   const { period, counting, toDate, rollingRange } = state;
   return { counting, days: periodLabel(period, counting && (toDate || rollingRange) ? "range" : kind) };
 }
 
-/** A period in words as the date filter's line shows it: "October 2026", "Last week · Week 43 · …", "Last 7 days · 23 Oct – 29 Oct 2026". */
+const UNIT_WORD = /\b(minutes?|hours?|days?|weeks?|months?|years?)\b/i;
+
+/**
+ * A period's words with the unit word marked, for the filter bar (where it is a dropdown switching the
+ * kind): `before + unit + after` is how it is counted ("This week": "This ", "week", ""; "7 weeks ago":
+ * "7 ", "weeks", " ago"; "Last 7 days"; "Year to date": "", "Year", " to date"), `days` its days ("Week 44 · …").
+ * A period with no unit word in its counting (a chosen one: "October 2026", a range, "Today") has `unit`
+ * null, and `before` holds its counting whole (empty for a chosen one).
+ */
+export function periodWords(state: PeriodState): { before: string; unit: string | null; after: string; days: string } {
+  const { counting, days } = periodParts(state);
+  // A range is no kind of the switch, whatever its counting says ("3 days").
+  const found = state.kind === "range" ? null : UNIT_WORD.exec(counting);
+  if (!found) return { before: counting, unit: null, after: "", days };
+  return { before: counting.slice(0, found.index), unit: found[0], after: counting.slice(found.index + found[0].length), days };
+}
+
+/** A period in words as the date filter's line shows it: "October 2026", "Last week - Week 43 - …", "Last 7 days - 23 Oct – 29 Oct 2026". */
 export function periodText(state: PeriodState, kind: PeriodKind = state.kind): string {
   const { counting, days } = periodParts(state, kind);
-  return counting ? `${counting} · ${days}` : days;
+  return counting ? `${counting} - ${days}` : days;
 }
 
 /** A window of a unit: the current one, so far, the last n (`n`, else the unit's own), or the chosen one around `at`. */

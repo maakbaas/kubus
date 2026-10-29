@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultDateField, kindValue, latestValue, periodState, periodText, stepValue, windowValue, withPeriod, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveAnchored, resolveRange, rollingLabel, rollingRangeLabel, rollingRangeValue, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
+import { defaultDateField, kindValue, latestValue, periodState, periodText, periodWords, stepValue, windowValue, withPeriod, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveAnchored, resolveRange, rollingLabel, rollingRangeLabel, rollingRangeValue, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
 
 describe("date periods", () => {
   it("finds the day, week (Sunday first), month and year around a day", () => {
@@ -40,7 +40,7 @@ describe("date periods", () => {
     expect(weekNumber("2026-12-31")).toEqual({ week: 1, year: 2027 });
     expect(weekNumber("2026-01-03")).toEqual({ week: 1, year: 2026 });
     expect(weekNumber("2026-01-04")).toEqual({ week: 2, year: 2026 });
-    expect(periodLabel({ start: "2026-10-25", end: "2026-10-31" }, "week", "en-GB")).toBe("Week 44 · 25 Oct – 31 Oct 2026");
+    expect(periodLabel({ start: "2026-10-25", end: "2026-10-31" }, "week", "en-GB")).toBe("Week 44 - 25 Oct – 31 Oct 2026");
   });
 
   it("reads and writes a between value", () => {
@@ -137,8 +137,35 @@ describe("the period as the filter bar and panel edit it", () => {
     expect(periodState("nonsense", NOW)).toBeNull();
     const words = (v: string) => periodText(periodState(v, NOW)!);
     expect(words("2026-10-01..2026-10-31")).toBe(periodLabel({ start: "2026-10-01", end: "2026-10-31" }, "month"));
-    expect(words("month+0")).toBe(`This month · ${periodLabel({ start: "2026-10-01", end: "2026-10-31" }, "month")}`);
-    expect(words("day-6..day+0")).toBe(`Last 7 days · ${periodLabel({ start: "2026-10-23", end: "2026-10-29" }, "range")}`);
+    expect(words("month+0")).toBe(`This month - ${periodLabel({ start: "2026-10-01", end: "2026-10-31" }, "month")}`);
+    expect(words("day-6..day+0")).toBe(`Last 7 days - ${periodLabel({ start: "2026-10-23", end: "2026-10-29" }, "range")}`);
+  });
+
+  it("marks the unit word of a period's counting (the filter bar's kind dropdown) and nothing else", () => {
+    const words = (v: string) => periodWords(periodState(v, NOW)!);
+    const joined = (v: string) => {
+      const w = words(v);
+      return `${w.before}${w.unit ?? ""}${w.after}${w.before || w.unit ? " - " : ""}${w.days}`;
+    };
+    expect(words("week+0")).toMatchObject({ before: "This ", unit: "week", after: "" });
+    expect(words("week-1")).toMatchObject({ before: "Last ", unit: "week", after: "" });
+    expect(words("week-7")).toMatchObject({ before: "7 ", unit: "weeks", after: " ago" });
+    expect(words("month+3")).toMatchObject({ before: "In 3 ", unit: "months", after: "" });
+    expect(words("hour+1")).toMatchObject({ before: "Next ", unit: "hour", after: "" });
+    expect(words("day-6..day+0")).toMatchObject({ before: "Last 7 ", unit: "days", after: "" });
+    expect(words("minute-29..minute+0")).toMatchObject({ before: "Last 30 ", unit: "minutes", after: "" });
+    expect(words("year+0..day+0")).toMatchObject({ before: "", unit: "Year", after: " to date" });
+    // No unit word: Today / Yesterday (no match inside a word), a chosen period, a range (even a counted one).
+    expect(words("day+0")).toMatchObject({ before: "Today", unit: null, after: "" });
+    expect(words("day-1")).toMatchObject({ before: "Yesterday", unit: null });
+    expect(words("2026-10-01..2026-10-31")).toMatchObject({ before: "", unit: null, after: "", days: "October 2026" });
+    expect(words("2026-10-01..2026-10-10")).toMatchObject({ before: "", unit: null });
+    expect(words("day-10..day-3")).toMatchObject({ before: "8 days", unit: null });
+    // Never inside the days ("Week 44 - …"): put back together it is the period's text.
+    for (const v of ["week+0", "week-7", "day-6..day+0", "year+0..day+0", "day+0", "2026-10-01..2026-10-31", "2026-10-25..2026-10-31", "2026-10-01..2026-10-10", "day-10..day-3"]) {
+      expect(joined(v)).toBe(periodText(periodState(v, NOW)!));
+    }
+    expect(words("2026-10-25..2026-10-31").unit).toBeNull();
   });
 
   it("steps a rolling period as a rolling one and a chosen one by its kind", () => {

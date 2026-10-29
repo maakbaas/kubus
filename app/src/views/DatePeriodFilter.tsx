@@ -119,7 +119,7 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
       ? "Choose the first and last day"
       : "Any date"
     : anchor
-      ? `${state.counting} · counted from this ${page?.name ?? "item"}'s ${anchorField?.name ?? "date"}`
+      ? `${state.counting} - counted from this ${page?.name ?? "item"}'s ${anchorField?.name ?? "date"}`
       : periodText(state, kind);
   const unit = kind && kind !== "range" ? kind : null;
 
