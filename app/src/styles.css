@@ -3006,6 +3006,8 @@ img[data-lightbox] {
   margin-inline-start: var(--cds-spacing-02);
   font-size: var(--cds-heading-03-font-size);
   font-weight: var(--cds-heading-03-font-weight);
+  line-height: var(--cds-heading-03-line-height, 1.4);
+  letter-spacing: var(--cds-heading-03-letter-spacing, 0);
 }
 
 .chart-block__problem {
@@ -3073,7 +3075,7 @@ img[data-lightbox] {
 .chart-options__subheading {
   font-size: var(--cds-heading-compact-01-font-size);
   line-height: var(--cds-heading-compact-01-line-height);
-  letter-spacing: var(--cds-heading-compact-01-letter-spacing);
+  letter-spacing: var(--cds-heading-compact-01-letter-spacing, 0.16px);
   font-weight: 600;
   margin: 0;
 }
@@ -3093,6 +3095,12 @@ img[data-lightbox] {
 }
 .chart-options__add {
   justify-self: start;
+}
+/* Carbon's number input is at least 9.375rem wide (and keeps the steppers' room): in a grid column, as wide as it. */
+.chart-options .cds--number input[type="number"] {
+  min-inline-size: 0;
+  inline-size: 100%;
+  padding-inline-end: var(--cds-spacing-05);
 }
 /* In a toolbar popover, view-type options stack in one column. */
 .toolbar-popover .view-options {

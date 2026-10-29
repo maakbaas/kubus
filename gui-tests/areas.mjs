@@ -28,18 +28,22 @@ export const AREAS = [
   [/^app\/src\/pages\/(SearchPage|BookmarksPage|SpacesPage)/, [2, 7, 19]],
 
   // Item pages and editing values in place.
-  [/^app\/src\/(pages\/(ItemPage|NewItemPage)|ui\/(FieldInput|ListField|ToggleInput|TagChip|RefCombo|editStart|useBuffered|useReferenceOptions|Highlight))/, [4, 12, 19]],
+  [/^app\/src\/(pages\/(ItemPage|NewItemPage)|ui\/(FieldInput|ListField|ToggleInput|TagChip|RefCombo|editStart|useBuffered|useReferenceOptions|Highlight))/, [4, 12, 19, 27]],
   [/^app\/src\/ui\/(MarkdownEditor|MarkdownView|codeHighlight)/, [8, 19]],
   [/^app\/src\/(ui\/(Lightbox|images|thumbnails)|domain\/files)/, [16]],
 
   // Collection views and their blocks.
-  [/^app\/src\/views\/(TableView|cells)|^app\/src\/ui\/(RowActions|useTableSort)/, [5, 12]],
-  [/^app\/src\/views\/CardsView/, [6, 19, 22]],
-  [/^app\/src\/(views\/|pages\/CollectionPage|domain\/(views|query|filterTree|datePeriod))/, [5, 6, 10, 22]],
+  [/^app\/src\/views\/(TableView|cells)|^app\/src\/ui\/(RowActions|useTableSort)/, [5, 12, 25]],
+  [/^app\/src\/views\/CardsView/, [6, 19, 22, 25]],
+  [/^app\/src\/(views\/(Chart|Stat|chartSpec|HeightSlider)|domain\/chart)/, [24]],
+  [/^app\/src\/(views\/|pages\/CollectionPage|domain\/(views|query|filterTree|datePeriod))/, [5, 6, 10, 22, 25]],
+  [/^app\/src\/(views\/(MapView|ComponentBlock|MarkdownBlock)|domain\/geo|ui\/MapSettings)/, [25]],
+  // Filter, sort, group, date period (rows asserted), a reference field's Choices.
+  [/^app\/src\/(views\/(QueryEditor|DatePeriodFilter|BlockView|TableView|CardsView)|domain\/(query|filterTree|datePeriod|views)|pages\/(CollectionPage|ItemPage)|ui\/ChoiceFilterEditor)/, [26]],
   [/^app\/src\/ui\/(ToolbarPopover|panelRoom|OverflowBar)|^app\/src\/platform\/keyboardInset/, [10, 14, 20]],
 
   // Collections, fields, components.
-  [/^app\/src\/(pages\/(CollectionEditorPage|CollectionsPage|RemotesPage)|ui\/(FieldEditor|FieldModal|FieldOrderEditor|FieldSettings|fieldKindIcons|ChoiceFilterEditor)|domain\/(collectionDraft|fieldKinds|fieldLayout))/, [7, 17, 22]],
+  [/^app\/src\/(pages\/(CollectionEditorPage|CollectionsPage|RemotesPage)|ui\/(FieldEditor|FieldModal|FieldOrderEditor|FieldSettings|fieldKindIcons|ChoiceFilterEditor)|domain\/(collectionDraft|fieldKinds|fieldLayout))/, [7, 17, 22, 27]],
   [/^app\/src\/ui\/useReorder/, [17]],
   [/^app\/src\/(pages\/(ComponentEditorPage|ComponentsPage)|ui\/(Component|PromoteComponentModal|promoteLocal|ValueSourceSwitch|frameFonts)|domain\/(components|componentWriter))/, [7, 19, 22]],
 
@@ -48,6 +52,7 @@ export const AREAS = [
   [/^app\/src\/(data\/sync\/|ui\/(SyncSettings|ServerConnection|ApiTokens|SyncStatusButton|ServerReplaced))/, [13, 18]],
   [/^app\/src\/(app\/(useDataChanges|itemCache|useItems|useItemCounts|useLinks)|views\/useCollectionData)/, [12, 13]],
   [/^app\/src\/(pages\/SettingsPage|ui\/(ConnectionSettings|useServerSettings|SourceSettings|localPrefs))/, [7, 18]],
+  [/^app\/src\/(pages\/SettingsPage|ui\/(AiSettings|MapSettings|ServerConnection|ConnectionSettings|ApiTokens|SyncSettings|SourceSettings|useServerSettings)|app\/mapStyle|data\/remote\/client|data\/sync\/SyncEngine)/, [28]],
   [/^app\/src\/(pages\/HelpPage|help\/)/, [1]],
 ];
 

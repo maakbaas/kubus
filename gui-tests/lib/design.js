@@ -166,6 +166,7 @@ function __design(opts) {
       "20/28/0": "heading-03",
       "28/36/0": "heading-04",
       "32/40/0": "heading-05",
+      "42/50.36/0": "heading-06 (a stat's number)",
     };
     const WEIGHTS = new Set(["300", "400", "600"]);
     // Carbon's components with their own text settings (tree nodes, the tab strip's contained tabs,
@@ -186,8 +187,8 @@ function __design(opts) {
   // ---- radius / shadow / border -------------------------------------------------------------------
   {
     // Carbon's own round parts: checkbox (2px), toggle (track and knob), tag, slider thumb, radio,
-    // the content switcher's ends, loading spinner; the Markdown's inline code (the editor's).
-    const ROUND = ".cds--popover-content, .cds--checkbox-label, .cds--toggle__switch, .cds--toggle__appearance, .cds--tag, .cds--slider__thumb, .cds--radio-button__appearance, .cds--loading, .cds--popover-caret, .cds--tooltip-content, .cds--skeleton";
+    // the content switcher's ends, loading spinner, a chart legend's swatches (Carbon Charts'); the Markdown's inline code (the editor's).
+    const ROUND = ".cds--popover-content, .cds--checkbox-label, .cds--toggle__switch, .cds--toggle__appearance, .cds--tag, .cds--slider__thumb, .cds--radio-button__appearance, .cds--loading, .cds--popover-caret, .cds--tooltip-content, .cds--skeleton, .cds--chart-holder";
     // Floating layers (shadows give them depth) and the dragged row of a reorder.
     const FLOATING = ".cds--popover-content, .overflow-bar[data-open] > .overflow-bar__items, .cds--modal-container, .cds--list-box__menu, .cds--overflow-menu-options, .flatpickr-calendar, [role=menu], .search-bar, .cds--side-nav, [data-dragging], .cds--toast-notification, .ws-drop, .cds--cc--tooltip";
     for (const el of shown) {
@@ -199,7 +200,8 @@ function __design(opts) {
         // An inset shadow is a focus / selection mark (Carbon draws focus and selected rows with it).
         // Carbon's contained tabs draw their dividers as box-shadows (Carbon's design).
         // So does what is being edited in place (the title's field background spread around it).
-        const inset = /inset/.test(s.boxShadow) || el.matches(".cds--tabs--contained .cds--tabs__nav-item, :focus-within");
+        // So does a chart legend's swatch (Carbon Charts' own focus ring around it).
+        const inset = /inset/.test(s.boxShadow) || el.matches(".cds--tabs--contained .cds--tabs__nav-item, :focus-within, .cds--chart-holder .legend-item .checkbox");
         judge("shadow", inset || !!el.closest(FLOATING) || el.matches(FLOATING), el, inset ? "inset" : "outer", `a box-shadow outside the floating layers: ${s.boxShadow.slice(0, 60)}`);
       }
       // Carbon's notifications mark their kind with a 3px edge (Carbon's design).
@@ -239,7 +241,7 @@ function __design(opts) {
     // Links set in a line of text (a cell's or card's list of titles, helper text): their height is
     // the line's (the WCAG exception for targets constrained by the line-height of text).
     const inline = (el) => el.matches("a") && (cs(el).display === "inline" || !!el.closest("td, dd, .cds--form__helper-text, .view-field__value"));
-    const controls = shown.filter((el) => el.matches("button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=checkbox], [role=tab], [role=option], [role=menuitem]") && !inline(el) && !el.closest("p, li, .md-view") && !el.disabled);
+    const controls = shown.filter((el) => el.matches("button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=checkbox], [role=tab], [role=option], [role=menuitem]") && !inline(el) && !el.closest("p, li, .md-view, .cds--chart-holder") && !el.disabled);
     const rects = controls.map((el) => el.getBoundingClientRect());
     controls.forEach((el, i) => {
       const r = rects[i];

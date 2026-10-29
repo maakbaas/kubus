@@ -262,3 +262,26 @@ describe("testing a server", () => {
     await expect(engine().testServer("https://elsewhere.example.com", "t")).rejects.toThrow("Cannot reach https://elsewhere.example.com");
   });
 });
+
+describe("switching sync off", () => {
+  it("while a sync is running leaves it off, not up to date", async () => {
+    server(() => ({ cursor: 1, changes: { collections: [collection("t1")] } }));
+    const engine = new SyncEngine((await localDevice()) as never, () => {}, env);
+    await engine.configure(config);
+    expect(engine.status.state).toBe("idle");
+
+    // The next request waits; sync is switched off meanwhile.
+    const answer = globalThis.fetch;
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    vi.stubGlobal("fetch", vi.fn(async (...args: Parameters<typeof fetch>) => (await held, answer(...args))));
+    const running = engine.syncNow();
+    await engine.configure({ ...config, enabled: false });
+    release();
+    await running;
+    await engine.idle();
+
+    expect(engine.status.state).toBe("off");
+    expect(engine.status.error).toBeNull();
+  });
+});

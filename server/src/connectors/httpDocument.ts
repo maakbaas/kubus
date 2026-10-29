@@ -10,6 +10,8 @@ import { SourceError } from "./connector.ts";
 
 /** How long a read document is used as it is. */
 export const DOCUMENT_TTL_MS = 60_000;
+/** The most redirects followed. */
+const MAX_REDIRECTS = 10;
 /** The largest document read. */
 export const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 /** The most documents kept (the oldest is forgotten first). */
@@ -127,6 +129,21 @@ export function fetchDocument(url: URL | string, request: DocumentRequest, now =
   return read;
 }
 
+/**
+ * One GET, asked again once when the connection it was sent on had been closed by the server meanwhile (a kept-alive
+ * one the server timed out as the request went out: a reset or "other side closed"); a GET can be repeated.
+ */
+async function get(url: URL, headers: Record<string, string>, signal: AbortSignal): Promise<Response> {
+  const send = () => fetch(url, { method: "GET", headers, signal, redirect: "manual" });
+  try {
+    return await send();
+  } catch (e) {
+    const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+    if (signal.aborted || !(cause?.code === "ECONNRESET" || cause?.code === "UND_ERR_SOCKET" || cause?.message === "other side closed")) throw e;
+    return send();
+  }
+}
+
 async function readDocument(address: string, request: DocumentRequest, have: Kept | undefined): Promise<HttpDocument> {
   const maxBytes = request.maxBytes ?? MAX_DOCUMENT_BYTES;
   const headers: Record<string, string> = { "User-Agent": "Kubus", ...request.headers };
@@ -134,9 +151,25 @@ async function readDocument(address: string, request: DocumentRequest, have: Kep
   if (have?.lastModified) headers["If-Modified-Since"] = have.lastModified;
   const signal = AbortSignal.timeout(request.timeoutMs);
   let res: Response;
+  let finalUrl = address;
   try {
-    res = await fetch(address, { method: "GET", headers, signal, redirect: "follow" });
+    // Redirects are followed here, not by fetch: fetch drops only Authorization when a redirect leaves the origin, and
+    // the password may be in any header (X-Api-Key), which must not follow it.
+    let at = new URL(address);
+    for (let hops = 0; ; hops++) {
+      res = await get(at, headers, signal);
+      const location = [301, 302, 303, 307, 308].includes(res.status) ? res.headers.get("location") : null;
+      if (!location) break;
+      await res.body?.cancel();
+      if (hops === MAX_REDIRECTS) throw new Error(`The address redirects more than ${MAX_REDIRECTS} times`);
+      const next = new URL(location, at);
+      if (next.protocol !== "https:" && next.protocol !== "http:") throw new Error(`The address redirects to ${next.protocol}//, which isn't read`);
+      if (next.origin !== at.origin) for (const name of Object.keys(headers)) if (name !== "User-Agent") delete headers[name];
+      at = next;
+    }
+    finalUrl = at.toString();
   } catch (e) {
+    if (e instanceof Error && /^The address redirects/.test(e.message)) throw e;
     if (signal.aborted) throw new Error(`The address didn't answer within ${Math.round(request.timeoutMs / 1000)} s`, { cause: e });
     const cause = (e as { cause?: { code?: string; message?: string } }).cause;
     throw new Error(`Can't reach the address${cause?.code ? ` (${cause.code})` : cause?.message ? `: ${cause.message}` : ""}`, { cause: e });
@@ -165,8 +198,26 @@ async function readDocument(address: string, request: DocumentRequest, have: Kep
     throw new Error(tooLarge(maxBytes));
   }
   const bytes = await readBounded(res, maxBytes, signal, request.timeoutMs);
-  const text = new TextDecoder("utf-8").decode(bytes).replace(/^﻿/, "");
-  return { url: res.url || address, status: res.status, contentType, headers: res.headers, bytes, text };
+  const text = decodeText(bytes, contentType);
+  return { url: finalUrl, status: res.status, contentType, headers: res.headers, bytes, text };
+}
+
+/**
+ * A document's text: in the charset its Content-Type declares (a Windows-1252 or Latin-1 export, as spreadsheets make),
+ * UTF-16 where a byte order mark says so, else UTF-8 (bytes that aren't become U+FFFD); a byte order mark is dropped.
+ */
+export function decodeText(bytes: Uint8Array, contentType: string): string {
+  let label = /charset\s*=\s*"?([^";\s]+)/i.exec(contentType)?.[1] ?? "utf-8";
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) label = "utf-16le";
+  else if (bytes[0] === 0xfe && bytes[1] === 0xff) label = "utf-16be";
+  let decoder: TextDecoder;
+  try {
+    decoder = new TextDecoder(label);
+  } catch {
+    // A charset this runtime doesn't know: the usual one.
+    decoder = new TextDecoder("utf-8");
+  }
+  return decoder.decode(bytes).replace(/^﻿/, "");
 }
 
 const tooLarge = (maxBytes: number) => `The document is larger than ${Math.round(maxBytes / 1024 / 1024)} MB, more than a source reads`;

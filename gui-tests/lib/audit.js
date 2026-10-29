@@ -251,6 +251,8 @@ function __audit(opts) {
   }
   for (const el of shown) {
     if (srOnly(el) || el.closest(".cds--assistive-text, .cds--visually-hidden, .cds--popover-content:not(.cds--popover--open > *)")) continue;
+    // Carbon Charts' svg is drawn wider than its holder (the axes' margins, empty); the holder itself is checked.
+    if (el.closest(".cds--chart-holder svg")) continue;
     const r = rect(el);
     if (r.width === 0 || r.height === 0) continue;
     const p = clipParent(el);
@@ -404,8 +406,9 @@ function __audit(opts) {
     // tiny-target: text links are exempt (they are as big as their words, like "Io" in a list of
     // references); icon links and buttons aren't.
     const inline = el.matches("a") && (cs(el).display === "inline" || (el.textContent.trim() !== "" && !el.querySelector("svg, img")));
-    // Carbon's slider thumb is 14px by design; its whole track takes clicks.
-    if (!inline && !el.matches("input[type=checkbox], input[type=radio], .cds--slider__thumb") && (r.width < 16 - 0.5 || r.height < 16 - 0.5)) {
+    // Carbon's slider thumb is 14px by design; its whole track takes clicks. So does a chart legend's
+    // swatch (13px, Carbon Charts' own: the legend item with its name is the target).
+    if (!inline && !el.matches("input[type=checkbox], input[type=radio], .cds--slider__thumb, .cds--chart-holder .legend-item .checkbox") && (r.width < 16 - 0.5 || r.height < 16 - 0.5)) {
       report("tiny-target", el, `control is ${Math.round(r.width)}x${Math.round(r.height)}px`);
     }
 
@@ -620,8 +623,9 @@ function __audit(opts) {
     const known = (c) => tokens.has(strip(c)) || /rgba\(\d+, \d+, \d+, 0\)/.test(c);
     const seenColors = new Set();
     for (const el of shown) {
-      // Exempt: user content (images, code colouring) and image covers filled with their average colour.
-      if (el.closest("iframe, .item-view__image, img, .cm-editor, .token, .milkdown pre code, .lightbox, .item-card__cover") || srOnly(el)) continue;
+      // Exempt: user content (images, code colouring), image covers filled with their average colour,
+      // a map legend's swatches and charts: their colours are Carbon Charts' series palette.
+      if (el.closest("iframe, .item-view__image, img, .cm-editor, .token, .milkdown pre code, .lightbox, .item-card__cover, .map-block__swatch, .cds--chart-holder") || srOnly(el)) continue;
       const s = cs(el);
       const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
       const props = [["background-color", s.backgroundColor]];
@@ -821,9 +825,11 @@ function __audit(opts) {
     for (const el of shown) {
       const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
       if (!hasText || srOnly(el)) continue;
-      if (el.closest("[disabled], [aria-disabled=true], .cds--btn--disabled, .cds--label--disabled, .cds--text-input--disabled, iframe, .cm-editor, .token, .lightbox, .item-card__cover, .image-input, [role=tooltip]")) continue;
+      if (el.closest("[disabled], [aria-disabled=true], .cds--btn--disabled, .cds--label--disabled, .cds--text-input--disabled, .cds--list-box--disabled, .cds--form__helper-text--disabled, iframe, .cm-editor, .token, .lightbox, .item-card__cover, .image-input, [role=tooltip]")) continue;
       // A disabled Carbon toggle: its label and state text are siblings of the disabled switch.
       if (el.closest(".cds--toggle:has(.cds--toggle__button:disabled), .cds--select--disabled")) continue;
+      // …and a disabled checkbox's label (the label is a sibling of the disabled input).
+      if (el.closest(".cds--checkbox-wrapper:has(.cds--checkbox:disabled)")) continue;
       if (el.matches("input, textarea, select, option")) continue; // their placeholders are exempt; values are checked as text elsewhere
       const s = cs(el);
       if (parseFloat(s.opacity) === 0) continue;

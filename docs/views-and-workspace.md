@@ -15,7 +15,7 @@ Extension points are registries, not special cases in pages:
   runs, as if its result had been typed (`{{ 1 == 1 }}` is "true"), reading `$now` and, on an item
   page, the page's item as `$item`. A value that can't be compared (failing code, "maybe" for a
   checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
-  nothing, never the wrong items. The value input is text for every kind (the braces must be typable);
+  nothing, never the wrong items (so does a value from the page's item that it doesn't have: "Author is this Book's Mentor" on a Book without one). The value input is text for every kind (the braces must be typable);
   under it, what the code works out to ("= true").
 - **And / Or** (`app/src/domain/filterTree.ts`): each rule says how it joins what comes before it
   (`FilterRule.join`: absent = And, narrowing; "or" lets more items in), read in order without precedence
@@ -134,7 +134,7 @@ Extension points are registries, not special cases in pages:
     date field, Size makes bubbles and Split by colours the dots; clicking a dot opens its item.
   - **Parts of a whole** (pie or donut, meter, treemap, word cloud; `partsOf`): the X axis's categories (by the first
     series' value), number fields (each made into one by its aggregate: fat, muscle and bone mass) or one value, against
-    a Total: the sum of the parts, a number or a field (made into one like the value). A total larger than the parts
+    a Total (a pie or meter; a treemap and a word cloud draw their parts alone): the sum of the parts, a number or a field (made into one like the value). A total larger than the parts
     adds a "Remaining" slice; a meter shows it as its empty part (Carbon's proportional meter); one value on a meter is a
     bar of its share. A gauge measures its value against its total likewise (none: the value is a %), shows its % (Carbon's
     gauge: no unit, the decimals as set), and the increase or decrease from a comparison value (any value, and "Previous
