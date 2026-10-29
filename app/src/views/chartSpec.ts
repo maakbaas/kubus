@@ -672,11 +672,11 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
 
 /**
  * A choropleth's shades of its hue, lowest value first: Carbon's own scale (white, 10 … 100) without white, so a region
- * with a little is its palest shade (10) rather than white; on a dark theme the other way round (from 90, not near-black
- * 100 or white).
+ * with a little is its palest shade (10) rather than white; on a dark theme the other way round, from 90 (not near-black
+ * 100) to 20 (not the near-white 10).
  */
 export function scaleShades(color: ScaleColor, theme: string): string[] {
-  const grades = theme === "g100" ? [90, 80, 70, 60, 50, 40, 30, 20, 10] : [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  const grades = theme === "g100" ? [90, 80, 70, 60, 50, 40, 30, 20] : [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
   const hue = carbonColors[color] as Record<number, string>;
   return grades.map((g) => hue[g]);
 }
