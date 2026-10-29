@@ -2,6 +2,7 @@ name: Nightly
 
 # What the critical path (test.yml) leaves out because it is slow, each suite within its budget:
 # - connectors-real: the connectors against InfluxDB, n8n and Actual Budget in containers (tests/services.yml);
+# - image: the server image built from server/Dockerfile and run by docker-compose.yml, checked over HTTP (tests/image-smoke.mjs);
 # - gui: the whole GUI suite, sharded over parallel jobs (`node tests/run.mjs shards`; the groups are in
 #   tests/run.mjs), with the app's coverage;
 # - coverage: the vitest projects with coverage, merged with the shards' into one report (artifact).
@@ -57,6 +58,17 @@ jobs:
       - name: Environment
         run: bash -c '. tests/env.sh; env | grep ^KUBUS_TEST_ >> "$GITHUB_ENV"'
       - run: npm run suite -- connectors-real
+
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # The smoke test imports shared/sync.ts directly: Node 24 runs TypeScript, no install needed.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm run suite -- image
 
   gui:
     needs: plan

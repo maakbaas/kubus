@@ -9,7 +9,7 @@ Three kinds of tests, each split by the part of the app it covers, so that a cha
 touched: vitest (next to the code in `app/src`, the server's in `server/test`; seconds), the GUI suites
 (`gui-tests/suites/NN-*.js`, playwright-cli; minutes each, about an hour in all) and Rust (`desktop/`, `cargo test`
 in `build.yml`). CI: `test.yml` runs the critical ones on every push in parallel jobs (typecheck, unit, server, GUI
-smoke of the changed areas); `nightly.yml` the slow ones (the connectors' real services, the full GUI suite sharded
+smoke of the changed areas); `nightly.yml` the slow ones (the connectors' real services, the server image end to end (`tests/image-smoke.mjs`, suite `image`; `image.yml` runs it before publishing), the full GUI suite sharded
 over jobs, merged coverage).
 
 ## The vitest projects

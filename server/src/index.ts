@@ -227,7 +227,7 @@ async function serveStatic(url: string, res: ServerResponse) {
   }
 }
 
-createServer(async (req, res) => {
+const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
@@ -288,3 +288,12 @@ createServer(async (req, res) => {
     log: (message) => console.log(`[api] ${message}`),
   });
 });
+
+// As PID 1 in the container Node has no default signal handling: without this `docker stop` waits ten seconds and kills.
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.once(signal, () => {
+    server.close();
+    server.closeAllConnections(); // the event streams (/api/events) never end by themselves
+    void pool.end().catch(() => undefined).finally(() => process.exit(0));
+  });
+}

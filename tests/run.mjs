@@ -37,6 +37,9 @@ add("connectors-real", "vitest: the connectors against InfluxDB, n8n and Actual 
   steps: [[...vitest("connectors"), "real.test"]],
   needs: ["KUBUS_TEST_INFLUX", "KUBUS_TEST_N8N", "KUBUS_TEST_ACTUAL"],
 });
+add("image", "the server image end to end: docker build of server/Dockerfile, docker-compose.yml with a throwaway Postgres, HTTP checks (Docker)", {
+  steps: [["node", "tests/image-smoke.mjs"]],
+});
 add("coverage", "vitest with V8 coverage, then the merged report (add the GUI's: gui-NN -- --coverage first)", {
   budget: 20,
   steps: [["npx", "vitest", "run", "--coverage", ...noReal], ["npm", "run", "coverage:report"]],
@@ -85,7 +88,7 @@ const CRITICAL = ["typecheck", "unit", "connectors", "server", "gui-smoke"];
 add("critical", "what CI's critical jobs run (test.yml); in CI each is a job of its own", { members: CRITICAL });
 add("nightly", "typecheck, every vitest project, the real services, every GUI shard (all but the baselines and perf)", {
   budget: 0,
-  members: ["typecheck", "unit", "connectors", "server", "connectors-real", ...shards.map((g, i) => (g.length ? `gui-shard-${i + 1}` : null)).filter(Boolean)],
+  members: ["typecheck", "unit", "connectors", "server", "connectors-real", "image", ...shards.map((g, i) => (g.length ? `gui-shard-${i + 1}` : null)).filter(Boolean)],
 });
 
 // ---- running ------------------------------------------------------------------------------------------

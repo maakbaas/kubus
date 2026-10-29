@@ -33,6 +33,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Smoke test before anything is published: the amd64 image, built into the local Docker (the layers
+      # land in the cache the publishing build below reuses), run as docker-compose.yml runs it
+      # (tests/image-smoke.mjs). A broken image never becomes :latest.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          load: true
+          tags: kubus-server:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node tests/image-smoke.mjs --no-build
       - uses: docker/build-push-action@v6
         with:
           context: .

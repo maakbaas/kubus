@@ -29,6 +29,7 @@ the real services, `services.yml`) then `source tests/env.sh`. The GUI suites ne
 | `connectors` | project `connectors` without the `*.real.test.ts`: every connector's unit tests, the shared contract against Postgres, MySQL, MariaDB, SQLite (D1), real local HTTP servers | server packages, `build:headless`, Postgres, MySQL, MariaDB | 10 min (20 s) | `npm run suite -- connectors` | `test.yml` job `server` |
 | `server` | project `server`: modules, settings, MCP, every HTTP endpoint of the real server process, devices syncing through it | server packages, `build:headless`, Postgres | 10 min (30 s) | `npm run suite -- server` | `test.yml` job `server` |
 | `connectors-real` | the `*.real.test.ts` of `connectors`: InfluxDB 2 (35 s), n8n (17 s; 1 to 2 min to start), Actual Budget with actual-http-api (25 s; 45 s to start) | `tests/setup-env.sh --connectors`, then `source tests/env.sh` sets `KUBUS_TEST_INFLUX`, `_N8N`, `_ACTUAL`; missing ones fail the suite | 10 min (~3 min with start) | `npm run suite -- connectors-real` | `nightly.yml` job `connectors-real` (compose profile `connectors`) |
+| `image` | the deliverable server image (`server/Dockerfile`, as `docker-compose.yml` runs it and `image.yml` publishes it): `docker build`, the compose file with its own throwaway Postgres (project `kubus-image-smoke`, free ports, nothing of a running stack touched), then over HTTP: health, token refusal, a sync round trip (`shared/sync.ts`), `/api/v1` answered by the bundled headless device (not 503), the web app's files, a stop / start that keeps the data; torn down at the end. `KUBUS_IMAGE_CA=<bundle>` for a TLS-intercepting proxy; `--keep`, `--no-build` | Docker with compose v2.24+ | 10 min (~2.5 min with a cold build, ~30 s cached) | `npm run suite -- image` | `nightly.yml` job `image`; `image.yml` before it publishes |
 | `coverage` | the vitest projects with V8 coverage, then `npm run coverage:report` (merges the GUI's coverage if `gui-… -- --coverage` ran) | as `connectors` + `server` | 20 min | `npm run suite -- coverage` | `nightly.yml` job `coverage` |
 
 `npm test` is still every project in one run (with the `*.real.test.ts`, skipped without their variables, an error in CI).
@@ -60,7 +61,7 @@ Rust (`cargo test`, clippy, fmt) is not a suite here: `desktop/` is tested by `b
 | Workflow | Jobs | Budget |
 |---|---|---|
 | `test.yml` (every push) | `typecheck`, `unit`, `server` (Postgres, MySQL, MariaDB services), `gui-smoke`, in parallel | each ≤ 10 min, so the whole ≤ 10 |
-| `nightly.yml` (schedule, by hand) | `connectors-real`, `gui` (matrix of shards), `coverage` (unit coverage + the shards' GUI coverage, merged: artifact `coverage-report`) | each ≤ 20 min job limit, the suites ≤ 10 |
+| `nightly.yml` (schedule, by hand) | `connectors-real`, `image`, `gui` (matrix of shards), `coverage` (unit coverage + the shards' GUI coverage, merged: artifact `coverage-report`) | each ≤ 20 min job limit, the suites ≤ 10 |
 | `build.yml` (every push) | the Windows installer, macOS / Linux packages, the Docker image; on Windows `unit` only: the one place tests run on another platform (paths, line endings); the rest is platform-independent and stays in `test.yml` | |
 
 A new suite file in `gui-tests/suites/` needs a line in `gui-tests/areas.mjs` (so `--changed` finds it); it is picked up by the
