@@ -49,6 +49,9 @@ needs server-side queries (docs/vision.md).
   missing. `now()`
   never goes below a timestamp received from the server (`observeStamp`), a cheap guard against clock
   skew instead of a hybrid logical clock.
+- *Dashboards* (`dashboards`, `dashboard_views`, since `SYNC_VERSION` 3): synced like collections and their views, each tab a row of its own
+  (a rename on one device and another tab's edit on another both stay); a dashboard tab's bookmark carries `dashboard_id`. A sync
+  announces `dashboards` and `dashboardViews` of each dashboard whose tabs came, as a local write would.
 - *Item links* (`item_links`, docs/data-model.md "Item links"): derived from the values but synced, so devices and the server hold the
   index. The row carries its value's own `updated_at` and is written in the same transaction (triggers on `field_values`, not while
   `sync_applying`), so the newest-wins merge keeps value and row together. Every device of a sync writes the rows with its values (the strict

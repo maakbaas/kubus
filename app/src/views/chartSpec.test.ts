@@ -97,6 +97,34 @@ describe("chartSpec", () => {
     expect(axes(s).right).toMatchObject({ correspondingDatasets: ["Sum of Pages"], title: "Sum of Pages" });
   });
 
+  it("fits each axis to its own series: a key and a domain per axis, and every row carries both keys inside both domains", () => {
+    const s = spec({ chart: "line", series: [sum("pages"), sum("rating", { axis: "right" })] });
+    const [left, right] = [axes(s).left, axes(s).right];
+    expect([left.mapsTo, right.mapsTo]).toEqual(["value", "valueRight"]);
+    // Pages 500 / 80 (Novel, Poetry) on the left, ratings 6 / 5 on the right.
+    expect(left.domain).toEqual([80, 500]);
+    expect(right.domain).toEqual([5, 6]);
+    type Row = { group: string; value: number; valueRight: number };
+    const rows = s.data as unknown as Row[];
+    for (const r of rows) {
+      expect(r.value, JSON.stringify(r)).toBeGreaterThanOrEqual(left.domain![0] as number);
+      expect(r.value).toBeLessThanOrEqual(left.domain![1] as number);
+      expect(r.valueRight).toBeGreaterThanOrEqual(right.domain![0] as number);
+      expect(r.valueRight).toBeLessThanOrEqual(right.domain![1] as number);
+    }
+    expect(rows.filter((r) => r.group === "Sum of Pages").map((r) => r.value)).toEqual([500, 80]);
+    expect(rows.filter((r) => r.group === "Sum of Rating").map((r) => r.valueRight)).toEqual([6, 5]);
+  });
+
+  it("an axis' min and max apply to its own series, a stacked axis to its stacks, a log axis to positive values", () => {
+    const s = spec({ chart: "bar", stack: "stacked", series: [sum("pages"), sum("pages", { label: "More" }), sum("rating", { axis: "right", style: "line" })], right: { title: "", min: 0, max: 20, log: false } });
+    expect(axes(s).left.domain).toEqual([0, 1000]);
+    expect(axes(s).right.domain).toEqual([0, 20]);
+    expect(s.options.comboChartTypes).toEqual([{ type: "stacked-bar", correspondingDatasets: ["Sum of Pages", "More"] }, { type: "line", correspondingDatasets: ["Sum of Rating"] }]);
+    const log = spec({ chart: "line", series: [sum("pages"), sum("rating", { axis: "right" })], right: { title: "", min: null, max: null, log: true } });
+    expect(axes(log).right).toMatchObject({ scaleType: "log", mapsTo: "valueRight", domain: [5, 6] });
+  });
+
   it("makes a combo of mixed styles, each its Carbon type", () => {
     const s = spec({ series: [newSeries(), sum("pages", { style: "line" }), sum("rating", { style: "points", axis: "right" }), newSeries({ style: "lollipop", label: "Also" })] });
     expect(s.chart).toBe("ComboChart");

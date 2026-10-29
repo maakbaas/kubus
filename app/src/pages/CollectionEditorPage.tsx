@@ -57,9 +57,10 @@ export function draftField(name = "", kind: FieldKind = "string"): FieldDraft {
   return field;
 }
 
-function initialDraft(existing?: Collection, remote = false): CollectionDraft {
+function initialDraft(existing: Collection | undefined, remote: boolean, spaceId: string): CollectionDraft {
   if (existing) return collectionDraft(existing);
-  // Its fields come from the columns it reads.
+  // Its fields come from the columns it reads. A remote collection starts in the space it's added in
+  // (a native one in every space).
   if (remote) {
     return {
       id: newId(),
@@ -67,7 +68,7 @@ function initialDraft(existing?: Collection, remote = false): CollectionDraft {
       pluralName: "",
       icon: "DataBase",
       description: "",
-      spaceIds: null,
+      spaceIds: [spaceId],
       source: { name: "", target: { table: { schema: null, name: "" } }, key: "", columns: [] },
       fields: [],
     };
@@ -90,7 +91,7 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
   const { repo, collections, reloadCollections, components, spaces, space } = useStore();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
-  const [draft, setDraft] = useState(() => initialDraft(existing, newRemote));
+  const [draft, setDraft] = useState(() => initialDraft(existing, newRemote, space.id));
   const remote = isRemote(draft);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);

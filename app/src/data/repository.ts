@@ -5,6 +5,7 @@ import type { Backlink } from "../domain/backlinks";
 import type { Component } from "../domain/components";
 import type { Space } from "../domain/spaces";
 import type { CollectionView } from "../domain/views";
+import type { Dashboard, DashboardView } from "../domain/dashboards";
 
 /**
  * What changed after a write, so every open view of that data can refresh (another pane, a
@@ -16,7 +17,10 @@ export type DataChange =
   | { scope: "items"; collectionId: string; itemId?: string }
   | { scope: "views"; collectionId: string }
   | { scope: "components" }
-  | { scope: "bookmarks" };
+  | { scope: "bookmarks" }
+  | { scope: "dashboards" }
+  /** A dashboard's tabs, in any space (a space without tabs of its own shows another's: domain/dashboards.ts). */
+  | { scope: "dashboardViews"; dashboardId: string };
 
 /** Where and whether this device syncs (stored per device; see data/sync/SyncEngine.ts). */
 export interface SyncConfig {
@@ -121,7 +125,7 @@ export interface Repository {
   listSpaces(): Promise<Space[]>;
   /** Creates (at the end) or renames / re-icons a space. */
   saveSpace(space: Pick<Space, "id" | "name" | "icon">): Promise<void>;
-  /** Deletes a space with its items, views and bookmarks. The default space can't be deleted. */
+  /** Deletes a space with its items, views, dashboard tabs and bookmarks. The default space can't be deleted. */
   deleteSpace(spaceId: string): Promise<void>;
 
   listCollections(): Promise<Collection[]>;
@@ -200,13 +204,43 @@ export interface Repository {
   /** Pins an item to one of its collection's item views, or back to the collection's default with null. */
   pinItemView(itemId: string, viewId: string | null): Promise<void>;
 
+  /** Every dashboard, in their order (whichever spaces it is shown in: domain/spaces.ts inSpace). */
+  listDashboards(): Promise<Dashboard[]>;
+  /**
+   * Creates (at the end) or updates a dashboard (name, icon, description, spaces). A new one gets a first tab,
+   * without blocks, in `spaceId` (tabs belong to a space).
+   */
+  saveDashboard(dashboard: Pick<Dashboard, "id" | "name" | "icon" | "description" | "spaceIds">, spaceId: string): Promise<void>;
+  /** Deletes a dashboard with its tabs (in every space) and their bookmarks. */
+  deleteDashboard(dashboardId: string): Promise<void>;
+  /**
+   * A dashboard's tabs in a space, in their order: its own, or, when it has none, virtual copies of another space's
+   * (domain/dashboards.ts dashboardViewsIn), stored there by `storeDashboardViews` before they change.
+   */
+  listDashboardViews(dashboardId: string, spaceId: string): Promise<DashboardView[]>;
+  /** Every stored dashboard tab, of every dashboard and space (what search goes through). */
+  listAllDashboardViews(): Promise<DashboardView[]>;
+  /**
+   * Stores the virtual tabs a space shows (copies of another space's) as its own, all at once (a stored one would hide
+   * the rest). Returns the new id of each, by virtual id; nothing (an empty map) when the space has tabs of its own.
+   */
+  storeDashboardViews(dashboardId: string, spaceId: string): Promise<Map<string, string>>;
+  /** Creates or updates a dashboard tab (by id); a virtual one is refused (store it first). */
+  saveDashboardView(view: DashboardView): Promise<void>;
+  deleteDashboardView(viewId: string): Promise<void>;
+  /** Stars a tab as the dashboard's default in a space (unstarring any other there), or clears it with null. */
+  setDefaultDashboardView(dashboardId: string, spaceId: string, viewId: string | null): Promise<void>;
+
   /** A space's side-nav bookmarks, in their order. */
   listBookmarks(spaceId: string): Promise<Bookmark[]>;
-  /** Bookmarks the view or item in a space (at the end of its list). */
-  addBookmark(kind: BookmarkKind, collectionId: string, targetId: string, label: string, spaceId: string): Promise<void>;
-  /** Removes the space's bookmark of this view or item, if any. */
+  /**
+   * Bookmarks the view, item or dashboard tab in a space (at the end of its list). `ownerId` is the view's or item's
+   * collection, or the tab's dashboard.
+   */
+  addBookmark(kind: BookmarkKind, ownerId: string, targetId: string, label: string, spaceId: string): Promise<void>;
+  /** Removes the space's bookmark of this view, item or dashboard tab, if any. */
   removeBookmark(targetId: string, spaceId: string): Promise<void>;
-  /** Updates the label snapshot of a bookmarked view or item (no-op when unchanged). */
+  /** Updates the label snapshot of a bookmarked view, item or dashboard tab (no-op when unchanged). */
   relabelBookmark(targetId: string, label: string): Promise<void>;
 
   /** All components, by name. */

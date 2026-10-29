@@ -22,7 +22,8 @@ import type { Bookmark, BookmarkKind } from "../../domain/bookmarks";
 import { parseItemViews, withDefaultItemView, type ItemView } from "../../domain/fieldLayout";
 import { isComponentOutput, type Component } from "../../domain/components";
 import { DEFAULT_SPACE_ID, withDefaultSpace, type Space } from "../../domain/spaces";
-import { defaultViewState, parseViewConfig, type CollectionView } from "../../domain/views";
+import { defaultViewState, NOTHING_COLLAPSED, parseViewConfig, type CollectionView } from "../../domain/views";
+import { dashboardViewsIn, FIRST_TAB_NAME, isVirtualTab, type Dashboard, type DashboardView } from "../../domain/dashboards";
 import type { DataChange, NewItem, Repository } from "../repository";
 import { SyncEngine } from "../sync/SyncEngine";
 import type { SyncEnvironment } from "../sync/environment";
@@ -143,6 +144,52 @@ function toView(r: ViewRow): CollectionView {
     updatedAt: r.updated_at,
   };
 }
+
+interface DashboardRow {
+  id: string;
+  name: string;
+  icon: string | null;
+  description: string;
+  space_ids: string | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+interface DashboardViewRow {
+  id: string;
+  dashboard_id: string;
+  space_id: string;
+  name: string;
+  config: string;
+  position: number;
+  is_default: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A stored dashboard tab (its config parsed as a collection view's; its blocks may be none). */
+function toDashboardView(r: DashboardViewRow): DashboardView {
+  const { filters, blocks, editable, collapsed, filterBar } = parseViewConfig(r.config);
+  return {
+    id: r.id,
+    dashboardId: r.dashboard_id,
+    spaceId: r.space_id,
+    name: r.name,
+    filters,
+    blocks,
+    editable,
+    collapsed,
+    ...(filterBar && { filterBar }),
+    position: r.position,
+    isDefault: r.is_default === 1,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+/** A view's or dashboard tab's config as stored (JSON). */
+const viewConfig = (view: Pick<CollectionView, "filters" | "blocks" | "editable" | "collapsed" | "filterBar">) =>
+  JSON.stringify({ filters: view.filters, blocks: view.blocks, editable: view.editable, collapsed: view.collapsed, filterBar: view.filterBar });
 
 /** Stored space_ids: null (every space) or a list of space ids. */
 const spaceIdsOf = (json: string | null): string[] | null => {
@@ -278,12 +325,17 @@ export class SqliteRepository implements Repository {
         UNION SELECT collection_id FROM views WHERE space_id = ?1 AND deleted_at IS NULL`,
       [spaceId],
     );
+    const dashboards = await this.db.select<{ dashboard_id: string }>(
+      "SELECT DISTINCT dashboard_id FROM dashboard_views WHERE space_id = ?1 AND deleted_at IS NULL",
+      [spaceId],
+    );
     // Read before the items are deleted; the release statements run after that, in the same transaction.
     const released = await this.releaseFilesWhere("item_id IN (SELECT id FROM items WHERE space_id = ?1 AND deleted_at IS NULL)", [spaceId]);
     await this.db.write([
       { sql: "UPDATE items SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
       { sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
       { sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
+      { sql: "UPDATE dashboard_views SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
       // The default space has no row until renamed: its tombstone is made here.
       {
         sql: `INSERT INTO spaces (id, name, icon, position, created_at, updated_at, deleted_at) VALUES (?2, 'Space', NULL, -1, ?1, ?1, ?1)
@@ -295,7 +347,7 @@ export class SqliteRepository implements Repository {
     this.emit({ scope: "spaces" }, { scope: "bookmarks" }, ...collections.flatMap((c) => [
       { scope: "items", collectionId: c.collection_id } as const,
       { scope: "views", collectionId: c.collection_id } as const,
-    ]));
+    ]), ...dashboards.map((d) => ({ scope: "dashboardViews", dashboardId: d.dashboard_id }) as const));
   }
 
   async listCollections(): Promise<Collection[]> {
@@ -615,7 +667,7 @@ export class SqliteRepository implements Repository {
 
   async saveView(view: CollectionView): Promise<void> {
     const ts = now();
-    const config = JSON.stringify({ filters: view.filters, blocks: view.blocks, editable: view.editable, collapsed: view.collapsed, filterBar: view.filterBar });
+    const config = viewConfig(view);
     await this.db.write([
       {
         sql: `INSERT INTO views (id, collection_id, space_id, name, config, position, created_at, updated_at)
@@ -655,21 +707,133 @@ export class SqliteRepository implements Repository {
     if (collectionId) this.emit({ scope: "items", collectionId, itemId });
   }
 
+  async listDashboards(): Promise<Dashboard[]> {
+    const rows = await this.db.select<DashboardRow>("SELECT * FROM dashboards WHERE deleted_at IS NULL ORDER BY position, created_at");
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      icon: r.icon,
+      description: r.description,
+      spaceIds: spaceIdsOf(r.space_ids),
+      position: r.position,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }));
+  }
+
+  async saveDashboard(d: Pick<Dashboard, "id" | "name" | "icon" | "description" | "spaceIds">, spaceId: string): Promise<void> {
+    const ts = now();
+    const isNew = (await this.db.select("SELECT 1 FROM dashboards WHERE id = ?1", [d.id])).length === 0;
+    const first = { filters: [], blocks: [], editable: true, collapsed: NOTHING_COLLAPSED };
+    await this.db.write([
+      {
+        sql: `INSERT INTO dashboards (id, name, icon, description, space_ids, position, created_at, updated_at)
+              SELECT ?1, ?2, ?3, ?4, ?5, COALESCE(MAX(position), -1) + 1, ?6, ?6 FROM dashboards WHERE deleted_at IS NULL
+              ON CONFLICT (id) DO UPDATE SET name = excluded.name, icon = excluded.icon, description = excluded.description,
+                space_ids = excluded.space_ids, updated_at = excluded.updated_at`,
+        bind: [d.id, d.name, d.icon, d.description, spaceIdsJson(d.spaceIds), ts],
+      },
+      // A new one's first tab, in the space it is made in.
+      ...(isNew
+        ? [{
+            sql: "INSERT INTO dashboard_views (id, dashboard_id, space_id, name, config, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?6)",
+            bind: [newId(), d.id, spaceId, FIRST_TAB_NAME, viewConfig(first), ts],
+          }]
+        : []),
+    ]);
+    this.emit({ scope: "dashboards" }, ...(isNew ? [{ scope: "dashboardViews", dashboardId: d.id } as const] : []));
+  }
+
+  async deleteDashboard(dashboardId: string): Promise<void> {
+    const ts = now();
+    await this.db.write([
+      { sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE dashboard_id = ?2 AND deleted_at IS NULL", bind: [ts, dashboardId] },
+      { sql: "UPDATE dashboard_views SET deleted_at = ?1, updated_at = ?1 WHERE dashboard_id = ?2 AND deleted_at IS NULL", bind: [ts, dashboardId] },
+      { sql: "UPDATE dashboards SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, dashboardId] },
+    ]);
+    this.emit({ scope: "dashboards" }, { scope: "dashboardViews", dashboardId }, { scope: "bookmarks" });
+  }
+
+  async listDashboardViews(dashboardId: string, spaceId: string): Promise<DashboardView[]> {
+    // All its spaces' tabs: a space without its own shows another's.
+    const rows = await this.db.select<DashboardViewRow>("SELECT * FROM dashboard_views WHERE dashboard_id = ?1 AND deleted_at IS NULL", [dashboardId]);
+    return dashboardViewsIn(rows.map(toDashboardView), dashboardId, spaceId);
+  }
+
+  async listAllDashboardViews(): Promise<DashboardView[]> {
+    const rows = await this.db.select<DashboardViewRow>(
+      "SELECT * FROM dashboard_views WHERE deleted_at IS NULL ORDER BY dashboard_id, space_id, position, created_at",
+    );
+    return rows.map(toDashboardView);
+  }
+
+  async storeDashboardViews(dashboardId: string, spaceId: string): Promise<Map<string, string>> {
+    const shown = await this.listDashboardViews(dashboardId, spaceId);
+    const ids = new Map(shown.filter((v) => v.virtual).map((v) => [v.id, newId()]));
+    if (ids.size === 0) return ids;
+    const ts = now();
+    await this.db.write(
+      shown.map((v) => ({
+        sql: `INSERT INTO dashboard_views (id, dashboard_id, space_id, name, config, position, is_default, created_at, updated_at)
+              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)`,
+        bind: [ids.get(v.id)!, dashboardId, spaceId, v.name, viewConfig(v), v.position, v.isDefault ? 1 : 0, ts],
+      })),
+    );
+    this.emit({ scope: "dashboardViews", dashboardId });
+    return ids;
+  }
+
+  async saveDashboardView(view: DashboardView): Promise<void> {
+    if (view.virtual || isVirtualTab(view.id)) throw new Error("A tab copied from another space is stored in this space first.");
+    await this.db.write([
+      {
+        sql: `INSERT INTO dashboard_views (id, dashboard_id, space_id, name, config, position, created_at, updated_at)
+              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+              ON CONFLICT (id) DO UPDATE SET
+                name = excluded.name, config = excluded.config,
+                position = excluded.position, updated_at = excluded.updated_at`,
+        bind: [view.id, view.dashboardId, view.spaceId, view.name, viewConfig(view), view.position, now()],
+      },
+    ]);
+    this.emit({ scope: "dashboardViews", dashboardId: view.dashboardId });
+  }
+
+  async deleteDashboardView(viewId: string): Promise<void> {
+    const dashboardId = (await this.db.select<{ dashboard_id: string }>("SELECT dashboard_id FROM dashboard_views WHERE id = ?1", [viewId]))[0]?.dashboard_id;
+    await this.db.write([{ sql: "UPDATE dashboard_views SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [now(), viewId] }]);
+    if (dashboardId) this.emit({ scope: "dashboardViews", dashboardId });
+  }
+
+  async setDefaultDashboardView(dashboardId: string, spaceId: string, viewId: string | null): Promise<void> {
+    await this.db.write([
+      {
+        sql: `UPDATE dashboard_views SET is_default = (id IS ?2), updated_at = ?3
+               WHERE dashboard_id = ?1 AND space_id = ?4 AND deleted_at IS NULL AND is_default IS NOT (id IS ?2)`,
+        bind: [dashboardId, viewId, now(), spaceId],
+      },
+    ]);
+    this.emit({ scope: "dashboardViews", dashboardId });
+  }
+
   async listBookmarks(spaceId: string): Promise<Bookmark[]> {
     const rows = await this.db.select<{
       id: string;
       kind: BookmarkKind;
-      collection_id: string;
+      collection_id: string | null;
+      dashboard_id: string | null;
       target_id: string;
       label: string;
       position: number;
       created_at: string;
     }>(
-      // Bookmarks of deleted views and items aren't shown (a remote collection's rows aren't stored: their ids are keys).
-      `SELECT b.* FROM bookmarks b JOIN collections t ON t.id = b.collection_id AND t.deleted_at IS NULL
+      // Bookmarks of deleted views, items and dashboard tabs aren't shown (a remote collection's rows aren't stored: their ids are keys).
+      `SELECT b.* FROM bookmarks b LEFT JOIN collections t ON t.id = b.collection_id AND t.deleted_at IS NULL
         WHERE b.deleted_at IS NULL AND b.space_id = ?1
+          AND (b.kind = 'dashboard' OR t.id IS NOT NULL)
           AND (b.kind <> 'view' OR EXISTS (SELECT 1 FROM views v WHERE v.id = b.target_id AND v.deleted_at IS NULL))
           AND (b.kind <> 'item' OR t.source IS NOT NULL OR EXISTS (SELECT 1 FROM items o WHERE o.id = b.target_id AND o.deleted_at IS NULL))
+          AND (b.kind <> 'dashboard' OR EXISTS (SELECT 1 FROM dashboard_views v JOIN dashboards d ON d.id = v.dashboard_id AND d.deleted_at IS NULL
+                                                 WHERE v.id = b.target_id AND v.dashboard_id = b.dashboard_id AND v.deleted_at IS NULL))
         ORDER BY b.position, b.created_at`,
       [spaceId],
     );
@@ -677,6 +841,7 @@ export class SqliteRepository implements Repository {
       id: r.id,
       kind: r.kind,
       collectionId: r.collection_id,
+      ...(r.dashboard_id !== null && { dashboardId: r.dashboard_id }),
       targetId: r.target_id,
       label: r.label,
       position: r.position,
@@ -684,13 +849,14 @@ export class SqliteRepository implements Repository {
     }));
   }
 
-  async addBookmark(kind: BookmarkKind, collectionId: string, targetId: string, label: string, spaceId: string): Promise<void> {
+  async addBookmark(kind: BookmarkKind, ownerId: string, targetId: string, label: string, spaceId: string): Promise<void> {
     const ts = now();
+    const dashboard = kind === "dashboard";
     await this.db.write([
       {
-        sql: `INSERT INTO bookmarks (id, kind, collection_id, space_id, target_id, label, position, created_at, updated_at)
-              SELECT ?1, ?2, ?3, ?7, ?4, ?5, COALESCE(MAX(position), -1) + 1, ?6, ?6 FROM bookmarks WHERE deleted_at IS NULL AND space_id = ?7`,
-        bind: [newId(), kind, collectionId, targetId, label, ts, spaceId],
+        sql: `INSERT INTO bookmarks (id, kind, collection_id, dashboard_id, space_id, target_id, label, position, created_at, updated_at)
+              SELECT ?1, ?2, ?3, ?8, ?7, ?4, ?5, COALESCE(MAX(position), -1) + 1, ?6, ?6 FROM bookmarks WHERE deleted_at IS NULL AND space_id = ?7`,
+        bind: [newId(), kind, dashboard ? null : ownerId, targetId, label, ts, spaceId, dashboard ? ownerId : null],
       },
     ]);
     this.emit({ scope: "bookmarks" });

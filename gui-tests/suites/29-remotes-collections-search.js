@@ -234,6 +234,7 @@ for (const vp of ["desktop", "phone"]) {
     const c = await storedBy(t, "Customers");
     await t.check("stored with its source, table and key", c?.source?.name === "CRM" && c.source.target.table.name === "customers" && c.source.key === "id" && c.source.columns.length === 4, JSON.stringify(c?.source));
     await t.check("stored with a field per column", c?.fields.length === 4 && c.fields.every((f) => f.column === f.name), JSON.stringify(c?.fields.map((f) => f.column)));
+    await t.check("a new remote collection is only in the space it was added in", JSON.stringify(c?.spaceIds) === JSON.stringify(["default"]), JSON.stringify(c?.spaceIds));
     // The Remotes page lists it with its source; the Collections page doesn't.
     await t.open("/remotes");
     await t.check("the Remotes page lists it", (await paneText(t)).includes("Customers"), await paneText(t));

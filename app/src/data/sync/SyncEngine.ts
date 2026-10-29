@@ -630,6 +630,7 @@ export class SyncEngine implements SyncControl {
     let replaced = false;
     if (SYNC_TABLES.some((t) => (remote.changes[t.name] ?? []).length > 0)) {
       const oldCollections = (await this.db.select<{ id: string }>("SELECT id FROM collections")).map((r) => r.id);
+      const oldDashboards = (await this.db.select<{ id: string }>("SELECT id FROM dashboards")).map((r) => r.id);
       const statements: Statement[] = [
         { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_applying', '1')" },
         { sql: "PRAGMA defer_foreign_keys = ON" },
@@ -654,7 +655,7 @@ export class SyncEngine implements SyncControl {
       this.cursor = remote.cursor;
       replaced = true;
       this.pulled({ changes: remote.changes, pushed: {}, cursor: remote.cursor, database: remote.database.id, initial: true });
-      await this.announce(remote.changes, oldCollections);
+      await this.announce(remote.changes, { collections: oldCollections, dashboards: oldDashboards });
     } else {
       await this.db.write([
         { sql: "DELETE FROM sync_outbox" },
@@ -690,7 +691,7 @@ export class SyncEngine implements SyncControl {
   }
 
   /** Tells the UI what the server changed, the way a local write would. */
-  private async announce(changes: WireChanges, replacedCollections: string[] = []) {
+  private async announce(changes: WireChanges, replaced?: { collections: string[]; dashboards: string[] }) {
     const out: DataChange[] = [];
     const items = new Map<string, string>(); // item id -> collection id
     for (const r of changes.items ?? []) items.set(String(r.id), String(r.collection_id));
@@ -707,12 +708,15 @@ export class SyncEngine implements SyncControl {
     if (changes.collections?.length || changes.fields?.length) out.push({ scope: "collections" });
     if (changes.components?.length) out.push({ scope: "components" });
     if (changes.bookmarks?.length) out.push({ scope: "bookmarks" });
+    if (changes.dashboards?.length) out.push({ scope: "dashboards" });
     // Everything was replaced: whatever the old data showed is gone or different now.
-    if (replacedCollections.length > 0) {
-      out.push({ scope: "spaces" }, { scope: "collections" }, { scope: "components" }, { scope: "bookmarks" });
-      for (const collectionId of replacedCollections) out.push({ scope: "items", collectionId }, { scope: "views", collectionId });
+    if (replaced) {
+      out.push({ scope: "spaces" }, { scope: "collections" }, { scope: "components" }, { scope: "bookmarks" }, { scope: "dashboards" });
+      for (const collectionId of replaced.collections) out.push({ scope: "items", collectionId }, { scope: "views", collectionId });
+      for (const dashboardId of replaced.dashboards) out.push({ scope: "dashboardViews", dashboardId });
     }
     for (const collectionId of new Set((changes.views ?? []).map((r) => String(r.collection_id)))) out.push({ scope: "views", collectionId });
+    for (const dashboardId of new Set((changes.dashboard_views ?? []).map((r) => String(r.dashboard_id)))) out.push({ scope: "dashboardViews", dashboardId });
     for (const [itemId, collectionId] of items) out.push({ scope: "items", collectionId, itemId });
 
     for (const t of SYNC_TABLES) for (const r of changes[t.name] ?? []) if (typeof r.updated_at === "string") observeStamp(r.updated_at);

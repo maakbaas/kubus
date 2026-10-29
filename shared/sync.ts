@@ -14,7 +14,7 @@
  * answers 426 `SyncOutdated` to a device of another version and writes nothing), so every release
  * with a sync change is rolled out to the server and all devices together: docs/migrations.md.
  */
-export const SYNC_VERSION = 2;
+export const SYNC_VERSION = 3;
 
 /** Maps to SQLite / Postgres: text, number = real / double precision, int, bool = 0|1 / boolean,
  *  json = text / jsonb, date = text YYYY-MM-DD / date, timestamp = ISO text / timestamptz,
@@ -62,6 +62,20 @@ export const SYNC_TABLES: SyncTable[] = [
     version: "updated_at",
     columns: {
       id: "text", name: "text", description: "text", code: "text", output: "text", frame_ratio: "text", ai: "int", ...stamps,
+    },
+  },
+  {
+    name: "dashboards",
+    key: ["id"],
+    version: "updated_at",
+    columns: { id: "text", name: "text", icon: "text", description: "text", space_ids: "json", position: "int", ...stamps },
+  },
+  {
+    name: "dashboard_views",
+    key: ["id"],
+    version: "updated_at",
+    columns: {
+      id: "text", dashboard_id: "text", space_id: "text", name: "text", config: "json", position: "int", is_default: "int", ...stamps,
     },
   },
   {
@@ -126,7 +140,7 @@ export const SYNC_TABLES: SyncTable[] = [
     version: "updated_at",
     columns: {
       id: "text", kind: "text", collection_id: "text", space_id: "text", target_id: "text", label: "text", position: "int",
-      ...stamps,
+      ...stamps, dashboard_id: "text",
     },
   },
 ];

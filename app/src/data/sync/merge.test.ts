@@ -150,6 +150,37 @@ describe("edits on two devices", () => {
     expect(await b.listBookmarks("work")).toEqual([]);
   });
 
+  it("carry dashboards, their tabs per space and their bookmarks; edits of two tabs both stay", async () => {
+    const n = await notes();
+    await a.saveSpace({ id: "work", name: "Work", icon: null });
+    await a.saveDashboard({ id: "d", name: "Home", icon: "Dashboard", description: "", spaceIds: null }, "default");
+    const [first] = await a.listDashboardViews("d", "default");
+    const ts = new Date().toISOString();
+    const block = { id: "b", title: "", kind: "table", filters: null, sort: [], groupBy: null, layout: { fields: null, editable: true, hiddenLabels: [], hideEmpty: false }, collectionId: n.id, options: null };
+    await a.saveDashboardView({ ...first, id: "second", name: "Second", position: 1, blocks: [block], createdAt: ts, updatedAt: ts });
+    await a.addBookmark("dashboard", "d", "second", "Home / Second", "default");
+    await settled(a);
+    await settled(b);
+    expect((await b.listDashboards()).map((d) => [d.name, d.icon])).toEqual([["Home", "Dashboard"]]);
+    expect((await b.listDashboardViews("d", "default")).map((v) => [v.name, v.blocks.length])).toEqual([["Dashboard", 0], ["Second", 1]]);
+    expect((await b.listDashboardViews("d", "work")).every((v) => v.virtual)).toBe(true);
+    expect((await b.listBookmarks("default")).map((x) => [x.kind, x.dashboardId, x.label])).toEqual([["dashboard", "d", "Home / Second"]]);
+    // Each tab is a row of its own: a rename on one device and a change of another tab on the other both stay.
+    const onB = await b.listDashboardViews("d", "default");
+    await a.saveDashboardView({ ...first, name: "Start" });
+    await b.saveDashboardView({ ...onB[1], filters: [{ id: "r", fieldId: "$date", operator: "between", value: "day-6..day+0" }] });
+    await settled(a);
+    await settled(b);
+    await settled(a);
+    for (const repo of [a, b]) expect((await repo.listDashboardViews("d", "default")).map((v) => [v.name, v.filters.length])).toEqual([["Start", 0], ["Second", 1]]);
+    await b.deleteDashboard("d");
+    await settled(b);
+    await settled(a);
+    expect(await a.listDashboards()).toEqual([]);
+    expect(await a.listAllDashboardViews()).toEqual([]);
+    expect(await a.listBookmarks("default")).toEqual([]);
+  });
+
   it("carry AI values with the fingerprint of their prompt, and the edited mark", async () => {
     const id = newId();
     await a.saveCollection({ id, name: "Memo", pluralName: "Memos", icon: null, description: "", spaceIds: null, fields: [field("Text"), { ...field("Gen", "ai"), code: "Say {{ $item.Text }}", output: "string" }] }, "default");
@@ -218,9 +249,15 @@ describe("what a sync reports to the app", () => {
     const [all] = await a.listViews(n.id, "default");
     await a.saveView({ ...all, name: "Renamed" });
     await a.saveCollection({ ...collectionDraft(n.a), name: "Memo" }, "default");
+    await a.saveDashboard({ id: "d", name: "Home", icon: null, description: "", spaceIds: null }, "default");
     await settled(a);
     await settled(b);
-    expect(changes).toEqual(expect.arrayContaining([{ scope: "spaces" }, { scope: "components" }, { scope: "bookmarks" }, { scope: "collections" }, { scope: "views", collectionId: n.id }]));
+    expect(changes).toEqual(
+      expect.arrayContaining([
+        { scope: "spaces" }, { scope: "components" }, { scope: "bookmarks" }, { scope: "collections" }, { scope: "views", collectionId: n.id }, { scope: "dashboards" },
+        { scope: "dashboardViews", dashboardId: "d" },
+      ]),
+    );
   });
 
   it("replaces everything a device showed when it connects to a server with data", async () => {
@@ -231,13 +268,18 @@ describe("what a sync reports to the app", () => {
     const fresh = await device({ connect: false });
     const ownId = newId();
     await fresh.saveCollection({ id: ownId, name: "Own", pluralName: "Owns", icon: null, description: "", spaceIds: null, fields: [field("Name")] }, "default");
+    await fresh.saveDashboard({ id: "own-board", name: "Own", icon: null, description: "", spaceIds: null }, "default");
     const changes = collect(fresh);
     await fresh.sync.configure({ url: "https://kubus.test", token: "secret", enabled: true, originals: "always" });
     await settled(fresh);
     expect(changes).toEqual(
-      expect.arrayContaining([{ scope: "spaces" }, { scope: "collections" }, { scope: "components" }, { scope: "bookmarks" }, { scope: "items", collectionId: ownId }, { scope: "views", collectionId: ownId }]),
+      expect.arrayContaining([
+        { scope: "spaces" }, { scope: "collections" }, { scope: "components" }, { scope: "bookmarks" }, { scope: "items", collectionId: ownId }, { scope: "views", collectionId: ownId },
+        { scope: "dashboards" }, { scope: "dashboardViews", dashboardId: "own-board" },
+      ]),
     );
     expect((await fresh.listCollections()).map((c) => c.id)).toEqual([n.id]); // the server's data replaced its own
+    expect(await fresh.listDashboards()).toEqual([]);
     expect(await fresh.countItemsByCollection(null)).toEqual({ [n.id]: 1 });
   });
 

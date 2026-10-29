@@ -17,7 +17,7 @@ CREATE TABLE meta (
 );
 
 -- Separate environments (e.g. Work and Private) sharing collections and components: items,
--- collection views and bookmarks belong to one space and show only there (src/domain/spaces.ts). The default space
+-- collection views, dashboard tabs and bookmarks belong to one space and show only there (src/domain/spaces.ts). The default space
 -- ('default') has a row only once it is renamed, like a collection's default item view.
 CREATE TABLE spaces (
   id         TEXT PRIMARY KEY,
@@ -75,6 +75,36 @@ CREATE TABLE components (
   updated_at  TEXT NOT NULL,
   deleted_at  TEXT
 );
+
+-- Dashboards: pages of blocks of any collections, belonging to none (domain/dashboards.ts), shown in some
+-- spaces (space_ids, like a collection's). Their tabs are per space, like collection views.
+CREATE TABLE dashboards (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  icon        TEXT,                       -- name of a Carbon icon, like a collection's
+  description TEXT NOT NULL DEFAULT '',
+  space_ids   TEXT,                       -- JSON array of the spaces it is shown in; null = every space
+  position    INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  deleted_at  TEXT
+);
+
+-- A dashboard's tabs, per space (a space without tabs of its own shows copies of the first space's: dashboards.ts
+-- dashboardViewsIn). Their config is a collection view's (JSON { filters, blocks, editable, collapsed, filterBar? }).
+CREATE TABLE dashboard_views (
+  id           TEXT PRIMARY KEY,
+  dashboard_id TEXT NOT NULL REFERENCES dashboards(id),
+  space_id     TEXT NOT NULL,           -- the space it is listed in (spaces.id; 'default' needs no row)
+  name         TEXT NOT NULL,
+  config       TEXT NOT NULL,
+  position     INTEGER NOT NULL DEFAULT 0,
+  is_default   INTEGER NOT NULL DEFAULT 0,  -- the starred tab, opened first (at most one per dashboard and space)
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
+  deleted_at   TEXT
+);
+CREATE INDEX idx_dashboard_views_dashboard ON dashboard_views(dashboard_id);
 
 CREATE TABLE fields (
   id             TEXT PRIMARY KEY,
@@ -237,19 +267,20 @@ CREATE TRIGGER item_links_update AFTER UPDATE ON field_values WHEN NOT EXISTS (S
       WHERE item_links.targets IS NOT excluded.targets OR item_links.updated_at IS NOT excluded.updated_at OR item_links.deleted_at IS NOT excluded.deleted_at;
 END;
 
--- Bookmarks in the side nav: a saved view of a collection's items, or an item. `label` is a
+-- Bookmarks in the side nav: a saved view of a collection's items, an item, or a dashboard's tab. `label` is a
 -- snapshot for the nav (refreshed when the bookmarked page is shown), so it reads without loading.
 CREATE TABLE bookmarks (
   id         TEXT PRIMARY KEY,
-  kind       TEXT NOT NULL CHECK (kind IN ('view', 'item')),
-  collection_id TEXT NOT NULL REFERENCES collections(id),
+  kind       TEXT NOT NULL CHECK (kind IN ('view', 'item', 'dashboard')),
+  collection_id TEXT REFERENCES collections(id),  -- a view's or item's collection; null for a dashboard's tab
   space_id   TEXT NOT NULL,            -- the space it is listed in
-  target_id  TEXT NOT NULL,            -- views.id or items.id
+  target_id  TEXT NOT NULL,            -- views.id, items.id or dashboard_views.id
   label      TEXT NOT NULL,
   position   INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  deleted_at TEXT
+  deleted_at TEXT,
+  dashboard_id TEXT REFERENCES dashboards(id)     -- a dashboard tab's dashboard; null for the others
 );
 CREATE INDEX idx_bookmarks_target ON bookmarks(target_id);
 

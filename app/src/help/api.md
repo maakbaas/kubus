@@ -143,6 +143,26 @@ A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, o
 - sort, a list of `{ fieldId, direction }` (a chart or map block without one runs in time order, by its collection's first date field; a sort given is always followed);
 - layout.fields.
 
+## Dashboards
+
+A dashboard is a page of blocks of any collections, belonging to none: `{ id, name, icon, description, spaces, position, createdAt, updatedAt }` (`spaces`: the spaces it is shown in, null for every one). Its tabs are views as above, per space; a space it is shown in that has no tabs of its own shows copies of the tabs of the space it was first given tabs in (`virtual: true`), which are stored there (all of them, with new ids) once one is changed, deleted, starred or bookmarked through the API, as in the app.
+
+| Method and address | What it does |
+|---|---|
+| `GET /dashboards` | the dashboards (optional: space, only those shown there) |
+| `GET /dashboards/{d}` | one dashboard, by id or name |
+| `POST /dashboards` | create one from `{ name, icon?, description?, space?, spaces? }`, with a first tab "Dashboard" in that space; it is shown only there unless `spaces` is given |
+| `PATCH /dashboards/{d}` | change it: `{ name?, icon?, description?, spaces? }` |
+| `DELETE /dashboards/{d}` | delete it, with its tabs and their bookmarks |
+| `GET /dashboards/{d}/views` | its tabs in a space (optional: space) |
+| `GET /dashboards/{d}/views/{v}/items` | a block's result, as for a collection view. Optional: block, space, limit, offset. A block reading a remote collection is refused (400): its rows aren't items here |
+| `POST /dashboards/{d}/views` | create a tab from `{ name, space?, filters?, blocks?, editable?, filterBar? }` in a space the dashboard is shown in (409 otherwise) |
+| `PATCH /dashboards/{d}/views/{v}` | change a tab (optional: space) |
+| `DELETE /dashboards/{d}/views/{v}` | delete a tab (optional: space) |
+| `PUT /dashboards/{d}/default-view` | star a tab in a space: `{ space?, view }` (null for none) |
+
+A dashboard's block names what it lists: `collectionId` (a collection's id or name), or `collectionIds`, several read as one (their fields merged by name; `merges` as the app stores them). Its fields are named against that: with several collections, the merged columns' names. A tab may have no blocks. The tab's filter names fields of its blocks' collections, each rule applied to the blocks of that field's collection, or `Date`: each block's own first date or date & time field (a block without one is left alone).
+
 ## Spaces, bookmarks and components
 
 | Method and address | What it does |
@@ -152,7 +172,7 @@ A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, o
 | `PATCH /spaces/{s}` | rename: `{ name?, icon? }` |
 | `DELETE /spaces/{s}` | delete, with its items |
 | `GET /bookmarks` | the bookmarks (optional: space) |
-| `POST /bookmarks` | add one: `{ kind: "item", target }` or `{ kind: "view", collection, target }`, with optional space and label |
+| `POST /bookmarks` | add one: `{ kind: "item", target }`, `{ kind: "view", collection, target }` or `{ kind: "dashboard", dashboard, target }` (a tab), with optional space and label |
 | `PATCH /bookmarks/{target}` | rename: `{ label }` |
 | `DELETE /bookmarks/{target}` | remove (optional: space) |
 | `GET /components`, `GET /components/{x}` | components, with their code |

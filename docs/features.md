@@ -307,7 +307,7 @@ What the app does, feature by feature (read the part you work on).
 - **Spaces** (`app/src/domain/spaces.ts`, table `spaces`, `#/spaces`): separate environments (e.g.
   Work / Private) in one database. Every item belongs to one space (`items.space_id`) and shows only
   there; collections (fields, item views) and components are shared. A collection can be
-  limited to some spaces (`collections.space_ids`, JSON; null = all; picked in the collection editor).
+  limited to some spaces (`collections.space_ids`, JSON; null = all; picked in the collection editor: a new native collection starts in all, a new remote one in the space it is added in).
   Collection views (`views.space_id`; starred per space; a new collection's "All" view goes into
   the space it was made in, other spaces show a virtual "All" view until one is stored), bookmarks
   (`bookmarks.space_id`) and the open tabs (`kubus.workspace.<spaceId>`) are per space;

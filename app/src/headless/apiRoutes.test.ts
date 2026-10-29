@@ -547,6 +547,122 @@ describe("views", () => {
   });
 });
 
+describe("dashboards", () => {
+  beforeEach(async () => {
+    await ok("POST", "/collections", { name: "Book", fields: [{ name: "Title", kind: "string" }, { name: "Read", kind: "date" }] });
+    await ok("POST", "/collections", { name: "Person", fields: [{ name: "Title", kind: "string" }, { name: "Read", kind: "datetime" }] });
+    await ok("POST", "/collections", { name: "Note", fields: [{ name: "Title", kind: "string" }] });
+    await ok("POST", "/spaces", { name: "Work" });
+  });
+
+  it("are made in a space, shown only there unless told, changed and deleted with their tabs", async () => {
+    const made = await ok("POST", "/dashboards", { name: "Home", icon: "Dashboard", description: "Mine" });
+    expect(made).toMatchObject({ name: "Home", icon: "Dashboard", description: "Mine", spaces: ["default"], position: 0 });
+    expect(names(await ok("GET", `/dashboards/${made.id}/views`))).toEqual(["Dashboard"]);
+    const everywhere = await ok("POST", "/dashboards", { name: "All", space: "Work", spaces: null });
+    expect(everywhere).toMatchObject({ spaces: null, position: 1 });
+    expect(names(await ok("GET", "/dashboards"))).toEqual(["Home", "All"]);
+    expect(names(await ok("GET", "/dashboards?space=work"))).toEqual(["All"]);
+    expect(await ok("GET", "/dashboards/home")).toMatchObject({ id: made.id });
+    expect(await ok("PATCH", "/dashboards/Home", { name: "Start", spaces: ["Work", "default"] })).toMatchObject({ name: "Start", icon: "Dashboard", spaces: [expect.any(String), "default"] });
+    expect(names(await ok("GET", "/dashboards?space=work"))).toEqual(["Start", "All"]);
+    expect(await ok("DELETE", "/dashboards/Start")).toEqual({ ok: true });
+    expect(names(await ok("GET", "/dashboards"))).toEqual(["All"]);
+  });
+
+  it("refuse what a dashboard can't be", async () => {
+    await ok("POST", "/dashboards", { name: "Home" });
+    expect(await refused(400, "POST", "/dashboards", {})).toBe("`name` is required");
+    expect(await refused(409, "POST", "/dashboards", { name: "home" })).toBe("There already is a dashboard “home”");
+    expect(await refused(404, "POST", "/dashboards", { name: "X", space: "Nope" })).toBe("No space “Nope”");
+    expect(await refused(400, "POST", "/dashboards", { name: "X", spaces: "Work" })).toBe("`spaces` must be a list of spaces (or null: every space)");
+    expect(await refused(404, "GET", "/dashboards/Nope")).toBe("No dashboard “Nope”");
+    expect(await refused(404, "PATCH", "/dashboards/Nope", {})).toBe("No dashboard “Nope”");
+    expect(await refused(400, "PATCH", "/dashboards/Home", { name: "" })).toBe("`name` can't be empty");
+    expect(await refused(404, "DELETE", "/dashboards/Nope")).toBe("No dashboard “Nope”");
+  });
+
+  it("have tabs per space: another space shows copies of the first space's, stored there once changed", async () => {
+    const home = await ok("POST", "/dashboards", { name: "Home", spaces: null });
+    const tab = await ok("POST", "/dashboards/Home/views", {
+      name: "Reading",
+      filters: [{ fieldId: "Date", operator: "between", value: "2026-01-01..2026-12-31" }, { fieldId: "Read", operator: "isNotEmpty", value: "" }],
+      blocks: [{ kind: "table", title: "Books", collectionId: "Book", sort: [{ fieldId: "Title", direction: "desc" }] }, { kind: "cards", collectionIds: ["Book", "Person"], layout: { fields: ["Title"] } }],
+      filterBar: true,
+    });
+    const book = await ok("GET", "/collections/Book");
+    const person = await ok("GET", "/collections/Person");
+    expect(tab).toMatchObject({ name: "Reading", dashboardId: home.id, spaceId: "default", position: 1, filterBar: true, editable: true });
+    expect(tab.filters.map((r: { fieldId: string }) => r.fieldId)).toEqual(["$date", book.fields[1].id]);
+    expect(tab.blocks[0]).toMatchObject({ collectionId: book.id, sort: [{ fieldId: book.fields[0].id, direction: "desc" }] });
+    expect(tab.blocks[1]).toMatchObject({ collectionId: book.id, collectionIds: [book.id, person.id], layout: expect.objectContaining({ fields: ["merged:name:title"] }) });
+    expect(tab.collapsed).toBeUndefined();
+    // Work has no tabs of its own: it shows copies, which the first change there stores (all of them).
+    const copies = await ok("GET", "/dashboards/Home/views?space=Work");
+    expect(copies.map((v: { name: string; virtual?: boolean }) => [v.name, v.virtual])).toEqual([["Dashboard", true], ["Reading", true]]);
+    const renamed = await ok("PATCH", "/dashboards/Home/views/Reading?space=Work", { name: "Work reading", filterBar: false });
+    expect(renamed).toMatchObject({ name: "Work reading", spaceId: expect.not.stringMatching("default") });
+    expect(renamed.filterBar).toBeUndefined();
+    expect(renamed.virtual).toBeUndefined();
+    expect(renamed.blocks).toEqual(tab.blocks);
+    expect(names(await ok("GET", "/dashboards/Home/views?space=Work"))).toEqual(["Dashboard", "Work reading"]);
+    expect(names(await ok("GET", "/dashboards/Home/views"))).toEqual(["Dashboard", "Reading"]);
+    // Starred per space.
+    const starred = await ok("PUT", "/dashboards/Home/default-view", { view: "Reading" });
+    expect(starred.map((v: { name: string; isDefault: boolean }) => [v.name, v.isDefault])).toEqual([["Dashboard", false], ["Reading", true]]);
+    expect((await ok("GET", "/dashboards/Home/views?space=Work")).every((v: { isDefault: boolean }) => !v.isDefault)).toBe(true);
+    expect((await ok("PUT", "/dashboards/Home/default-view", { view: null })).every((v: { isDefault: boolean }) => !v.isDefault)).toBe(true);
+    expect(await ok("DELETE", `/dashboards/Home/views/${tab.id}`)).toEqual({ ok: true });
+    expect(names(await ok("GET", "/dashboards/Home/views"))).toEqual(["Dashboard"]);
+    expect(await ok("DELETE", "/dashboards/Home/views/Work%20reading?space=Work")).toEqual({ ok: true });
+    expect(names(await ok("GET", "/dashboards/Home/views?space=Work"))).toEqual(["Dashboard"]);
+  });
+
+  it("refuse what a tab or its blocks can't be", async () => {
+    await ok("POST", "/dashboards", { name: "Home" });
+    expect(await refused(400, "POST", "/dashboards/Home/views", {})).toBe("`name` is required");
+    expect(await refused(409, "POST", "/dashboards/Home/views", { name: "T", space: "Work" })).toMatch(/Home isn't shown in Work/);
+    expect(await refused(400, "POST", "/dashboards/Home/views", { name: "T", blocks: "x" })).toBe("`blocks` must be a list of blocks");
+    expect(await refused(400, "POST", "/dashboards/Home/views", { name: "T", blocks: [{ kind: "table" }] })).toBe("A dashboard's block needs `collectionId` (a collection's id or name) or `collectionIds`");
+    expect(await refused(404, "POST", "/dashboards/Home/views", { name: "T", blocks: [{ kind: "table", collectionIds: ["Book", "Nope"] }] })).toBe("No collection “Nope”");
+    expect(await refused(404, "POST", "/dashboards/Home/views", { name: "T", blocks: [{ kind: "table", collectionId: "Book", groupBy: "Nope" }] })).toBe("Book has no field “Nope”");
+    expect(await refused(404, "POST", "/dashboards/Home/views", { name: "T", blocks: [{ kind: "table", collectionId: "Book" }], filters: [{ fieldId: "Nope", operator: "is", value: "" }] })).toBe("Dashboard has no field “Nope”");
+    expect(await refused(404, "PATCH", "/dashboards/Home/views/Nope", {})).toBe("Home has no tab “Nope”");
+    expect(await refused(404, "DELETE", "/dashboards/Home/views/Nope")).toBe("Home has no tab “Nope”");
+    expect(await refused(404, "PUT", "/dashboards/Home/default-view", { view: "Nope" })).toBe("Home has no tab “Nope”");
+    expect(await refused(404, "GET", "/dashboards/Home/views/Nope/items")).toBe("Home has no tab “Nope”");
+    expect(await refused(404, "GET", "/dashboards/Home/views/Dashboard/items")).toBe("The tab “Dashboard” has no blocks");
+  });
+
+  it("show a block's items through the tab's filter, its Date each block's own, several collections merged", async () => {
+    await ok("POST", "/collections/Book/items", { values: { Title: "Dune", Read: "2026-02-01" } });
+    await ok("POST", "/collections/Book/items", { values: { Title: "Emma", Read: "2025-02-01" } });
+    await ok("POST", "/collections/Person/items", { values: { Title: "Ada", Read: "2026-05-01T10:00:00.000Z" } });
+    await ok("POST", "/collections/Person/items", { values: { Title: "Bob", Read: "1990-05-01T10:00:00.000Z" } });
+    await ok("POST", "/collections/Note/items", { values: { Title: "Undated" } });
+    await ok("POST", "/dashboards", { name: "Home" });
+    await ok("POST", "/dashboards/Home/views", {
+      name: "This year",
+      filters: [{ fieldId: "Date", operator: "between", value: "2026-01-01..2026-12-31" }],
+      blocks: [
+        { kind: "table", title: "Books", collectionId: "Book" },
+        { kind: "table", title: "Notes", collectionId: "Note" },
+        { kind: "table", title: "Both", collectionIds: ["Book", "Person"], sort: [{ fieldId: "Title", direction: "asc" }] },
+      ],
+    });
+    const titles = async (block: string) => (await ok("GET", `/dashboards/Home/views/This%20year/items?block=${block}`)).items.map((i: { values: { Title: string } }) => i.values.Title);
+    expect(await titles("Books")).toEqual(["Dune"]);
+    expect(await titles("Notes")).toEqual(["Undated"]); // no date field: the period leaves it alone
+    expect(await titles("Both")).toEqual(["Ada", "Dune"]); // each by its own date (merged by name: a date and a date & time)
+    const first = await ok("GET", "/dashboards/Home/views/This%20year/items?limit=1");
+    expect(first).toMatchObject({ view: { name: "This year" }, block: { title: "Books" }, total: 1, limit: 1 });
+    expect(first.blocks.map((b: { title: string }) => b.title)).toEqual(["Books", "Notes", "Both"]);
+    expect(await refused(404, "GET", "/dashboards/Home/views/This%20year/items?block=Nope")).toBe("The tab “This year” has no block “Nope”");
+    await ok("DELETE", "/collections/Note");
+    expect(await refused(409, "GET", "/dashboards/Home/views/This%20year/items?block=Notes")).toBe("A collection this block lists was deleted");
+  });
+});
+
 describe("bookmarks", () => {
   let itemId: string;
   beforeEach(async () => {
@@ -569,12 +685,28 @@ describe("bookmarks", () => {
     expect(await ok("GET", "/bookmarks")).toEqual([]);
   });
 
+  it("are made for a dashboard's tab, a copied one stored first, and go with their dashboard", async () => {
+    await ok("POST", "/dashboards", { name: "Home", spaces: null });
+    const mark = await ok("POST", "/bookmarks", { kind: "dashboard", dashboard: "Home", target: "Dashboard" });
+    expect(mark).toMatchObject({ kind: "dashboard", collectionId: null, dashboardId: expect.any(String), label: "Home / Dashboard" });
+    expect(await refused(409, "POST", "/bookmarks", { kind: "dashboard", dashboard: "Home", target: "Dashboard" })).toBe("Already bookmarked");
+    // In Work the tab is a copy of the default space's: bookmarking it stores it there.
+    const work = await ok("POST", "/bookmarks", { kind: "dashboard", dashboard: "Home", target: "Dashboard", space: "Work" });
+    expect(work.targetId).not.toBe(mark.targetId);
+    expect((await ok("GET", "/dashboards/Home/views?space=Work"))[0]).toMatchObject({ id: work.targetId });
+    expect(await refused(400, "POST", "/bookmarks", { kind: "dashboard", target: "Dashboard" })).toBe("`dashboard` is required");
+    expect(await refused(404, "POST", "/bookmarks", { kind: "dashboard", dashboard: "Home", target: "Nope" })).toBe("Home has no tab “Nope”");
+    await ok("DELETE", "/dashboards/Home");
+    expect(await ok("GET", "/bookmarks")).toEqual([]);
+    expect(await ok("GET", "/bookmarks?space=Work")).toEqual([]);
+  });
+
   it("are refused for what can't be bookmarked", async () => {
     await ok("POST", "/bookmarks", { kind: "item", target: itemId });
     expect(await refused(409, "POST", "/bookmarks", { kind: "item", target: itemId })).toBe("Already bookmarked");
     expect(await refused(409, "POST", "/bookmarks", { kind: "item", target: itemId, space: "Work" })).toBe("The item is in another space");
     expect(await refused(404, "POST", "/bookmarks", { kind: "item", target: "ghost" })).toBe("No item ghost");
-    expect(await refused(400, "POST", "/bookmarks", { kind: "tab", target: itemId })).toBe("`kind` must be item or view");
+    expect(await refused(400, "POST", "/bookmarks", { kind: "tab", target: itemId })).toBe("`kind` must be item, view or dashboard");
     expect(await refused(400, "POST", "/bookmarks", { kind: "item" })).toBe("`target` is required");
     expect(await refused(400, "POST", "/bookmarks", { kind: "view", target: "All" })).toBe("`collection` is required");
     expect(await refused(404, "POST", "/bookmarks", { kind: "view", collection: "Book", target: "Nope" })).toBe("Book has no view “Nope”");
@@ -655,5 +787,11 @@ describe("remote collections", () => {
     await headless.repo.saveCollection(draft, "default");
     expect((await send(direct, "POST", "/collections/People/items", { values: { Id: 1 } })).status).toBe(409);
     expect((await send(direct, "GET", "/collections")).body.map((c: { name: string }) => c.name)).toEqual(["Person"]);
+    // A dashboard block reading it (alone or merged) has no items in the API.
+    await send(direct, "POST", "/collections", { name: "Book", fields: [{ name: "Title", kind: "string" }] });
+    await send(direct, "POST", "/dashboards", { name: "Home" });
+    await send(direct, "POST", "/dashboards/Home/views", { name: "T", blocks: [{ kind: "table", title: "Mixed", collectionIds: ["Book", "People"] }] });
+    const answer = await send(direct, "GET", "/dashboards/Home/views/T/items");
+    expect([answer.status, answer.body.error]).toEqual([400, "The block reads People, a remote collection: its rows aren't items in the API"]);
   });
 });

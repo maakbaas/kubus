@@ -201,7 +201,10 @@ Extension points are registries, not special cases in pages:
     none, so it follows the type), on the left or right axis, and
     shown as its values, a running total, the change from the step before or a moving average (`transformValues`). Split
     by (a field) splits every series ("Pages · Novel" with several; at most 12, the rest "Other"). One style on one axis
-    is Carbon's own chart; mixed styles or a right axis are its combo chart (`comboChartTypes` per style). Bars and areas
+    is Carbon's own chart; mixed styles or a right axis are its combo chart (`comboChartTypes` per style). With two axes, Carbon fits and filters every value axis by all the rows' values under its `mapsTo`, whatever its
+    `correspondingDatasets`: so the right axis' series carry their value as `valueRight` (the left's `value`), each axis
+    is given its own series' extremes (or its min and max) as its `domain`, and every row also carries the other axis' key
+    at that axis' lower end (else Carbon drops the rows without it or outside its domain: a series would vanish). Bars and areas
     side by side, stacked or as shares of 100%; horizontal when every series is bars on the left axis; lines smooth,
     straight or in steps, with or without dots; missing values (an average of no items) joined over or, "Leave a gap", a break in a line or unstacked area
     (Carbon breaks where a value is empty; a count or sum of none is 0, not missing); compact (a sparkline: no axes, legend or grid). A scatter's series are its Y fields, its X a number or

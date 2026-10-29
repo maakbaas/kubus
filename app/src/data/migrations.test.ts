@@ -134,4 +134,29 @@ describe("migrations", () => {
     await repo.rebuildLinks();
     expect(await client.select("SELECT id, targets, updated_at, deleted_at FROM item_links ORDER BY id")).toEqual(rows);
   });
+
+  it("rebuild the bookmarks for dashboards (migration 3), keeping theirs, queueing none, and the outbox triggers work after", async () => {
+    let queued: number[] = [];
+    const client = await openTestClient((db: Db) => {
+      db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
+      db.exec(firstRelease);
+      db.exec(firstReleaseData);
+      db.exec("PRAGMA user_version = 1");
+      queued = db.selectValues("SELECT id FROM sync_outbox ORDER BY id");
+    });
+    const marks = await client.select<{ kind: string; collection_id: string | null; dashboard_id: string | null }>("SELECT kind, collection_id, dashboard_id FROM bookmarks ORDER BY id");
+    expect(marks.length).toBeGreaterThan(0);
+    expect(marks.every((b) => b.collection_id !== null && b.dashboard_id === null)).toBe(true);
+    // What the first release had queued (its own writes), and nothing more (migration 2 queues item links).
+    expect((await client.select<{ id: number }>("SELECT id FROM sync_outbox WHERE tbl <> 'item_links' ORDER BY id")).map((r) => r.id)).toEqual(queued);
+    const repo = await SqliteRepository.open(client, memoryEnvironment());
+    await repo.saveDashboard({ id: "dash", name: "Home", icon: null, description: "", spaceIds: ["default"] }, "default");
+    const [tab] = await repo.listDashboardViews("dash", "default");
+    await repo.addBookmark("dashboard", "dash", tab.id, "Home / Dashboard", "default");
+    expect((await repo.listBookmarks("default")).map((b) => b.label)).toEqual(["Dune", "Unread books", "Home / Dashboard"]);
+    // Foreign keys hold: a dashboard bookmark names a dashboard, not a collection.
+    await expect(client.write([{ sql: "INSERT INTO bookmarks (id, kind, space_id, target_id, label, created_at, updated_at, dashboard_id) VALUES ('x', 'dashboard', 'default', 't', 'x', 'n', 'n', 'nope')" }])).rejects.toThrow(/FOREIGN KEY/);
+    const after = await client.select<{ tbl: string }>("SELECT DISTINCT tbl FROM sync_outbox WHERE id > ?1 AND tbl <> 'item_links' ORDER BY tbl", [Math.max(0, ...queued)]);
+    expect(after.map((r) => r.tbl)).toEqual(["bookmarks", "dashboard_views", "dashboards"]);
+  });
 });

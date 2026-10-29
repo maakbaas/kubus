@@ -71,6 +71,32 @@ describe.skipIf(!ADMIN)("devices syncing through the server", () => {
     expect(await b.getFile(fileId)).toEqual({ data: bytes("sunset"), mime: "image/png" });
   });
 
+  it("carry a dashboard with its tabs per space and a bookmark of one", async () => {
+    const a = await device();
+    const collection = await photos(a);
+    await a.saveSpace({ id: "work", name: "Work", icon: null });
+    await a.saveDashboard({ id: "board", name: "Board", icon: "Dashboard", description: "", spaceIds: ["default", "work"] }, "default");
+    const [first] = await a.listDashboardViews("board", "default");
+    const block = { id: "b", title: "", kind: "cards", filters: null, sort: [], groupBy: null, layout: { fields: null, editable: true, hiddenLabels: [], hideEmpty: false }, collectionId: collection.id, options: null };
+    await a.saveDashboardView({ ...first, blocks: [block], filters: [{ id: "r", fieldId: "$date", operator: "between", value: "day-6..day+0" }], filterBar: true });
+    await a.storeDashboardViews("board", "work");
+    const [workTab] = await a.listDashboardViews("board", "work");
+    await a.saveDashboardView({ ...workTab, name: "Work tab" });
+    await a.addBookmark("dashboard", "board", workTab.id, "Board / Work tab", "work");
+    await settled(a);
+
+    const b = await device();
+    expect((await b.listDashboards()).map((d) => [d.name, d.icon, d.spaceIds])).toEqual([["Board", "Dashboard", ["default", "work"]]]);
+    expect(await b.listDashboardViews("board", "default")).toEqual([expect.objectContaining({ id: first.id, blocks: [block], filterBar: true, filters: [expect.objectContaining({ fieldId: "$date" })] })]);
+    expect((await b.listDashboardViews("board", "work")).map((v) => [v.id, v.name, v.virtual])).toEqual([[workTab.id, "Work tab", undefined]]);
+    expect(await b.listBookmarks("work")).toEqual([expect.objectContaining({ kind: "dashboard", collectionId: null, dashboardId: "board", targetId: workTab.id })]);
+    await b.deleteDashboard("board");
+    await settled(b);
+    await settled(a);
+    expect(await a.listDashboards()).toEqual([]);
+    expect(await a.listBookmarks("work")).toEqual([]);
+  });
+
   it("bring every device to the same state after edits and deletes on both", async () => {
     const a = await device();
     const collection = await photos(a);
