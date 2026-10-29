@@ -43,6 +43,9 @@ export function normalizeBlock(base: Collection, block: ViewBlock, all?: Collect
   if (block.sortChosen) normalized.sortChosen = true;
   if (block.hideHeader) normalized.hideHeader = true;
   if (block.limit !== undefined) normalized.limit = block.limit;
+  if (block.beside) normalized.beside = true;
+  if (block.width !== undefined) normalized.width = block.width;
+  if (block.rowMaxHeight !== undefined) normalized.rowMaxHeight = block.rowMaxHeight;
   if (all && block.collectionIds) normalized.collectionIds = block.collectionIds;
   if (all && block.merges) normalized.merges = block.merges;
   if (block.groupDate) normalized.groupDate = block.groupDate;

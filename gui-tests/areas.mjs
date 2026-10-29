@@ -52,6 +52,9 @@ export const AREAS = [
   // "Full width" of collection views, item views and dashboard tabs: the setting, where it is stored, the pages' width.
   [/^app\/src\/(pages\/(CollectionPage|ItemPage|NewItemPage)|domain\/(views|fieldLayout|dashboards)|data\/sqlite\/SqliteRepository)/, [60]],
 
+  // Blocks side by side (rows): their layout, Block settings' row controls, dragging, the divider, collapsing a dashboard's row.
+  [/^app\/src\/(views\/(BlockRows|BlockView)|domain\/(blockRows|views)|pages\/(CollectionPage|ItemPage|DashboardPage)|ui\/SectionHeader)|^gui-tests\/lib\/design/, [62]],
+
   // Dashboards: their pages, the side nav's branch, their blocks (several collections, the dashboard's filter), bookmarks and search.
   [/^app\/src\/(pages\/(DashboardPage|DashboardsPage)|domain\/dashboards)/, [61, 60]],
   [/^app\/src\/(app\/(NavTree|routes|store)\.tsx|ui\/BookmarkButton|pages\/(BookmarksPage|SearchPage)|views\/(BlockView|BlockListEditor|AddBlockButton|FilterBar|registry)|domain\/mergedCollection)/, [61]],

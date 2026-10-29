@@ -1834,7 +1834,7 @@ img[data-lightbox] {
 /* Blocks on an item page (tables, cards) read as on a collection page: Carbon's own type scale.
    So do the tooltips of buttons in the fields (e.g. "Generate again"), which would otherwise
    inherit the fields' larger scale and read bigger than every other tooltip. */
-.item-fields > .block,
+.item-fields > .block-row,
 .item-fields .cds--tooltip-content {
   --cds-body-compact-01-font-size: 0.875rem;
   --cds-body-compact-01-line-height: 1.28572;
@@ -1848,7 +1848,7 @@ img[data-lightbox] {
 }
 :root,
 .item-fields,
-.item-fields > .block {
+.item-fields > .block-row {
   --block-pad-top: calc((2rem - 1px - var(--cds-body-compact-01-font-size) * var(--cds-body-compact-01-line-height)) / 2);
 }
 
@@ -3131,6 +3131,96 @@ img[data-lightbox] {
 .item-fields > .block + .block {
   margin-block-start: 0;
 }
+/* Rows of blocks (views/BlockRows.tsx, domain/blockRows.ts). Rows are apart as blocks were, a line centred between
+   them (an item page's: as its fields, below). A row's blocks stack the same way,
+   the divider being the line between them, unless the row is wide enough to stand them side by side (below). A row or
+   cell whose block isn't shown yet (its items loading, none matching a search) takes no room. */
+.block-row {
+  container: block-row / inline-size;
+}
+.block-row:not(:has(.block)),
+.block-cell:empty,
+.block-row__divider:has(+ .block-cell:empty),
+.block-cell:empty + .block-row__divider {
+  display: none;
+}
+.block-row:has(.block) ~ .block-row:has(.block) {
+  position: relative;
+  margin-block-start: var(--cds-spacing-07);
+}
+.block-row:has(.block) ~ .block-row:has(.block)::before {
+  content: "";
+  position: absolute;
+  inset-block-start: calc(var(--cds-spacing-07) / -2);
+  inset-inline: 0;
+  border-block-start: 1px solid var(--cds-border-subtle);
+  pointer-events: none;
+}
+/* An item page's rows are spaced and lined like its fields (the stack's gap, a line between any two entries). */
+.item-fields > .block-row:has(.block) ~ .block-row:has(.block) {
+  margin-block-start: 0;
+}
+.block-row__cells {
+  display: flex;
+  flex-direction: column;
+}
+.block-cell {
+  position: relative;
+  min-inline-size: 0;
+}
+/* Stacked: the line between two blocks of a row, in the middle of the room between them. */
+.block-row__divider {
+  position: relative;
+  flex: 0 0 var(--cds-spacing-07);
+}
+.block-row__divider::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline: 0;
+  border-block-start: 1px solid var(--cds-border-subtle);
+}
+/* Side by side (the row at least 40rem wide; "Full width" on): each block its share of the row, all as tall as the
+   tallest (the cells stretch; the line between them spans the row), the divider between them a vertical line that
+   resizes them. With a max height a block's part below its name scrolls beyond it. Narrower, nothing of this applies:
+   stacked as above, each block its own height (a phone shows a dashboard as a list). */
+@container block-row (min-width: 40rem) {
+  .block-row--wide > .block-row__cells {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .block-row--wide .block-cell {
+    flex: var(--share) 1 0%;
+  }
+  .block-row--wide .block-row__divider::before {
+    inset-block: 0;
+    inset-inline: 50% auto;
+    border-block-start: 0;
+    border-inline-start: 1px solid var(--cds-border-subtle);
+  }
+  .block-row--wide.block-row--resizable .block-row__divider {
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .block-row--wide.block-row--resizable .block-row__divider:is(:hover, :focus-visible)::before {
+    border-inline-start: 2px solid var(--cds-border-interactive);
+  }
+  .block-row--wide .block-row__divider:focus-visible {
+    outline: none;
+  }
+  /* Its scroll box reaches 1rem into the room left of it, so what a block hangs there (a Markdown block's box, as on
+     the page) isn't cut off: the padding puts the content back where it was. */
+  .block-row--capped .block-cell > .block > .block__body {
+    max-block-size: var(--row-max);
+    overflow: auto;
+    margin-inline-start: calc(-1 * var(--cds-spacing-05));
+    padding-inline-start: var(--cds-spacing-05);
+  }
+}
+/* A block's name drags it to another place on the page. */
+.section-header__title--drag {
+  cursor: grab;
+}
 /* A settings panel's own actions (Save as shared component, Remove block) span the panel, as its
    fields do; the pair in a component block's settings stays side by side. */
 .view-settings .cds--btn:not(.cds--btn--icon-only, .block-component__actions > .cds--btn) {
@@ -3440,14 +3530,14 @@ img[data-lightbox] {
    pulled 1rem left so its box's own 1rem inset puts the text at the edge (the box border sits
    1rem further left; its right edge stays); labels and checkboxes, without an inset, get the
    1rem back as padding. */
-.item-fields > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label, .block),
+.item-fields > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label, .block-row),
 .item-field--no-label > :not(.image-input, .view-field--image) {
   margin-inline-start: calc(-1 * var(--cds-spacing-05));
 }
 /* The page's own fields only: a block's content (cards' labels, tables) keeps its own insets. */
-.item-fields > :not(.form-actions, .image-input, .view-field--image, .block) .cds--label,
-.item-fields > :not(.block) .checkbox-field,
-.item-fields > :not(.block) .checklist-box {
+.item-fields > :not(.form-actions, .image-input, .view-field--image, .block-row) .cds--label,
+.item-fields > :not(.block-row) .checkbox-field,
+.item-fields > :not(.block-row) .checklist-box {
   padding-inline-start: var(--cds-spacing-05);
 }
 /* A line between fields (and blocks) on item pages, centred in the stack's gap. It runs from the
@@ -3466,12 +3556,12 @@ img[data-lightbox] {
   border-block-start: 1px solid var(--cds-border-subtle);
   pointer-events: none;
 }
-.item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label, .block)::before,
+.item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label, .block-row)::before,
 .item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > :not(.image-input, .view-field--image)::before {
   inset-inline-start: var(--cds-spacing-05);
 }
 @media (max-width: 42rem) {
-  .item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label, .block)::before,
+  .item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label, .block-row)::before,
   .item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > :not(.image-input, .view-field--image)::before {
     inset-inline: calc(0.5 * var(--cds-spacing-05));
   }
@@ -3492,13 +3582,13 @@ img[data-lightbox] {
    Blocks are left out, as on wider panes: they sit on the page's edges (the same edges as the title
    and the header's "⋮"), not half an inset outside them. */
 @media (max-width: 42rem) {
-  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label, .block),
+  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label, .block-row),
   .item-field--no-label > :not(.image-input, .view-field--image) {
     margin-inline: calc(-0.5 * var(--cds-spacing-05));
   }
-  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .block) .cds--label,
-  .item-fields:not(.item-fields--form) > :not(.block) .checkbox-field,
-  .item-fields:not(.item-fields--form) > :not(.block) .checklist-box {
+  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .block-row) .cds--label,
+  .item-fields:not(.item-fields--form) > :not(.block-row) .checkbox-field,
+  .item-fields:not(.item-fields--form) > :not(.block-row) .checklist-box {
     padding-inline-start: calc(0.5 * var(--cds-spacing-05));
   }
 }

@@ -12,7 +12,7 @@ import { DASHBOARD_ICON, findTab, dashboardBlockCollection,
 import { newId, newName, now, type Collection } from "../domain/model";
 import { isRemote } from "../domain/sources";
 import type { Space } from "../domain/spaces";
-import { isFullWidth, NOTHING_COLLAPSED, sameView, type Collapsed, type ViewBlock, type ViewState } from "../domain/views";
+import { isFullWidth, NOTHING_COLLAPSED, sameView, withBlockCollapsed, type Collapsed, type ViewBlock, type ViewState } from "../domain/views";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { IconPicker } from "../ui/IconPicker";
@@ -30,6 +30,8 @@ import type { NewBlockSpec } from "../views/AddBlockButton";
 import { AddBlockButton } from "../views/AddBlockButton";
 import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
 import { BlockView } from "../views/BlockView";
+import { BlockRows, listRowActions, rowShape, type RowControls } from "../views/BlockRows";
+import { reordered, rowStart, withoutBlock } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
 import { useCollectionData } from "../views/useCollectionData";
@@ -255,6 +257,8 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   // As a collection view's: the Filter button moves to the filter bar, and the width changes, once the panels close.
   const filterInBar = panels.hold("filterInBar", !!active?.filterBar);
   const fullWidth = panels.hold("fullWidth", isFullWidth("dashboard", active?.fullWidth));
+  // The rows as shown: held while a panel is open, like the width (Block settings' "Beside the block above" moves the block).
+  const shape = panels.hold("rows", rowShape(view.blocks));
 
   async function updateActive() {
     const tab = await stored();
@@ -284,7 +288,24 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   };
   const moveBlocks = (order: ViewBlock[]) => {
     const at = (b: ViewBlock) => order.findIndex((o) => o.id === b.id) >>> 0;
-    arrangeNow(() => order, (blocks) => [...blocks].sort((a, b) => at(a) - at(b)));
+    const ids = (blocks: ViewBlock[]) => blocks.map((b) => b.id);
+    const sorted = (blocks: ViewBlock[]) => [...blocks].sort((a, b) => at(a) - at(b));
+    arrangeNow(
+      (blocks) => reordered(ids(blocks), ids(order), order),
+      (blocks) => reordered(ids(blocks), ids(sorted(blocks)), sorted(blocks)),
+    );
+  };
+  // Blocks side by side (rows: views/BlockRows.tsx), stored right away like the rest of the tab's arrangement.
+  const rowActions = listRowActions(view.blocks, (change) => arrangeNow(change));
+  /**
+   * A dashboard collapses a row, not a block: all its blocks at once (stored as its first block's, so a row of one is
+   * collapsed as that block was).
+   */
+  const collapsedState = active?.collapsed ?? NOTHING_COLLAPSED;
+  const rowCollapse = (block: ViewBlock) => {
+    const first = rowStart(view.blocks.map((b) => b.id), view.blocks, block.id)?.id ?? block.id;
+    const collapsed = collapsedState.blocks.includes(first);
+    return { collapsed, onToggle: () => storeNow({ collapsed: withBlockCollapsed(collapsedState, first, !collapsed) }).catch(fail) };
   };
   const blockName = useBlockName();
   /** Removing blocks (a dashboard's tab may be left without any): asked first, unless asked already. */
@@ -293,7 +314,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
     if (gone.length === 0) return;
     const title = gone.length === 1 ? `Remove block “${blockName(gone[0])}”?` : `Remove ${gone.length} blocks?`;
     if (!asked && !(await confirm({ title, body: "Items are not affected." }))) return;
-    await arrange((blocks) => blocks.filter((b) => !ids.includes(b.id)));
+    await arrange((blocks) => ids.reduce((list, id) => withoutBlock(list.map((b) => b.id), list, id), blocks));
   }
 
   async function toggleDefault() {
@@ -527,24 +548,35 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
         </Tile>
       )}
 
-      {savedViews !== null &&
-        viewChosen &&
-        view.blocks.map((block) => (
-          <DashboardBlock
-            key={`${activeId ?? ""}-${block.id}`}
-            block={block}
-            filters={view.filters}
-            search={searched}
-            editable={view.editable}
-            collapsed={active?.collapsed ?? NOTHING_COLLAPSED}
-            onCollapse={(next) => storeNow({ collapsed: next }).catch(fail)}
-            onChange={setBlock}
-            onSet={(patch) => setBlockNow(block.id, patch)}
-            onRemove={() => removeBlocks([block.id]).catch(fail)}
-            onError={setError}
-            onOpenChange={panels.onOpenChange}
-          />
-        ))}
+      {savedViews !== null && viewChosen && (
+        <BlockRows
+          entries={view.blocks}
+          blockOf={(b) => b}
+          wide={fullWidth}
+          shape={shape}
+          onPlace={rowActions.place}
+          onShares={rowActions.shares}
+          render={(block, placed) => (
+            <DashboardBlock
+              key={`${activeId ?? ""}-${block.id}`}
+              block={block}
+              filters={view.filters}
+              search={searched}
+              editable={view.editable}
+              collapsed={collapsedState}
+              onCollapse={(next) => storeNow({ collapsed: next }).catch(fail)}
+              collapse={rowCollapse(block)}
+              onChange={setBlock}
+              onSet={(patch) => setBlockNow(block.id, patch)}
+              onRemove={() => removeBlocks([block.id]).catch(fail)}
+              onError={setError}
+              onOpenChange={panels.onOpenChange}
+              onDragStart={placed.onDragStart}
+              row={fullWidth ? rowActions.controls(block) : undefined}
+            />
+          )}
+        />
+      )}
 
       {dialog}
     </div>
@@ -625,6 +657,10 @@ interface BlockProps {
   onRemove(): void;
   onError(message: string): void;
   onOpenChange(open: boolean): void;
+  /** Its row's collapse (a dashboard collapses rows, not blocks). */
+  collapse: { collapsed: boolean; onToggle(): void };
+  onDragStart?(e: React.DragEvent): void;
+  row?: RowControls;
 }
 
 /** A block of a dashboard: its (first remaining) collection's, or a warning when the collections it listed are gone. */
@@ -641,7 +677,7 @@ function DashboardBlock(props: BlockProps) {
   return <DashboardBlockContent key={home.id} home={home} {...props} />;
 }
 
-function DashboardBlockContent({ home, block, filters, search, editable, collapsed, onCollapse, onChange, onSet, onRemove, onError, onOpenChange }: BlockProps & { home: Collection }) {
+function DashboardBlockContent({ home, block, filters, search, editable, collapsed, onCollapse, collapse, onChange, onSet, onRemove, onError, onOpenChange, onDragStart, row }: BlockProps & { home: Collection }) {
   const { collections } = useStore();
   const data = useCollectionData(home);
   const normalized = useMemo(() => normalizeBlock(home, block, collections), [home, block, collections]);
@@ -662,6 +698,9 @@ function DashboardBlockContent({ home, block, filters, search, editable, collaps
       onRemove={onRemove}
       onError={onError}
       onOpenChange={onOpenChange}
+      collapse={collapse}
+      onDragStart={onDragStart}
+      row={row}
     />
   );
 }

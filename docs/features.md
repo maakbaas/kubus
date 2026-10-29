@@ -287,7 +287,8 @@ What the app does, feature by feature (read the part you work on).
   copies of the tabs of the space it was first given tabs in, stored there all at once, `storeDashboardViews`, before one is changed,
   starred or bookmarked), " *" for unsaved changes, "+" (a copy of what is shown, named "New", opened with Tab settings and its name
   selected), Save changes (held while a panel is open), delete (not the last), star, bookmark, search in its blocks, Filter and
-  **Tab settings**: Tab name, Show filter bar (default off), Full width (default on), Fields are editable and the block list
+  **Tab settings**: Tab name, Show filter bar (default off), Full width (default on; blocks side by side in rows need it:
+  "Blocks side by side", where a row collapses as one), Fields are editable and the block list
   (reorder, header, remove: a tab may have no blocks; Add block). What changes the shown items (the tab's filter, a block's filter,
   sort, grouping, fields, Fields are editable) waits for Save changes; arranging (blocks, their type, options, name and collections),
   the tab's name, Show filter bar, Full width and collapsing are stored at once. A tab without blocks shows an empty state with
@@ -333,6 +334,25 @@ What the app does, feature by feature (read the part you work on).
   (`FieldCollapse` context, read by `FieldLabel`, so view and edit mode look alike), stored right
   away with the item view's `Collapsed` (field ids among the block ids). The layout's name toggle
   (tag icon, `hiddenLabels`) also covers blocks there: it hides the block's header (its menus move to a "⋮" beside it).
+- **Blocks side by side** (`domain/blockRows.ts`, `views/BlockRows.tsx`): with "Full width" on, a collection view's, an
+  item page's or a dashboard tab's blocks stand in rows. Stored on the blocks, the list staying the page's order: `beside`
+  (it joins the row of the block just before it; on an item page a field in between starts a new row), `width` (its share
+  of the row in percent; absent = equal) and, on a row's first block, `rowMaxHeight` (rem). At most 4 to a row. Where the
+  row is at least 40rem wide (a container query, so a narrow tiled pane counts like a phone) its blocks stand side by side,
+  each its share, all as tall as the tallest (the line between them spans the row); with a max height the part of each
+  below its name scrolls inside beyond it. Narrower (a phone), or with "Full width" off, a row's blocks stack exactly as
+  blocks always did, their heights their own, no max height, nothing scrolling inside: a dashboard is a list there. A block
+  is placed by dragging its name onto another block (not on an item page): its left or right quarter puts it beside that
+  block (side by side only), its top or bottom half in a row of its own above or below that block's row (highlighted like
+  the workspace's drop zones); the divider between two blocks moves their shares in 5% steps (drag it, or focus it and use
+  the arrow keys; at least 10% each). Block settings has "Beside the block above" (off for the first block, or when the
+  row above is full) and "Row's max height (rem)" (empty: none). All of it is arranging: stored at once, no " *"; a change in
+  Block settings moves the block only once the panel closes (the rows are held, `usePanelsOpen().hold`). A row stays sound
+  when it changes (`Arrangement` in `blockRows.ts`): the next block takes over a removed or moved first block's settings,
+  a changed row gets equal shares again, and a block reordered in the block list (or a Fields list) away from the block
+  it was beside starts a row of its own (`reordered`). **On a dashboard a row collapses, not a block**: any block's caret
+  collapses (or expands) its whole row, stored as the row's first block's id in the tab's `Collapsed`; collection views
+  and item pages keep collapsing blocks one by one.
 - **Full width** (a checkbox in a collection view's View settings, an item view's Page layout popover and a dashboard tab's
   settings): on, the page uses the pane's whole width (as collection views always did); off, it keeps to the narrow
   700px column of an item page, centred. Defaults (absent): collection views and dashboard tabs on, item views off, so

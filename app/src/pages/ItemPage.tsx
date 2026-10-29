@@ -6,6 +6,8 @@ import { Add, Checkmark, Code, Edit, Filter, Information, Pin, PinFilled, Renew,
 import { isFullWidth, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
+import { BlockRows, rowShape, shownRows, type RowControls } from "../views/BlockRows";
+import { canBeside, reordered, rowStart, setBeside, setRowMaxHeight, setRowShares, withoutBlock } from "../domain/blockRows";
 import { QueryEditor } from "../views/QueryEditor";
 import { useBlockName } from "../views/BlockListEditor";
 import { AddBlockButton, type NewBlockSpec } from "../views/AddBlockButton";
@@ -239,7 +241,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
 
   const listPath = `/collections/${collection.id}/items`;
   // A link to a field or block of the page (?field=, ?block=): scrolled to and highlighted. Fields
-  // are the children of the list, in the order of its entries (see `entries` below).
+  // are the children of the list, in the order of its rows (see `entries` below; a row of blocks is one child).
   const fieldList = useRef<HTMLDivElement>(null);
   const fieldIndex = useRef<string[]>([]);
   const linkedField = params.get("field");
@@ -310,15 +312,20 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
    * collection pages.
    */
   const arrange = (change: (layout: ItemLayout) => ItemLayout) => {
-    if (draft) setDraft(change(draft));
-    storeNow({ layout: change(saved) });
+    // A block no longer right under the one it was beside (the Fields list reordered) leaves its row.
+    const applied = (l: ItemLayout) => {
+      const next = change(l);
+      return { ...next, blocks: reordered(orderOf(l), orderOf(next), next.blocks) };
+    };
+    if (draft) setDraft(applied(draft));
+    storeNow({ layout: applied(saved) });
   };
   const setBlockNow = (id: string, patch: Partial<ViewBlock>) =>
     arrange((l) => ({ ...l, blocks: l.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) }));
   const addBlock = (block: ViewBlock) => arrange((l) => ({ ...l, blocks: [...l.blocks, block], fields: l.fields && [...l.fields, block.id] }));
   async function removeBlock(block: ViewBlock) {
     if (!(await confirm({ title: `Remove block “${blockName(block)}”?`, body: "Items are not affected." }))) return;
-    arrange((l) => ({ ...l, blocks: l.blocks.filter((b) => b.id !== block.id), fields: l.fields && l.fields.filter((f) => f !== block.id) }));
+    arrange((l) => ({ ...l, blocks: withoutBlock(orderOf(l), l.blocks, block.id), fields: l.fields && l.fields.filter((f) => f !== block.id) }));
   }
 
   /**
@@ -357,7 +364,18 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const entries = itemPageFields<FieldDef | ViewBlock>([...pickableFields(collection), ...layout.blocks], layout, titleField?.id).filter(
     (f) => blocksById.has(f.id) || !layout.hideEmpty || editing?.fieldId === f.id || !isEmpty(shown ? fieldValue(shown, f as FieldDef) : null),
   );
-  fieldIndex.current = entries.map((e) => e.id);
+  // Blocks side by side (rows: views/BlockRows.tsx): blocks next to each other on the page, held while a panel is open.
+  const shape = panels.hold("rows", rowShape(layout.blocks));
+  fieldIndex.current = shownRows(entries, (e) => blocksById.get(e.id), fullWidth, shape).map((r) => r[0].id);
+  /** The page's order of fields and blocks, empty ones too (what "Beside the block above" looks at). */
+  const orderOf = (l: ItemLayout) => itemPageFields<{ id: string }>([...pickableFields(collection), ...l.blocks], l, titleField?.id).map((e) => e.id);
+  const rowControls = (block: ViewBlock): RowControls => ({
+    beside: !!block.beside,
+    canBeside: canBeside(orderOf(layout), layout.blocks, block.id),
+    onBeside: (on) => arrange((l) => ({ ...l, blocks: setBeside(orderOf(l), l.blocks, block.id, on) })),
+    maxHeight: rowStart(orderOf(layout), layout.blocks, block.id)?.rowMaxHeight,
+    onMaxHeight: (rem) => arrange((l) => ({ ...l, blocks: setRowMaxHeight(orderOf(l), l.blocks, block.id, rem) })),
+  });
   const restricted = !!item && isRestricted(collection, item, remote ? { ...shownLayout, editable: true } : layout);
 
   async function saveField(field: FieldDef, value: FieldValue) {
@@ -603,111 +621,119 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
       {item && (
         <FramesSizing>
         <Stack ref={fieldList} gap={7} className="item-fields">
-          {entries.map((entry) => {
-            const block = blocksById.get(entry.id);
-            if (block) {
-              return page && (
-                <ItemPageBlock
-                  key={block.id}
-                  block={block}
-                  page={page}
-                  pageFilters={pageFilters}
-                  editable={layout.editable}
-                  headerHidden={layout.hiddenLabels.includes(block.id)}
-                  collapsed={collapsed}
-                  onCollapse={setCollapsed}
-                  onChange={setBlock}
-                  onSet={(patch) => setBlockNow(block.id, patch)}
-                  onRemove={() => removeBlock(block)}
-                  onError={setError}
-                  onOpenChange={panels.onOpenChange}
+          <BlockRows
+            entries={entries}
+            blockOf={(e) => blocksById.get(e.id)}
+            wide={fullWidth}
+            shape={shape}
+            onShares={(row, shares) => arrange((l) => ({ ...l, blocks: setRowShares(l.blocks, row, shares) }))}
+            render={(entry) => {
+              const block = blocksById.get(entry.id);
+              if (block) {
+                return page && (
+                  <ItemPageBlock
+                    key={block.id}
+                    block={block}
+                    page={page}
+                    pageFilters={pageFilters}
+                    editable={layout.editable}
+                    headerHidden={layout.hiddenLabels.includes(block.id)}
+                    collapsed={collapsed}
+                    onCollapse={setCollapsed}
+                    onChange={setBlock}
+                    onSet={(patch) => setBlockNow(block.id, patch)}
+                    onRemove={() => removeBlock(block)}
+                    onError={setError}
+                    onOpenChange={panels.onOpenChange}
+                    row={fullWidth && activeView ? rowControls(block) : undefined}
+                  />
+                );
+              }
+              const f = entry as FieldDef;
+              // Its own component (written in its settings), or the shared one it picks.
+              const component = f.kind === "component" ? fieldComponent(f, components) : undefined;
+              const shared = component && f.code === null ? components.find((t) => t.id === f.componentId) : undefined;
+              const labelHidden = layout.hiddenLabels.includes(f.id);
+              // An AI field's "Generate again", in its label row (none without its name), also while collapsed or edited.
+              const regenerateButton = f.kind === "ai" && (
+                <RegenerateButton generatedAt={item.aiGeneratedAt?.[f.id]} edited={!!item.aiEdited?.[f.id]} onRegenerate={(hint) => regenerate(f, hint)} />
+              );
+              // A component field's "Edit component", in its label row: its value is computed, so a click
+              // on it edits nothing; a shared component changes everywhere, so editing it is asked for explicitly.
+              const editComponentButton = component && layout.editable && <EditComponentButton name={shared?.name} onEdit={() => setEditing({ fieldId: f.id })} />;
+              const editor = editing?.fieldId === f.id && (
+                <FieldEditor
+                  key={f.id}
+                  field={f}
+                  value={item.values[f.id] ?? null}
+                  refs={refs}
+                  start={editing.start}
+                  onSave={(v) => saveField(f, v)}
+                  onCancel={() => setEditing(null)}
                 />
               );
-            }
-            const f = entry as FieldDef;
-            // Its own component (written in its settings), or the shared one it picks.
-            const component = f.kind === "component" ? fieldComponent(f, components) : undefined;
-            const shared = component && f.code === null ? components.find((t) => t.id === f.componentId) : undefined;
-            const labelHidden = layout.hiddenLabels.includes(f.id);
-            // An AI field's "Generate again", in its label row (none without its name), also while collapsed or edited.
-            const regenerateButton = f.kind === "ai" && (
-              <RegenerateButton generatedAt={item.aiGeneratedAt?.[f.id]} edited={!!item.aiEdited?.[f.id]} onRegenerate={(hint) => regenerate(f, hint)} />
-            );
-            // A component field's "Edit component", in its label row: its value is computed, so a click
-            // on it edits nothing; a shared component changes everywhere, so editing it is asked for explicitly.
-            const editComponentButton = component && layout.editable && <EditComponentButton name={shared?.name} onEdit={() => setEditing({ fieldId: f.id })} />;
-            const editor = editing?.fieldId === f.id && (
-              <FieldEditor
-                key={f.id}
-                field={f}
-                value={item.values[f.id] ?? null}
-                refs={refs}
-                start={editing.start}
-                onSave={(v) => saveField(f, v)}
-                onCancel={() => setEditing(null)}
-              />
-            );
-            const field =
-            editing?.fieldId === f.id && component ? (
-              // A component field edits its component (shared: saving asks first).
-              <ComponentFieldEditor key={f.id} collection={collection} field={f} component={component} shared={shared} onDone={() => setEditing(null)} />
-            ) : editor && regenerateButton && !labelHidden ? (
-              // Its buttons stay where they were while it is edited: over the input's label row.
-              <div key={f.id} className="view-field">
-                {editor}
-                <SectionHeader label={null} overlay>
-                  {regenerateButton}
-                </SectionHeader>
-              </div>
-            ) : editor ? (
-              editor
-            ) : (
-              <ViewField
-                key={f.id}
-                field={f}
-                value={shown ? fieldValue(shown, f) : null}
-                refs={refs}
-                onEdit={(start) => setEditing({ fieldId: f.id, start })}
-                onSave={(v) => saveField(f, v).catch((e) => setError(errorMessage(e)))}
-                onRegenerate={f.kind === "ai" ? (hint) => regenerate(f, hint) : undefined}
-                componentButton={editComponentButton || undefined}
-                generatedAt={f.kind === "ai" ? item.aiGeneratedAt?.[f.id] : undefined}
-                edited={f.kind === "ai" ? !!item.aiEdited?.[f.id] : undefined}
-                itemId={item.id}
-                labelHidden={labelHidden}
-                readOnly={!layout.editable || isMetaField(f)}
-                fixed={remote}
-              />
-            );
-            // A field shown without its name (the layout's choice); the wrapper adds no box. Without
-            // a label it has no caret, so it can't collapse.
-            if (labelHidden) {
-              return (
-                <div key={f.id} className="item-field--no-label">
-                  {field}
+              const field =
+              editing?.fieldId === f.id && component ? (
+                // A component field edits its component (shared: saving asks first).
+                <ComponentFieldEditor key={f.id} collection={collection} field={f} component={component} shared={shared} onDone={() => setEditing(null)} />
+              ) : editor && regenerateButton && !labelHidden ? (
+                // Its buttons stay where they were while it is edited: over the input's label row.
+                <div key={f.id} className="view-field">
+                  {editor}
+                  <SectionHeader label={null} overlay>
+                    {regenerateButton}
+                  </SectionHeader>
                 </div>
+              ) : editor ? (
+                editor
+              ) : (
+                <ViewField
+                  key={f.id}
+                  field={f}
+                  value={shown ? fieldValue(shown, f) : null}
+                  refs={refs}
+                  onEdit={(start) => setEditing({ fieldId: f.id, start })}
+                  onSave={(v) => saveField(f, v).catch((e) => setError(errorMessage(e)))}
+                  onRegenerate={f.kind === "ai" ? (hint) => regenerate(f, hint) : undefined}
+                  componentButton={editComponentButton || undefined}
+                  generatedAt={f.kind === "ai" ? item.aiGeneratedAt?.[f.id] : undefined}
+                  edited={f.kind === "ai" ? !!item.aiEdited?.[f.id] : undefined}
+                  itemId={item.id}
+                  labelHidden={labelHidden}
+                  readOnly={!layout.editable || isMetaField(f)}
+                  fixed={remote}
+                />
               );
-            }
-            if (!activeView) return field;
-            // Collapsible like a block (the caret is in its label), stored with the item view right away.
-            const fieldCollapsed = collapsed.blocks.includes(f.id);
-            const toggle = () => {
-              if (editing?.fieldId === f.id) setEditing(null);
-              setCollapsed(withBlockCollapsed(collapsed, f.id, !fieldCollapsed));
-            };
-            return (
-              <FieldCollapse.Provider key={f.id} value={{ collapsed: fieldCollapsed, onToggle: toggle }}>
-                {fieldCollapsed ? (
-                  // Only the label row, its buttons kept (like a collapsed block's menus).
-                  <div className="view-field">
-                    <SectionHeader label={<FieldLabel field={f} />}>{regenerateButton || editComponentButton}</SectionHeader>
+              // A field shown without its name (the layout's choice); the wrapper adds no box. Without
+              // a label it has no caret, so it can't collapse.
+              if (labelHidden) {
+                return (
+                  <div key={f.id} className="item-field--no-label">
+                    {field}
                   </div>
-                ) : (
-                  field
-                )}
-              </FieldCollapse.Provider>
-            );
-          })}
+                );
+              }
+              if (!activeView) return field;
+              // Collapsible like a block (the caret is in its label), stored with the item view right away.
+              const fieldCollapsed = collapsed.blocks.includes(f.id);
+              const toggle = () => {
+                if (editing?.fieldId === f.id) setEditing(null);
+                setCollapsed(withBlockCollapsed(collapsed, f.id, !fieldCollapsed));
+              };
+              return (
+                <FieldCollapse.Provider key={f.id} value={{ collapsed: fieldCollapsed, onToggle: toggle }}>
+                  {fieldCollapsed ? (
+                    // Only the label row, its buttons kept (like a collapsed block's menus).
+                    <div className="view-field">
+                      <SectionHeader label={<FieldLabel field={f} />}>{regenerateButton || editComponentButton}</SectionHeader>
+                    </div>
+                  ) : (
+                    field
+                  )}
+                </FieldCollapse.Provider>
+              );
+            }}
+          />
         </Stack>
         </FramesSizing>
       )}
@@ -808,6 +834,7 @@ function ItemPageBlock({
   onRemove,
   onError,
   onOpenChange,
+  row,
 }: {
   block: ViewBlock;
   page: PageItem;
@@ -822,12 +849,16 @@ function ItemPageBlock({
   onRemove(): void;
   onError(message: string): void;
   onOpenChange(open: boolean): void;
+  /** Its place in a row (Block settings), while "Full width" is on. */
+  row?: RowControls;
 }) {
   const { collections } = useStore();
   const collection = findCollection(collections, block.collectionId ?? page.collection.id);
   if (!collection) {
     return (
-      <InlineNotification kind="warning" title="Block without collection" subtitle="The collection this block listed was deleted." onClose={onRemove} />
+      <section className="block" data-block-id={block.id}>
+        <InlineNotification kind="warning" title="Block without collection" subtitle="The collection this block listed was deleted." onClose={onRemove} />
+      </section>
     );
   }
   const Content = collection.virtual === "backlinks" ? BacklinksBlockContent : ItemPageBlockContent;
@@ -847,6 +878,7 @@ function ItemPageBlock({
       onRemove={onRemove}
       onError={onError}
       onOpenChange={onOpenChange}
+      row={row}
     />
   );
 }

@@ -5,6 +5,7 @@
 // (fieldLayout.ts): there a block may list another collection, filtered by the page's item.
 // The "current" view state is ephemeral; it becomes a CollectionView only when the user saves it.
 
+import { normalizeRowMaxHeight } from "./blockRows";
 import { mergeCollections, type MergeProblem, type ColumnMerge } from "./mergedCollection";
 import { parseFieldLayout, type FieldLayout } from "./fieldLayout";
 import { newId, pickableFields, type Collection } from "./model";
@@ -50,6 +51,12 @@ export interface ViewBlock {
   hideHeader?: true;
   /** Items shown at first and added by each "Show more" (Filter → Limit); 0 = all. Absent = its type's default (`blockLimit`). */
   limit?: number;
+  /** Shown beside the block before it, in its row (domain/blockRows.ts), where the page is wide enough. Absent = a row of its own. */
+  beside?: true;
+  /** Its share of its row's width, in percent (set by dragging the divider). Absent = an equal share. */
+  width?: number;
+  /** The first block of a row: the row's max height in rem; its blocks scroll inside beyond it. Absent = none. */
+  rowMaxHeight?: number;
 }
 
 /** Items a block shows at first and adds by each "Show more" unless its Limit says otherwise. */
@@ -236,6 +243,9 @@ export function parseBlock(raw: unknown): ViewBlock | null {
   if (o.sortChosen === true) block.sortChosen = true;
   if (o.hideHeader === true) block.hideHeader = true;
   if (typeof o.limit === "number" && Number.isInteger(o.limit) && o.limit >= 0) block.limit = o.limit;
+  if (o.beside === true) block.beside = true;
+  if (typeof o.width === "number" && Number.isFinite(o.width) && o.width > 0 && o.width <= 100) block.width = Math.round(o.width);
+  if (typeof o.rowMaxHeight === "number" && Number.isFinite(o.rowMaxHeight)) block.rowMaxHeight = normalizeRowMaxHeight(o.rowMaxHeight);
   if (Array.isArray(o.collectionIds) && o.collectionIds.length > 1 && o.collectionIds.every((id) => typeof id === "string")) block.collectionIds = o.collectionIds as string[];
   const merges = array<unknown>(o.merges).filter(
     (m): m is ColumnMerge => !!m && typeof m === "object" && typeof (m as ColumnMerge).id === "string" && typeof (m as ColumnMerge).name === "string" && Array.isArray((m as ColumnMerge).fields) && (m as ColumnMerge).fields.every((f) => typeof f === "string"),
