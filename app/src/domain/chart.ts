@@ -229,7 +229,7 @@ export interface ChartOptions {
   /** `compare` "number": the number compared with. */
   baseline: number | null;
   // Stat
-  /** Its value's name above the number. */
+  /** Stat: its value's name above the number. Meter: the label row above the bar (Carbon's `meter.showLabels`). */
   showLabel: boolean;
   /** Below its number: the value along the X axis, a compact area or line chart (Carbon's), or none. */
   sparkline: "area" | "line" | "none";

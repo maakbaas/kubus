@@ -198,7 +198,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
               onChange={({ selectedItem }) => {
                 if (!selectedItem || selectedItem.id === collection.id) return;
                 const { id: _id, title: _title, ...fresh } = newPageBlock(selectedItem, page);
-                onSet({ ...fresh, groupOrder: undefined });
+                onSet({ ...fresh, groupOrder: undefined, groupDate: undefined });
               }}
             />
           )}
@@ -309,7 +309,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const base = blockQuery(viewFilters, block);
   const filters = useMemo(() => resolveFilterValues(base.filters, page ?? null), [base.filters, page]);
   const inherited = useMemo(() => resolveFilterValues(viewFilters ?? NO_FILTERS, page ?? null), [viewFilters, page]);
-  const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder]); // eslint-disable-line react-hooks/exhaustive-deps
+  const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder, base.groupDate]); // eslint-disable-line react-hooks/exhaustive-deps
   // A remote collection's rows come from its source a page at a time, filtered and sorted there.
   // Its Limit: items shown at first and added by each "Show more" (0: all, a remote collection's loaded page by page).
   const limit = blockLimit(block, !!uses.all);
