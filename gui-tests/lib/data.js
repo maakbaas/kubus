@@ -350,3 +350,36 @@ function wsLayout(panesPaths, { direction = "row", active = 0, sizes } = {}) {
     activePaneId: panes[active].id,
   };
 }
+
+// ---- the suite's own calendar (local days; the app's is not used to expect rows) ----
+
+const pad2 = (n) => String(n).padStart(2, "0");
+const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+/** Noon, `n` days from today (local): its day is the same whatever the time of the run. */
+const dayAt = (n) => {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + n);
+  return d;
+};
+const dayStr = (n) => ymd(dayAt(n));
+const sundayOf = (d) => {
+  const s = new Date(d);
+  s.setDate(s.getDate() - s.getDay());
+  return s;
+};
+
+/** [first, last] day ("yyyy-mm-dd") of the day / week / month / year `offset` units from today's (the suite's own calendar, not the app's). */
+function periodDays(kind, offset = 0) {
+  const t = dayAt(0);
+  if (kind === "day") return [dayStr(offset), dayStr(offset)];
+  if (kind === "week") {
+    const s = sundayOf(t);
+    s.setDate(s.getDate() + 7 * offset);
+    const e = new Date(s);
+    e.setDate(e.getDate() + 6);
+    return [ymd(s), ymd(e)];
+  }
+  if (kind === "month") return [ymd(new Date(t.getFullYear(), t.getMonth() + offset, 1)), ymd(new Date(t.getFullYear(), t.getMonth() + offset + 1, 0))];
+  return [`${t.getFullYear() + offset}-01-01`, `${t.getFullYear() + offset}-12-31`];
+}

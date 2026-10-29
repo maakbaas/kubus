@@ -6,37 +6,7 @@
 // (window.kubus.repo) and, after a reload, the same again.
 
 const DAY_MS = 86400000;
-const pad2 = (n) => String(n).padStart(2, "0");
-const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-/** Noon, `n` days from today (local): its day is the same whatever the time of the run. */
-const dayAt = (n) => {
-  const d = new Date();
-  d.setHours(12, 0, 0, 0);
-  d.setDate(d.getDate() + n);
-  return d;
-};
-const dayStr = (n) => ymd(dayAt(n));
 const ago = (ms) => new Date(Date.now() - ms).toISOString();
-const sundayOf = (d) => {
-  const s = new Date(d);
-  s.setDate(s.getDate() - s.getDay());
-  return s;
-};
-
-/** [first, last] day ("yyyy-mm-dd") of the day / week / month / year `offset` units from today's (the suite's own calendar, not the app's). */
-function periodDays(kind, offset = 0) {
-  const t = dayAt(0);
-  if (kind === "day") return [dayStr(offset), dayStr(offset)];
-  if (kind === "week") {
-    const s = sundayOf(t);
-    s.setDate(s.getDate() + 7 * offset);
-    const e = new Date(s);
-    e.setDate(e.getDate() + 6);
-    return [ymd(s), ymd(e)];
-  }
-  if (kind === "month") return [ymd(new Date(t.getFullYear(), t.getMonth() + offset, 1)), ymd(new Date(t.getFullYear(), t.getMonth() + offset + 1, 0))];
-  return [`${t.getFullYear() + offset}-01-01`, `${t.getFullYear() + offset}-12-31`];
-}
 
 // --- data -------------------------------------------------------------------------------------
 
@@ -138,20 +108,19 @@ async function expectRows(t, label, expected, { block = 0, ordered = false } = {
 }
 
 const FILTER = /^Filter( \(\d+\))?$|^Filter all blocks( \(\d+\))?$/;
-const panelOf = (t) => t.page.locator(".toolbar-popover__panel:visible").last();
-const rulesOf = (t) => panelOf(t).locator(".query-editor__rule");
+const rulesOf = (t) => toolbarPanel(t).locator(".query-editor__rule");
 
 /** Opens the view's Filter panel (in the views bar), or a block's menu (`name`) in its header. */
 async function openView(t, name = FILTER) {
   await t.openPanel(t.page.locator(".views-bar").first(), name);
-  return panelOf(t);
+  return toolbarPanel(t);
 }
 async function openBlock(t, name, block = 0) {
   await t.openPanel(t.page.locator(".ws-pane--active .block").nth(block).locator(".section-header").first(), name);
-  return panelOf(t);
+  return toolbarPanel(t);
 }
 async function addRule(t) {
-  await panelOf(t).getByRole("button", { name: "Add filter" }).click();
+  await toolbarPanel(t).getByRole("button", { name: "Add filter" }).click();
   await t.settle(100);
   return rulesOf(t).last();
 }
@@ -365,7 +334,7 @@ test("filter: a block builds on its view's filter (And narrows, Or lets more in)
   await t.closeAll();
   // A block's own rule comes after it.
   await openBlock(t, FILTER, 1);
-  await t.check("the block's panel says it uses the view's filter", (await panelOf(t).innerText()).includes("Only the view's filter"), await panelOf(t).innerText());
+  await t.check("the block's panel says it uses the view's filter", (await toolbarPanel(t).innerText()).includes("Only the view's filter"), await toolbarPanel(t).innerText());
   const rule = await addRule(t);
   await t.check("the block's first rule joins the view's (a join, no Where)", (await rule.innerText()).includes("Where") === false && (await rule.getByLabel("Join", { exact: true }).count()) === 1);
   await setRule(t, rule, { field: "Pages", cond: ">", value: "100", join: "And" });
@@ -395,7 +364,7 @@ test("filter: a block builds on its view's filter (And narrows, Or lets more in)
   // Limit: items shown at a time.
   await t.closeAll();
   await openBlock(t, FILTER, 0);
-  const limit = panelOf(t).getByRole("spinbutton", { name: "Items shown at a time" });
+  const limit = toolbarPanel(t).getByRole("spinbutton", { name: "Items shown at a time" });
   await limit.fill("5");
   await t.settle(200);
   await t.until("a Limit of 5 shows five rows", async () => ((await titlesOf(t, 0)) || []).length === 5);
@@ -440,7 +409,7 @@ test("sort: Sort by every field, both directions, kept with the view @ desktop",
   await t.open(t.listPath(ids.collections.books));
   await expectRows(t, "sorted by title", TITLES, { ordered: true });
   await openBlock(t, "Sort and group");
-  const panel = panelOf(t);
+  const panel = toolbarPanel(t);
   const sortBy = panel.getByLabel("Sort by", { exact: true });
   const dir = panel.getByLabel("Direction", { exact: true });
   const options = await optionsOf(sortBy);
@@ -491,7 +460,7 @@ test("sort: Sort by every field, both directions, kept with the view @ desktop",
     return rows.length === BOOKS.length && sortedBy(rows, SORT_KEYS.Pages, true) && rows[0] === "Hotel";
   });
   await openBlock(t, "Sort and group");
-  await t.check("and the panel shows it", (await panelOf(t).getByLabel("Sort by", { exact: true }).inputValue()) === pagesId && (await panelOf(t).getByLabel("Direction", { exact: true }).inputValue()) === "desc");
+  await t.check("and the panel shows it", (await toolbarPanel(t).getByLabel("Sort by", { exact: true }).inputValue()) === pagesId && (await toolbarPanel(t).getByLabel("Direction", { exact: true }).inputValue()) === "desc");
 }, { viewport: "desktop" });
 
 // --- group ----------------------------------------------------------------------------------------------
@@ -542,7 +511,7 @@ test(`group: Group by ${label} and every Group order, rows per group @ desktop`,
   const ids = await t.seed(querySpec());
   await t.open(t.listPath(ids.collections.books));
   await openBlock(t, "Sort and group");
-  const panel = panelOf(t);
+  const panel = toolbarPanel(t);
   const groupBy = panel.getByLabel("Group by", { exact: true });
   const order = panel.getByLabel("Group order", { exact: true });
   const options = await optionsOf(groupBy);
@@ -584,16 +553,16 @@ test(`group: Group by ${label} and every Group order, rows per group @ desktop`,
   const model = groupsModel("Author", "count");
   await t.until("reloaded: grouped by Author, most items first", async () => JSON.stringify((await groupsOf(t)).map(([l, r]) => [l, r])) === JSON.stringify(model) || JSON.stringify(await groupsOf(t)));
   await openBlock(t, "Sort and group");
-  await t.check("and the panel shows it", (await panelOf(t).getByLabel("Group order", { exact: true }).inputValue()) === "count");
+  await t.check("and the panel shows it", (await toolbarPanel(t).getByLabel("Group order", { exact: true }).inputValue()) === "count");
   // Ascending is the default and not stored.
-  await panelOf(t).getByLabel("Group order", { exact: true }).selectOption({ label: "Ascending" });
+  await toolbarPanel(t).getByLabel("Group order", { exact: true }).selectOption({ label: "Ascending" });
   await t.closeAll();
   await saveView(t);
   const after = await storedView(t, ids.collections.books);
   await t.check("Ascending is not stored (the default)", after.blocks[0].groupOrder === undefined, JSON.stringify(after.blocks[0].groupOrder));
   // No grouping: one list again.
   await openBlock(t, "Sort and group");
-  await panelOf(t).getByLabel("Group by", { exact: true }).selectOption({ label: "No grouping" });
+  await toolbarPanel(t).getByLabel("Group by", { exact: true }).selectOption({ label: "No grouping" });
   await t.closeAll();
   await expectRows(t, "No grouping: a plain table", TITLES, { ordered: true });
   await t.check("no groups on screen", (await groupsOf(t)).length === 0);
@@ -669,7 +638,7 @@ test("group: a date by year, month, week, day or hour, in time order; stored, ke
   const ids = await t.seed(dateSpec());
   await t.open(t.listPath(ids.collections.entries));
   await openBlock(t, "Sort and group");
-  const panel = panelOf(t);
+  const panel = toolbarPanel(t);
   const groupBy = panel.getByLabel("Group by", { exact: true });
   const by = panel.getByLabel("Group dates by", { exact: true });
   const order = panel.getByLabel("Group order", { exact: true });
@@ -720,19 +689,19 @@ test("group: a date by year, month, week, day or hour, in time order; stored, ke
   await t.open(t.listPath(ids.collections.entries));
   await shown("reloaded: by month, newest first", dateGroupsModel("At", "month", "desc"));
   await openBlock(t, "Sort and group");
-  await t.check("and the panel shows it", (await panelOf(t).getByLabel("Group dates by", { exact: true }).inputValue()) === "month");
+  await t.check("and the panel shows it", (await toolbarPanel(t).getByLabel("Group dates by", { exact: true }).inputValue()) === "month");
   await t.audit("sort and group popover, a date grouped by month", { shotOnFail: true });
 
   // Hours are of a date & time: another date field falls back to days; day is not stored.
-  await panelOf(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Hour" });
-  await panelOf(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Day" });
+  await toolbarPanel(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Hour" });
+  await toolbarPanel(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Day" });
   await shown("a date field after hours: by day", dateGroupsModel("Day", "day", "desc"));
-  await t.check("a date has no Hour to choose", !(await optionsOf(panelOf(t).getByLabel("Group dates by", { exact: true }))).includes("Hour"));
-  await panelOf(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Year" });
-  await panelOf(t).getByLabel("Group by", { exact: true }).selectOption({ label: "At" });
+  await t.check("a date has no Hour to choose", !(await optionsOf(toolbarPanel(t).getByLabel("Group dates by", { exact: true }))).includes("Hour"));
+  await toolbarPanel(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Year" });
+  await toolbarPanel(t).getByLabel("Group by", { exact: true }).selectOption({ label: "At" });
   await shown("another date field keeps the year", dateGroupsModel("At", "year", "desc"));
-  await panelOf(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Title" });
-  await t.check("a text field: no Group dates by", (await panelOf(t).getByLabel("Group dates by", { exact: true }).count()) === 0);
+  await toolbarPanel(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Title" });
+  await t.check("a text field: no Group dates by", (await toolbarPanel(t).getByLabel("Group dates by", { exact: true }).count()) === 0);
   await t.closeAll();
   await saveView(t);
   const after = await storedView(t, ids.collections.entries);
@@ -775,7 +744,7 @@ test("group: collapsed groups and blocks are kept @ desktop", async (t) => {
   await t.until("and takes it out of the stored view", async () => Object.values((await storedView(t, ids.collections.books)).collapsed.groups).flat().length === 1);
   // Another grouping field has its own groups: nothing of Author's collapsed state carries over.
   await openBlock(t, "Sort and group");
-  await panelOf(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Read" });
+  await toolbarPanel(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Read" });
   await t.closeAll();
   await t.until("grouped by Read: both groups open", async () => {
     const groups = await groupsOf(t);
@@ -795,10 +764,10 @@ test("group: collapsed groups and blocks are kept @ desktop", async (t) => {
 
 // --- date period ------------------------------------------------------------------------------------
 
-const dp = (t) => panelOf(t).locator(".date-period");
+const dp = (t) => toolbarPanel(t).locator(".date-period");
 const periodLabelOf = async (t) => (await dp(t).locator(".date-period__label").innerText()).trim();
 const kindTab = (t, name) => dp(t).getByRole("tab", { name, exact: true });
-const whichSelect = (t) => panelOf(t).getByLabel("Which", { exact: true });
+const whichSelect = (t) => toolbarPanel(t).getByLabel("Which", { exact: true });
 const pubIn = (first, last) => (b) => pubDay(b) !== null && pubDay(b) >= first && pubDay(b) <= last;
 const inDays = (first, last) => names(BOOKS.filter(pubIn(first, last)));
 const WORDS = { day: ["Today", "Yesterday", "Tomorrow", "days"], week: ["This week", "Last week", "Next week", "weeks"], month: ["This month", "Last month", "Next month", "months"], year: ["This year", "Last year", "Next year", "years"] };
@@ -896,7 +865,7 @@ test("date period: Which (so far, the last n, a chosen one) and Range @ desktop"
     await kindTab(t, kind[0].toUpperCase() + kind.slice(1)).click();
     await whichSelect(t).selectOption({ label: `Last n ${kind}s` });
     await t.settle(100);
-    const count = panelOf(t).getByRole("spinbutton", { name: unitLabel, exact: true });
+    const count = toolbarPanel(t).getByRole("spinbutton", { name: unitLabel, exact: true });
     await t.check(`Last n ${kind}s starts at ${n}`, (await count.inputValue()) === String(n), await count.inputValue());
     await expectRows(t, `last ${n} ${kind}s`, inDays(...range(n)));
     await count.fill("2");
@@ -910,7 +879,7 @@ test("date period: Which (so far, the last n, a chosen one) and Range @ desktop"
   await kindTab(t, "Day").click();
   await whichSelect(t).selectOption({ label: "A chosen day" });
   await t.settle(100);
-  const day = panelOf(t).getByLabel("Day", { exact: true });
+  const day = toolbarPanel(t).getByLabel("Day", { exact: true });
   await typeDate(t, day, dayStr(-8));
   await expectRows(t, "a chosen day", inDays(dayStr(-8), dayStr(-8)));
   await dp(t).getByRole("button", { name: "Previous", exact: true }).click();
@@ -926,14 +895,14 @@ test("date period: Which (so far, the last n, a chosen one) and Range @ desktop"
   await t.settle(100);
   await t.check("Week keeps the choice: a chosen week (of that day)", (await whichSelect(t).locator("option:checked").innerText()) === "A chosen week");
   await expectRows(t, "the week of that day", inDays(...weekOf(dayStr(-3))));
-  await typeDate(t, panelOf(t).getByLabel("A day of the week", { exact: true }), dayStr(-20));
+  await typeDate(t, toolbarPanel(t).getByLabel("A day of the week", { exact: true }), dayStr(-20));
   await expectRows(t, "a chosen week: the week of -20 days", inDays(...weekOf(dayStr(-20))));
   // A chosen month: its month and year; a chosen year.
   const old = dayAt(-400);
   await kindTab(t, "Month").click();
   await t.settle(100);
-  await panelOf(t).getByLabel("Month", { exact: true }).selectOption({ value: String(old.getMonth() + 1) });
-  await panelOf(t).getByLabel("Year", { exact: true }).selectOption({ value: String(old.getFullYear()) });
+  await toolbarPanel(t).getByLabel("Month", { exact: true }).selectOption({ value: String(old.getMonth() + 1) });
+  await toolbarPanel(t).getByLabel("Year", { exact: true }).selectOption({ value: String(old.getFullYear()) });
   await t.settle(150);
   const monthDays = [ymd(new Date(old.getFullYear(), old.getMonth(), 1)), ymd(new Date(old.getFullYear(), old.getMonth() + 1, 0))];
   await expectRows(t, "a chosen month (400 days ago)", inDays(...monthDays));
@@ -943,9 +912,9 @@ test("date period: Which (so far, the last n, a chosen one) and Range @ desktop"
   await expectRows(t, "Next: the month after", inDays(ymd(nextMonth), ymd(new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0))));
   await kindTab(t, "Year").click();
   await t.settle(100);
-  await panelOf(t).getByLabel("Year", { exact: true }).selectOption({ value: String(old.getFullYear()) });
+  await toolbarPanel(t).getByLabel("Year", { exact: true }).selectOption({ value: String(old.getFullYear()) });
   await expectRows(t, "a chosen year", inDays(`${old.getFullYear()}-01-01`, `${old.getFullYear()}-12-31`));
-  const years = await optionsOf(panelOf(t).getByLabel("Year", { exact: true }));
+  const years = await optionsOf(toolbarPanel(t).getByLabel("Year", { exact: true }));
   await t.check("the years run from this one a century back", years[0] === String(dayAt(0).getFullYear()) && years.length === 101, `${years[0]} … ${years[years.length - 1]} (${years.length})`);
   await t.audit("a chosen year", { shotOnFail: true });
   // Range: two chosen days, both included.
@@ -954,8 +923,8 @@ test("date period: Which (so far, the last n, a chosen one) and Range @ desktop"
   await t.settle(100);
   await t.check("a range with no days yet", (await periodLabelOf(t)) === "Choose the first and last day");
   await expectRows(t, "and no filter yet", TITLES);
-  await typeDate(t, panelOf(t).getByLabel("First day", { exact: true }), dayStr(-20));
-  await typeDate(t, panelOf(t).getByLabel("Last day", { exact: true }), dayStr(-1));
+  await typeDate(t, toolbarPanel(t).getByLabel("First day", { exact: true }), dayStr(-20));
+  await typeDate(t, toolbarPanel(t).getByLabel("Last day", { exact: true }), dayStr(-1));
   await expectRows(t, "a range of days, both ends included", inDays(dayStr(-20), dayStr(-1)));
   await dp(t).getByRole("button", { name: "Next", exact: true }).click();
   await expectRows(t, "Next moves the range on by its length (20 days)", inDays(dayStr(0), dayStr(19)));
@@ -1004,21 +973,21 @@ test("date period: by Published, Logged, Created or Updated; hours and minutes @
   await t.settle(150);
   const within = (hours) => names(BOOKS.filter((b) => b.hours <= hours));
   await expectRows(t, "the last 24 hours", within(24));
-  const count = panelOf(t).getByRole("spinbutton", { name: "Hours", exact: true });
+  const count = toolbarPanel(t).getByRole("spinbutton", { name: "Hours", exact: true });
   await t.check("starts at 24", (await count.inputValue()) === "24");
   await count.fill("5");
   await expectRows(t, "the last 5 hours", within(5));
   await whichSelect(t).selectOption({ label: "Last n minutes" });
   await t.settle(150);
   await expectRows(t, "the last 30 minutes: none", []);
-  await panelOf(t).getByRole("spinbutton", { name: "Minutes", exact: true }).fill("100");
+  await toolbarPanel(t).getByRole("spinbutton", { name: "Minutes", exact: true }).fill("100");
   await expectRows(t, "the last 100 minutes: Alpha, logged an hour ago", ["Alpha"]);
   // A chosen hour: the one Alpha was logged in.
   const alpha = new Date(ago(3600000));
   await whichSelect(t).selectOption({ label: "A chosen hour" });
   await t.settle(100);
-  await typeDate(t, panelOf(t).getByLabel("Day", { exact: true }), ymd(alpha));
-  await panelOf(t).getByLabel("Hour", { exact: true }).selectOption({ value: pad2(alpha.getHours()) });
+  await typeDate(t, toolbarPanel(t).getByLabel("Day", { exact: true }), ymd(alpha));
+  await toolbarPanel(t).getByLabel("Hour", { exact: true }).selectOption({ value: pad2(alpha.getHours()) });
   await t.settle(150);
   await expectRows(t, "a chosen hour", ["Alpha"]);
   await dp(t).getByRole("button", { name: "Next", exact: true }).click();
@@ -1047,7 +1016,7 @@ test("date period: it frames the other rules, a block's Or can step outside it @
   await openView(t);
   await kindTab(t, "Day").click();
   await whichSelect(t).selectOption({ label: "Last n days" });
-  await panelOf(t).getByRole("spinbutton", { name: "Days", exact: true }).fill("30");
+  await toolbarPanel(t).getByRole("spinbutton", { name: "Days", exact: true }).fill("30");
   await t.settle(150);
   const recent = (b) => pubIn(dayStr(-29), dayStr(0))(b);
   await expectRows(t, "the last 30 days", names(BOOKS.filter(recent)));
@@ -1165,13 +1134,13 @@ test("item page: Counted from the page's item's date; filtering the Authors bloc
   const ids = await t.seed(querySpec({ authorViews: AUTHOR_PAGE }));
   await t.open(authorPath(t, ids, "ada"));
   await openBlock(t, FILTER, 0);
-  await t.check("no 'Counted from' before a rolling period is set", (await panelOf(t).getByLabel("Counted from", { exact: true }).count()) === 0);
+  await t.check("no 'Counted from' before a rolling period is set", (await toolbarPanel(t).getByLabel("Counted from", { exact: true }).count()) === 0);
   await kindTab(t, "Day").click();
   await whichSelect(t).selectOption({ label: "Last n days" });
-  await panelOf(t).getByRole("spinbutton", { name: "Days", exact: true }).fill("15");
+  await toolbarPanel(t).getByRole("spinbutton", { name: "Days", exact: true }).fill("15");
   await t.settle(150);
   await expectRows(t, "the last 15 days from today", inDays(dayStr(-14), dayStr(0)), { block: 0 });
-  const from = panelOf(t).getByLabel("Counted from", { exact: true });
+  const from = toolbarPanel(t).getByLabel("Counted from", { exact: true });
   await t.check("Counted from offers Today or the page item's date", JSON.stringify(await optionsOf(from)) === JSON.stringify(["Today", "This Author's Debut"]), JSON.stringify(await optionsOf(from)));
   await from.selectOption({ label: "This Author's Debut" });
   await t.settle(150);
@@ -1214,7 +1183,7 @@ test("item page: Filter all blocks applies to the blocks whose collection has th
   await t.open(authorPath(t, ids, "ada"));
   await expectRows(t, "both blocks unfiltered", TITLES, { block: 0 });
   await t.openPanel(header, /^Filter all blocks/);
-  await t.check("an empty page-wide filter says each block keeps its own", (await panelOf(t).innerText()).includes("every block shows what its own filter lets through"), await panelOf(t).innerText());
+  await t.check("an empty page-wide filter says each block keeps its own", (await toolbarPanel(t).innerText()).includes("every block shows what its own filter lets through"), await toolbarPanel(t).innerText());
   const nation = await addRule(t);
   const fields = await optionsOf(nation.getByLabel("Field", { exact: true }));
   await t.check("it goes by the fields of both collections", ["Name", "Nation", "Title", "Pages", "Read", "Published"].every((f) => fields.includes(f)), JSON.stringify(fields));
@@ -1230,7 +1199,7 @@ test("item page: Filter all blocks applies to the blocks whose collection has th
   // A block builds on it: its own Or rule lets more in.
   await t.closeAll();
   await openBlock(t, FILTER, 0);
-  await t.check("a block says it uses the page's filter", (await panelOf(t).innerText()).includes("Only the page's filter"), await panelOf(t).innerText());
+  await t.check("a block says it uses the page's filter", (await toolbarPanel(t).innerText()).includes("Only the page's filter"), await toolbarPanel(t).innerText());
   await setRule(t, await addRule(t), { field: "Title", cond: "is", value: "Golf", join: "Or" });
   await expectRows(t, "the block's Or rule adds Golf (read anyway)", names(BOOKS.filter((b) => b.read || b.title === "Golf")), { block: 0 });
   await setRule(t, rulesOf(t).first(), { field: "Title", cond: "is", value: "Hotel", join: "Or" });
@@ -1238,7 +1207,7 @@ test("item page: Filter all blocks applies to the blocks whose collection has th
   await t.closeAll();
   // A date period works across both: by Published reaches the Books block only.
   await t.openPanel(header, /^Filter all blocks/);
-  await panelOf(t).getByLabel("by", { exact: true }).selectOption({ label: "Published" });
+  await toolbarPanel(t).getByLabel("by", { exact: true }).selectOption({ label: "Published" });
   await kindTab(t, "Week").click();
   await t.settle(150);
   await expectRows(t, "this week by Published: the Books block", names(BOOKS.filter((b) => (pubIn(...periodDays("week", 0))(b) && b.read) || b.title === "Hotel")), { block: 0 });
@@ -1327,7 +1296,7 @@ for (const vp of ["phone", "laptop"]) {
     const bar = t.page.locator(".views-bar").first();
     await t.openPanel(bar, FILTER);
     await t.audit("filter panel, no rules", { shotOnFail: true });
-    const add = panelOf(t).getByRole("button", { name: "Add filter" });
+    const add = toolbarPanel(t).getByRole("button", { name: "Add filter" });
     await t.popoverStep("adding a rule", () => add.click());
     await setRule(t, rulesOf(t).last(), { field: "Pages", cond: ">", value: "100" });
     await expectRows(t, "Pages > 100", names(BOOKS.filter((b) => b.pages !== null && b.pages > 100)));
@@ -1344,10 +1313,10 @@ for (const vp of ["phone", "laptop"]) {
     // Sort and group in the block's header.
     const header = t.page.locator(".ws-pane--active .block").first().locator(".section-header").first();
     await t.openPanel(header, "Sort and group");
-    await panelOf(t).getByLabel("Sort by", { exact: true }).selectOption({ label: "Pages" });
-    await panelOf(t).getByLabel("Direction", { exact: true }).selectOption({ label: "Descending" });
-    await panelOf(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Read" });
-    await panelOf(t).getByLabel("Group order", { exact: true }).selectOption({ label: "Descending" });
+    await toolbarPanel(t).getByLabel("Sort by", { exact: true }).selectOption({ label: "Pages" });
+    await toolbarPanel(t).getByLabel("Direction", { exact: true }).selectOption({ label: "Descending" });
+    await toolbarPanel(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Read" });
+    await toolbarPanel(t).getByLabel("Group order", { exact: true }).selectOption({ label: "Descending" });
     await t.until("grouped by Read, Not checked first, longest first", async () => {
       const groups = await groupsOf(t);
       const model = [["Not checked", shown.filter((b) => !b.read)], ["Checked", shown.filter((b) => b.read)]].filter(([, l]) => l.length);
@@ -1369,9 +1338,9 @@ test("blocks: a block's filter, sort and group carry over when it is shown as Ca
   await setRule(t, await addRule(t), { field: "Pages", cond: ">", value: "70" });
   await t.closeAll();
   await openBlock(t, "Sort and group", 0);
-  await panelOf(t).getByLabel("Sort by", { exact: true }).selectOption({ label: "Pages" });
-  await panelOf(t).getByLabel("Direction", { exact: true }).selectOption({ label: "Descending" });
-  await panelOf(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Read" });
+  await toolbarPanel(t).getByLabel("Sort by", { exact: true }).selectOption({ label: "Pages" });
+  await toolbarPanel(t).getByLabel("Direction", { exact: true }).selectOption({ label: "Descending" });
+  await toolbarPanel(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Read" });
   await t.closeAll();
   const shown = BOOKS.filter((b) => b.pages !== null && b.pages > 70);
   const model = [["Checked", shown.filter((b) => b.read)], ["Not checked", shown.filter((b) => !b.read)]];
@@ -1382,7 +1351,7 @@ test("blocks: a block's filter, sort and group carry over when it is shown as Ca
   // Block settings → Show as: Cards.
   const showAs = async (kind) => {
     await openBlock(t, "Block settings", 0);
-    await panelOf(t).getByRole("combobox", { name: /Show as/ }).click();
+    await toolbarPanel(t).getByRole("combobox", { name: /Show as/ }).click();
     await t.page.getByRole("option", { name: kind, exact: true }).click();
     await t.settle(200);
     await t.closeAll();

@@ -111,22 +111,11 @@ const makeRemote = (t, { name = "Customer", plural = "Customers", spaceIds = nul
 
 const pane = (t) => t.page.locator(".ws-pane--active");
 const paneText = async (t) => (await pane(t).innerText().catch(() => "")).replace(/\s+/g, " ");
-const modal = (t) => t.page.locator(".cds--modal.is-visible");
 const navNode = (t, id) => t.page.locator(`.nav-tree li[id="${id}"]`);
 /** Whether the collection editor is on screen. */
 const onEditor = async (t) => (await pane(t).locator(".form-page").count()) === 1;
 const breadcrumbs = async (t) => (await pane(t).locator(".cds--breadcrumb a").allInnerTexts()).map((s) => s.trim());
 
-/** A Carbon dropdown / combo box inside `scope`, by its title. */
-const dropdown = (t, scope, title) =>
-  scope.locator(".cds--dropdown__wrapper, .cds--combo-box, .cds--list-box__wrapper").filter({ has: t.page.locator(".cds--label", { hasText: new RegExp(`^${title}$`) }) }).first();
-const menuOptions = async (t) => (await t.page.getByRole("option").filter({ visible: true }).allInnerTexts()).map((s) => s.trim());
-async function choose(t, scope, title, option) {
-  await dropdown(t, scope, title).locator(".cds--list-box__field").first().click();
-  await t.settle(80);
-  await t.page.getByRole("option", { name: option, exact: true }).filter({ visible: true }).first().click();
-  await t.settle(80);
-}
 
 /** Every collection as stored, as plain data. */
 const storedCollections = (t) => t.page.evaluate(async () => JSON.parse(JSON.stringify(await window.kubus.repo.listCollections())));
@@ -210,7 +199,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.settle();
     await t.check("saving nothing is refused, naming the singular name", (await form.innerText()).includes("Singular name is required"));
     // The source: the server's, with the one that can't be read marked.
-    await dropdown(t, form, "Source").locator(".cds--list-box__field").first().click();
+    await dropdownOf(t, form, "Source").locator(".cds--list-box__field").first().click();
     await t.settle(100);
     const sources = await menuOptions(t);
     await t.check("the Source menu lists the server's sources, a problem named", JSON.stringify(sources) === JSON.stringify(["CRM", "Files (unreachable)"]), sources.join(" | "));
@@ -230,7 +219,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.check("the fields are the columns", JSON.stringify(names) === JSON.stringify(COLUMNS.map((c) => c.name)), names.join(", "));
     const kinds = (await form.locator(".field-row .cds--list-box__field").allInnerTexts()).map((s) => s.trim());
     await t.check("a column's type is its field's: a checkbox for the boolean", kinds.includes("Checkbox") && kinds.includes("Number"), kinds.join("|"));
-    await t.check("the key is the primary key", (await dropdown(t, form, "Key").innerText()).includes("id"));
+    await t.check("the key is the primary key", (await dropdownOf(t, form, "Key").innerText()).includes("id"));
     await t.check("columns that aren't read are named", (await form.innerText()).includes("Not read: secret (bytea)"));
     await t.check("a field says which column it shows", (await form.innerText()).includes("Column city (text)"));
     await t.audit("new remote collection, table read");
@@ -267,7 +256,7 @@ test("remotes: edit — the source is fixed, columns read again or hidden, rows 
   await t.open(`/remotes/${id}/edit`);
   const form = pane(t).locator("form");
   await t.until("the editor shows the collection", async () => (await form.locator(".field-row").count()) === 4);
-  await t.check("the source cannot change any more", await dropdown(t, form, "Source").locator("button.cds--list-box__field").first().isDisabled());
+  await t.check("the source cannot change any more", await dropdownOf(t, form, "Source").locator("button.cds--list-box__field").first().isDisabled());
   await t.check("columns can be read again", (await form.getByRole("button", { name: "Read columns again" }).count()) === 1);
   await t.settle(300);
   await t.check("opening the editor reads nothing from the table", fake.describes === 0, String(fake.describes));
@@ -323,15 +312,15 @@ test("remotes: row actions — duplicate, delete asks first and leaves the sourc
   const before = fake.queries.length;
   const rowOf = (name) => (name === "Customers 2" ? pane(t).locator("tbody tr").filter({ hasText: "Customers 2" }) : pane(t).locator("tbody tr").filter({ hasNotText: "Customers 2" }));
   await rowOf("Customers 2").getByRole("button", { name: "Delete Customers 2 collection" }).click();
-  await t.until("Delete asks first", async () => (await modal(t).innerText().catch(() => "")).includes("Delete “Customers 2”?"));
-  await t.check("it says the source is not affected", (await modal(t).innerText()).includes("CRM is not affected"));
+  await t.until("Delete asks first", async () => (await shownModal(t).innerText().catch(() => "")).includes("Delete “Customers 2”?"));
+  await t.check("it says the source is not affected", (await shownModal(t).innerText()).includes("CRM is not affected"));
   await t.audit("delete remote collection dialog");
-  await modal(t).getByRole("button", { name: "Cancel" }).click();
-  await t.until("Cancel closes the dialog", async () => (await modal(t).count()) === 0);
+  await shownModal(t).getByRole("button", { name: "Cancel" }).click();
+  await t.until("Cancel closes the dialog", async () => (await shownModal(t).count()) === 0);
   await t.check("Cancel kept it", !!(await storedBy(t, "Customers 2")));
   await rowOf("Customers 2").getByRole("button", { name: "Delete Customers 2 collection" }).click();
-  await t.until("asked again", async () => (await modal(t).count()) === 1);
-  await modal(t).getByRole("button", { name: "Delete" }).click();
+  await t.until("asked again", async () => (await shownModal(t).count()) === 1);
+  await shownModal(t).getByRole("button", { name: "Delete" }).click();
   await t.until("Delete removes the collection", async () => (await pane(t).locator("tbody tr").count()) === 1 && !(await storedBy(t, "Customers 2")));
   await t.check("the first one stays and nothing was asked of the source", !!(await storedBy(t, "Customers")) && fake.queries.length === before);
   // Edit opens the remote editor.
@@ -430,8 +419,6 @@ test("remote block: loading every row shows its progress, can be cancelled and g
 // by the value (a day), so the app loads every row and groups them itself.
 const groupTitles = (t) => pane(t).locator(".block .table-group__title").allInnerTexts().then((l) => l.map((s) => s.trim()));
 const groupSizes = (t) => pane(t).locator(".block .cds--accordion__item").evaluateAll((els) => els.map((e) => e.querySelectorAll("tbody tr").length));
-const panelOf = (t) => t.page.locator(".toolbar-popover__panel:visible").last();
-
 test("remote block: grouped by a month loads every row, groups them in the app, partial when stopped, resumed", async (t) => {
   await t.boot();
   const fake = await fakeRemotes(t);
@@ -443,8 +430,8 @@ test("remote block: grouped by a month loads every row, groups them in the app, 
   await t.open(t.listPath(id));
   await t.until("the first page is in", async () => (await tableRows(t).count()) === 40);
   await t.openPanel(pane(t).locator(".block .section-header").first(), "Sort and group");
-  const groupBy = panelOf(t).getByLabel("Group by", { exact: true });
-  const by = panelOf(t).getByLabel("Group dates by", { exact: true });
+  const groupBy = toolbarPanel(t).getByLabel("Group by", { exact: true });
+  const by = toolbarPanel(t).getByLabel("Group dates by", { exact: true });
   await t.check("a remote collection's date column can be grouped", (await groupBy.locator("option").allInnerTexts()).includes("joined"));
   await t.check("no Group dates by before a date is grouped", (await by.count()) === 0);
   await groupBy.selectOption({ label: "joined" });
@@ -484,16 +471,16 @@ test("remote block: grouped by a month loads every row, groups them in the app, 
 
   // The order and the part of the groups are the app's: no new request.
   await t.openPanel(pane(t).locator(".block .section-header").first(), "Sort and group");
-  await panelOf(t).getByLabel("Group order", { exact: true }).selectOption({ label: "Descending" });
+  await toolbarPanel(t).getByLabel("Group order", { exact: true }).selectOption({ label: "Descending" });
   await t.until("descending: March first", async () => JSON.stringify(await groupTitles(t)) === JSON.stringify(["March 2026", "February 2026", "January 2026"]), JSON.stringify(await groupTitles(t)));
   await t.check("the rows were not loaded again", fake.queries.length === asked, `${fake.queries.length} vs ${asked}`);
-  await panelOf(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Year" });
+  await toolbarPanel(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Year" });
   await t.until("by year: one group of all 120", async () => JSON.stringify(await groupTitles(t)) === JSON.stringify(["2026"]) && JSON.stringify(await groupSizes(t)) === "[120]", JSON.stringify(await groupTitles(t)));
   await t.check("a year is grouped from the rows already in", fake.queries.length === asked, `${fake.queries.length} vs ${asked}`);
-  await panelOf(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Week" });
+  await toolbarPanel(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Week" });
   await t.until("by week: ISO weeks, the latest first (Week 13 to Week 1)", async () => { const l = await groupTitles(t); return (l[0] === "Week 13, 2026" && l.at(-1) === "Week 1, 2026") || JSON.stringify(l); });
-  await panelOf(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Month" });
-  await panelOf(t).getByLabel("Group order", { exact: true }).selectOption({ label: "Ascending" });
+  await toolbarPanel(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Month" });
+  await toolbarPanel(t).getByLabel("Group order", { exact: true }).selectOption({ label: "Ascending" });
   await t.closeAll();
 
   // Stored with the view; after a reload the rows come again and are grouped.
@@ -673,28 +660,28 @@ test("collections: delete asks first, says what goes, and removes the collection
   const ids = await t.seed(collectionsSpec());
   await t.open("/collections");
   await collectionRow(t, "Books").getByRole("button", { name: "Delete Books collection" }).click();
-  await t.until("Delete asks first", async () => (await modal(t).innerText().catch(() => "")).includes("Delete “Books”?"));
-  await t.check("it says how many items go", (await modal(t).innerText()).includes("its 3 Books"), await modal(t).innerText());
+  await t.until("Delete asks first", async () => (await shownModal(t).innerText().catch(() => "")).includes("Delete “Books”?"));
+  await t.check("it says how many items go", (await shownModal(t).innerText()).includes("its 3 Books"), await shownModal(t).innerText());
   await t.audit("delete collection dialog");
   await t.escapeCloses("Escape closes the delete dialog");
   await t.check("Escape kept the collection", !!(await storedBy(t, "Books")));
   await collectionRow(t, "Books").getByRole("button", { name: "Delete Books collection" }).click();
-  await modal(t).getByRole("button", { name: "Cancel" }).click();
-  await t.until("Cancel closes the dialog", async () => (await modal(t).count()) === 0);
+  await shownModal(t).getByRole("button", { name: "Cancel" }).click();
+  await t.until("Cancel closes the dialog", async () => (await shownModal(t).count()) === 0);
   await t.check("Cancel kept the collection and its items", !!(await storedBy(t, "Books")) && (await itemCountOf(t, ids.collections.books)) === 3);
   // A collection with one item says "1 Person"... and Delete removes it.
   await collectionRow(t, "Films").getByRole("button", { name: "Delete Films collection" }).click();
-  await t.until("asked for Films", async () => (await modal(t).innerText().catch(() => "")).includes("Delete “Films”?"));
-  await t.check("one item is counted in the singular, items of other spaces too", (await modal(t).innerText()).includes("its 1 Film"), await modal(t).innerText());
-  await modal(t).getByRole("button", { name: "Delete" }).click();
+  await t.until("asked for Films", async () => (await shownModal(t).innerText().catch(() => "")).includes("Delete “Films”?"));
+  await t.check("one item is counted in the singular, items of other spaces too", (await shownModal(t).innerText()).includes("its 1 Film"), await shownModal(t).innerText());
+  await shownModal(t).getByRole("button", { name: "Delete" }).click();
   await t.until("Delete removes it from the list", async () => !(await rowNames(t)).includes("Films"));
   await t.check("it is gone from the store, its items too", !(await storedBy(t, "Films")) && (await itemCountOf(t, ids.collections.films)) === 0);
   await collectionRow(t, "Books").getByRole("button", { name: "Delete Books collection" }).click();
-  await modal(t).getByRole("button", { name: "Delete" }).click();
+  await shownModal(t).getByRole("button", { name: "Delete" }).click();
   await t.until("Books is gone", async () => !(await rowNames(t)).includes("Books"));
   await t.until("and from the side nav", async () => !(await navNode(t, "collections").innerText()).includes("Books"));
   await collectionRow(t, "People").getByRole("button", { name: "Delete People collection" }).click();
-  await modal(t).getByRole("button", { name: "Delete" }).click();
+  await shownModal(t).getByRole("button", { name: "Delete" }).click();
   await t.until("deleting the last one leaves the empty state", async () => (await paneText(t)).includes("No collections yet"));
   await t.audit("collections, none left");
   await t.open("/collections");
@@ -754,23 +741,23 @@ for (const vp of ["desktop", "phone"]) {
     await t.audit("new collection, field names refused");
     // Fix them: a Number field and a Date, then the title is chosen.
     await rows(t).nth(1).getByRole("textbox", { name: "Field name" }).fill("Hours");
-    await choose(t, rows(t).nth(1), "Field type", "Number");
+    await pickOption(t, rows(t).nth(1), "Field type", "Number");
     await rows(t).nth(2).getByRole("textbox", { name: "Field name" }).fill("Since");
-    await choose(t, rows(t).nth(2), "Field type", "Date");
-    await dropdown(t, pane(t).locator("form"), "Title").locator(".cds--list-box__field").first().click();
+    await pickOption(t, rows(t).nth(2), "Field type", "Date");
+    await dropdownOf(t, pane(t).locator("form"), "Title").locator(".cds--list-box__field").first().click();
     await t.settle(100);
     const titles = await menuOptions(t);
     await t.check("the Title menu offers the first text field, text / number / date fields, and no title", JSON.stringify(titles) === JSON.stringify(["The first text field with a value", "Name", "Hours", "Since", "No title"]), titles.join(" | "));
     await t.audit("title menu open");
     await t.page.getByRole("option", { name: "Since", exact: true }).click();
-    await t.until("Since is the title", async () => (await dropdown(t, pane(t).locator("form"), "Title").innerText()).includes("Since"));
+    await t.until("Since is the title", async () => (await dropdownOf(t, pane(t).locator("form"), "Title").innerText()).includes("Since"));
     // Remove the third row and add it again to check Remove works before saving, without a dialog.
     await rows(t).nth(2).getByRole("button", { name: "Remove field" }).click();
     await t.until("a field not yet saved is removed at once", async () => (await rows(t).count()) === 2);
-    await t.until("the title falls back to the first text field", async () => (await dropdown(t, pane(t).locator("form"), "Title").innerText()).includes("The first text field with a value"));
+    await t.until("the title falls back to the first text field", async () => (await dropdownOf(t, pane(t).locator("form"), "Title").innerText()).includes("The first text field with a value"));
     await t.page.getByRole("button", { name: "Add field" }).click();
     await rows(t).nth(2).getByRole("textbox", { name: "Field name" }).fill("Since");
-    await choose(t, rows(t).nth(2), "Field type", "Date");
+    await pickOption(t, rows(t).nth(2), "Field type", "Date");
     // Spaces: chosen on a device with several.
     const spaces = pane(t).locator("form .cds--multi-select__wrapper");
     await t.check("Spaces starts as All spaces", (await spaces.innerText()).includes("All spaces"));
@@ -823,7 +810,7 @@ test("editor: an existing collection — rename, add, remove (asks first), title
   await t.settle();
   await t.check("a field named like another (any case) is refused", (await paneText(t)).includes("Duplicate field name") && (await onEditor(t)));
   await added.getByRole("textbox", { name: "Field name" }).fill("Rating");
-  await choose(t, added, "Field type", "Number");
+  await pickOption(t, added, "Field type", "Number");
   await save(t, "Save changes");
   await t.until("saved with the new field", async () => !(await onEditor(t)));
   c = await storedBy(t, "Books");
@@ -833,20 +820,20 @@ test("editor: an existing collection — rename, add, remove (asks first), title
   await rowNamed(t, "Rating").getByRole("button", { name: "Remove field" }).click();
   await t.until("the row is gone from the form", async () => (await rows(t).count()) === 4);
   await save(t, "Save changes");
-  await t.until("Save asks Remove fields?", async () => (await modal(t).innerText().catch(() => "")).includes("Remove fields?"));
-  await t.check("it names the field and what happens to its values", (await modal(t).innerText()).includes("“Rating”") && (await modal(t).innerText()).includes("will no longer be shown"), await modal(t).innerText());
+  await t.until("Save asks Remove fields?", async () => (await shownModal(t).innerText().catch(() => "")).includes("Remove fields?"));
+  await t.check("it names the field and what happens to its values", (await shownModal(t).innerText()).includes("“Rating”") && (await shownModal(t).innerText()).includes("will no longer be shown"), await shownModal(t).innerText());
   await t.audit("remove fields dialog");
-  await modal(t).getByRole("button", { name: "Cancel" }).click();
-  await t.until("Cancel closes the dialog", async () => (await modal(t).count()) === 0);
+  await shownModal(t).getByRole("button", { name: "Cancel" }).click();
+  await t.until("Cancel closes the dialog", async () => (await shownModal(t).count()) === 0);
   await t.check("still on the form, nothing removed from the store", (await onEditor(t)) && (await storedBy(t, "Books")).fields.some((f) => f.name === "Rating"));
   await save(t, "Save changes");
-  await t.until("asked again", async () => (await modal(t).count()) === 1);
-  await modal(t).getByRole("button", { name: "Remove and save" }).click();
+  await t.until("asked again", async () => (await shownModal(t).count()) === 1);
+  await shownModal(t).getByRole("button", { name: "Remove and save" }).click();
   await t.until("Remove and save stores it without the field", async () => !(await onEditor(t)) && !(await storedBy(t, "Books")).fields.some((f) => f.name === "Rating"));
   // The title: automatic, another field, no title.
   await t.go(`/collections/${books}/edit`);
   const form = pane(t).locator("form");
-  await dropdown(t, form, "Title").locator(".cds--list-box__field").first().click();
+  await dropdownOf(t, form, "Title").locator(".cds--list-box__field").first().click();
   await t.settle(100);
   const titles = await menuOptions(t);
   await t.check("the Title menu lists the text and number fields", JSON.stringify(titles) === JSON.stringify(["The first text field with a value", "Name of the book", "Pages", "No title"]), titles.join(" | "));
@@ -860,14 +847,14 @@ test("editor: an existing collection — rename, add, remove (asks first), title
   await t.go(dune);
   await t.check("an item is titled by the Pages field", (await itemTitle()) === "412", await itemTitle());
   await t.go(`/collections/${books}/edit`);
-  await choose(t, form, "Title", "No title");
+  await pickOption(t, form, "Title", "No title");
   await save(t, "Save changes");
   await t.until("saved with no title", async () => !(await onEditor(t)) && (await storedBy(t, "Books")).titleField === "none");
   await t.go(dune);
   await t.check("without a title an item is called by the collection's name", (await itemTitle()) === "Book", await itemTitle());
   await t.audit("an item without a title");
   await t.go(`/collections/${books}/edit`);
-  await choose(t, form, "Title", "The first text field with a value");
+  await pickOption(t, form, "Title", "The first text field with a value");
   await save(t, "Save changes");
   await t.until("back to automatic", async () => !(await onEditor(t)) && (await storedBy(t, "Books")).titleField === null);
   // Spaces: Work only, so Books moves to Not in this space.
@@ -903,7 +890,7 @@ test("editor: a remote collection's fields — a column's type, hiding, componen
   const typeOf = (name) => rowNamed(t, name).locator("button.cds--list-box__field").first();
   await t.check("a number column's type is fixed", await typeOf("id").isDisabled());
   await t.check("a text column's type can be Markdown or HTML", !(await typeOf("name").isDisabled()));
-  await choose(t, rowNamed(t, "name"), "Field type", "Markdown");
+  await pickOption(t, rowNamed(t, "name"), "Field type", "Markdown");
   // Own fields are component fields.
   await t.page.getByRole("button", { name: "Add field" }).click();
   const added = rows(t).last();

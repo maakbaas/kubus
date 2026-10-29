@@ -6,8 +6,6 @@
 
 const WS_KEY = "kubus.workspace.default";
 const SERVER = "https://sync.test";
-const modalOf = (t) => t.page.locator(".cds--modal.is-visible");
-
 /** The stored layout: the root's direction and the panes' tab paths, in order. */
 async function storedLayout(t) {
   return t.page.evaluate((key) => {
@@ -62,7 +60,7 @@ async function fakeServer(t) {
 async function connected(t, fake) {
   await t.page.evaluate((c) => localStorage.setItem("kubus.sync", JSON.stringify(c)), { url: SERVER, token: "secret-token", enabled: true, originals: "always" });
   await t.open("/settings?section=sync");
-  const modal = modalOf(t);
+  const modal = shownModal(t);
   await t.until("the first connection asks", async () => (await modal.innerText().catch(() => "")).includes("Connect to this server?") || (await t.page.getByRole("button", { name: "Up to date" }).count()) > 0, { timeout: 10000 }).catch(() => {});
   if (await modal.count()) await modal.getByRole("button", { name: "Connect" }).click();
   await t.until("this device's data reaches the server", () => fake.requests.some((r) => (r.tables.items || 0) > 0), { timeout: 15000 });
@@ -118,14 +116,14 @@ for (const scenario of ["another database", "an empty server"]) {
     if (!empty) {
       // Replacing this device's data asks first; Cancel keeps everything and the pause.
       await connect.click();
-      await t.until("it asks before replacing", async () => (await modalOf(t).innerText().catch(() => "")).includes("Replace this device's data?"));
+      await t.until("it asks before replacing", async () => (await shownModal(t).innerText().catch(() => "")).includes("Replace this device's data?"));
       await t.audit("Replace this device's data? dialog");
-      await modalOf(t).getByRole("button", { name: "Cancel" }).click();
+      await shownModal(t).getByRole("button", { name: "Cancel" }).click();
       await t.until("Cancel closes it", async () => (await t.count(".cds--modal.is-visible")) === 0);
       await t.check("…and nothing changed: still paused, same items", (await pane.innerText()).includes("The server's database was wiped or replaced") && (await itemCount(t)) === before);
       await connect.click();
-      await t.until("asked again", async () => (await modalOf(t).count()) === 1);
-      await modalOf(t).getByRole("button", { name: "Replace" }).click();
+      await t.until("asked again", async () => (await shownModal(t).count()) === 1);
+      await shownModal(t).getByRole("button", { name: "Replace" }).click();
     } else {
       await connect.click();
     }

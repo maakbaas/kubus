@@ -4,7 +4,7 @@ name: Test
 # (`tests/run.mjs` fails a suite over its budget), so a push is judged in about the longest of them:
 # - typecheck: the app, the server and the server's tests;
 # - unit: the vitest projects that need nothing (domain, storage, sync, api, app);
-# - server: the connectors' and the server's vitest projects against Postgres, MySQL 8 and MariaDB;
+# - server: the nodesqlite, connectors and server vitest projects against Postgres, MySQL 8 and MariaDB;
 # - gui-smoke: the GUI suite's smoke tests of the suites this branch's changes reach (gui-tests/areas.mjs),
 #   all of them on main; not the screenshot baselines (machine-dependent).
 # The slow part stays out of the way: full.yml has the connectors' real services (n8n alone takes 1 to 2

@@ -101,7 +101,7 @@ const SHARDS = [["01", "25"], ["02", "19"], ["03", "22", "28"], ["04", "27"], ["
 const LOCAL_ONLY = ["21", "23"];
 const listed = new Set([...SHARDS.flat(), ...LOCAL_ONLY]);
 const shards = SHARDS.map((g) => g.filter((n) => guiNumbers.includes(n))).filter((g) => g.length);
-shards.push(guiNumbers.filter((n) => !listed.has(n))); // the rest: 28 and whatever is new
+shards.push(guiNumbers.filter((n) => !listed.has(n))); // the rest: whatever is new
 const shardRegex = (g) => `^(${g.join("|")})-`;
 shards.forEach((g, i) => {
   if (!g.length) return;

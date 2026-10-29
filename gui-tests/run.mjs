@@ -110,7 +110,7 @@ const tmpDir = join(reportDir, "tmp");
 // address); broken images are caught by the audit's broken-image rule instead.
 const IGNORE_CONSOLE = ["Download the React DevTools", "\\[vite\\]", "Failed to load resource"];
 
-const lib = ["harness.js", "data.js", "crawl.js", "matrix.js", "audit.js", "design.js"].map((f) => readFileSync(join(here, "lib", f), "utf8")).join("\n\n");
+const lib = ["harness.js", "data.js", "crawl.js", "matrix.js", "locators.js", "audit.js", "design.js"].map((f) => readFileSync(join(here, "lib", f), "utf8")).join("\n\n");
 const suiteFiles = readdirSync(join(here, "suites")).filter((f) => f.endsWith(".js") && (!suiteFilter || new RegExp(suiteFilter, "i").test(f))).sort();
 
 // ---- discover tests (the suites register them at load; nothing runs) ----------------------

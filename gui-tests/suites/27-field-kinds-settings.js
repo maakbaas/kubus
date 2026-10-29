@@ -15,22 +15,9 @@ const ICON_KEY = { Checkbox: null, Heart: "heart", Star: "star", Flag: "flag", B
 /** What a component field's Output offers (value → text), in order. */
 const OUTPUTS = { markdown: "Markdown", string: "Text", number: "Number", image: "Image (URL)", html: "HTML" };
 
-/** A Carbon dropdown inside `scope`, by its title. */
-const dropdown = (t, scope, title) => scope.locator(".cds--dropdown__wrapper").filter({ has: t.page.locator(".cds--label", { hasText: new RegExp(`^${title}$`) }) }).first();
-
-/** The options of the open menu, as texts. */
-const menuOptions = async (t) => (await t.page.getByRole("option").filter({ visible: true }).allInnerTexts()).map((s) => s.trim());
-
-/** Opens a dropdown, picks an option by its text. */
-async function choose(t, scope, title, option) {
-  await dropdown(t, scope, title).locator(".cds--list-box__field").first().click();
-  await t.settle(80);
-  await t.page.getByRole("option", { name: option, exact: true }).filter({ visible: true }).first().click();
-  await t.settle(80);
-}
 
 /** What a dropdown shows as chosen. */
-const chosen = async (t, scope, title) => (await dropdown(t, scope, title).locator(".cds--list-box__field").first().innerText()).trim();
+const chosen = async (t, scope, title) => (await dropdownOf(t, scope, title).locator(".cds--list-box__field").first().innerText()).trim();
 
 /** One side of the Value switch inside `scope`: "Code" or "AI prompt". */
 const valueTab = (scope, side) => scope.locator(".cds--content-switcher button").filter({ hasText: new RegExp(`^${side}$`) });
@@ -47,7 +34,7 @@ async function addRow(t, name, type) {
   await t.settle(80);
   const row = rows(t).last();
   await row.getByRole("textbox", { name: "Field name" }).fill(name);
-  if (type !== "String") await choose(t, row, "Field type", type);
+  if (type !== "String") await pickOption(t, row, "Field type", type);
   return row;
 }
 
@@ -106,11 +93,11 @@ async function openFieldDialog(t, collectionId) {
 async function settingsOf(t, scope) {
   const text = await scope.innerText();
   return {
-    refersTo: (await dropdown(t, scope, "Refers to").count()) > 0,
-    icon: (await dropdown(t, scope, "Icon").count()) > 0,
+    refersTo: (await dropdownOf(t, scope, "Refers to").count()) > 0,
+    icon: (await dropdownOf(t, scope, "Icon").count()) > 0,
     strike: /Strike through/.test(text),
     askAi: (await scope.locator(".cds--content-switcher").count()) > 0,
-    component: (await dropdown(t, scope, "Component").count()) > 0,
+    component: (await dropdownOf(t, scope, "Component").count()) > 0,
     code: (await scope.getByRole("textbox", { name: "Code" }).count()) > 0,
   };
 }
@@ -131,7 +118,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.open("/collections/new");
     const row = rows(t).first();
     await row.getByRole("textbox", { name: "Field name" }).fill("Probe");
-    await dropdown(t, row, "Field type").locator(".cds--list-box__field").first().click();
+    await dropdownOf(t, row, "Field type").locator(".cds--list-box__field").first().click();
     await t.settle(100);
     const options = await menuOptions(t);
     await t.check("the menu offers the 13 types, AI not among them", JSON.stringify(options) === JSON.stringify(KINDS), options.join(" | "));
@@ -141,7 +128,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.check("a new field is a String", (await chosen(t, row, "Field type")) === "String");
     await t.check("a String has no settings", JSON.stringify(await settingsOf(t, row)) === JSON.stringify(NONE) && (await row.locator(".field-row__settings").count()) === 0);
     for (const type of KINDS) {
-      await choose(t, row, "Field type", type);
+      await pickOption(t, row, "Field type", type);
       await t.check(`${type}: chosen`, (await chosen(t, row, "Field type")) === type, await chosen(t, row, "Field type"));
       const got = await settingsOf(t, row);
       const want = SETTINGS[type] ?? NONE;
@@ -151,7 +138,7 @@ for (const vp of ["desktop", "phone"]) {
       if (SETTINGS[type]) await t.audit(`settings of ${type}`);
     }
     // The chosen type is what gets stored.
-    await choose(t, row, "Field type", "Number");
+    await pickOption(t, row, "Field type", "Number");
     await t.page.getByRole("textbox", { name: "Name", exact: true }).first().fill("Gizmos");
     await saveEditor(t, "Create collection");
     const c = await stored(t, "Gizmo");
@@ -164,7 +151,7 @@ test("field dialog: the same kinds, the same settings", async (t) => {
   const ids = await t.seed(profileSpec("typical", { items: 3 }));
   const modal = await openFieldDialog(t, ids.collections.books);
   await modal.getByRole("textbox", { name: "Name" }).fill("Probe");
-  await dropdown(t, modal, "Field type").locator(".cds--list-box__field").first().click();
+  await dropdownOf(t, modal, "Field type").locator(".cds--list-box__field").first().click();
   await t.settle(100);
   const options = await menuOptions(t);
   await t.check("the dialog offers the same 13 types", JSON.stringify(options) === JSON.stringify(KINDS), options.join(" | "));
@@ -173,7 +160,7 @@ test("field dialog: the same kinds, the same settings", async (t) => {
   await t.settle(100);
   await t.check("Escape closed the menu, not the dialog", (await modal.count()) === 1);
   for (const type of KINDS) {
-    await choose(t, modal, "Field type", type);
+    await pickOption(t, modal, "Field type", type);
     const got = await settingsOf(t, modal);
     const want = SETTINGS[type] ?? NONE;
     await t.check(`${type}: settings in the dialog`, JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
@@ -192,13 +179,13 @@ for (const vp of ["desktop"]) {
     // The first row (a String called Name) stays; one field of each other type follows.
     for (const type of KINDS.slice(1)) {
       const row = await addRow(t, `F ${type}`, type);
-      if (type === "Item") await choose(t, row, "Refers to", "Authors");
-      if (type === "List of items") await choose(t, row, "Refers to", "Gadgets (itself)");
+      if (type === "Item") await pickOption(t, row, "Refers to", "Authors");
+      if (type === "List of items") await pickOption(t, row, "Refers to", "Gadgets (itself)");
       if (type === "Checkbox") {
-        await choose(t, row, "Icon", "Heart");
+        await pickOption(t, row, "Icon", "Heart");
         await row.getByText("Strike through the item when checked").click();
       }
-      if (type === "Checklist") await choose(t, row, "Icon", "Flag");
+      if (type === "Checklist") await pickOption(t, row, "Icon", "Flag");
       if (type === "Component") await row.getByRole("textbox", { name: "Code" }).fill("{{ $item.Name }}!");
     }
     // …and a field asking AI.
@@ -227,7 +214,7 @@ for (const vp of ["desktop"]) {
     const rowOf = (name) => all.filter({ has: t.page.locator(`input[value="${name}"]`) });
     await t.check("types can't be changed any more", (await rowOf("F Number").locator(".cds--dropdown").first().getAttribute("class")).includes("cds--dropdown--disabled") || (await rowOf("F Number").locator(".cds--list-box__field").first().isDisabled()));
     await t.check("Item shows its collection", (await chosen(t, rowOf("F Item"), "Refers to")).includes("Authors"));
-    await t.check("and can't be changed", await dropdown(t, rowOf("F Item"), "Refers to").locator(".cds--list-box__field").first().isDisabled());
+    await t.check("and can't be changed", await dropdownOf(t, rowOf("F Item"), "Refers to").locator(".cds--list-box__field").first().isDisabled());
     await t.check("List of items shows the collection itself", (await chosen(t, rowOf("F List of items"), "Refers to")).includes("Gadgets"));
     await t.check("checkbox shows Heart and Strike through ticked", (await chosen(t, rowOf("F Checkbox"), "Icon")) === "Heart" && (await rowOf("F Checkbox").getByRole("checkbox", { name: /Strike through/ }).isChecked()));
     await t.check("checklist shows Flag, strike through off", (await chosen(t, rowOf("F Checklist"), "Icon")) === "Flag" && !(await rowOf("F Checklist").getByRole("checkbox", { name: /Strike through/ }).isChecked()));
@@ -252,7 +239,7 @@ test("Refers to: required, offers collections, choices, fixed once saved", async
   for (const type of ["Item", "List of items"]) {
     const row = await addRow(t, `To ${type}`, type);
     await t.check(`${type}: nothing chosen yet`, (await chosen(t, row, "Refers to")) === "Choose…", await chosen(t, row, "Refers to"));
-    await dropdown(t, row, "Refers to").locator(".cds--list-box__field").first().click();
+    await dropdownOf(t, row, "Refers to").locator(".cds--list-box__field").first().click();
     await t.settle(100);
     const options = await menuOptions(t);
     await t.check(`${type}: offers every collection and itself`, JSON.stringify(options) === JSON.stringify(["Authors", "Books", "Reviews (itself)"]), options.join(" | "));
@@ -266,14 +253,14 @@ test("Refers to: required, offers collections, choices, fixed once saved", async
   await t.check("nothing was stored", (await stored(t, "Review")) === null);
   await t.audit("references without a collection");
   const first = rows(t).nth(1);
-  await choose(t, first, "Refers to", "Authors");
+  await pickOption(t, first, "Refers to", "Authors");
   await t.check("the problem goes with the choice", (await first.innerText()).includes("Choose a collection") === false);
   // Authors have a choice filter editor ("Choices"): only items matching are offered.
   await t.check("a reference shows its Choices", (await first.innerText()).includes("Choices") && (await first.innerText()).includes("Any Author can be chosen."));
   await first.getByRole("button", { name: /Add filter/ }).first().click();
   await t.settle(150);
   await t.audit("a reference with a choice filter row", { shotOnFail: true });
-  await choose(t, rows(t).nth(2), "Refers to", "Books");
+  await pickOption(t, rows(t).nth(2), "Refers to", "Books");
   await t.page.getByRole("button", { name: "Create collection" }).click();
   await t.until("saved", async () => !(await onForm(t)));
   const c = await stored(t, "Review");
@@ -281,8 +268,8 @@ test("Refers to: required, offers collections, choices, fixed once saved", async
   // A saved field's collection is fixed; its kind too.
   await t.open(`/collections/${ids.collections.books}/edit`);
   const by = rows(t).filter({ has: t.page.locator('input[value="By"]') });
-  await t.check("Refers to is fixed once saved", await dropdown(t, by, "Refers to").locator(".cds--list-box__field").first().isDisabled());
-  await t.check("and so is the type", await dropdown(t, by, "Field type").locator(".cds--list-box__field").first().isDisabled());
+  await t.check("Refers to is fixed once saved", await dropdownOf(t, by, "Refers to").locator(".cds--list-box__field").first().isDisabled());
+  await t.check("and so is the type", await dropdownOf(t, by, "Field type").locator(".cds--list-box__field").first().isDisabled());
   await t.audit("saved reference fields");
 }, { viewport: "desktop" });
 
@@ -294,7 +281,7 @@ for (const kind of ["Checkbox", "Checklist"]) {
     const ids = await t.seed(spec);
     await t.open(`/collections/${ids.collections.t}/edit`);
     const first = rows(t).nth(1);
-    await dropdown(t, first, "Icon").locator(".cds--list-box__field").first().click();
+    await dropdownOf(t, first, "Icon").locator(".cds--list-box__field").first().click();
     await t.settle(100);
     const options = await menuOptions(t);
     await t.check("the Icon menu lists the box and ten icons", JSON.stringify(options) === JSON.stringify(ICONS), options.join(" | "));
@@ -304,7 +291,7 @@ for (const kind of ["Checkbox", "Checklist"]) {
     await t.settle(80);
     for (const [i, icon] of ICONS.entries()) {
       const row = rows(t).nth(i + 1);
-      await choose(t, row, "Icon", icon);
+      await pickOption(t, row, "Icon", icon);
       await t.check(`${icon}: shown as chosen`, (await chosen(t, row, "Icon")) === icon, await chosen(t, row, "Icon"));
     }
     await t.audit(`${kind}: every icon chosen`);
@@ -412,7 +399,7 @@ test("Component field: local code, every Output, a shared one, problems", async 
   }
   // A shared component instead of local code.
   const shared = await addRow(t, "Shared", "Component");
-  await dropdown(t, shared, "Component").locator(".cds--list-box__field").first().click();
+  await dropdownOf(t, shared, "Component").locator(".cds--list-box__field").first().click();
   await t.settle(100);
   const choices = await menuOptions(t);
   await t.check("Component offers Local and the shared field components", choices[0] === "Local" && choices.some((c) => c.startsWith("Double")), choices.join(" | "));
@@ -452,7 +439,7 @@ test("AI field: Value AI prompt, prompt, output; fixed once saved", async (t) =>
   await row.locator("select").first().selectOption({ label: "Number" });
   await row.getByRole("textbox", { name: "Prompt" }).fill("How many letters are in {{ $item.Name }}? Only the number.");
   // The shared AI components are offered, plain ones are not.
-  await dropdown(t, row, "Prompt").locator(".cds--list-box__field").first().click();
+  await dropdownOf(t, row, "Prompt").locator(".cds--list-box__field").first().click();
   await t.settle(100);
   const choices = await menuOptions(t);
   await t.check("only AI components are offered", choices.some((c) => c.startsWith("Short summary")) && !choices.some((c) => c.startsWith("Double")), choices.join(" | "));
@@ -529,12 +516,12 @@ for (const vp of ["desktop", "phone"]) {
     await t.settle(150);
     await t.check("a name of another field (any case) is refused", (await modal.innerText()).includes("Another field has this name"));
     await modal.getByRole("textbox", { name: "Name" }).fill("Series");
-    await choose(t, modal, "Field type", "Item");
+    await pickOption(t, modal, "Field type", "Item");
     await add.click();
     await t.settle(150);
     await t.check("a reference without a collection is refused", (await modal.innerText()).includes("Choose a collection"));
     await t.audit("field dialog with a reference problem");
-    await choose(t, modal, "Refers to", "Authors");
+    await pickOption(t, modal, "Refers to", "Authors");
     await t.check("the problem goes", !(await modal.innerText()).includes("Choose a collection"));
     // The collection is told: adding asks first; No leaves it as it was.
     await add.click();
@@ -567,21 +554,21 @@ test("a type changed before saving starts afresh; a saved field's type is fixed"
   await t.open("/collections/new");
   await t.page.getByRole("textbox", { name: "Name", exact: true }).first().fill("Drafts");
   const row = await addRow(t, "Shape", "Item");
-  await choose(t, row, "Refers to", "Authors");
+  await pickOption(t, row, "Refers to", "Authors");
   await t.check("Item with Authors", (await chosen(t, row, "Refers to")).includes("Authors"));
-  await choose(t, row, "Field type", "Checkbox");
-  await choose(t, row, "Icon", "Star");
+  await pickOption(t, row, "Field type", "Checkbox");
+  await pickOption(t, row, "Icon", "Star");
   await row.getByText("Strike through the item when checked").click();
   await t.check("the reference settings are gone, the checkbox's shown", !(await settingsOf(t, row)).refersTo && (await chosen(t, row, "Icon")) === "Star");
-  await choose(t, row, "Field type", "Item");
+  await pickOption(t, row, "Field type", "Item");
   await t.check("back to Item: no collection chosen again", (await chosen(t, row, "Refers to")) === "Choose…", await chosen(t, row, "Refers to"));
-  await choose(t, row, "Field type", "Component");
+  await pickOption(t, row, "Field type", "Component");
   await row.getByRole("textbox", { name: "Code" }).fill("{{ $item.Shape }}");
-  await choose(t, row, "Field type", "Checklist");
+  await pickOption(t, row, "Field type", "Checklist");
   await t.check("a checklist starts with the box, no strike through", (await chosen(t, row, "Icon")) === "Checkbox" && !(await row.getByRole("checkbox", { name: /Strike through/ }).isChecked()));
-  await choose(t, row, "Field type", "Component");
+  await pickOption(t, row, "Field type", "Component");
   await t.check("a component starts with empty code", (await row.getByRole("textbox", { name: "Code" }).inputValue()) === "");
-  await choose(t, row, "Field type", "Date");
+  await pickOption(t, row, "Field type", "Date");
   await t.audit("a field changed to Date");
   await saveEditor(t, "Create collection");
   const f = storedField(await stored(t, "Draft"), "Shape");
@@ -589,11 +576,11 @@ test("a type changed before saving starts afresh; a saved field's type is fixed"
   // Saved: the type can't change; a field added now still can.
   await t.open(`/collections/${(await stored(t, "Draft")).id}/edit`);
   const saved = rows(t).filter({ has: t.page.locator('input[value="Shape"]') });
-  await t.check("a saved field's type is disabled", await dropdown(t, saved, "Field type").locator(".cds--list-box__field").first().isDisabled());
+  await t.check("a saved field's type is disabled", await dropdownOf(t, saved, "Field type").locator(".cds--list-box__field").first().isDisabled());
   await t.check("the editor says so", (await t.page.locator(".ws-pane--active .form-page").innerText()).includes("A field's type cannot change once saved."));
   const fresh = await addRow(t, "Fresh", "Number");
-  await t.check("a new field's type can be chosen", !(await dropdown(t, fresh, "Field type").locator(".cds--list-box__field").first().isDisabled()));
-  await choose(t, fresh, "Field type", "Markdown");
+  await t.check("a new field's type can be chosen", !(await dropdownOf(t, fresh, "Field type").locator(".cds--list-box__field").first().isDisabled()));
+  await pickOption(t, fresh, "Field type", "Markdown");
   await t.check("and changed", (await chosen(t, fresh, "Field type")) === "Markdown");
 }, { viewport: "desktop" });
 
@@ -695,7 +682,7 @@ test("Title: the editor's choices, stored, and what each makes of an item's titl
   // The editor's Title menu: automatic, the text, number and date fields, none.
   await t.open(`/collections/${ids.collections.t}/edit`);
   await t.check("the editor starts on the automatic choice", (await chosen(t, t.page.locator(".ws-pane--active"), "Title")) === "The first text field with a value", await chosen(t, t.page.locator(".ws-pane--active"), "Title"));
-  await dropdown(t, t.page.locator(".ws-pane--active"), "Title").locator(".cds--list-box__field").first().click();
+  await dropdownOf(t, t.page.locator(".ws-pane--active"), "Title").locator(".cds--list-box__field").first().click();
   await t.settle(100);
   const options = await menuOptions(t);
   await t.check("it offers automatic, the string, number and date fields (not Markdown), and none", JSON.stringify(options) === JSON.stringify(["The first text field with a value", "Name", "Alias", "Age", "Born", "No title"]), options.join(" | "));
@@ -704,7 +691,7 @@ test("Title: the editor's choices, stored, and what each makes of an item's titl
   await t.settle(80);
   const setTitle = async (option) => {
     await t.open(`/collections/${ids.collections.t}/edit`);
-    await choose(t, t.page.locator(".ws-pane--active"), "Title", option);
+    await pickOption(t, t.page.locator(".ws-pane--active"), "Title", option);
     await saveEditor(t);
   };
   await setTitle("Alias");
