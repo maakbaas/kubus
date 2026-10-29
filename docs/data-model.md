@@ -28,7 +28,7 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   (`repo.sync`) lives behind it, so the UI knows nothing about it.
 - **Change feed.** After every committed write the repository emits a `DataChange`
   (`spaces`, `collections`, `items` of a collection / item, `views` of a collection, `components`,
-  `bookmarks`) via `repo.subscribe`. Anything that
+  `bookmarks`, `dashboards`, `dashboardViews` of a dashboard) via `repo.subscribe`. Anything that
   shows data refreshes through `useDataChanges` (app/src/app/useDataChanges.ts) rather than relying
   on whoever made the edit: item lists, item pages, reference labels, counts and the store's
   collections all do. Sync emits the same changes for data arriving from the server.
@@ -56,6 +56,12 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 - Tables: `spaces`, `collections`, `fields`, `items`, `field_values` (EAV with typed columns
   `value_text | value_number | value_date | value_datetime | value_bool | value_ref | value_json`),
   `meta` (holds `replica_id`).
+- Dashboards (`domain/dashboards.ts`): `dashboards` (name, icon, description, `space_ids` like a collection's) and their tabs
+  `dashboard_views` (per space, `space_id`, a config as a collection view's, the starred tab per dashboard and space). A space the
+  dashboard is shown in without tabs of its own shows copies of the tabs of the space holding its oldest tab (`dashboardViewsIn`: worked
+  out, not stored, so it holds after that space is deleted), stored there all at once (`Repository.storeDashboardViews`) before one
+  changes. `deleteSpace` deletes that space's tabs, `deleteDashboard` its tabs and their bookmarks. A bookmark of a tab has kind
+  `dashboard`, `dashboard_id` and no `collection_id`.
 - Images live in `files` (content-addressed: id = SHA-256, immutable; the bytes in the local-only,
   nullable BLOB `data`: NULL until downloaded from the server) and are referenced from
   `field_values.value_file` (no foreign key: a file's row can arrive after its use) or from markdown

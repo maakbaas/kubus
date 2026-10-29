@@ -4,7 +4,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { device } from "../../test/fakeServer";
 import { collectionDraft, itemLabel, newId, NO_TITLE, type Collection, type FieldDef, type FieldKind } from "../../domain/model";
-import type { CollectionView } from "../../domain/views";
+import { NOTHING_COLLAPSED, type CollectionView } from "../../domain/views";
+import { isVirtualTab, type DashboardView } from "../../domain/dashboards";
 import type { DataChange } from "../repository";
 
 type Repo = Awaited<ReturnType<typeof device>>;
@@ -258,6 +259,95 @@ describe("bookmarks", () => {
     expect((await repo.listBookmarks("default")).map((x) => [x.targetId, x.label])).toEqual([[a, "A2"], [b, "B"]]);
     await repo.removeBookmark(a, "default");
     expect((await repo.listBookmarks("default")).map((x) => x.targetId)).toEqual([b]);
+  });
+});
+
+describe("dashboards", () => {
+  const dashboard = (id: string, name: string, spaceIds: string[] | null = null) => ({ id, name, icon: null, description: "", spaceIds });
+  const tabOf = (dashboardId: string, spaceId: string, name: string, over: Partial<DashboardView> = {}): DashboardView => {
+    const ts = new Date().toISOString();
+    return { id: newId(), dashboardId, spaceId, name, filters: [], blocks: [], editable: true, collapsed: NOTHING_COLLAPSED, position: 1, isDefault: false, createdAt: ts, updatedAt: ts, ...over };
+  };
+
+  it("are made with a first tab in their space, listed in their order, changed in place", async () => {
+    await repo.saveDashboard(dashboard("d1", "Home", ["default"]), "default");
+    await repo.saveDashboard(dashboard("d2", "Work"), "default");
+    await repo.saveDashboard({ ...dashboard("d1", "Start", ["default", "work"]), icon: "Dashboard", description: "Mine" }, "work");
+    expect((await repo.listDashboards()).map((d) => [d.id, d.name, d.icon, d.description, d.spaceIds, d.position])).toEqual([
+      ["d1", "Start", "Dashboard", "Mine", ["default", "work"], 0],
+      ["d2", "Work", null, "", null, 1],
+    ]);
+    // Only the first save made a tab, in the space it was made in.
+    const tabs = await repo.listAllDashboardViews();
+    expect(tabs.map((v) => [v.dashboardId, v.spaceId, v.name, v.blocks.length, v.editable])).toEqual([["d1", "default", "Dashboard", 0, true], ["d2", "default", "Dashboard", 0, true]]);
+    expect(changes).toContainEqual({ scope: "dashboardViews", dashboardId: "d1" });
+    expect(changes).toContainEqual({ scope: "dashboards" });
+  });
+
+  it("have tabs per space: a space without its own shows copies, stored all at once", async () => {
+    const book = await collection("Book", [field("Title")]);
+    await repo.saveDashboard(dashboard("d", "Home"), "default");
+    const [first] = await repo.listDashboardViews("d", "default");
+    const block = { id: "b1", title: "", kind: "table", filters: null, sort: [], groupBy: null, layout: { fields: null, editable: true, hiddenLabels: [], hideEmpty: false }, collectionId: book.id, options: null };
+    const second = tabOf("d", "default", "Books", { blocks: [block], filterBar: true, filters: [{ id: "r", fieldId: "$date", operator: "between", value: "day-6..day+0" }] });
+    await repo.saveDashboardView(second);
+    await repo.setDefaultDashboardView("d", "default", second.id);
+    const copies = await repo.listDashboardViews("d", "work");
+    expect(copies.map((v) => [v.name, v.spaceId, v.virtual, v.isDefault, isVirtualTab(v.id)])).toEqual([["Dashboard", "work", true, false, true], ["Books", "work", true, true, true]]);
+    expect(copies[1]).toMatchObject({ blocks: [block], filterBar: true, filters: second.filters });
+    await expect(repo.saveDashboardView(copies[1])).rejects.toThrow(/stored in this space first/);
+    const ids = await repo.storeDashboardViews("d", "work");
+    expect(ids.size).toBe(2);
+    const stored = await repo.listDashboardViews("d", "work");
+    expect(stored.map((v) => [v.id, v.name, v.virtual, v.isDefault])).toEqual([[ids.get(copies[0].id), "Dashboard", undefined, false], [ids.get(copies[1].id), "Books", undefined, true]]);
+    expect(await repo.storeDashboardViews("d", "work")).toEqual(new Map());
+    // Starred and changed per space.
+    await repo.setDefaultDashboardView("d", "work", stored[0].id);
+    await repo.saveDashboardView({ ...stored[0], name: "Work board" });
+    expect((await repo.listDashboardViews("d", "work")).map((v) => [v.name, v.isDefault])).toEqual([["Work board", true], ["Books", false]]);
+    expect((await repo.listDashboardViews("d", "default")).map((v) => [v.name, v.isDefault])).toEqual([["Dashboard", false], ["Books", true]]);
+    await repo.deleteDashboardView(first.id);
+    expect((await repo.listDashboardViews("d", "default")).map((v) => v.name)).toEqual(["Books"]);
+    expect((await repo.listAllDashboardViews()).some((v) => v.id === first.id)).toBe(false);
+  });
+
+  it("are deleted with their tabs and their bookmarks; a deleted tab's bookmark isn't listed", async () => {
+    const book = await collection("Book", [field("Title")]);
+    const item = await repo.createItem(book, {}, "default");
+    await repo.saveDashboard(dashboard("d", "Home"), "default");
+    await repo.saveDashboard(dashboard("e", "Other"), "default");
+    const [tab] = await repo.listDashboardViews("d", "default");
+    const extra = tabOf("d", "default", "Extra");
+    await repo.saveDashboardView(extra);
+    const [other] = await repo.listDashboardViews("e", "default");
+    await repo.addBookmark("dashboard", "d", tab.id, "Home / Dashboard", "default");
+    await repo.addBookmark("dashboard", "d", extra.id, "Home / Extra", "default");
+    await repo.addBookmark("item", book.id, item, "Item", "default");
+    await repo.addBookmark("dashboard", "e", other.id, "Other", "default");
+    const marks = await repo.listBookmarks("default");
+    expect(marks.map((b) => [b.kind, b.collectionId, b.dashboardId, b.label])).toEqual([
+      ["dashboard", null, "d", "Home / Dashboard"], ["dashboard", null, "d", "Home / Extra"], ["item", book.id, undefined, "Item"], ["dashboard", null, "e", "Other"],
+    ]);
+    await repo.deleteDashboardView(extra.id);
+    expect((await repo.listBookmarks("default")).map((b) => b.label)).toEqual(["Home / Dashboard", "Item", "Other"]);
+    changes = [];
+    await repo.deleteDashboard("d");
+    expect(changes).toEqual([{ scope: "dashboards" }, { scope: "dashboardViews", dashboardId: "d" }, { scope: "bookmarks" }]);
+    expect((await repo.listDashboards()).map((d) => d.id)).toEqual(["e"]);
+    expect((await repo.listAllDashboardViews()).map((v) => v.dashboardId)).toEqual(["e"]);
+    expect((await repo.listBookmarks("default")).map((b) => b.label)).toEqual(["Item", "Other"]);
+  });
+
+  it("lose a deleted space's tabs, which then shows nothing of its own", async () => {
+    await repo.saveSpace({ id: "work", name: "Work", icon: null });
+    await repo.saveDashboard(dashboard("d", "Home"), "work");
+    await repo.saveDashboardView(tabOf("d", "default", "Here"));
+    changes = [];
+    await repo.deleteSpace("work");
+    expect(changes).toContainEqual({ scope: "dashboardViews", dashboardId: "d" });
+    expect((await repo.listAllDashboardViews()).map((v) => [v.spaceId, v.name])).toEqual([["default", "Here"]]);
+    // The dashboard stays (like a collection), its other spaces' tabs too.
+    expect((await repo.listDashboards()).map((d) => d.id)).toEqual(["d"]);
   });
 });
 

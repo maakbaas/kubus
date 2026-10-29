@@ -52,6 +52,7 @@ describe("bookmarks", () => {
   it("lead to a view of the collection or to the item", () => {
     expect(bookmarkPath({ kind: "view", collectionId: "c", targetId: "v" })).toBe("/collections/c/items?view=v");
     expect(bookmarkPath({ kind: "item", collectionId: "c", targetId: "i" })).toBe("/collections/c/items/i");
+    expect(bookmarkPath({ kind: "dashboard", collectionId: null, dashboardId: "d", targetId: "t" })).toBe("/dashboards/d?view=t");
   });
 });
 

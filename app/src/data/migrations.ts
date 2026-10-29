@@ -72,4 +72,54 @@ INSERT INTO sync_outbox (tbl, pk) SELECT 'item_links', id FROM item_links;
 `);
     },
   },
+  {
+    version: 3,
+    description: "dashboards and their tabs; bookmarks of a dashboard's tab",
+    // Nothing to queue: the new tables are empty, and the rebuilt bookmarks hold the rows they held (the server has them).
+    up: `
+CREATE TABLE dashboards (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  icon        TEXT,
+  description TEXT NOT NULL DEFAULT '',
+  space_ids   TEXT,
+  position    INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  deleted_at  TEXT
+);
+CREATE TABLE dashboard_views (
+  id           TEXT PRIMARY KEY,
+  dashboard_id TEXT NOT NULL REFERENCES dashboards(id),
+  space_id     TEXT NOT NULL,
+  name         TEXT NOT NULL,
+  config       TEXT NOT NULL,
+  position     INTEGER NOT NULL DEFAULT 0,
+  is_default   INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
+  deleted_at   TEXT
+);
+CREATE INDEX idx_dashboard_views_dashboard ON dashboard_views(dashboard_id);
+-- bookmarks: kind may be 'dashboard', collection_id nullable, dashboard_id added (a CHECK and NOT NULL change: rebuilt).
+CREATE TABLE bookmarks_new (
+  id         TEXT PRIMARY KEY,
+  kind       TEXT NOT NULL CHECK (kind IN ('view', 'item', 'dashboard')),
+  collection_id TEXT REFERENCES collections(id),
+  space_id   TEXT NOT NULL,
+  target_id  TEXT NOT NULL,
+  label      TEXT NOT NULL,
+  position   INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  dashboard_id TEXT REFERENCES dashboards(id)
+);
+INSERT INTO bookmarks_new (id, kind, collection_id, space_id, target_id, label, position, created_at, updated_at, deleted_at, dashboard_id)
+  SELECT id, kind, collection_id, space_id, target_id, label, position, created_at, updated_at, deleted_at, NULL FROM bookmarks;
+DROP TABLE bookmarks;
+ALTER TABLE bookmarks_new RENAME TO bookmarks;
+CREATE INDEX idx_bookmarks_target ON bookmarks(target_id);
+`,
+  },
 ];

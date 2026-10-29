@@ -41,6 +41,22 @@ describe("outbox triggers", () => {
     const seeded = db.prepare(`SELECT ${keyOf(SYNC_TABLES.find((t) => t.name === "field_values")!)} AS pk FROM field_values`).get();
     expect(seeded).toEqual({ pk: '["o1","f1"]' });
   });
+
+  it("queue dashboards, their tabs and a dashboard tab's bookmark", () => {
+    db.exec(`INSERT INTO dashboards (id, name, created_at, updated_at) VALUES ('d1', 'Home', '${T1}', '${T1}')`);
+    db.exec(`INSERT INTO dashboard_views (id, dashboard_id, space_id, name, config, created_at, updated_at) VALUES ('v1', 'd1', 'default', 'Tab', '{}', '${T1}', '${T1}')`);
+    db.exec(`INSERT INTO bookmarks (id, kind, space_id, target_id, label, created_at, updated_at, dashboard_id) VALUES ('b1', 'dashboard', 'default', 'v1', 'Home', '${T1}', '${T1}', 'd1')`);
+    db.exec(`UPDATE dashboard_views SET name = 'Renamed' WHERE id = 'v1'`);
+    expect(outbox()).toEqual([
+      { tbl: "dashboards", pk: "d1" },
+      { tbl: "dashboard_views", pk: "v1" },
+      { tbl: "bookmarks", pk: "b1" },
+      { tbl: "dashboard_views", pk: "v1" },
+    ]);
+    // A bookmark's kind is checked, and its dashboard must exist.
+    expect(() => db.exec(`INSERT INTO bookmarks (id, kind, space_id, target_id, label, created_at, updated_at) VALUES ('b2', 'tab', 'default', 'v1', 'x', '${T1}', '${T1}')`)).toThrow(/CHECK/);
+    expect(() => db.exec(`INSERT INTO bookmarks (id, kind, space_id, target_id, label, created_at, updated_at, dashboard_id) VALUES ('b3', 'dashboard', 'default', 'v1', 'x', '${T1}', '${T1}', 'nope')`)).toThrow(/FOREIGN KEY/);
+  });
 });
 
 describe("applying rows from the server", () => {

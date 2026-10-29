@@ -102,6 +102,33 @@ describe.skipIf(!ADMIN)("the server's database", () => {
     expect((await pool.query("SELECT name FROM spaces")).rows).toEqual([{ name: "Office" }]);
   });
 
+  it("makes the dashboards' tables and the bookmarks' dashboard column by themselves (sync version 3), typed", async () => {
+    await start();
+    await pool.query("DROP TABLE dashboards, dashboard_views; ALTER TABLE bookmarks DROP COLUMN dashboard_id"); // as a server of version 2 left it
+    await start();
+    const columns = await pool.query<{ table_name: string; column_name: string; data_type: string }>(
+      `SELECT table_name, column_name, data_type FROM information_schema.columns
+        WHERE (table_name IN ('dashboards', 'dashboard_views') AND column_name IN ('space_ids', 'config', 'position', 'is_default', 'updated_at'))
+           OR (table_name = 'bookmarks' AND column_name IN ('dashboard_id', 'collection_id'))
+        ORDER BY table_name, column_name`,
+    );
+    expect(columns.rows.map((c) => `${c.table_name}.${c.column_name} ${c.data_type}`)).toEqual([
+      "bookmarks.collection_id text", "bookmarks.dashboard_id text",
+      "dashboard_views.config jsonb", "dashboard_views.is_default integer", "dashboard_views.position integer", "dashboard_views.updated_at timestamp with time zone",
+      "dashboards.position integer", "dashboards.space_ids jsonb", "dashboards.updated_at timestamp with time zone",
+    ]);
+    const ts = "2026-10-01T00:00:00.000Z";
+    await sync({
+      dashboards: [{ id: "d", name: "Home", icon: null, description: "", space_ids: '["default"]', position: 0, created_at: ts, updated_at: ts, deleted_at: null }],
+      dashboard_views: [{ id: "v", dashboard_id: "d", space_id: "default", name: "Tab", config: '{"filters":[],"blocks":[]}', position: 0, is_default: 1, created_at: ts, updated_at: ts, deleted_at: null }],
+      bookmarks: [{ id: "b", kind: "dashboard", collection_id: null, dashboard_id: "d", space_id: "default", target_id: "v", label: "Home / Tab", position: 0, created_at: ts, updated_at: ts, deleted_at: null }],
+    });
+    expect((await pool.query("SELECT b.label, v.name FROM bookmarks b JOIN dashboard_views v ON v.id = b.target_id")).rows).toEqual([{ label: "Home / Tab", name: "Tab" }]);
+    // A device of version 2 is refused: nothing it sends is written.
+    expect(await sync({ dashboards: [{ id: "x", name: "Old" }] }, { version: 2 })).toMatchObject({ outdated: { update: "app", version: 3 } });
+    expect((await pool.query("SELECT id FROM dashboards")).rows).toEqual([{ id: "d" }]);
+  });
+
   it("records every migration again after a wipe, dropping the server's settings and API tokens", async () => {
     await pool.query(schemaSql);
     await pool.query("INSERT INTO api_tokens (id, name, access, token_sha256) VALUES ('t1', 'Scripts', 'read', 'abc')");

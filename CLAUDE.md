@@ -80,6 +80,7 @@ is what this split avoids. Keep them current when behaviour changes.
 | Layout     | `FieldLayout` (a block's fields), `ItemLayout` (the fields and blocks of an item view) |
 | Component  | `Component` / `components`                  |
 | Space      | `Space` / `spaces`                          |
+| Dashboard  | `Dashboard` / `dashboards`; its tabs `DashboardView` / `dashboard_views` |
 
 A Collection defines fields and holds its items (Books); an Item is one of them (a particular
 book). "View" is both how a collection's items are listed (collection view: its blocks) and how
@@ -88,7 +89,8 @@ one item's page looks (item view, whose layout is its fields and blocks); say "c
 component) inside a view. A Component is rendering ({{ }} code over the built-in $ names), shared
 (reusable, by name) or local (written in one place): a field, block or static component by the
 built-ins it uses; with "AI prompt" its text is a prompt for an AI field.
-A Space keeps items apart while sharing collections. A field's own kind is called "Field type" in the UI.
+A Dashboard is a page of blocks of any collections, belonging to none; its tabs are views per space (a
+space without its own shows copies of the first space's). A Space keeps items apart while sharing collections. A field's own kind is called "Field type" in the UI.
 
 ## Architecture
 

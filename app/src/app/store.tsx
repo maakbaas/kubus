@@ -127,10 +127,11 @@ export function StoreProvider({
       }, (e) => console.error("Reloading bookmarks failed", e));
     void reload();
     const unsubscribe = repo.subscribe((change) => {
-      // Bookmarks of deleted views / items disappear too. Item edits only matter
+      // Bookmarks of deleted views / items / dashboard tabs disappear too. Item edits only matter
       // for a bookmarked item (it may have been deleted), not on every cell edit.
       const itemChange = change.scope === "items" && (!change.itemId || bookmarked.has(change.itemId));
-      if (change.scope === "bookmarks" || change.scope === "views" || change.scope === "collections" || itemChange) void reload();
+      const dashboardChange = change.scope === "dashboards" || change.scope === "dashboardViews";
+      if (change.scope === "bookmarks" || change.scope === "views" || change.scope === "collections" || dashboardChange || itemChange) void reload();
     });
     return () => {
       stale = true;
