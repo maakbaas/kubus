@@ -568,9 +568,12 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
 function RowSettings({ id, row }: { id: string; row: RowControls }) {
   return (
     <>
-      <div className="view-options__checks">
-        <Checkbox id={`${id}-beside`} labelText="Beside the block above" checked={row.beside} disabled={!row.beside && !row.canBeside} onChange={(_, { checked }) => row.onBeside(checked)} />
-      </div>
+      {/* Only where it can be: a block right above it, with room in its row. */}
+      {(row.beside || row.canBeside) && (
+        <div className="view-options__checks">
+          <Checkbox id={`${id}-beside`} labelText="Beside the block above" checked={row.beside} onChange={(_, { checked }) => row.onBeside(checked)} />
+        </div>
+      )}
       <NumberInput
         size="sm"
         key={row.maxHeight ?? "none"}

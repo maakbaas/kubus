@@ -345,8 +345,8 @@ What the app does, feature by feature (read the part you work on).
   is placed by dragging its name onto another block (not on an item page): its left or right quarter puts it beside that
   block (side by side only), its top or bottom half in a row of its own above or below that block's row (highlighted like
   the workspace's drop zones); the divider between two blocks moves their shares in 5% steps (drag it, or focus it and use
-  the arrow keys; at least 10% each). Block settings has "Beside the block above" (off for the first block, or when the
-  row above is full) and "Row's max height (rem)" (empty: none). All of it is arranging: stored at once, no " *"; a change in
+  the arrow keys; at least 10% each). Block settings has "Beside the block above" (only where a block is right above it
+  with room in its row) and "Row's max height (rem)" (empty: none). All of it is arranging: stored at once, no " *"; a change in
   Block settings moves the block only once the panel closes (the rows are held, `usePanelsOpen().hold`). A row stays sound
   when it changes (`Arrangement` in `blockRows.ts`): the next block takes over a removed or moved first block's settings,
   a changed row gets equal shares again, and a block reordered in the block list (or a Fields list) away from the block

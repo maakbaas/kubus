@@ -142,7 +142,7 @@ test("dashboard rows: Beside the block above and the row's max height in Block s
   await t.escapeCloses("Escape closes Block settings");
   await t.until("Last is below More again", async () => below(await rRect(t, "r-more"), await rRect(t, "r-last")));
   await blockSettings(t, "r-books");
-  await t.check("the first block of the tab can't be beside anything", await box().isDisabled());
+  await t.check("the first block of the tab isn't offered it (nothing above it)", (await box().count()) === 0);
   await t.escapeCloses("Escape closes Block settings");
 }, { viewport: "desktop" });
 
