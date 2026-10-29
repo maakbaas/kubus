@@ -196,20 +196,31 @@ function paging(req: ApiRequest, fallback: number, max: number) {
   return { limit, offset };
 }
 
-/** Where a block is given: a collection view or an item view (`own`: its collection), or a dashboard's tab (none of its own). */
-type BlockPlace = { own: Collection } | { dashboard: true };
+/**
+ * Where a block is given: a collection view or an item view (`own`: its collection; `kept`: the blocks it has now), or a
+ * dashboard's tab (none of its own).
+ */
+type BlockPlace = { own: Collection; kept?: ViewBlock[] } | { dashboard: true };
+
+/** Several collections in one block are for dashboards: elsewhere only a block that already lists them (by its id) keeps them. */
+const SEVERAL_FOR_DASHBOARDS = "Several collections in one block are for dashboards";
 
 function blockIn(world: World, place: BlockPlace, raw: unknown): ViewBlock {
   if (!raw || typeof raw !== "object") throw new HttpError(400, "A block must be an object");
   const o = raw as Body;
   const own = "own" in place ? place.own : null;
   // On a dashboard a block names its collection, or several (read as one: their fields merged by name).
-  const several = !own && Array.isArray(o.collectionIds) ? [...new Set(o.collectionIds.map((n) => collectionOf(world, String(n)).id))] : null;
+  const several = Array.isArray(o.collectionIds) ? [...new Set(o.collectionIds.map((n) => collectionOf(world, String(n)).id))] : null;
+  // Elsewhere several are refused, but for a block made before (sent back with its id and the same collections): it is kept.
+  if (own && several && several.length > 1) {
+    const kept = "own" in place ? place.kept?.find((b) => b.id === o.id) : undefined;
+    if (JSON.stringify(kept?.collectionIds) !== JSON.stringify(several)) throw new HttpError(400, SEVERAL_FOR_DASHBOARDS);
+  }
   if (!own && !several?.length && typeof o.collectionId !== "string") {
     throw new HttpError(400, "A dashboard's block needs `collectionId` (a collection's id or name) or `collectionIds`");
   }
-  const named = several?.length ? collectionOf(world, several[0]) : typeof o.collectionId === "string" ? collectionOf(world, o.collectionId) : own!;
   const collectionIds = several && several.length > 1 ? several : undefined;
+  const named = typeof o.collectionId === "string" && (own || !several?.length) ? collectionOf(world, o.collectionId) : several?.length ? collectionOf(world, several[0]) : own!;
   // Fields are named against what the block reads: with several collections, their merged columns.
   const merges = Array.isArray(o.merges) ? (o.merges as ViewBlock["merges"]) : undefined;
   const listed = collectionIds ? listedCollection(named, { collectionIds, merges }, world.collections).collection : named;
@@ -219,8 +230,8 @@ function blockIn(world: World, place: BlockPlace, raw: unknown): ViewBlock {
     id: newId(),
     title: "",
     ...o,
-    collectionId: own && named === own ? null : named.id,
-    ...(!own && { collectionIds }),
+    collectionId: own && named.id === own.id ? null : named.id,
+    collectionIds,
     filters: o.filters === null || o.filters === undefined ? null : resolveRules<FilterRule>(listed, o.filters, "filters"),
     sort: resolveRules<SortRule>(listed, o.sort, "sort").map(({ fieldId, direction }) => ({ fieldId, direction })),
     // A sort given is a sort chosen (the block type's default no longer applies).
@@ -377,7 +388,7 @@ export function createApi(repo: Repository): Router {
       o.blocks === undefined
         ? existing.blocks
         : Array.isArray(o.blocks) && o.blocks.length > 0
-          ? o.blocks.map((b) => blockIn(w, { own: collection }, b))
+          ? o.blocks.map((b) => blockIn(w, { own: collection, kept: existing.blocks }, b))
           : (() => {
               throw new HttpError(400, "`blocks` must be a list of at least one block");
             })(),
@@ -391,7 +402,8 @@ export function createApi(repo: Repository): Router {
     const resolved = v.map((raw) => {
       const o = (raw ?? {}) as Body;
       const layout = (o.layout && typeof o.layout === "object" ? o.layout : {}) as Body;
-      const blocks = Array.isArray(layout.blocks) ? layout.blocks.map((b) => blockIn(w, { own: collection }, b)) : [];
+      const kept = collection.itemViews.flatMap((x) => x.layout.blocks);
+      const blocks = Array.isArray(layout.blocks) ? layout.blocks.map((b) => blockIn(w, { own: collection, kept }, b)) : [];
       const ids = (x: unknown) =>
         Array.isArray(x) ? x.map((n) => blocks.find((b) => b.id === n)?.id ?? fieldOf(collection, String(n)).id) : x;
       return {

@@ -3,8 +3,8 @@ import { useNavigate } from "react-router";
 import { IconButton, InlineNotification, Link, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Tile } from "@carbon/react";
 import { TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
-import { dashboardIcon, type Dashboard } from "../domain/dashboards";
-import { newId, nextName } from "../domain/model";
+import { dashboardIcon, newDashboardName, type Dashboard } from "../domain/dashboards";
+import { newId } from "../domain/model";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { NewButton } from "../ui/NewButton";
 import { PageHeader } from "../ui/PageHeader";
@@ -14,10 +14,6 @@ import { LIST_MAIN, LIST_TABLE } from "../ui/listTable";
 import { RowActions, ROW_BUTTON } from "../ui/RowActions";
 import { FillTable } from "../views/TableView";
 
-/** The name a new dashboard gets: "Dashboard", else "Dashboard 2", … (free among all dashboards). */
-export function newDashboardName(taken: string[]): string {
-  return taken.includes("Dashboard") ? nextName("Dashboard", taken) : "Dashboard";
-}
 
 /**
  * The space's dashboards as a table (name with its icon opens it; description; spaces it is shown in; delete), plus

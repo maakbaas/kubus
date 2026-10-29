@@ -533,6 +533,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
             onSet={(patch) => setBlockNow(block.id, patch)}
             // A view keeps at least one block.
             onRemove={view.blocks.length > 1 ? () => removeBlocks([block.id]).catch((e) => setError(errorMessage(e))) : undefined}
+            // Moved to a dashboard: taken out without asking (the last one is copied instead).
+            onTakeOut={view.blocks.length > 1 ? () => arrange((blocks) => blocks.filter((b) => b.id !== block.id)) : undefined}
             onError={setError}
             onOpenChange={panels.onOpenChange}
           />

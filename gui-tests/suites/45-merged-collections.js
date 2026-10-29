@@ -1,6 +1,8 @@
 // Several collections in one block: Invoices (native) and Shop sales (a remote table behind a faked server, routes on the
-// test's browser context) read as one. The block's Collections picker (Block settings) takes more than one; their fields of
-// one name are one column, Collection says which one a row is from, Created / Updated / Title stay; Fields → Merge fields
+// test's browser context) read as one. On a dashboard the block's Collections picker (Block settings) takes more than one
+// (choosing them, and the block keeping its kind and options, are tested there); the other tests read a block of both seeded
+// in the Invoices collection view (a legacy block: since dashboards only made there, it keeps working; suite 62 has what its
+// picker may still do). Their fields of one name are one column, Collection says which one a row is from, Created / Updated / Title stay; Fields → Merge fields
 // merges two differently named fields by hand. Tables, groups, charts and stats work on it as on any collection: the rows
 // of both parts in the order of the sort a page at a time (Show more asks the remote part only when its rows are used up),
 // the group sizes and the total summed, the view's filter (its date period stepped) reaching both parts, read-only rows that
@@ -154,6 +156,29 @@ const setBlocks = (t, ids, blocks, filters = []) =>
     [ids.collections.inv, ids.sales, blocks, BLOCK, filters],
   );
 
+const INVOICE_COLLECTION = {
+  key: "inv", name: "Invoice", plural: "Invoices", icon: "Receipt",
+  fields: [{ key: "client", name: "Client", kind: "string" }, { key: "price", name: "Price", kind: "number" }, { key: "date", name: "Date", kind: "date" }],
+  items: INVOICES.map(([client, price, date]) => ({ values: { client, price, date } })),
+};
+
+/** Boots with Invoices and Shop sales and the dashboard Sales, whose tab Overview has one block of Invoices; opens it. */
+async function dashWorld(t) {
+  await t.boot();
+  const fake = await fakeShop(t);
+  const ids = await t.seed({
+    collections: [INVOICE_COLLECTION],
+    dashboards: [{ key: "sales", name: "Sales", tabs: [{ name: "Overview", blocks: [{ id: "b0", kind: "table", collection: "inv", sort: [{ field: "date" }] }] }] }],
+  });
+  ids.sales = await makeSales(t);
+  await t.open(dashPath(ids));
+  return { ids, fake };
+}
+const dashPath = (ids) => `/dashboards/${ids.dashboards.sales}`;
+/** The dashboard's stored tab (its only one). */
+const storedTab = (t, ids) => t.page.evaluate(async (d) => (await window.kubus.repo.listAllDashboardViews()).find((v) => v.dashboardId === d), ids.dashboards.sales);
+const tabBlocks = async (t, ids) => (await storedTab(t, ids)).blocks;
+
 /** The id of the field named `name` of a collection. */
 const fieldId = (t, collectionId, name) =>
   t.page.evaluate(async ([c, n]) => (await window.kubus.repo.listCollections()).find((x) => x.id === c).fields.find((f) => f.name === n).id, [collectionId, name]);
@@ -212,18 +237,8 @@ const chart = (t, i = 0) =>
 
 // ---- tests ----------------------------------------------------------------------------------------
 
-test("merged collections: the Collections picker reads two collections as one table, their columns merged by name", async (t) => {
-  await t.boot();
-  const fake = await fakeShop(t);
-  const ids = await t.seed({
-    collections: [{
-      key: "inv", name: "Invoice", plural: "Invoices", icon: "Receipt",
-      fields: [{ key: "client", name: "Client", kind: "string" }, { key: "price", name: "Price", kind: "number" }, { key: "date", name: "Date", kind: "date" }],
-      items: INVOICES.map(([client, price, date]) => ({ values: { client, price, date } })),
-    }],
-  });
-  ids.sales = await makeSales(t);
-  await t.open(t.listPath(ids.collections.inv));
+test("merged collections: a dashboard block's Collections picker reads two collections as one table, their columns merged by name", async (t) => {
+  const { ids, fake } = await dashWorld(t);
   await expectTitles(t, "Invoices alone: its six invoices", ["Ada", "Bo", "Cy", "Di", "Ed", "Flo"]);
   await t.check("it asked the shop nothing", fake.queries.length === 0);
 
@@ -238,19 +253,28 @@ test("merged collections: the Collections picker reads two collections as one ta
   await t.check("a field only one collection has is empty for the other's rows", ada.includes("120") && !ada.includes("25") && gus.includes("25") && !gus.includes("120"), JSON.stringify([ada, gus]));
   await t.check("Collection names each row's collection", ada.includes("Invoices") && gus.includes("Shop sales"), JSON.stringify([ada, gus]));
 
-  const stored = (await storedBlocks(t, ids))[0];
-  await t.check("the choice is stored with the block", JSON.stringify(stored.collectionIds) === JSON.stringify([ids.collections.inv, ids.sales]), JSON.stringify(stored.collectionIds));
+  const stored = (await tabBlocks(t, ids))[0];
+  await t.check("the choice is stored with the block, naming its first", JSON.stringify(stored.collectionIds) === JSON.stringify([ids.collections.inv, ids.sales]) && stored.collectionId === ids.collections.inv, JSON.stringify([stored.collectionId, stored.collectionIds]));
   // Escape (which clears a Carbon multi-select) closes the panel and keeps the choice.
   await t.closeAll();
   await expectSet(t, "closing the panel keeps both collections", BY_DATE);
-  await t.audit("a table of two collections");
+  await t.audit("a dashboard table of two collections");
 
-  await t.open(t.listPath(ids.collections.inv));
+  await t.open(dashPath(ids));
   await expectSet(t, "after a reload", BY_DATE);
-  await toggleCollection(t, "Shop sales");
-  await expectTitles(t, "taking the shop out again: Invoices alone", ["Ada", "Bo", "Cy", "Di", "Ed", "Flo"]);
+  // A dashboard has no collection of its own: either can be taken out.
+  await toggleCollection(t, "Invoices");
+  await expectSet(t, "taking Invoices out: the shop alone", ["Gus", "Hal", "Ivy", "Jo", "Kit", "Lu"]);
   await t.closeAll();
-  await t.check("the choice is gone from the block", (await storedBlocks(t, ids))[0].collectionIds === undefined);
+  const alone = (await tabBlocks(t, ids))[0];
+  await t.check("the block names the shop alone", alone.collectionId === ids.sales && alone.collectionIds === undefined, JSON.stringify([alone.collectionId, alone.collectionIds]));
+  await toggleCollection(t, "Invoices");
+  await expectSet(t, "Invoices back", BY_DATE);
+  await toggleCollection(t, "Shop sales");
+  await expectSet(t, "taking the shop out again: Invoices alone", ["Ada", "Bo", "Cy", "Di", "Ed", "Flo"]);
+  await t.closeAll();
+  const one = (await tabBlocks(t, ids))[0];
+  await t.check("the choice is gone from the block", one.collectionIds === undefined && one.collectionId === ids.collections.inv, JSON.stringify([one.collectionId, one.collectionIds]));
 }, { smoke: true });
 
 test("merged collections: sorted by date, Show more asks the remote part only when its rows are used up", async (t) => {
@@ -377,8 +401,8 @@ test("merged collections: a deleted collection is a problem shown on the block, 
   await t.audit("a block with a collection gone");
 });
 
-test("merged collections: adding or removing a collection keeps the block's kind, and the options that still apply", async (t) => {
-  const { ids } = await world(t, { blocks: [] });
+test("merged collections: adding or removing a collection on a dashboard keeps the block's kind, and the options that still apply", async (t) => {
+  const { ids } = await dashWorld(t);
   const inv = ids.collections.inv;
   const date = await fieldId(t, inv, "Date");
   const price = await fieldId(t, inv, "Price");
@@ -391,36 +415,36 @@ test("merged collections: adding or removing a collection keeps the block's kind
   };
   const store = (kind) =>
     t.page.evaluate(
-      async ([inv, base, kind, options]) => {
+      async ([dashboard, inv, base, kind, options]) => {
         const repo = window.kubus.repo;
-        const [view] = await repo.listViews(inv, "default");
-        await repo.saveView({ ...view, blocks: [{ ...base, id: "b0", kind, options, collectionId: null }] });
+        const tab = (await repo.listAllDashboardViews()).find((v) => v.dashboardId === dashboard);
+        await repo.saveDashboardView({ ...tab, blocks: [{ ...base, id: "b0", kind, options, collectionId: inv }] });
       },
-      [inv, BLOCK, kind === "stat" ? "chart" : kind, KINDS[kind]],
+      [ids.dashboards.sales, inv, BLOCK, kind === "stat" ? "chart" : kind, KINDS[kind]],
     );
   for (const kind of Object.keys(KINDS)) {
     // A stat is a chart block with a stat chart.
     const real = kind === "stat" ? "chart" : kind;
     await store(kind);
-    await t.open(t.listPath(inv));
-    await t.until(`${kind}: stored as given`, async () => (await storedBlocks(t, ids))[0]?.kind === real, { timeout: 10000 });
+    await t.open(dashPath(ids));
+    await t.until(`${kind}: stored as given`, async () => (await tabBlocks(t, ids))[0]?.kind === real, { timeout: 10000 });
     await toggleCollection(t, "Shop sales");
-    await t.until(`${kind}: two collections are listed`, async () => ((await storedBlocks(t, ids))[0].collectionIds ?? []).length === 2, { timeout: 10000 });
-    const two = (await storedBlocks(t, ids))[0];
+    await t.until(`${kind}: two collections are listed`, async () => ((await tabBlocks(t, ids))[0].collectionIds ?? []).length === 2, { timeout: 10000 });
+    const two = (await tabBlocks(t, ids))[0];
     await t.check(`${kind}: adding a second collection keeps the kind`, two.kind === real && two.options.chart === KINDS[kind].chart, `${two.kind} ${two.options?.chart}`);
     if (kind === "chart" || kind === "stat") {
       await t.check(`${kind}: its series is the merged Price column`, two.options.series[0].field === COL.price, JSON.stringify(two.options.series));
       if (kind === "chart") await t.check("chart: its X axis is the merged Date column", two.options.x.field === COL.date && two.options.x.dateStep === "month", JSON.stringify(two.options.x));
       await t.until(`${kind}: still drawn after a reload`, async () => {
-        await t.open(t.listPath(inv));
+        await t.open(dashPath(ids));
         return (await block(t).locator(kind === "chart" ? ".chart-block" : ".stat-block").count()) > 0;
       }, { timeout: 20000 });
     }
     await t.closeAll();
     await t.audit(`a ${kind} block of two collections`);
     await toggleCollection(t, "Shop sales");
-    await t.until(`${kind}: one collection again`, async () => (await storedBlocks(t, ids))[0].collectionIds === undefined, { timeout: 10000 });
-    const one = (await storedBlocks(t, ids))[0];
+    await t.until(`${kind}: one collection again`, async () => (await tabBlocks(t, ids))[0].collectionIds === undefined, { timeout: 10000 });
+    const one = (await tabBlocks(t, ids))[0];
     await t.check(`${kind}: removing it keeps the kind`, one.kind === real, one.kind);
     if (kind === "chart") await t.check("chart: its X axis and series are the Invoices' fields again", one.options.x.field === date && one.options.series[0].field === price, JSON.stringify(one.options));
     await t.closeAll();

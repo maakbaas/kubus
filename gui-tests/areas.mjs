@@ -62,6 +62,8 @@ export const AREAS = [
 
   [/^app\/src\/(domain\/(backlinks|sources|views)|views\/(useBacklinks|BlockView|useItemActions|itemActions|cells|TableView|CardsView)|pages\/ItemPage|data\/sqlite\/SqliteRepository|data\/sync\/SyncEngine)/, [43]],
   [/^app\/src\/(domain\/(mergedCollection|mergedRows|query|sources|views)|views\/(useMergedResult|MergeFields|BlockView|useRemoteResult|remotePages|index)|pages\/CollectionPage)/, [45]],
+  // Several collections only on dashboards: legacy blocks elsewhere (remove only), an item page's Collection dropdown, Move to a dashboard.
+  [/^app\/src\/(domain\/(views|dashboards|mergedCollection)|views\/(BlockView|MoveToDashboardModal|MergeFields)|pages\/(CollectionPage|ItemPage|DashboardPage|DashboardsPage))/, [62]],
 
   // Collections, fields, components.
   [/^app\/src\/(pages\/(CollectionEditorPage|CollectionsPage|RemotesPage)|ui\/(SourceSettings|FieldEditor|FieldModal|FieldOrderEditor|FieldSettings|fieldKindIcons|ChoiceFilterEditor)|domain\/(collectionDraft|fieldKinds|fieldLayout))/, [7, 17, 22, 27, 29]],

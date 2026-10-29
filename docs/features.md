@@ -246,9 +246,14 @@ What the app does, feature by feature (read the part you work on).
   (its layout: fields and blocks and their order, names shown, editable, hide empty) is stored
   right away too; only what a block shows waits for Save changes.
 - **Several collections in one block** (merged collections: `domain/mergedCollection.ts` `mergeCollections`, `domain/mergedRows.ts`,
-  `views/useMergedResult.ts`, `views/MergeFields.tsx`): a block's Collections picker (Block settings, on collection views and item pages)
-  takes more than one collection, native and remote mixed (Backlinks can't be merged); on a dashboard (see Dashboards) none of
-  them is forced in, as a dashboard has no collection of its own. The block then reads them as one
+  `views/useMergedResult.ts`, `views/MergeFields.tsx`): on a dashboard only (see Dashboards), a block's Collections picker (Block
+  settings) takes more than one collection, native and remote mixed (Backlinks isn't offered there). Elsewhere a block lists one: a
+  collection view's block its view's collection (Block settings has no picker), an item page's block the one its **Collection**
+  dropdown picks (any collection, or Backlinks). A block of several made in a collection view or on an item page before they were for
+  dashboards keeps showing them all: its Collections picker lists only those, to remove (a collection view's own can't be; the helper
+  text says "Several collections in one block are for dashboards. Here they can only be removed."), down to one, which turns it into a
+  plain block; or **Move to a dashboard** takes it there whole (see Dashboards). The API refuses a new one outside a dashboard (400,
+  Help → API). The block then reads them as one
   read-only collection made when it is shown (never stored: the block keeps `ViewBlock.collectionIds` and `merges`, JSON in the view's
   config or the item view's layout, no schema or sync change; older devices ignore both and show the first collection). Columns: fields of one
   name (case aside) whose types fit are one column (the matrix, `canShow`: text, Markdown and HTML show each other; a date also a
@@ -299,10 +304,20 @@ What the app does, feature by feature (read the part you work on).
   were all deleted shows a warning (closing it removes the block). Remote collections' blocks read their source a page at a time, with
   "Read the remote collections again" in the tab bar. Blocks stack one under another, as on a collection view (side by side is
   roadmap). Component blocks see their block's items as `$items`; there is no `$item` on a dashboard.
+  **Move to a dashboard** (Block settings of any block of a collection view or item page but a Backlinks one,
+  `views/MoveToDashboardModal.tsx`, `movedBlock` in `domain/dashboards.ts`): an `xs` dialog picks one of the space's dashboards or
+  **New dashboard** (made as New dashboard makes one: in this space only). The block gets a new id, names its collection (the view's
+  when it listed none; several and their merges kept), and the filter it built on (the view's, or the item page's rules for its
+  collection) becomes the first rules of its own, which keeps what it shows, but a date period of that filter then frames the block's
+  own rules too (the dialog says so when that changes anything, as when rules take a value from the page's item, `$item`, which a
+  dashboard doesn't have: a plain "this item" value is then empty and doesn't filter, `{{ $item }}` code and a period counted from
+  the item's date match nothing). It goes at the end of the dashboard's starred tab in the shown space, else its first (virtual tabs stored
+  first, `storeDashboardViews`; a dashboard without tabs gets one), and is taken out of its view or item view without asking, or
+  copied when it is the view's last block ("Copy"); then the dashboard opens at it (`?view=&block=`).
 - **Backlinks** (`domain/backlinks.ts`, `views/useBacklinks.ts`, docs/data-model.md "Item links"): the items that link to an item. A link is a
   reference field's item(s) (Item, List of items) or a link to an item in a Markdown, HTML or AI text
   (`#/collections/<c>/items/<id>`, whatever of its page the link names: a field, view or block counts as the item; the new item
-  form doesn't). On an item page a block can list **Backlinks**, offered only in the Collection picker of such blocks (Block settings;
+  form doesn't). On an item page a block can list **Backlinks**, offered only in the Collection dropdown of such blocks (Block settings;
   `VIRTUAL_COLLECTIONS`; it is not in the store's collections, the side nav or any other picker): a virtual collection (`Collection.virtual`,
   read-only like a remote one: `isReadOnly`, so its rows only open) with one row per link from a live native item of the shown space
   that isn't the item itself, also for a remote collection's row. Fields: Item (a Markdown link to the linking item), Title (its label,

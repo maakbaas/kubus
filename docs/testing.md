@@ -104,6 +104,7 @@ can't drift apart unnoticed: a change to the sync protocol changes both and runs
 | `pages/CollectionsPage.tsx`, `RemotesPage.tsx`, `CollectionEditorPage.tsx`, `SearchPage.tsx`, `ui/SearchBar.tsx`, `app/NavTree.tsx` | – | 29 (editor also 07, 17, 27) |
 | `domain/dashboards.ts`, `pages/DashboardPage.tsx`, `DashboardsPage.tsx` (and the side nav's branch, bookmarks and search of them) | `domain` (`dashboards.test.ts`), `storage` (`repository.test.ts`) | 61 (and 60 for Full width) |
 | `domain/links.ts`, `domain/linkTargets.ts`, `app/useLinks.ts`, `app/useLinkTargets.ts` | `domain` (`links.test.ts`, `linkTargets.test.ts`) | 08, 29, 34, 61 |
+| A block's collections (`views/BlockView.tsx` `BlockMenus`: the item page's Collection dropdown, legacy blocks of several outside dashboards), `views/MoveToDashboardModal.tsx` (`movedBlock`) | `domain` (`dashboards.test.ts`), `api` (`apiRoutes.test.ts`: the 400 for several outside a dashboard) | 43, 45, 61, 62 |
 | `app/src/styles.css`, `ui/PageHeader.tsx`, anything every page uses | – | all |
 
 

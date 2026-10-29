@@ -43,7 +43,13 @@ Extension points are registries, not special cases in pages:
   checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
   nothing, never the wrong items (so does a value from the page's item that it doesn't have: "Author is this Book's Mentor" on a Book without one). The value input is text for every kind (the braces must be typable);
   under it, what the code works out to ("= true").
-- **Several collections in one block**: the block's Collections picker (Block settings) reads them as one read-only collection, fields
+- **The collections a block lists** (`BlockMenus`, Block settings): a collection view's block lists the view's collection (no picker); an
+  item page's block one collection, picked in a single-select **Collection** dropdown (the store's collections and Backlinks); a
+  dashboard's block one or several (a **Collections** multi-select). A legacy block of several outside a dashboard (`collectionIds`
+  of more than one) keeps showing them; its Collections multi-select lists only its own, to remove (a collection view's own is a
+  disabled item), with the helper text "Several collections in one block are for dashboards. Here they can only be removed."; Block
+  settings → Move to a dashboard (any collection-view or item-page block but Backlinks) takes a block to a dashboard (docs/features.md "Dashboards").
+- **Several collections in one block** (dashboards; legacy blocks elsewhere): the block's Collections picker (Block settings) reads them as one read-only collection, fields
   merged by name, Collection / Title / Created / Updated always there, Fields → Merge fields by hand, the view's filter translated to its
   columns, a page at a time from every part, a chart over all rows: docs/features.md "Several collections in one block". Choosing other collections (more, fewer, another one) keeps the block's type and its type's options (field ids found again by name: `carryOptions`); filter, sort and fields start afresh. On a dashboard (`BlockPlace` "dashboard") the picker forces no home collection in and offers no Backlinks; the block always stores `collectionId` (its first), plus `collectionIds` when there are several.
 - **Virtual collections** (`domain/backlinks.ts` `VIRTUAL_COLLECTIONS`, `Collection.virtual`): a block on an item page may list a collection

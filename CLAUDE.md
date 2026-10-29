@@ -125,11 +125,14 @@ headless device that answers the server's HTTP API (bundled into `server/headles
   the source a page at a time (`useRemoteResult`: it filters, sorts and groups), never from the item cache, and
   whatever edits items checks `isRemote` (their `ItemActions` have no `remove` / `setValue`). App and server talk
   connector-neutral (`shared/sources.ts`); everything database-specific stays in `server/src/connectors/`.
-- **Backlinks are a virtual collection** (`domain/backlinks.ts`, `Collection.virtual`): offered only in the Collection picker of
+- **Backlinks are a virtual collection** (`domain/backlinks.ts`, `Collection.virtual`): offered only in the Collection dropdown of
   item-page blocks and read-only through the same guard (`isReadOnly`); its rows are the items linking to the page's item, read from the
   synced `item_links` index (docs/data-model.md "Item links": one row per value with the value's own `updated_at`, kept by triggers on
   `field_values`, healed after a first download from a server filled before the table existed). Keep `item_links` in step with what counts as a link (`linkTargets`).
-- **A block may list several collections** (`ViewBlock.collectionIds`, native and remote mixed): `domain/mergedCollection.ts` makes one read-only
+- **A dashboard's block may list several collections** (`ViewBlock.collectionIds`, native and remote mixed; only on a dashboard: a
+  collection view's block lists the view's collection, an item page's one other or Backlinks; a legacy block of several elsewhere keeps
+  showing them and can only lose some, or go to a dashboard with "Move to a dashboard", `views/MoveToDashboardModal.tsx`; the API answers
+  400 for a new one there): `domain/mergedCollection.ts` makes one read-only
   collection of them when the block is shown (nothing stored: fields merged by name, Collection / Title / Created / Updated), and
   `views/useMergedResult.ts` fans the query out to the parts (native via the item cache + `applyQuery`, remote via `sourceQuery`), merged a
   page at a time (`domain/mergedRows.ts`); the merged collection is `Collection.mergedFrom` (runtime only: the UI says "Collections").

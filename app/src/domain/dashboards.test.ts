@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { blankField, type Collection } from "./model";
 import type { FilterRule } from "./query";
-import { DASHBOARD_DATE, dashboardBlockCollection, dashboardFiltersFor, dashboardScope, dashboardViewsIn, isVirtualTab, newDashboardBlock, type DashboardView } from "./dashboards";
+import { DASHBOARD_DATE, dashboardBlockCollection, dashboardFiltersFor, dashboardScope, dashboardViewsIn, isVirtualTab, movedBlock, newDashboardBlock, tabToMoveTo, type DashboardView } from "./dashboards";
 import { mergeCollections } from "./mergedCollection";
-import { NOTHING_COLLAPSED } from "./views";
+import { newBlock, NOTHING_COLLAPSED, type ViewBlock } from "./views";
 import { inSpace } from "./spaces";
 
 const collection = (id: string, fields: Collection["fields"], source: Collection["source"] = null): Collection => ({
@@ -57,6 +57,47 @@ describe("a dashboard's blocks", () => {
     expect(dashboardBlockCollection(block)).toBe("Book");
     expect(dashboardBlockCollection({ collectionId: null, collectionIds: ["Person", "Book"] })).toBe("Person");
     expect(dashboardBlockCollection({ collectionId: null })).toBeNull();
+  });
+});
+
+describe("a block moved to a dashboard", () => {
+  const block = (extra: Partial<ViewBlock> = {}): ViewBlock => ({ ...newBlock("table", null), ...extra });
+  const contains = (v: string, extra: Partial<FilterRule> = {}) => rule("title", { operator: "contains", value: v, ...extra });
+
+  it("names its collection (its place's when it listed none), keeps several and their merges, and gets a new id", () => {
+    const plain = block();
+    const moved = movedBlock(plain, books, []);
+    expect(moved.block).toMatchObject({ collectionId: "Book", filters: null });
+    expect(moved.block.id).not.toBe(plain.id);
+    const merges = [{ id: "m", name: "Name", fields: ["title", "name"] }] as unknown as ViewBlock["merges"];
+    expect(movedBlock(block({ collectionId: null, collectionIds: ["Person", "Book"], merges }), books, []).block).toMatchObject({ collectionId: "Person", collectionIds: ["Person", "Book"], merges });
+    expect(movedBlock(block({ collectionId: "Person" }), books, []).block.collectionId).toBe("Person");
+  });
+
+  it("takes the filter it built on as its first rules: the same items, but where a date period framed only that filter", () => {
+    const inherited = [contains("a")];
+    const own = [contains("b", { id: "own" })];
+    const moved = movedBlock(block({ filters: own }), books, inherited);
+    expect(moved.block.filters!.map((r) => r.value)).toEqual(["a", "b"]);
+    expect(moved.block.filters![0].id).not.toBe(inherited[0].id);
+    expect([moved.reframed, moved.pageRules]).toEqual([false, false]);
+    // The view's period framed its rules only: an Or rule of the block made an exception to it, which now falls under it.
+    const period = [rule("read")];
+    expect(movedBlock(block({ filters: [contains("b", { join: "or" })] }), books, period).reframed).toBe(true);
+    expect(movedBlock(block({ filters: [contains("b")] }), books, period).reframed).toBe(false);
+  });
+
+  it("tells about rules on the page's item ($item), which match nothing on a dashboard", () => {
+    expect(movedBlock(block({ filters: [rule("title", { operator: "is", value: "$item" })] }), books, []).pageRules).toBe(true);
+    expect(movedBlock(block(), books, [rule("read", { value: "day-6..day+0@$item.read" })]).pageRules).toBe(true);
+    expect(movedBlock(block({ filters: [contains("{{ $item.title }}")] }), books, []).pageRules).toBe(true);
+    expect(movedBlock(block({ filters: [contains("$items")] }), books, []).pageRules).toBe(false);
+  });
+
+  it("goes on the starred tab, else the first", () => {
+    expect(tabToMoveTo([{ id: "a", isDefault: false }, { id: "b", isDefault: true }])?.id).toBe("b");
+    expect(tabToMoveTo([{ id: "a", isDefault: false }, { id: "b", isDefault: false }])?.id).toBe("a");
+    expect(tabToMoveTo([])).toBeNull();
   });
 });
 

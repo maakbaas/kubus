@@ -44,7 +44,9 @@ append-only migrations in one transaction, the version stored in the database.
 
 A block listing several collections keeps `collectionIds` and `merges` in its JSON (a view's config, an item view's layout): no schema change, no
 migration, no sync version. An older device parses blocks leniently (`parseBlock`, `parseLayout` leave what they don't know) and shows such a block
-as its first collection only; saving a view there drops the two keys.
+as its first collection only; saving a view there drops the two keys. Since dashboards (version 3) a block of several collections is made only
+on a dashboard; one made before in a view or item view is kept as it is (no migration: it keeps showing them, and can only lose some, or be
+moved to a dashboard), so no data is lost.
 
 ## The server's database
 
