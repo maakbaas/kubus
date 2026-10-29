@@ -2,7 +2,7 @@
 // API follows the GUI's rules. Documented on the Help page (help/api.md): keep the two in step.
 //
 // Collections are named by id, name or plural name, spaces by id or name (default: the default
-// space), fields, components, views and item views by id or name, all in any case.
+// space), fields, components, views, item views, dashboards and their tabs by id or name, all in any case.
 
 import { HttpError, json, readJson, Router, type ApiRequest } from "../../../shared/router";
 import { MAX_FILE_BYTES } from "../../../shared/sync";
@@ -14,11 +14,15 @@ import { fieldKinds } from "../domain/fieldKinds";
 import { fileSrc, IMAGE_TYPES } from "../domain/files";
 import { parseItemViews, type ItemView } from "../domain/fieldLayout";
 import { canBeTitle, collectionDraft, isReferenceKind, newId, NO_TITLE, suggestPlural, type Collection, type CollectionDraft, type FieldDef, type FieldDraft, type Item, type ItemLabel } from "../domain/model";
-import { applyQuery, filterValueProblem, isGrouped, operatorsFor, type FilterRule, type SortRule, type ViewQuery } from "../domain/query";
+import { applyQuery, filterValueProblem, isGrouped, operatorsFor, type FilterRule, type QueryResult, type SortRule, type ViewQuery } from "../domain/query";
 import { refLabelForSpace } from "../domain/refOptions";
-import { DEFAULT_SPACE_ID, type Space } from "../domain/spaces";
+import { DEFAULT_SPACE_ID, inSpace, type Space } from "../domain/spaces";
+import { dashboardFiltersFor, dashboardScope, type Dashboard, type DashboardView } from "../domain/dashboards";
+import { resolveParts } from "../domain/mergedCollection";
+import { nativeItems } from "../domain/mergedRows";
+import { isRemote } from "../domain/sources";
 import { blockSort } from "../domain/blockSort";
-import { blockQuery, defaultViewState, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
+import { blockQuery, defaultViewState, listedCollection, NOTHING_COLLAPSED, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
 import { draftProblem } from "../domain/collectionDraft";
 import { computeItems, loadWorld, type World } from "../domain/world";
 import { fieldOf, itemOut, same, valuesIn, type ItemsExist } from "./values";
@@ -107,6 +111,10 @@ const viewOut = ({ collapsed: _collapsed, ...view }: CollectionView) => view;
 
 const bookmarkOut = (b: Bookmark) => b;
 
+const dashboardOut = ({ spaceIds, ...d }: Dashboard) => ({ ...d, spaces: spaceIds });
+
+const tabOut = ({ collapsed: _collapsed, ...tab }: DashboardView) => tab;
+
 /** A collection's title field as asked for: a text, number or date field (by id or name), "none", or null (the first text field with a value). */
 function titleFieldIn(collection: Collection, raw: unknown): string | null {
   if (raw === null) return null;
@@ -173,17 +181,31 @@ function paging(req: ApiRequest, fallback: number, max: number) {
   return { limit, offset };
 }
 
-function blockIn(world: World, own: Collection, raw: unknown): ViewBlock {
+/** Where a block is given: a collection view or an item view (`own`: its collection), or a dashboard's tab (none of its own). */
+type BlockPlace = { own: Collection } | { dashboard: true };
+
+function blockIn(world: World, place: BlockPlace, raw: unknown): ViewBlock {
   if (!raw || typeof raw !== "object") throw new HttpError(400, "A block must be an object");
   const o = raw as Body;
-  const listed = typeof o.collectionId === "string" ? collectionOf(world, o.collectionId) : own;
+  const own = "own" in place ? place.own : null;
+  // On a dashboard a block names its collection, or several (read as one: their fields merged by name).
+  const several = !own && Array.isArray(o.collectionIds) ? [...new Set(o.collectionIds.map((n) => collectionOf(world, String(n)).id))] : null;
+  if (!own && !several?.length && typeof o.collectionId !== "string") {
+    throw new HttpError(400, "A dashboard's block needs `collectionId` (a collection's id or name) or `collectionIds`");
+  }
+  const named = several?.length ? collectionOf(world, several[0]) : typeof o.collectionId === "string" ? collectionOf(world, o.collectionId) : own!;
+  const collectionIds = several && several.length > 1 ? several : undefined;
+  // Fields are named against what the block reads: with several collections, their merged columns.
+  const merges = Array.isArray(o.merges) ? (o.merges as ViewBlock["merges"]) : undefined;
+  const listed = collectionIds ? listedCollection(named, { collectionIds, merges }, world.collections).collection : named;
   const layout = (o.layout && typeof o.layout === "object" ? o.layout : {}) as Body;
   const ids = (v: unknown) => (Array.isArray(v) ? v.map((n) => fieldOf(listed, String(n)).id) : v);
   const block = parseBlock({
     id: newId(),
     title: "",
     ...o,
-    collectionId: listed === own ? null : listed.id,
+    collectionId: own && named === own ? null : named.id,
+    ...(!own && { collectionIds }),
     filters: o.filters === null || o.filters === undefined ? null : resolveRules<FilterRule>(listed, o.filters, "filters"),
     sort: resolveRules<SortRule>(listed, o.sort, "sort").map(({ fieldId, direction }) => ({ fieldId, direction })),
     // A sort given is a sort chosen (the block type's default no longer applies).
@@ -193,6 +215,26 @@ function blockIn(world: World, own: Collection, raw: unknown): ViewBlock {
   });
   if (!block) throw new HttpError(400, "A block needs a `kind` (table, cards, map, component, markdown, …)");
   return block;
+}
+
+/** The collections a dashboard tab's blocks list (those still there), each once. */
+const tabCollections = (world: World, blocks: ViewBlock[]): Collection[] => {
+  const ids = new Set(blocks.flatMap((b) => b.collectionIds ?? (b.collectionId ? [b.collectionId] : [])));
+  return world.collections.filter((c) => ids.has(c.id));
+};
+
+/** A page of a query's result: its groups' items in order (an item in several groups is in each), and how many there are in all. */
+function page(collection: Collection, result: QueryResult, limit: number, offset: number) {
+  let skip = offset;
+  let room = limit;
+  const groups = result.groups.map((g) => {
+    const shown = g.items.slice(Math.min(skip, g.items.length)).slice(0, room);
+    skip = Math.max(0, skip - g.items.length);
+    room -= shown.length;
+    return { key: g.key, label: g.label, total: g.items.length, items: shown.map((i) => itemOut(collection, i)) };
+  });
+  const total = result.groups.reduce((n, g) => n + g.items.length, 0);
+  return { grouped: isGrouped(result), groups: groups.filter((g) => g.items.length > 0), items: groups.flatMap((g) => g.items), total };
 }
 
 export function createApi(repo: Repository): Router {
@@ -320,7 +362,7 @@ export function createApi(repo: Repository): Router {
       o.blocks === undefined
         ? existing.blocks
         : Array.isArray(o.blocks) && o.blocks.length > 0
-          ? o.blocks.map((b) => blockIn(w, collection, b))
+          ? o.blocks.map((b) => blockIn(w, { own: collection }, b))
           : (() => {
               throw new HttpError(400, "`blocks` must be a list of at least one block");
             })(),
@@ -333,7 +375,7 @@ export function createApi(repo: Repository): Router {
     const resolved = v.map((raw) => {
       const o = (raw ?? {}) as Body;
       const layout = (o.layout && typeof o.layout === "object" ? o.layout : {}) as Body;
-      const blocks = Array.isArray(layout.blocks) ? layout.blocks.map((b) => blockIn(w, collection, b)) : [];
+      const blocks = Array.isArray(layout.blocks) ? layout.blocks.map((b) => blockIn(w, { own: collection }, b)) : [];
       const ids = (x: unknown) =>
         Array.isArray(x) ? x.map((n) => blocks.find((b) => b.id === n)?.id ?? fieldOf(collection, String(n)).id) : x;
       return {
@@ -390,18 +432,83 @@ export function createApi(repo: Repository): Router {
     const labels = new Map<string, ItemLabel[]>();
     const all = await computeItems(repo, w, collection, await repo.listItems(collection, spaceId), spaceId, labels);
     const refLabel = await refLabelForSpace(repo, collection, spaceId, w, labels);
-    const result = applyQuery(collection, all, query, { refLabel });
-    let skip = offset;
-    let room = limit;
-    const groups = result.groups.map((g) => {
-      const shown = g.items.slice(Math.min(skip, g.items.length)).slice(0, room);
-      skip = Math.max(0, skip - g.items.length);
-      room -= shown.length;
-      return { key: g.key, label: g.label, total: g.items.length, items: shown.map((i) => itemOut(collection, i)) };
-    });
-    const total = result.groups.reduce((n, g) => n + g.items.length, 0);
-    return { grouped: isGrouped(result), groups: groups.filter((g) => g.items.length > 0), items: groups.flatMap((g) => g.items), total };
+    return page(collection, applyQuery(collection, all, query, { refLabel }), limit, offset);
   };
+
+  /**
+   * The items a dashboard tab's block shows: the tab's filter made the block's (`dashboardFiltersFor`: "Date" is its date
+   * field), then the block's own. A block of several collections reads their items merged (its columns), as the app does;
+   * remote collections' rows aren't items here, so a block reading one is refused.
+   */
+  const blockItems = async (w: World, tab: DashboardView, block: ViewBlock, limit: number, offset: number) => {
+    const ids = block.collectionIds ?? (block.collectionId ? [block.collectionId] : []);
+    const parts = ids.map((id) => w.collections.find((c) => c.id === id));
+    if (parts.length === 0 || parts.some((c) => !c)) throw new HttpError(409, "A collection this block lists was deleted");
+    const remote = parts.find((c) => isRemote(c!));
+    if (remote) throw new HttpError(400, `The block reads ${remote.pluralName}, a remote collection: its rows aren't items in the API`);
+    if (!block.collectionIds) {
+      const collection = parts[0]!;
+      return queried(w, collection, tab.spaceId, blockQuery(dashboardFiltersFor(collection, tab.filters), block, blockSort(block, collection)), limit, offset);
+    }
+    const merged = listedCollection(parts[0]!, block, w.collections).collection;
+    const items: Item[] = [];
+    for (const part of resolveParts(merged, w.collections)) {
+      const own = await computed(w, part.collection, await repo.listItems(part.collection, tab.spaceId), tab.spaceId);
+      items.push(...nativeItems(merged, part, own, new WeakMap()));
+    }
+    // Merged columns are never references: no labels to look up.
+    const query = blockQuery(dashboardFiltersFor(merged, tab.filters), block, blockSort(block, merged));
+    return page(merged, applyQuery(merged, items, query, { refLabel: () => "" }), limit, offset);
+  };
+
+  const dashboardOf = async (name: string): Promise<Dashboard> => {
+    const all = await repo.listDashboards();
+    const d = all.find((x) => x.id === name) ?? all.find((x) => same(x.name, name));
+    if (!d) throw new HttpError(404, `No dashboard “${name}”`);
+    return d;
+  };
+
+  /**
+   * A dashboard's tab by id or name: in the space given (its own tabs, or the copies it shows of another space's), else
+   * among its stored tabs of every space.
+   */
+  const tabOf = async (w: World, dashboard: Dashboard, name: string, space?: string | null): Promise<DashboardView> => {
+    const tabs = space ? await repo.listDashboardViews(dashboard.id, spaceOf(w, space).id) : (await repo.listAllDashboardViews()).filter((v) => v.dashboardId === dashboard.id);
+    const tab = tabs.find((v) => v.id === name) ?? tabs.find((v) => same(v.name, name));
+    if (!tab) throw new HttpError(404, `${dashboard.name} has no tab “${name}”`);
+    return tab;
+  };
+
+  /** The tab as stored: a copy of another space's is stored in its space first (with the other copies there, as the app does). */
+  const storedTab = async (tab: DashboardView): Promise<DashboardView> => {
+    if (!tab.virtual) return tab;
+    const id = (await repo.storeDashboardViews(tab.dashboardId, tab.spaceId)).get(tab.id);
+    return (await repo.listDashboardViews(tab.dashboardId, tab.spaceId)).find((v) => v.id === id) ?? tab;
+  };
+
+  const tabIn = (w: World, o: Body, existing: DashboardView): DashboardView => {
+    const blocks =
+      o.blocks === undefined
+        ? existing.blocks
+        : Array.isArray(o.blocks)
+          ? o.blocks.map((b) => blockIn(w, { dashboard: true }, b))
+          : (() => {
+              throw new HttpError(400, "`blocks` must be a list of blocks");
+            })();
+    const { filterBar: _bar, ...rest } = existing;
+    const filterBar = o.filterBar === undefined ? existing.filterBar : o.filterBar === true;
+    return {
+      ...rest,
+      name: o.name === undefined ? existing.name : text(o, "name", true),
+      // A rule names a field of a block's collection, or "Date": each block's own date.
+      filters: o.filters === undefined ? existing.filters : resolveRules<FilterRule>([dashboardScope([]), ...tabCollections(w, blocks)], o.filters, "filters"),
+      blocks,
+      editable: o.editable === undefined ? existing.editable : o.editable !== false,
+      ...(filterBar && { filterBar: true as const }),
+    };
+  };
+
+  const tabsAnswer = async (dashboardId: string, spaceId: string) => json(200, (await repo.listDashboardViews(dashboardId, spaceId)).map(tabOut));
 
   /** An AI field of an item, the item, and the fingerprint of its prompt as the item reads now. */
   const aiOf = async (id: string, name: string) => {
@@ -709,6 +816,121 @@ export function createApi(repo: Repository): Router {
         return json(200, collectionOf(await world(), collection.id).itemViews);
       })
 
+      // Dashboards and their tabs
+      .add("GET", "/api/v1/dashboards", async (req) => {
+        const w = await world();
+        const space = req.query.has("space") ? spaceOf(w, req.query.get("space")) : null;
+        return json(200, (await repo.listDashboards()).filter((d) => !space || inSpace(d, space.id)).map(dashboardOut));
+      })
+      .add("GET", "/api/v1/dashboards/{d}", async (_req, { d }) => json(200, dashboardOut(await dashboardOf(d))))
+      .add("POST", "/api/v1/dashboards", async (req) => {
+        const o = await body(req);
+        const w = await world();
+        const name = text(o, "name", true).trim();
+        if ((await repo.listDashboards()).some((d) => same(d.name, name))) throw new HttpError(409, `There already is a dashboard “${name}”`);
+        // Its first tab is in `space`, and it is shown there only unless `spaces` says otherwise (as a new one in the app).
+        const space = spaceOf(w, text(o, "space"));
+        const id = newId();
+        const spaceIds = o.spaces === undefined ? [space.id] : spacesIn(w, o.spaces);
+        await repo.saveDashboard({ id, name, icon: text(o, "icon") ?? null, description: text(o, "description") ?? "", spaceIds }, space.id);
+        return json(201, dashboardOut(await dashboardOf(id)));
+      })
+      .add("PATCH", "/api/v1/dashboards/{d}", async (req, { d }) => {
+        const o = await body(req);
+        const w = await world();
+        const old = await dashboardOf(d);
+        await repo.saveDashboard(
+          {
+            id: old.id,
+            name: o.name === undefined ? old.name : text(o, "name", true).trim(),
+            icon: o.icon === undefined ? old.icon : (text(o, "icon") ?? null),
+            description: o.description === undefined ? old.description : (text(o, "description") ?? ""),
+            spaceIds: o.spaces === undefined ? old.spaceIds : spacesIn(w, o.spaces),
+          },
+          DEFAULT_SPACE_ID,
+        );
+        return json(200, dashboardOut(await dashboardOf(old.id)));
+      })
+      .add("DELETE", "/api/v1/dashboards/{d}", async (_req, { d }) => {
+        await repo.deleteDashboard((await dashboardOf(d)).id);
+        return json(200, { ok: true });
+      })
+      .add("GET", "/api/v1/dashboards/{d}/views", async (req, { d }) => {
+        const w = await world();
+        return tabsAnswer((await dashboardOf(d)).id, spaceOf(w, req.query.get("space")).id);
+      })
+      .add("GET", "/api/v1/dashboards/{d}/views/{v}/items", async (req, { d, v }) => {
+        const w = await world();
+        const tab = await tabOf(w, await dashboardOf(d), v, req.query.get("space") ?? DEFAULT_SPACE_ID);
+        const name = req.query.get("block");
+        const block = name === null ? tab.blocks[0] : (tab.blocks.find((b) => b.id === name) ?? tab.blocks.find((b) => same(b.title, name)));
+        if (!block) throw new HttpError(404, name === null ? `The tab “${tab.name}” has no blocks` : `The tab “${tab.name}” has no block “${name}”`);
+        const { limit, offset } = paging(req, 100, 1000);
+        const result = await blockItems(w, tab, block, limit, offset);
+        return json(200, {
+          view: { id: tab.id, name: tab.name },
+          block: { id: block.id, title: block.title, kind: block.kind },
+          blocks: tab.blocks.map((b) => ({ id: b.id, title: b.title, kind: b.kind })),
+          ...(result.grouped ? { groups: result.groups } : { items: result.items }),
+          total: result.total,
+          limit,
+          offset,
+        });
+      })
+      .add("POST", "/api/v1/dashboards/{d}/views", async (req, { d }) => {
+        const o = await body(req);
+        const w = await world();
+        const dashboard = await dashboardOf(d);
+        const space = spaceOf(w, text(o, "space"));
+        if (!inSpace(dashboard, space.id)) throw new HttpError(409, `${dashboard.name} isn't shown in ${space.name}`);
+        // A space showing another's tabs keeps them: they are stored here first, as the app does.
+        await repo.storeDashboardViews(dashboard.id, space.id);
+        const existing = await repo.listDashboardViews(dashboard.id, space.id);
+        const ts = new Date().toISOString();
+        const base: DashboardView = {
+          id: newId(),
+          dashboardId: dashboard.id,
+          spaceId: space.id,
+          name: "",
+          filters: [],
+          blocks: [],
+          editable: true,
+          collapsed: NOTHING_COLLAPSED,
+          position: Math.max(-1, ...existing.map((x) => x.position)) + 1,
+          isDefault: false,
+          createdAt: ts,
+          updatedAt: ts,
+        };
+        const tab = tabIn(w, { ...o, name: text(o, "name", true) }, base);
+        await repo.saveDashboardView(tab);
+        return json(201, tabOut(await tabOf(w, dashboard, tab.id, space.id)));
+      })
+      .add("PATCH", "/api/v1/dashboards/{d}/views/{v}", async (req, { d, v }) => {
+        const o = await body(req);
+        const w = await world();
+        const dashboard = await dashboardOf(d);
+        const old = await storedTab(await tabOf(w, dashboard, v, req.query.get("space")));
+        await repo.saveDashboardView(tabIn(w, o, old));
+        return json(200, tabOut(await tabOf(w, dashboard, old.id, old.spaceId)));
+      })
+      .add("DELETE", "/api/v1/dashboards/{d}/views/{v}", async (req, { d, v }) => {
+        const w = await world();
+        const tab = await storedTab(await tabOf(w, await dashboardOf(d), v, req.query.get("space")));
+        await repo.deleteDashboardView(tab.id);
+        return json(200, { ok: true });
+      })
+      .add("PUT", "/api/v1/dashboards/{d}/default-view", async (req, { d }) => {
+        const o = await body(req);
+        const w = await world();
+        const dashboard = await dashboardOf(d);
+        const space = spaceOf(w, text(o, "space"));
+        // Starring is per space: copies of another space's tabs are stored here first.
+        const tab = o.view === null || o.view === undefined ? null : await storedTab(await tabOf(w, dashboard, String(o.view), space.id));
+        if (!tab) await repo.storeDashboardViews(dashboard.id, space.id);
+        await repo.setDefaultDashboardView(dashboard.id, space.id, tab?.id ?? null);
+        return tabsAnswer(dashboard.id, space.id);
+      })
+
       // Bookmarks
       .add("GET", "/api/v1/bookmarks", async (req) => {
         const w = await world();
@@ -720,22 +942,31 @@ export function createApi(repo: Repository): Router {
         const space = spaceOf(w, text(o, "space"));
         const kind = o.kind;
         const target = text(o, "target", true);
-        let collectionId: string;
+        let ownerId: string;
+        let targetId: string;
         let label: string;
         if (kind === "item") {
           const { collection, item } = await itemOf(w, target);
           if (item.spaceId !== space.id) throw new HttpError(409, "The item is in another space");
-          collectionId = collection.id;
+          ownerId = collection.id;
+          targetId = target;
           label = itemOut(collection, item).label;
         } else if (kind === "view") {
           const collection = collectionOf(w, text(o, "collection", true));
           const view = await viewOf(w, collection, target, space.id);
-          collectionId = collection.id;
+          ownerId = collection.id;
+          targetId = view.id;
           label = `${collection.pluralName} / ${view.name}`; // as the app labels it
-        } else throw new HttpError(400, "`kind` must be item or view");
-        const targetId = kind === "item" ? target : (await viewOf(w, collectionOf(w, collectionId), target, space.id)).id;
+        } else if (kind === "dashboard") {
+          const dashboard = await dashboardOf(text(o, "dashboard", true));
+          // A tab copied from another space is stored in this one first: a bookmark needs a stored tab.
+          const tab = await storedTab(await tabOf(w, dashboard, target, space.id));
+          ownerId = dashboard.id;
+          targetId = tab.id;
+          label = `${dashboard.name} / ${tab.name}`; // as the app labels it
+        } else throw new HttpError(400, "`kind` must be item, view or dashboard");
         if ((await repo.listBookmarks(space.id)).some((b) => b.targetId === targetId)) throw new HttpError(409, "Already bookmarked");
-        await repo.addBookmark(kind, collectionId, targetId, text(o, "label") ?? label, space.id);
+        await repo.addBookmark(kind, ownerId, targetId, text(o, "label") ?? label, space.id);
         return json(201, (await repo.listBookmarks(space.id)).find((b) => b.targetId === targetId));
       })
       .add("PATCH", "/api/v1/bookmarks/{target}", async (req, { target }) => {
