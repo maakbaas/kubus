@@ -132,7 +132,7 @@ export async function handleSync(
     const before = await currentCursor(client);
     let wrote = false;
     for (const t of SYNC_TABLES) {
-      // A statement per set of columns (one, unless devices of several versions' rows were merged).
+      // A statement per set of columns (one: a device sends whole rows; a hand-made request may leave some out).
       const byColumns = new Map<string, WireRow[]>();
       for (const row of unique(t, pushed[t.name] ?? [])) {
         const id = columnsOf(t, row).join(",");

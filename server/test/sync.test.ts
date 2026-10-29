@@ -98,7 +98,7 @@ describe.skipIf(!ADMIN)("the server's side of sync", () => {
 
     it("writes more rows than one statement takes, and rows with different columns in one push", async () => {
       const many = Array.from({ length: 2500 }, (_, i) => space(`s${String(i).padStart(4, "0")}`, `Space ${i}`));
-      const { icon: _icon, ...older } = space("old", "From an older device");
+      const { icon: _icon, ...older } = space("old", "Hand-made, without its icon");
       await sync({ spaces: [...many, older] });
       expect((await pool.query("SELECT count(*)::int AS n FROM spaces")).rows).toEqual([{ n: 2501 }]);
       expect((await pool.query("SELECT icon FROM spaces WHERE id = 'old'")).rows).toEqual([{ icon: null }]);

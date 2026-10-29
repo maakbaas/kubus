@@ -1,6 +1,6 @@
 // @vitest-environment node
 // The item links index (item_links, docs/data-model.md "Item links"): kept by triggers with every local write
-// of a value, read as backlinks, rebuilt identically from the values, healed where an older app wrote a value.
+// of a value, read as backlinks, rebuilt identically from the values, healed where a sync brought values without their rows.
 import { beforeEach, describe, expect, it } from "vitest";
 import { healLinks } from "../schema";
 import { collectionDraft, newId, type Collection, type FieldDef, type FieldKind } from "../../domain/model";
@@ -253,11 +253,11 @@ describe("rebuilding and healing", () => {
     expect((await rows())[0].updated_at).toBe(await stampOf(id, w.about));
   });
 
-  it("makes missing rows and renews stale ones for values an older app wrote, queued for sync (the heal after a sync)", async () => {
+  it("makes missing rows and renews stale ones for values a sync brought without their rows, queued for sync (the heal after a first download)", async () => {
     const w = await world();
     const id = await repo.createItem(w.note, { [w.body]: link(w.person.id, w.ada), [w.about]: w.ada }, "default");
     await client.write([{ sql: "DELETE FROM sync_outbox" }]);
-    // An older device wrote both values anew (and the pull applied them: no triggers, no index rows).
+    // A server filled before the table existed sent both values anew (applied: no triggers, no index rows).
     const later = "2999-01-01T00:00:00.000Z";
     await sync(client, true);
     await client.write([
@@ -269,7 +269,7 @@ describe("rebuilding and healing", () => {
     expect(await queued()).toEqual([]);
     expect((await repo.listBacklinks(w.person.id, w.bob, "default")).map((l) => l.fieldId)).toEqual([]);
 
-    await client.write([healLinks([[id, w.body], [id, w.about]])]);
+    await client.write([healLinks()]);
     const healed = await rows();
     expect(healed.map((r) => [r.source_field_id, r.updated_at, parseTargets(r.targets)[0].item]).sort()).toEqual(
       [[w.body, later, w.bob], [w.about, later, w.bob]].sort(),
@@ -279,7 +279,7 @@ describe("rebuilding and healing", () => {
 
     // A value no older than its row is left as it is.
     await client.write([{ sql: "DELETE FROM sync_outbox" }]);
-    await client.write([healLinks([[id, w.body], [id, w.about]])]);
+    await client.write([healLinks()]);
     expect(await queued()).toEqual([]);
   });
 
@@ -288,18 +288,18 @@ describe("rebuilding and healing", () => {
     const id = await repo.createItem(w.note, { [w.about]: w.ada }, "default");
     const stamp = await stampOf(id, w.about);
     await client.write([{ sql: "UPDATE item_links SET updated_at = '2999-01-01T00:00:00.000Z', targets = '[]', deleted_at = '2999-01-01T00:00:00.000Z'" }]);
-    await client.write([healLinks(null)]);
+    await client.write([healLinks()]);
     expect((await rows())[0]).toMatchObject({ targets: "[]", updated_at: "2999-01-01T00:00:00.000Z" });
     expect(stamp < "2999").toBe(true);
   });
 
-  it("ends the row of a value that stopped linking, when only the value was written by an older app", async () => {
+  it("ends the row of a value that stopped linking, when only the value came from the server", async () => {
     const w = await world();
     const id = await repo.createItem(w.note, { [w.about]: w.ada }, "default");
     await sync(client, true);
     await client.write([{ sql: "UPDATE field_values SET value_ref = NULL, updated_at = '2999-01-01T00:00:00.000Z' WHERE item_id = ?1", bind: [id] }]);
     await sync(client, false);
-    await client.write([healLinks([[id, w.about]])]);
+    await client.write([healLinks()]);
     expect((await rows())[0]).toMatchObject({ targets: "[]", deleted_at: "2999-01-01T00:00:00.000Z", updated_at: "2999-01-01T00:00:00.000Z" });
     expect(await repo.listBacklinks(w.person.id, w.ada, "default")).toEqual([]);
   });

@@ -155,7 +155,7 @@ export interface Repository {
   listBacklinks(collectionId: string, itemId: string, spaceId: string): Promise<Backlink[]>;
   /**
    * Makes the item links agree with the stored values again, queued for sync as they change (they are kept as values are
-   * written and healed after a sync; this is for after a change in what counts as a link). Idempotent.
+   * written and healed after a first download; this is for after a change in what counts as a link). Idempotent.
    */
   rebuildLinks(): Promise<void>;
   /** Returns the id of the created item. */
