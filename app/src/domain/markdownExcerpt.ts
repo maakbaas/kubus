@@ -16,7 +16,10 @@ import { containsQuery } from "./tags";
 
 const MAX_BLOCKS = 3;
 
-const parser = unified().use(remarkParse).use(remarkGfm);
+/** The GFM parser, made on first use (a module that only imports this file, like the database worker, never builds it). */
+let parser: ReturnType<typeof makeParser> | undefined;
+const makeParser = () => unified().use(remarkParse).use(remarkGfm);
+const parse = (source: string) => (parser ??= makeParser()).parse(source);
 
 /** Inline containers whose children run together; other containers get spaces between children. */
 const PHRASING = new Set(["paragraph", "heading", "emphasis", "strong", "delete", "link", "linkReference", "tableCell"]);
@@ -52,7 +55,7 @@ const PLAIN_TEXTS_MAX = 20_000;
 export function markdownPlainText(source: string): string {
   let text = plainTexts.get(source);
   if (text === undefined) {
-    text = visibleText(parser.parse(source));
+    text = visibleText(parse(source));
     if (plainTexts.size >= PLAIN_TEXTS_MAX) plainTexts.delete(plainTexts.keys().next().value!);
   } else plainTexts.delete(source);
   plainTexts.set(source, text);
@@ -82,7 +85,7 @@ export function markdownExcerpt(source: string, query: string, exactTag = false)
   let section: RootContent | null = null;
   let sectionShown = false;
 
-  for (const node of parser.parse(source).children) {
+  for (const node of parse(source).children) {
     if (node.type === "heading") {
       section = node;
       sectionShown = false;
