@@ -9,6 +9,8 @@
 // Rules (ids in CRITERIA, audit.js):
 //   spacing-scale     margins, paddings and gaps on Carbon's spacing scale
 //   edge-align        a pane's content starts on one left edge
+//   block-fit         every block (on item pages too) lies inside its page's content box; what it draws (chart, map) inside the block
+//   phone-width       a window-wide pane on a phone: the page's content box is the window minus the page padding
 //   rhythm            equal gaps between the fields of an item page / the blocks of a view
 //   toolbar-pitch     icon buttons in a row at a 32px pitch: no gaps, no overlaps
 //   progress-stop     a progress bar sits in a LoadingBar with a "×" stop button, on the right edge of its
@@ -317,11 +319,13 @@ function __design(opts) {
         ["page title", ".page-header__title", 0, false],
         ["description", ".page-header__subtitle", 0, false],
         ["views bar", ".views-bar", 0, false],
-        ["block", ".block", 0, false],
+        ["block", "@blocks", 0, false],
         ["first view tab's label", ".views-bar .cds--tabs__nav-item:first-child", 16, true],
       ];
+      // Blocks of a collection view and of an item page (inside .item-fields): the outermost ones.
+      const blocks = [...content.querySelectorAll(".block")].filter((b) => visible(b) && !b.closest(".cds--popover-content, .cds--modal") && !b.parentElement.closest(".block"));
       for (const [name, sel, inset, text] of LEFT) {
-        for (const el of own(sel).slice(0, 4)) {
+        for (const el of (sel === "@blocks" ? blocks : own(sel)).slice(0, 4)) {
           // A tab list scrolled sideways (the selected tab brought into view) moves its labels with it.
         const scrolled = text ? el.closest(".cds--tab--list")?.scrollLeft ?? 0 : 0;
         const left = text ? textLeft(el) + scrolled : el.getBoundingClientRect().left;
@@ -330,12 +334,38 @@ function __design(opts) {
           judge("edge-align", Math.abs(d) <= 1, el, `${name} ${d}`, `${name} starts ${d}px off the page's left edge${inset ? ` (+${inset}px)` : ""}`);
         }
       }
-      const rights = [...own(".page-header__actions"), ...own(".views-bar"), ...own(".block > .section-header")].map((el) => [el, el.getBoundingClientRect().right]);
+      const rights = [...own(".page-header__actions"), ...own(".views-bar"), ...blocks.map((b) => b.querySelector(":scope > .section-header")).filter((h) => h && visible(h))].map((el) => [el, el.getBoundingClientRect().right]);
       if (rights.length > 1) {
         const ref = rights[0][1];
         for (const [el, right] of rights.slice(1)) {
           const d = Math.round(right - ref);
           judge("edge-align", Math.abs(d) <= 1, el, `right ${d}`, `ends ${d}px off the page header's right edge`);
+        }
+      }
+      // Blocks end where the page's content box does, and what a block draws stays inside the block:
+      // a chart's svg or a map's canvas that is wider than its block would push its "⋮" menu out.
+      const cb = content.getBoundingClientRect();
+      const cstyle = cs(content);
+      const boxRight = cb.right - px(cstyle.paddingRight) - (content.offsetWidth - content.clientWidth);
+      for (const b of blocks.slice(0, 12)) {
+        const br = b.getBoundingClientRect().right;
+        judge("block-fit", br <= boxRight + 1, b, `block ${Math.round(br - boxRight)}`, `ends ${Math.round(br - boxRight)}px beyond the page's content box`);
+        for (const d of [...b.querySelectorAll("svg, canvas")].filter((e) => visible(e) && !e.closest(".cds--popover-content, button, .cds--btn")).slice(0, 6)) {
+          const r = d.getBoundingClientRect();
+          if (r.width < 100) continue;
+          judge("block-fit", r.right <= br + 1, d, `drawn ${Math.round(r.right - br)}`, `a ${Math.round(r.width)}px-wide ${d.tagName.toLowerCase()} ends ${Math.round(r.right - br)}px beyond its block`);
+        }
+      }
+      // A pane as wide as a phone's window: the page's content box is the window minus one spacing-05.
+      const pr = pane.getBoundingClientRect();
+      if (vw <= 672 && Math.abs(pr.left) <= 1 && Math.abs(pr.right - vw) <= 1) {
+        const pad = 16;
+        const head = [...content.querySelectorAll(".page-header")].find(visible);
+        const left = crumb.getBoundingClientRect().left;
+        judge("phone-width", Math.abs(left - pad) <= 1, crumb, `left ${Math.round(left - pad)}`, `the page starts ${Math.round(left)}px from the window's left edge, not ${pad}px`);
+        if (head) {
+          const right = head.getBoundingClientRect().right;
+          judge("phone-width", Math.abs(vw - pad - right) <= 1, head, `right ${Math.round(vw - pad - right)}`, `the page header ends ${Math.round(vw - right)}px from the window's right edge, not ${pad}px`);
         }
       }
     }

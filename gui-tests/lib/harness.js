@@ -23,6 +23,8 @@ function test(name, fn, opts = {}) {
 
 const VIEWPORTS = {
   phone: { width: 390, height: 844, isMobile: true, hasTouch: true },
+  "phone-360": { width: 360, height: 780, isMobile: true, hasTouch: true },
+  "phone-412": { width: 412, height: 915, isMobile: true, hasTouch: true },
   "phone-small": { width: 320, height: 568, isMobile: true, hasTouch: true },
   tablet: { width: 820, height: 1180, isMobile: true, hasTouch: true },
   laptop: { width: 1024, height: 768 },

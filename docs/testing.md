@@ -9,7 +9,7 @@ Three kinds of tests, each split by the part of the app it covers, so that a cha
 touched: vitest (next to the code in `app/src`, the server's in `server/test`; seconds), the GUI suites
 (`gui-tests/suites/NN-*.js`, playwright-cli; minutes each, about an hour in all) and Rust (`desktop/`, `cargo test`
 in `build.yml`). CI: `test.yml` runs the critical ones on every push in parallel jobs (typecheck, unit, server, GUI
-smoke of the changed areas); `nightly.yml` the slow ones (the connectors' real services, the server image end to end (`tests/image-smoke.mjs`, suite `image`; `image.yml` runs it before publishing), the full GUI suite sharded
+smoke of the changed areas); `full.yml` the slow ones (the connectors' real services, the server image end to end (`tests/image-smoke.mjs`, suite `image`; `image.yml` runs it before publishing), the full GUI suite sharded
 over jobs, merged coverage).
 
 ## The vitest projects
@@ -58,9 +58,9 @@ for one); `tests/env.sh` sets a variable for each that answers, and a test file 
 
 | Service (pinned image) | Variable | Files | Seeded through | Start / test time (4 busy CPUs) | CI |
 |---|---|---|---|---|---|
-| InfluxDB 2.7.12 | `KUBUS_TEST_INFLUX` (`_ORG`, `_TOKEN`: the image's setup) | `influx.real.test.ts` | its HTTP API: a bucket, line protocol, a read-only token (`influxSeed.ts`) | 4 s / 35 s | nightly |
-| n8n 2.45.5 | `KUBUS_TEST_N8N` | `n8n.real.test.ts` | owner setup and API keys (`/rest`), data tables (`/api/v1/data-tables`) (`n8nSeed.ts`) | 1 to 2 min / 17 s | nightly |
-| Actual Budget server 26.10.0 + actual-http-api 26.10.1 | `KUBUS_TEST_ACTUAL` (`_KEY`) | `actual.real.test.ts` | actual-http-api's write routes; the empty budget is made by `actualSeed.cjs` when the `actual-api` service starts | 45 s / 25 s | nightly (compose: two services and a mounted script, which a job's service containers can't have) |
+| InfluxDB 2.7.12 | `KUBUS_TEST_INFLUX` (`_ORG`, `_TOKEN`: the image's setup) | `influx.real.test.ts` | its HTTP API: a bucket, line protocol, a read-only token (`influxSeed.ts`) | 4 s / 35 s | full.yml |
+| n8n 2.45.5 | `KUBUS_TEST_N8N` | `n8n.real.test.ts` | owner setup and API keys (`/rest`), data tables (`/api/v1/data-tables`) (`n8nSeed.ts`) | 1 to 2 min / 17 s | full.yml |
+| Actual Budget server 26.10.0 + actual-http-api 26.10.1 | `KUBUS_TEST_ACTUAL` (`_KEY`) | `actual.real.test.ts` | actual-http-api's write routes; the empty budget is made by `actualSeed.cjs` when the `actual-api` service starts | 45 s / 25 s | full.yml (compose: two services and a mounted script, which a job's service containers can't have) |
 
 Where `CI` is set a missing variable is an error (the `connectors` suite leaves these files out; `connectors-real` is the suite that runs them). Docker Hub rate-limits
 anonymous pulls: `mirror.gcr.io/<image>` has the same images (`docker tag` them to the pinned names).
@@ -149,5 +149,5 @@ npm run coverage:report                       # merges what exists: coverage/ind
 - `fixture-v1.sql` (with `schema-v1.sql`) is frozen: a migration must keep its rows, and the app
   must read them as they were. A later release whose data takes new shapes gets a fixture of
   its own version, made with that release's app.
-- A GUI suite's new area goes in `gui-tests/areas.mjs`, so `--changed` finds it. A new suite file needs nothing else: `npm run suite` and the nightly shards derive from `gui-tests/suites/` (a shard group in `tests/run.mjs` only balances the time).
+- A GUI suite's new area goes in `gui-tests/areas.mjs`, so `--changed` finds it. A new suite file needs nothing else: `npm run suite` and the shards of full.yml derive from `gui-tests/suites/` (a shard group in `tests/run.mjs` only balances the time).
 - A suite stays within 10 minutes (`tests/run.mjs` fails it otherwise); a new kind of suite gets an entry in `tests/run.mjs` and a row in `tests/README.md`.
