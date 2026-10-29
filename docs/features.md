@@ -176,6 +176,9 @@ What the app does, feature by feature (read the part you work on).
   connection" (`SyncControl.testServer`: `/api/health`, then whether the token is accepted; nothing saved) and Disconnect;
   sync, the server's model, remote collections and API tokens all use it), Sync (`ui/SyncSettings.tsx`; `?section=sync`: the
   "Sync this device" switch and "Download images", both applied at once, the state, Wipe local / server database),
+  Backup (`ui/BackupSettings.tsx`; `?section=backup`: "Download backup" saves the local database as `kubus-backup-YYYY-MM-DD.sqlite`
+  and says what it holds; "Restore from backup…" picks a file, refuses one that is no Kubus database or is a newer app's with the reason,
+  asks "Replace all data on this device?", replaces everything, leaves sync off and reloads; docs/sync.md "Backup and restore"),
   Connections (`ui/ConnectionSettings.tsx`; `?section=connections`: the server's remote sources, each set up by its kind's own fields, Host / Port / Database / User for PostgreSQL and so on, as the server describes them; docs/sync.md "Remote sources"; listed as a table like the list pages, name, kind,
   edit and delete icons, each one's problem or warnings above it, and "Add connection": a connection's name or edit icon
   opens its settings in a dialog, `?source=<id>` (`new` for one being added), whose Save stores them on the server at once;
@@ -217,6 +220,7 @@ What the app does, feature by feature (read the part you work on).
   `ViewBlock.hideHeader`, stored right away), on an item page with the layout's name toggle (a
   Markdown block too: unnamed, it is headed "Markdown" like any block): the header row goes with
   its menus (no buttons at all), so the content keeps the full width; the block can't collapse. A
+  table block's Fields popover has the same name toggle per field (hides that column's header label, `hiddenLabels`). A
   field shown without its name does the same with its label row's buttons ("Generate again"). The line between fields and
   blocks stays either way: a hidden header or name never joins two sections. What
   arranges a view is stored right away, applied to the shown and the saved view alike, so it never
@@ -241,6 +245,18 @@ What the app does, feature by feature (read the part you work on).
   filter's references (`filterPreset`). On item pages the same split holds: arranging the page
   (its layout: fields and blocks and their order, names shown, editable, hide empty) is stored
   right away too; only what a block shows waits for Save changes.
+- **Backlinks** (`domain/backlinks.ts`, `views/useBacklinks.ts`, docs/data-model.md "Item links"): the items that link to an item. A link is a
+  reference field's item(s) (Item, List of items) or a link to an item in a Markdown, HTML or AI text
+  (`#/collections/<c>/items/<id>`, whatever of its page the link names: a field, view or block counts as the item; the new item
+  form doesn't). On an item page a block can list **Backlinks**, offered only in the Collection picker of such blocks (Block settings;
+  `VIRTUAL_COLLECTIONS`; it is not in the store's collections, the side nav or any other picker): a virtual collection (`Collection.virtual`,
+  read-only like a remote one: `isReadOnly`, so its rows only open) with one row per link from a live native item of the shown space
+  that isn't the item itself, also for a remote collection's row. Fields: Item (a Markdown link to the linking item), Title (its label,
+  the collection's title), Collection (its plural name: group by it), Field (the name of the field its link is in); Created and Updated
+  are the linking item's. Every block type shows it (table, cards, chart, map, a Component block over `$items` / `$groups`) with filter, sort
+  and group; a new block starts with Title, Collection, Field and Updated (the title is already the row's link, `BACKLINKS_FIELDS`). A row opens
+  the linking item (`itemPath`). Its rows are read when the page shows and again with every item change (`useBacklinkData`,
+  `Repository.listBacklinks`). No backlinks to collections, views or blocks. Text in Component and string fields isn't scanned (not stored / not a link).
 - **Field order and layouts** (`app/src/domain/fieldLayout.ts`, `ui/FieldOrderEditor.tsx`): one
   approach for which fields show in which order: a block's fields (table columns, card fields)
   and item pages (`orderFields`; null = all in the collection's order). Item pages show an item view
@@ -277,7 +293,12 @@ What the app does, feature by feature (read the part you work on).
 - **Bookmarks** (`app/src/domain/bookmarks.ts`, table `bookmarks`): a bookmark icon on a view (tab strip,
   next to the star) and on an item (page header, next to (i)) toggles a link in the side nav's
   Bookmarks branch (of the shown space). A view bookmark opens `…/items?view=<id>`. Labels are snapshots, refreshed
-  while the bookmarked page is shown; bookmarks of deleted views / items aren't listed.
+  while the bookmarked page is shown; bookmarks of deleted views / items aren't listed (a remote collection's row has
+  no stored item: its bookmark, whose target is the row's id, lasts as long as the collection).
+- **Created and Updated** are pickable like fields (`META_FIELDS`, ids `$created` / `$updated`) but hidden by default: a
+  layout that never chose its fields (`fields: null`: item pages, table columns, card fields) leaves them out
+  (`orderFields`, `itemPageFields` in `domain/fieldLayout.ts`, the field selection's unticked rows); ticking them stores an explicit
+  list, which keeps them.
 - **Links open any scheme** (https, mailto, tel, spotify:, obsidian:, … open the app registered
   for it) except blocked ones (javascript:, data:, file:, …): `isOpenableUrl` / `safeUrl` in
   `platform/openExternal.ts`, used by Markdown (react-markdown's `urlTransform`), cells and the
@@ -292,6 +313,13 @@ What the app does, feature by feature (read the part you work on).
   href tried once per editor); one that names nothing stays as written and is resolved when clicked. `?block=` /
   `?field=` scroll to the target and flash it (`ui/useLinkTarget.ts`; blocks carry `data-block-id`, item page
   fields are found by their place among the page's entries).
+  **Link picker** (`ui/LinkPicker.tsx`, `domain/linkTargets.ts`, `app/useLinkTargets.ts`): typing `[text](` (text may
+  be empty) or `#/` after a space in the Markdown editor opens a Carbon list at the caret of the shown space's
+  collections, views and items (`item#field` lists that item's fields), filtered as typed (ranked: exact, prefix, word
+  start, inside, place; a typed or pasted address `#/collections/<id>/items…` finds the page it names). ↑/↓ move, Enter or
+  Tab choose, Escape closes it (editor keeps focus), a click chooses; choosing writes an ordinary `[text](#/collections/…)`
+  link by id (the text typed, else the option's name). No Markdown syntax is added (`linkTrigger` plugin only reports the
+  caret). Labels come from `Repository.listLabels`, per collection, read when first needed.
 - **Web addresses in plain values are links** (`Highlight`'s `links`, `splitUrls`): `http(s)://…` in text, list and
   checklist entries, AI and component text (cells, card fields, the item page) opens outside the app (`openExternal`;
   not the item, nor the value's editor). Never in titles (the title is the item's own link, or edited by a click), group
@@ -311,6 +339,8 @@ What the app does, feature by feature (read the part you work on).
   list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; a full-text index is roadmap #1).
   Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`); a result with no visible match is left out.
   An item opens at the first field that matched (`?field=`; at the top when its title matched), a Markdown block at the block.
+  A text that looks like a link address (`/`, `?`, `=` or `a#b`: `isAddressQuery`) also lists the pages whose link it fits
+  (a link list: `LinkTargetList`, the picker's matching), leaving out the collections and items already listed above.
 - **Remote collections** (`domain/sources.ts`, `collections.source`, `fields.source_column`; docs/sync.md
   "Remote sources"): a table (for InfluxDB a bucket's measurement) of one of the server's sources, shown like any collection
   but read-only. They have a page of their own, **Remotes** (`#/remotes`, `pages/RemotesPage.tsx`: the

@@ -1,6 +1,7 @@
 import type { FieldDef, FieldValue, Item, ItemLabel, Collection, CollectionDraft } from "../domain/model";
 import type { Bookmark, BookmarkKind } from "../domain/bookmarks";
 import type { ItemView } from "../domain/fieldLayout";
+import type { Backlink } from "../domain/backlinks";
 import type { Component } from "../domain/components";
 import type { Space } from "../domain/spaces";
 import type { CollectionView } from "../domain/views";
@@ -86,6 +87,20 @@ export interface Repository {
    * database. Whatever shows data must start over: the app reloads after it.
    */
   wipeLocal(): Promise<void>;
+  /**
+   * The whole local database as a SQLite file (a backup): every collection, item, view, component,
+   * setting kept in the database and the bytes of the images held on this device.
+   */
+  exportBackup(): Promise<Uint8Array>;
+  /** Throws why `bytes` is not a backup this app can restore (not SQLite, not Kubus's, damaged, newer); changes nothing. */
+  checkBackup(bytes: Uint8Array): Promise<void>;
+  /**
+   * Replaces all data on this device with a backup file's. Throws why a file is refused (not SQLite,
+   * not Kubus's, damaged, made by a newer app) before anything changes; an older one is migrated.
+   * Sync is paused first and forgets the server (as `SyncControl.pause`): the restored data meets
+   * the server like a device with data of its own meets one for the first time. The app reloads after it.
+   */
+  restoreBackup(bytes: Uint8Array): Promise<void>;
   /** Syncing with the Kubus server. */
   readonly sync: SyncControl;
 
@@ -122,6 +137,17 @@ export interface Repository {
    * items in every space, or of the given ones: what pickers and links need, without loading every value.
    */
   listLabels(collection: Collection, itemIds?: string[]): Promise<ItemLabel[]>;
+  /**
+   * The links to an item (of a native collection, or a remote one's row by its item id): one per linking item and
+   * field (item_links, docs/data-model.md), the linking items being native, live, in `spaceId`, and not the item
+   * itself. Most recently changed first.
+   */
+  listBacklinks(collectionId: string, itemId: string, spaceId: string): Promise<Backlink[]>;
+  /**
+   * Makes the item links agree with the stored values again, queued for sync as they change (they are kept as values are
+   * written and healed after a sync; this is for after a change in what counts as a link). Idempotent.
+   */
+  rebuildLinks(): Promise<void>;
   /** Returns the id of the created item. */
   createItem(collection: Collection, values: Record<string, FieldValue>, spaceId: string): Promise<string>;
   /**

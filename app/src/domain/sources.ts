@@ -7,11 +7,15 @@
 import { TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceRow, type SourceShape, type SourceSort } from "../../../shared/sources";
 import { resolveRange, rollingRangeValue } from "./datePeriod";
 import { fieldKindList } from "./fieldKinds";
+import { dateGroupLabel } from "./groupDate";
 import { blankField, isMetaField, newId, SELF_FIELD, selfField, titleFields, type Collection, type CollectionSource, type FieldDef, type FieldKind, type FieldValue, type Item } from "./model";
 import { filterTree, mapTree } from "./filterTree";
 import { filterValueProblem, isGroupable, waitsForValue, operatorsFor, TITLE, type FilterRule, type OperatorSpec, type ViewQuery } from "./query";
 
 export const isRemote = (collection: Pick<Collection, "source">): boolean => !!collection.source;
+
+/** Whether a collection's items can't be changed here: a remote one's rows, a virtual one's (the backlinks). */
+export const isReadOnly = (collection: Pick<Collection, "source" | "virtual">): boolean => isRemote(collection) || !!collection.virtual;
 
 /** Field types a column's field can be shown as (they read the same values): text also as Markdown or HTML. */
 export const columnKinds = (kind: FieldKind): FieldKind[] => (kind === "string" || kind === "markdown" || kind === "html" ? ["string", "markdown", "html"] : [kind]);
@@ -123,6 +127,7 @@ export function rowItem(collection: Collection, shape: SourceShape, row: SourceR
 export function groupLabel(field: FieldDef | undefined, key: string): string {
   if (key === "") return "(empty)";
   if (field?.kind === "checkbox") return key === "yes" ? "Checked" : "Not checked";
+  if (field?.kind === "date" || field?.kind === "datetime") return dateGroupLabel(key);
   return key;
 }
 

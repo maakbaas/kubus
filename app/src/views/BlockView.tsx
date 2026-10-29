@@ -1,7 +1,10 @@
 import { useEffect, useId, useMemo, useState } from "react";
-import { Button, Checkbox, Dropdown, InlineNotification, NumberInput, ProgressBar, TextInput } from "@carbon/react";
+import { LoadingBar } from "../ui/LoadingBar";
+import { Button, Checkbox, Dropdown, InlineNotification, NumberInput, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
+import { isReadOnly } from "../domain/sources";
+import { BACKLINKS_FIELDS, VIRTUAL_COLLECTIONS } from "../domain/backlinks";
 import { orderFields } from "../domain/fieldLayout";
 import { newId, pickableFields, titleFields, type Collection } from "../domain/model";
 import { placeProblem } from "../domain/components";
@@ -51,7 +54,9 @@ export function newPageBlock(target: Collection, page: Collection, spec?: { kind
   const link = target.fields.find((f) => (f.kind === "item" || f.kind === "item_list") && f.targetCollectionId === page.id);
   const filters: FilterRule[] = link ? [{ id: newId(), fieldId: link.id, operator: "is", value: PAGE_ITEM }] : [];
   const kind = spec?.kind ?? "table";
-  return normalizeBlock(target, { ...newBlock(kind, spec?.options ?? blockType(kind).defaultOptions(target)), collectionId: target.id, filters });
+  const block = { ...newBlock(kind, spec?.options ?? blockType(kind).defaultOptions(target)), collectionId: target.id, filters };
+  // The Backlinks collection starts with the fields that tell something (the title already is the link).
+  return normalizeBlock(target, target.virtual === "backlinks" ? { ...block, layout: { ...block.layout, fields: BACKLINKS_FIELDS } } : block);
 }
 
 /** Sorted by title (ascending), not grouped (where grouping applies): what every block starts with. */
@@ -80,6 +85,8 @@ interface MenusProps {
 export function BlockMenus({ collection, block, refs, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange }: MenusProps) {
   const uid = useId();
   const { components, collections } = useStore();
+  // The virtual collections (Backlinks) are listed only here, among the page's block collections.
+  const pageCollections = useMemo(() => [...collections, ...VIRTUAL_COLLECTIONS], [collections]);
   // A Markdown block's text is its own static component: promoted, it becomes a shared one (named
   // like the block), which the block then shows as a component block: the same text, now reusable
   // elsewhere and edited in the component editor.
@@ -185,7 +192,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
               id={`${uid}-collection`}
               titleText="Collection"
               label="Collection"
-              items={collections}
+              items={pageCollections}
               selectedItem={collection}
               itemToString={(c) => c?.pluralName ?? ""}
               itemToElement={(c) => (
@@ -198,7 +205,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
               onChange={({ selectedItem }) => {
                 if (!selectedItem || selectedItem.id === collection.id) return;
                 const { id: _id, title: _title, ...fresh } = newPageBlock(selectedItem, page);
-                onSet({ ...fresh, groupOrder: undefined });
+                onSet({ ...fresh, groupOrder: undefined, groupDate: undefined });
               }}
             />
           )}
@@ -223,7 +230,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
               const options = next.defaultOptions(collection);
               const showsTitle = (o: unknown) => !!(o as { showTitle?: boolean } | null)?.showTitle;
               const title = titleFields(collection)[0];
-              const shown = block.layout.fields ?? pickableFields(collection).map((f) => f.id);
+              const shown = block.layout.fields ?? orderFields(pickableFields(collection), null).map((f) => f.id);
               const fields =
                 title && showsTitle(options) && shown.includes(title.id)
                   ? shown.filter((id) => id !== title.id)
@@ -309,7 +316,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const base = blockQuery(viewFilters, block);
   const filters = useMemo(() => resolveFilterValues(base.filters, page ?? null), [base.filters, page]);
   const inherited = useMemo(() => resolveFilterValues(viewFilters ?? NO_FILTERS, page ?? null), [viewFilters, page]);
-  const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder]); // eslint-disable-line react-hooks/exhaustive-deps
+  const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder, base.groupDate]); // eslint-disable-line react-hooks/exhaustive-deps
   // A remote collection's rows come from its source a page at a time, filtered and sorted there.
   // Its Limit: items shown at first and added by each "Show more" (0: all, a remote collection's loaded page by page).
   const limit = blockLimit(block, !!uses.all);
@@ -360,6 +367,8 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
   // Searching the view: a block listing items that has none matching is left out altogether.
   if (search.trim() && uses.query && items && result.total === 0) return null;
+  // Not even its header until its items are in: a header alone would sit where the blocks above are about to push it away.
+  if (!items && !error) return null;
   return (
     <section className="block" data-block-id={block.id}>
       <SectionHeader
@@ -398,7 +407,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           fields={fields}
           layout={block.layout}
           options={block.options}
-          editable={editable}
+          editable={editable && !isReadOnly(collection)}
           onOptions={(options) => onSet({ options })}
           refs={data.refs}
           search={search}
@@ -414,18 +423,19 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           none), then filling as the rows come in; it doesn't change shape when the total arrives. */}
       {!collapsed && remote && (remote.waiting || remote.progress) && (
         <div className="block-more">
-          <ProgressBar
-            className="block-more__bar"
-            size="small"
+          <LoadingBar
             label={remote.progress ? `Loading rows: ${remote.progress.loaded} of ${remote.progress.total}` : "Loading rows"}
-            value={remote.progress?.loaded ?? 0}
-            max={Math.max(remote.progress?.total ?? 1, 1)}
+            value={remote.progress?.loaded}
+            max={remote.progress?.total}
+            onStop={remote.progress?.cancel ?? remote.stop}
           />
-          {limit === 0 && (
-            <Button kind="tertiary" size="sm" onClick={remote.progress?.cancel ?? remote.stop}>
-              Cancel
-            </Button>
-          )}
+        </div>
+      )}
+      {!collapsed && remote?.stopped && (
+        <div className="block-more">
+          <Button kind="tertiary" size="sm" onClick={remote.resume}>
+            Load rows
+          </Button>
         </div>
       )}
       {!collapsed && items && stepped && (

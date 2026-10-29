@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it } from "vitest";
-import { fileIds, schema } from "../schema";
+import { fileIds, linkTargetsFn, schema } from "../schema";
 import { acceptedStatement, editedStatement, generatedStatement } from "./generated";
 
 const T = "2026-10-21T10:00:00.000Z";
@@ -15,6 +15,7 @@ const rows = () => db.prepare("SELECT item_id, value_text, value_number, value_j
 beforeEach(() => {
   db = new DatabaseSync(":memory:");
   db.function("file_ids", { deterministic: true }, fileIds as (...args: unknown[]) => string);
+  db.function("link_targets", { deterministic: true }, linkTargetsFn as (...args: unknown[]) => string);
   db.exec(schema);
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(`INSERT INTO collections (id, name, plural_name, created_at, updated_at) VALUES ('t1', 'Album', 'Albums', '${T}', '${T}')`);

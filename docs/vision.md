@@ -55,8 +55,11 @@ Rules that keep this from becoming three products glued together:
 
 The stages, in order:
 
-- **Native Kubus core**: item links (reference fields), field and block components. Built.
+- **Native Kubus core**: item links (reference fields, links in Markdown), backlinks (the virtual Backlinks collection of an
+  item page's blocks, read from the synced `item_links` index: docs/features.md "Backlinks"), field and block components. Built.
 - **The server + sync** (docs/sync.md). Built.
+- **Backup**: the local database downloaded as a SQLite file and restored from one (Settings → Backup,
+  docs/sync.md "Backup and restore"). Built.
 - **Remote sources**, read-only: tables and SQL queries through the server, same views and
   components (docs/sync.md "Remote sources"). Built for Postgres, MySQL / MariaDB, n8n data tables, InfluxDB 2,
   Cloudflare D1, Actual Budget, calendar (ICS) subscriptions and JSON / CSV over HTTP. Remote data stays read-only by
@@ -67,7 +70,7 @@ The stages, in order:
 ## Open items
 
 Every open item, numbered (the other docs refer to them as "roadmap #n"). Nothing else in the docs
-is planned work.
+is planned work. A finished item is removed and its number not reused (#7, backup, is built: Settings → Backup).
 
 Native core:
 
@@ -91,7 +94,6 @@ Remote sources:
 
 Local storage:
 
-7. Export / import of the local database (sqlite file or JSON) for backups without sync.
 8. The database opening everywhere: several browser tabs at once (a SharedWorker or Web Locks
     leader election; today a second tab shows an error), and OPFS verified in the macOS
     (WKWebView) and Linux (WebKitGTK) Tauri builds.

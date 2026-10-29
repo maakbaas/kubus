@@ -568,7 +568,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
       )}
       {first.value !== "count" && !fieldsParts && <FieldSelect id={`${uid}-value-field`} label="Of" fields={numbers} value={first.field} onChange={(field) => setFirst({ field })} />}
       {o.chart === "stat" && check("showLabel", "Show the name above the number")}
-      {labelShown && (o.chart !== "stat" || o.showLabel) && <TextInput size="sm" id={`${uid}-value-label`} labelText="Label" placeholder={seriesLabel({ ...first, label: "" }, collection)} value={first.label} onChange={(e) => setFirst({ label: e.target.value })} />}
+      {o.chart === "meter" && check("showLabel", "Show the label above the meter (its name and total)")}
+      {labelShown && ((o.chart !== "stat" && o.chart !== "meter") || o.showLabel) && <TextInput size="sm" id={`${uid}-value-label`} labelText="Label" placeholder={seriesLabel({ ...first, label: "" }, collection)} value={first.label} onChange={(e) => setFirst({ label: e.target.value })} />}
     </Section>
   );
   const spokesSection = o.chart === "radar" && (

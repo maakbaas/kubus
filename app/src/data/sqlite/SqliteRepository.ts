@@ -31,6 +31,8 @@ import { decodeAiInput } from "../../domain/ai";
 import { draftProblem } from "../../domain/collectionDraft";
 import { firstShownFields, isRemote, sourcePeriod } from "../../domain/sources";
 import type { SqlClient, Statement } from "./protocol";
+import type { Backlink } from "../../domain/backlinks";
+import { healLinks } from "../schema";
 
 interface CollectionRow {
   id: string;
@@ -230,6 +232,20 @@ export class SqliteRepository implements Repository {
   async wipeLocal(): Promise<void> {
     await this.sync.pause();
     await this.db.wipe();
+  }
+
+  exportBackup(): Promise<Uint8Array> {
+    return this.db.exportDatabase();
+  }
+
+  checkBackup(bytes: Uint8Array): Promise<void> {
+    return this.db.importDatabase(bytes, true);
+  }
+
+  async restoreBackup(bytes: Uint8Array): Promise<void> {
+    await this.checkBackup(bytes); // a refused file changes nothing, not even sync
+    await this.sync.pause();
+    await this.db.importDatabase(bytes);
   }
 
   async listSpaces(): Promise<Space[]> {
@@ -482,6 +498,26 @@ export class SqliteRepository implements Repository {
     );
   }
 
+  async listBacklinks(collectionId: string, itemId: string, spaceId: string): Promise<Backlink[]> {
+    // The index row holds the targets as JSON; instr() narrows to the rows that mention the item at all.
+    const rows = await this.db.select<{ collection_id: string; item_id: string; field_id: string; created_at: string; updated_at: string }>(
+      `SELECT o.collection_id, o.id AS item_id, l.source_field_id AS field_id, o.created_at, o.updated_at
+         FROM item_links l
+         JOIN items o ON o.id = l.source_item_id AND o.deleted_at IS NULL AND o.space_id = ?3
+         JOIN collections c ON c.id = o.collection_id AND c.deleted_at IS NULL
+         JOIN fields f ON f.id = l.source_field_id AND f.deleted_at IS NULL
+        WHERE l.deleted_at IS NULL AND o.id <> ?2 AND instr(l.targets, ?2) > 0
+          AND EXISTS (SELECT 1 FROM json_each(l.targets) t WHERE json_extract(t.value, '$.item') = ?2 AND json_extract(t.value, '$.collection') = ?1)
+        ORDER BY o.updated_at DESC, o.id, f.position`,
+      [collectionId, itemId, spaceId],
+    );
+    return rows.map((r) => ({ sourceCollectionId: r.collection_id, sourceItemId: r.item_id, fieldId: r.field_id, itemCreatedAt: r.created_at, itemUpdatedAt: r.updated_at }));
+  }
+
+  async rebuildLinks(): Promise<void> {
+    await this.db.write([healLinks(null, true)]);
+  }
+
   async createItem(collection: Collection, values: Record<string, FieldValue>, spaceId: string): Promise<string> {
     const [id] = await this.createItems([{ collection, values, spaceId }]);
     return id;
@@ -629,11 +665,11 @@ export class SqliteRepository implements Repository {
       position: number;
       created_at: string;
     }>(
-      // Bookmarks of deleted views and items aren't shown.
+      // Bookmarks of deleted views and items aren't shown (a remote collection's rows aren't stored: their ids are keys).
       `SELECT b.* FROM bookmarks b JOIN collections t ON t.id = b.collection_id AND t.deleted_at IS NULL
         WHERE b.deleted_at IS NULL AND b.space_id = ?1
           AND (b.kind <> 'view' OR EXISTS (SELECT 1 FROM views v WHERE v.id = b.target_id AND v.deleted_at IS NULL))
-          AND (b.kind <> 'item' OR EXISTS (SELECT 1 FROM items o WHERE o.id = b.target_id AND o.deleted_at IS NULL))
+          AND (b.kind <> 'item' OR t.source IS NOT NULL OR EXISTS (SELECT 1 FROM items o WHERE o.id = b.target_id AND o.deleted_at IS NULL))
         ORDER BY b.position, b.created_at`,
       [spaceId],
     );

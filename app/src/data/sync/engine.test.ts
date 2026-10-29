@@ -5,8 +5,8 @@
 // connections in connect.test.ts, files and thumbnails in files.test.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newId, type Collection, type FieldDef } from "../../domain/model";
+import { openTestClient } from "../../test/engine";
 import { bytes, device as makeDevice, FakeServer, SERVER_URL, settled, TOKEN } from "../../test/fakeServer";
-import { DirectSqlClient } from "../sqlite/direct";
 import { SqliteRepository } from "../sqlite/SqliteRepository";
 import { memoryEnvironment } from "./environment";
 
@@ -25,7 +25,7 @@ const device: typeof makeDevice = async (options) => {
   return repo;
 };
 const openDevice = async (env: ReturnType<typeof memoryEnvironment>) => {
-  const repo = await SqliteRepository.open(await DirectSqlClient.open(), env);
+  const repo = await SqliteRepository.open(await openTestClient(), env);
   repos.push(repo);
   return repo;
 };

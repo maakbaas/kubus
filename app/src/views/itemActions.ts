@@ -1,5 +1,6 @@
 import type { ItemCache } from "../app/itemCache";
 import type { Repository } from "../data";
+import { itemPath } from "../domain/backlinks";
 import { itemLabel, labelField, nextName, type Collection, type FieldValue, type Item } from "../domain/model";
 import { groupPreset, type ViewQuery } from "../domain/query";
 import type { OpenMode } from "../workspace/Workspace";
@@ -50,7 +51,7 @@ export function readOnlyActions(actions: ItemActions): ItemActions {
 /** The handlers for the collection and query as they are now. */
 export function buildItemActions({ collection, stored, query, preset, onSort, confirm, onError }: ItemActionsOptions, { repo, cache, spaceId, openRelated }: ItemActionsEnvironment): ItemActions {
   return {
-    open: (item, mode, o) => openRelated(`/collections/${collection.id}/items/${item.id}${o?.edit ? "?edit=1" : ""}`, mode),
+    open: (item, mode, o) => openRelated(`${itemPath(collection, item)}${o?.edit ? "?edit=1" : ""}`, mode),
     async remove(item) {
       if (!(await confirm({ title: `Delete ${collection.name}?`, body: `This ${collection.name} will be removed.` }))) return;
       try {

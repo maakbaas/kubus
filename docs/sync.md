@@ -6,8 +6,8 @@ home-screen app.
 ## Sync with Postgres (the server and the sync engine)
 
 Repo layout: `app/` the web app (what Tauri and the phone run), `desktop/` the Tauri shell,
-`server/` the sync server (Node 24, runs its TypeScript directly, dependencies `pg` and
-`@sqlite.org/sqlite-wasm` for the headless device), `shared/` what both sides import: `sync.ts`
+`server/` the sync server (Node 24, runs its TypeScript directly, dependency `pg`; the headless device
+uses Node's built-in `node:sqlite`), `shared/` what both sides import: `sync.ts`
 the protocol (the list of synced tables / columns / types and the request shapes), `files.ts`
 (file ids, `fileIdsIn`), `router.ts` (the routes of the server and the API), `api.ts` (types of the
 server ↔ headless device interface).
@@ -49,6 +49,14 @@ needs server-side queries (docs/vision.md).
   missing. `now()`
   never goes below a timestamp received from the server (`observeStamp`), a cheap guard against clock
   skew instead of a hybrid logical clock.
+- *Item links* (`item_links`, docs/data-model.md "Item links"): derived from the values but synced, so devices and the server hold the
+  index. The row carries its value's own `updated_at` and is written in the same transaction (triggers on `field_values`, not while
+  `sync_applying`), so the newest-wins merge keeps value and row together. Values from a device that doesn't know the table (`SYNC_VERSION`
+  1, which `SYNC_COMPATIBLE` still lets sync; it never reads the table's rows) have no row: after applying a sync the engine
+  rebuilds the rows of the applied values that are missing or older (`healAppliedLinks`, after `sync_applying` is cleared, so the table's outbox trigger queues
+  them and the next sync sends them), and after a first download for every value. Nothing is computed on the server; it stores the rows
+  (jsonb `targets`, handed back as the same text). A newer app talking to a server that lacks the table is told to update the server
+  (the usual answer to an unknown table); a row that arrives alone announces its source item's change (`announce`).
 - *First connection to a server* (or a changed server URL): the server is the source of truth. If it
   holds data, that replaces everything on the device (one local transaction, nothing is sent; the
   Server tab (saving a new address while sync is on) and the Sync tab (switching it on) ask for confirmation first, `isNewServer`). Only an empty server takes the device's data
@@ -374,7 +382,7 @@ takes the new one when its settings are opened. A source's name: letters, digits
 app's own `SqliteRepository` running inside the server process as one more synced device
 (`app/src/headless`), never by writing to Postgres: so it follows the GUI's rules (field diffing,
 file release, AI fields, the "All" view, soft deletes, change sets).
-- *Device*: `DirectSqlClient` (sqlite-wasm in memory, `SqliteEngine` as in the worker), the real
+- *Device*: `NodeSqlClient` (`data/sqlite/node.ts`: Node's built-in `node:sqlite`, `SqliteEngine` as in the worker), the real
   `SyncEngine` with `memoryEnvironment({ keepFiles: false })` (settings in memory; file bytes dropped
   once uploaded, fetched from the server when asked), syncing over HTTP with `http://127.0.0.1:$PORT`
   and listening to `/api/events`. It starts with a first connection (everything but bytes). After a
@@ -383,18 +391,24 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   the server's: a device's cursor never exceeds the server's, so a higher one means the server's counter
   restarted (a wipe drops the sequences) and the device holds another database's data; it syncs, gets 409
   and starts over, so the API never answers with pre-wipe data even when the wipe signal was missed.
-- *Persistence* (`KUBUS_HEADLESS_DIR`, `headless/diskStore.ts`): unset, the database is in memory and every
-  server start downloads everything (`/api/v1` answers 503 until done; tests, development). Set to a
-  directory (the image: `/data/headless`, a volume in `docker-compose.yml`), the device saves its database
-  there as `headless.db` and resumes on the next start from its sync cursor: it logs `Resuming from …`
-  (or `Nothing saved in … yet` the first time), syncs only what came after, and `/api/v1` has the data at
-  once. sqlite-wasm under Node has no file system, so the database lives in memory and is saved as a
-  whole snapshot (`DirectSqlClient.export`) to a temporary file, fsynced and renamed over the old one, at
-  most every second (10 times as long as the last snapshot took, for big databases), after a write, and on
-  SIGTERM (`HeadlessHost.close`). The file is therefore always one complete database. The cursor
+- *Persistence* (`KUBUS_HEADLESS_DIR`, `headless/diskStore.ts`): unset, the database is `node:sqlite` in memory
+  (the same engine as with a directory, so tests and development run what production runs; sqlite-wasm would be a
+  second engine for nothing) and every server start downloads everything (`/api/v1` answers 503 until done). Set to a
+  directory (the image: `/data/headless`, a volume in `docker-compose.yml`), the device opens `headless.db` there
+  directly, a real SQLite file in WAL mode (`synchronous = NORMAL`, `busy_timeout` 5 s, foreign keys on): every
+  commit is in the file when it returns, `kill -9` or a crash leaves a consistent database with every commit up to
+  the last (only a power loss or kernel crash can lose the last few commits, which sync fetches again), and nothing
+  is saved "later". On start it logs `Resuming from …` (or `Nothing saved in … yet` the first time), syncs only what
+  came after its cursor, and `/api/v1` has the data at once. On SIGTERM (`HeadlessHost.close`) the log is folded into
+  the file. `headless.lock` keeps a second server process off the directory; a file that isn't a database is kept
+  aside as `headless.db.damaged-<time>` (with its `-wal` / `-shm` removed) and the device starts over. The cursor
   (`meta.sync_cursor`), the server's database id and the server address (`sync_server`) are rows of that same database,
-  written in the same transaction as the data they describe, so a snapshot is consistent by construction; after a crash
-  the device resumes from its last snapshot's cursor and fetches the rest (a sync is idempotent). Nothing
+  written in the same transaction as the data they describe, so after a crash the device resumes from its last
+  commit's cursor and fetches the rest (a sync is idempotent). *Backups*: the volume is a cache of Postgres (the
+  device rebuilds it with a first connection), so it needs none; to copy it anyway use `sqlite3 headless.db ".backup x.db"`
+  (safe while the server runs) or copy the three files `headless.db`, `-wal`, `-shm` together after stopping it; a
+  bare copy of `headless.db` alone while it runs may miss the log. Node's SQLite is flagged experimental, so the
+  start commands pass `--disable-warning=ExperimentalWarning` (Dockerfile, `npm start`, `npm run dev`).
   else needs to survive: the sync settings (`memoryEnvironment`) are set from the server's options at each
   start. The database is migrated like any device's (`SqliteRepository.open`; one from a newer version is
   left alone and the API says to update). If the server's database was replaced or wiped meanwhile (409, a
@@ -432,7 +446,7 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   run code on the server.
 - *Build*: `npm run build:headless` (`app/vite.headless.config.ts`, an SSR build) bundles
   `app/src/headless/index.ts` into `server/headless/index.js` (git-ignored; the Dockerfile's web stage
-  builds it); sqlite-wasm stays external. The server loads it with a dynamic import
+  builds it); `node:sqlite` stays external (built into Node). The server loads it with a dynamic import
   (`server/src/headless.ts`); without it `/api/v1` answers 503 saying to build it.
 - *Webhooks* (`headless/webhooks.ts`): `SyncEngine.onPulled` reports each sync's applied rows and
   the ones it sent (the API's own writes, which the server doesn't send back); the device turns them into events (item created / updated / deleted with the item as the API returns
@@ -451,6 +465,35 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   by method doesn't apply, every MCP request being a `POST`); with `"read"` the tools that write are neither
   listed nor run. An API refusal is a tool result with `isError` (the model can act on
   it), an unknown tool or one the token may not use a JSON-RPC error.
+
+**Backup and restore** (Settings → Backup, `ui/BackupSettings.tsx`; roadmap #7, built). *Download backup* is the whole
+local database as a plain SQLite file, `kubus-backup-YYYY-MM-DD.sqlite`: `SqliteEngine.exportDatabase`
+(`sqlite3_js_db_export`) runs inside the worker that holds the database, one request at a time, so no write is in flight and the
+file is a consistent snapshot; file bytes (`files.data`) are rows, so the images held on this device are in it. Not in it: what
+lives outside the database (the device's AI key `kubus.ai`, `kubus.sync` with the server's address and token, tab and
+display preferences in `localStorage`). The download is `platform/download.ts` (a blob link with `download`; works in
+a browser and in the Tauri window, which needs no plugin for it: WebView2 saves it to Downloads; macOS / Linux unverified).
+*Restore from backup…* (a Carbon `FileUploaderButton`) goes through `Repository.checkBackup` first, then a danger dialog ("Replace
+all data on this device?"), then `restoreBackup`; the app reloads after it. In the worker (`SqliteEngine.importDatabase`):
+- The file is opened **apart, in memory** (`openBackup`): the header must be `SQLite format 3\0`, the Kubus tables must be there,
+  `PRAGMA user_version` must not be newer than this app's (refused: "made by a newer version of Kubus … update the app"; an
+  older one is migrated by `ensureSchema` like any older database; a pre-release hash is refused), `quick_check` must pass. A refused file
+  changes nothing, not even sync (`dryRun`).
+- Only then is the live database replaced, in **one transaction** (a failure rolls back): the file is loaded as an attached
+  in-memory database (`sqlite3_deserialize` into schema `backup`) and its tables, rows, indexes and triggers are copied over those of
+  the open database. The SAH-pool VFS is never installed or reopened and the pool's files are not touched: the worker keeps its
+  lock and its connection (`acquireDbLock` / `poolFilesFree` / `waitForPoolFiles` stay in front of the one install in `worker.ts`),
+  and a crash half-way leaves the old database, not a half-written file.
+- **Sync after a restore.** The backup is data, not a position in a server's history: its `sync_cursor`, `sync_database`,
+  `sync_server` and outbox (those of the device that made it) are dropped, this device keeps its own `replica_id`, and
+  `restoreBackup` first pauses sync (`SyncControl.pause`: URL and token kept, the server forgotten) as `wipeLocal` does. So the
+  restored device is a device with data of its own meeting a server, which is the first connection: switching sync on asks "Connect to this server?",
+  then a server that holds data replaces the restored data (nothing is sent), an empty one receives all of it. A restore never pushes
+  itself over the server's data unasked, and an old cursor never merges it wrongly. Restoring an old backup on a device that still
+  has the server's newer data therefore needs a choice: leave sync off and use the backup alone, or let the server win. Merging them
+  is roadmap #9.
+Tests: `data/sqlite/backup.test.ts` (round trip incl. the first release's fixture, migration, every refusal, sync state),
+`worker.test.ts`, `client.test.ts`, `platform/platform.test.ts`, and suite 28 (the Backup tab: a real download, restore, cancel, refusals).
 
 **iOS / home-screen app.** The same web build. Status bar: no style meta (`default`); iOS
 colours the bar from the top tab strip (sticky, solid, full width; see Conventions). `body` is

@@ -1,15 +1,16 @@
 // The headless device: the app's own repository and sync engine inside the server process, with
-// an in-memory database (saved to a directory when the server has one, KUBUS_HEADLESS_DIR: see
-// diskStore.ts), so the HTTP API (/api/v1) follows exactly the rules the GUI does. It is
+// a database of node:sqlite (a file in a directory when the server has one, KUBUS_HEADLESS_DIR: see
+// diskStore.ts; in memory otherwise), so the HTTP API (/api/v1) follows exactly the rules the GUI does. It is
 // one more synced device: it syncs with the server over HTTP like the others, hears their changes
 // through /api/events, and its own writes reach them through sync. Bundled for Node by
 // `npm run build:headless` (app/vite.headless.config.ts) into server/headless, which the server
 // loads (server/src/headless.ts). See docs/sync.md, "The API".
 
+import { existsSync } from "node:fs";
 import type { HeadlessOptions, StartHeadless } from "../../../shared/api";
 import type { ApiRequest, ApiResponse } from "../../../shared/router";
 import { HttpError, json } from "../../../shared/router";
-import { DirectSqlClient } from "../data/sqlite/direct";
+import { NodeSqlClient } from "../data/sqlite/node";
 import { SqliteRepository } from "../data/sqlite/SqliteRepository";
 import { memoryEnvironment } from "../data/sync/environment";
 import { setCompiler } from "../domain/components";
@@ -25,6 +26,7 @@ export class HeadlessDevice {
   private constructor(
     readonly repo: SqliteRepository,
     private options: HeadlessOptions,
+    private client: NodeSqlClient,
     private store: DiskStore | null,
   ) {
     this.webhooks = new Webhooks(repo, options.webhooks, options.log);
@@ -37,21 +39,21 @@ export class HeadlessDevice {
   }
 
   /**
-   * Opens the device and connects it. Without a data directory it is empty and its first sync
-   * downloads everything (but file bytes). With one it opens what that holds and resumes from its
-   * sync cursor; if the server's database is another one (wiped, replaced, a different server) it
+   * Opens the device and connects it. Without a data directory it is empty (in memory) and its first
+   * sync downloads everything (but file bytes). With one it opens the database file there and resumes
+   * from its sync cursor; if the server's database is another one (wiped, replaced, a different server) it
    * starts over, as a running device does.
    */
   static async start(options: HeadlessOptions): Promise<HeadlessDevice> {
     setCompiler(contextCompiler);
     const store = options.dataDir ? await DiskStore.open(options.dataDir) : null;
+    let client: NodeSqlClient | null = null;
     try {
-      const client = await HeadlessDevice.openDatabase(store, options);
+      client = await HeadlessDevice.openDatabase(store, options);
       // File bytes stay on the server (fetched when asked): the database holds only rows.
       const repo = await SqliteRepository.open(client, memoryEnvironment({ keepFiles: false }));
-      const device = new HeadlessDevice(repo, options, store);
+      const device = new HeadlessDevice(repo, options, client, store);
       if (store) {
-        store.attach(() => client.export());
         const [saved] = await client.select<{ value: string }>("SELECT value FROM meta WHERE key = 'sync_cursor'");
         options.log(
           saved
@@ -65,26 +67,29 @@ export class HeadlessDevice {
       });
       return device;
     } catch (e) {
-      await store?.close(); // keeps what was saved and frees the directory for the next try
+      await client?.close(); // what was committed stays in the file
+      await store?.close(); // and the directory is free for the next try
       throw e;
     }
   }
 
-  private static async openDatabase(store: DiskStore | null, options: HeadlessOptions): Promise<DirectSqlClient> {
-    if (!store) return DirectSqlClient.open();
+  private static async openDatabase(store: DiskStore | null, options: HeadlessOptions): Promise<NodeSqlClient> {
+    if (!store) return NodeSqlClient.open();
+    const existed = existsSync(store.dbPath);
     try {
-      return await DirectSqlClient.open(undefined, { load: store.loaded, changed: store.changed });
+      return await NodeSqlClient.open(store.dbPath);
     } catch (e) {
       // A newer version's database waits for its version (it is never touched); a file that isn't a database is put aside.
-      if (!store.loaded || /newer version of Kubus/.test(String(e))) throw e;
+      if (!existed || /newer version of Kubus/.test(String(e))) throw e;
       options.log(`The saved database can't be opened (${e instanceof Error ? e.message : String(e)}): kept as ${await store.setAside()}, starting over`);
-      return DirectSqlClient.open(undefined, { changed: store.changed });
+      return NodeSqlClient.open(store.dbPath);
     }
   }
 
-  /** Saves the database to disk and frees the data directory (the server is stopping). */
+  /** Closes the database (its log folded into the file) and frees the data directory (the server is stopping). */
   async close(): Promise<void> {
     await this.queue.catch(() => {});
+    await this.client.close();
     await this.store?.close();
   }
 

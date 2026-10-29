@@ -3,7 +3,7 @@ import { codeProblem, componentUses, itemsInput, localComponents, placeProblem, 
 import { parseLayout } from "./fieldLayout";
 import type { Collection, FieldDef, Item } from "./model";
 import { filterPreset, PAGE_ITEM, pageItemField, resolvePageValues, type FilterRule } from "./query";
-import { blockLimit, blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery } from "./views";
+import { blockLimit, blockQuery, collapsedGroups, newBlock, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, parseBlock, parseViewConfig, sameView, withBlockCollapsed, withGroupCollapsed, withQuery } from "./views";
 
 const code = (text: string) => ({ code: text, ai: false });
 const field = (id: string, name: string, kind: FieldDef["kind"], targetCollectionId: string | null = null): FieldDef => ({
@@ -51,6 +51,18 @@ describe("blocks", () => {
     const b = withQuery({ ...newBlock("table", null), groupOrder: "count" }, { filters: [], sort: [], groupBy: "author" });
     expect(b.groupBy).toBe("author");
     expect("groupOrder" in b).toBe(false);
+  });
+
+  it("keep a date grouping (not the default day) from query to block and back, and read it from storage", () => {
+    const b = withQuery(newBlock("table", null), { filters: [], sort: [], groupBy: "when", groupDate: "week", groupOrder: "desc" });
+    expect(b).toMatchObject({ groupDate: "week", groupOrder: "desc" });
+    expect(Object.keys(b).slice(-2)).toEqual(["groupDate", "groupOrder"]);
+    expect(blockQuery(null, b)).toMatchObject({ groupBy: "when", groupDate: "week", groupOrder: "desc" });
+    expect(parseBlock(JSON.parse(JSON.stringify(b)))?.groupDate).toBe("week");
+    expect(parseBlock({ ...b, groupDate: "day" })).not.toHaveProperty("groupDate");
+    expect(parseBlock({ ...b, groupDate: "decade" })).not.toHaveProperty("groupDate");
+    expect("groupDate" in withQuery(b, { filters: [], sort: [], groupBy: "when" })).toBe(false);
+    expect(blockQuery(null, newBlock("table", null))).not.toHaveProperty("groupDate");
   });
 
   it("on item pages: layouts keep their blocks", () => {

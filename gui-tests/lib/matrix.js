@@ -44,8 +44,15 @@ function matrixTests(style, viewports = MATRIX_VIEWPORTS) {
   for (const vp of viewports) {
     test(`${style} content @ ${vp}`, async (t) => {
       await t.boot();
+      // The map blocks' style comes from OpenFreeMap: a blank one, so the pages load offline.
+      const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "*" };
+      await t.page.route("https://tiles.openfreemap.org/**", (route) => {
+        if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
+        if (route.request().url().includes("/styles/")) return route.fulfill({ status: 200, headers: CORS, json: { version: 8, name: "stub", sources: {}, layers: [{ id: "background", type: "background", paint: { "background-color": "#ffffff" } }] } });
+        return route.fulfill({ status: 404, headers: CORS, body: "" });
+      });
       // Long content has long field names too (table headers, card labels, item pages, editors).
-      const ids = await t.seed(matrixSpec(style, { items: style === "short" ? 3 : 14, longNames: style === "long", filterBar: true }));
+      const ids = await t.seed(matrixSpec(style, { drawn: true, items: style === "short" ? 3 : 14, longNames: style === "long", filterBar: true }));
       for (const [label, path] of matrixPages(ids)) {
         await t.open(path);
         await t.audit(label);

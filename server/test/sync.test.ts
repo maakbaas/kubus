@@ -109,6 +109,25 @@ describe.skipIf(!ADMIN)("the server's side of sync", () => {
       await sync({ spaces: [space("a", "first", T3), space("a", "last", T1)] });
       expect(await names()).toEqual(["a=last"]);
     });
+
+    it("stores the item links a device derives (jsonb targets) and hands them back as the text it was sent", async () => {
+      // The canonical text of the app (domain/backlinks.ts linkTargets): keys in jsonb's order, so it survives the round trip.
+      const targets = '[{"item":"i1","collection":"c1"},{"item":"i2","collection":"c2"}]';
+      const row = { id: "item/field", source_item_id: "item", source_field_id: "field", targets, updated_at: T2, deleted_at: null };
+      await sync({ item_links: [row] });
+      expect((await pool.query("SELECT targets, pg_typeof(targets)::text AS type FROM item_links")).rows).toEqual([{ targets: JSON.parse(targets), type: "jsonb" }]);
+      expect((await sync({})).changes.item_links).toEqual([row]);
+    });
+
+    it("lets the newer item link win, as it does for the value it belongs to, and keeps the stored one on an equal stamp", async () => {
+      const link = (targets: string, updated_at: string, deleted_at: string | null = null) => ({ id: "i/f", source_item_id: "i", source_field_id: "f", targets, updated_at, deleted_at });
+      await sync({ item_links: [link('[{"item":"a","collection":"c"}]', T2)] });
+      await sync({ item_links: [link('[{"item":"old","collection":"c"}]', T1)] });
+      await sync({ item_links: [link('[{"item":"tie","collection":"c"}]', T2)] });
+      expect((await pool.query("SELECT targets FROM item_links")).rows).toEqual([{ targets: [{ item: "a", collection: "c" }] }]);
+      await sync({ item_links: [link("[]", T3, T3)] });
+      expect((await pool.query("SELECT targets, deleted_at IS NOT NULL AS gone FROM item_links")).rows).toEqual([{ targets: [], gone: true }]);
+    });
   });
 
   describe("conflicts", () => {
@@ -236,6 +255,16 @@ describe.skipIf(!ADMIN)("the server's side of sync", () => {
       expect(result).toMatchObject({ outdated: { update: "app" } });
     });
 
+    it("syncs with a device from before the item links table: it sends values only, and is sent the links with the rest", async () => {
+      // SYNC_COMPATIBLE stays at 1: the table is an addition an older device leaves alone.
+      expect(SYNC_COMPATIBLE).toBe(1);
+      const link = { id: "i/f", source_item_id: "i", source_field_id: "f", targets: "[]", updated_at: T1, deleted_at: T1 };
+      await sync({ item_links: [link] });
+      const older = await sync({ spaces: [space("a", "A")] }, { version: 1, compatible: 1 });
+      expect(older.changes.item_links).toEqual([link]);
+      expect(await names()).toEqual(["a=A"]);
+    });
+
     it("writes what an older device sends and keeps what it doesn't know", async () => {
       await sync({ spaces: [space("a", "A", T1, { icon: "Star" })] });
       const { icon: _icon, ...older } = space("a", "A renamed", T2);
@@ -301,7 +330,7 @@ describe.skipIf(!ADMIN)("the server's schema and migrations", () => {
     await pool.query("INSERT INTO server_meta (key, value) VALUES ('keep', 'me')");
     const { rows: before } = await pool.query("SELECT value FROM server_meta WHERE key = 'database_id'");
     // As an older server left it: later tables gone, later columns missing, no migration record.
-    await pool.query("DROP TABLE api_tokens, server_settings, thumbnails, bookmarks, schema_migrations");
+    await pool.query("DROP TABLE api_tokens, server_settings, thumbnails, bookmarks, item_links, schema_migrations");
     await pool.query("ALTER TABLE collections DROP COLUMN source, DROP COLUMN title_field");
     await pool.query("ALTER TABLE fields DROP COLUMN source_column");
     await pool.query("ALTER TABLE spaces DROP COLUMN icon");
@@ -309,7 +338,7 @@ describe.skipIf(!ADMIN)("the server's schema and migrations", () => {
     await applySchema(pool, schemaSql); // and again: nothing to do
     expect(await columns("collections")).toEqual(expect.arrayContaining(["source", "title_field"]));
     expect(await columns("fields")).toContain("source_column");
-    for (const table of ["api_tokens", "server_settings", "thumbnails", "bookmarks"]) expect(await columns(table)).not.toEqual([]);
+    for (const table of ["api_tokens", "server_settings", "thumbnails", "bookmarks", "item_links"]) expect(await columns(table)).not.toEqual([]);
     expect((await pool.query("SELECT id, name, icon FROM spaces")).rows).toEqual([{ id: "s1", name: "Work", icon: null }]);
     expect((await pool.query("SELECT id FROM file_bytes")).rows).toEqual([{ id: "f" }]);
     expect((await pool.query("SELECT value FROM server_meta WHERE key IN ('database_id', 'keep') ORDER BY key")).rows).toEqual([{ value: before[0].value }, { value: "me" }]);

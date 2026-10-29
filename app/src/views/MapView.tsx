@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSP
 import { Checkbox, IconButton, Link, Select, SelectItem } from "@carbon/react";
 import { CenterToFit, Earth, ZoomIn, ZoomOut } from "@carbon/icons-react";
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
+import { itemPath } from "../domain/backlinks";
 import { isCoordinateField, isLocationTextField, locationOf, locationOfPair, type LngLat } from "../domain/geo";
 import { fieldValue, isStruckThrough, itemLabel, pickableFields, type Collection, type FieldDef, type Item } from "../domain/model";
 import { fieldText, isEmptyValue, isGrouped, type QueryResult } from "../domain/query";
@@ -443,7 +444,7 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
                       <div className="label">
                         <p title={itemLabel(collection, shownPlace.item)}>
                           <Link
-                            href={`#/collections/${collection.id}/items/${shownPlace.item.id}`}
+                            href={`#${itemPath(collection, shownPlace.item)}`}
                             {...itemLinkProps(shownPlace.item, actions)}
                             className={isStruckThrough(collection, shownPlace.item) ? "map-block__title item--struck" : "map-block__title"}
                           >

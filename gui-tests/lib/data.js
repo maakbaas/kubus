@@ -15,6 +15,7 @@
 //                   views?: [{ name, blocks: [partial ViewBlock with kind/options/layout/groupBy/sort;
 //                              componentKey (a shared component) or local: code (its own)], filters?, isDefault?, filterBar? (Show filter bar) }],
 //                   (a block filter value "$item.@key": the page item's field by key)
+//                   (a block's `collection` is a collection key, or the id of a virtual collection: "$backlinks")
 //                   itemViews?: [{ name, layout }] }],
 //   bookmarks: [{ kind: "item"|"view", collection, item?, view?, label }],
 //   prefs: { localStorageKey: value },
@@ -113,7 +114,7 @@ async function __seedInPage(spec) {
     const mapBlock = (b) => ({
       id: b.id || uid(), title: b.title || "", kind: b.kind || "table", filters: b.filters ? b.filters.map((r) => ({ id: uid(), fieldId: fieldId(r.field), operator: r.operator, value: String(r.value).replace(/@([a-z0-9_]+)/gi, (_, k) => fieldId(k)) })) : null,
       sort: b.sort ? b.sort.map((s) => ({ fieldId: fieldId(s.field), direction: s.direction || "asc" })) : [{ fieldId: "$title", direction: "asc" }],
-      groupBy: b.groupBy ? fieldId(b.groupBy) : null, layout: mapLayout(b.layout), collectionId: b.collection ? ids.collections[b.collection] : null,
+      groupBy: b.groupBy ? fieldId(b.groupBy) : null, layout: mapLayout(b.layout), collectionId: b.collection ? (ids.collections[b.collection] ?? b.collection) : null,
       options: b.options ? JSON.parse(JSON.stringify(b.options).replace(/"@([a-z0-9_]+)"/gi, (_, k) => JSON.stringify(fieldId(k)))) : b.kind === "cards" ? { coverFieldId: null, cardWidth: 16, coverRatio: "auto", showTitle: true, coverBeside: false } : b.kind === "markdown" ? { text: "" } : { titleLink: true, editable: true },
       ...(b.hideHeader ? { hideHeader: true } : {}),
       ...(b.componentKey ? { kind: "component", options: { componentId: ids.components[b.componentKey], local: null } } : {}),
@@ -287,6 +288,10 @@ function profileSpec(style, { items = 12, authors = 6, fieldsExtra = 0, longName
   };
 }
 
+/** A chart and a map block for the matrix (the map has no location field: it shows its message on the stubbed style). */
+const MATRIX_CHART = { kind: "chart", title: "Chart", options: { chart: "bar", x: { by: "field", field: "@done" }, series: [{ id: "a", value: "sum", field: "@count", label: "", style: null, axis: "left", transform: "none", window: 3 }] } };
+const MATRIX_MAP = { kind: "map", title: "Map", options: { locationFieldId: null, longitudeFieldId: null, height: 20, aspect: "none", route: false } };
+
 /** The profile plus views that exercise every block type. */
 function matrixSpec(style, opts = {}) {
   const spec = profileSpec(style, opts);
@@ -304,10 +309,26 @@ function matrixSpec(style, opts = {}) {
         { kind: "table", title: style === "long" ? TEXT.long[0] : "Table", layout: { fields: ["title", "count", "date", "done", "tags"] } },
         { kind: "cards", title: "Cards", options: { coverFieldId: "@cover", cardWidth: 10, coverRatio: "1/1", showTitle: true, coverBeside: false } },
         { kind: "component", local: "{{ 21 * 2 }}" },
+        ...(opts.drawn ? [MATRIX_CHART, MATRIX_MAP] : []),
       ],
     },
     ...filterBarView,
   ];
+  // `drawn`: the item page with one block of every kind that draws itself (chart, map) next to table,
+  // cards and markdown, all of which must fit the pane and share its right edge (design.js, edge-align).
+  if (opts.drawn) books.itemViews = [{
+    name: "Everything",
+    layout: {
+      fields: ["title", "notes", "count", "chartB", "mapB", "tableB", "cardsB", "mdB"],
+      blocks: [
+        { id: "chartB", collection: "books", ...MATRIX_CHART },
+        { id: "mapB", collection: "books", ...MATRIX_MAP },
+        { id: "tableB", kind: "table", collection: "books", title: "Table", layout: { fields: ["title", "count", "date", "done", "tags"] } },
+        { id: "cardsB", kind: "cards", collection: "books", title: "Cards", options: { coverFieldId: "@cover", cardWidth: 10, coverRatio: "1/1", showTitle: true, coverBeside: false } },
+        { id: "mdB", kind: "markdown", title: "Notes", options: { text: MARKDOWN[style] || MARKDOWN.typical } },
+      ],
+    },
+  }];
   spec.bookmarks = [
     { kind: "item", collection: "books", item: "books/i0", label: style === "long" ? TEXT.long[1] : "First book" },
     { kind: "view", collection: "books", view: "books/Cards", label: "Books / Cards" },

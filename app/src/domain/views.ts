@@ -7,6 +7,7 @@
 
 import { parseFieldLayout, type FieldLayout } from "./fieldLayout";
 import { newId, pickableFields, type Collection } from "./model";
+import { parseGroupDate, type GroupDate } from "./groupDate";
 import { defaultQuery, type FilterRule, type GroupOrder, type SortRule, type ViewQuery } from "./query";
 
 /** Name of a block type in the registry (src/views/index.ts). */
@@ -26,6 +27,8 @@ export interface ViewBlock {
   /** Field to group by, or null. */
   groupBy: string | null;
   groupOrder?: GroupOrder;
+  /** A date field's groups by year, month, week, day or hour (absent: day). */
+  groupDate?: GroupDate;
   /** Which fields it shows, in which order, and how. */
   layout: FieldLayout;
   /** The collection it lists; null = the page's own (always so in a collection view). */
@@ -162,7 +165,7 @@ export function pageFilterScope(collections: Collection[]): Collection {
   const names = new Map<string, number>();
   for (const c of collections) for (const f of c.fields) names.set(f.name, (names.get(f.name) ?? 0) + 1);
   const fields = collections.flatMap((c) => c.fields.map((f) => ((names.get(f.name) ?? 0) > 1 ? { ...f, name: `${f.name} (${c.name})` } : f)));
-  return { ...collections[0], fields, source: collections.every((c) => c.source) ? collections[0].source : null };
+  return { ...collections[0], fields, source: collections.every((c) => c.source) ? collections[0].source : null, virtual: collections.every((c) => c.virtual) ? collections[0].virtual : null };
 }
 
 /** No filter rules: always this array (frozen), so what is memoized on a query's filters stays. */
@@ -171,14 +174,13 @@ export const NO_FILTERS = Object.freeze([]) as unknown as FilterRule[];
 /** The query a block runs: its own filter on top of the one it inherits (its view's or item page's). */
 export function blockQuery(inherited: FilterRule[] | null, block: ViewBlock): ViewQuery {
   const query: ViewQuery = { filters: block.filters ?? NO_FILTERS, inherited: inherited ?? NO_FILTERS, sort: block.sort, groupBy: block.groupBy };
-  return block.groupOrder ? { ...query, groupOrder: block.groupOrder } : query;
+  return { ...query, ...(block.groupOrder && { groupOrder: block.groupOrder }), ...(block.groupDate && { groupDate: block.groupDate }) };
 }
 
 /** A block with a changed sort / grouping (the query editor edits a whole query). */
 export function withQuery(block: ViewBlock, query: ViewQuery): ViewBlock {
-  const { groupOrder: _old, ...rest } = block;
-  const next = { ...rest, sort: query.sort, groupBy: query.groupBy };
-  return query.groupOrder ? { ...next, groupOrder: query.groupOrder } : next;
+  const { groupOrder: _old, groupDate: _oldDate, ...rest } = block;
+  return { ...rest, sort: query.sort, groupBy: query.groupBy, ...(query.groupDate && { groupDate: query.groupDate }), ...(query.groupOrder && { groupOrder: query.groupOrder }) };
 }
 
 /** Whether two view states show the same thing (used to tell if a saved view was changed). */
@@ -206,6 +208,8 @@ export function parseBlock(raw: unknown): ViewBlock | null {
   };
   if (o.hideHeader === true) block.hideHeader = true;
   if (typeof o.limit === "number" && Number.isInteger(o.limit) && o.limit >= 0) block.limit = o.limit;
+  const groupDate = parseGroupDate(o.groupDate);
+  if (groupDate) block.groupDate = groupDate;
   return o.groupOrder === "desc" || o.groupOrder === "count" ? { ...block, groupOrder: o.groupOrder } : block;
 }
 

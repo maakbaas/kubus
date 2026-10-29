@@ -18,7 +18,11 @@ export type Request =
   | { id: number; op: "select"; sql: string; bind?: Bind }
   | { id: number; op: "write"; statements: Statement[] }
   /** Drops every table and creates the schema afresh (the app reloads after it). */
-  | { id: number; op: "wipe" };
+  | { id: number; op: "wipe" }
+  /** The whole database as a SQLite file's bytes. */
+  | { id: number; op: "export" }
+  /** Replaces the database with a backup file's (`dryRun`: only checks it, throwing why not). */
+  | { id: number; op: "import"; bytes: Uint8Array; dryRun: boolean };
 
 export type Response = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };
 
@@ -30,4 +34,11 @@ export interface SqlClient {
   write(statements: Statement[]): Promise<void>;
   /** Drops all data: every table empty, as in a new database. */
   wipe(): Promise<void>;
+  /** The whole database as a SQLite file (a consistent snapshot, files' bytes included). */
+  exportDatabase(): Promise<Uint8Array>;
+  /**
+   * Replaces the whole database with a backup file's (migrated if older; sync state not carried over),
+   * or with `dryRun` only checks the file. Throws why a file is refused; the database is then untouched.
+   */
+  importDatabase(bytes: Uint8Array, dryRun?: boolean): Promise<void>;
 }

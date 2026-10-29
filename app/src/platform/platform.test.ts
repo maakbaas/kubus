@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { suppressShellContextMenu } from "./contextMenu";
 import { trackKeyboardInset } from "./keyboardInset";
+import { downloadFile } from "./download";
 import { createLlmClient, DEFAULT_LLM_SETTINGS } from "./llm";
 import { openExternal } from "./openExternal";
 
@@ -158,13 +159,15 @@ describe("the shell's context menu", () => {
 });
 
 describe("the keyboard inset", () => {
-  function setup(viewport: { height: number; offsetTop: number } | undefined, innerHeight = 800) {
+  function setup(viewport: { height: number; offsetTop: number; pageTop?: number } | undefined, innerHeight = 800) {
     const style = { setProperty: vi.fn() };
     const handlers = new Map<string, () => void>();
-    const visualViewport = viewport && { ...viewport, addEventListener: (type: string, h: () => void) => handlers.set(type, h) };
-    vi.stubGlobal("window", { innerHeight, visualViewport });
+    const windowHandlers = new Map<string, () => void>();
+    const visualViewport = viewport && { pageTop: 0, ...viewport, addEventListener: (type: string, h: () => void) => handlers.set(type, h) };
+    const win = { innerHeight, visualViewport, scrollX: 0, scrollY: 0, scrollTo: vi.fn(), addEventListener: (type: string, h: () => void) => windowHandlers.set(type, h) };
+    vi.stubGlobal("window", win);
     vi.stubGlobal("document", { documentElement: { style } });
-    return { style, handlers, viewport: visualViewport };
+    return { style, handlers, windowHandlers, win, viewport: visualViewport };
   }
 
   it("is the height the keyboard covers, set now and whenever the viewport changes", () => {
@@ -177,6 +180,43 @@ describe("the keyboard inset", () => {
     t.viewport!.offsetTop = 50; // panned down by iOS: that part is not covered
     t.handlers.get("scroll")!();
     expect(t.style.setProperty).toHaveBeenLastCalledWith("--keyboard-inset", "250px");
+  });
+
+  it("is measured again when the window turns, and once more after iOS reports the new height", () => {
+    vi.useFakeTimers();
+    try {
+      const t = setup({ height: 800, offsetTop: 0 });
+      trackKeyboardInset();
+      // Turned: the visual viewport event came first, the window's new height only now.
+      t.win.innerHeight = 400;
+      t.viewport!.height = 400;
+      t.windowHandlers.get("orientationchange")!();
+      expect(t.style.setProperty).toHaveBeenLastCalledWith("--keyboard-inset", "0px");
+      // iOS still reported the old window height at that moment; later it is right.
+      t.win.innerHeight = 800;
+      t.viewport!.height = 500;
+      t.windowHandlers.get("resize")!();
+      expect(t.style.setProperty).toHaveBeenLastCalledWith("--keyboard-inset", "300px");
+      t.viewport!.height = 800;
+      vi.advanceTimersByTime(300);
+      expect(t.style.setProperty).toHaveBeenLastCalledWith("--keyboard-inset", "0px");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("puts a panned window back at 0,0 once no keyboard covers it, and leaves it while one does", () => {
+    const t = setup({ height: 500, offsetTop: 0 });
+    t.win.scrollY = 120;
+    trackKeyboardInset();
+    expect(t.win.scrollTo).not.toHaveBeenCalled(); // iOS panned it to show the focused field
+    t.viewport!.height = 800;
+    t.handlers.get("resize")!();
+    expect(t.win.scrollTo).toHaveBeenCalledWith(0, 0);
+    t.win.scrollTo.mockClear();
+    t.win.scrollY = 0;
+    t.handlers.get("resize")!();
+    expect(t.win.scrollTo).not.toHaveBeenCalled();
   });
 
   it("is never negative", () => {
@@ -228,5 +268,26 @@ describe("the service worker", () => {
     expect((await load({ prod: false, worker: true })).loads).toHaveLength(0);
     expect((await load({ prod: true, worker: false })).loads).toHaveLength(0);
     expect((await load({ prod: true, worker: true, tauri: true })).loads).toHaveLength(0);
+  });
+});
+
+describe("downloadFile", () => {
+  it("clicks a hidden blob link named after the file, then lets go of the blob", () => {
+    vi.useFakeTimers();
+    const clicks: { href: string; download: string }[] = [];
+    const link = { href: "", download: "", style: {} as Record<string, string>, click: () => clicks.push({ href: link.href, download: link.download }), remove: vi.fn() };
+    const append = vi.fn();
+    vi.stubGlobal("document", { createElement: () => link, body: { append } });
+    const revoked: string[] = [];
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:kubus/1");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation((u) => void revoked.push(u));
+    downloadFile("kubus-backup-2026-10-29.sqlite", new Uint8Array([1, 2, 3]), "application/vnd.sqlite3");
+    expect(clicks).toEqual([{ href: "blob:kubus/1", download: "kubus-backup-2026-10-29.sqlite" }]);
+    expect(append).toHaveBeenCalledWith(link);
+    expect(link.remove).toHaveBeenCalled();
+    expect(revoked).toEqual([]);
+    vi.advanceTimersByTime(60_000);
+    expect(revoked).toEqual(["blob:kubus/1"]);
+    vi.useRealTimers();
   });
 });

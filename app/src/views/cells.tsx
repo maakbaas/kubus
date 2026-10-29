@@ -12,6 +12,7 @@ import { AiStatus } from "../ui/AiStatus";
 import { Highlight } from "../ui/Highlight";
 import { ImageThumb } from "../ui/images";
 import { ItemLink } from "../ui/ItemLink";
+import { RelatedLink } from "../ui/RelatedLink";
 import { formatValue, type RefOptions } from "../ui/useReferenceOptions";
 import type { ItemActions } from "./registry";
 
@@ -50,13 +51,18 @@ export { isMetaField };
 
 /**
  * Markdown as a one-line preview (syntax stripped, see markdownPreviewParts) whose links stay
- * links: they open in the browser, without also opening the item or editing the cell.
+ * links: they open in the browser (links to the app's own pages in the workspace), without also opening the item or editing the cell.
  */
 function MarkdownPreview({ source, search }: { source: string; search: string }) {
   return (
     <span>
       {markdownPreviewParts(source).map((part, i) =>
-        typeof part === "string" || !isOpenableUrl(part.href) ? (
+        typeof part !== "string" && part.href.startsWith("#/") ? (
+          // A link to a page of the app (an item, a view): opened in the workspace, as the item links of Markdown are.
+          <RelatedLink key={i} path={part.href.slice(1)}>
+            <Highlight text={part.text} query={search} tags={false} />
+          </RelatedLink>
+        ) : typeof part === "string" || !isOpenableUrl(part.href) ? (
           // Inline code or a link that can't be opened: as text (no tags in it, like rendered Markdown).
           <Highlight key={i} text={typeof part === "string" ? part : part.text} query={search} tags={typeof part === "string"} />
         ) : (

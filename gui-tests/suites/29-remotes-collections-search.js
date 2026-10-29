@@ -60,6 +60,14 @@ async function fakeRemotes(t, url = CRM_URL) {
       }
       return route.fulfill({ status: 200, headers: cors, json: { rows, more: end < fake.total, ...(body.counts && { total: fake.total }) } });
     }
+    if (/^\/api\/sources\/[^/]+\/row$/.test(path)) {
+      // One row by its key (an item page of a remote collection).
+      const body = JSON.parse(req.postData() || "{}");
+      const i = Number(body.keyValue) - 1;
+      if (!(i >= 0 && i < fake.total)) return route.fulfill({ status: 200, headers: cors, json: { row: null } });
+      const cell = { id: i + 1, name: `Customer ${i + 1}`, city: `City ${i % 7}`, active: i % 2 === 0 };
+      return route.fulfill({ status: 200, headers: cors, json: { row: { key: String(i + 1), values: body.columns.map((c) => (c in cell ? cell[c] : null)) } } });
+    }
     return route.fulfill({ status: 404, headers: cors, json: { error: "Not found" } });
   });
   return fake;
@@ -114,7 +122,16 @@ const storedCollections = (t) => t.page.evaluate(async () => JSON.parse(JSON.str
 const storedBy = async (t, plural) => (await storedCollections(t)).find((c) => c.pluralName === plural) ?? null;
 
 /** Scrolls everything back to the top (a sticky header over scrolled rows is not what the audit looks at). */
-const toTop = (t) => t.page.evaluate(() => document.querySelectorAll("*").forEach((el) => el.scrollTop > 0 && (el.scrollTop = 0)));
+/** The × of a loading bar. */
+const stopOf = (t) => pane(t).locator(".block-more .loading-bar").getByRole("button", { name: "Stop loading" });
+/** The × ends where the block's header buttons end (the same right edge), and is a 32px button. */
+const alignedWithHeader = (t) =>
+  pane(t).evaluate((el) => {
+    const stop = el.querySelector(".loading-bar .cds--btn--icon-only")?.getBoundingClientRect();
+    const head = [...el.querySelectorAll(".block > .section-header .cds--btn--icon-only")].map((b) => b.getBoundingClientRect().right);
+    return !!stop && head.length > 0 && Math.abs(stop.right - Math.max(...head)) <= 1.5 && Math.round(stop.width) === 32;
+  });
+const toTop =(t) => t.page.evaluate(() => document.querySelectorAll("*").forEach((el) => el.scrollTop > 0 && (el.scrollTop = 0)));
 
 /** The rows of the first table block on the page. */
 const tableRows = (t) => pane(t).locator(".block table tbody tr");
@@ -312,7 +329,7 @@ test("remotes: row actions — duplicate, delete asks first and leaves the sourc
   void id;
 }, { viewport: "desktop" });
 
-// A remote block reads a page at a time, from the source: Show more, the progress of loading every row and its Cancel.
+// A remote block reads a page at a time, from the source: Show more, the loading bar and its ×.
 test("remote block: pages, Show more, errors", async (t) => {
   await t.boot();
   const fake = await fakeRemotes(t);
@@ -323,8 +340,20 @@ test("remote block: pages, Show more, errors", async (t) => {
   fake.holdFrom = 0;
   await t.open(t.listPath(id), { settle: false });
   await t.until("while the first page is on its way, a bar says rows are loading", async () => (await pane(t).locator(".block-more .cds--progress-bar").count()) === 1 && fake.queries.length === 1);
-  await t.check("the bar has no Cancel for a block with a Limit", (await pane(t).locator(".block-more").getByRole("button", { name: "Cancel" }).count()) === 0);
+  await t.check("the bar has a × to stop, also for a block with a Limit", (await stopOf(t).count()) === 1);
+  await t.check("the × lines up with the block's header buttons", await alignedWithHeader(t));
+  await t.audit("remote block, first page on its way");
+  // Stopping drops the answer: no rows, and "Load rows" asks again.
+  await stopOf(t).click();
   release();
+  await t.until("stopping the first page leaves no bar and offers Load rows", async () => (await pane(t).locator(".block-more .cds--progress-bar").count()) === 0 && (await pane(t).getByRole("button", { name: "Load rows" }).count()) === 1);
+  await t.settle(300);
+  await t.check("the late answer showed no rows", (await tableRows(t).count()) === 0);
+  fake.hold = null;
+  await pane(t).getByRole("button", { name: "Load rows" }).click();
+  await t.until("Load rows brings the first page", async () => (await tableRows(t).count()) === 100 && (await pane(t).getByRole("button", { name: "Load rows" }).count()) === 0);
+  fake.queries.length = 0;
+  await t.open(t.listPath(id));
   await t.until("the first hundred rows are in", async () => (await tableRows(t).count()) === 100);
   await t.until("the bar is gone", async () => (await pane(t).locator(".block-more .cds--progress-bar").count()) === 0);
   await t.check("the block says 100 of 250", (await pane(t).locator(".block-more").innerText()).replace(/\s+/g, " ").includes("100 of 250"));
@@ -364,9 +393,11 @@ test("remote block: loading every row shows its progress, can be cancelled and g
   const bar = pane(t).locator(".block-more");
   await t.until("the bar counts the rows in, of the total", async () => (await bar.innerText().catch(() => "")).includes("Loading rows") && (await bar.locator("[aria-valuenow]").first().getAttribute("aria-valuenow").catch(() => null)) === "40", await bar.innerText().catch(() => ""));
   await t.check("the bar's label is Loading rows: 40 of 120", (await bar.innerText()).replace(/\s+/g, " ").includes("Loading rows: 40 of 120"), await bar.innerText());
-  await t.check("it can be cancelled", (await bar.getByRole("button", { name: "Cancel" }).count()) === 1);
+  await t.check("it can be stopped with a ×", (await stopOf(t).count()) === 1);
+  await t.check("the × lines up with the block's header buttons", await alignedWithHeader(t));
+  await stopOf(t).focus();
   await t.audit("loading every row, progress");
-  await bar.getByRole("button", { name: "Cancel" }).click();
+  await t.page.keyboard.press("Enter");
   release();
   await t.until("after Cancel the rows in stay and Load all rows is offered", async () => (await pane(t).getByRole("button", { name: "Load all rows" }).count()) === 1);
   await t.settle(400);
@@ -917,6 +948,51 @@ test("search: nothing typed, nothing found, a tag, a count that stops at 50", as
   await t.audit("search, a tag");
 }, { viewport: "desktop" });
 
+test("search: a link address finds the page it names, once", async (t) => {
+  await t.boot();
+  const ids = await t.seed({
+    collections: [
+      {
+        key: "notes", name: "Note", plural: "Notes",
+        fields: [{ key: "title", name: "Title", kind: "string" }, { key: "body", name: "Body", kind: "string" }],
+        views: [{ name: "Archive", blocks: [{ kind: "table", title: "All" }] }],
+        items: [{ key: "a", values: { title: "Alpha", body: "" } }, { key: "b", values: { title: "Beta", body: "" } }],
+      },
+    ],
+  });
+  const cid = ids.collections.notes;
+  const alpha = ids.items["notes/a"];
+  const beta = ids.items["notes/b"];
+  const viewId = await t.page.evaluate(async (c) => (await window.kubus.repo.listAllViews()).find((v) => v.collectionId === c && v.name === "Archive").id, cid);
+  // Beta's body holds Alpha's address as plain text: Alpha is found by that text too.
+  await t.page.evaluate(async ([c, id, text]) => {
+    const col = (await window.kubus.repo.listCollections()).find((x) => x.id === c);
+    await window.kubus.repo.updateItem(col, id, { [col.fields[0].id]: "Beta", [col.fields[1].id]: text });
+  }, [cid, beta, `see #/collections/${cid}/items/${alpha}`]);
+  const links = async () => (await searchLists(t))[Object.keys(await searchLists(t)).find((k) => /links?$/.test(k)) ?? ""] ?? [];
+  const go = async (q) => {
+    await t.open(`/search?q=${encodeURIComponent(q)}`);
+    await t.until(`the search for ${q} is answered`, async () => (await paneText(t)).includes(`Results for “${q}”`) && (await pane(t).locator(".cds--contained-list, .helper").count()) > 0, q);
+  };
+  // A view's address, an item's, a field's: each is listed as a link to that page.
+  await go(`#/collections/${cid}/items?view=${viewId}`);
+  await t.until("a view's address lists the view", async () => (await links()).some((x) => x.includes("Archive")), JSON.stringify(await searchLists(t)));
+  await hitOf(t, "Archive").click();
+  await t.until("choosing the link opens the page", async () => (await tabPath(t)).includes(`view=${viewId}`), await tabPath(t));
+  await go(`items/${alpha}`);
+  await t.until("an item's address lists the item once", async () => (await links()).filter((x) => x.includes("Alpha")).length === 1, JSON.stringify(await searchLists(t)));
+  await go("alpha#tit");
+  await t.until("item#field lists the field", async () => (await links()).some((x) => x.includes("Title")), JSON.stringify(await searchLists(t)));
+  // Alpha also matches as text (Beta's body names its address): it is shown once, in the items.
+  await go(`collections/${cid}/items/${alpha}`);
+  await t.until("the page is answered", async () => (await paneText(t)).includes("Results for"));
+  const all = Object.values(await searchLists(t)).flat();
+  await t.check("an item that matches twice is listed once", all.filter((x) => x.includes("Alpha")).length <= 1, JSON.stringify(await searchLists(t)));
+  await go("qqq/zzz");
+  await t.until("an address naming nothing says so", async () => (await paneText(t)).includes("Nothing found."));
+  await t.audit("search, link hits");
+}, { viewport: "desktop" });
+
 for (const vp of ["desktop", "phone"]) {
   test(`search: the search bar — opens focused, searches as you type, closes @ ${vp}`, async (t) => {
     await t.boot();
@@ -991,5 +1067,71 @@ test("search: the bar searches in the pane that was active when Search was click
     await t.page.keyboard.press("Enter");
     await t.until("closed", async () => (await bar(t).count()) === 0);
     await t.check("after closing, the results stay in that pane and the other still shows its page", (await panes.nth(active).innerText()).includes("Results for “horse”") && !(await other.innerText()).includes("Results for"));
+  }
+}, { viewport: "desktop" });
+
+// A remote row has no stored item: its bookmark must still list, show in the side nav, open the row
+// and be removed (the row's id is its key made link-safe, base64url; `rowItemId`).
+test("remote item: bookmark add, side nav, Bookmarks page, open, remove; every control does something @ desktop", async (t) => {
+  await t.boot();
+  await fakeRemotes(t);
+  await connectTo(t);
+  const id = await makeRemote(t);
+  const rowId = "MQ"; // base64url("1"): the row with key 1, "Customer 1"
+  const path = t.itemPath(id, rowId);
+  const stored = () => t.page.evaluate(async () => JSON.parse(JSON.stringify(await window.kubus.repo.listBookmarks("default"))));
+  const bookmarkButton = (name) => pane(t).getByRole("button", { name, exact: true }).filter({ visible: true }).first();
+  const navBookmarks = () => t.page.locator('.nav-tree li[id^="bookmark-"]');
+  await t.open(path);
+  await t.until("the remote item page is shown", async () => (await paneText(t)).includes("Customer 1"));
+
+  await bookmarkButton("Bookmark").click();
+  await t.until("the bookmark button turns into Remove bookmark", async () => (await bookmarkButton("Remove bookmark").count()) === 1);
+  const list = await stored();
+  await t.check("the bookmark is stored and listed, for the row", list.length === 1 && list[0].kind === "item" && list[0].targetId === rowId && list[0].collectionId === id, JSON.stringify(list));
+  await t.until("the side nav lists it", async () => (await navBookmarks().count()) === 1 && (await navBookmarks().innerText()).includes("Customer 1"));
+  await t.check("the button stays pressed after reopening", await (async () => {
+    await t.open(path);
+    await t.until("page", async () => (await paneText(t)).includes("Customer 1"));
+    return (await bookmarkButton("Remove bookmark").count()) === 1;
+  })());
+
+  // The side nav opens the row.
+  await t.open("/");
+  await navBookmarks().locator(".cds--tree-node__label").first().click();
+  await t.until("the side nav bookmark opens the remote item", async () => (await paneText(t)).includes("Customer 1") && (await pane(t).locator(".item-fields").count()) === 1);
+  // The Bookmarks page lists it, opens it and removes it.
+  await t.open("/bookmarks");
+  await t.until("the Bookmarks page lists it", async () => (await paneText(t)).includes("Customer 1"));
+  await t.audit("Bookmarks page with a remote item");
+  await pane(t).getByRole("link", { name: "Customer 1" }).click();
+  await t.until("the Bookmarks page link opens the remote item", async () => (await pane(t).locator(".item-fields").count()) === 1 && (await paneText(t)).includes("Customer 1"));
+  await t.open("/bookmarks");
+  await pane(t).getByRole("button", { name: "Remove bookmark Customer 1" }).click();
+  await t.until("Remove on the Bookmarks page removes it", async () => (await stored()).length === 0 && (await navBookmarks().count()) === 0);
+  // Remove from the item page.
+  await t.open(path);
+  await t.until("page again", async () => (await paneText(t)).includes("Customer 1"));
+  await bookmarkButton("Bookmark").click();
+  await t.until("added again", async () => (await stored()).length === 1);
+  await bookmarkButton("Remove bookmark").click();
+  await t.until("the item page's button removes it", async () => (await stored()).length === 0 && (await navBookmarks().count()) === 0);
+
+  // Every control in the page header does something.
+  await t.open(path);
+  await t.until("page for the controls", async () => (await paneText(t)).includes("Customer 1"));
+  const buttons = await pane(t).locator(".page-header .cds--btn--icon-only, .page-header button").evaluateAll((els) => els.filter((e) => e.checkVisibility()).map((e) => e.getAttribute("aria-label") || e.textContent.trim()));
+  await t.check("the header has controls", buttons.length > 0, JSON.stringify(buttons));
+  for (const name of [...new Set(buttons)].filter(Boolean)) {
+    if (/^(Remove bookmark|Bookmark)$/.test(name)) continue;
+    await t.open(path);
+    await t.until("page", async () => (await paneText(t)).includes("Customer 1"));
+    const before = await t.page.evaluate(() => ({ html: document.querySelector(".ws-pane--active .ws-pane__body")?.innerHTML.length, tabs: location.hash, open: document.querySelectorAll(".cds--popover--open, .cds--modal.is-visible").length }));
+    await pane(t).locator(".page-header").getByRole("button", { name, exact: true }).filter({ visible: true }).first().click();
+    await t.settle(250);
+    const after = await t.page.evaluate(() => ({ html: document.querySelector(".ws-pane--active .ws-pane__body")?.innerHTML.length, tabs: location.hash, open: document.querySelectorAll(".cds--popover--open, .cds--modal.is-visible").length }));
+    const did = before.html !== after.html || before.tabs !== after.tabs || before.open !== after.open;
+    await t.check(`"${name}" does something`, did, JSON.stringify({ before, after }));
+    await t.audit(`remote item after "${name}"`);
   }
 }, { viewport: "desktop" });

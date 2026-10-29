@@ -16,6 +16,8 @@ export interface RunningServer {
   /** What it printed so far (stdout and stderr). */
   output(): string;
   stop(): Promise<void>;
+  /** SIGKILL: the process dies at once, as in a crash or an OOM kill (nothing is flushed or closed). */
+  kill(): Promise<void>;
 }
 
 export async function freePort(): Promise<number> {
@@ -35,7 +37,7 @@ export async function startServer(databaseUrl: string, env: Record<string, strin
   // Under coverage (vitest.config.ts sets KUBUS_V8_DIR) the server leaves its V8 coverage there when it exits
   // (stop() sends SIGTERM, on which it shuts down and exits).
   const dump = process.env.KUBUS_V8_DIR;
-  const child = spawn(process.execPath, [join(import.meta.dirname, "../src/index.ts")], {
+  const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../src/index.ts")], {
     env: { ...process.env, DATABASE_URL: databaseUrl, KUBUS_TOKEN: TOKEN, PORT: String(port), ...(dump ? { NODE_V8_COVERAGE: dump } : {}), ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -47,6 +49,10 @@ export async function startServer(databaseUrl: string, env: Record<string, strin
   const server: RunningServer = {
     url,
     output: () => output,
+    async kill() {
+      if (child.exitCode === null) child.kill("SIGKILL");
+      await exited;
+    },
     async stop() {
       if (child.exitCode === null) child.kill();
       await exited;

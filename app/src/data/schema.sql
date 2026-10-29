@@ -195,6 +195,48 @@ CREATE TRIGGER file_uses_delete AFTER DELETE ON field_values BEGIN
   DELETE FROM file_uses WHERE item_id = OLD.item_id AND field_id = OLD.field_id;
 END;
 
+-- Which items a value points at, for backlinks (domain/backlinks.ts; docs/data-model.md "Item links"): a
+-- row per (source item, source field) whose value links to items, a reference field's item(s), or
+-- the items a Markdown / HTML / AI text links to (any of their field, view or block anchors too).
+-- Synced, but derived: `id` and `updated_at` are made from the value (the id from its item and
+-- field, updated_at = the value's own), so the row and its value merge to the same version on every
+-- device, and two devices make the same row. The triggers below write it with every local write of a
+-- value; rows applied from a sync arrive with their own, and the sync engine heals a value whose
+-- row is missing or older (an older app wrote it: SyncEngine, healLinks). `targets` is a JSON array
+-- of { item, collection } (a native item's id, or a remote row's item id); `deleted_at` (= updated_at)
+-- marks a value that stopped linking anywhere. A source item or field that is deleted is left out
+-- when reading (they sync themselves), so the row stays as it is. No foreign keys: a target can be a
+-- remote row, and rows arrive in any order.
+CREATE TABLE item_links (
+  id              TEXT PRIMARY KEY,   -- source_item_id || '/' || source_field_id
+  source_item_id  TEXT NOT NULL,
+  source_field_id TEXT NOT NULL,
+  targets         TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  deleted_at      TEXT
+);
+CREATE INDEX idx_item_links_item ON item_links(source_item_id);
+CREATE TRIGGER item_links_insert AFTER INSERT ON field_values WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying') BEGIN
+  INSERT INTO item_links (id, source_item_id, source_field_id, targets, updated_at, deleted_at)
+    SELECT NEW.item_id || '/' || NEW.field_id, NEW.item_id, NEW.field_id, x.targets, NEW.updated_at,
+           CASE WHEN x.targets = '[]' THEN NEW.updated_at END
+      FROM (SELECT link_targets(f.kind, f.target_collection_id, NEW.value_text, NEW.value_ref, NEW.value_json) AS targets
+              FROM fields f WHERE f.id = NEW.field_id) x
+     WHERE x.targets <> '[]' OR EXISTS (SELECT 1 FROM item_links l WHERE l.id = NEW.item_id || '/' || NEW.field_id AND l.deleted_at IS NULL)
+    ON CONFLICT (id) DO UPDATE SET targets = excluded.targets, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at
+      WHERE item_links.targets IS NOT excluded.targets OR item_links.updated_at IS NOT excluded.updated_at OR item_links.deleted_at IS NOT excluded.deleted_at;
+END;
+CREATE TRIGGER item_links_update AFTER UPDATE ON field_values WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying') BEGIN
+  INSERT INTO item_links (id, source_item_id, source_field_id, targets, updated_at, deleted_at)
+    SELECT NEW.item_id || '/' || NEW.field_id, NEW.item_id, NEW.field_id, x.targets, NEW.updated_at,
+           CASE WHEN x.targets = '[]' THEN NEW.updated_at END
+      FROM (SELECT link_targets(f.kind, f.target_collection_id, NEW.value_text, NEW.value_ref, NEW.value_json) AS targets
+              FROM fields f WHERE f.id = NEW.field_id) x
+     WHERE x.targets <> '[]' OR EXISTS (SELECT 1 FROM item_links l WHERE l.id = NEW.item_id || '/' || NEW.field_id AND l.deleted_at IS NULL)
+    ON CONFLICT (id) DO UPDATE SET targets = excluded.targets, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at
+      WHERE item_links.targets IS NOT excluded.targets OR item_links.updated_at IS NOT excluded.updated_at OR item_links.deleted_at IS NOT excluded.deleted_at;
+END;
+
 -- Bookmarks in the side nav: a saved view of a collection's items, or an item. `label` is a
 -- snapshot for the nav (refreshed when the bookmarked page is shown), so it reads without loading.
 CREATE TABLE bookmarks (

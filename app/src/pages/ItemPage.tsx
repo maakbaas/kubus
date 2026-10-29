@@ -10,6 +10,8 @@ import { QueryEditor } from "../views/QueryEditor";
 import { useBlockName } from "../views/BlockListEditor";
 import { AddBlockButton, type NewBlockSpec } from "../views/AddBlockButton";
 import { useCollectionData } from "../views/useCollectionData";
+import { useBacklinkData } from "../views/useBacklinks";
+import { findCollection } from "../domain/backlinks";
 import { useStore, useCollection } from "../app/store";
 import { useAiFill } from "../app/useAi";
 import { useDataChanges } from "../app/useDataChanges";
@@ -278,7 +280,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   // With more than one block listing items the page gets a filter for all of them (on top of their own).
   const listing = layout.blocks.filter((b) => blockType(b.kind).uses(b.options, components).query);
   const pageScope = [...new Set(listing.map((b) => b.collectionId ?? collection.id))]
-    .map((id) => collections.find((c) => c.id === id))
+    .map((id) => findCollection(collections, id))
     .filter((c): c is Collection => !!c);
   const pageFilters = listing.length > 1 ? layout.filters : [];
   const showTab = (id: string | null) => {
@@ -814,14 +816,16 @@ function ItemPageBlock({
   onError(message: string): void;
   onOpenChange(open: boolean): void;
 }) {
-  const collection = useCollection(block.collectionId ?? page.collection.id);
+  const { collections } = useStore();
+  const collection = findCollection(collections, block.collectionId ?? page.collection.id);
   if (!collection) {
     return (
       <InlineNotification kind="warning" title="Block without collection" subtitle="The collection this block listed was deleted." onClose={onRemove} />
     );
   }
+  const Content = collection.virtual === "backlinks" ? BacklinksBlockContent : ItemPageBlockContent;
   return (
-    <ItemPageBlockContent
+    <Content
       key={collection.id}
       collection={collection}
       block={block}
@@ -848,6 +852,14 @@ function ItemPageBlockContent({
 }: Parameters<typeof ItemPageBlock>[0] & { collection: Collection }) {
   // Its items, shared with every pane showing that collection.
   const data = useCollectionData(collection);
+  const normalized = useMemo(() => normalizeBlock(collection, block), [collection, block]);
+  const applying = useMemo(() => pageFiltersFor(collection, pageFilters), [collection, pageFilters]);
+  return <BlockView collection={collection} data={data} block={normalized} viewFilters={applying} search="" place="item" {...rest} />;
+}
+
+/** A block of the Backlinks collection: the items linking to the page's item (not in the shared item cache: they depend on the page's item). */
+function BacklinksBlockContent({ collection, block, pageFilters, ...rest }: Parameters<typeof ItemPageBlock>[0] & { collection: Collection }) {
+  const data = useBacklinkData(rest.page);
   const normalized = useMemo(() => normalizeBlock(collection, block), [collection, block]);
   const applying = useMemo(() => pageFiltersFor(collection, pageFilters), [collection, pageFilters]);
   return <BlockView collection={collection} data={data} block={normalized} viewFilters={applying} search="" place="item" {...rest} />;

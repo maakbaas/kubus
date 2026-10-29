@@ -130,15 +130,8 @@ for (const vp of ["desktop", "laptop"]) {
       await box.locator("label, input").first().click({ force: true });
       await t.wait(200);
     }, { scope: ".ws-pane--active .ws-pane__body" });
-    // Row actions: duplicate, then delete (asks first; cancel).
-    const dup = t.page.locator(".items-table tbody").getByRole("button", { name: "Duplicate", exact: true }).first();
-    if (await dup.count()) {
-      const rowsBefore = await rows.count();
-      await dup.click();
-      await t.settle();
-      // The copy is written, then the list hears the change: under load that is after the settle.
-      await t.until("Duplicate adds a row", async () => (await rows.count()) === rowsBefore + 1 || `${rowsBefore} → ${await rows.count()}`);
-    }
+    // Row actions: no Duplicate (saves space; the table's rows have no overflow menu), then delete (asks first; cancel).
+    await t.check("rows have no Duplicate button", (await t.page.locator(".items-table tbody").getByRole("button", { name: "Duplicate", exact: true }).count()) === 0);
     const del = t.page.locator(".items-table tbody").getByRole("button", { name: "Delete", exact: true }).first();
     if (await del.count()) {
       await rows.first().hover();
@@ -323,5 +316,131 @@ for (const vp of ["desktop", "phone"]) {
     await t.settle(150);
     const back = await at();
     await t.check("scrolled back up: the header row is in its place again", Math.abs(back.head - before.head) <= 1, JSON.stringify({ before, back }));
+  }, { viewport: vp });
+}
+
+/** The editor of the cell being edited and the row's buttons: boxes, and whether they overlap. */
+async function editorVsButtons(t) {
+  return t.page.evaluate(() => {
+    const cell = document.querySelector(".items-table td.cell--editing");
+    const row = cell && cell.closest("tr");
+    const input = cell && cell.querySelector("input, textarea, [contenteditable]");
+    if (!row || !input) return null;
+    const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+    const editor = box(input);
+    const buttons = [...row.querySelectorAll("td.row-actions button")].filter((b) => b.getClientRects().length && getComputedStyle(b).visibility !== "hidden");
+    const hits = buttons.map((b) => ({ label: b.getAttribute("aria-label") || b.textContent.trim(), ...box(b) })).filter((b) => Math.min(editor.right, b.right) - Math.max(editor.left, b.left) > 1 && Math.min(editor.bottom, b.bottom) - Math.max(editor.top, b.top) > 1);
+    return { editor, buttons: buttons.length, overlapping: hits.map((h) => h.label) };
+  });
+}
+
+// A single-line editor in the last column sat over the row's open button (the title column is
+// left out, so each row has one): on a phone the column is a sliver, and the editor reached over
+// the actions cell. Short and long values; every row button must stay clear of it.
+const LAST_COLUMNS = [["Place", "string"], ["Count", "number"], ["Day", "date"], ["When", "datetime"], ["Related", "item"]];
+for (const vp of ["phone", "phone-small", "desktop"]) {
+  test(`table: a cell editor in the last column never covers the row's buttons @ ${vp}`, async (t) => {
+    await t.boot();
+    const places = ["Oslo", "A place with a name that goes on and on and on and on, Lorem ipsum dolor sit amet", "Bern"];
+    const fields = [{ key: "title", name: "Title", kind: "string" }, { key: "place", name: "Place", kind: "string" }, { key: "count", name: "Count", kind: "number" }, { key: "day", name: "Day", kind: "date" }, { key: "when", name: "When", kind: "datetime" }, { key: "tags", name: "Tags", kind: "string_list" }, { key: "ref", name: "Related", kind: "item", target: "notes" }];
+    const spec = {
+      collections: [{
+        key: "notes", name: "Note", plural: "Notes", fields,
+        items: places.map((place, k) => ({ key: `n${k}`, values: { title: `Note ${k}`, place, count: k + 1, day: `2024-05-0${k + 1}`, when: `2024-05-0${k + 1}T10:30:00`, tags: k === 1 ? ["a", "b"] : ["x"], ref: { ref: `notes/n${(k + 1) % 3}` } } })),
+        // One view per kind, the title column left out (each row has an open button) and that kind last.
+        views: LAST_COLUMNS.map(([name]) => ({ name, blocks: [{ kind: "table", layout: { fields: ["count", ...fields.filter((f) => f.name === name && f.key !== "count").map((f) => f.key)] } }] })),
+      }],
+    };
+    const ids = await t.seed(spec);
+    for (const [col, kind] of LAST_COLUMNS) {
+      await t.open(`${t.listPath(ids.collections.notes)}?view=${ids.views[`notes/${col}`]}`);
+      for (let row = 0; row < 3; row++) {
+        const cell = t.page.locator(`.items-table .cell-editable[aria-label='Edit ${col}']`).nth(row);
+        await cell.evaluate((el) => el.scrollIntoView({ block: "center", inline: "center" }));
+        await t.wait(100);
+        await cell.click({ position: { x: 3, y: 3 } });
+        await t.wait(250);
+        const s = await editorVsButtons(t);
+        await t.check(`${col} (${kind}), row ${row}: the editor is open in a row with buttons`, !!s, JSON.stringify(s));
+        if (s) await t.check(`${col} (${kind}), row ${row}: the editor covers none of the row's visible buttons`, s.overlapping.length === 0, `covers ${s.overlapping.join(", ")}: ${JSON.stringify(s)}`);
+        // (A calendar is taller than a 320x568 window's room: its own finding, not this test's.)
+        await t.audit(`${col} (${kind}), row ${row}: editing`, { shotOnFail: true, skip: vp === "phone-small" ? ["popover-in-viewport"] : [] });
+        await escapeEditor(t);
+        await t.settle(100);
+      }
+    }
+  }, { viewport: vp });
+}
+
+// The same on the pages that list spaces and collections (a name / description edited in place
+// beside "Switch to" / the row's other buttons).
+for (const vp of ["phone", "phone-small", "desktop"]) {
+  test(`spaces and collections lists: an editor never covers the row's buttons @ ${vp}`, async (t) => {
+    await t.boot();
+    const spec = profileSpec("typical", { items: 2 });
+    spec.spaces = [{ key: "w", name: "Work" }, { key: "h", name: "A space with a long name for the narrow screen" }];
+    spec.collections[0].description = "Short";
+    await t.seed(spec);
+    for (const [path, label] of [["/spaces", /^Rename /], ["/collections", /^Edit description of /]]) {
+      await t.open(path);
+      const cells = t.page.getByRole("button", { name: label }).filter({ visible: true });
+      if (vp === "desktop") await t.until(`${path}: editable cells are listed`, async () => (await cells.count()) > 0);
+      else await t.wait(500); // (the description column is left out of a phone's list)
+      const n = await cells.count();
+      for (let i = 0; i < Math.min(n, 3); i++) {
+        const cell = cells.nth(i);
+        await cell.evaluate((el) => el.scrollIntoView({ block: "center", inline: "center" }));
+        await cell.click({ position: { x: 3, y: 3 } });
+        await t.wait(250);
+        const s = await editorVsButtons(t);
+        await t.check(`${path}, row ${i}: the editor is open in a row with buttons`, !!s, JSON.stringify(s));
+        if (s) await t.check(`${path}, row ${i}: the editor covers none of the row's visible buttons`, s.overlapping.length === 0, `${JSON.stringify(s)}`);
+        await t.audit(`${path}, row ${i}: editing`, { shotOnFail: true });
+        await escapeEditor(t);
+        await t.settle(100);
+      }
+    }
+  }, { viewport: vp });
+}
+
+for (const vp of ["desktop", "phone"]) {
+  test(`table: a field's name can be hidden, its column sizes to the content @ ${vp}`, async (t) => {
+    await t.boot();
+    const spec = profileSpec("typical", { items: 6 });
+    spec.collections[0].views = [{ name: "All", blocks: [{ kind: "table", layout: { fields: ["title", "done", "count"] } }] }];
+    const ids = await t.seed(spec);
+    const coll = ids.collections.books;
+    const done = ids.fields["books.done"];
+    const path = t.listPath(coll);
+    // The header names shown (a hidden name stays in the DOM for screen readers and the sort button, visually hidden).
+    const labels = () => t.page.evaluate(() => [...document.querySelectorAll(".items-table thead th")].map((h) => (h.classList.contains("cell--name-hidden") ? "" : h.querySelector(".cds--table-header-label")?.textContent.trim() ?? "")));
+    const save = async () => { await t.openPanel(t.page.locator(".views-bar").first(), "Save changes to view"); await t.until("the view is saved", async () => !(await t.page.locator(".views-bar").first().innerText()).includes("*")); };
+    const stored = () => t.page.evaluate(async (c) => (await window.kubus.repo.listViews(c, "default")).find((v) => v.name === "All").blocks[0].layout.hiddenLabels, coll);
+    const header = () => t.page.locator(".block").first().locator(".section-header").first();
+    await t.open(path);
+    const wide = await t.page.evaluate(() => [...document.querySelectorAll(".items-table thead th")].find((h) => h.textContent.includes("Done")).getBoundingClientRect().width);
+    await openTool(t, header(), "Fields");
+    const row = t.page.locator(".cds--popover--open .field-order__row", { hasText: "Done" }).first();
+    await t.check("the Fields popover offers the name toggle per field", (await t.page.locator(".cds--popover--open").getByRole("button", { name: "Hide field name" }).count()) >= 3);
+    await row.getByRole("button", { name: "Hide field name" }).click();
+    await t.until("the header label is gone, the column stays", async () => { const l = await labels(); return (l.length === 4 && l[1] === "" && l[0] !== "" && l[2] !== "") || JSON.stringify(l); });
+    await t.check("the toggle now offers to show it", (await row.getByRole("button", { name: "Show field name" }).count()) === 1);
+    await t.closeAll();
+    await t.settle();
+    const narrow = await t.page.evaluate(() => document.querySelectorAll(".items-table thead th")[1].getBoundingClientRect().width);
+    await t.check("the column sizes to its checkbox, not to the header", narrow < wide - 8 && narrow < 80, `${wide} → ${narrow}`);
+    await t.check("the column is still sortable and named", (await t.page.locator(".items-table thead th").nth(1).getByRole("button", { name: /Done/ }).count()) === 1);
+    await t.audit("table with a hidden header label");
+    await save();
+    await t.check("hiding the name is stored with the view", JSON.stringify(await stored()) === JSON.stringify([done]), JSON.stringify(await stored()));
+    await t.open(path);
+    await t.until("it persists after reopening", async () => (await labels())[1] === "");
+    // Show it again.
+    await openTool(t, header(), "Fields");
+    await t.page.locator(".cds--popover--open .field-order__row", { hasText: "Done" }).first().getByRole("button", { name: "Show field name" }).click();
+    await t.until("showing it brings the header back", async () => (await labels())[1] === "Done");
+    await t.closeAll(); // Save is held while the panel is open
+    await save();
+    await t.check("showing the name is stored", (await stored()).length === 0);
   }, { viewport: vp });
 }

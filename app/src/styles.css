@@ -1681,6 +1681,29 @@ img[data-lightbox] {
   background: var(--cds-background-inverse-hover);
 }
 
+/* The link picker (LinkPicker): a Carbon contained list hanging from the caret. It scrolls inside,
+   within the room beside the caret (--popover-room), never making the page scroll. */
+.link-picker .cds--popover .cds--popover-content {
+  inline-size: min(26rem, 90vw);
+}
+.link-target-list {
+  max-block-size: min(16rem, var(--popover-room, 16rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.link-target-list .cds--contained-list__header {
+  position: static;
+}
+/* The option Enter takes. */
+.link-target-list [data-active="true"],
+.link-target-list [data-active="true"] .cds--contained-list-item__content {
+  background: var(--cds-layer-selected);
+}
+.link-target__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Code syntax coloring (prism/refractor tokens): Carbon's saturated steps, vivid on the code's
    subtle background (still AA on it: the 60s in light, the 30/40s in dark). */
 .cds--white {
@@ -2506,8 +2529,16 @@ img[data-lightbox] {
 .block-more .helper {
   margin-bottom: 0;
 }
-/* A chart loading all rows: the bar takes the room beside Cancel. */
-.block-more__bar {
+/* The app's loading bar (ui/LoadingBar.tsx): the bar takes the room beside its "×" stop button, a 32px icon
+   button at the row's right edge, in line with the heading's buttons above. */
+.loading-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-05);
+  flex: 1;
+  min-inline-size: 0;
+}
+.loading-bar__bar {
   flex: 1;
   min-inline-size: 0;
 }
@@ -2571,6 +2602,16 @@ img[data-lightbox] {
 }
 .items-table :is(td, th).row-actions {
   text-align: end;
+}
+/* A field whose name is hidden in the block's layout: the name stays (screen readers, the sort button's
+   label) but takes no room, so the column sizes to its content (a checkbox) and not to its header. */
+.items-table th.cell--name-hidden .cds--table-header-label {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 /* Small (2rem) controls fill a small row exactly: no vertical cell padding around them. */
 .items-table td.row-actions,
@@ -2674,6 +2715,11 @@ img[data-lightbox] {
 .items-table td.cell--editing:nth-last-child(2) .cell-overlay {
   inset-inline-end: auto;
   inline-size: max(100%, 12rem);
+}
+/* …and where it does, the row's buttons under it are not drawn while it is open (they keep their
+   place, nothing moves): an editor never lies over a button you could still see, or tap by mistake. */
+.items-table tr:has(> td.cell--editing:nth-last-child(2)) > td.row-actions > * {
+  visibility: hidden;
 }
 .items-table .table-add-row:not(.table-add-row--bare) td:nth-last-child(2) .add-cell {
   inset-inline-end: auto;
@@ -3303,7 +3349,7 @@ img[data-lightbox] {
   inset-inline-start: var(--cds-spacing-05);
 }
 @media (max-width: 42rem) {
-  .item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label)::before,
+  .item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label, .block)::before,
   .item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > :not(.image-input, .view-field--image)::before {
     inset-inline: calc(0.5 * var(--cds-spacing-05));
   }
@@ -3320,9 +3366,11 @@ img[data-lightbox] {
   padding-inline-start: 0;
 }
 /* Phones: no room to push boxes to the pane edge. Boxes sit half an inset in from both sides
-   (centred, a little space each side) and labels follow, so text stays near the title's edge. */
+   (centred, a little space each side) and labels follow, so text stays near the title's edge.
+   Blocks are left out, as on wider panes: they sit on the page's edges (the same edges as the title
+   and the header's "⋮"), not half an inset outside them. */
 @media (max-width: 42rem) {
-  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label),
+  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label, .block),
   .item-field--no-label > :not(.image-input, .view-field--image) {
     margin-inline: calc(-0.5 * var(--cds-spacing-05));
   }

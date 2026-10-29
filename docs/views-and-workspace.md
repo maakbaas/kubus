@@ -10,6 +10,14 @@ Extension points are registries, not special cases in pages:
   `applyQuery()`. Everything field-kind specific (filter operators, sort key, group keys, text for
   search) is in one `KIND_RULES` table: a new field kind or operator is added there. Pseudo fields
   `$title`, `$updated`, `$created` can be sorted on; the default query sorts by `$title`.
+  **Group by a date or date & time field** (`domain/groupDate.ts`, `ViewQuery.groupDate`, stored on the block as
+  `groupDate`, absent = day): by year, month, week (ISO: Monday to Sunday, week 1 holds the year's first Thursday), day or
+  hour (date & time only; a date falls back to day), chosen in "Group dates by" beside Group by. A group's key sorts as time
+  does (`2026`, `2026-10`, `2026-W44`, `2026-10-28`, `2026-10-28T14`) and Group order sorts by keys, so groups run
+  chronologically; its label reads out ("October 2026", "Week 44, 2026", "28 Oct 2026, 14:00"). A date & time is grouped in
+  the device's time zone. Items without a date form the "(empty)" group, always last. Local collections only: a remote
+  collection's source still groups by the column's value (the contract `shared/sources.ts` and the connectors have no
+  date parts), so "Group dates by" isn't offered there (its day keys do read out as dates).
   A filter value may hold `{{ }}` code, typed and shown as raw text (the one place besides
   components where code runs): `resolveFilterValues` / `filterCodeValue` work it out when the filter
   runs, as if its result had been typed (`{{ 1 == 1 }}` is "true"), reading `$now` and, on an item
@@ -17,6 +25,13 @@ Extension points are registries, not special cases in pages:
   checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
   nothing, never the wrong items (so does a value from the page's item that it doesn't have: "Author is this Book's Mentor" on a Book without one). The value input is text for every kind (the braces must be typable);
   under it, what the code works out to ("= true").
+- **Virtual collections** (`domain/backlinks.ts` `VIRTUAL_COLLECTIONS`, `Collection.virtual`): a block on an item page may list a collection
+  that stores nothing, **Backlinks** (docs/features.md): offered in that block's Collection picker only (`BlockMenus`, when it has a
+  page), resolved by id next to the store's collections (`findCollection`, in `ItemPageBlock` and the page-wide filter's scope).
+  Its rows come from `useBacklinkData` (the items linking to the page's item, current from the change feed) instead of the shared item
+  cache or a remote source, then go through `applyQuery` like any collection's items, so every block type, filter, sort, group and
+  component (`$items`) works. Read-only through the same guard as remote collections (`isReadOnly` in `useItemActions`: rows open
+  and sort only); a row opens the linking item (`itemPath`: table title, card, map dot, `ItemActions.open`).
 - **And / Or** (`app/src/domain/filterTree.ts`): each rule says how it joins what comes before it
   (`FilterRule.join`: absent = And, narrowing; "or" lets more items in), read in order without precedence
   (`A or B and C` = `(A or B) and C`); the first rule of a filter building on nothing shows "Where". A
@@ -72,6 +87,11 @@ Extension points are registries, not special cases in pages:
   view): how many items it shows at first and each "Show more" adds; empty is all. Unset it is 100, or all for a block
   that needs every item (a chart: `BlockUses.all`; `blockLimit`). A remote collection is asked that many rows a page
   (all: every page, one after the other). The Filter button is blue while a Limit is set.
+  **Loading bars**: the only progress bar in the app is `ui/LoadingBar.tsx` (a remote block's rows), shown from the request on
+  (table, cards, chart, map alike). Its stop control is always a small "×" ghost icon button ("Stop loading", 32px) at the right
+  of the bar, on the right edge of the block's header buttons (design rule `progress-stop`). Stopping while every row loads
+  keeps the pages in ("Load all rows" resumes); stopping the first page (which the source can't be told to abandon: no
+  abort in the sources client) drops its answer, and "Load rows" asks again. A new progress bar must use `LoadingBar` with `onStop`.
 - **Page-wide filter** (item pages): with more than one block listing items (`uses.query`), the page toolbar gets "Filter all blocks", the collection views' filter panel (`QueryEditor`, date period included) over the fields of all those collections (`pageFilterScope`; a name several share gets its collection behind it; remote collections included: a remote block hands the rules to its source like its own filter, `sourceQuery`, connector-neutral, so a block of a remote table can show this month's rows). It is `ItemLayout.filters`, unsaved until Save changes like a block's filter. Like a view's filter, each block builds on it (And / Or above): a block takes the rules on its collection's fields and, if native, the pseudo fields (`pageFiltersFor`) and ignores the rest. With one block, or none, it doesn't apply.
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,
@@ -84,7 +104,12 @@ Extension points are registries, not special cases in pages:
   group in a collapsible Carbon Accordion; columns as wide as their content on one line while
   there's room, the actions column widened by `FillTable` so the table spans the pane; an editing
   cell overlays its input on the invisibly kept value so the column never resizes; columns are
-  selectable per view, the title column too (rows then get an open button); a table looks the
+  selectable per view, the title column too (rows then get an open button); the Fields popover
+  offers each shown field's name toggle (tag icon, as on item pages: `FieldLayout.hiddenLabels` in the block's layout, JSON
+  in the view's config, so it syncs like the other layout options and older devices ignore it): a hidden name leaves
+  the header visually (kept for screen readers and the sort button) and the column sizes to its content, e.g. a checkbox;
+  rows have Edit and Delete only, no Duplicate (it saves width; a table row has no overflow menu, so
+  `ItemActions.duplicate` stays for other callers); a table looks the
   same at every width: one too wide for its pane (a phone, a narrow tiled pane) scrolls sideways,
   all its columns together (none is pinned), a fade at an edge with more beyond it; while the pane scrolls down its
   header row stays in view a margin below the pane's top (`--table-head-gap`, covered by the page's background once
@@ -154,7 +179,7 @@ Extension points are registries, not special cases in pages:
   - **Parts of a whole** (pie or donut, meter, treemap, word cloud; `partsOf`): the X axis's categories (by the first
     series' value), number fields (each made into one by its aggregate: fat, muscle and bone mass) or one value, against
     a Total (a pie or meter; a treemap and a word cloud draw their parts alone): the sum of the parts, a number or a field (made into one like the value). A total larger than the parts
-    adds a "Remaining" slice; a meter shows it as its empty part (Carbon's proportional meter); one value on a meter is a
+    adds a "Remaining" slice; a meter shows it as its empty part (Carbon's proportional meter); a meter's label row above the bar (its name and total) is Carbon's `meter.showLabels`, off by the "Show the label above the meter" checkbox (`showLabel`); one value on a meter is a
     bar of its share. A gauge measures its value against its total likewise (none: the value is a %), shows its % (Carbon's
     gauge: no unit, the decimals as set), and the increase or decrease from a comparison value (any value, and "Previous
     value" after the Last value, or a number; Carbon's delta arrow). A stat (`StatView`, like Grafana's stat panel, made
@@ -178,7 +203,7 @@ Extension points are registries, not special cases in pages:
   - **Size**: Height (see below) and Width (a slider like the cards', 8 to 120rem (about 1920px) at most; a gauge as wide
     as a pane is mostly empty, so switching to one makes a full-width chart 24rem).
   A setting still to choose (a field, three spokes) or nothing to chart says so instead of an empty chart. The chart follows
-  the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of `MAX_SOURCE_PAGE` (10,000) rows one after the other, a progress bar of the rows in against the source's total and Cancel under it; after Cancel the chart shows the rows in and "Load all rows" goes on).
+  the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of `MAX_SOURCE_PAGE` (10,000) rows one after the other, a loading bar of the rows in against the source's total; its "×" stops it, the chart then shows the rows in and "Load all rows" goes on).
   A chart, a map and a component block showing HTML have the same Height setting (`BLOCK_HEIGHT` and
   `normalizeBlockHeight` in `domain/views.ts`, the slider `views/HeightSlider.tsx`: 8 to 48rem, 24 for a new block;
   a chart's old Small / Medium / Large reads as 16 / 24 / 32) and Aspect ratio beside it (`ASPECT_RATIOS`: none, 2:1,

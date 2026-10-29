@@ -32,7 +32,7 @@ export const AREAS = [
 
   // Item pages and editing values in place.
   [/^app\/src\/(pages\/(ItemPage|NewItemPage)|ui\/(FieldInput|ListField|ToggleInput|TagChip|RefCombo|editStart|useBuffered|useReferenceOptions|Highlight))/, [4, 12, 19, 27, 31, 32]],
-  [/^app\/src\/ui\/(MarkdownEditor|MarkdownView|codeHighlight)/, [8, 19, 34]],
+  [/^app\/src\/ui\/(MarkdownEditor|LinkPicker|LinkTargetList|MarkdownView|codeHighlight)/, [8, 19, 34]],
   [/^app\/src\/(ui\/(Lightbox|images|thumbnails)|domain\/files)/, [16]],
 
   // Collection views and their blocks.
@@ -44,8 +44,11 @@ export const AREAS = [
   // Filter, sort, group, date period (rows asserted), a reference field's Choices.
   [/^app\/src\/(views\/(QueryEditor|DatePeriodFilter|BlockView|TableView|CardsView)|domain\/(query|filterTree|datePeriod|views)|pages\/(CollectionPage|ItemPage)|ui\/ChoiceFilterEditor)/, [26]],
   // The collection view's filter bar (Show filter bar): its setting, Filter button and date period.
-  [/^app\/src\/(views\/(FilterBar|DatePeriodFilter)|domain\/(datePeriod|views)|pages\/CollectionPage|data\/sqlite\/SqliteRepository)/, [43]],
+  [/^app\/src\/(views\/(FilterBar|DatePeriodFilter)|domain\/(datePeriod|views)|pages\/CollectionPage|data\/sqlite\/SqliteRepository)/, [44]],
   [/^app\/src\/ui\/(ToolbarPopover|panelRoom|OverflowBar)|^app\/src\/platform\/keyboardInset/, [10, 14, 20]],
+
+  // Backlinks: the virtual collection of item-page blocks and the item links behind it.
+  [/^app\/src\/(domain\/(backlinks|sources|views)|views\/(useBacklinks|BlockView|useItemActions|itemActions|cells|TableView|CardsView)|pages\/ItemPage|data\/sqlite\/SqliteRepository|data\/sync\/SyncEngine)/, [43]],
 
   // Collections, fields, components.
   [/^app\/src\/(pages\/(CollectionEditorPage|CollectionsPage|RemotesPage)|ui\/(SourceSettings|FieldEditor|FieldModal|FieldOrderEditor|FieldSettings|fieldKindIcons|ChoiceFilterEditor)|domain\/(collectionDraft|fieldKinds|fieldLayout))/, [7, 17, 22, 27, 29]],
@@ -57,7 +60,7 @@ export const AREAS = [
   [/^app\/src\/(data\/sync\/|ui\/(SyncSettings|ServerConnection|ApiTokens|SyncStatusButton|ServerReplaced))/, [13, 18, 33]],
   [/^app\/src\/(app\/(useDataChanges|itemCache|useItems|useItemCounts|useLinks)|views\/useCollectionData)/, [12, 13]],
   [/^app\/src\/(pages\/SettingsPage|ui\/(ConnectionSettings|useServerSettings|SourceSettings|localPrefs))/, [7, 18]],
-  [/^app\/src\/(pages\/SettingsPage|ui\/(AiSettings|MapSettings|ServerConnection|ConnectionSettings|ApiTokens|SyncSettings|SourceSettings|useServerSettings)|app\/mapStyle|data\/remote\/client|data\/sync\/SyncEngine)/, [28]],
+  [/^app\/src\/(pages\/SettingsPage|platform\/download|ui\/(AiSettings|BackupSettings|MapSettings|ServerConnection|ConnectionSettings|ApiTokens|SyncSettings|SourceSettings|useServerSettings)|app\/mapStyle|data\/remote\/client|data\/sync\/SyncEngine)/, [28]],
   [/^app\/src\/(pages\/HelpPage|help\/)/, [...PAGES_MATRIX, 30]],
 ];
 

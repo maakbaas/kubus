@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { useStore } from "../app/store";
-import { isRemote } from "../domain/sources";
+import { isReadOnly } from "../domain/sources";
 import { useOpenRelated } from "../workspace/Workspace";
 import { buildItemActions, stableItemActions, type ItemActionsOptions } from "./itemActions";
 import type { ItemActions } from "./registry";
@@ -16,6 +16,6 @@ export function useItemActions(options: ItemActionsOptions): ItemActions {
   const openRelated = useOpenRelated();
   const latest = useRef<ItemActions>(null as unknown as ItemActions);
   latest.current = buildItemActions(options, { repo, cache, spaceId: space.id, openRelated });
-  const readOnly = isRemote(options.collection);
+  const readOnly = isReadOnly(options.collection);
   return useMemo(() => stableItemActions(latest, readOnly), [readOnly]);
 }

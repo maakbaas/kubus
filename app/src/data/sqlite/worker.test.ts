@@ -78,6 +78,21 @@ describe("the worker without OPFS", () => {
     expect(await send({ id: 4, op: "select", sql: "SELECT * FROM meta WHERE key = 'k'" })).toEqual({ id: 4, ok: true, result: [] });
   });
 
+  it("exports the database as a SQLite file and restores it, refusing a file that is none", async () => {
+    await send({ id: 1, op: "open" });
+    await send({ id: 2, op: "write", statements: [{ sql: "INSERT INTO meta (key, value) VALUES ('k', 'v')" }] });
+    const exported = (await send({ id: 3, op: "export" })) as { ok: true; result: Uint8Array };
+    expect(exported.ok).toBe(true);
+    expect(new TextDecoder().decode(exported.result.subarray(0, 15))).toBe("SQLite format 3");
+    await send({ id: 4, op: "wipe" });
+    expect(await send({ id: 5, op: "select", sql: "SELECT * FROM meta WHERE key = 'k'" })).toMatchObject({ result: [] });
+    expect(await send({ id: 6, op: "import", bytes: new TextEncoder().encode("nope"), dryRun: false })).toMatchObject({ ok: false, error: expect.stringMatching(/not a SQLite database/) });
+    expect(await send({ id: 7, op: "import", bytes: exported.result, dryRun: true })).toEqual({ id: 7, ok: true, result: null });
+    expect(await send({ id: 8, op: "select", sql: "SELECT * FROM meta WHERE key = 'k'" })).toMatchObject({ result: [] }); // a dry run changes nothing
+    expect(await send({ id: 9, op: "import", bytes: exported.result, dryRun: false })).toEqual({ id: 9, ok: true, result: null });
+    expect(await send({ id: 10, op: "select", sql: "SELECT value FROM meta WHERE key = 'k'" })).toMatchObject({ result: [{ value: "v" }] });
+  });
+
   it("reports a failing statement as an error answer, and stays usable", async () => {
     await send({ id: 1, op: "open" });
     const failed = await send({ id: 2, op: "write", statements: [{ sql: "INSERT INTO nowhere VALUES (1)" }] });

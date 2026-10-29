@@ -40,6 +40,7 @@ export function normalizeBlock(collection: Collection, block: ViewBlock): ViewBl
   };
   if (block.hideHeader) normalized.hideHeader = true;
   if (block.limit !== undefined) normalized.limit = block.limit;
+  if (block.groupDate) normalized.groupDate = block.groupDate;
   return block.groupOrder ? { ...normalized, groupOrder: block.groupOrder } : normalized;
 }
 
