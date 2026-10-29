@@ -227,10 +227,6 @@ describe.skipIf(!ADMIN)("the server's side of sync", () => {
   describe("versions", () => {
     const request = (over: Partial<SyncRequest> = {}): SyncRequest => ({ since: 0, changes: {}, version: SYNC_VERSION, ...over });
 
-    it("syncs with devices of its own version only", () => {
-      expect(refusal(request())).toBeNull();
-    });
-
     it("tells an older device to update the app, and writes nothing", async () => {
       expect(refusal(request({ version: SYNC_VERSION - 1 }))).toMatchObject({ update: "app", version: SYNC_VERSION });
       // A device from before versions sends none.

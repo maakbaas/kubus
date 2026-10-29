@@ -22,9 +22,8 @@ is what this split avoids. Keep them current when behaviour changes.
   connectors, the HTTP API (headless device) and webhooks, iOS home-screen app, known sync limits.
 - `docs/migrations.md`: schema changes: the device's and the server's migrations, sync between versions
   (the strict `SYNC_VERSION` gate), the steps of a change.
-- `tests/README.md`: the catalog of every test suite (what, needs, time budget, how to run, which CI job); `npm run suite -- list`.
-- `docs/testing.md`: the test suites (vitest projects `domain`, `storage`, `sync`, `api`, `app`, `connectors`,
-  `server`; the GUI suites), what each covers and needs (Postgres), what to run for a change, and CI.
+- `docs/testing.md`: what the tests are for and when a change needs one, every suite (vitest projects, GUI suites),
+  what each needs (Postgres), what to run before pushing, and CI.
 - `docs/vision.md`: the "one hub" vision (native + remote sources, capabilities), the roadmap and
   every open item, numbered (other docs refer to them as "roadmap #n"; keep the list there only).
 
@@ -67,6 +66,12 @@ is what this split avoids. Keep them current when behaviour changes.
   `server/src/ai.ts`). Never sync a key, put it in the synced data or send the server's to a device; the same goes for
   a remote source's password (`server/src/settings.ts`: write-only, dropped when its address changes).
 - Same words in code and UI (see Terminology); no "type", "object", "template", "entry".
+- **Tests stay lean** (`docs/testing.md`): unit tests for new logic in `domain/`, `data/`, sync, `headless/`, `server/` and
+  for a fixed bug; no new GUI test for a UI feature (the generic GUI suites reach every page and control). Two hard limits:
+  at most 10 minutes of test rework per change (past that, delete the test that pinned details; never weaken one that
+  guards data, sync or migrations), and the whole suite (`npm run suite -- full`) in at most 30 minutes (over that, drop
+  the least meaningful tests). Before pushing: `npm run typecheck`, `npm run test:changed`, and `npm run test:gui:smoke`
+  if the GUI shows the change.
 
 ## Terminology
 
@@ -148,18 +153,16 @@ stale peer range.
 - `npm run dev`: Tauri desktop app with hot reload (runs `dev:web` on port 1420).
 - `npm run dev:web`: same app in a normal browser at http://localhost:1420.
 - `npm run typecheck`, `npm run build:web` (to `app/dist`), `npm run build` (desktop bundle).
-- `npm run suite -- <name…>` (`list`, `unit`, `server`, `critical`, `full`, `gui-NN`, …): any suite by name, timed and held to its budget (`tests/README.md`).
+- `npm run suite -- <name…>` (`list`, `unit`, `server`, `critical`, `full`, `gui-NN`, …): any suite by name, timed and held to its budget.
 - `npm test`: every vitest project; `npm test -- --project sync` one part, `npm run test:changed` the tests reaching
   files changed since origin/main. The server's projects need `npm ci --prefix server` and Postgres
   (`KUBUS_TEST_POSTGRES`): `docs/testing.md`. Run the projects of what a change touches before pushing.
-- `npm run test:coverage` (+ `npm run test:gui -- --coverage`), then `npm run coverage:report`: one merged coverage report in `coverage/` (`docs/testing.md`).
+- `npm run test:coverage`: V8 coverage of the vitest projects in `coverage/`.
 - `npm run build:headless`: the headless device for the server (`server/headless`, git-ignored); without it the
   server's `/api/v1` answers 503. Rebuild it after app changes when running the server locally.
-- `npm run test:gui`: the GUI stress suite (CI runs only smoke tests; `gui-tests/README.md`): every page, size and content shape through
-  `playwright-cli` against a development-mode build it makes and serves itself (`--dev`: the dev server), layout rules
-  as pass/fail criteria, HTML report with screenshots in `gui-tests/report/`. `npm run test:gui:smoke`: its ~23-test smoke
-  subset; `--changed`: the suites covering the files changed since origin/main (`gui-tests/areas.mjs`); `--repeat n`; `--perf`: the perf tests only (suite 23, each once; `perf-summary.json`, `--perf-compare`); screenshot baselines in `gui-tests/baselines/` (`--update-baselines` after a
-  deliberate visual change).
+- `npm run test:gui`: the GUI suite (`gui-tests/README.md`): every page, size and content shape through `playwright-cli`
+  against a development-mode build it makes and serves itself (`--dev`: the dev server), layout rules as pass/fail
+  criteria, HTML report with screenshots in `gui-tests/report/`. `npm run test:gui:smoke`: its ~36 smoke tests (CI's).
 - Server: `docker compose up -d` (change the passwords in `docker-compose.yml` first; it starts its own Postgres and pulls the image that `.github/workflows/image.yml` publishes to ghcr.io); or `cd server && npm install && npm run dev` with `DATABASE_URL` and `KUBUS_TOKEN` set.
 - Browser automation (playwright-cli) runs in a subagent on the cheapest model (`model: "haiku"`).
 

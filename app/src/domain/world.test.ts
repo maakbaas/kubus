@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Component } from "./components";
 import { bookmarkPath } from "./bookmarks";
-import { fileIdFromSrc, fileSrc, fileIdsIn, filesUsedBy, IMAGE_TYPES } from "./files";
+import { fileIdFromSrc, fileSrc, fileIdsIn, filesUsedBy } from "./files";
 import { blankField, type Collection, type Item, type ItemLabel } from "./model";
 import { computeItems, loadWorld } from "./world";
 
@@ -68,11 +68,6 @@ describe("files", () => {
     for (const src of ["", "files/abc", `files/${id}.png`, `x/files/${id}`, `https://x.org/files/${id}`, `files/${"A".repeat(64)}`]) {
       expect(fileIdFromSrc(src)).toBeNull();
     }
-  });
-
-  it("lists the image types the app shows", () => {
-    expect(IMAGE_TYPES).toContain("image/svg+xml");
-    expect(IMAGE_TYPES).toContain("image/webp");
   });
 
   it("finds the files a text uses, once each", () => {

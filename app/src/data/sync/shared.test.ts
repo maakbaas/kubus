@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { fileIdsIn, FILE_ID, filesUsedBy } from "../../../../shared/files";
 import { HttpError, json, readJson, Router, type ApiRequest } from "../../../../shared/router";
-import { DEFAULT_MAP_STYLE, MAP_STYLE_IDS, SOURCE_NAME } from "../../../../shared/settings";
+import { SOURCE_NAME } from "../../../../shared/settings";
 
 const request = (method: string, path: string, body = ""): ApiRequest => ({
   method,
@@ -112,10 +112,5 @@ describe("settings", () => {
   it("names a source in single-spaced words of letters, digits, - and _", () => {
     for (const ok of ["CRM", "my db", "a-b_c 1", "x".repeat(40)]) expect(SOURCE_NAME.test(ok), ok).toBe(true);
     for (const bad of ["", " lead", "trail ", "two  spaces", "dot.ted", "slash/ed", "x".repeat(41), "é"]) expect(SOURCE_NAME.test(bad), bad).toBe(false);
-  });
-
-  it("offers the map styles, starting from the one that follows the theme", () => {
-    expect(MAP_STYLE_IDS).toContain(DEFAULT_MAP_STYLE);
-    expect(DEFAULT_MAP_STYLE).toBe("auto");
   });
 });

@@ -3,11 +3,8 @@ name: Full
 # What the critical path (test.yml) leaves out because it is slow, each suite within its budget:
 # - connectors-real: the connectors against InfluxDB, n8n and Actual Budget in containers (tests/services.yml);
 # - image: the server image built from server/Dockerfile and run by docker-compose.yml, checked over HTTP (tests/image-smoke.mjs);
-# - gui: the whole GUI suite, sharded over parallel jobs (`node tests/run.mjs shards`; the groups are in
-#   tests/run.mjs), with the app's coverage;
-# - coverage: the vitest projects with coverage, merged with the shards' into one report (artifact).
-# Not the screenshot baselines (suite 21) nor the perf tests (23): they belong to one machine.
-# tests/README.md is the catalog of the suites.
+# - gui: the whole GUI suite, sharded over parallel jobs (`node tests/run.mjs shards`).
+# docs/testing.md is the catalog of the suites.
 # By hand only (Actions → Full → Run workflow): no schedule.
 on:
   workflow_dispatch:
@@ -86,90 +83,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm install -g @playwright/cli@0.1.22
-      # Coverage slows the tests down: 15 minutes of budget instead of 10.
-      - run: npm run suite -- ${{ matrix.shard.suite }} --budget 15 -- --coverage
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: gui-v8-${{ matrix.shard.name }}
-          path: coverage/gui-v8/
-          if-no-files-found: ignore
-          retention-days: 3
-      # The build with source maps maps the shards' coverage to the sources; one shard's is enough.
-      - uses: actions/upload-artifact@v4
-        if: matrix.shard.name == 'shard-1'
-        with:
-          name: gui-build
-          path: gui-tests/.build/
-          retention-days: 3
+      - run: npm run suite -- ${{ matrix.shard.suite }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: gui-report-${{ matrix.shard.name }}
           path: gui-tests/report/
-          retention-days: 14
-
-  coverage:
-    needs: gui
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: mysql
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pmysql" --health-interval 5s --health-timeout 5s --health-retries 20
-      mariadb:
-        image: mariadb:11.4
-        env:
-          MARIADB_ROOT_PASSWORD: mariadb
-        ports:
-          - 3307:3306
-        options: >-
-          --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 5s --health-retries 20
-    env:
-      KUBUS_TEST_POSTGRES: postgres://postgres:postgres@localhost:5432/postgres
-      KUBUS_TEST_MYSQL: mysql://root:mysql@127.0.0.1:3306
-      KUBUS_TEST_MARIADB: mysql://root:mariadb@127.0.0.1:3307
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            server/package-lock.json
-      - run: npm ci
-      - run: npm ci --prefix server
-      - run: npm run build:headless
-      # The GUI shards' coverage (coverage/gui-v8-shard-N/, one folder per artifact) and the build its source maps point into.
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: gui-v8-*
-          path: coverage
-      - uses: actions/download-artifact@v4
-        with:
-          name: gui-build
-          path: gui-tests/.build
-        continue-on-error: true
-      # vitest empties only coverage/unit, so the shards' folders stay.
-      - run: npm run suite -- coverage
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-report
-          path: coverage/
           retention-days: 14

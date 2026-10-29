@@ -118,6 +118,9 @@ describe.skipIf(!ACTUAL)("Actual Budget connector, against Actual", () => {
         schedule: { name: "Rent", account: accounts.Main, payee: landlord, amount: -90000, amountOp: "is", date: { start: "2026-11-01", frequency: "monthly", interval: 1, endMode: "never" }, posts_transaction: true },
       });
       await call("PATCH", `/budgets/${id}/months/2026-03/categories/${categories.Rent}`, { category: { budgeted: 90000 } });
+      // A connector keeps what it read for a while (ROWS_TTL_MS): the contract's rows, before this budget changed.
+      await connector.close();
+      connector = new ActualConnector(config(id));
     }, 120_000);
 
     it("reads split transactions as their parts, amounts from cents", async () => {

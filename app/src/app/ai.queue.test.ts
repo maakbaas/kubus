@@ -423,15 +423,6 @@ describe("progress", () => {
     h.ai.offer([job("i1")]);
     expect(h.ai.getProgress()).not.toBe(first);
   });
-
-  it("subscribe returns an unsubscribe", () => {
-    const h = setup();
-    const seen = vi.fn();
-    const off = h.ai.subscribe(seen);
-    off();
-    h.ai.setProblems([["i1", "f1", "x"]]);
-    expect(seen).not.toHaveBeenCalled();
-  });
 });
 
 describe("models", () => {

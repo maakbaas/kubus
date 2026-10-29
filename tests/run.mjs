@@ -9,7 +9,7 @@
 //   node tests/run.mjs shards                  the GUI shards as JSON (the matrix of full.yml)
 // A suite delegates to vitest or gui-tests/run.mjs (this file only names, times and bounds them), prints
 // a summary, and fails when it exceeds its budget (10 minutes unless it says otherwise, --budget <min>
-// for all named): it is interrupted then, so a hang can't eat the whole job. tests/README.md is the catalog.
+// for all named): it is interrupted then, so a hang can't eat the whole job. docs/testing.md is the catalog.
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -19,7 +19,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_BUDGET = 10; // minutes
 
 // ---- the suites -------------------------------------------------------------------------------------
-/** @type {Map<string, {about: string, budget: number, steps?: string[][], members?: string[], needs?: string[]}>} */
+/** @type {Map<string, {about: string, budget: number, steps?: string[][], members?: string[], needs?: string[], total?: number}>} */
 const suites = new Map();
 const add = (name, about, rest) => suites.set(name, { about, budget: DEFAULT_BUDGET, ...rest });
 
@@ -41,11 +41,6 @@ add("connectors-real", "vitest: the connectors against InfluxDB, n8n and Actual 
 add("image", "the server image end to end: docker build of server/Dockerfile, docker-compose.yml with a throwaway Postgres, HTTP checks (Docker)", {
   steps: [["node", "tests/image-smoke.mjs"]],
 });
-add("coverage", "vitest with V8 coverage, then the merged report (add the GUI's: gui-NN -- --coverage first)", {
-  budget: 20,
-  steps: [["npx", "vitest", "run", "--coverage"], ["npm", "run", "coverage:report"]],
-  needs: ["KUBUS_TEST_POSTGRES", "KUBUS_TEST_MYSQL", "KUBUS_TEST_MARIADB"],
-});
 
 // The GUI suites come from gui-tests/suites/NN-*.js: a new file is a new suite here. The runner
 // (gui-tests/run.mjs) does the work; `--suite` picks files by name.
@@ -58,68 +53,28 @@ const firstComment = (file) => {
 };
 for (const file of guiFiles) {
   const n = file.slice(0, 2);
-  const perf = n === "23"; // perf tests are left out of other runs
-  add(`gui-${n}`, `GUI ${file.slice(0, -3)}: ${firstComment(file)}`, { steps: [gui("--suite", `^${n}-`, ...(perf ? ["--perf"] : []))] });
+  add(`gui-${n}`, `GUI ${file.slice(0, -3)}: ${firstComment(file)}`, { steps: [gui("--suite", `^${n}-`)] });
 }
 const guiNumbers = guiFiles.map((f) => f.slice(0, 2));
 
-/**
- * The last measured time of each GUI suite, from gui-tests/report/results.json when a run has made it:
- * `{ "01": { serial, wall } }` in minutes. `serial` is the sum of its tests (what one worker would take);
- * `wall` is what CI sees, with its 2 workers (the report's own duration when the run held that suite only).
- */
-function measuredGui() {
-  const out = {};
-  try {
-    const { summary, results } = JSON.parse(readFileSync(join(root, "gui-tests", "report", "results.json"), "utf8"));
-    const bySuite = {};
-    for (const r of results) (bySuite[r.suite.slice(0, 2)] ||= []).push(r.ms || 0);
-    const only = Object.keys(bySuite).length === 1;
-    for (const [n, list] of Object.entries(bySuite)) {
-      const serial = list.reduce((a, b) => a + b, 0) / 60_000;
-      out[n] = { serial, wall: only && !summary.partial ? summary.seconds / 60 : serial / 2 };
-    }
-  } catch { /* no report yet */ }
-  return out;
-}
-const measured = measuredGui();
-/** Warnings for GUI suites whose last measured time is over their budget (a suite should be split then). */
-function overBudget(name) {
-  const m = /^gui-(\d\d)$/.exec(name);
-  const t = m && measured[m[1]];
-  const budget = suites.get(name)?.budget;
-  return t && budget && t.wall > budget ? `${name}: last measured ${t.wall.toFixed(1)} min (${t.serial.toFixed(1)} min serial) is over its ${budget} min budget: split the suite file` : null;
-}
-if (process.argv[2] !== "shards") for (const w of guiNumbers.map((n) => overBudget(`gui-${n}`)).filter(Boolean)) console.warn(`warning: ${w}`);
 
-// Shards for CI: packed from the suites' measured serial time (gui-tests/report/results.json after a run:
-// first-fit-decreasing to at most ~16 minutes of serial test time per shard, ~8 minutes at the 2 workers
-// of a CI runner; the loaded machine of the last measure makes it conservative). Suite 21 (screenshot
-// baselines) is machine-dependent and runs where it was made, 23 only with --perf. Suites in no group
-// (a new one) land in the last shard: add them here when they are measured.
-const SHARDS = [["01", "25"], ["02", "19"], ["03", "22", "28"], ["04", "27"], ["05", "29", "30"], ["06", "42"], ["07", "35"], ["08"], ["09", "39"], ["10"], ["11", "24"], ["12", "15", "16", "38"], ["13", "32", "40"], ["14", "33", "36"], ["17", "20", "37"], ["18", "26", "41"], ["31", "34", "43", "44", "45"]];
-const LOCAL_ONLY = ["21", "23"];
-const listed = new Set([...SHARDS.flat(), ...LOCAL_ONLY]);
-const shards = SHARDS.map((g) => g.filter((n) => guiNumbers.includes(n))).filter((g) => g.length);
-shards.push(guiNumbers.filter((n) => !listed.has(n))); // the rest: whatever is new
-const shardRegex = (g) => `^(${g.join("|")})-`;
+// Shards for CI (full.yml): each generic sweep alone (1 to 5 minutes of serial test time each), the flows together (about
+// 8 minutes: one or two short tests per area). A new flow suite needs nothing here; a new sweep goes in GUI_SWEEPS.
+const GUI_SWEEPS = ["01", "02", "03", "09", "10", "11", "14", "20", "35", "36", "40", "41"];
+const shards = [...guiNumbers.filter((n) => GUI_SWEEPS.includes(n)).map((n) => [n]), guiNumbers.filter((n) => !GUI_SWEEPS.includes(n))];
 shards.forEach((g, i) => {
-  if (!g.length) return;
-  add(`gui-shard-${i + 1}`, `GUI suites ${g.join(", ")} (one job of full.yml)`, { steps: [gui("--suite", shardRegex(g))] });
+  add(`gui-shard-${i + 1}`, `GUI suites ${g.join(", ")} (one job of full.yml)`, { steps: [gui("--suite", `^(${g.join("|")})-`)] });
 });
-add("gui-all", `every GUI suite but ${LOCAL_ONLY.join(" and ")} in one run (an hour or more: not within a budget; CI shards it)`, {
-  budget: 120,
-  steps: [gui("--suite", `^(?!(${LOCAL_ONLY.join("|")})-)`)],
-});
-add("gui-smoke", "GUI smoke tests of the suites the changes reach (all on main; not the baselines)", {
-  steps: [gui("--smoke", "--suite", "^(?!21-)", ...(process.env.GITHUB_REF === "refs/heads/main" || process.env.GUI_ALL ? [] : ["--changed", "origin/main"]))],
-});
+add("gui-all", "every GUI suite in one run (browsers in parallel; CI shards it instead)", { budget: 20, steps: [gui()] });
+add("gui-smoke", "the GUI smoke tests (one main path per area, plus the generic sweeps' quickest)", { steps: [gui("--smoke")] });
 
 const CRITICAL = ["typecheck", "unit", "nodesqlite", "connectors", "server", "gui-smoke"];
 add("critical", "what CI's critical jobs run (test.yml); in CI each is a job of its own", { members: CRITICAL });
-add("full", "typecheck, every vitest project, the real services, every GUI shard (all but the baselines and perf)", {
+// Everything, held to 30 minutes in all: over that there are too many tests, and the least meaningful go (docs/testing.md).
+add("full", "typecheck, every vitest project, the real services, the image, the whole GUI suite: 30 minutes at most", {
   budget: 0,
-  members: ["typecheck", "unit", "connectors", "server", "connectors-real", "image", ...shards.map((g, i) => (g.length ? `gui-shard-${i + 1}` : null)).filter(Boolean)],
+  total: 30,
+  members: ["typecheck", "unit", "nodesqlite", "connectors", "server", "connectors-real", "image", "gui-all"],
 });
 
 // ---- running ------------------------------------------------------------------------------------------
@@ -155,16 +110,18 @@ function die(message) {
 if (!names.length || names[0] === "list") {
   const w = Math.max(...[...suites.keys()].map((n) => n.length));
   for (const [name, s] of suites) console.log(`${name.padEnd(w)}  ${String(s.budget || "-").padStart(3)} min  ${s.about}`);
-  console.log("\nAlso gui:<regex> (GUI suite files matching it). npm run suite -- <name…> [--budget <min>] [-- extra args]; tests/README.md");
+  console.log("\nAlso gui:<regex> (GUI suite files matching it). npm run suite -- <name…> [--budget <min>] [-- extra args]; docs/testing.md");
   process.exit(0);
 }
 if (names[0] === "shards") {
   // For a CI matrix: [{ name, suite, regex, suites }]
-  console.log(JSON.stringify(shards.map((g, i) => ({ name: `shard-${i + 1}`, suite: `gui-shard-${i + 1}`, suites: g.join(" ") })).filter((s) => s.suites)));
+  console.log(JSON.stringify(shards.map((g, i) => ({ name: `shard-${i + 1}`, suite: `gui-shard-${i + 1}`, suites: g.join(" ") }))));
   process.exit(0);
 }
 
 const queue = names.flatMap(resolveSuite);
+/** Groups held to a total time (minutes), like full. */
+const totals = names.map((n) => suites.get(n)).filter((g) => g?.total);
 
 /** Runs one command; resolves with its exit code, or "timeout" after interrupting it. */
 function run(cmd, timeoutMs) {
@@ -210,6 +167,8 @@ for (const suite of queue) {
 
 console.log("\nSuite                 Time    Budget  Result");
 for (const r of results) console.log(`${r.name.padEnd(20)}  ${fmt(r.ms).padStart(6)}  ${r.budget ? `${r.budget} min`.padStart(6) : "     -"}  ${r.status}`);
+const totalMs = results.reduce((t, r) => t + r.ms, 0);
+for (const g of totals) if (totalMs > g.total * 60_000) results.push({ name: "total", status: `OVER ${g.total} MIN`, ms: totalMs, budget: g.total });
 const bad = results.filter((r) => r.status !== "ok");
-console.log(bad.length ? `\n${bad.length} of ${results.length} failed: ${bad.map((r) => r.name).join(", ")}` : `\nAll ${results.length} green, ${fmt(results.reduce((t, r) => t + r.ms, 0))} in total`);
+console.log(bad.length ? `\n${bad.length} of ${results.length} failed: ${bad.map((r) => r.name).join(", ")}` : `\nAll ${results.length} green, ${fmt(totalMs)} in total`);
 process.exitCode = bad.length ? 1 : 0;

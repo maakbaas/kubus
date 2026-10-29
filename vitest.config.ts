@@ -1,5 +1,4 @@
-import { existsSync, rmSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import { configDefaults, defineConfig } from "vitest/config";
 
 // The unit and integration tests (`npm test`), one project per part of the app, so a change runs
@@ -25,19 +24,12 @@ const realTests = process.argv.includes("real.test");
 const serverInstalled = existsSync(new URL("server/node_modules/pg", import.meta.url));
 if (!serverInstalled) console.warn("The connectors and server tests are left out: install the server's packages (npm ci in server/)");
 
-// `npm run test:coverage` writes V8 coverage as istanbul json to coverage/unit; tests/coverage.mjs merges
-// it with the GUI suite's. The real server the HTTP tests start is a child process: with KUBUS_V8_DIR
-// set, server/test/serve.ts has it dump its V8 coverage there, and tests/coverage.mjs adds it.
-if (process.argv.includes("--coverage") && !process.env.KUBUS_V8_DIR) {
-  process.env.KUBUS_V8_DIR = fileURLToPath(new URL("coverage/server-v8", import.meta.url));
-  rmSync(process.env.KUBUS_V8_DIR, { recursive: true, force: true });
-}
 export default defineConfig({
   test: {
     coverage: {
       provider: "v8",
-      reportsDirectory: "coverage/unit",
-      reporter: ["json", "text-summary"],
+      reportsDirectory: "coverage",
+      reporter: ["html", "text-summary"],
       reportOnFailure: true,
       include: ["app/src/**", "server/src/**", "shared/**"],
       exclude: ["**/*.test.{ts,tsx}", "app/src/test/**", "**/*.{css,md,sql,d.ts}"],

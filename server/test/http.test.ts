@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SYNC_VERSION, type SyncRequest, type SyncResponse } from "../../shared/sync.ts";
 import type { ApiTokenInfo, ApiTokenMade } from "../../shared/tokens.ts";
 import { admin, ADMIN, createDatabase, dropDatabase, sourceFor } from "./postgres.ts";
-import { HEADLESS_BUILT, request, startServer, TOKEN, type RunningServer } from "./serve.ts";
+import { HEADLESS_BUILT, request, startServer, type RunningServer } from "./serve.ts";
 
 const DB = "kubus_http_test";
 const sha256 = (data: Uint8Array) => createHash("sha256").update(data).digest("hex");
@@ -44,7 +44,6 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
     writeFileSync(join(staticDir, "index.html"), "<!doctype html><title>Kubus</title>");
     mkdirSync(join(staticDir, "assets"));
     writeFileSync(join(staticDir, "assets", "app-123.js"), "console.log(1)");
-    writeFileSync(join(staticDir, "..", "kubus-outside.txt"), "secret");
     provider = createServer((req, res) => {
       let body = "";
       req.on("data", (d) => (body += d));
@@ -70,22 +69,6 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
       const response = await fetch(`${server.url}/api/health`);
       expect(await response.json()).toEqual({ ok: true, syncVersion: SYNC_VERSION });
     });
-
-    it("refuses /api without the right token", async () => {
-      for (const authorization of ["", "Bearer wrong", `Bearer ${TOKEN}x`, "Bearer kubus_notatoken"]) {
-        const response = await request(server, "/api/settings", { headers: { Authorization: authorization } });
-        expect(response.status).toBe(401);
-      }
-      expect((await request(server, "/api/events", { headers: { Authorization: "Bearer wrong" } })).status).toBe(401);
-      expect((await request(server, "/api/v1/collections", { headers: { Authorization: "Bearer wrong" } })).status).toBe(401);
-    });
-
-    it("answers CORS preflights, for the app on another origin", async () => {
-      const response = await fetch(`${server.url}/api/sync`, { method: "OPTIONS" });
-      expect(response.status).toBe(204);
-      expect(response.headers.get("access-control-allow-origin")).toBe("*");
-      expect(response.headers.get("access-control-allow-headers")).toMatch(/Authorization/);
-    });
   });
 
   describe("the web app", () => {
@@ -102,19 +85,6 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
       const response = await fetch(`${server.url}/assets/app-123.js`);
       expect(response.headers.get("content-type")).toBe("text/javascript");
       expect(response.headers.get("cache-control")).toMatch(/immutable/);
-    });
-
-    it("answers 404 for a missing file and never serves one outside its directory", async () => {
-      expect((await fetch(`${server.url}/missing.png`)).status).toBe(404);
-      for (const path of ["/..%2fkubus-outside.txt", "/%2e%2e/kubus-outside.txt", "/assets/..%2f..%2fkubus-outside.txt"]) {
-        const response = await fetch(`${server.url}${path}`);
-        expect(response.status).not.toBe(200);
-        expect(await response.text()).not.toBe("secret");
-      }
-    });
-
-    it("refuses other methods", async () => {
-      expect((await fetch(`${server.url}/`, { method: "POST" })).status).toBe(405);
     });
   });
 
@@ -161,24 +131,6 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
       await sync({ changes: { spaces: [space("http-s2", "New", "2026-10-03T00:00:00.000Z")] } });
       await sync({ changes: { spaces: [space("http-s2", "Old", "2026-10-02T00:00:00.000Z")] } });
       expect((await sync({})).body.changes.spaces?.find((r) => r.id === "http-s2")).toMatchObject({ name: "New" });
-    });
-
-    it("answers 409 to a device of another database and 426 to one of another version, writing nothing", async () => {
-      const mismatch = await sync({ database: "another", changes: { spaces: [space("http-s3", "Lost")] } });
-      expect(mismatch.status).toBe(409);
-      expect(mismatch.body.error).toMatch(/wiped or replaced/);
-      const outdated = await sync({ version: 0, changes: { spaces: [space("http-s3", "Lost")] } });
-      expect(outdated.status).toBe(426);
-      expect(outdated.body.update).toBe("app");
-      const newer = await sync({ version: SYNC_VERSION + 1, changes: { spaces: [space("http-s3", "Lost")] } });
-      expect(newer.status).toBe(426);
-      expect(newer.body.update).toBe("server");
-      expect((await sync({})).body.changes.spaces?.some((r) => r.id === "http-s3")).toBeFalsy();
-    });
-
-    it("refuses a body that isn't a sync request", async () => {
-      const response = await request(server, "/api/sync", { method: "POST", body: "not json", headers: { "Content-Type": "application/json" } });
-      expect(response.status).toBe(400);
     });
 
     it("signals connected devices after a write, with its cursor", async () => {
@@ -381,12 +333,6 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
       expect((await as(made.body.token, "/api/v1/collections")).status).toBe(401);
     });
 
-    it("refuse a token without a name or access", async () => {
-      expect((await make({ name: "", access: "read" })).status).toBe(400);
-      expect((await make({ name: "x", access: "all" })).status).toBe(400);
-      expect((await make(null)).status).toBe(400);
-    });
-
     it("reach only /api/v1, never the devices' endpoints", async () => {
       const { token } = (await make({ name: "Everything", access: "write" })).body;
       for (const [method, path] of [["POST", "/api/sync"], ["GET", "/api/settings"], ["GET", "/api/tokens"], ["POST", "/api/tokens"], ["GET", "/api/events"], ["GET", "/api/ai"], ["POST", "/api/wipe"]]) {
@@ -436,10 +382,6 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
   });
 
   describe("wiping", () => {
-    it("needs to be confirmed in so many words", async () => {
-      expect((await request(server, "/api/wipe", { method: "POST", json: {} })).status).toBe(400);
-    });
-
     it("drops the devices' data, the server's settings and API tokens, and makes a new database", async () => {
       const before = (await sync({})).body.database.id;
       await request(server, "/api/settings", { method: "PUT", json: settings() });

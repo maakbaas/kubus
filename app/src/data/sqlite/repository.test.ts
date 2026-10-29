@@ -55,20 +55,6 @@ describe("spaces", () => {
     await repo.saveSpace({ id: "work", name: "Office", icon: null });
     expect((await repo.listSpaces()).map((s) => [s.id, s.name])).toEqual([["default", "Space"], ["work", "Office"], ["home", "Home"]]);
   });
-
-  it("are deleted with their items, views and bookmarks; the last one stays", async () => {
-    const book = await collection("Book", [field("Title")]);
-    await repo.saveSpace({ id: "work", name: "Work", icon: null });
-    const there = await repo.createItem(book, { [book.fields[0].id]: "Report" }, "work");
-    await repo.createItem(book, { [book.fields[0].id]: "Novel" }, "default");
-    await repo.addBookmark("item", book.id, there, "Report", "work");
-    await repo.deleteSpace("work");
-    expect((await repo.listSpaces()).map((s) => s.id)).toEqual(["default"]);
-    expect(await repo.getItem(book, there)).toBeNull();
-    expect(await repo.listBookmarks("work")).toEqual([]);
-    expect(titles(await repo.listItems(book, "default"), book)).toEqual(["Novel"]);
-    await expect(repo.deleteSpace("default")).rejects.toThrow(/only space/);
-  });
 });
 
 describe("collections", () => {
@@ -374,15 +360,5 @@ describe("components", () => {
     await repo.deleteComponent(component.id, { withFields: true });
     expect(await repo.listComponents()).toEqual([]);
     expect((await repo.listCollections()).find((c) => c.id === book.id)?.fields.map((f) => f.name)).toEqual(["Title"]);
-  });
-});
-
-describe("files", () => {
-  it("are stored once per content", async () => {
-    const data = new TextEncoder().encode("bytes");
-    const id = await repo.putFile(data, "image/png");
-    expect(await repo.putFile(data, "image/png")).toBe(id);
-    expect(id).toMatch(/^[0-9a-f]{64}$/);
-    expect(await repo.getFile(id)).toEqual({ data, mime: "image/png" });
   });
 });

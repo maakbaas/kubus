@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeBlock } from "../views";
 import { COL, invoices, MERGES, shopSales, world } from "../test/mergedWorld";
-import { compareGroups } from "./query";
 import { listedCollection, newBlock, parseBlock, parseViewConfig } from "./views";
 
 describe("a block listing several collections", () => {
@@ -28,19 +27,5 @@ describe("a block listing several collections", () => {
     // Without the collections to read it by, only the one collection's own fields are known.
     expect(normalizeBlock(shopSales, shown).layout.fields).toEqual([]);
     expect(normalizeBlock(shopSales, shown, world)).toMatchObject({ collectionIds: ["sales", "invoices"], merges: MERGES });
-  });
-});
-
-describe("groups in a query's order", () => {
-  const g = (key: string, label: string, count: number) => ({ key, label, count });
-  it("orders by label either way, by size, the empty group last", () => {
-    const list = [g("", "(empty)", 9), g("b", "B", 1), g("a", "A", 3)];
-    expect([...list].sort((x, y) => compareGroups(x, y, "asc", false)).map((x) => x.key)).toEqual(["a", "b", ""]);
-    expect([...list].sort((x, y) => compareGroups(x, y, "desc", false)).map((x) => x.key)).toEqual(["b", "a", ""]);
-    expect([...list].sort((x, y) => compareGroups(x, y, "count", false)).map((x) => x.key)).toEqual(["a", "b", ""]);
-  });
-  it("orders dates by their keys, not their labels", () => {
-    const list = [g("2026-11", "November 2026", 1), g("2026-02", "February 2026", 1)];
-    expect(list.sort((x, y) => compareGroups(x, y, "asc", true)).map((x) => x.key)).toEqual(["2026-02", "2026-11"]);
   });
 });

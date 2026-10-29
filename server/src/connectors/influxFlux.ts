@@ -813,8 +813,3 @@ export function rowFlux(shape: SourceShape & { keyValue: string }, columns: Map<
   }
   return new Script(shape.target, columns, range).render([`filter(fn: (r) => ${where})`, "limit(n: 1)", `keep(columns: ${JSON.stringify([...new Set([shape.key, ...shape.columns])])})`]);
 }
-
-/** A query's first rows: what its columns are read from. */
-export function sampleFlux(target: SourceTarget & { query: string }): string {
-  return new Script(target, new Map()).render(["limit(n: 100)"]);
-}

@@ -14,7 +14,7 @@ vi.mock("./MapView", () => ({ mapView: stub("map") }));
 vi.mock("./MarkdownBlock", () => ({ markdownBlock: stub("markdown") }));
 vi.mock("./TableView", () => ({ tableView: stub("table") }));
 
-const { BLOCK_TYPES, blockType, carryOptions, normalizeBlock, normalizeView } = await import("./index");
+const { blockType, carryOptions, normalizeBlock, normalizeView } = await import("./index");
 
 const collection = {
   id: "c", name: "Book", pluralName: "Books", icon: null, description: "", itemViews: [], spaceIds: null, createdAt: "", updatedAt: "",
@@ -22,10 +22,6 @@ const collection = {
 } as Collection;
 
 describe("block types", () => {
-  it("lists the types in the order of the Show as menu", () => {
-    expect(BLOCK_TYPES.map((t) => t.kind)).toEqual(["table", "cards", "chart", "map", "markdown", "component"]);
-  });
-
   it("falls back to the table for an unknown kind", () => {
     expect(blockType("map").kind).toBe("map");
     expect(blockType("removed").kind).toBe("table");

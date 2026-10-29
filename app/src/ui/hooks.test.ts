@@ -12,7 +12,6 @@ const { useBuffered } = await import("./useBuffered");
 const { useTableSort } = await import("./useTableSort");
 const { returnFocus, useMountedDialog } = await import("./useMountedDialog");
 const { findBlock, useLinkTarget } = await import("./useLinkTarget");
-const { useMediaQuery } = await import("./useMediaQuery");
 const { updateOf, useServerSettings } = await import("./useServerSettings");
 const { readPref, writePref } = await import("./localPrefs");
 
@@ -294,40 +293,6 @@ describe("link targets", () => {
     vi.stubGlobal("document", { querySelectorAll: (q: string) => (q === '[data-block-id="b1"]' ? [hidden, shown] : []) });
     expect(findBlock("b1")).toBe(shown);
     expect(findBlock("b2")).toBeNull();
-  });
-});
-
-describe("useMediaQuery", () => {
-  function media(initial: boolean) {
-    let listener: (e: { matches: boolean }) => void = () => {};
-    const mql = {
-      matches: initial,
-      addEventListener: vi.fn((_: string, l: typeof listener) => (listener = l)),
-      removeEventListener: vi.fn(),
-    };
-    const matchMedia = vi.fn(() => mql);
-    vi.stubGlobal("window", { matchMedia });
-    return { mql, matchMedia, change: (matches: boolean) => listener({ matches }) };
-  }
-
-  it("is the query's result now, and follows it", async () => {
-    const q = media(false);
-    const h = renderHook(() => useMediaQuery("(min-width: 1000px)"));
-    expect(h.result.current).toBe(false);
-    expect(q.matchMedia).toHaveBeenCalledWith("(min-width: 1000px)");
-    q.change(true);
-    await h.settle();
-    expect(h.result.current).toBe(true);
-  });
-
-  it("stops listening when it goes away, and re-reads when the query changes", async () => {
-    const q = media(true);
-    const h = renderHook(({ query }: { query: string }) => useMediaQuery(query), { props: { query: "a" } });
-    h.rerender({ query: "b" });
-    expect(q.mql.removeEventListener).toHaveBeenCalledTimes(1);
-    expect(q.matchMedia).toHaveBeenCalledWith("b");
-    h.unmount();
-    expect(q.mql.removeEventListener).toHaveBeenCalledTimes(2);
   });
 });
 

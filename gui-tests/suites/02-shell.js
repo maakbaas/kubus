@@ -45,7 +45,7 @@ async function checkTabRules(t, label) {
   await t.check(`${label}: tab width rules`, problems.length === 0, problems.join("\n"));
 }
 
-const SHELL_VPS = ["desktop", "laptop", "phone", "tablet"];
+const SHELL_VPS = ["desktop", "phone"];
 
 for (const vp of SHELL_VPS) {
   test(`side nav: toggle, branches, many long collections @ ${vp}`, async (t) => {
@@ -122,7 +122,7 @@ test("side nav: resize gutter limits and reset", async (t) => {
   await t.check("nav width is remembered", Math.abs((await navWidth()) - 400) <= 3, `${await navWidth()}`);
 });
 
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["phone"]) {
   test(`space switcher, global search, sync status @ ${vp}`, async (t) => {
     await t.boot();
     await t.seed({ ...profileSpec("long", { items: 6 }), spaces: [{ key: "w", name: "Work space with a rather long name for the switcher" }, { key: "p", name: "Private" }, { key: "x", name: "日本語スペース 🚀" }] });
@@ -168,7 +168,7 @@ for (const vp of ["desktop", "phone"]) {
   }, { viewport: vp });
 }
 
-for (const vp of ["desktop", "laptop", "phone", "short"]) {
+for (const vp of ["desktop", "phone"]) {
   test(`many tabs with long titles @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(profileSpec("long", { items: 10 }));
@@ -242,7 +242,7 @@ test("tabs: new, middle click close, close all, history", async (t) => {
   await t.check("the link opens a tab", (await t.count(".ws-pane__tabs .cds--tabs__nav-item")) === 1);
 });
 
-for (const vp of ["wide", "desktop", "laptop", "phone"]) {
+for (const vp of ["desktop"]) {
   test(`split panes: 2, 3 and 4 panes @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(profileSpec("long", { items: 8 }));

@@ -34,11 +34,8 @@ export async function freePort(): Promise<number> {
 /** Starts a server on `databaseUrl`; resolves once it answers. */
 export async function startServer(databaseUrl: string, env: Record<string, string> = {}): Promise<RunningServer> {
   const port = env.PORT ? Number(env.PORT) : await freePort(); // a fixed one when a test restarts a server (the device recognises its address)
-  // Under coverage (vitest.config.ts sets KUBUS_V8_DIR) the server leaves its V8 coverage there when it exits
-  // (stop() sends SIGTERM, on which it shuts down and exits).
-  const dump = process.env.KUBUS_V8_DIR;
   const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../src/index.ts")], {
-    env: { ...process.env, DATABASE_URL: databaseUrl, KUBUS_TOKEN: TOKEN, PORT: String(port), ...(dump ? { NODE_V8_COVERAGE: dump } : {}), ...env },
+    env: { ...process.env, DATABASE_URL: databaseUrl, KUBUS_TOKEN: TOKEN, PORT: String(port), ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";

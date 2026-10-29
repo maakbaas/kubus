@@ -14,8 +14,7 @@
 const __tests = [];
 /**
  * Registers a test. `opts.viewport`: a key of VIEWPORTS (default desktop); `opts.dark`: dark theme;
- * `opts.smoke`: in the quick smoke run (--smoke); `opts.heavy`: big data, run last and alone;
- * `opts.perf`: a perf test (--perf only: phases measured with t.measure).
+ * `opts.smoke`: in the quick smoke run (--smoke); `opts.heavy`: big data, run last and alone.
  */
 function test(name, fn, opts = {}) {
   __tests.push({ name, fn, opts });
@@ -43,19 +42,7 @@ function __makeT(ctx, pg, name, opts) {
   const errors = [];
   let shotN = 0;
   let loads = 0;
-  // Where the test's time goes (ms), reported with its result.
-  const timing = { boot: 0, seed: 0, load: 0, settle: 0, settles: 0, settleTimeouts: 0, audit: 0, audits: 0, screenshot: 0, screenshots: 0 };
-  const timed = async (key, fn) => {
-    const t0 = Date.now();
-    try {
-      return await fn();
-    } finally {
-      timing[key] += Date.now() - t0;
-    }
-  };
   let where = "";
-  /** The renderer's Performance metrics now (CDP), by name: durations in seconds, sizes in bytes. */
-  const perfMetrics = async () => Object.fromEntries((await t.cdp.send("Performance.getMetrics")).metrics.map((m) => [m.name, m.value]));
 
   pg.on("console", (m) => {
     if (m.type() === "error") errors.push({ where, text: m.text().slice(0, 500) });
@@ -81,17 +68,6 @@ function __makeT(ctx, pg, name, opts) {
     if (sameOrigin(r.url()) && !/ABORTED/i.test(why)) errors.push({ where, text: `Request failed: ${why} ${r.url().slice(base.length, base.length + 200)}` });
   });
 
-  // --coverage (Chromium): V8's precise coverage over CDP. Taken before every load, which throws the old
-  // page's scripts away, and at the end of the test; a take holds what ran since the one before.
-  const coverage = { cdp: null, takes: [] };
-  async function takeCoverage() {
-    if (!coverage.cdp) return;
-    try {
-      const { result } = await coverage.cdp.send("Profiler.takePreciseCoverage");
-      coverage.takes.push(result.filter((e) => e.url.startsWith(base + "/")).map(({ url, functions }) => ({ url, functions })));
-    } catch {}
-  }
-
   async function shoot(boxes) {
     shotN += 1;
     const file = `${slug}--${String(shotN).padStart(2, "0")}.jpg`;
@@ -113,8 +89,7 @@ function __makeT(ctx, pg, name, opts) {
           document.body.appendChild(layer);
         }, boxes);
       }
-      await timed("screenshot", () => pg.screenshot({ path: `${shotDir}/${file}`, type: "jpeg", quality: 70, animations: "disabled", caret: "initial" }));
-      timing.screenshots++;
+      await pg.screenshot({ path: `${shotDir}/${file}`, type: "jpeg", quality: 70, animations: "disabled", caret: "initial" });
       return file;
     } catch {
       return null;
@@ -138,9 +113,6 @@ function __makeT(ctx, pg, name, opts) {
     checkpoints,
     errors,
     external,
-    timing,
-    coverage,
-    takeCoverage,
 
     /** Names what the test is doing now (shown with console errors and failures). */
     at(label) {
@@ -149,12 +121,9 @@ function __makeT(ctx, pg, name, opts) {
 
     /** Loads the app and waits for the database (for seeding before showing a page). */
     async boot() {
-      await timed("boot", async () => {
-        await takeCoverage();
-        await pg.goto(base + "/");
-        await pg.waitForFunction(() => window.kubus && window.kubus.repo, null, { timeout: 30000 });
-        await pg.waitForSelector(".ws-pane", { timeout: 30000 });
-      });
+      await pg.goto(base + "/");
+      await pg.waitForFunction(() => window.kubus && window.kubus.repo, null, { timeout: 30000 });
+      await pg.waitForSelector(".ws-pane", { timeout: 30000 });
     },
 
     /** Opens an app route in the (single) tab by loading the app with it in the address bar. */
@@ -166,12 +135,9 @@ function __makeT(ctx, pg, name, opts) {
       // under load).
       if (!keepTabs && pg.url().startsWith(base)) await pg.evaluate(() => sessionStorage.setItem("__gui_clear_tabs", "1"));
       loads += 1;
-      await takeCoverage();
-      await timed("load", async () => {
-        await pg.goto(`${base}/?load=${loads}#${path}`);
-        await pg.waitForFunction(() => window.kubus && window.kubus.repo, null, { timeout: opts.perf ? 120000 : 30000 });
-        await pg.waitForSelector(".ws-pane", { timeout: opts.perf ? 120000 : 30000 });
-      });
+      await pg.goto(`${base}/?load=${loads}#${path}`);
+      await pg.waitForFunction(() => window.kubus && window.kubus.repo, null, { timeout: 30000 });
+      await pg.waitForSelector(".ws-pane", { timeout: 30000 });
       if (settle) await t.settle();
     },
 
@@ -194,8 +160,6 @@ function __makeT(ctx, pg, name, opts) {
      * Returns when (epoch ms, page clock) the last change it saw happened, null when it saw none.
      */
     async settle(quiet = 200, max = 5000) {
-        timing.settles++;
-      const t0 = Date.now();
       const res = await pg
         .evaluate(
           ({ quiet, max }) =>
@@ -218,55 +182,8 @@ function __makeT(ctx, pg, name, opts) {
           { quiet, max },
         )
         .catch(() => ({ timedOut: false, changed: null }));
-      timing.settle += Date.now() - t0;
-      if (res.timedOut) timing.settleTimeouts++;
       return res.changed;
     },
-
-    /**
-     * Perf tests (`perf: true`): one phase of the app's own work, measured in the page. `action`
-     * (Playwright: a click, typing, a navigation) starts it; `until` is the state that ends it: a
-     * function run in the page (with `arg`), polled every frame until it returns something truthy;
-     * without one the phase ends at the next frame. Recorded: `ms` from just before the action
-     * to that frame (what a person waits for), `doneMs` to the last DOM change after it (the page
-     * still filling in), the main thread's busy time (CDP: tasks, script, style and layout), long
-     * tasks (over 50ms: count and total), elements and JS heap. The settling after it is the
-     * suite's time (timing.settle), not the app's.
-     */
-    async measure(name, action, until = null, { arg = null, timeout = 60000 } = {}) {
-      where = name;
-      if (!t.cdp) throw new Error("t.measure is for perf tests ({ perf: true })");
-      const m0 = await perfMetrics();
-      const s0 = await pg.evaluate(() => performance.timeOrigin + performance.now());
-      await action();
-      // The predicate's source runs in the page as an expression (whatever the page's CSP says).
-      const pred = until ? `(${until.toString()})(${JSON.stringify(arg)})` : "true";
-      const handle = await pg.waitForFunction(`(${pred}) ? performance.timeOrigin + performance.now() : false`, null, { polling: "raf", timeout });
-      const s1 = await handle.jsonValue();
-      const changed = await t.settle();
-      const m1 = await perfMetrics();
-      const end = await pg.evaluate(() => ({ at: performance.timeOrigin + performance.now(), nodes: document.getElementsByTagName("*").length }));
-      const long = await pg.evaluate(([a, b]) => (window.__perfLong || []).filter((e) => e.start >= a && e.start < b).map((e) => e.ms), [s0, end.at]);
-      const d = (k) => Math.round(((m1[k] || 0) - (m0[k] || 0)) * 1000);
-      const phase = {
-        name,
-        ms: Math.round(s1 - s0),
-        doneMs: Math.round(Math.max(s1, changed || 0) - s0),
-        cpuMs: d("TaskDuration"),
-        scriptMs: d("ScriptDuration"),
-        layoutMs: d("LayoutDuration") + d("RecalcStyleDuration"),
-        longTasks: long.length,
-        longMs: Math.round(long.reduce((a, b) => a + b, 0)),
-        nodes: end.nodes,
-        heapMB: Math.round(((m1.JSHeapUsedSize || 0) / 2 ** 20) * 10) / 10,
-      };
-      t.phases.push(phase);
-      return phase;
-    },
-    /** The phases measured so far (t.measure). */
-    phases: [],
-    /** The page's CDP session (perf tests): Performance metrics. */
-    cdp: null,
 
     async wait(ms) {
       await pg.waitForTimeout(ms);
@@ -306,7 +223,7 @@ function __makeT(ctx, pg, name, opts) {
 
     /** Seeds data through the dev build's repository (window.kubus.repo); see data.js. */
     async seed(spec) {
-      return await timed("seed", () => pg.evaluate(__seedInPage, spec));
+      return await pg.evaluate(__seedInPage, spec);
     },
 
     /**
@@ -317,9 +234,8 @@ function __makeT(ctx, pg, name, opts) {
       if (settle) await t.settle();
       const skipped = [...skip, ...(opts.skip || []), ...(__OPTS.skip || [])];
       // The layout audit (breakage, audit.js) and the design rules (consistency, design.js).
-      const res = await timed("audit", () => pg.evaluate(__audit, { skip: skipped, max: 8, focus }));
-      const design = await timed("audit", () => pg.evaluate(__design, { skip: skipped, max: 8 }));
-      timing.audits++;
+      const res = await pg.evaluate(__audit, { skip: skipped, max: 8, focus });
+      const design = await pg.evaluate(__design, { skip: skipped, max: 8 });
       const violations = [...res.violations, ...design.violations];
       Object.assign(res.counts, design.counts);
       const boxes = violations.filter((v) => v.box && v.box.w > 0).map((v, i) => ({ ...v.box, n: i + 1 }));
@@ -336,20 +252,6 @@ function __makeT(ctx, pg, name, opts) {
     /** Like check, but stops the test when it fails (later steps would only fail along). */
     async require(label, pass, detail = "") {
       if (!(await t.check(label, pass, detail))) throw new TestFailure(`${label}: ${detail}`);
-    },
-
-    /**
-     * A screenshot baseline: the window as it is now, saved as a PNG that run.mjs compares with
-     * gui-tests/baselines/<name>@<viewport>[-dark].png (or, with --update-baselines, stores as it).
-     * The pointer is moved out of the way and the caret hidden, so only the page decides the pixels.
-     */
-    async baseline(name) {
-      await pg.mouse.move(t.vp.width - 1, t.vp.height - 1);
-      await t.settle(300);
-      const file = `${name}@${t.viewport}${opts.dark ? "-dark" : ""}.png`;
-      const shot = `${__OPTS.shotPrefix || ""}baseline--${file}`;
-      await pg.screenshot({ path: `${shotDir}/${shot}`, type: "png", animations: "disabled", caret: "hide" });
-      return record({ kind: "baseline", label: `baseline ${file}`, pass: true, baseline: file, screenshot: shot });
     },
 
     /** A screenshot checkpoint without a criterion (shows the state in the report). */
@@ -827,31 +729,9 @@ async function __main(pg) {
       }).observe({ type: "layout-shift", buffered: true });
     } catch {}
   });
-  // Perf tests: long tasks (the main thread busy for over 50ms at a time), with epoch times.
-  if (opts.perf) {
-    await ctx.addInitScript(() => {
-      window.__perfLong = [];
-      try {
-        new PerformanceObserver((list) => {
-          for (const e of list.getEntries()) window.__perfLong.push({ start: performance.timeOrigin + e.startTime, ms: e.duration });
-        }).observe({ type: "longtask", buffered: true });
-      } catch {}
-    });
-  }
   const p = await ctx.newPage();
-  // Perf tests measure how long things take, also when that is long (a slow build before a fix).
-  p.setDefaultTimeout(opts.perf ? 60000 : 8000);
-  const chromium = /chrom|msedge/.test(__OPTS.browser || "chromium");
-  // Perf tests read the renderer's metrics through a CDP session (Chromium only).
-  const cdp = chromium && opts.perf ? await ctx.newCDPSession(p) : null;
-  if (cdp) await cdp.send("Performance.enable");
+  p.setDefaultTimeout(8000);
   const t = __makeT(ctx, p, entry.name, opts);
-  t.cdp = opts.perf ? cdp : null;
-  if (chromium && __OPTS.coverage) {
-    t.coverage.cdp = await ctx.newCDPSession(p);
-    await t.coverage.cdp.send("Profiler.enable");
-    await t.coverage.cdp.send("Profiler.startPreciseCoverage", { callCount: true, detailed: true });
-  }
   const started = Date.now();
   let status = "pass";
   let error = null;
@@ -875,19 +755,7 @@ async function __main(pg) {
   t.checkpoints.push({ kind: "check", label: "no fonts, scripts, styles or images from other hosts (offline first)", pass: t.external.length === 0, detail: [...new Set(t.external)].slice(0, 10).join("\n") });
   t.checkpoints.push({ kind: "console", label: "no console errors", pass: errs.length === 0, detail: errs.slice(0, 10).map((e) => `[${e.where}] ${e.text}`).join("\n") });
   if (status === "pass" && t.checkpoints.some((c) => !c.pass)) status = "fail";
-  // Perf tests: the JS heap after a garbage collection, at the end.
-  let perf = null;
-  if (opts.perf) {
-    let heapMB = null;
-    try {
-      await cdp.send("HeapProfiler.collectGarbage");
-      const m = (await cdp.send("Performance.getMetrics")).metrics.find((x) => x.name === "JSHeapUsedSize");
-      heapMB = m ? Math.round((m.value / 2 ** 20) * 10) / 10 : null;
-    } catch {}
-    perf = { phases: t.phases, heapMB };
-  }
-  await t.takeCoverage();
   const ms = Date.now() - started;
   await ctx.close().catch(() => {});
-  return JSON.stringify({ name: entry.name, status, error, ms, timing: t.timing, perf, viewport: opts.viewport || "desktop", dark: !!opts.dark, checkpoints: t.checkpoints, coverage: t.coverage.takes });
+  return JSON.stringify({ name: entry.name, status, error, ms, viewport: opts.viewport || "desktop", dark: !!opts.dark, checkpoints: t.checkpoints });
 }

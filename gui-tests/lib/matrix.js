@@ -1,8 +1,5 @@
-// Shared by the pages-matrix suites (01, 35-39): every page of the app, in every content style, at
-// every window size: the layout audit must pass on each, and a page must load without layout shifts
-// (CLS) once it shows.
-
-const MATRIX_VIEWPORTS = ["phone", "phone-small", "tablet", "laptop", "desktop", "short", "wide"];
+// Shared by the pages-matrix suites (01, 35, 36): every page of the app, in a content style, at some window sizes:
+// the layout audit must pass on each, and a page must load without layout shifts (CLS) once it shows.
 
 /** The pages to visit, given the seeded ids. */
 function matrixPages(ids) {
@@ -47,8 +44,8 @@ function matrixPages(ids) {
   ];
 }
 
-/** Registers one test per window size (default: all) of every page in this content style. */
-function matrixTests(style, viewports = MATRIX_VIEWPORTS) {
+/** Registers one test per window size of every page in this content style. */
+function matrixTests(style, viewports) {
   for (const vp of viewports) {
     test(`${style} content @ ${vp}`, async (t) => {
       await t.boot();

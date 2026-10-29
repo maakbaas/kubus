@@ -193,9 +193,6 @@ export function mergedRowItem(merged: Collection, part: ResolvedPart, projection
 export const COLLECTION_COLUMN = "merged:collection";
 const COLUMN = "merged:";
 
-/** Whether a field id is a merged column's. */
-export const isMergedColumn = (id: string) => id.startsWith(COLUMN);
-
 /** Columns merged by hand: differently named fields of the listed collections shown as one column (ViewBlock.merges). */
 export interface ColumnMerge {
   id: string;

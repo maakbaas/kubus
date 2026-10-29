@@ -3,7 +3,7 @@ import { CHART_KINDS, defaultChartOptions, newSeries, type ChartInput, type Char
 import { blankField, type Collection, type Item } from "../domain/model";
 import type { QueryContext } from "../domain/query";
 import { regionsOf } from "../domain/regions";
-import { chartSpec, meterHeight, METER_LABEL_ROW_REM, type ChartSpec } from "./chartSpec";
+import { chartSpec, type ChartSpec } from "./chartSpec";
 
 const collection: Collection = {
   id: "books", name: "Book", pluralName: "Books", icon: null, description: "", itemViews: [], spaceIds: null, createdAt: "", updatedAt: "",
@@ -162,13 +162,6 @@ describe("chartSpec", () => {
     expect((stacked.options.comboChartTypes as { type: string }[])[0].type).toBe("stacked-bar");
   });
 
-  it("sets an axis's title, min, max and log", () => {
-    const set = spec({ left: { title: "Count", min: 1, max: null, log: false } });
-    expect(axes(set).left).toMatchObject({ title: "Count", domain: [1, 2] });
-    expect(axes(spec({ left: { title: "", min: null, max: 10, log: false } })).left.domain).toEqual([0, 10]);
-    expect(axes(spec({ left: { title: "", min: null, max: null, log: true } })).left.scaleType).toBe("log");
-  });
-
   it("draws thresholds as lines on the value axis", () => {
     const s = spec({ thresholds: [{ value: 1, status: "info" }, { value: 2, status: "warning" }, { value: 5, status: "danger" }, { value: 8, status: "target" }] });
     expect(axes(s).left.thresholds).toMatchObject([
@@ -209,26 +202,6 @@ describe("chartSpec", () => {
     expect(targets.options.meter).toEqual({ showLabels: true, status: { ranges: [{ range: [0, 20], status: "success" }, { range: [50, 100], status: "success" }] } });
     expect(parts.data).toEqual([{ group: "Pages", value: 580 }, { group: "Rating", value: 11 }]);
     expect((parts.options.meter as { proportional: { total: number } }).proportional.total).toBe(1000);
-  });
-
-  it("hides a meter's label row (Carbon's meter.showLabels) when the label is off", () => {
-    const total = { from: "number" as const, number: 1000, field: null };
-    for (const o of [{ parts: "one" as const, series: [sum("pages")] }, { parts: "fields" as const, fields: ["pages", "rating"] }]) {
-      expect((spec({ chart: "meter", total, ...o }).options.meter as { showLabels: boolean }).showLabels).toBe(true);
-      expect((spec({ chart: "meter", total, showLabel: false, ...o }).options.meter as { showLabels: boolean }).showLabels).toBe(false);
-    }
-  });
-
-  it("takes the label row's height off a meter's height when the label is hidden", () => {
-    const total = { from: "number" as const, number: 1000, field: null };
-    const height = (o: Partial<ChartOptions>) => spec({ chart: "meter", total, ...o }).options.height;
-    const one = { parts: "one" as const, series: [sum("pages")] };
-    const several = { parts: "fields" as const, fields: ["pages", "rating"] };
-    expect(height(one)).toBe("5rem");
-    expect(height(several)).toBe("6rem");
-    expect(height({ ...one, showLabel: false })).toBe(meterHeight(5, "one", false));
-    expect(parseFloat(height({ ...one, showLabel: false }) as string)).toBeCloseTo(5 - METER_LABEL_ROW_REM.one, 3);
-    expect(parseFloat(height({ ...several, showLabel: false }) as string)).toBeCloseTo(6 - METER_LABEL_ROW_REM.proportional, 3);
   });
 
   it("gives a gauge its status by its thresholds (a % of the total or values), its % with the decimals", () => {

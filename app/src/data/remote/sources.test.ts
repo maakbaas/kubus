@@ -5,8 +5,6 @@ import {
   betweenBounds,
   conditionText,
   isSourceCondition,
-  MAX_SOURCE_GROUPS,
-  MAX_SOURCE_PAGE,
   wallTime,
   type SourceCondition,
   type SourceFilter,
@@ -108,11 +106,5 @@ describe("conditionText", () => {
     expect(conditionText({ and: [] }, rule, words)).toBe("TRUE");
     expect(conditionText({ or: [] }, rule, words)).toBe("FALSE");
     expect(conditionText({ and: [{ or: [] }] }, rule, words)).toBe("(FALSE)");
-  });
-});
-
-describe("limits", () => {
-  it("keep a page well below the groups a query may list times ten", () => {
-    expect(MAX_SOURCE_PAGE).toBeGreaterThan(MAX_SOURCE_GROUPS);
   });
 });

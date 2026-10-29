@@ -8,13 +8,9 @@ const shownPopover = (t) => t.page.locator(".cds--popover--open").last();
 /** The visible dialog. */
 const shownModal = (t) => t.page.locator(".cds--modal.is-visible");
 
-/** A Carbon dropdown / combo box / multi-select inside `scope`, by its title (its label's text). */
+/** A Carbon dropdown / combo box / multi-select inside `scope`, by its title (its label's text; a multi-select with a selection adds its count for screen readers after it). */
 const dropdownOf = (t, scope, title) =>
-  scope.locator(".cds--dropdown__wrapper, .cds--combo-box, .cds--list-box__wrapper, .cds--multi-select__wrapper").filter({ has: t.page.locator(".cds--label", { hasText: new RegExp(`^${title}$`) }) }).first();
-/** A block's Collections multi-select (block settings) inside `scope`; `.cds--list-box__field` of it opens its menu. */
-const collectionsPicker = (scope) => scope.locator(".cds--multi-select").first();
-/** An item page block's single Collection dropdown (block settings: any collection, or Backlinks) inside `scope`; `.cds--list-box__field` of it opens its menu. */
-const collectionDropdown = (t, scope) => dropdownOf(t, scope, "Collection");
+  scope.locator(".cds--dropdown__wrapper, .cds--combo-box, .cds--list-box__wrapper, .cds--multi-select__wrapper").filter({ has: t.page.locator(".cds--label", { hasText: new RegExp(`^${title}(Total items selected|$)`) }) }).first();
 /** The options of the open menu, as texts. */
 const menuOptions = async (t) => (await t.page.getByRole("option").filter({ visible: true }).allInnerTexts()).map((s) => s.trim());
 /** Opens the dropdown `title` inside `scope` and picks the option with that text. */

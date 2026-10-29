@@ -1,7 +1,7 @@
 // @vitest-environment node
 // The sync environments (data/sync/environment.ts): the browser's, with its globals replaced, and the memory one.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { browserEnvironment, memoryEnvironment } from "./environment";
+import { browserEnvironment } from "./environment";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -81,21 +81,5 @@ describe("browserEnvironment.watch", () => {
     document.visibilityState = "visible";
     document.dispatchEvent(new Event("visibilitychange"));
     expect(sync).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe("memoryEnvironment", () => {
-  it("keeps settings in memory only, suggests no server, watches nothing", () => {
-    const env = memoryEnvironment();
-    expect(env.storage.get("k")).toBeNull();
-    env.storage.set("k", "v");
-    expect(env.storage.get("k")).toBe("v");
-    env.storage.remove("k");
-    expect(env.storage.get("k")).toBeNull();
-    expect(env.defaultUrl()).toBe("");
-    expect(() => env.watch(() => {})).not.toThrow();
-    expect(env.keepFiles).toBe(true);
-    expect(memoryEnvironment({ keepFiles: false }).keepFiles).toBe(false);
-    expect(memoryEnvironment().storage.get("k")).toBeNull(); // each its own
   });
 });

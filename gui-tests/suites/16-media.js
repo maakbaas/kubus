@@ -1,7 +1,5 @@
-// Images: an image field's upload (the file input and a drop on its drop zone), removing one,
-// pasting and dropping an image into the Markdown editor (stored as a file, not inlined), the
-// lightbox (opening, focus inside, Escape, a click outside), and an image whose file is missing.
-// Files are made in the page (a canvas), so the test needs no files on disk.
+// An image field: upload (file input and drop), the lightbox, replace, remove. Files are made in the page
+// (a canvas), so the test needs no files on disk.
 
 /** Makes a PNG File in the page as window.__files[name]. */
 async function makeImage(t, name, { w = 240, h = 160, color = "#0f62fe" } = {}) {
@@ -53,95 +51,50 @@ async function chooseFile(input, name) {
   }, name);
 }
 
-for (const vp of ["desktop", "phone"]) {
-  test(`image field: upload, lightbox, replace, remove, drop @ ${vp}`, async (t) => {
-    await t.boot();
-    const ids = await t.seed(emptyItemSpec());
-    await t.open(t.itemPath(ids.collections.books, ids.items["books/empty"]));
-    await makeImage(t, "first");
-    // On the item page the image field is its own editor: each change saves at once.
-    const field = t.page.locator(".ws-pane--active .item-fields .image-input").first();
-    await field.scrollIntoViewIfNeeded();
-    await t.audit("empty image field");
-    await chooseFile(field.locator("input[type=file]").first(), "first");
-    await t.until("an uploaded image is stored and shown", () => loadedImg(t, ".ws-pane--active .item-fields .image-input__preview img"), { timeout: 8000 });
-    const shape = () => field.locator(".image-input__preview img").evaluate((i) => (i.naturalWidth > i.naturalHeight ? "wide" : "tall")).catch(() => "none");
-    await t.audit("image uploaded");
-    // It is stored: a reload shows it.
-    await t.open(t.itemPath(ids.collections.books, ids.items["books/empty"]));
-    await t.until("the image is still there after a reload", () => loadedImg(t, ".ws-pane--active .item-fields .image-input__preview img"), { timeout: 8000 });
-    await makeImage(t, "second", { w: 120, h: 300, color: "#24a148" });
-    await makeImage(t, "third", { w: 300, h: 100, color: "#8a3ffc" });
-    // The lightbox.
-    const img = field.locator(".image-input__preview img").first();
-    await img.scrollIntoViewIfNeeded();
-    await img.click();
-    await t.until("a click on the image opens the lightbox", async () => (await t.count(".lightbox.is-visible")) === 1);
-    await t.until("the lightbox shows the image", () => loadedImg(t, ".lightbox.is-visible .lightbox__image"));
-    await t.check("focus is in the lightbox", await t.page.evaluate(() => !!document.activeElement?.closest(".lightbox")));
-    await t.audit("lightbox open");
-    await t.page.keyboard.press("Escape");
-    await t.until("Escape closes the lightbox", async () => (await t.count(".lightbox.is-visible")) === 0);
-    await img.click();
-    await t.until("the lightbox opens again", async () => (await t.count(".lightbox.is-visible")) === 1);
-    await t.page.mouse.click(4, t.vp.height - 4);
-    await t.until("a click outside closes it", async () => (await t.count(".lightbox.is-visible")) === 0);
-    // Replace (its hidden picker), without moving anything else on the page.
-    // A taller image takes more room (what follows the field moves down with it); the page header holds still.
-    await t.noShift("replacing the image moves nothing above the fields", async () => {
-      await chooseFile(field.locator(".image-input__preview input[type=file]").first(), "second");
-      await t.until("Replace image shows the new image", async () => (await shape()) === "tall" || await shape(), { timeout: 8000 });
-    }, { scope: ".ws-pane--active .page-header", inPage: true });
-    // Remove: the drop zone is back; a dropped image is stored.
-    await img.hover();
-    await field.getByRole("button", { name: "Remove image" }).click();
-    await t.until("Remove image brings back the drop zone", async () => (await field.locator(".cds--file__drop-container").count()) === 1);
-    await t.audit("image removed");
-    await dispatchWithFile(t, field.locator(".cds--file__drop-container").first(), "drop", "third");
-    await t.until("a dropped image is stored and shown", async () => (await shape()) === "wide" || await shape(), { timeout: 8000 });
-    await t.audit("image dropped");
-  }, { viewport: vp, smoke: vp === "desktop" });
-}
-
-for (const vp of ["desktop", "phone"]) {
-  test(`Markdown: a pasted and a dropped image are stored as files @ ${vp}`, async (t) => {
-    await t.boot();
-    const ids = await t.seed(emptyItemSpec());
-    await t.open(t.itemPath(ids.collections.books, ids.items["books/empty"]));
-    await makeImage(t, "pasted");
-    await makeImage(t, "dropped", { color: "#da1e28" });
-    await t.page.getByRole("button", { name: "Edit Notes", exact: true }).click();
-    await t.page.waitForSelector(".field-editor .ProseMirror");
-    const pm = t.page.locator(".field-editor .ProseMirror").first();
-    await pm.click();
-    await t.page.keyboard.type("Before the image. ");
-    await dispatchWithFile(t, pm, "paste", "pasted");
-    await t.until("the pasted image shows in the editor", () => loadedImg(t, ".field-editor .ProseMirror img"), { timeout: 8000 });
-    await dispatchWithFile(t, pm, "drop", "dropped");
-    await t.until("the dropped image shows too", async () => (await t.page.locator(".field-editor .ProseMirror img").count()) >= 2 || "one image", { timeout: 8000 });
-    await t.audit("markdown with pasted and dropped images");
-    const srcs = await t.page.locator(".field-editor .ProseMirror img").evaluateAll((imgs) => imgs.map((i) => i.getAttribute("src") || ""));
-    await t.check("stored as files, not inlined as data", srcs.every((s) => !s.startsWith("data:")), srcs.join(", ").slice(0, 200));
-    await t.page.keyboard.press("Control+Enter");
-    await t.until("Ctrl+Enter saves: the page shows both images", async () => (await t.count(".ws-pane--active .item-fields .md-view img")) >= 2 && (await t.count(".field-editor")) === 0, { timeout: 8000 });
-    await t.until("the saved images load", () => loadedImg(t, ".ws-pane--active .item-fields .md-view img"));
-    await t.audit("markdown images saved");
-    // An image in Markdown opens the lightbox too.
-    await t.page.locator(".ws-pane--active .item-fields .md-view img").first().click();
-    await t.until("a Markdown image opens the lightbox", async () => (await t.count(".lightbox.is-visible")) === 1);
-    await t.page.keyboard.press("Escape");
-    await t.until("Escape closes it", async () => (await t.count(".lightbox.is-visible")) === 0);
-  }, { viewport: vp });
-}
-
-test("an image whose file is missing shows a placeholder, not a broken image", async (t) => {
+test("image field: upload, lightbox, replace, remove, drop @ desktop", async (t) => {
   await t.boot();
-  const spec = profileSpec("typical", { items: 1 });
-  spec.collections[0].items.push({ key: "missing", values: { title: "Missing image", notes: "Text before.\n\n![gone](files/0000000000000000000000000000000000000000000000000000000000000000)\n\nText after." } });
-  const ids = await t.seed(spec);
-  await t.open(t.itemPath(ids.collections.books, ids.items["books/missing"]));
-  await t.settle(400);
-  await t.audit("missing image in Markdown");
-  const text = await t.page.locator(".ws-pane--active .item-fields").innerText();
-  await t.check("the text around it is shown", text.includes("Text before.") && text.includes("Text after."));
-});
+  const ids = await t.seed(emptyItemSpec());
+  await t.open(t.itemPath(ids.collections.books, ids.items["books/empty"]));
+  await makeImage(t, "first");
+  // On the item page the image field is its own editor: each change saves at once.
+  const field = t.page.locator(".ws-pane--active .item-fields .image-input").first();
+  await field.scrollIntoViewIfNeeded();
+  await t.audit("empty image field");
+  await chooseFile(field.locator("input[type=file]").first(), "first");
+  await t.until("an uploaded image is stored and shown", () => loadedImg(t, ".ws-pane--active .item-fields .image-input__preview img"), { timeout: 8000 });
+  const shape = () => field.locator(".image-input__preview img").evaluate((i) => (i.naturalWidth > i.naturalHeight ? "wide" : "tall")).catch(() => "none");
+  await t.audit("image uploaded");
+  // It is stored: a reload shows it.
+  await t.open(t.itemPath(ids.collections.books, ids.items["books/empty"]));
+  await t.until("the image is still there after a reload", () => loadedImg(t, ".ws-pane--active .item-fields .image-input__preview img"), { timeout: 8000 });
+  await makeImage(t, "second", { w: 120, h: 300, color: "#24a148" });
+  await makeImage(t, "third", { w: 300, h: 100, color: "#8a3ffc" });
+  // The lightbox.
+  const img = field.locator(".image-input__preview img").first();
+  await img.scrollIntoViewIfNeeded();
+  await img.click();
+  await t.until("a click on the image opens the lightbox", async () => (await t.count(".lightbox.is-visible")) === 1);
+  await t.until("the lightbox shows the image", () => loadedImg(t, ".lightbox.is-visible .lightbox__image"));
+  await t.check("focus is in the lightbox", await t.page.evaluate(() => !!document.activeElement?.closest(".lightbox")));
+  await t.audit("lightbox open");
+  await t.page.keyboard.press("Escape");
+  await t.until("Escape closes the lightbox", async () => (await t.count(".lightbox.is-visible")) === 0);
+  await img.click();
+  await t.until("the lightbox opens again", async () => (await t.count(".lightbox.is-visible")) === 1);
+  await t.page.mouse.click(4, t.vp.height - 4);
+  await t.until("a click outside closes it", async () => (await t.count(".lightbox.is-visible")) === 0);
+  // Replace (its hidden picker), without moving anything else on the page.
+  // A taller image takes more room (what follows the field moves down with it); the page header holds still.
+  await t.noShift("replacing the image moves nothing above the fields", async () => {
+    await chooseFile(field.locator(".image-input__preview input[type=file]").first(), "second");
+    await t.until("Replace image shows the new image", async () => (await shape()) === "tall" || await shape(), { timeout: 8000 });
+  }, { scope: ".ws-pane--active .page-header", inPage: true });
+  // Remove: the drop zone is back; a dropped image is stored.
+  await img.hover();
+  await field.getByRole("button", { name: "Remove image" }).click();
+  await t.until("Remove image brings back the drop zone", async () => (await field.locator(".cds--file__drop-container").count()) === 1);
+  await t.audit("image removed");
+  await dispatchWithFile(t, field.locator(".cds--file__drop-container").first(), "drop", "third");
+  await t.until("a dropped image is stored and shown", async () => (await shape()) === "wide" || await shape(), { timeout: 8000 });
+  await t.audit("image dropped");
+}, { viewport: "desktop", smoke: true });

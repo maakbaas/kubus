@@ -4,6 +4,7 @@ import { Checkbox, Heading, IconButton, InlineNotification, MultiSelect, Search,
 import { Add, Filter, Renew, Save, Search as SearchIcon, Settings, SettingsAdjust, Star, StarFilled, TrashCan } from "@carbon/icons-react";
 import { useDashboard, useStore } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
+import { useItemsLoaded } from "../app/useItems";
 import { useFreshLoads } from "../app/useFreshLoads";
 import { findCollection } from "../domain/backlinks";
 import { DASHBOARD_ICON, findTab, dashboardBlockCollection,
@@ -337,6 +338,14 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   const scope = useMemo(() => dashboardScope(listed), [listed]);
   const refs = useReferenceOptions(scope);
   const readsSource = listed.some(isRemote);
+  // A tab's blocks first show together, once their collections' items are in (a remote part shows its own loading bar);
+  // after that they stay while a block's new collection loads (hidden, they would close its Block settings).
+  const loaded = useItemsLoaded(useMemo(() => listed.filter((c) => !isRemote(c) && !c.virtual), [listed]));
+  const [shownTab, setShownTab] = useState<string | null>(null);
+  useEffect(() => {
+    if (loaded) setShownTab(activeId);
+  }, [loaded, activeId]);
+  const blocksReady = loaded || shownTab === activeId;
 
   const filterButton = (
     <ToolbarPopover label={view.filters.length > 0 ? `Filter (${view.filters.length})` : "Filter"} icon={Filter} width="wide" active={view.filters.length > 0} onOpenChange={panels.onOpenChange}>
@@ -527,6 +536,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
 
       {savedViews !== null &&
         viewChosen &&
+        blocksReady &&
         view.blocks.map((block) => (
           <DashboardBlock
             key={`${activeId ?? ""}-${block.id}`}
@@ -636,7 +646,7 @@ function DashboardBlock(props: BlockProps) {
       </section>
     );
   }
-  return <DashboardBlockContent key={home.id} home={home} {...props} />;
+  return <DashboardBlockContent home={home} {...props} />;
 }
 
 function DashboardBlockContent({ home, block, filters, search, editable, collapsed, onCollapse, onChange, onSet, onRemove, onError, onOpenChange }: BlockProps & { home: Collection }) {

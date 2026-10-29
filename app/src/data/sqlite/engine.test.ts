@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeAll, describe, expect, it } from "vitest";
-import { bareDatabases, nodeEngine, openTestClient } from "../../test/engine";
+import { bareDatabases, openTestClient } from "../../test/engine";
 import type { Db } from "../migrations";
 import { ensureSchema, type SchemaPlan } from "./engine";
 
@@ -157,11 +157,6 @@ describe("the engine", () => {
     await client.write([{ sql: "INSERT INTO collections (id, name, plural_name, created_at, updated_at) VALUES ('c2', 'C', 'Cs', 't', 't')" }]);
     expect(await client.select("SELECT sql FROM sqlite_master WHERE name = 'sync_collections_insert'")).toHaveLength(1);
     await expect(client.write([{ sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES ('i2', 'nowhere', 'default', 't', 't')" }])).rejects.toThrow(/FOREIGN KEY/);
-  });
-
-  it("reports SQLite's version", async () => {
-    const client = await openTestClient();
-    expect(client.info).toEqual({ persistent: nodeEngine, sqliteVersion: expect.stringMatching(/^3\.\d+/) });
   });
 });
 

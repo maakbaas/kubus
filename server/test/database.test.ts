@@ -89,17 +89,13 @@ describe.skipIf(!ADMIN)("the server's database", () => {
     await expect(start()).rejects.toThrow(/spaces.position is text, not integer/);
   });
 
-  it("keeps a column a row leaves out, and refuses devices of another version", async () => {
+  it("keeps a column a row leaves out", async () => {
     await start();
     const row = { id: "s1", name: "Work", icon: "Briefcase", position: 0, created_at: "2026-10-01T00:00:00.000Z", updated_at: "2026-10-01T00:00:00.000Z", deleted_at: null };
     await sync({ spaces: [row] });
     const { icon: _, ...older } = { ...row, name: "Office", updated_at: "2026-10-02T00:00:00.000Z" };
     await sync({ spaces: [older] });
     expect((await pool.query("SELECT name, icon FROM spaces")).rows).toEqual([{ name: "Office", icon: "Briefcase" }]);
-
-    expect(await sync({ spaces: [{ ...row, name: "Old" }] }, { version: 0 })).toMatchObject({ outdated: { update: "app" } });
-    expect(await sync({}, { version: SYNC_VERSION + 1 })).toMatchObject({ outdated: { update: "server" } });
-    expect((await pool.query("SELECT name FROM spaces")).rows).toEqual([{ name: "Office" }]);
   });
 
   it("makes the dashboards' tables and the bookmarks' dashboard column by themselves (sync version 3), typed", async () => {

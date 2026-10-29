@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button, Checkbox, Dropdown, InlineNotification, MultiSelect, NumberInput, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
@@ -131,7 +131,7 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
    * collections' fields and filter don't apply, so it starts afresh (linked to the page's item where it can be).
    */
   const pick = (list: Collection[]) => {
-    // Escape clears a Carbon multi-select: a block always lists at least one collection.
+    // Delete clears a Carbon multi-select: a block always lists at least one collection.
     if (list.length === 0 || (list.length === chosen.length && list.every((c) => chosen.some((x) => x.id === c.id)))) return;
     const ids = list.map((c) => c.id);
     // The block keeps its type and the options that still apply (fields found again by name).
@@ -441,10 +441,16 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   const collapsed = !headless && state.blocks.includes(block.id);
   const toggleCollapsed = () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
+  // Once shown, a block stays while its rows are read again (its collections changed): unmounted, it would close the
+  // Block settings being used.
+  const shownOnce = useRef(false);
+  useEffect(() => {
+    if (items || error) shownOnce.current = true;
+  });
   // Searching the view: a block listing items that has none matching is left out altogether.
   if (search.trim() && uses.query && items && result.total === 0) return null;
   // Not even its header until its items are in: a header alone would sit where the blocks above are about to push it away.
-  if (!items && !error && !remote?.waiting && !remote?.stopped) return null;
+  if (!items && !error && !remote?.waiting && !remote?.stopped && !shownOnce.current) return null;
   return (
     <section className="block" data-block-id={block.id}>
       <SectionHeader

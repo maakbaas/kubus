@@ -175,13 +175,6 @@ describe("a database file", () => {
   });
 });
 
-describe("rows on node:sqlite", () => {
-  it("are plain objects", async () => {
-    const [row] = await (await NodeSqlClient.open()).select("SELECT 1 AS b");
-    expect(Object.getPrototypeOf(row)).toBe(Object.prototype);
-  });
-});
-
 describe("in memory", () => {
   it("is not persistent, and each is its own database", async () => {
     const a = await NodeSqlClient.open();

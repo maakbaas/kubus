@@ -13,3 +13,25 @@ export function useItems(collection: Collection): Snapshot<Item> {
   const subscribe = useCallback((onChange: () => void) => cache.items.subscribe(collectionId, onChange), [cache, collectionId]);
   return useSyncExternalStore(subscribe, () => cache.items.snapshot(collectionId));
 }
+
+/**
+ * Whether the items of all these collections are loaded (or failed to): for a page of blocks of several collections, which
+ * shows them together, so a block whose items come later doesn't push the blocks below it away. Subscribing loads them.
+ */
+export function useItemsLoaded(collections: Collection[]): boolean {
+  const { cache } = useStore();
+  const key = collections.map((c) => c.id).join(" ");
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const offs = key ? key.split(" ").map((id) => cache.items.subscribe(id, onChange)) : [];
+      return () => offs.forEach((off) => off());
+    },
+    [cache, key],
+  );
+  return useSyncExternalStore(subscribe, () =>
+    key ? key.split(" ").every((id) => {
+      const s = cache.items.snapshot(id);
+      return s.items !== null || !!s.error;
+    }) : true,
+  );
+}

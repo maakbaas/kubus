@@ -1,7 +1,7 @@
 // @vitest-environment node
 import type { ElementContent } from "hast";
 import { describe, expect, it } from "vitest";
-import { COMPONENT_LANGUAGE, highlightCode, highlightComponent } from "./codeHighlight";
+import { highlightCode, highlightComponent } from "./codeHighlight";
 
 /** The text a highlighted tree spells out. */
 const textOf = (nodes: ElementContent[]): string =>
@@ -54,9 +54,5 @@ describe("highlightComponent", () => {
   it("handles an empty component and an unclosed brace", () => {
     expect(textOf(highlightComponent(""))).toBe("");
     expect(textOf(highlightComponent("a {{ b"))).toBe("a {{ b");
-  });
-
-  it("names the fence language of the Help page's examples", () => {
-    expect(COMPONENT_LANGUAGE).toBe("component");
   });
 });

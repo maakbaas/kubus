@@ -1,10 +1,11 @@
-// The rest of the pages matrix: long content on the wide window, the dark theme, an empty database, empty collections and items.
+// The rest of the pages matrix: every page with unicode content (CJK, RTL, emoji) on a phone; the dark theme; an empty
+// database, empty collections and items.
 // (the pages and the test are in lib/matrix.js)
 
-matrixTests("long", ["wide"]);
+matrixTests("unicode", ["phone"]);
 
-// Dark theme: same pages, two sizes.
-for (const vp of ["desktop", "phone"]) {
+// Dark theme: same pages, on a phone (suite 14 has the dark floating layers on a desktop).
+for (const vp of ["phone"]) {
   test(`typical content, dark theme @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(matrixSpec("typical", { filterBar: true, dashboard: true }));
@@ -16,7 +17,7 @@ for (const vp of ["desktop", "phone"]) {
 }
 
 // Empty database: every page without any data.
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["desktop"]) {
   test(`empty database @ ${vp}`, async (t) => {
     await t.boot();
     for (const [label, path] of [["collections", "/collections"], ["components", "/components"], ["spaces", "/spaces"], ["bookmarks", "/bookmarks"], ["dashboards", "/dashboards"], ["missing dashboard", "/dashboards/nope"], ["search", "/search"], ["search, no hits", "/search?q=zzzz"], ["new collection", "/collections/new"], ["new component", "/components/new"], ["settings", "/settings"], ["help", "/help"], ["missing collection", "/collections/nope/items"], ["missing item", "/collections/nope/items/nope"]]) {
@@ -27,7 +28,7 @@ for (const vp of ["desktop", "phone"]) {
 }
 
 // A collection with no items and only a title field, and one with items but no values at all.
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["phone"]) {
   test(`empty collection and empty items @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed({

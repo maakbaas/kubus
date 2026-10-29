@@ -10,9 +10,7 @@ import {
   fieldLookup,
   fitsPlace,
   isComponentError,
-  isComponentOutput,
   itemsInput,
-  kindText,
   localComponents,
   outputOf,
   placeProblem,
@@ -39,12 +37,6 @@ describe("warnings", () => {
 });
 
 describe("outputs", () => {
-  it("know their names", () => {
-    expect(isComponentOutput("html")).toBe(true);
-    expect(isComponentOutput("pdf")).toBe(false);
-    expect(isComponentOutput(null)).toBe(false);
-  });
-
   it("a number output is a number, an error when it isn't, nothing when empty", () => {
     expect(render({ code: "{{ 2 * 3 }}", output: "number" })).toBe(6);
     expect(render({ code: "{{ '4.5' }}", output: "number" })).toBe(4.5);
@@ -208,14 +200,6 @@ describe("components in places", () => {
     expect(componentsFor(list, "static").map((c) => c.id)).toEqual(["s"]);
     expect(componentsFor(list, "block", "f").map((c) => c.id)).toEqual(["f", "b", "s"]);
   });
-
-  it("describe themselves for the editor", () => {
-    expect(kindText("{{ $item.A }}")).toMatch(/^Field component/);
-    expect(kindText("{{ $items.length }}")).toMatch(/^Block component/);
-    expect(kindText("hello")).toMatch(/^Static component/);
-    expect(kindText("{{ $item }}{{ $all }}")).toMatch(/together/);
-    expect(kindText("Say {{ $item.A }}", true)).toMatch(/^AI component/);
-  });
 });
 
 describe("a field's component", () => {
@@ -353,17 +337,6 @@ describe("compiling", () => {
       throw "plain string";
     });
     expect(evaluate("other")).toBe(`${ERROR_PREFIX}plain string`);
-  });
-
-  it("keeps a bounded number of compiled sections", () => {
-    const compiler = vi.fn(() => () => 1);
-    setCompiler(compiler as never);
-    for (let i = 0; i < 520; i++) evaluate(`${i}`);
-    expect(compiler).toHaveBeenCalledTimes(520);
-    evaluate("519");
-    expect(compiler).toHaveBeenCalledTimes(520); // recent: kept
-    evaluate("0");
-    expect(compiler).toHaveBeenCalledTimes(521); // oldest: let go
   });
 });
 

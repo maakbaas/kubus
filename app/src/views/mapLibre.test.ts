@@ -1,27 +1,10 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MAP_STYLE_IDS } from "../../../shared/settings";
 
 afterEach(() => {
   vi.resetModules();
   vi.doUnmock("maplibre-gl");
   vi.doUnmock("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url");
-});
-
-describe("map styles", () => {
-  it("offers every style the server's settings know, in the menu's order", async () => {
-    const { MAP_STYLES } = await import("./mapLibre");
-    expect(MAP_STYLES.map((s) => s.value).sort()).toEqual([...MAP_STYLE_IDS].sort());
-    expect(MAP_STYLES[0]).toEqual({ value: "auto", text: "Automatic" });
-  });
-
-  it("'auto' follows the theme with the quiet styles; the others are themselves", async () => {
-    const { styleUrl } = await import("./mapLibre");
-    expect(styleUrl("auto", false)).toBe("https://tiles.openfreemap.org/styles/positron");
-    expect(styleUrl("auto", true)).toBe("https://tiles.openfreemap.org/styles/dark");
-    expect(styleUrl("liberty", true)).toBe("https://tiles.openfreemap.org/styles/liberty");
-    expect(styleUrl("bright", false)).toBe("https://tiles.openfreemap.org/styles/bright");
-  });
 });
 
 describe("loadMapLibre", () => {

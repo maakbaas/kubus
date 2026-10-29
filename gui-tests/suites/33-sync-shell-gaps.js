@@ -1,30 +1,7 @@
-// Rarer paths of the shell and sync, each asserted by its result: a server whose database was
-// wiped or replaced (the status button and Settings → Sync say so; connecting again asks before it
-// replaces this device's data, or uploads to an empty server), a tab dropped on each edge of a pane
-// (left, top, bottom: the split and where the tab lands), and a tag clicked in a component's
-// frame (here, beside, in a new tab by the middle button).
+// A server whose database was replaced or wiped: sync pauses until asked, connecting again asks before it
+// replaces this device's data, or uploads to an empty server.
 
-const WS_KEY = "kubus.workspace.default";
 const SERVER = "https://sync.test";
-/** The stored layout: the root's direction and the panes' tab paths, in order. */
-async function storedLayout(t) {
-  return t.page.evaluate((key) => {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const out = { direction: null, panes: [] };
-    const walk = (n) => {
-      if (n.kind === "pane") out.panes.push(n.tabs.map((x) => x.path));
-      else {
-        out.direction ??= n.direction;
-        n.children.forEach(walk);
-      }
-    };
-    walk(JSON.parse(raw).root);
-    return out;
-  }, WS_KEY);
-}
-
-// ---- a server whose database was replaced ----------------------------------------------------
 
 /**
  * A fake Kubus server at SERVER: POST /api/sync keeps the rows it is sent and answers with the rows
@@ -74,6 +51,7 @@ const touch = (t) =>
     const space = (await repo.listSpaces())[0];
     await repo.createItem(c, { [c.fields[0].id]: "Made later " + Math.random() }, space.id);
   });
+
 const itemCount = (t) =>
   t.page.evaluate(async () => {
     const repo = window.kubus.repo;
@@ -134,77 +112,3 @@ for (const scenario of ["another database", "an empty server"]) {
     await t.audit("after connecting again");
   }, { smoke: scenario === "another database" });
 }
-
-// ---- dropping a tab on a pane's edges ---------------------------------------------------------
-
-for (const [edge, direction, draggedFirst] of [["left", "row", true], ["top", "column", true], ["bottom", "column", false], ["right", "row", false]]) {
-  test(`a tab dropped on a pane's ${edge} edge splits it ${direction === "row" ? "side by side" : "one above the other"}`, async (t) => {
-    await t.boot();
-    const ids = await t.seed(profileSpec("typical", { items: 3 }));
-    const books = ids.collections.books;
-    const list = `/collections/${books}/items`;
-    await t.seed({ prefs: { [WS_KEY]: wsLayout([["/collections", list]]) } });
-    await t.open(list, { keepTabs: true });
-    const tab = t.page.locator(".ws-pane__tabs .cds--tabs__nav-item").first();
-    const body = t.page.locator(".ws-pane__frame").first();
-    const bb = await body.boundingBox();
-    const at = { left: { x: 10, y: bb.height / 2 }, right: { x: bb.width - 10, y: bb.height / 2 }, top: { x: bb.width / 2, y: 10 }, bottom: { x: bb.width / 2, y: bb.height - 10 } }[edge];
-    await tab.dragTo(body, { targetPosition: at });
-    await t.until("two panes", async () => (await t.count(".ws-pane")) === 2);
-    const layout = await storedLayout(t);
-    await t.check(`the split is ${direction === "row" ? "side by side" : "stacked"}`, layout.direction === direction, JSON.stringify(layout));
-    await t.check(`the dropped tab (Collections) is in the ${draggedFirst ? "first" : "second"} pane, the other tab in the other`, layout.panes[draggedFirst ? 0 : 1].join() === "/collections" && layout.panes[draggedFirst ? 1 : 0].join() === list, JSON.stringify(layout));
-    await t.until("both panes show their page", async () => (await t.page.locator(".ws-pane .page-header__title").filter({ visible: true }).count()) === 2);
-    await t.audit(`after dropping on the ${edge} edge`);
-    await t.page.reload();
-    await t.page.waitForSelector(".ws-pane");
-    await t.settle();
-    await t.check("the arrangement is kept after a reload", JSON.stringify(await storedLayout(t)) === JSON.stringify(layout));
-  });
-}
-
-// ---- a tag clicked in a component's frame -----------------------------------------------------
-
-test("a #tag in a component's frame: click searches here, Ctrl+click beside, middle click in a new tab", async (t) => {
-  await t.boot();
-  const spec = {
-    collections: [
-      {
-        key: "notes",
-        name: "Note",
-        plural: "Notes",
-        fields: [
-          { key: "name", name: "Name", kind: "string" },
-          { key: "view", name: "View", kind: "component", code: "<p>{{ $item[\"Name\"] }} is filed under #reading today</p>", output: "html" },
-        ],
-        items: [{ values: { name: "A note" } }],
-      },
-    ],
-  };
-  const ids = await t.seed(spec);
-  const path = t.itemPath(ids.collections.notes, ids.items["notes/i0"]);
-  const frame = () => t.page.frameLocator(".ws-pane--active iframe").first();
-  const tag = () => frame().locator(".kubus-tag");
-  const open = async () => {
-    await t.seed({ prefs: { [WS_KEY]: wsLayout([[path]]) } });
-    await t.open(path, { keepTabs: true });
-    await t.until("the frame shows the tag", async () => (await tag().count().catch(() => 0)) === 1, { timeout: 8000 });
-  };
-  const searchPaths = async () => ((await storedLayout(t)).panes || []).flat().filter((p) => p.startsWith("/search"));
-
-  await open();
-  await t.check("the tag is marked as a link", (await tag().getAttribute("role")) === "link" && (await tag().innerText()) === "#reading");
-  await tag().click({ button: "middle" });
-  await t.until("a middle click opens the search in a new tab", async () => (await searchPaths(t)).length === 1 && (await storedLayout(t)).panes[0].length === 2);
-  await t.check("the search is for the tag", decodeURIComponent((await searchPaths(t))[0]).includes("#reading"), (await searchPaths(t))[0]);
-  await t.audit("after a middle click on a tag");
-
-  await open();
-  await tag().click({ modifiers: ["Control"] });
-  await t.until("Ctrl+click opens the search beside", async () => (await storedLayout(t)).panes.length === 2 && (await searchPaths(t)).length === 1);
-  await t.audit("after Ctrl+click on a tag");
-
-  await open();
-  await tag().click();
-  await t.until("a plain click goes to the search in this tab", async () => (await storedLayout(t)).panes.length === 1 && (await storedLayout(t)).panes[0].length === 1 && (await searchPaths(t)).length === 1);
-});

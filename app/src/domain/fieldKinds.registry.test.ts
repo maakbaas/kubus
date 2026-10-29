@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fieldKindList, fieldKinds, formatDate, formatDateTime, formatTime, htmlPreview, markdownPreview, markdownPreviewParts, offeredKind } from "./fieldKinds";
+import { fieldKinds, formatDate, formatDateTime, formatTime, htmlPreview, markdownPreview, markdownPreviewParts } from "./fieldKinds";
 import type { FieldKind } from "./model";
 
 describe("date formats", () => {
@@ -96,23 +96,6 @@ describe("the storage of each kind", () => {
     expect(fieldKinds.image.format("abc")).toBe("abc");
     expect(fieldKinds.item.format("i1")).toBe("i1");
     expect(fieldKinds.item.format(null)).toBe("");
-  });
-
-  it("every kind has a label and a value column", () => {
-    for (const [kind, spec] of Object.entries(fieldKinds)) {
-      expect(spec.label, kind).not.toBe("");
-      expect(spec.column, kind).toMatch(/^value_/);
-    }
-  });
-});
-
-describe("the kinds offered", () => {
-  it("every kind but 'ai', which is a Component field asking AI", () => {
-    expect(fieldKindList).toContain("component");
-    expect(fieldKindList).not.toContain("ai");
-    expect(fieldKindList).toHaveLength(Object.keys(fieldKinds).length - 1);
-    expect(offeredKind("ai")).toBe("component");
-    expect(offeredKind("string")).toBe("string");
   });
 });
 

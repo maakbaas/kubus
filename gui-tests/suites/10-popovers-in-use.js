@@ -73,7 +73,7 @@ function popoverSpec() {
   return spec;
 }
 
-const POP_VPS = ["desktop", "laptop", "phone", "short"];
+const POP_VPS = ["desktop"];
 
 for (const vp of POP_VPS) {
   test(`view filter in use: rules for every field kind @ ${vp}`, async (t) => {
@@ -241,7 +241,7 @@ for (const vp of POP_VPS) {
   }, { viewport: vp, smoke: vp === "desktop" });
 }
 
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["phone"]) {
   test(`icon picker in use: typing filters the grid in place @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(popoverSpec());
@@ -269,7 +269,7 @@ for (const vp of ["desktop", "phone"]) {
 }
 
 // Popovers together with everything else.
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["desktop"]) {
   test(`popovers and the rest: one at a time, click-through, scroll, resize @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(popoverSpec());

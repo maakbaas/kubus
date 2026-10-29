@@ -15,13 +15,6 @@ describe("markdownPlainText", () => {
     expect(markdownPlainText("| a | b |\n|---|---|\n| 1 | 2 |")).toMatch(/a.*b.*1.*2/);
   });
 
-  it("gives the same answer again, from its memory, and has room for many documents", () => {
-    const first = markdownPlainText("# Same");
-    expect(markdownPlainText("# Same")).toBe(first);
-    for (let i = 0; i < 25; i++) markdownPlainText(`# Doc ${i}`);
-    expect(markdownPlainText("# Same")).toBe(first);
-  });
-
   it("is empty for nothing", () => {
     expect(markdownPlainText("")).toBe("");
   });

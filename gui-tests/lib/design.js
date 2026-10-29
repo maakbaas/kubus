@@ -356,10 +356,12 @@ function __design(opts) {
           judge("block-fit", r.right <= br + 1, d, `drawn ${Math.round(r.right - br)}`, `a ${Math.round(r.width)}px-wide ${d.tagName.toLowerCase()} ends ${Math.round(r.right - br)}px beyond its block`);
         }
       }
-      // A pane as wide as a phone's window: the page's content box is the window minus one spacing-05.
+      // A pane as wide as a phone's window: the page's content box is the window minus one spacing-05 (and the pane's
+      // scrollbar gutter, kept on both edges: none on a phone, whose scrollbars overlay; a narrow desktop window has one).
       const pr = pane.getBoundingClientRect();
       if (vw <= 672 && Math.abs(pr.left) <= 1 && Math.abs(pr.right - vw) <= 1) {
-        const pad = 16;
+        const scroller = pane.querySelector(".ws-pane__body");
+        const pad = 16 + (scroller ? (scroller.offsetWidth - scroller.clientWidth - px(cs(scroller).borderLeftWidth) - px(cs(scroller).borderRightWidth)) / 2 : 0);
         const head = [...content.querySelectorAll(".page-header")].find(visible);
         const left = crumb.getBoundingClientRect().left;
         judge("phone-width", Math.abs(left - pad) <= 1, crumb, `left ${Math.round(left - pad)}`, `the page starts ${Math.round(left)}px from the window's left edge, not ${pad}px`);

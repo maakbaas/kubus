@@ -70,4 +70,4 @@ export function normalizeView(collection: Collection, state: ViewState): ViewSta
   return { filters: state.filters, blocks: blocks.map((b) => normalizeBlock(collection, b)), editable: state.editable };
 }
 
-export type { BlockOptionsProps, BlockPlace, BlockProps, BlockTypeDefinition, BlockUses, ItemActions, PageItem } from "./registry";
+export type { BlockPlace, BlockTypeDefinition, PageItem } from "./registry";

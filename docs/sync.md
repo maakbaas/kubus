@@ -508,7 +508,7 @@ all data on this device?"), then `restoreBackup`; the app reloads after it. In t
   has the server's newer data therefore needs a choice: leave sync off and use the backup alone, or let the server win. Merging them
   is roadmap #9.
 Tests: `data/sqlite/backup.test.ts` (round trip incl. the first release's fixture, migration, every refusal, sync state),
-`worker.test.ts`, `client.test.ts`, `platform/platform.test.ts`, and suite 28 (the Backup tab: a real download, restore, cancel, refusals).
+`worker.test.ts`, `client.test.ts`, `platform/platform.test.ts`, and GUI suite 28 (the Backup tab: a real download, restore, cancel).
 
 **iOS / home-screen app.** The same web build. Status bar: no style meta (`default`); iOS
 colours the bar from the top tab strip (sticky, solid, full width; see Conventions). `body` is

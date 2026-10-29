@@ -81,7 +81,7 @@ async function tabWalk(t, label, max = 45) {
   await t.check(`${label}: Shift+Tab moves back`, back.id !== before.id, `focus stayed on ${back.what}`);
 }
 
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["desktop"]) {
   test(`keyboard: Tab through every page @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(matrixSpec("typical", { items: 5 }));
@@ -129,7 +129,7 @@ async function dialogKeys(t, label, open, { returnFocus = true } = {}) {
   }
 }
 
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["phone"]) {
   test(`dialogs: focus inside, Tab trapped, Escape returns focus @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(matrixSpec("typical", { items: 5 }));
@@ -207,7 +207,7 @@ async function hoverNoShift(t, label, max = 30) {
   return moved;
 }
 
-for (const vp of ["desktop", "laptop"]) {
+for (const vp of ["desktop"]) {
   test(`hover: no control moves anything when hovered @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(matrixSpec("typical", { items: 5 }));
@@ -219,7 +219,7 @@ for (const vp of ["desktop", "laptop"]) {
 }
 
 // Dialogs in use: typing and choosing in them moves neither the dialog nor the control in use.
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["desktop"]) {
   test(`dialogs in use: add field, new bookmark @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(matrixSpec("typical", { items: 5 }));

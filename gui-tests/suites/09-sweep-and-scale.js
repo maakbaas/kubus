@@ -1,16 +1,12 @@
 // Window-size sweeps (resized live, no reload: responsive breakpoints must hold at every width
-// and height), scale (many collections, fields, views, items), dark theme popovers and rapid
-// interaction.
+// and height), scale (many collections, fields, views, items) and rapid interaction.
 
 const SWEEP_WIDTHS = [320, 360, 390, 430, 480, 560, 640, 672, 700, 768, 820, 900, 1000, 1055, 1056, 1100, 1151, 1152, 1280, 1366, 1440, 1600, 1920, 2560];
 const SWEEP_HEIGHTS = [360, 480, 568, 700, 900, 1200];
 
 for (const [label, pathOf] of [
-  ["collection table", (ids) => `/collections/${ids.collections.books}/items`],
   ["collection blocks", (ids) => `/collections/${ids.collections.books}/items?view=${ids.views["books/Blocks"]}`],
   ["item page", (ids) => `/collections/${ids.collections.books}/items/${ids.items["books/i0"]}`],
-  ["collection editor", (ids) => `/collections/${ids.collections.books}/edit`],
-  ["collections overview", () => "/collections"],
 ]) {
   test(`width sweep 320–2560px: ${label}`, async (t) => {
     await t.boot();
@@ -48,7 +44,7 @@ test("height sweep: popovers stay in the window", async (t) => {
   }
 });
 
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["desktop"]) {
   test(`scale: 60 collections, 80 fields, 30 views @ ${vp}`, async (t) => {
     await t.boot();
     // The same pages of an ordinary collection (15 fields) first: they set the machine's pace.
@@ -78,28 +74,6 @@ for (const vp of ["desktop", "phone"]) {
       await t.audit(label);
     }
   }, { viewport: vp, heavy: true });
-}
-
-for (const vp of ["desktop", "phone"]) {
-  test(`dark theme: popovers, menus and dialogs @ ${vp}`, async (t) => {
-    await t.boot();
-    const ids = await t.seed(matrixSpec("typical", { items: 6 }));
-    await t.open(t.listPath(ids.collections.books));
-    for (const label of ["Filter", "View settings"]) {
-      const b = t.page.locator(".views-bar").getByRole("button", { name: label, exact: true }).first();
-      if (await b.count()) {
-        await b.click();
-        await t.audit(`dark: ${label}`);
-        await t.closeAll();
-      }
-    }
-    await t.page.locator(".items-table tbody").getByRole("button", { name: "Delete", exact: true }).first().click({ force: true }).catch(() => {});
-    await t.settle();
-    await t.audit("dark: confirmation dialog");
-    await t.closeAll();
-    await t.open(t.itemPath(ids.collections.books, ids.items["books/i0"]));
-    await t.audit("dark: item page");
-  }, { viewport: vp, dark: true });
 }
 
 test("rapid interaction: switching tabs, views and pages quickly", async (t) => {

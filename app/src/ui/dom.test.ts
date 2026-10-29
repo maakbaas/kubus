@@ -158,14 +158,13 @@ describe("Escape through dropdowns", () => {
     escapeThroughDropdowns();
     const capture = listeners.find((l) => l.capture)!.fn;
     const bubble = listeners.find((l) => !l.capture)!.fn;
-    /** A trusted keydown whose target is (or is in) a dropdown field. */
-    const key = (k: string, target: { expanded?: boolean; dropdown?: boolean } = { dropdown: true }) => {
+    /** A trusted keydown whose target is (or is in) a dropdown field (of a multi-select with `multi`). */
+    const key = (k: string, target: { expanded?: boolean; dropdown?: boolean; multi?: boolean } = { dropdown: true }) => {
       const e = new FakeKeyboardEvent("keydown", { key: k });
       e.isTrusted = true;
-      Object.assign(e, {
-        target: { closest: () => (target.dropdown ? { getAttribute: () => (target.expanded ? "true" : "false") } : null) },
-      });
-      return e;
+      const field = { getAttribute: () => (target.expanded ? "true" : "false"), closest: () => (target.multi ? {} : null) };
+      Object.assign(e, { target: { closest: () => (target.dropdown ? field : null) }, stopPropagation: vi.fn() });
+      return e as FakeKeyboardEvent & { stopPropagation: ReturnType<typeof vi.fn> };
     };
     return { capture, bubble, dispatched, key };
   }
@@ -186,6 +185,15 @@ describe("Escape through dropdowns", () => {
     t.bubble(e as never);
     vi.runAllTimers();
     expect(t.dispatched).toHaveLength(0);
+  });
+
+  it("keeps a closed multi-select's Escape from it (Carbon would clear the choice), and sends it on", () => {
+    const t = setup();
+    const e = t.key("Escape", { dropdown: true, multi: true });
+    t.capture(e as never);
+    vi.runAllTimers();
+    expect(e.stopPropagation).toHaveBeenCalled();
+    expect(t.dispatched).toHaveLength(1);
   });
 
   it("leaves an open dropdown's Escape to the dropdown (it closes its menu)", () => {

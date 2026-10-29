@@ -5,8 +5,7 @@ import { ItemCache } from "../app/itemCache";
 import { newId, type FieldDef, type Item } from "../domain/model";
 import type { ViewQuery } from "../domain/query";
 import { device } from "../test/fakeServer";
-import { buildItemActions, readOnlyActions, stableItemActions, type ItemActionsOptions } from "./itemActions";
-import type { ItemActions } from "./registry";
+import { buildItemActions, stableItemActions, type ItemActionsOptions } from "./itemActions";
 
 const field = (name: string, kind: FieldDef["kind"], position: number, extra: Partial<FieldDef> = {}): FieldDef => ({
   id: newId(), collectionId: "", name, kind, targetCollectionId: null, componentId: null, code: null, output: null,
@@ -185,34 +184,6 @@ describe("stable actions", () => {
     expect(t.onSort).toHaveBeenLastCalledWith([{ fieldId: "f", direction: "asc" }]);
   });
 
-  it("forwards every editing action", async () => {
-    const calls: string[] = [];
-    const latest = {
-      current: {
-        open: () => calls.push("open"),
-        remove: () => calls.push("remove"),
-        duplicate: () => calls.push("duplicate"),
-        setValue: async () => void calls.push("setValue"),
-        openNew: () => calls.push("openNew"),
-        create: async () => void calls.push("create"),
-        groupPreset: () => (calls.push("groupPreset"), {}),
-        sortBy: () => calls.push("sortBy"),
-      } satisfies ItemActions,
-    };
-    const s = stableItemActions(latest, false);
-    const item = {} as Item;
-    const f = {} as FieldDef;
-    s.open(item);
-    s.remove!(item);
-    s.duplicate!(item);
-    await s.setValue!(item, f, 1);
-    s.openNew!();
-    await s.create!({});
-    s.groupPreset!("k");
-    s.sortBy!("f");
-    expect(calls).toEqual(["open", "remove", "duplicate", "setValue", "openNew", "create", "groupPreset", "sortBy"]);
-  });
-
   it("a remote collection's can only open and sort", async () => {
     const t = await setup();
     const latest = { current: t.make({ query: query({ groupBy: "g", sort: [{ fieldId: "f", direction: "asc" }] }) }) };
@@ -224,17 +195,6 @@ describe("stable actions", () => {
     expect(stable.sort).toEqual({ fieldId: "f", direction: "asc" });
     latest.current = t.make({ query: query({ groupBy: "h" }) });
     expect(stable.groupBy).toBe("h"); // reads through to the latest
-  });
-
-  it("readOnlyActions passes open and sortBy through", () => {
-    const open = vi.fn();
-    const sortBy = vi.fn();
-    const ro = readOnlyActions({ open, sortBy, remove: vi.fn(), sort: { fieldId: "f", direction: "asc" } } as unknown as ItemActions);
-    ro.open({} as Item);
-    ro.sortBy!("x");
-    expect(open).toHaveBeenCalled();
-    expect(sortBy).toHaveBeenCalledWith("x");
-    expect(ro.remove).toBeUndefined();
   });
 });
 

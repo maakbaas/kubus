@@ -1,4 +1,4 @@
-// Shared by the click-everything suites (03, 40-42): on every page, every visible control is clicked
+// Shared by the click-everything and hover suites (03, 40, 41): on every page, every visible control is clicked
 // (and every icon button hovered); what opens (a popover, menu, modal) is audited and its own controls
 // are clicked in turn. After every click the layout audit must pass and no console error may appear.
 // Destructive controls (delete / remove) are clicked to open their confirmation only; inside
@@ -74,7 +74,7 @@ async function crawlPage(t, label, path) {
     const loc = t.page.locator(`[data-crawl="${target.i}"]`);
     t.at(`${label} › click "${target.name}"`);
     try {
-      await loc.scrollIntoViewIfNeeded({ timeout: 2000 });
+      await loc.evaluate((el) => el.scrollIntoView({ block: "nearest", inline: "nearest" }), null, { timeout: 2000 });
       await loc.click({ timeout: 3000 }).catch(async () => {
         // A tooltip or a closing panel may still be in the way: once more after moving away.
         await t.closeAll();

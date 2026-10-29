@@ -19,7 +19,7 @@ async function auditPanel(t, label, scope, button) {
   await t.closeAll();
 }
 
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["desktop"]) {
   test(`dark theme: every popover, menu and dialog @ ${vp}`, async (t) => {
     await t.boot();
     const spec = matrixSpec("typical", { items: 6 });

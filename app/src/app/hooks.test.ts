@@ -17,7 +17,7 @@ vi.mock("./store", () => ({ useStore: () => m.store, useComponents: () => m.stor
 vi.mock("../workspace/Workspace", () => ({ useOpenRelated: () => m.openRelated }));
 vi.mock("../platform/openExternal", () => ({ openExternal: m.openExternal }));
 
-const { useAiCellState, useAiFill, useAiProgress, useAiSettings, useServerAi } = await import("./useAi");
+const { useAiCellState, useAiFill, useAiProgress, useServerAi } = await import("./useAi");
 const { useDataChanges } = await import("./useDataChanges");
 const { useItemCounts } = await import("./useItemCounts");
 const { useItems } = await import("./useItems");
@@ -50,15 +50,6 @@ describe("AI hooks", () => {
     m.store = { ai, components: [] };
     return ai;
   }
-
-  it("useAiSettings follows the settings", async () => {
-    const ai = setup();
-    const h = renderHook(() => useAiSettings());
-    expect(h.result.current.source).toBe("server");
-    ai.setSettings({ ...ai.settings, source: "own", fieldModel: "m" });
-    await h.settle();
-    expect(h.result.current).toMatchObject({ source: "own", fieldModel: "m" });
-  });
 
   it("useServerAi gives the server's offer, with its problem while there is none", async () => {
     const ai = setup();

@@ -5,11 +5,10 @@ name: Test
 # - typecheck: the app, the server and the server's tests;
 # - unit: the vitest projects that need nothing (domain, storage, sync, api, app);
 # - server: the nodesqlite, connectors and server vitest projects against Postgres, MySQL 8 and MariaDB;
-# - gui-smoke: the GUI suite's smoke tests of the suites this branch's changes reach (gui-tests/areas.mjs),
-#   all of them on main; not the screenshot baselines (machine-dependent).
-# The slow part stays out of the way: full.yml has the connectors' real services (n8n alone takes 1 to 2
-# minutes to start), the whole GUI suite sharded over jobs, and coverage. build.yml (Windows) runs `unit` there.
-# tests/README.md is the catalog of the suites.
+# - gui-smoke: the GUI suite's smoke tests (one main path per area and the generic sweeps' quickest).
+# The slow part stays out of the way: full.yml (by hand) has the connectors' real services (n8n alone takes
+# 1 to 2 minutes to start), the server image and the whole GUI suite sharded over jobs. build.yml (Windows) runs `unit`.
+# docs/testing.md is the catalog of the suites.
 on:
   push:
   workflow_dispatch:
@@ -107,8 +106,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # --changed compares with origin/main
       - uses: actions/setup-node@v4
         with:
           node-version: 22

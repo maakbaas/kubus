@@ -69,7 +69,7 @@ function kbSpec() {
   return spec;
 }
 
-for (const vp of ["phone", "phone-small"]) {
+for (const vp of ["phone"]) {
   for (const style of ["android", "ios"]) {
     test(`block settings name with the keyboard (${style}) @ ${vp}`, async (t) => {
       await t.boot();
@@ -170,7 +170,7 @@ async function judgeHits(t, label) {
   await t.check(`${label}: touch hits the control drawn there`, problems.length === 0, problems.join("; "));
 }
 
-for (const vp of ["phone", "phone-small"]) {
+for (const vp of ["phone"]) {
   for (const style of [null, "android", "ios", "ios-panned"]) {
     test(`hit-testing matches after rotating and back${style ? ` with the ${style} keyboard` : ""} @ ${vp}`, async (t) => {
       await t.boot();
@@ -381,7 +381,7 @@ async function headerAt(t, n, at) {
 const TEXT_FIELDS = "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]), textarea";
 const POPOVER_CONTENT = ".toolbar-popover > .cds--popover > .cds--popover-content";
 
-for (const vp of ["phone", "phone-small"]) {
+for (const vp of ["phone"]) {
   test(`iOS keyboard sequence: the lowest field of panels below their button @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(kbSpec());

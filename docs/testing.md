@@ -1,38 +1,83 @@
 # Testing
 
-**The catalog of every suite (what it covers, needs, its time budget, how to run it, which CI job runs it) is
-`tests/README.md`**; `npm run suite -- list` shows the names and `npm run suite -- <name…>` runs any of them
-(`tests/run.mjs`, which times each and fails one over its budget). This file is about the conventions: what the
-projects cover, what to run for a change, coverage and how to write tests.
+## What the tests are for
 
-Three kinds of tests, each split by the part of the app it covers, so that a change runs the tests of what it
-touched: vitest (next to the code in `app/src`, the server's in `server/test`; seconds), the GUI suites
-(`gui-tests/suites/NN-*.js`, playwright-cli; minutes each, about an hour in all) and Rust (`desktop/`, `cargo test`
-in `build.yml`). CI: `test.yml` runs the critical ones on every push in parallel jobs (typecheck, unit, server, GUI
-smoke of the changed areas); `full.yml` the slow ones (the connectors' real services, the server image end to end (`tests/image-smoke.mjs`, suite `image`; `image.yml` runs it before publishing), the full GUI suite sharded
-over jobs, merged coverage).
+The suite is kept lean on purpose: a change should cost little test work, and a red test should mean a real problem.
+Two hard limits:
 
-## The vitest projects
+- **At most 10 minutes of test rework per change.** When keeping a test in step with a change would take longer, the
+  test was pinning details: delete it (and say so in the commit), unless it guards data, sync or migrations.
+- **The whole suite in at most 30 minutes** (`npm run suite -- full`: every vitest project, the real services, the
+  server image and the whole GUI suite on one machine; it fails when over). Over that there are too many tests: drop
+  the least meaningful ones (a duplicate window size, a page another sweep already covers), not the data tests.
 
-`vitest.config.ts` defines them. `npm test -- --project sync --project api` runs several;
-`npm run test:changed` runs the tests that import a file changed since origin/main (vitest follows
-the imports).
+- **Guarded closely**: what is expensive to get wrong and hard to see by hand. That means data (schema, migrations,
+  storage, backups), sync and the server, the HTTP API, and domain logic with real edge cases (query, date periods,
+  charts, links, merged collections). Also the GUI's consistency rules (layout, spacing, nothing moving under the
+  pointer, keyboard and focus, the iOS keyboard), which the generic GUI suites check on every page and control.
+- **Not tested**: wording, constants, registry contents, class names, and the step-by-step behaviour of a feature's UI.
+  These change with the app, and a test that only restates them costs more than it finds.
 
-| Project | Covers | Files | Needs |
+When you change the app:
+
+- **New logic** in `domain/`, `data/`, sync, `headless/` or `server/` gets a unit test beside it.
+- **A fixed bug** gets a regression test where one is cheap (a unit test if the cause can be reached there).
+- **A UI feature** needs no new GUI test. The generic suites (the pages matrix, click everything, hover, keyboard, dark
+  layers, popovers in use) reach new pages and controls by themselves. A new area of the app with no flow test yet
+  may get one main-path test on desktop in a suite of its own; no more.
+- **A test that breaks because behaviour changed on purpose**: change it when the edit is small. If it pinned the old
+  details, delete it. Never weaken a data, sync or migration test to make it pass.
+- The test part of a change should be small next to the change itself.
+
+Before pushing:
+
+- `npm run typecheck`, plus `npm run typecheck --prefix server` and `npm run typecheck:test --prefix server` for server code.
+- `npm run test:changed`: the vitest tests that import what changed.
+- `npm run test:gui:smoke` when the change shows in the GUI.
+
+## The suites
+
+`npm run suite -- <name…>` runs any suite by name (`tests/run.mjs`), times it and fails it when it takes more than its
+budget (10 minutes unless `list` says otherwise; `--budget <min>`). `npm run suite -- list` shows them all.
+
+| Suite | What | Needs | CI |
 |---|---|---|---|
-| `domain` | the storage-agnostic model: query, views, fields, components, AI prompts, links, tags | `app/src/domain/*.test.ts` | nothing |
-| `storage` | the device's database: schema and migrations (`fixture-v1.sql` migrated keeps every row), the engine, backups (`backup.test.ts`: export, restore, every refusal, sync state), the Repository contract (`repository*.test.ts`: refusals, soft deletes, files and their clean-up), the worker (`worker.test.ts`, with the SAH-pool VFS faked: it is installed only once the lock is held and the files are free) and its lock rules (`dbLock.test.ts`), the main thread's side of the worker protocol (`client.test.ts`) | `app/src/data/*.test.ts`, `app/src/data/sqlite/*.test.ts` | nothing |
-| `sync` | the device's side of sync (outbox, merge of two devices' edits, files, first connection, versions, the engine's timing and error states, the server's change signal) against `FakeServer` (`app/src/test/fakeServer.ts`); the client of the server's remote sources; the router and helpers of `shared/` (their tests live in `app/src`: `shared/` is copied whole into the server's image and typechecked without vitest) | `app/src/data/sync/*.test.ts`, `app/src/data/remote/*.test.ts` | nothing |
-| `api` | the HTTP API (`/api/v1`, the headless device): every route and its errors (`apiRoutes.test.ts`, checked against `help/api.md`), values by kind, the component compiler, webhooks, the device's 503s and its data directory (`diskStore.test.ts`: resume, wipe, lock, a damaged file), against `FakeServer` | `app/src/headless/*.test.ts` | nothing |
-| `nodesqlite` | the storage contract again on the server's engine: the `storage`, `sync` and `api` test files (except the worker, client, lock and backup tests, which are wasm-only: backups are a device's, `NodeSqlClient` refuses them), with their databases on `node:sqlite` files instead of sqlite-wasm in memory (`KUBUS_TEST_ENGINE=node`; tests open databases through `app/src/test/engine.ts`; `NodeSqlClient`'s own tests: `sqlite/node.test.ts`) | same globs | nothing |
-| `app` | the app's own logic outside the UI: the AI service and backfill, the item cache, the workspace layout, block registry and item actions, remote paging, platform adapters, and the hooks and browser-facing helpers (`ui/`), run without a DOM | `app/src/{app,platform,ui,views,pages,workspace,test}/*.test.ts(x)` | nothing |
-| `connectors` | the remote-source connectors, against the real services wherever one runs locally: Postgres, MySQL 8, MariaDB, InfluxDB 2, n8n and Actual Budget (with actual-http-api) in containers; CSV, JSON, NDJSON and ICS from real files over real local HTTP servers; D1 on a real SQLite behind a stand-in of Cloudflare's API (D1 itself doesn't run locally); the shared contract (`contract.ts`) asked of each; the unit tests of their query languages and the memory connector | `server/test/connectors/*.test.ts` | the server's packages; per service the variable below (its tests are skipped without it) |
-| `server` | the server itself: its modules in-process (so coverage counts them: sync, schema, migrations and wipe in `sync.test.ts` and `database.test.ts`; `tokens`, `files` against Postgres; `sources` with stand-in connectors; `ai` against a stand-in provider; `events`; `headless`; `headlessDir.test.ts`: the real server restarted, and killed with SIGKILL mid-writes, on `KUBUS_HEADLESS_DIR`), its settings, the MCP protocol and its tools (`mcp.test.ts`, with a fake API), every HTTP endpoint of the real server process (`serve.ts`: `http.test.ts` the working paths, `endpoints.test.ts` the 400 / 401 / 403 / 404 / 405 / 413 ones), and devices syncing through it end to end | `server/test/*.test.ts` | the server's packages, Postgres, `npm run build:headless` for `/api/v1` |
+| `typecheck` | tsc of the app, the server and the server's tests | both `npm ci` | `test.yml` |
+| `unit` | vitest projects `domain`, `storage`, `sync`, `api`, `app` (about 30 s) | nothing | `test.yml`; `build.yml` on Windows |
+| `nodesqlite` | the `storage`, `sync` and `api` files again on `node:sqlite` (the server's headless device's engine) | Node 22.5+ | `test.yml` job `server` |
+| `connectors` | every connector against Postgres, MySQL 8, MariaDB, SQLite (D1) and real local HTTP servers | server packages, `build:headless`, the databases | `test.yml` job `server` |
+| `server` | the server's modules, settings, MCP, every HTTP endpoint of the real server process, devices syncing through it | server packages, `build:headless`, Postgres | `test.yml` job `server` |
+| `gui-smoke` | the GUI tests marked `smoke` (about 36: one main path per area plus the generic sweeps' quickest) | Chrome, `playwright-cli` | `test.yml` |
+| `connectors-real` | the `*.real.test.ts`: InfluxDB 2, n8n and Actual Budget in containers | `tests/setup-env.sh --connectors` | `full.yml` |
+| `image` | the server image (`server/Dockerfile`, `docker-compose.yml` with a throwaway Postgres) checked over HTTP (`tests/image-smoke.mjs`) | Docker with compose v2.24+ | `full.yml`; `image.yml` before publishing |
+| `gui-NN`, `gui-shard-N`, `gui-all` | one GUI suite file, a shard of them, all of them (about 100 tests, browsers in parallel) | Chrome, `playwright-cli` | `full.yml` (shards) |
+| `critical`, `full` | what `test.yml` runs; everything, in 30 minutes at most | as each part | |
 
-The `connectors` and `server` projects test `server/` code: they need its packages
-(`npm ci --prefix server`), and are left out (with a note) without them. Tests that need Postgres
-get it from `KUBUS_TEST_POSTGRES`, a superuser's connection string; each test file makes its own
-database and drops it again (`server/test/postgres.ts`):
+CI: `test.yml` runs the critical suites on every push, as parallel jobs of 10 minutes at most. `full.yml` is run by
+hand (Actions → Full → Run workflow) before a release or after a large change. `build.yml` builds the desktop packages
+and runs `cargo test`.
+
+Environment: `tests/setup-env.sh` installs the packages, the headless build, the databases and playwright-cli pointed
+at a local Chromium; then `source tests/env.sh`.
+
+## Vitest projects
+
+`vitest.config.ts` defines them. `npm test -- --project sync --project api` runs several.
+
+| Project | Covers | Files |
+|---|---|---|
+| `domain` | the storage-agnostic model: query, views, fields, components, AI prompts, links, charts, dashboards | `app/src/domain/*.test.ts` |
+| `storage` | schema and migrations (`fixture-v1.sql` migrated keeps every row), the engine, backups, the Repository contract, the worker and its lock rules (the SAH-pool VFS faked) | `app/src/data/*.test.ts`, `app/src/data/sqlite/*.test.ts` |
+| `sync` | the device's side of sync (outbox, merge, files, first connection, versions, the engine) against `FakeServer` (`app/src/test/fakeServer.ts`); the remote sources' client; `shared/` | `app/src/data/sync/`, `app/src/data/remote/` |
+| `api` | `/api/v1` on the headless device: every route and its errors (checked against `help/api.md`), the component compiler, webhooks, its data directory | `app/src/headless/*.test.ts` |
+| `nodesqlite` | `storage`, `sync` and `api` again on `node:sqlite` files (`KUBUS_TEST_ENGINE=node`, `app/src/test/engine.ts`), except the wasm-only worker, client, lock and backup tests | same globs |
+| `app` | app logic outside the UI: AI service and backfill, item cache, workspace layout, item actions, remote paging, platform adapters, hooks (`renderHook` in `app/src/test/hooks.ts`, no DOM) | `app/src/{app,platform,ui,views,pages,workspace,test}/` |
+| `connectors` | the remote-source connectors: the shared contract (`contract.ts`, each answer compared with `applyQuery`'s on the same rows), each service's own errors, and that it only reads | `server/test/connectors/*.test.ts` |
+| `server` | the server in-process and as a real process (`serve.ts`), and devices syncing through it (`devices.test.ts`, so device and server can't drift apart) | `server/test/*.test.ts` |
+
+`connectors` and `server` need the server's packages (`npm ci --prefix server`; left out without them). Postgres,
+MySQL and MariaDB come from `KUBUS_TEST_POSTGRES`, `KUBUS_TEST_MYSQL`, `KUBUS_TEST_MARIADB`. Each test file makes
+its own database. Without the variable a test is skipped locally; in CI (`CI` set) that is an error.
 
 ```bash
 docker run -d --name kubus-test-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16
@@ -41,118 +86,34 @@ npm ci --prefix server && npm run build:headless
 npm run suite -- server connectors
 ```
 
-The MySQL / MariaDB connector's tests (`mysql.test.ts`) get their servers likewise from `KUBUS_TEST_MYSQL`
-(MySQL 8) and `KUBUS_TEST_MARIADB`, an account that can create databases and users (`server/test/mysql.ts`);
-each server's tests run when its variable is set:
+The real services of `connectors-real` (`tests/services.yml`, compose profile `connectors`; `tests/env.sh` sets
+`KUBUS_TEST_INFLUX`, `_N8N` and `_ACTUAL` for those that answer):
 
-```bash
-docker run -d --name kubus-test-mysql -e MYSQL_ROOT_PASSWORD=mysql -p 3306:3306 mysql:8.4
-docker run -d --name kubus-test-mariadb -e MARIADB_ROOT_PASSWORD=mariadb -p 3307:3306 mariadb:11.4
-export KUBUS_TEST_MYSQL=mysql://root:mysql@127.0.0.1:3306 KUBUS_TEST_MARIADB=mysql://root:mariadb@127.0.0.1:3307
-npm test -- --project connectors
-```
-
-The connectors' other real services are in `tests/services.yml` under the compose profile `connectors`
-(`tests/setup-env.sh --connectors` starts them all; or `docker compose -f tests/services.yml --profile connectors up -d --wait influxdb`
-for one); `tests/env.sh` sets a variable for each that answers, and a test file without its variable is skipped:
-
-| Service (pinned image) | Variable | Files | Seeded through | Start / test time (4 busy CPUs) | CI |
-|---|---|---|---|---|---|
-| InfluxDB 2.7.12 | `KUBUS_TEST_INFLUX` (`_ORG`, `_TOKEN`: the image's setup) | `influx.real.test.ts` | its HTTP API: a bucket, line protocol, a read-only token (`influxSeed.ts`) | 4 s / 35 s | full.yml |
-| n8n 2.45.5 | `KUBUS_TEST_N8N` | `n8n.real.test.ts` | owner setup and API keys (`/rest`), data tables (`/api/v1/data-tables`) (`n8nSeed.ts`) | 1 to 2 min / 17 s | full.yml |
-| Actual Budget server 26.10.0 + actual-http-api 26.10.1 | `KUBUS_TEST_ACTUAL` (`_KEY`) | `actual.real.test.ts` | actual-http-api's write routes; the empty budget is made by `actualSeed.cjs` when the `actual-api` service starts | 45 s / 25 s | full.yml (compose: two services and a mounted script, which a job's service containers can't have) |
-
-Where `CI` is set a missing variable is an error (the `connectors` suite leaves these files out; `connectors-real` is the suite that runs them). Docker Hub rate-limits
-anonymous pulls: `mirror.gcr.io/<image>` has the same images (`docker tag` them to the pinned names).
-
-What the connector tests ask, for every connector that can answer it:
-
-- `contract.ts` (the shared contract, `shared/sources.ts`): a fixture says what a service holds (the dataset's people,
-  `dataset.ts`, loaded through the service's own API) and `contractCases` derives every filter operator of each column's
-  type, every sort, a search, every page, every grouping and order, trees of and / or, a row by its key and the requests
-  that must be refused; each answer must equal memory.ts's `queryRows` (the app's own meaning, `applyQuery`) on the rows
-  the service holds. Where a source differs by its documented limits (docs/sync.md "Known limits": text order, a tie's
-  order) the fixture says how (`text`, `looseTies`), not the case.
-- Each service's own: listing, types of every column, errors (a wrong key or password, an unreachable host, a missing
-  table, a key without the scope, the time limit) and that it only reads (the data is the same after, the key can't write).
-- `http.transport.test.ts`: the HTTP connectors with real files: 20,000 rows, the row and size limits, encodings (a BOM,
-  declared charsets, UTF-16), malformed content, redirects (the password stays on its origin), statuses, slow and cut-off
-  bodies, the password in each place, pages, revalidation.
-
-Without `KUBUS_TEST_POSTGRES` (or those two) they are skipped locally; in CI (`CI` set) that is an error, as is a
-missing headless build: nothing is skipped there without anyone noticing.
-
-`FakeServer` stands in for the server in the device's sync and API tests (fast, no Postgres).
-`renderHook` (`app/src/test/hooks.ts`) runs a React hook in node, without a DOM or renderer (state, effects, external stores); a test mocks `../app/store` for `useStore`. Pure logic of a hook is better extracted and tested on its own (`views/itemActions.ts`, `views/remotePages.ts`); browser APIs (viewport, selection, canvas) are stubbed per test with `vi.stubGlobal`.
-`server/test/devices.test.ts` runs the same kind of devices against the real server, so the two
-can't drift apart unnoticed: a change to the sync protocol changes both and runs both.
-
-## What to run for a change
-
-| You changed | vitest | GUI suites (`--changed` picks them: `gui-tests/areas.mjs`) |
+| Service | Files | Start / test time |
 |---|---|---|
-| `app/src/domain/` | `domain` (and what imports it: `test:changed`) | by area: query and views 05, 06, 10, 22; components 07, 19, 22; AI 15 |
-| `app/src/data/schema.sql`, `migrations.ts`, `sqlite/` | `storage`, `nodesqlite`, `sync`, `api` | all (every page reads the database) |
-| `app/src/data/sync/`, `shared/sync.ts` | `sync`, `server` | 13, 18 |
-| `domain/backlinks.ts`, `views/useBacklinks.ts`, the `item_links` triggers / `healLinks` (`data/schema.sql`, `schema.ts`), `Repository.listBacklinks` | `domain` (`backlinks.test.ts`), `storage` (`sqlite/links.test.ts`, `migrations.test.ts`), `sync` (`sync/links.test.ts`, `spec.test.ts`), `server` (`sync.test.ts`, `devices.test.ts`) | 43 |
-| `app/src/headless/`, `app/src/help/api.md` | `api`, `nodesqlite`, `server` | none |
-| `app/src/pages/SettingsPage.tsx`, `ui/*Settings.tsx` (`BackupSettings`: `storage`), `ServerConnection`, `ApiTokens` | `sync` (`SyncEngine`) | 28 (and 13, 18 for sync) |
-| `server/src/connectors/`, `shared/sources.ts` | `connectors` | none |
-| `server/src/` | `server` (and `connectors` for `sources.ts`) | none |
-| `app/src/views/` | `domain` | 05, 06, 10, 12, 22 |
-| `app/src/pages/ItemPage.tsx`, `ui/FieldInput.tsx` and the editors | – | 04, 12, 19, 27 (Markdown 08) |
-| `pages/CollectionsPage.tsx`, `RemotesPage.tsx`, `CollectionEditorPage.tsx`, `SearchPage.tsx`, `ui/SearchBar.tsx`, `app/NavTree.tsx` | – | 29 (editor also 07, 17, 27) |
-| `domain/dashboards.ts`, `pages/DashboardPage.tsx`, `DashboardsPage.tsx` (and the side nav's branch, bookmarks and search of them) | `domain` (`dashboards.test.ts`), `storage` (`repository.test.ts`) | 61 (and 60 for Full width) |
-| `domain/links.ts`, `domain/linkTargets.ts`, `app/useLinks.ts`, `app/useLinkTargets.ts` | `domain` (`links.test.ts`, `linkTargets.test.ts`) | 08, 29, 34, 61 |
-| A block's collections (`views/BlockView.tsx` `BlockMenus`: the item page's Collection dropdown, a dashboard block's Collections) | `api` (`apiRoutes.test.ts`: the 400 for several outside a dashboard) | 43, 45, 61 |
-| `app/src/styles.css`, `ui/PageHeader.tsx`, anything every page uses | – | all |
+| InfluxDB 2.7.12 | `influx.real.test.ts` (seeded by `influxSeed.ts`) | 4 s / 35 s |
+| n8n 2.45.5 | `n8n.real.test.ts` (`n8nSeed.ts`) | 1 to 2 min / 17 s |
+| Actual Budget 26.10.0 + actual-http-api 26.10.1 | `actual.real.test.ts` (`actualSeed.cjs`) | 45 s / 25 s |
 
+Docker Hub rate-limits anonymous pulls: `mirror.gcr.io/<image>` has the same images.
 
-Before pushing: `npm run typecheck` (and `npm run typecheck --prefix server`, `npm run typecheck:test --prefix server` for server code),
-the vitest projects above, and `npm run test:gui -- --changed --smoke` for a change the GUI shows.
+Notes:
+- `fixture-v1.sql` (with `schema-v1.sql`) is frozen: a migration must keep its rows. A release whose data takes new
+  shapes gets a fixture of its own version.
+- Pure logic of a hook is better extracted and tested on its own (`views/itemActions.ts`, `views/remotePages.ts`).
+- `npm run test:coverage` writes a V8 coverage report of the vitest projects to `coverage/` (git-ignored).
 
-## Coverage
+## GUI suites
 
-One command gives one report of everything the tests run (`coverage/`, git-ignored):
+`gui-tests/README.md` covers the runner, the harness and the layout rules. There are two kinds of suite:
 
-```bash
-npm run test:coverage                         # the vitest projects with V8 coverage (needs what `npm test` needs)
-npm run test:gui -- --coverage [--suite NN]   # optional: the GUI tests' coverage of app/src (below)
-npm run coverage:report                       # merges what exists: coverage/index.html and a table per directory
-```
-
-- **Unit**: `vitest.config.ts` (`coverage`: `app/src`, `server/src`, `shared`, without tests, `app/src/test`, CSS and Markdown) writes
-  `coverage/unit/coverage-final.json`. Pass `--coverage.include='<glob>'` and `--coverage.reporter=text-summary` to look at one area.
-  Coverage slows tests down, so under `--coverage` a test may take 20 s instead of 5.
-- **Server child process**: the HTTP and device tests run the real server as a child process (`server/test/serve.ts`), invisible to vitest.
-  Under coverage `vitest.config.ts` sets `KUBUS_V8_DIR`; `serve.ts` then gives the child `NODE_V8_COVERAGE` of that folder
-  (V8 writes it when the process exits: `stop()` sends SIGTERM, on which the server shuts down). `coverage/server-v8/` holds the dumps.
-- **GUI**: `--coverage` makes `run.mjs` build with source maps and each test collect V8 precise coverage over CDP (Chromium; the app's main
-  thread, not its workers), into `coverage/gui-v8/`, one file per test (`gui-tests/README.md`).
-- **The merge** (`tests/coverage.mjs`). The transforms behind the three kinds cut a file's statements differently (vitest's, the bundler's,
-  node's), so the kinds cannot be added by statement number, and adding every entry no other kind has would put the merged percentage
-  *below* a kind's own. So: (1) the GUI's statements and functions are not those of the converted bundle (`ast-v8-to-istanbul` loses
-  what the source map cannot place) but the unit run's map of the same file (it includes every file), counted from the V8 ranges: where the
-  source map puts a statement's start in the bundle, the count of the innermost range there; the conversion's branches, and any statement
-  it has that the unit map has no place for, are merged in; (2) a file's richest map is the base and the others are folded into it by place
-  (line:column, else the nearest on the line, counts added), an entry no place matches only when it ran. So what any kind executed
-  counts, and the merged figure is never below one kind's. The server's V8 data goes through node's type stripping (offsets kept). The
-  table lists per directory the merged percentages and the statements each kind reached alone, all against the same statement map.
-  A kind with no data is left out. `KUBUS_COVERAGE_DIR` / `KUBUS_ROOT` point the script at another folder / checkout.
-  Limits: a function's or statement's count is that of the V8 block range at its start (V8 has no per-statement counters); branches of
-  the GUI come from the conversion and so only partly match the unit map's.
-
-## Writing tests
-
-- A test goes in the project of the code it tests, beside it (`app/src`) or in `server/test`
-  (`connectors/` for a connector). A new kind of test that fits no project gets one in
-  `vitest.config.ts` and a row above.
-- A connector's test answers as its service does: the real service where one runs locally (`*.real.test.ts`,
-  `contract.*.test.ts`), else a stand-in that follows the service's documented answers (`d1Api.ts` for Cloudflare's API,
-  `influx.test.ts` and the others' unit tests), and checks that it only reads. A new connector gets a fixture for the
-  contract (`contract.ts`) first.
-- `fixture-v1.sql` (with `schema-v1.sql`) is frozen: a migration must keep its rows, and the app
-  must read them as they were. A later release whose data takes new shapes gets a fixture of
-  its own version, made with that release's app.
-- A GUI suite's new area goes in `gui-tests/areas.mjs`, so `--changed` finds it. A new suite file needs nothing else: `npm run suite` and the shards of full.yml derive from `gui-tests/suites/` (a shard group in `tests/run.mjs` only balances the time).
-- A suite stays within 10 minutes (`tests/run.mjs` fails it otherwise); a new kind of suite gets an entry in `tests/run.mjs` and a row in `tests/README.md`.
+- **Generic sweeps**: they know no feature and check every page and control against the rules in `lib/audit.js`
+  and `lib/design.js`. These are the pages matrix (01, 35, 36: every page in each content shape, typical content at
+  three window sizes, the others at one or two), the shell (02), click everything (03, 40), hover icon buttons (41),
+  width and height sweeps and scale
+  (09), popovers in use (10), keyboard and dialogs (11), dark layers (14) and the on-screen keyboard (20), each a CI shard
+  of its own (`GUI_SWEEPS` in `tests/run.mjs`). New UI is covered by them without new tests. A deliberate exception to
+  a rule is exempted in the rule, with its reason.
+- **Flows**: one or two main-path tests per area (04–06, 12–18, 22–34, 43–45, 61), each step followed by what was
+  stored and shown, all in one CI shard (about 10 minutes). Only these know how a feature is used, so they are the ones
+  a UI change may break.
