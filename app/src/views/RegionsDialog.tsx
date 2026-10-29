@@ -73,10 +73,10 @@ export function RegionsDialog({
     return m ? `${m.labels.join(", ")} (${m.items})` : "";
   };
 
-  // At the window level (opened from the Block settings popover), inside the app root for the theme. Small, not
-  // the dialogs' xs: three columns of names and values don't fit an xs dialog.
+  // At the window level (opened from the Block settings popover), inside the app root for the theme. Medium, not
+  // the dialogs' xs: three columns of names ("Noord-Holland (North Holland)") and values don't fit a smaller one.
   return createPortal(
-    <Modal open={open} size="sm" passiveModal modalHeading={`Regions of ${mapLabel(regions.map)}`} onRequestClose={onClose} className="regions-dialog">
+    <Modal open={open} size="md" passiveModal modalHeading={`Regions of ${mapLabel(regions.map)}`} onRequestClose={onClose} className="regions-dialog">
       <Stack gap={5}>
         <p className="helper">A value is a region when it is the region's name, English name or code (case, accents and punctuation aside).</p>
         {error && <p className="helper">{error}</p>}
