@@ -245,8 +245,8 @@ Extension points are registries, not special cases in pages:
     Departments"), downloaded from unpkg (jsDelivr refuses a package this large) at a pinned version (`GEODATA_VERSION`) when chosen and stored as a file
     (`regions.file`, `files/<id>`: the same bytes on every device, so one file; synced like an image, kept while a block
     names it: docs/data-model.md, block_file_uses; "Downloading the map…" under the select meanwhile, the map shown until it's done;
-    offline it says so); Regions from, the field whose values are the regions (a category per value, as the X axis's); and
-    Colour (`ChartOptions.scaleColor`: Carbon's first five series colours, purple by default), whose shades Carbon is given
+    offline it says so); and Regions from, the field whose values are the regions (a category per value, as the X axis's).
+    Display: Colour (`ChartOptions.scaleColor`: Carbon's first five series colours, purple by default), whose shades Carbon is given
     (`color.gradient.colors`, `scaleShades` in chartSpec.ts): its own scale without white and the palest step, so a region with
     little is a light shade rather than white (on a dark theme from 90 to 10); Max (`scaleMax`, none by default): when a
     value is above it, the values above are drawn as it (the darkest shade; Carbon fits its scale and legend to the values,
@@ -257,7 +257,7 @@ Extension points are registries, not special cases in pages:
     (an English name is in a few maps only, under several keys: not used), ignoring case,
     accents and punctuation ("noord holland" is Noord-Holland, "Fryslan" Fryslân), a code first (`regionFinder`); two
     values of one region ("NL", "Netherlands") are one. A region without items is striped (Carbon's missing data); the
-    values that are no region are listed under the map unless unticked (`showUnmatched`) ("Not on the map: Atlantis (1)", ellipsized, the whole list in its
+    values that are no region are listed under the map unless "Show values not on the map" (Display, `showUnmatched`) is unticked ("Not on the map: Atlantis (1)", ellipsized, the whole list in its
     title). "Show regions" (Data, under Regions from) opens the map's regions (`views/RegionsDialog.tsx`, a small dialog:
     a long name, a code and a number don't fit an xs one): every region's name, its code and how many of the
     block's items are in it (`RegionValues.matches`; the Block settings get the block's result for it,
