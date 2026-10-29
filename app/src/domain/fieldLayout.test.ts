@@ -96,6 +96,17 @@ describe("parseItemViews", () => {
     expect(views[1]).toMatchObject({ name: "", isDefault: false });
   });
 
+  it("reads \"Full width\" only when it is a boolean (absent: the item page's narrow column)", () => {
+    const views = parseItemViews(JSON.stringify([
+      { id: "a", name: "Wide", layout: {}, fullWidth: true },
+      { id: "b", name: "Narrow", layout: {}, fullWidth: false },
+      { id: "c", name: "Plain", layout: {} },
+      { id: "d", name: "Odd", layout: {}, fullWidth: "yes" },
+    ]));
+    expect(views.map((v) => v.fullWidth)).toEqual([true, false, undefined, undefined]);
+    expect(views.filter((v) => "fullWidth" in v).map((v) => v.id)).toEqual(["a", "b"]);
+  });
+
   it("is empty when absent or unreadable", () => {
     expect(parseItemViews(null)).toEqual([]);
     expect(parseItemViews("")).toEqual([]);

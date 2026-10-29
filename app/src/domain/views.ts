@@ -130,9 +130,23 @@ export interface CollectionView extends ViewState {
    * Stored with the view as soon as it is set, not a change to save (it shows no other items). Absent = off.
    */
   filterBar?: true;
+  /**
+   * "Full width": the view uses the pane's whole width (on) or the item page's narrow column (off). Stored with
+   * the view as soon as it is set, like "Show filter bar"; absent = the place's default (`isFullWidth`).
+   */
+  fullWidth?: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * "Full width" when a view doesn't say (absent): collection views and dashboard tabs use the pane's width,
+ * item views the narrow column (700px) of an item page, as they always did.
+ */
+export const FULL_WIDTH_DEFAULT = { collection: true, item: false, dashboard: true } as const;
+export type WidthPlace = keyof typeof FULL_WIDTH_DEFAULT;
+/** Whether a view of this place is shown at full width: its own setting, else the place's default. */
+export const isFullWidth = (place: WidthPlace, stored?: boolean): boolean => stored ?? FULL_WIDTH_DEFAULT[place];
 
 /** A block shows every field, editable, with its name. */
 export const BLOCK_LAYOUT: FieldLayout = { fields: null, editable: true, hiddenLabels: [], hideEmpty: false };
@@ -231,8 +245,8 @@ export function parseBlock(raw: unknown): ViewBlock | null {
   return o.groupOrder === "desc" || o.groupOrder === "count" ? { ...block, groupOrder: o.groupOrder } : block;
 }
 
-/** A view's stored config (JSON `{ filters, blocks, editable, collapsed, filterBar? }`); unreadable: no filter, no blocks. */
-export function parseViewConfig(json: string): ViewState & { collapsed: Collapsed; filterBar?: true } {
+/** A view's stored config (JSON `{ filters, blocks, editable, collapsed, filterBar?, fullWidth? }`); unreadable: no filter, no blocks. */
+export function parseViewConfig(json: string): ViewState & { collapsed: Collapsed; filterBar?: true; fullWidth?: boolean } {
   let o: Record<string, unknown> = {};
   try {
     o = (JSON.parse(json) ?? {}) as Record<string, unknown>;
@@ -245,6 +259,7 @@ export function parseViewConfig(json: string): ViewState & { collapsed: Collapse
     editable: o.editable !== false,
     collapsed: parseCollapsed(o.collapsed),
     ...(o.filterBar === true && { filterBar: true as const }),
+    ...(typeof o.fullWidth === "boolean" && { fullWidth: o.fullWidth }),
   };
 }
 

@@ -248,7 +248,9 @@ Extension points are registries, not special cases in pages:
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
 - **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + JSON config
-  `{ filters, blocks, editable, collapsed, filterBar? }` (`parseViewConfig`).
+  `{ filters, blocks, editable, collapsed, filterBar?, fullWidth? }` (`parseViewConfig`; `fullWidth`: "Full width", absent =
+  on for a collection view and a dashboard tab, `isFullWidth`; off, the page is wrapped in `.view-page--narrow`, the item
+  page's 700px column; an item view's own is on the `ItemView`, absent = off, on = `.item-view--full`; docs/features.md "Full width").
   Every new collection gets an ordinary "All" view (table, all items, sorted by title) in the space it is made in, created
   with the collection in `saveCollection`; it can be renamed (view settings), edited, starred or deleted like
   any other; "+" adds one ("New", then "New 2", …) as a copy of what is shown, unsaved changes
@@ -256,7 +258,7 @@ Extension points are registries, not special cases in pages:
   "+" sits after the last tab. The tab bar's right end holds the view's tools after Discard /
   Save, delete, star and bookmark: Search (opens a search bar below the tabs; closes when emptied
   or with Escape on an empty box; the blocks filter once typing pauses 150 ms, an emptied box at once; while it has text, a block listing items with none matching is
-  left out, `BlockView`), Filter (the view's; on the filter bar instead while "Show filter bar" is on) and View settings (name, Show filter bar, Fields are editable, blocks);
+  left out, `BlockView`), Filter (the view's; on the filter bar instead while "Show filter bar" is on) and View settings (name, Show filter bar, Full width, Fields are editable, blocks);
   each block's own menus (Filter, Sort and group, Fields, Block settings: name, show as, type options) are in its header. The collection page opens the starred view (`views.is_default`, at most one per collection and space,
   set via `setDefaultView`), else the first; a space without stored views shows a virtual "All" table (id `default`; stored when
   changed, renamed or joined by another view), so a collection always has a view and the last can't be

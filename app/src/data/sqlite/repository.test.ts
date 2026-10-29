@@ -6,6 +6,7 @@ import { device } from "../../test/fakeServer";
 import { collectionDraft, itemLabel, newId, NO_TITLE, type Collection, type FieldDef, type FieldKind } from "../../domain/model";
 import { NOTHING_COLLAPSED, type CollectionView } from "../../domain/views";
 import { isVirtualTab, type DashboardView } from "../../domain/dashboards";
+import { FULL_LAYOUT } from "../../domain/fieldLayout";
 import type { DataChange } from "../repository";
 
 type Repo = Awaited<ReturnType<typeof device>>;
@@ -245,6 +246,18 @@ describe("views", () => {
     const { filterBar: _on, ...off } = (await repo.listViews(book.id, "default"))[0];
     await repo.saveView(off);
     expect("filterBar" in (await repo.listViews(book.id, "default"))[0]).toBe(false);
+  });
+
+  it("keep \"Full width\" in their config as set, on or off", async () => {
+    const book = await collection("Book", [field("Title")]);
+    const [all] = await repo.listViews(book.id, "default");
+    expect("fullWidth" in all).toBe(false);
+    await repo.saveView({ ...all, fullWidth: false });
+    expect((await repo.listViews(book.id, "default"))[0].fullWidth).toBe(false);
+    await repo.saveView({ ...all, fullWidth: true });
+    expect((await repo.listViews(book.id, "default"))[0].fullWidth).toBe(true);
+    await repo.saveItemViews(book.id, [{ id: "v", name: "Wide", layout: FULL_LAYOUT, isDefault: true, collapsed: NOTHING_COLLAPSED, fullWidth: true }]);
+    expect((await repo.listCollections()).find((c) => c.id === book.id)!.itemViews[0].fullWidth).toBe(true);
   });
 });
 

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
 import { Add, Checkmark, Code, Edit, Filter, Information, Pin, PinFilled, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
-import { NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
+import { isFullWidth, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
 import { QueryEditor } from "../views/QueryEditor";
@@ -175,7 +175,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
    * What is stored right away (collapsed blocks and groups, arranged blocks), by item view, shown
    * until the stored views come back with it.
    */
-  const [local, setLocal] = useState<Record<string, { collapsed?: Collapsed; layout?: ItemLayout }>>({});
+  const [local, setLocal] = useState<Record<string, { collapsed?: Collapsed; layout?: ItemLayout; fullWidth?: boolean }>>({});
   useEffect(() => setLocal({}), [collection.itemViews]);
 
   const latest = useRef(collection);
@@ -290,11 +290,15 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   };
   const saveViews = (views: ItemView[]) => repo.saveItemViews(collection.id, views).catch((e) => setError(errorMessage(e)));
   const collapsed = activeView ? (local[activeView.id]?.collapsed ?? activeView.collapsed) : NOTHING_COLLAPSED;
+  /** The shown view's "Full width" as stored (absent: off). */
+  const storedFullWidth = activeView ? (local[activeView.id]?.fullWidth ?? activeView.fullWidth) : undefined;
+  // The page's width follows it once the panels are closed: the header's buttons would move under the open popover.
+  const fullWidth = panels.hold("fullWidth", isFullWidth("item", storedFullWidth));
   /** Stores the shown item view with these (the virtual "Default" view is stored then), shown at once. */
-  const storeNow = (patch: { collapsed?: Collapsed; layout?: ItemLayout }) => {
+  const storeNow = (patch: { collapsed?: Collapsed; layout?: ItemLayout; fullWidth?: boolean }) => {
     if (!activeView) return;
     setLocal((m) => ({ ...m, [activeView.id]: { ...m[activeView.id], ...patch } }));
-    saveViews(itemViews.map((v) => (v.id === activeView.id ? { ...v, layout: saved, collapsed, ...patch } : v)));
+    saveViews(itemViews.map((v) => (v.id === activeView.id ? { ...v, layout: saved, collapsed, ...(storedFullWidth !== undefined && { fullWidth: storedFullWidth }), ...patch } : v)));
   };
   /** Collapsing or expanding a block or a group: stored right away. */
   const setCollapsed = (next: Collapsed) => storeNow({ collapsed: next });
@@ -380,7 +384,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   }
 
   return (
-    <div className="form-page item-view">
+    // "Full width" (Page layout) on: the page at the pane's width, as a collection view; else the narrow column.
+    <div className={fullWidth ? "form-page item-view item-view--full" : "form-page item-view"}>
       <PageHeader
         title={
           // The title edits in place, unless the layout makes the page read-only.
@@ -487,6 +492,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   view={activeView}
                   layout={current}
                   titleFieldId={titleField?.id}
+                  fullWidth={isFullWidth("item", storedFullWidth)}
+                  onFullWidth={(on) => storeNow({ fullWidth: on })}
                   onChange={(patch) => arrange((l) => ({ ...l, ...patch }))}
                   onAddBlock={addBlock}
                   onError={(e) => setError(errorMessage(e))}
@@ -902,6 +909,8 @@ function ItemLayoutSettings({
   view,
   layout,
   titleFieldId,
+  fullWidth,
+  onFullWidth,
   onChange,
   onAddBlock,
   onError,
@@ -915,6 +924,9 @@ function ItemLayoutSettings({
   layout: ItemLayout;
   /** The field shown as the page title: left out unless chosen. */
   titleFieldId: string | undefined;
+  /** "Full width": the shown view's, and setting it (stored right away). */
+  fullWidth: boolean;
+  onFullWidth(on: boolean): void;
   /** A layout change: stored right away. */
   onChange(patch: Partial<ItemLayout>): void;
   /** A new block: stored right away. */
@@ -972,6 +984,7 @@ function ItemLayoutSettings({
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
         />
       )}
+      {view && <Checkbox id={`${uid}-item-layout-full-width`} labelText="Full width" checked={fullWidth} onChange={(_, { checked }) => onFullWidth(checked)} />}
       {!isRemote(collection) && (
         <Checkbox id={`${uid}-item-layout-editable`} labelText="Fields are editable" checked={layout.editable} onChange={(_, { checked }) => onChange({ editable: checked })} />
       )}

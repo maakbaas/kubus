@@ -37,6 +37,8 @@ export interface DashboardView extends ViewState {
   collapsed: Collapsed;
   /** "Show filter bar", as a collection view's: stored as soon as it is set. Absent = off. */
   filterBar?: true;
+  /** "Full width", as a collection view's: stored as soon as it is set. Absent = on (`isFullWidth("dashboard", …)`). */
+  fullWidth?: boolean;
   /**
    * Not stored: a copy of another space's tab, shown in a space without tabs of its own (`dashboardViewsIn`). It is
    * stored there (`Repository.storeDashboardViews`) before it is changed, starred or bookmarked.

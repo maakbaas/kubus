@@ -49,6 +49,8 @@ export const AREAS = [
   // The collection view's filter bar (Show filter bar): its setting, Filter button and date period.
   [/^app\/src\/(views\/(FilterBar|DatePeriodFilter)|domain\/(datePeriod|views)|pages\/CollectionPage|data\/sqlite\/SqliteRepository)/, [44]],
   [/^app\/src\/ui\/(ToolbarPopover|panelRoom|OverflowBar)|^app\/src\/platform\/keyboardInset/, [9, 10, 14, 20]],
+  // "Full width" of collection views and item views: the setting, where it is stored, the pages' width.
+  [/^app\/src\/(pages\/(CollectionPage|ItemPage|NewItemPage)|domain\/(views|fieldLayout|dashboards)|data\/sqlite\/SqliteRepository)/, [60]],
 
   // Backlinks: the virtual collection of item-page blocks and the item links behind it.
   [/^app\/src\/(domain\/(backlinks|sources|views)|views\/(useBacklinks|BlockView|useItemActions|itemActions|cells|TableView|CardsView)|pages\/ItemPage|data\/sqlite\/SqliteRepository|data\/sync\/SyncEngine)/, [43]],
