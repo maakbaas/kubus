@@ -642,11 +642,11 @@ export class SqliteRepository implements Repository {
       position: number;
       created_at: string;
     }>(
-      // Bookmarks of deleted views and items aren't shown.
+      // Bookmarks of deleted views and items aren't shown (a remote collection's rows aren't stored: their ids are keys).
       `SELECT b.* FROM bookmarks b JOIN collections t ON t.id = b.collection_id AND t.deleted_at IS NULL
         WHERE b.deleted_at IS NULL AND b.space_id = ?1
           AND (b.kind <> 'view' OR EXISTS (SELECT 1 FROM views v WHERE v.id = b.target_id AND v.deleted_at IS NULL))
-          AND (b.kind <> 'item' OR EXISTS (SELECT 1 FROM items o WHERE o.id = b.target_id AND o.deleted_at IS NULL))
+          AND (b.kind <> 'item' OR t.source IS NOT NULL OR EXISTS (SELECT 1 FROM items o WHERE o.id = b.target_id AND o.deleted_at IS NULL))
         ORDER BY b.position, b.created_at`,
       [spaceId],
     );

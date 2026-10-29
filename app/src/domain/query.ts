@@ -6,6 +6,7 @@ import { dollarNames, ERROR_PREFIX, fieldLookup, render, splitWarnings, type Ref
 import { checklistItems } from "./checklist";
 import { formatMinute, inMinutes, momentOfValue, resolveRange, splitAnchor } from "./datePeriod";
 import { formatDate, htmlPlainText } from "./fieldKinds";
+import { dateGroup, dateGroupValue, type GroupDate } from "./groupDate";
 import { filterTree, holds, requiredRules } from "./filterTree";
 import { markdownPlainText } from "./markdownExcerpt";
 import { fieldValue, itemLabel, pickableFields, selfField, type FieldDef, type FieldKind, type FieldValue, type Item, type Collection } from "./model";
@@ -54,6 +55,8 @@ export interface ViewQuery {
   groupBy: string | null;
   /** Order of the groups: by their value (A to Z / Z to A), or the largest first. Default "asc". */
   groupOrder?: GroupOrder;
+  /** A date or date & time field's groups: by its year, month, week, day or hour (date & time only). Absent = day. */
+  groupDate?: GroupDate;
 }
 
 export type GroupOrder = "asc" | "desc" | "count";
@@ -92,7 +95,7 @@ interface KindRules {
   /** Comparable key for sorting; null sorts last. */
   sortKey(field: FieldDef, value: FieldValue, ctx: QueryContext): string | number | null;
   /** Group keys (an item may fall in several groups, e.g. lists); omit for "not groupable". */
-  groupKeys?(field: FieldDef, value: FieldValue, ctx: QueryContext): { key: string; label: string }[];
+  groupKeys?(field: FieldDef, value: FieldValue, ctx: QueryContext, by?: GroupDate): { key: string; label: string }[];
   /** The value a new item gets to land in the group with this (non-empty) key; omit when none does. */
   groupValue?(key: string): FieldValue;
 }
@@ -141,14 +144,23 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     operators: [op("is", "is"), op("before", "is before"), op("after", "is after"), ...EMPTY_OPS],
     text: (_, v) => str(v),
     sortKey: (_, v) => str(v) || null,
-    groupKeys: (_, v) => single(str(v)),
-    groupValue: (key) => key,
+    groupKeys: (_, v, __, by) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str(v));
+      return m ? [dateGroup(+m[1], +m[2], +m[3], null, by)] : single(str(v));
+    },
+    groupValue: dateGroupValue,
   },
   datetime: {
     operators: [op("is", "is on"), op("before", "is before"), op("after", "is after"), ...EMPTY_OPS],
     text: (_, v) => (str(v) ? localDay(v) : ""),
     sortKey: (_, v) => str(v) || null,
-    groupKeys: (_, v) => single(str(v) ? localDay(v) : ""),
+    groupKeys: (_, v, __, by) => {
+      if (!str(v)) return single("");
+      const d = new Date(str(v));
+      if (!Number.isNaN(d.getTime())) return [dateGroup(d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), by)];
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str(v));
+      return m ? [dateGroup(+m[1], +m[2], +m[3], null, by)] : single(str(v).slice(0, 10));
+    },
   },
   checkbox: {
     // "is" takes true or false, so a value from the page's item can choose.
@@ -503,9 +515,11 @@ export function applyQuery(
   const groupKeys = groupField && KIND_RULES[groupField.kind].groupKeys;
   if (!groupField || !groupKeys) return { groups: [{ key: "", label: "", items: sorted }], total: sorted.length };
 
+  // A date's groups: by what the query says (a date has no hours).
+  const by = query.groupDate === "hour" && groupField.kind !== "datetime" ? "day" : query.groupDate;
   const groups = new Map<string, ItemGroup>();
   for (const item of sorted) {
-    for (const { key, label } of groupKeys(groupField, fieldValue(item, groupField), ctx)) {
+    for (const { key, label } of groupKeys(groupField, fieldValue(item, groupField), ctx, by)) {
       const group = groups.get(key) ?? { key, label: label || "(empty)", items: [] };
       group.items.push(item);
       groups.set(key, group);
@@ -513,10 +527,12 @@ export function applyQuery(
   }
   // Groups by value (either direction) or size, the "(empty)" group always last.
   const order = query.groupOrder ?? "asc";
+  const isDate = groupField.kind === "date" || groupField.kind === "datetime";
   const ordered = [...groups.values()].sort((a, b) => {
     if (a.key === "" || b.key === "") return a.key === "" ? 1 : -1;
     if (order === "count" && a.items.length !== b.items.length) return b.items.length - a.items.length;
-    return compareKeys(a.label, b.label) * (order === "desc" ? -1 : 1);
+    // Dates by their keys (they sort as the time does; their labels read out).
+    return (isDate ? compareKeys(a.key, b.key) : compareKeys(a.label, b.label)) * (order === "desc" ? -1 : 1);
   });
   return { groups: ordered, total: sorted.length };
 }

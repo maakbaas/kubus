@@ -57,6 +57,13 @@ describe("normalizeBlock", () => {
     expect(JSON.stringify(normalizeBlock(collection, n))).toBe(JSON.stringify(n));
   });
 
+  it("keeps a date grouping before the group order", () => {
+    const n = normalizeBlock(collection, block({ groupDate: "month", groupOrder: "desc" }));
+    expect(Object.keys(n).slice(-2)).toEqual(["groupDate", "groupOrder"]);
+    expect(n.groupDate).toBe("month");
+    expect(normalizeBlock(collection, block())).not.toHaveProperty("groupDate");
+  });
+
   it("leaves out what is absent: no hideHeader, limit or groupOrder keys", () => {
     const n = normalizeBlock(collection, block());
     expect(n).not.toHaveProperty("hideHeader");

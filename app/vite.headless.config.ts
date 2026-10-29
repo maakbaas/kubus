@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 // The headless device (src/headless) for Node: one ES module, server/headless/index.js, which the
 // server loads. Everything is bundled (the app's code imports without extensions and uses ?raw)
-// except sqlite-wasm, which finds its .wasm file next to itself and is the server's dependency.
+// except node:sqlite, Node's built-in SQLite (the headless device's database, data/sqlite/node.ts).
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   publicDir: false,
@@ -15,5 +15,5 @@ export default defineConfig({
     minify: false,
     rollupOptions: { output: { entryFileNames: "index.js" } },
   },
-  ssr: { noExternal: true, external: ["@sqlite.org/sqlite-wasm"] },
+  ssr: { noExternal: true, external: ["node:sqlite"] },
 });

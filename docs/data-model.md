@@ -17,8 +17,13 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   interface with a web fallback.
 - **SQLite runs in the browser** via `@sqlite.org/sqlite-wasm` inside a dedicated worker
   (`app/src/data/sqlite/worker.ts`: the lock and OPFS; the schema, reads and writes are
-  `SqliteEngine` in `engine.ts`, which the server's headless device runs in memory), stored with the `opfs-sahpool` VFS (no COOP/COEP headers needed;
+  `SqliteEngine` in `engine.ts`), stored with the `opfs-sahpool` VFS (no COOP/COEP headers needed;
   Safari 16.4+). Without OPFS it falls back to an in-memory DB and the UI shows a warning.
+- **Three hosts, one engine.** `SqliteEngine` runs on sqlite-wasm in the browser's worker (OPFS), on sqlite-wasm in
+  memory in tests (`DirectSqlClient`), and on Node's built-in `node:sqlite` in the server's headless device
+  (`NodeSqlClient`, `data/sqlite/node.ts`: a real WAL file, or `:memory:` without `KUBUS_HEADLESS_DIR`; `NodeDb` gives it
+  the few `oo1.DB` methods the engine uses, integers bind as INTEGER and read back as numbers, BigInt beyond 2^53). The
+  storage, sync and api tests run on both (vitest project `nodesqlite`, `docs/testing.md`).
 - **Repository boundary.** The UI only talks to `Repository` (`app/src/data/repository.ts`); sync
   (`repo.sync`) lives behind it, so the UI knows nothing about it.
 - **Change feed.** After every committed write the repository emits a `DataChange`

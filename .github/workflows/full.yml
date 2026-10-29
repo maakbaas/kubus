@@ -1,4 +1,4 @@
-name: Nightly
+name: Full
 
 # What the critical path (test.yml) leaves out because it is slow, each suite within its budget:
 # - connectors-real: the connectors against InfluxDB, n8n and Actual Budget in containers (tests/services.yml);
@@ -8,13 +8,12 @@ name: Nightly
 # - coverage: the vitest projects with coverage, merged with the shards' into one report (artifact).
 # Not the screenshot baselines (suite 21) nor the perf tests (23): they belong to one machine.
 # tests/README.md is the catalog of the suites.
+# By hand only (Actions → Full → Run workflow): no schedule.
 on:
-  schedule:
-    - cron: '17 2 * * *'
   workflow_dispatch:
 
 concurrency:
-  group: nightly
+  group: full
   cancel-in-progress: false
 
 permissions:
