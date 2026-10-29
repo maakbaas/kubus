@@ -102,7 +102,7 @@ test("markdown editing: #tags are decorated and clicked", async (t) => {
   await t.audit("editor with tags");
   const tabNames = () => t.page.locator(".ws-pane__tabs .cds--tabs__nav-item").allInnerTexts();
   await pm.locator('[data-tag="#beta/sub"]').click({ modifiers: ["Control"], force: true });
-  await t.until("Ctrl+click on a tag opens its search beside", async () => (await tabNames()).length === 2 || "no second tab");
+  await t.until("Ctrl+click on a tag opens its search in a pane beside", async () => (await t.count(".ws-pane")) === 2 || "no second pane");
   await t.check("…the page being edited stays open", (await t.count(".ProseMirror")) === 1);
   await t.page.locator(".ws-pane__tabs .cds--tabs__nav-item", { hasText: "Editing" }).first().click();
   await t.until("back on the edited page", async () => (await pm.isVisible()) || "hidden");
@@ -119,11 +119,12 @@ test("markdown editing: clicking links (plain and Ctrl)", async (t) => {
   await pm.getByRole("link", { name: "outside" }).click();
   await t.until("a plain click on an outside link opens it in a new window", async () => (await t.page.evaluate(() => window.__opened)).includes("https://example.com/x"));
   await t.check("…and the editor stays", (await t.count(".ProseMirror")) === 1);
-  // Ctrl+click opens the page beside (a new tab where there is no room); the one being edited stays.
+  // Ctrl+click opens the page beside (the desktop window is wide): a second pane; the one being edited stays.
   const tabNames = () => t.page.locator(".ws-pane__tabs .cds--tabs__nav-item").allInnerTexts();
   await pm.getByRole("link", { name: "the books" }).click({ modifiers: ["Control"] });
-  await t.until("Ctrl+click on a link to a page opens it beside", async () => (await tabNames()).some((n) => n.includes("Books")) || "no Books tab");
-  await t.check("…the page that was being edited stays open", (await tabNames()).some((n) => n.includes("Editing")) && (await t.count(".ProseMirror")) === 1);
+  await t.until("Ctrl+click on a link to a page opens it in a pane beside", async () => (await t.count(".ws-pane")) === 2 || "no second pane");
+  await t.until("…showing the books", async () => (await t.page.locator(".ws-pane").last().innerText()).includes("Books") || "not shown");
+  await t.check("…the page that was being edited stays open, in its own tab", (await tabNames()).length === 2 && (await tabNames()).some((n) => n.includes("Editing")) && (await t.count(".ProseMirror")) === 1, (await tabNames()).join("|"));
   await t.audit("after Ctrl+click on a link");
 });
 
