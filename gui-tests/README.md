@@ -2,7 +2,8 @@
 
 A browser test suite that clicks through the whole app and checks layout rules on every page, at
 many window sizes and with content of every shape. Not part of `npm test`; CI runs only the smoke tests
-of the suites a branch's changes reach (`--smoke --changed`, `.github/workflows/test.yml`): run the rest by hand.
+of the suites a branch's changes reach (`--smoke --changed`, `.github/workflows/test.yml`): the full suite runs sharded in `nightly.yml`
+(`npm run suite -- gui-NN` / `gui-shard-N` run a suite or a shard with a time budget: `tests/README.md`).
 
 ```
 npm run test:gui                                  # everything (~265 tests, about an hour; browsers in parallel by free memory)
