@@ -304,6 +304,14 @@ What the app does, feature by feature (read the part you work on).
   (`FieldCollapse` context, read by `FieldLabel`, so view and edit mode look alike), stored right
   away with the item view's `Collapsed` (field ids among the block ids). The layout's name toggle
   (tag icon, `hiddenLabels`) also covers blocks there: it hides the block's header (its menus move to a "⋮" beside it).
+- **Full width** (a checkbox in a collection view's View settings, an item view's Page layout popover and a dashboard tab's
+  settings): on, the page uses the pane's whole width (as collection views always did); off, it keeps to the narrow
+  700px column of an item page, centred. Defaults (absent): collection views and dashboard tabs on, item views off, so
+  every view made before it looks as it did (`isFullWidth`, `FULL_WIDTH_DEFAULT` in `domain/views.ts`). Stored with the
+  view as soon as it is set (`fullWidth` in the view's config JSON, on the `ItemView` in `collections.item_views`), like
+  "Show filter bar": no " *", nothing to save. The page changes width once the panel closes (`usePanelsOpen().hold`):
+  the toolbar's buttons would move under the open panel. The standard page (edit icon) keeps the item view's width; a new
+  item's page is always narrow.
 - **Spaces** (`app/src/domain/spaces.ts`, table `spaces`, `#/spaces`): separate environments (e.g.
   Work / Private) in one database. Every item belongs to one space (`items.space_id`) and shows only
   there; collections (fields, item views) and components are shared. A collection can be

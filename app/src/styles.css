@@ -748,6 +748,16 @@ body {
   max-inline-size: 700px;
   margin-inline: auto;
 }
+/* An item view with "Full width" on: the pane's whole width, as a collection view (still the form-page container). */
+.form-page.item-view.item-view--full {
+  max-width: none;
+  max-inline-size: none;
+}
+/* A collection view with "Full width" off: the narrow column of an item page. (On, .view-page is an unstyled box.) */
+.view-page--narrow {
+  max-inline-size: 700px;
+  margin-inline: auto;
+}
 /* Help's and Settings' tabs: the text keeps to the page's left edge (Carbon's tab panels are padded),
    the views bar's margin below the tabs. */
 .help-page .cds--tab-content,

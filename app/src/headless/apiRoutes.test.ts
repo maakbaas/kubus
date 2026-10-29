@@ -469,6 +469,12 @@ describe("views", () => {
     expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filterBar: true })).filterBar).toBe(true);
     expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { name: "Plainer" })).filterBar).toBe(true);
     expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filterBar: false })).filterBar).toBeUndefined();
+    // "Full width": on unless set; set, kept when not sent, back to the default with null.
+    expect(made.fullWidth).toBe(true);
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { fullWidth: false })).fullWidth).toBe(false);
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { name: "Plainer" })).fullWidth).toBe(false);
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { fullWidth: null })).fullWidth).toBe(true);
+    expect(await refused(400, "PATCH", `/collections/Book/views/${made.id}?space=work`, { fullWidth: "no" })).toBe("`fullWidth` must be true or false (or null: the default)");
     expect(await ok("DELETE", "/collections/Book/views/Plainer?space=work")).toEqual({ ok: true });
     expect(await ok("GET", "/collections/Book/views?space=work")).toEqual([]);
   });
@@ -537,6 +543,11 @@ describe("views", () => {
     expect(views[1].layout.fields).toEqual([book.fields[0].id, "b1"]);
     expect(views[1].layout.blocks).toHaveLength(1);
     expect(views[1].layout.filters).toHaveLength(1);
+    // "Full width": off unless set.
+    expect(views.map((v: { fullWidth: boolean }) => v.fullWidth)).toEqual([false, false]);
+    expect((await ok("PUT", "/collections/Book/item-views", [{ name: "Wide", fullWidth: true, layout: {} }]))[0].fullWidth).toBe(true);
+    expect((await ok("GET", "/collections/Book")).itemViews[0].fullWidth).toBe(true);
+    expect(await refused(400, "PUT", "/collections/Book/item-views", [{ name: "x", fullWidth: 1, layout: {} }])).toBe("`fullWidth` must be true or false (or null: the default)");
     // None marked default: the first one is.
     expect((await ok("PUT", "/collections/Book/item-views", [{ name: "One", layout: {} }, { name: "Two", layout: {} }])).map((v: { isDefault: boolean }) => v.isDefault)).toEqual([true, false]);
     expect(await refused(400, "PUT", "/collections/Book/item-views", [])).toBe("Send a list of at least one item view");
@@ -603,6 +614,9 @@ describe("dashboards", () => {
     const renamed = await ok("PATCH", "/dashboards/Home/views/Reading?space=Work", { name: "Work reading", filterBar: false });
     expect(renamed).toMatchObject({ name: "Work reading", spaceId: expect.not.stringMatching("default") });
     expect(renamed.filterBar).toBeUndefined();
+    // "Full width": on unless set.
+    expect(tab.fullWidth).toBe(true);
+    expect((await ok("PATCH", "/dashboards/Home/views/Work reading?space=Work", { fullWidth: false })).fullWidth).toBe(false);
     expect(renamed.virtual).toBeUndefined();
     expect(renamed.blocks).toEqual(tab.blocks);
     expect(names(await ok("GET", "/dashboards/Home/views?space=Work"))).toEqual(["Dashboard", "Work reading"]);

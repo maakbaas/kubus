@@ -13,10 +13,10 @@
 //                              choiceFilter?: [{ field: targetFieldKey, operator, value }] }],
 //                   items: [{ key?, space?: spaceKey, values: { fieldKey: value } }],
 //                   views?: [{ name, blocks: [partial ViewBlock with kind/options/layout/groupBy/sort;
-//                              componentKey (a shared component) or local: code (its own)], filters?, isDefault?, filterBar? (Show filter bar) }],
+//                              componentKey (a shared component) or local: code (its own)], filters?, isDefault?, filterBar? (Show filter bar), fullWidth? (Full width) }],
 //                   (a block filter value "$item.@key": the page item's field by key)
 //                   (a block's `collection` is a collection key, or the id of a virtual collection: "$backlinks")
-//                   itemViews?: [{ name, layout }] }],
+//                   itemViews?: [{ name, layout, fullWidth? }] }],
 //   bookmarks: [{ kind: "item"|"view", collection, item?, view?, label }],
 //   prefs: { localStorageKey: value },
 // }
@@ -124,10 +124,10 @@ async function __seedInPage(spec) {
     for (const [i, v] of (c.views || []).entries()) {
       const id = i === 0 && existing[0] && v.replaceAll !== false ? existing[0].id : uid();
       ids.views[`${c.key}/${v.name}`] = id;
-      await repo.saveView({ id, collectionId: ids.collections[c.key], spaceId: ids.spaces[c.space || "default"], name: v.name, position: i, isDefault: !!v.isDefault, filters: v.filters || [], blocks: v.blocks.map(mapBlock), collapsed: { blocks: [], groups: {} }, ...(v.filterBar ? { filterBar: true } : {}), createdAt: stamp(), updatedAt: stamp() });
+      await repo.saveView({ id, collectionId: ids.collections[c.key], spaceId: ids.spaces[c.space || "default"], name: v.name, position: i, isDefault: !!v.isDefault, filters: v.filters || [], blocks: v.blocks.map(mapBlock), collapsed: { blocks: [], groups: {} }, ...(v.filterBar ? { filterBar: true } : {}), ...(typeof v.fullWidth === "boolean" ? { fullWidth: v.fullWidth } : {}), createdAt: stamp(), updatedAt: stamp() });
     }
     if (c.itemViews) {
-      await repo.saveItemViews(ids.collections[c.key], c.itemViews.map((v, i) => ({ id: uid(), name: v.name, isDefault: i === 0, collapsed: { blocks: [], groups: {} }, layout: { ...mapLayout(v.layout), blocks: (v.layout && v.layout.blocks || []).map(mapBlock) } })));
+      await repo.saveItemViews(ids.collections[c.key], c.itemViews.map((v, i) => ({ id: uid(), name: v.name, isDefault: i === 0, collapsed: { blocks: [], groups: {} }, ...(typeof v.fullWidth === "boolean" ? { fullWidth: v.fullWidth } : {}), layout: { ...mapLayout(v.layout), blocks: (v.layout && v.layout.blocks || []).map(mapBlock) } })));
     }
   }
   for (const b of spec.bookmarks || []) {

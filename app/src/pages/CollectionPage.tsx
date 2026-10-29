@@ -6,7 +6,7 @@ import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { newName, now, newId, type Collection } from "../domain/model";
 import { firstShownFields, isReadOnly, isRemote, sourcePeriod } from "../domain/sources";
-import { defaultViewState, newBlock, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
+import { defaultViewState, isFullWidth, newBlock, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
 import { NotFound } from "../ui/NotFound";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { BookmarkButton } from "../ui/BookmarkButton";
@@ -40,6 +40,9 @@ const withFilterBar = (view: CollectionView, on: boolean): CollectionView => {
   const { filterBar: _old, ...rest } = view;
   return on ? { ...rest, filterBar: true } : rest;
 };
+
+/** A view with "Full width" set (stored as set: on or off). */
+const withFullWidth = (view: CollectionView, on: boolean): CollectionView => ({ ...view, fullWidth: on });
 
 /** Id of the virtual "All" view of a space that has no stored view of the collection. */
 const VIRTUAL_VIEW = "default";
@@ -209,6 +212,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // closes (View settings is where the bar is switched on): leaving the toolbar, it would move the
   // buttons after it, and their open panels with them. The bar itself shows at once, and stays until then when switched off.
   const filterInBar = panels.hold("filterInBar", !!active?.filterBar);
+  // "Full width" (View settings): off, the view is the narrow column of an item page. Held while a panel is
+  // open, like the filter bar: the width moves the toolbar's buttons, and the open panel with them.
+  const fullWidth = panels.hold("fullWidth", isFullWidth("collection", active?.fullWidth));
 
   async function updateActive() {
     if (!active) return;
@@ -226,6 +232,15 @@ function CollectionContent({ collection }: { collection: Collection }) {
     setSavedViews((list) => list && list.map((v) => (v.id === active.id ? withFilterBar(v, on) : v)));
     const id = (await storeVirtual()) ?? active.id;
     await repo.saveView({ ...withFilterBar(active, on), id, createdAt: active.createdAt || now() });
+    await loadViews();
+  }
+
+  /** "Full width": stored with the shown view right away, as "Show filter bar" (it shows no other items). */
+  async function setFullWidth(on: boolean) {
+    if (!active) return;
+    setSavedViews((list) => list && list.map((v) => (v.id === active.id ? withFullWidth(v, on) : v)));
+    const id = (await storeVirtual()) ?? active.id;
+    await repo.saveView({ ...withFullWidth(active, on), id, createdAt: active.createdAt || now() });
     await loadViews();
   }
 
@@ -324,7 +339,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
   );
 
   return (
-    <>
+    // Without "Full width", the page keeps to the narrow column of an item page.
+    <div className={fullWidth ? "view-page" : "view-page view-page--narrow"}>
       <PageHeader
         current={collection.pluralName}
         title={
@@ -452,6 +468,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
                 />
               )}
               {active && <Checkbox id={`${uid}-view-filter-bar`} labelText="Show filter bar" checked={!!active.filterBar} onChange={(_, { checked }) => setFilterBar(checked).catch((e) => setError(errorMessage(e)))} />}
+              {active && <Checkbox id={`${uid}-view-full-width`} labelText="Full width" checked={isFullWidth("collection", active.fullWidth)} onChange={(_, { checked }) => setFullWidth(checked).catch((e) => setError(errorMessage(e)))} />}
               {!readOnly && (
                 <Checkbox id={`${uid}-view-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
               )}
@@ -522,6 +539,6 @@ function CollectionContent({ collection }: { collection: Collection }) {
         ))}
 
       {dialog}
-    </>
+    </div>
   );
 }

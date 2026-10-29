@@ -42,6 +42,8 @@ export interface ItemView {
   isDefault: boolean;
   /** Its collapsed blocks and groups (saved as toggled, without "Save changes"). */
   collapsed: Collapsed;
+  /** "Full width": the page at the pane's whole width; absent = off, the narrow column (`isFullWidth("item", …)`). Stored as set, like `collapsed`. */
+  fullWidth?: boolean;
 }
 
 /**
@@ -59,7 +61,7 @@ export function parseItemViews(json: string | null): ItemView[] {
     return list.flatMap((v) => {
       const layout = parseLayout(JSON.stringify(v.layout ?? null));
       return typeof v.id === "string" && layout
-        ? [{ id: v.id, name: String(v.name ?? ""), layout, isDefault: v.isDefault === true, collapsed: parseCollapsed(v.collapsed) }]
+        ? [{ id: v.id, name: String(v.name ?? ""), layout, isDefault: v.isDefault === true, collapsed: parseCollapsed(v.collapsed), ...(typeof v.fullWidth === "boolean" && { fullWidth: v.fullWidth }) }]
         : [];
     });
   } catch {

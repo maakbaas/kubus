@@ -22,7 +22,7 @@ import { resolveParts } from "../domain/mergedCollection";
 import { nativeItems } from "../domain/mergedRows";
 import { isRemote } from "../domain/sources";
 import { blockSort } from "../domain/blockSort";
-import { blockQuery, defaultViewState, listedCollection, NOTHING_COLLAPSED, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
+import { blockQuery, defaultViewState, isFullWidth, listedCollection, NOTHING_COLLAPSED, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
 import { draftProblem } from "../domain/collectionDraft";
 import { computeItems, loadWorld, type World } from "../domain/world";
 import { fieldOf, itemOut, same, valuesIn, type ItemsExist } from "./values";
@@ -96,7 +96,7 @@ const collectionOut = (c: Collection, itemCount?: number) => ({
   titleField: c.titleField ?? null,
   ...(itemCount !== undefined && { itemCount }),
   fields: c.fields.map(fieldOut),
-  itemViews: c.itemViews,
+  itemViews: c.itemViews.map(itemViewOut),
   createdAt: c.createdAt,
   updatedAt: c.updatedAt,
 });
@@ -106,14 +106,29 @@ const filterBarIn = (o: Body, existing: CollectionView): { filterBar?: true } =>
   o.filterBar === undefined ? (existing.filterBar ? { filterBar: true } : {}) : o.filterBar === true ? { filterBar: true } : {};
 
 const withoutFilterBar = ({ filterBar: _bar, ...view }: CollectionView): CollectionView => view;
+const withoutFullWidth = ({ fullWidth: _width, ...view }: CollectionView): CollectionView => view;
 
-const viewOut = ({ collapsed: _collapsed, ...view }: CollectionView) => view;
+/**
+ * "Full width" as sent: true or false stores it, null takes it off (the place's default), absent keeps the stored
+ * one. Without the key when not stored.
+ */
+const fullWidthIn = (o: Body, stored: boolean | undefined): { fullWidth?: boolean } => {
+  const v = o.fullWidth === undefined ? stored : o.fullWidth;
+  if (v === undefined || v === null) return {};
+  if (typeof v !== "boolean") throw new HttpError(400, "`fullWidth` must be true or false (or null: the default)");
+  return { fullWidth: v };
+};
+
+const viewOut = ({ collapsed: _collapsed, ...view }: CollectionView) => ({ ...view, fullWidth: isFullWidth("collection", view.fullWidth) });
+
+/** An item view as answered: its "Full width" as shown (off unless set). */
+const itemViewOut = (v: ItemView) => ({ ...v, fullWidth: isFullWidth("item", v.fullWidth) });
 
 const bookmarkOut = (b: Bookmark) => b;
 
 const dashboardOut = ({ spaceIds, ...d }: Dashboard) => ({ ...d, spaces: spaceIds });
 
-const tabOut = ({ collapsed: _collapsed, ...tab }: DashboardView) => tab;
+const tabOut = ({ collapsed: _collapsed, ...tab }: DashboardView) => ({ ...tab, fullWidth: isFullWidth("dashboard", tab.fullWidth) });
 
 /** A collection's title field as asked for: a text, number or date field (by id or name), "none", or null (the first text field with a value). */
 function titleFieldIn(collection: Collection, raw: unknown): string | null {
@@ -355,7 +370,7 @@ export function createApi(repo: Repository): Router {
   };
 
   const viewIn = (w: World, collection: Collection, o: Body, existing: CollectionView): CollectionView => ({
-    ...withoutFilterBar(existing),
+    ...withoutFullWidth(withoutFilterBar(existing)),
     name: o.name === undefined ? existing.name : text(o, "name", true),
     filters: o.filters === undefined ? existing.filters : resolveRules<FilterRule>(collection, o.filters, "filters"),
     blocks:
@@ -368,6 +383,7 @@ export function createApi(repo: Repository): Router {
             })(),
     editable: o.editable === undefined ? existing.editable : o.editable !== false,
     ...filterBarIn(o, existing),
+    ...fullWidthIn(o, existing.fullWidth),
   });
 
   const itemViewsIn = (w: World, collection: Collection, v: unknown): ItemView[] => {
@@ -383,6 +399,7 @@ export function createApi(repo: Repository): Router {
         name: text(o, "name", true),
         isDefault: o.isDefault === true,
         collapsed: o.collapsed,
+        ...fullWidthIn(o, undefined),
         layout: {
           editable: true,
           hideEmpty: false,
@@ -495,7 +512,7 @@ export function createApi(repo: Repository): Router {
           : (() => {
               throw new HttpError(400, "`blocks` must be a list of blocks");
             })();
-    const { filterBar: _bar, ...rest } = existing;
+    const { filterBar: _bar, fullWidth: _width, ...rest } = existing;
     const filterBar = o.filterBar === undefined ? existing.filterBar : o.filterBar === true;
     return {
       ...rest,
@@ -505,6 +522,7 @@ export function createApi(repo: Repository): Router {
       blocks,
       editable: o.editable === undefined ? existing.editable : o.editable !== false,
       ...(filterBar && { filterBar: true as const }),
+      ...fullWidthIn(o, existing.fullWidth),
     };
   };
 
@@ -807,13 +825,13 @@ export function createApi(repo: Repository): Router {
         await repo.setDefaultView(collection.id, space.id, view?.id ?? null);
         return json(200, (await repo.listViews(collection.id, space.id)).map(viewOut));
       })
-      .add("GET", "/api/v1/collections/{c}/item-views", async (_req, { c }) => json(200, collectionOf(await world(), c).itemViews))
+      .add("GET", "/api/v1/collections/{c}/item-views", async (_req, { c }) => json(200, collectionOf(await world(), c).itemViews.map(itemViewOut)))
       .add("PUT", "/api/v1/collections/{c}/item-views", async (req, { c }) => {
         const list = await readJson(req, MAX_JSON);
         const w = await world();
         const collection = collectionOf(w, c);
         await repo.saveItemViews(collection.id, itemViewsIn(w, collection, list));
-        return json(200, collectionOf(await world(), collection.id).itemViews);
+        return json(200, collectionOf(await world(), collection.id).itemViews.map(itemViewOut));
       })
 
       // Dashboards and their tabs

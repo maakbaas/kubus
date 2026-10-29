@@ -127,7 +127,7 @@ const toField = (r: FieldRow): FieldDef => ({
 
 /** A stored view as a CollectionView (its config parsed and normalized). */
 function toView(r: ViewRow): CollectionView {
-  const { filters, blocks, editable, collapsed, filterBar } = parseViewConfig(r.config);
+  const { filters, blocks, editable, collapsed, filterBar, fullWidth } = parseViewConfig(r.config);
   return {
     id: r.id,
     collectionId: r.collection_id,
@@ -138,6 +138,7 @@ function toView(r: ViewRow): CollectionView {
     editable,
     collapsed,
     ...(filterBar && { filterBar }),
+    ...(fullWidth !== undefined && { fullWidth }),
     position: r.position,
     isDefault: r.is_default === 1,
     createdAt: r.created_at,
@@ -169,7 +170,7 @@ interface DashboardViewRow {
 
 /** A stored dashboard tab (its config parsed as a collection view's; its blocks may be none). */
 function toDashboardView(r: DashboardViewRow): DashboardView {
-  const { filters, blocks, editable, collapsed, filterBar } = parseViewConfig(r.config);
+  const { filters, blocks, editable, collapsed, filterBar, fullWidth } = parseViewConfig(r.config);
   return {
     id: r.id,
     dashboardId: r.dashboard_id,
@@ -180,6 +181,7 @@ function toDashboardView(r: DashboardViewRow): DashboardView {
     editable,
     collapsed,
     ...(filterBar && { filterBar }),
+    ...(fullWidth !== undefined && { fullWidth }),
     position: r.position,
     isDefault: r.is_default === 1,
     createdAt: r.created_at,
@@ -188,8 +190,8 @@ function toDashboardView(r: DashboardViewRow): DashboardView {
 }
 
 /** A view's or dashboard tab's config as stored (JSON). */
-const viewConfig = (view: Pick<CollectionView, "filters" | "blocks" | "editable" | "collapsed" | "filterBar">) =>
-  JSON.stringify({ filters: view.filters, blocks: view.blocks, editable: view.editable, collapsed: view.collapsed, filterBar: view.filterBar });
+const viewConfig = (view: Pick<CollectionView, "filters" | "blocks" | "editable" | "collapsed" | "filterBar" | "fullWidth">) =>
+  JSON.stringify({ filters: view.filters, blocks: view.blocks, editable: view.editable, collapsed: view.collapsed, filterBar: view.filterBar, fullWidth: view.fullWidth });
 
 /** Stored space_ids: null (every space) or a list of space ids. */
 const spaceIdsOf = (json: string | null): string[] | null => {

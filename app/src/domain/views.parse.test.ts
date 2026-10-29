@@ -20,6 +20,8 @@ import {
   parseBlock,
   parseCollapsed,
   parseViewConfig,
+  FULL_WIDTH_DEFAULT,
+  isFullWidth,
   withBlockCollapsed,
   withGroupCollapsed,
   withQuery,
@@ -77,6 +79,27 @@ describe("parseViewConfig", () => {
     expect(parseViewConfig(JSON.stringify({ filters: [], blocks: [], filterBar: true })).filterBar).toBe(true);
     for (const filterBar of [false, "yes", 1, null]) expect("filterBar" in parseViewConfig(JSON.stringify({ filters: [], blocks: [], filterBar }))).toBe(false);
     expect("filterBar" in parseViewConfig(JSON.stringify({ filters: [], blocks: [] }))).toBe(false);
+  });
+
+  it("reads \"Full width\" when it is set, either way; absent is the place's default", () => {
+    expect(parseViewConfig(JSON.stringify({ filters: [], blocks: [], fullWidth: false })).fullWidth).toBe(false);
+    expect(parseViewConfig(JSON.stringify({ filters: [], blocks: [], fullWidth: true })).fullWidth).toBe(true);
+    for (const fullWidth of ["yes", 1, null]) expect("fullWidth" in parseViewConfig(JSON.stringify({ filters: [], blocks: [], fullWidth }))).toBe(false);
+    expect("fullWidth" in parseViewConfig(JSON.stringify({ filters: [], blocks: [] }))).toBe(false);
+  });
+});
+
+describe("full width", () => {
+  it("defaults to on for collection views and dashboard tabs, off for item views", () => {
+    expect(FULL_WIDTH_DEFAULT).toEqual({ collection: true, item: false, dashboard: true });
+    expect([isFullWidth("collection"), isFullWidth("item"), isFullWidth("dashboard")]).toEqual([true, false, true]);
+  });
+
+  it("is the view's own setting when stored", () => {
+    expect(isFullWidth("collection", false)).toBe(false);
+    expect(isFullWidth("dashboard", false)).toBe(false);
+    expect(isFullWidth("item", true)).toBe(true);
+    expect(isFullWidth("item", false)).toBe(false);
   });
 });
 

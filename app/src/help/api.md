@@ -130,12 +130,14 @@ Any field can also have a choiceFilter, a toggleIcon and strikeThrough.
 |---|---|
 | `GET /collections/{c}/views` | the collection views (optional: space) |
 | `GET /collections/{c}/views/{v}/items` | a view's result: the items one of its blocks shows (block: its title or id, default the first), through the view's and the block's filter, sort and grouping. `{ view, block, blocks, items, total, limit, offset }`; grouped, `groups` (each `{ key, label, total, items }`) instead of items. Optional: block, space, limit, offset |
-| `POST /collections/{c}/views` | create one from `{ name, space?, filters?, blocks?, editable?, filterBar? }` (`filterBar`: "Show filter bar") |
+| `POST /collections/{c}/views` | create one from `{ name, space?, filters?, blocks?, editable?, filterBar?, fullWidth? }` (`filterBar`: "Show filter bar"; `fullWidth`: "Full width", see below) |
 | `PATCH /collections/{c}/views/{v}` | change one (optional: space) |
 | `DELETE /collections/{c}/views/{v}` | delete one (optional: space) |
 | `PUT /collections/{c}/default-view` | set the default view: `{ space?, view }` (null for none) |
 | `GET /collections/{c}/item-views` | the item views |
-| `PUT /collections/{c}/item-views` | replace the item views with a list of `{ name, isDefault?, layout }` |
+| `PUT /collections/{c}/item-views` | replace the item views with a list of `{ name, isDefault?, fullWidth?, layout }` |
+
+"Full width" (`fullWidth`): whether the view uses the page's whole width (true) or the narrow column of an item page (false). Every view, item view and dashboard tab is answered with it; unless set, it is true for a collection view and a dashboard tab and false for an item view. A PATCH without it keeps it; null sets it back to that default.
 
 A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, options? }`. Its kind is table, cards, map, component or markdown. Fields in a block can be named by id or by name, in:
 
@@ -156,7 +158,7 @@ A dashboard is a page of blocks of any collections, belonging to none: `{ id, na
 | `DELETE /dashboards/{d}` | delete it, with its tabs and their bookmarks |
 | `GET /dashboards/{d}/views` | its tabs in a space (optional: space) |
 | `GET /dashboards/{d}/views/{v}/items` | a block's result, as for a collection view. Optional: block, space, limit, offset. A block reading a remote collection is refused (400): its rows aren't items here |
-| `POST /dashboards/{d}/views` | create a tab from `{ name, space?, filters?, blocks?, editable?, filterBar? }` in a space the dashboard is shown in (409 otherwise) |
+| `POST /dashboards/{d}/views` | create a tab from `{ name, space?, filters?, blocks?, editable?, filterBar?, fullWidth? }` in a space the dashboard is shown in (409 otherwise) |
 | `PATCH /dashboards/{d}/views/{v}` | change a tab (optional: space) |
 | `DELETE /dashboards/{d}/views/{v}` | delete a tab (optional: space) |
 | `PUT /dashboards/{d}/default-view` | star a tab in a space: `{ space?, view }` (null for none) |
