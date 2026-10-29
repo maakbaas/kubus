@@ -99,6 +99,7 @@ can't drift apart unnoticed: a change to the sync protocol changes both and runs
 | `server/src/` | `server` (and `connectors` for `sources.ts`) | none |
 | `app/src/views/` | `domain` | 05, 06, 10, 12, 22 |
 | `app/src/pages/ItemPage.tsx`, `ui/FieldInput.tsx` and the editors | – | 04, 12, 19, 27 (Markdown 08) |
+| `pages/CollectionsPage.tsx`, `RemotesPage.tsx`, `CollectionEditorPage.tsx`, `SearchPage.tsx`, `ui/SearchBar.tsx`, `app/NavTree.tsx` | – | 29 (editor also 07, 17, 27) |
 | `app/src/styles.css`, `ui/PageHeader.tsx`, anything every page uses | – | all |
 
 Before pushing: `npm run typecheck` (and `npm run typecheck --prefix server`, `npm run typecheck:test --prefix server` for server code),

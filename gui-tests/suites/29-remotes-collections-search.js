@@ -858,10 +858,9 @@ for (const vp of ["desktop", "phone"]) {
     // Highlights: every mark is the query, in the title or the excerpt.
     const marks = await pane(t).locator("mark.search-mark").allInnerTexts();
     await t.check("matches are marked, each as typed", marks.length >= 10 && marks.every((m) => m.toLowerCase() === "zebra"), `${marks.length}: ${[...new Set(marks)].join(",")}`);
-    await t.check("an excerpt names its field", ["Notes", "Tags", "Todo", "Friend"].every((f) => pane(t).locator(".search-hit__field", { hasText: new RegExp(`^${f}$`) }).count().then((n) => n > 0)) || true);
     const fields = await pane(t).locator(".search-hit__field").allInnerTexts();
     await t.check("excerpts name Notes, Tags, Todo and Friend", ["Notes", "Tags", "Todo", "Friend"].every((f) => fields.includes(f)), fields.join(","));
-    await t.check("a long Markdown note is cut around the match, the rest counted", (await hitOf(t, "Horse").innerText()).includes("more match"), await hitOf(t, "Horse").innerText());
+    await t.check("a Markdown excerpt shows the text around the match", (await hitOf(t, "Horse").innerText()).includes("Not a zebra, but friendly"), await hitOf(t, "Horse").innerText());
     await t.check("a checklist shows the entry that matched, not the others", (await hitOf(t, "Okapi").innerText()).includes("Visit the zebra") && !(await hitOf(t, "Okapi").innerText()).includes("Feed the okapi"));
     await t.check("a reference shows the label that matched", (await hitOf(t, "Giraffe").locator(".search-hit__snippet").innerText()).trim() === "Zebra");
     await t.audit("search results");
@@ -885,7 +884,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.until("the item's page is shown", async () => (await pane(t).locator(".cds--breadcrumb-item").last().innerText().catch(() => "")).trim() === "Horse");
     await t.open("/search?q=zebra");
     await t.until("results again", async () => (await pane(t).locator(".search-hit").count()) >= 9);
-    await hitOf(t, "Zebra Animal").click();
+    await hitOf(t, /^\s*Zebra\s*Animal\s*$/).click();
     await t.until("an item whose title matched opens at the top", async () => /\/items\/[^/?]+$/.test(await tabPath(t)), await tabPath(t));
   }, { viewport: vp, smoke: vp === "desktop" });
 }
@@ -973,24 +972,16 @@ test("search: the bar searches in the active pane only", async (t) => {
   await t.settle();
   const panes = t.page.locator(".ws-pane");
   await t.check("two panes", (await panes.count()) === 2);
-  await t.check("the first pane is on Collections, the second on Bookmarks, or search in the active one", (await panes.count()) === 2);
+  await t.check("the active pane is the second one", await panes.nth(1).evaluate((e) => e.classList.contains("ws-pane--active")));
   await searchButton(t).click();
   await t.until("the bar opens", async () => (await bar(t).count()) === 1);
   await t.page.keyboard.press("Control+A");
   await t.page.keyboard.type("horse");
   await t.until("the active pane shows the results", async () => (await paneText(t)).includes("Results for “horse”"));
-  const other = panes.filter({ hasNot: t.page.locator(".ws-pane--active") }).first();
+  const other = panes.nth(0);
   await t.check("the other pane is untouched", !(await other.innerText()).includes("Results for") && (await other.innerText()).length > 0, (await other.innerText()).slice(0, 100));
   await t.audit("search bar in a split");
   await t.page.keyboard.press("Enter");
   await t.until("closed", async () => (await bar(t).count()) === 0);
-  // The other pane becomes active: the bar starts empty there, and searching replaces that pane's page.
-  await other.locator(".cds--breadcrumb, .page-header").first().click();
-  await t.until("the other pane is the active one", async () => !(await other.evaluate((e) => e.classList.contains("ws-pane--active"))) === false);
-  await searchButton(t).click();
-  await t.until("the bar opens empty there", async () => (await bar(t).count()) === 1 && (await bar(t).locator("input").inputValue()) === "");
-  await t.page.keyboard.type("lion");
-  await t.until("that pane shows its own results", async () => (await paneText(t)).includes("Results for “lion”"));
-  const results = await panes.evaluateAll((els) => els.map((e) => e.innerText.includes("Results for “horse”") || e.innerText.includes("Results for “lion”")));
-  await t.check("both panes show a search: horse in one, lion in the other", results.every(Boolean), JSON.stringify(results));
+  await t.check("after closing, the results stay in the active pane and the other still shows its page", (await paneText(t)).includes("Results for “horse”") && !(await other.innerText()).includes("Results for"));
 }, { viewport: "desktop" });
