@@ -201,8 +201,8 @@ END;
 -- Synced, but derived: `id` and `updated_at` are made from the value (the id from its item and
 -- field, updated_at = the value's own), so the row and its value merge to the same version on every
 -- device, and two devices make the same row. The triggers below write it with every local write of a
--- value; rows applied from a sync arrive with their own, and the sync engine heals a value whose
--- row is missing or older (an older app wrote it: SyncEngine, healLinks). `targets` is a JSON array
+-- value; rows applied from a sync arrive with their own, and after a first download from a server
+-- that holds values without rows (filled before the table existed) the sync engine heals them (healLinks). `targets` is a JSON array
 -- of { item, collection } (a native item's id, or a remote row's item id); `deleted_at` (= updated_at)
 -- marks a value that stopped linking anywhere. A source item or field that is deleted is left out
 -- when reading (they sync themselves), so the row stays as it is. No foreign keys: a target can be a

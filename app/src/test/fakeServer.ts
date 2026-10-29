@@ -64,7 +64,7 @@ export class FakeServer {
         const key = t.key.map((k) => row[k]).join("|");
         const old = table.get(key);
         if (old && (!t.version || String(old.row[t.version]) >= String(row[t.version]))) continue;
-        // In the columns the row has: an older device leaves the others as they are.
+        // In the columns the row has, as the real server (a missing one keeps its value).
         table.set(key, { row: { ...old?.row, ...row }, seq: ++this.seq });
       }
     }

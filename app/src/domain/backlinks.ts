@@ -2,7 +2,7 @@
 //
 // What links to what is kept in the synced table `item_links` (docs/data-model.md "Item links"):
 // one row per (source item, source field) with the items that field's value points at, kept by
-// triggers on field_values from `linkTargets` below and healed after a sync (SyncEngine). The
+// triggers on field_values from `linkTargets` below and healed after a first download (SyncEngine). The
 // "Backlinks" collection (`backlinksCollection`) is a virtual one: the items linking to the item of
 // the page it is on, one row per link, read-only like a remote collection. It is offered only in the
 // collection picker of item page blocks; every block type shows it like any collection's items.
@@ -20,6 +20,9 @@ const ITEM_LINK = /(?<![^\s("'<])#\/collections\/([A-Za-z0-9_-]+)\/items\/([A-Za
 
 /** The kinds whose text can hold links to items. */
 const TEXT_KINDS: ReadonlySet<string> = new Set<FieldKind>(["markdown", "html", "ai"]);
+
+/** Every kind whose values can link to items: `linkTargets` gives `[]` for any other (the heal skips them: data/schema.ts). */
+export const LINK_KINDS = ["item", "item_list", ...TEXT_KINDS] as const;
 
 /**
  * The items a stored value points at, as the canonical JSON `item_links.targets` holds: an array of

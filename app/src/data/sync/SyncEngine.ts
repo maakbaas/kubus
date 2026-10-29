@@ -99,6 +99,9 @@ class SyncRefused extends Error {
   }
 }
 
+/** Which side is older, given the server's SYNC_VERSION (another than this device's). */
+const olderOf = (serverVersion: number): "app" | "server" => (serverVersion > SYNC_VERSION ? "app" : "server");
+
 /** What every request says about this device's data (shared/sync.ts; `compatible` only for servers from before the strict gate). */
 const VERSION = { version: SYNC_VERSION, compatible: SYNC_VERSION };
 
@@ -300,7 +303,7 @@ export class SyncEngine implements SyncControl {
     const info = health.ok ? ((await health.json().catch(() => null)) as { ok?: boolean; syncVersion?: number } | null) : null;
     if (!info?.ok) throw new Error(`${root} is not a Kubus server`);
     if (typeof info.syncVersion === "number" && info.syncVersion !== SYNC_VERSION) {
-      throw new Error(`${SYNC_OUTDATED[info.syncVersion > SYNC_VERSION ? "app" : "server"]} (sync version ${info.syncVersion} on the server, ${SYNC_VERSION} here)`);
+      throw new Error(`${SYNC_OUTDATED[olderOf(info.syncVersion)]} (sync version ${info.syncVersion} on the server, ${SYNC_VERSION} here)`);
     }
     // Any answer past the token check means it was accepted.
     if ((await ask("/api/settings", { headers: { Authorization: `Bearer ${token}` } })).status === 401) throw new Error("The server did not accept the token");
@@ -401,7 +404,7 @@ export class SyncEngine implements SyncControl {
     if (!response.ok) throw new Error(`Server error ${response.status}`);
     const answer = (await response.json()) as SyncResponse;
     // The server checks the versions first; this is the device's own check of what it applies.
-    if (typeof answer.version === "number" && answer.version !== SYNC_VERSION) throw new SyncRefused(answer.version > SYNC_VERSION ? "app" : "server");
+    if (typeof answer.version === "number" && answer.version !== SYNC_VERSION) throw new SyncRefused(olderOf(answer.version));
     return answer;
   }
 
@@ -644,7 +647,7 @@ export class SyncEngine implements SyncControl {
         ...remember,
         { sql: "DELETE FROM meta WHERE key = 'sync_applying'" },
         // Values the server holds without item_links rows (it was filled before the table existed) get theirs, queued for the server.
-        healLinks(null),
+        healLinks(),
       );
       await this.db.write(statements);
       this.cursor = remote.cursor;

@@ -3,7 +3,7 @@
 
 import tables from "./schema.sql?raw";
 import { filesUsedBy } from "../../../shared/files";
-import { linkTargets } from "../domain/backlinks";
+import { LINK_KINDS, linkTargets } from "../domain/backlinks";
 import { SYNC_TABLES, type SyncTable } from "../../../shared/sync";
 
 /** SQL function file_ids(value_file, value_text): the files a value uses, as a JSON array (file_uses' triggers call it). */
@@ -17,25 +17,23 @@ export const linkTargetsFn = linkTargets;
 
 /**
  * Makes `item_links` agree with the field values, row by row: a value's row that is missing or older than the value is
- * written (updated_at = the value's own, so it is the same row on every device). `keys` limits it to
- * these (item id, field id) pairs (a sync's applied values; null = all of them). `rebuild` also rewrites a row of
- * the same stamp that holds other targets (links recognized differently by this version): not done after a
- * sync, where an equal stamp is the same value. Queued for sync by the table's outbox trigger (not while sync_applying is set).
+ * written (updated_at = the value's own, so it is the same row on every device): after a first download from a server
+ * holding values without rows (SyncEngine). `rebuild` also rewrites a row of the same stamp that holds other targets
+ * (links recognized differently by this version: `Repository.rebuildLinks`). Queued for sync by the table's outbox
+ * trigger (not while sync_applying is set).
  */
-export function healLinks(keys: [string, string][] | null, rebuild = false): { sql: string; bind: string[] } {
+export function healLinks(rebuild = false): { sql: string } {
   return {
     sql: `INSERT INTO item_links (id, source_item_id, source_field_id, targets, updated_at, deleted_at)
           SELECT w.id, w.item_id, w.field_id, w.targets, w.updated_at, CASE WHEN w.targets = '[]' THEN w.updated_at END
             FROM (SELECT fv.item_id || '/' || fv.field_id AS id, fv.item_id AS item_id, fv.field_id AS field_id, fv.updated_at AS updated_at,
                          link_targets(f.kind, f.target_collection_id, fv.value_text, fv.value_ref, fv.value_json) AS targets
                     FROM field_values fv JOIN fields f ON f.id = fv.field_id
-                   WHERE f.kind IN ('item', 'item_list', 'markdown', 'html', 'ai')
-                     ${keys ? "AND (fv.item_id, fv.field_id) IN (SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?1))" : ""}) w
+                   WHERE f.kind IN (${LINK_KINDS.map((k) => `'${k}'`).join(", ")})) w
             LEFT JOIN item_links l ON l.id = w.id
            WHERE (l.id IS NULL OR l.updated_at < w.updated_at${rebuild ? " OR (l.updated_at = w.updated_at AND l.targets IS NOT w.targets)" : ""})
              AND (w.targets <> '[]' OR (l.id IS NOT NULL AND l.deleted_at IS NULL))
           ON CONFLICT (id) DO UPDATE SET targets = excluded.targets, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at`,
-    bind: keys ? [JSON.stringify(keys)] : [],
   };
 }
 
