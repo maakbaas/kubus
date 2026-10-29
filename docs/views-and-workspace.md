@@ -127,7 +127,8 @@ Extension points are registries, not special cases in pages:
   selectable per view, the title column too (rows then get an open button); the Fields popover
   offers each shown field's name toggle (tag icon, as on item pages: `FieldLayout.hiddenLabels` in the block's layout, JSON
   in the view's config, so it syncs like the other layout options and older devices ignore it): a hidden name leaves
-  the header visually (kept for screen readers and the sort button) and the column sizes to its content, e.g. a checkbox;
+  the header visually (kept for screen readers and the sort button, whose icon then stands where the column's content starts) and the column sizes to its content, e.g. a checkbox;
+  cell padding is defined once (`--table-cell-pad` on `.items-table`, spacing-04: columns are 1.5rem apart, not Carbon's 2rem; the first column's start and the last cell's end keep 1rem); each cell publishes `--cell-pad-start` / `--cell-pad-end`, from which cell editors, the add row, the wrapped-text editor and the header's sort button take their text inset, so text never moves when editing starts; an editor covers exactly its own cell (no spilling over neighbours or the row's buttons);
   rows have Edit and Delete only, no Duplicate (it saves width; a table row has no overflow menu, so
   `ItemActions.duplicate` stays for other callers); a table looks the
   same at every width: one too wide for its pane (a phone, a narrow tiled pane) scrolls sideways,

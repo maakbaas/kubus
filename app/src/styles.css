@@ -2617,6 +2617,32 @@ img[data-lightbox] {
 .items-table .cds--data-table {
   inline-size: auto;
 }
+/* Cell padding, defined once. Between two columns a cell pads --table-cell-pad on each side (Carbon: 1rem,
+   so 2rem apart; here spacing-04, 1.5rem apart, more room for content); the first column's start and the
+   last column's end keep Carbon's 1rem (spacing-05), the table's edge. Every cell publishes its own start /
+   end padding as --cell-pad-start / --cell-pad-end: editors, the add row and the header's sort button take
+   their text inset from them (an input's text starts exactly where its cell's text did). */
+.items-table {
+  --table-cell-pad: var(--cds-spacing-04);
+}
+.items-table :is(th, td) {
+  --cell-pad-start: var(--table-cell-pad);
+  --cell-pad-end: var(--table-cell-pad);
+  padding-inline: var(--cell-pad-start) var(--cell-pad-end);
+}
+.items-table :is(th, td):first-child {
+  --cell-pad-start: var(--cds-spacing-05);
+}
+.items-table :is(th, td):last-child {
+  --cell-pad-end: var(--cds-spacing-05);
+}
+/* A sortable header's button carries the cell's padding itself (Carbon: the cell has none). */
+.items-table th[aria-sort] {
+  padding-inline: 0;
+}
+.items-table th .cds--table-sort {
+  padding-inline-start: var(--cell-pad-start);
+}
 /* A percentage column width would stretch an auto-width table to the pane. */
 .items-table .row-actions {
   inline-size: auto;
@@ -2638,6 +2664,11 @@ img[data-lightbox] {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+/* A nameless column's sort icon stands where the column's content starts (a checkbox below it), not
+   after the margin Carbon keeps between a label and its icon. */
+.items-table th.cell--name-hidden .cds--table-sort :is(.cds--table-sort__icon, .cds--table-sort__icon-unsorted) {
+  margin-inline-start: 0;
+}
 /* Small (2rem) controls fill a small row exactly: no vertical cell padding around them. */
 .items-table td.row-actions,
 .items-table .table-add-row td {
@@ -2646,7 +2677,7 @@ img[data-lightbox] {
 /* Add row: inputs are laid over their cells (out of the flow), so opening the row never
    changes column widths. A small gap (spacing-02 per side) keeps neighbouring inputs apart;
    each input's text inset shrinks by the same amount, so typed text starts exactly below the
-   column's text (cell padding 1rem = gap + input inset). */
+   column's text (cell padding = gap + input inset). */
 .items-table .table-add-row td {
   position: relative;
   block-size: calc(2rem + 1px); /* as tall as the idle "+" row (2rem button + its border) */
@@ -2686,7 +2717,7 @@ img[data-lightbox] {
 }
 /* A checkbox stays in the flow in every add row; bare cells have less padding, so it makes up the rest. */
 .table-add-row--bare .add-check {
-  padding-inline: calc(1rem - var(--cds-spacing-02));
+  padding-inline: calc(var(--cell-pad-start) - var(--cds-spacing-02)) calc(var(--cell-pad-end) - var(--cds-spacing-02));
 }
 .table-add-row--bare .add-cell,
 .table-add-row--bare .add-cell--actions {
@@ -2699,7 +2730,7 @@ img[data-lightbox] {
   justify-content: flex-end;
 }
 .items-table .table-add-row :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box__field, .cds--text-input--empty) {
-  padding-inline-start: calc(1rem - var(--cds-spacing-02));
+  padding-inline-start: calc(var(--cell-pad-start, var(--cds-spacing-05)) - var(--cds-spacing-02));
 }
 /* Editing in a cell without content jump (same rules as the item page): the input covers
    the cell exactly. Carbon cells and inputs both indent text by 1rem and use body-compact-01,
@@ -2724,17 +2755,9 @@ img[data-lightbox] {
   flex-direction: column;
   justify-content: center;
 }
-/* The last data column is often a sliver (its values are short or empty): its cell editor grows to a
-   usable width towards the cells before it, never over the row's buttons after it (they stay shown). */
-.items-table td.cell--editing:nth-last-child(2) .cell-overlay {
-  inset-inline-start: auto;
-  inline-size: max(100%, 12rem);
-}
-.items-table .table-add-row:not(.table-add-row--bare) td:nth-last-child(2) .add-cell {
-  inset-inline-end: auto;
-  inline-size: max(calc(100% - 2 * var(--cds-spacing-02)), 12rem);
-  /* above the actions cell it reaches over (a later sibling, which would paint over it) */
-  z-index: 1;
+/* An input's text starts where its cell's text does (Carbon indents inputs by 1rem; a cell here by --cell-pad-start). */
+.cell-overlay :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box__field, .cds--text-input--empty) {
+  padding-inline-start: var(--cell-pad-start, var(--cds-spacing-05));
 }
 /* The cell's text sits 1px lower than an input's (its bottom border lifts the input's text). */
 .items-table td.cell--editing :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box) {
@@ -3252,7 +3275,7 @@ img[data-lightbox] {
 /* The idle add row's "+" icon starts where the column's text starts: the 2rem icon button
    centres a 1rem icon, so the cell's 1rem inset shrinks by that 0.5rem. */
 .items-table td.table-add-row__plus {
-  padding-inline-start: calc(1rem - var(--cds-spacing-03));
+  padding-inline-start: calc(var(--cell-pad-start) - var(--cds-spacing-03));
 }
 /* Item details popover: label / value pairs. */
 .item-info {
@@ -3506,8 +3529,8 @@ img[data-lightbox] {
   inline-size: auto;
   min-inline-size: 0;
   max-inline-size: none;
-  margin: -0.4375rem calc(-1 * var(--cds-spacing-05));
-  padding: 0.4375rem var(--cds-spacing-05);
+  margin: -0.4375rem calc(-1 * var(--cell-pad-end, var(--cds-spacing-05))) -0.4375rem calc(-1 * var(--cell-pad-start, var(--cds-spacing-05)));
+  padding: 0.4375rem var(--cell-pad-end, var(--cds-spacing-05)) 0.4375rem var(--cell-pad-start, var(--cds-spacing-05));
   /* Exactly the room the cell's text had at the line end, not a pixel more: with extra room a word
      that just missed the line in the cell would fit in the editor, and the text would jump. (The
      caret at a line's end sits in the padding, which is not clipped.) */

@@ -439,23 +439,12 @@ function __audit(opts) {
           // A card's link is stretched under the whole card on purpose: the card's own controls
           // (a checkbox, a link in a field) sit above it, and the rest of the card is the link.
           (el.matches(".item-card__link") && hit.closest(".item-card") === el.closest(".item-card")) ||
-          // A table cell's open editor spilling over the other data cells of its row (editorOverRowCell).
-          (!!hit.closest(".items-table td.cell--editing .cell-overlay") && !!el.closest(".items-table td:not(.row-actions)") && hit.closest("tr") === el.closest("tr")) ||
           // Carbon puts a visual twin over some inputs (checkbox / toggle labels, date icons).
           el.matches("input") && (hit.closest(".cds--form-item, .cds--checkbox-wrapper, .cds--toggle, .cds--date-picker, .cds--search, .cds--list-box, .cds--number, .cds--slider-container") === el.closest(".cds--form-item, .cds--checkbox-wrapper, .cds--toggle, .cds--date-picker, .cds--search, .cds--list-box, .cds--number, .cds--slider-container"));
         if (!legit) report("occluded", el, `covered at its centre by ${describe(hit)}`);
       }
     }
   }
-
-  // An open cell editor in a table spills over the other data cells of its row when its own cell is too narrow (the
-  // last column's editor grows towards the cells before it, never over the row's buttons): like a spreadsheet's.
-  const editorOverRowCell = (a, b) => {
-    const editor = (el) => el.closest(".items-table td.cell--editing .cell-overlay");
-    const cell = (el) => !editor(el) && el.closest(".items-table td:not(.row-actions)");
-    const pair = (x, y) => !!editor(x) && !!cell(y) && editor(x).closest("tr") === cell(y).closest("tr");
-    return pair(a, b) || pair(b, a);
-  };
 
   // controls-overlap
   {
@@ -471,7 +460,6 @@ function __audit(opts) {
         if (a.layer !== b.layer || a.el.contains(b.el) || b.el.contains(a.el)) continue;
         // A card's link lies under the whole card by design; the card's own links and checkboxes sit above it.
         if (a.el.matches(".item-card__link") || b.el.matches(".item-card__link")) continue;
-        if (editorOverRowCell(a.el, b.el)) continue;
         // Tabs of one tab list are laid out by Carbon (a dismissable tab's close button sits over
         // the tab; in a clipped strip the hidden neighbours touch the shown tab inside its clip).
         if (a.el.closest(".cds--tab--list") && a.el.closest(".cds--tab--list") === b.el.closest(".cds--tab--list")) continue;

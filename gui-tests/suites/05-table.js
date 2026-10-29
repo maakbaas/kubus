@@ -330,7 +330,8 @@ async function editorVsButtons(t) {
     const editor = box(input);
     const buttons = [...row.querySelectorAll("td.row-actions button")].filter((b) => b.getClientRects().length && getComputedStyle(b).visibility !== "hidden");
     const hits = buttons.map((b) => ({ label: b.getAttribute("aria-label") || b.textContent.trim(), ...box(b) })).filter((b) => Math.min(editor.right, b.right) - Math.max(editor.left, b.left) > 1 && Math.min(editor.bottom, b.bottom) - Math.max(editor.top, b.top) > 1);
-    return { editor, buttons: buttons.length, overlapping: hits.map((h) => h.label) };
+    const c = box(cell);
+    return { editor, cell: c, outside: Math.max(0, c.left - editor.left, editor.right - c.right), buttons: buttons.length, overlapping: hits.map((h) => h.label) };
   });
 }
 
@@ -363,6 +364,7 @@ for (const vp of ["phone", "phone-small", "desktop"]) {
         const s = await editorVsButtons(t);
         await t.check(`${col} (${kind}), row ${row}: the editor is open in a row with buttons`, !!s, JSON.stringify(s));
         if (s) await t.check(`${col} (${kind}), row ${row}: the editor covers none of the row's visible buttons`, s.overlapping.length === 0, `covers ${s.overlapping.join(", ")}: ${JSON.stringify(s)}`);
+        if (s) await t.check(`${col} (${kind}), row ${row}: the editor stays inside its own cell`, s.outside <= 1, JSON.stringify(s));
         const hidden = await t.page.evaluate(() => {
           const tr = document.querySelector(".items-table td.cell--editing")?.closest("tr");
           return [...(tr?.querySelectorAll("td.row-actions button") ?? [])].filter((b) => getComputedStyle(b).visibility !== "visible").map((b) => b.getAttribute("aria-label") ?? b.textContent);
@@ -374,6 +376,62 @@ for (const vp of ["phone", "phone-small", "desktop"]) {
         await t.settle(100);
       }
     }
+  }, { viewport: vp });
+}
+
+// Without a title link each row has an open button in the actions column: its width must be in the
+// column sizing, so no data column is squeezed below what its content needs (a sliver the editor then
+// had to spill out of), compared with the same columns beside a title link.
+for (const vp of ["phone", "desktop"]) {
+  test(`table: the open button's room is in the column widths @ ${vp}`, async (t) => {
+    await t.boot();
+    const places = ["Oslo", "A place with a name that goes on and on and on and on, Lorem ipsum dolor sit amet", "Bern"];
+    const fields = [{ key: "title", name: "Title", kind: "string" }, { key: "place", name: "Place", kind: "string" }, { key: "count", name: "Count", kind: "number" }, { key: "day", name: "Day", kind: "date" }];
+    const spec = {
+      collections: [{
+        key: "notes", name: "Note", plural: "Notes", fields,
+        items: places.map((place, k) => ({ key: `n${k}`, values: { title: `Note ${k}`, place, count: k + 1, day: `2024-05-0${k + 1}` } })),
+        views: [
+          { name: "With title", blocks: [{ kind: "table", layout: { fields: ["title", "count", "day", "place"] } }] },
+          { name: "No title", blocks: [{ kind: "table", layout: { fields: ["count", "day", "place"] } }] },
+        ],
+      }],
+    };
+    const ids = await t.seed(spec);
+    const measure = () => t.page.evaluate(() => {
+      const table = document.querySelector(".ws-pane--active .items-table table");
+      const heads = [...table.tHead.rows[0].cells];
+      const body = [...table.tBodies[0].rows];
+      const cols = heads.map((h, i) => {
+        const cells = body.map((r) => r.cells[i]);
+        // What a cell's content needs at least: its widest unbreakable part plus the cell's padding.
+        const need = Math.max(...cells.map((c) => {
+          const cs = getComputedStyle(c);
+          return c.scrollWidth - parseFloat(cs.paddingInlineStart) - parseFloat(cs.paddingInlineEnd);
+        }));
+        return { name: h.textContent.trim(), width: h.getBoundingClientRect().width, need, over: Math.max(...cells.map((c) => c.scrollWidth - c.clientWidth)) };
+      });
+      const buttons = Math.max(...body.map((r) => [...r.lastElementChild.querySelectorAll("button")].length));
+      return { cols, buttons };
+    });
+    const out = {};
+    for (const name of ["With title", "No title"]) {
+      await t.open(`${t.listPath(ids.collections.notes)}?view=${ids.views[`notes/${name}`]}`);
+      await t.settle(300);
+      out[name] = await measure();
+    }
+    const withT = out["With title"], noT = out["No title"];
+    await t.check("the title-less table has the open button, the other none", noT.buttons === withT.buttons + 1, JSON.stringify(out));
+    const actions = noT.cols[noT.cols.length - 1], base = withT.cols[withT.cols.length - 1];
+    await t.check("the actions column fits one more button (32px)", actions.width >= base.width + 31 || actions.width >= 32 + 32, JSON.stringify(out));
+    for (const view of [withT, noT]) {
+      for (const c of view.cols.slice(0, -1)) await t.check(`${c.name}: its cells' content is not clipped by the column`, c.over <= 1, JSON.stringify(out));
+    }
+    for (const c of noT.cols.slice(0, -1)) {
+      const same = withT.cols.find((w) => w.name === c.name);
+      await t.check(`${c.name}: no narrower than beside a title link, less the title column's room`, c.width >= same.width - 1 || vp === "phone", JSON.stringify(out));
+    }
+    await t.audit("title-less table");
   }, { viewport: vp });
 }
 
@@ -434,6 +492,26 @@ for (const vp of ["desktop", "phone"]) {
     await t.settle();
     const narrow = await t.page.evaluate(() => document.querySelectorAll(".items-table thead th")[1].getBoundingClientRect().width);
     await t.check("the column sizes to its checkbox, not to the header", narrow < wide - 8 && narrow < 80, `${wide} → ${narrow}`);
+    // The sort icon of the nameless column lines up with the column's content (the checkbox below it).
+    const lineup = await t.page.evaluate(() => {
+      const icon = [...document.querySelectorAll(".items-table thead th")[1].querySelectorAll("button svg")].map((e) => e.getBoundingClientRect()).find((r) => r.width > 0);
+      const box = document.querySelector(".items-table tbody tr td:nth-child(2) .cds--checkbox-label").getBoundingClientRect();
+      return { icon: icon.left, box: box.left + 3 }; // (Carbon draws the box 3px (0.1875rem) in from its label)
+    });
+    await t.check("the nameless column's sort icon starts where its checkbox does", Math.abs(lineup.icon - lineup.box) <= 1, JSON.stringify(lineup));
+    // Cell padding: the table's outer edges keep 1rem, two columns are 1.5rem apart (spacing-04 each side).
+    const pads = await t.page.evaluate(() => {
+      const px = (v) => Math.round(parseFloat(v) * 100) / 100;
+      const pad = (c) => { const cs = getComputedStyle(c); return [px(cs.paddingInlineStart), px(cs.paddingInlineEnd)]; };
+      const sort = (th) => { const b = th.querySelector("button"); return b ? px(getComputedStyle(b).paddingInlineStart) : null; };
+      const cells = [...document.querySelector(".items-table tbody tr").cells];
+      const heads = [...document.querySelectorAll(".items-table thead th")];
+      return { body: cells.map(pad), headSort: heads.map(sort) };
+    });
+    const last = pads.body.length - 1;
+    await t.check("the first column keeps 16px before its text, the last cell 16px after", pads.body[0][0] === 16 && pads.body[last][1] === 16, JSON.stringify(pads));
+    await t.check("between columns: 24px of padding in all (12 + 12)", pads.body.slice(0, last).every((p, i) => p[1] + pads.body[i + 1][0] === 24), JSON.stringify(pads));
+    await t.check("a header's text starts where its column's text does", pads.headSort.every((v, i) => v === null || v === pads.body[i][0]), JSON.stringify(pads));
     await t.check("the column is still sortable and named", (await t.page.locator(".items-table thead th").nth(1).getByRole("button", { name: /Done/ }).count()) === 1);
     await t.audit("table with a hidden header label");
     await save();
