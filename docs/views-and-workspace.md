@@ -230,7 +230,7 @@ Extension points are registries, not special cases in pages:
     of Carbon parts; Carbon Charts has none): centred: the value's name (unless "Show the name above the number" is off), the number (heading-06, its unit a step smaller), the
     change from what it is compared with beside it as a Carbon tag with an up or down arrow ("Compared with the
     average (79.2 kg)" below), as a % or the difference ("Change
-    shown as"), green or red by which way is better ("Better": higher, lower, neither: grey), and a sparkline across the block below (4rem, as a compact chart; full width by default, Width narrows it): the value along its X axis ("Sparkline along") as Carbon's compact area
+    shown as"), green or red by which way is better ("Better": higher, lower, neither: grey), and a sparkline across the block below (4rem, as a compact chart; full width by default, Width narrows it). Its Height and Aspect ratio apply as to any chart (10rem when a chart is turned into a stat): the number centred in what the sparkline leaves, the sparkline growing with the height (40% of it, 4 to 16rem); never less tall than its text and a 4rem sparkline (StatView sets that as its least height, and as `data-row-min`: a row side by side, where it counts and fills like a chart, is never less tall). A meter keeps Carbon's own fixed height: the value along its X axis ("Sparkline along") as Carbon's compact area
     or line chart (`chartSpec` of a stat is it; in its tag's colour, Carbon's `color.scale`: support-success,
     support-error, grey for neither), or none (`statOf`, `baselineOf` in domain/chart.ts).
   - **Spread**: a histogram's field (a number or a date: dates on a time axis), bins and Split by; a box plot's field (a

@@ -154,7 +154,17 @@ describe("a row's height", () => {
     expect(rowHeightPx({ rowFit: "shortest", rowHeight: 5 }, [100, 300], 16)).toBe(100);
   });
 
-  it("with nothing to measure (only blocks filling it): its height, else 24rem", () => {
+  it("is never less than a block that can't scroll (a stat)", () => {
+    expect(rowHeightPx({ rowFit: "shortest" }, [100, 300], 16, [200])).toBe(200);
+    expect(rowHeightPx({ rowHeight: 5 }, [100, 300], 16, [200])).toBe(200);
+  });
+
+  it("of charts alone: their own heights (20rem and 30rem) as the rest", () => {
+    expect(rowHeightPx({}, [320, 480], 16)).toBe(480);
+    expect(rowHeightPx({ rowFit: "shortest" }, [320, 480], 16)).toBe(320);
+  });
+
+    it("with nothing to measure (only collapsed blocks): its height, else 24rem", () => {
     expect(rowHeightPx({ rowHeight: 10 }, [], 16)).toBe(160);
     expect(rowHeightPx({ rowFit: "shortest" }, [], 16)).toBe(384);
   });

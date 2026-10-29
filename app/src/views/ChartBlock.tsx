@@ -174,6 +174,9 @@ function Unmatched({ unmatched }: { unmatched: { label: string; items: number }[
 // coming or going moves only what is below the control just used. One options shape for every kind:
 // switching kind keeps the series, X axis and thresholds (`switchKind`).
 
+/** A stat's Height when it is chosen, in rem. */
+const STAT_HEIGHT = 10;
+
 /** Which sections and settings a chart kind has. */
 function kindHas(kind: ChartKind) {
   const xy = isXY(kind);
@@ -194,7 +197,7 @@ function kindHas(kind: ChartKind) {
     thresholds: xy || kind === "gauge" || kind === "meter",
     axes: xy || kind === "histogram" || kind === "boxplot" || kind === "scatter",
     legend: kind !== "gauge" && kind !== "stat",
-    height: kind !== "meter" && kind !== "stat",
+    height: kind !== "meter",
     display: xy || kind === "pie" || kind === "gauge" || kind === "histogram" || kind === "stat" || kind === "choropleth",
   };
 }
@@ -234,6 +237,8 @@ function switchKind(o: ChartOptions, chart: ChartKind, axis: FieldDef[], splits:
   const next: ChartOptions = { ...o, chart };
   // A gauge is narrow: as wide as a pane it is mostly empty (a stat spans the block, its sparkline across).
   next.width = widthAfterSwitch(o, chart);
+  // A stat starts low (its number and a sparkline).
+  if (chart === "stat" && o.chart !== "stat") next.height = STAT_HEIGHT;
   // A stat's sparkline runs along a date the first time.
   if (chart === "stat" && o.x.by === "none") {
     const date = axis.find((f) => f.kind === "date" || f.kind === "datetime");
@@ -966,12 +971,13 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
     <Section key="size" title="Size">
       {has.height && (
         <>
-          {!compact && <HeightSlider id={`${uid}-height`} value={o.height} disabled={inRow} onChange={(height) => set({ height })} />}
-          {!compact && <AspectSelect id={`${uid}-aspect`} value={o.aspect} disabled={inRow} onChange={(aspect) => set({ aspect })} />}
+          {!compact && <HeightSlider id={`${uid}-height`} value={o.height} onChange={(height) => set({ height })} />}
+          {!compact && <AspectSelect id={`${uid}-aspect`} value={o.aspect} onChange={(aspect) => set({ aspect })} />}
           {!compact && inRow && <InRowNote />}
           {compact && <p className="helper chart-options__note">A compact chart has its own, low height.</p>}
         </>
       )}
+
       <SettledSlider
         id={`${uid}-width`}
         labelText="Width"
@@ -1025,8 +1031,20 @@ export const chartBlock = defineBlockType<ChartOptions>({
   defaultOptions: (collection: Collection) => defaultChartOptions(collection),
   normalizeOptions: (raw, collection) => normalizeChartOptions(raw, collection),
   // Its X axis is its own setting (not the block's grouping); "This item" charts the page's item, not a query's.
-  // Drawn at its Height (a compact chart, a meter or a stat at their own): such a chart fills a row's height.
-  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null, fillsRow: kindHas(options.chart).height && !(isXY(options.chart) && options.compact) }),
+  // Drawn at its Height (a compact chart or a meter at their own): in a row, that and the space above it (.chart-block)
+  // count, and it fills the row; one at its own height is centred in the row, never less tall.
+  uses: (options) => ({
+    query: options.scope !== "page",
+    all: true,
+    groups: false,
+    fields: null,
+    // A stat's Height is the whole block (its space above inside it); a chart's is its drawing's, the space above added.
+    ...(options.chart === "stat"
+      ? { ownHeight: { height: options.height, aspect: options.aspect } }
+      : kindHas(options.chart).height && !(isXY(options.chart) && options.compact)
+        ? { ownHeight: { height: options.height, aspect: options.aspect, extra: "var(--cds-spacing-05)" } }
+        : { fixedHeight: true }),
+  }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,
 });

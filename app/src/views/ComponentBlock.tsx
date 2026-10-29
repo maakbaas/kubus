@@ -156,8 +156,8 @@ function ComponentBlockOptionsEditor({ collection, options, inRow, onChange }: B
           </>
         )}
         {/* What it shows in a box of its own (HTML) is as tall as a chart or a map, at most. */}
-        {html && <HeightSlider id={`${uid}-height`} value={height} disabled={inRow} onChange={setHeight} />}
-        {html && <AspectSelect id={`${uid}-aspect`} value={options.aspect} disabled={inRow} onChange={(aspect) => onChange({ ...options, aspect })} />}
+        {html && <HeightSlider id={`${uid}-height`} value={height} onChange={setHeight} />}
+        {html && <AspectSelect id={`${uid}-aspect`} value={options.aspect} onChange={(aspect) => onChange({ ...options, aspect })} />}
         {html && inRow && <InRowNote />}
       </Stack>
       {dialog === "new" && (
@@ -208,7 +208,7 @@ export const componentBlock = defineBlockType<ComponentBlockOptions>({
   uses(options, components) {
     const component = blockComponent(options, components);
     const uses = component ? componentUses(component.code) : null;
-    return { query: !!uses?.items, groups: !!uses?.groups, fields: uses?.fields ? { labels: false, hideEmpty: false } : null, fillsRow: component?.output === "html" };
+    return { query: !!uses?.items, groups: !!uses?.groups, fields: uses?.fields ? { labels: false, hideEmpty: false } : null, ...(component?.output === "html" && { ownHeight: { height: options.height, aspect: options.aspect } }) };
   },
   View: ComponentBlockView,
   OptionsEditor: ComponentBlockOptionsEditor,

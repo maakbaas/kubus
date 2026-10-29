@@ -3210,7 +3210,8 @@ img[data-lightbox] {
   }
   /* Several blocks: each one's part below its name is the row's height (--row-body, measured: BlockRows.tsx); what is
      taller scrolls inside it, what is wider (cards of a set width, a wide table) sideways, never the page. A chart, map
-     or HTML component fills it (--row-fill-box: domain/views.ts blockHeightCss), less a chart's own space above it.
+     or HTML component fills it (--row-fill-box: domain/views.ts blockHeightCss), less a chart's own space above it; it
+     and a stat, meter or compact chart (the row is at least as tall) never scroll.
      Its scroll box reaches 1rem into the room left of it, so what a block hangs there (a Markdown block's box, as on the
      page) isn't cut off: the padding puts it back. */
   .block-row--fit .block-cell > .block > .block__body {
@@ -3219,8 +3220,16 @@ img[data-lightbox] {
     margin-inline-start: calc(-1 * var(--cds-spacing-05));
     padding-inline-start: var(--cds-spacing-05);
   }
-  .block-row--fit .block-cell > .block--fills > .block__body {
+  .block-row--fit .block-cell > :is(.block--fills, .block--fixed) > .block__body {
     overflow: hidden;
+  }
+  /* A stat, meter or compact chart at its own height: centred in the row (never less tall than it). */
+  .block-row--fit .block-cell > .block--fixed > .block__body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .block-row--fit .block-cell > .block--fills > .block__body {
     --row-fill-box: var(--row-body);
   }
   .block-row--fit .block--fills .chart-block {
@@ -3270,6 +3279,18 @@ img[data-lightbox] {
 }
 .item-fields [data-drop] {
   position: relative;
+}
+/* A chart's, map's or HTML component's own height (BlockView `.block__own`), measured for its row: no room taken, nothing
+   shown; its own container, so its height at its aspect ratio is worked out from the block's width as the box's is. */
+.block__own {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  container-type: inline-size;
 }
 /* A block's name drags it to another place on the page. */
 .section-header__title--drag {
@@ -3337,6 +3358,25 @@ img[data-lightbox] {
 .stat-block__sparkline > * {
   position: absolute;
   inset: 0;
+}
+/* A stat is as tall as its Height (and Aspect ratio; a row's height in a row; never less than its text and a 4rem
+   sparkline: StatView): its text centred in what the sparkline leaves, the sparkline growing with the height (40% of
+   it, 4 to 16rem). */
+.stat-block {
+  display: flex;
+  flex-direction: column;
+}
+.stat-block .stat-block__body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+.stat-block .stat-block__text {
+  flex: none;
+  margin-block: auto;
+}
+.stat-block .stat-block__sparkline {
+  flex: 0 0 clamp(4rem, 40%, 16rem);
+  block-size: auto;
 }
 .stat-block__label,
 .stat-block__from {
