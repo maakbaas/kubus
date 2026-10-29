@@ -3237,9 +3237,9 @@ img[data-lightbox] {
     min-block-size: var(--row-limit);
   }
 }
-/* Where a dragged block or field goes: a 2px line in the gap there (views/BlockRows.tsx; an item page's field: ItemPage's
-   `fieldDrops`), not a highlighted part of a block: nothing is split, a block only joins a row or gets one of its own.
-   Above or below a row it spans the row (in the gap); beside a block it runs down the block's edge. */
+/* Where a dragged block or field goes, highlighted like the workspace's drop zones (views/BlockRows.tsx; an item page's
+   field: ItemPage's `fieldDrops`): above or below, the top or bottom half of the whole row (it gets a row of its own
+   there, nothing is split); beside, the half of the block it lands next to. */
 .block-row {
   position: relative;
 }
@@ -3248,34 +3248,25 @@ img[data-lightbox] {
   content: "";
   position: absolute;
   pointer-events: none;
-  background: var(--cds-focus);
+  background: var(--cds-highlight);
+  opacity: 0.6;
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
   z-index: 1;
 }
 .block-drop--top,
-.block-drop--bottom,
-.item-fields [data-drop]::after {
-  inset-inline: 0;
-  block-size: 2px;
-}
-.block-drop--top,
 .item-fields [data-drop="top"]::after {
-  inset-block-start: calc(var(--cds-spacing-07) / -2 - 1px);
+  inset: 0 0 50% 0;
 }
 .block-drop--bottom,
 .item-fields [data-drop="bottom"]::after {
-  inset-block-end: calc(var(--cds-spacing-07) / -2 - 1px);
+  inset: 50% 0 0 0;
 }
-.block-drop--left,
-.block-drop--right {
-  inset-block: 0;
-  inline-size: 2px;
-}
-/* On the block's own edge: past it, the last block's line would reach beyond the page and make it scroll sideways. */
 .block-drop--left {
-  inset-inline-start: -1px;
+  inset: 0 50% 0 0;
 }
 .block-drop--right {
-  inset-inline-end: -1px;
+  inset: 0 0 0 50%;
 }
 .item-fields [data-drop] {
   position: relative;

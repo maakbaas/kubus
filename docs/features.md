@@ -346,8 +346,8 @@ What the app does, feature by feature (read the part you work on).
   row's height, else 24rem. A row of one block keeps its own height, only limited (at most / at least). Narrower (a
   phone), a row's blocks stack exactly as blocks always did, their heights their own, nothing limited or scrolling inside:
   a dashboard is a list there. A block is placed by dragging its name onto another block: its left or right quarter puts
-  it beside that block (side by side only; a line down that block's edge marks it), its top or bottom half in a row of its
-  own above or below that block's row (a line across the row); the divider between two blocks moves their shares in 5%
+  it beside that block (side by side only; that half of the block is highlighted), its top or bottom half in a row of its
+  own above or below that block's row (the top or bottom half of the whole row highlighted); the divider between two blocks moves their shares in 5%
   steps (drag it, or focus it and use the arrow keys; at least 10% each). In a row of several, what is wider than its
   share scrolls sideways inside the block, never the page. Block settings has "Beside the block above" (only where a block
   is right above it with room in its row), Row height (As its tallest / shortest block) and Max / Min height (rem; empty:

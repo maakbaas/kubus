@@ -135,7 +135,7 @@ export function BlockRows<T extends { id: string }>({ entries, blockOf, render, 
             shares={rowShares(row.map((e) => blockOf(e) ?? {}))}
             settings={{ ...(head.rowFit && { rowFit: head.rowFit }), ...(head.rowHeight !== undefined && { rowHeight: head.rowHeight }) }}
             onShares={onShares}
-            // Above or below a block of the row: a line across the whole row (it gets a row of its own there).
+            // Above or below a block of the row: the half of the whole row (it gets a row of its own there).
             dropLine={drop && row.some((e) => e.id === drop.id) && (drop.zone === "top" || drop.zone === "bottom") ? drop.zone : null}
             cell={(e: T, share: number) => (
               <div
@@ -158,7 +158,7 @@ export function BlockRows<T extends { id: string }>({ entries, blockOf, render, 
                 }}
               >
                 {render(e, onPlace ? { onDragStart: dragStart(e.id, "block") } : {})}
-                {/* Beside it: a line at its edge (nothing is split: it joins the row). */}
+                {/* Beside it: the half of it the block lands next to (it joins the row). */}
                 {drop?.id === e.id && (drop.zone === "left" || drop.zone === "right") && <div className={`block-drop block-drop--${drop.zone}`} aria-hidden="true" />}
               </div>
             )}
