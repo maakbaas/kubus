@@ -31,6 +31,9 @@ Extension points are registries, not special cases in pages:
   checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
   nothing, never the wrong items (so does a value from the page's item that it doesn't have: "Author is this Book's Mentor" on a Book without one). The value input is text for every kind (the braces must be typable);
   under it, what the code works out to ("= true").
+- **Several collections in one block**: the block's Collections picker (Block settings) reads them as one read-only collection, fields
+  merged by name, Collection / Title / Created / Updated always there, Fields → Merge fields by hand, the view's filter translated to its
+  columns, a page at a time from every part, a chart over all rows: docs/features.md "Several collections in one block".
 - **Virtual collections** (`domain/backlinks.ts` `VIRTUAL_COLLECTIONS`, `Collection.virtual`): a block on an item page may list a collection
   that stores nothing, **Backlinks** (docs/features.md): offered in that block's Collection picker only (`BlockMenus`, when it has a
   page), resolved by id next to the store's collections (`findCollection`, in `ItemPageBlock` and the page-wide filter's scope).

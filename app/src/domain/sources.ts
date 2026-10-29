@@ -10,12 +10,12 @@ import { fieldKindList } from "./fieldKinds";
 import { dateGroupLabel } from "./groupDate";
 import { blankField, isMetaField, newId, SELF_FIELD, selfField, titleFields, type Collection, type CollectionSource, type FieldDef, type FieldKind, type FieldValue, type Item } from "./model";
 import { filterTree, mapTree } from "./filterTree";
-import { filterValueProblem, isGroupable, waitsForValue, operatorsFor, TITLE, type FilterRule, type OperatorSpec, type ViewQuery } from "./query";
+import { filterValueProblem, isGroupable, ruleMatches, waitsForValue, operatorsFor, TITLE, type FilterRule, type OperatorSpec, type ViewQuery } from "./query";
 
 export const isRemote = (collection: Pick<Collection, "source">): boolean => !!collection.source;
 
-/** Whether a collection's items can't be changed here: a remote one's rows, a virtual one's (the backlinks). */
-export const isReadOnly = (collection: Pick<Collection, "source" | "virtual">): boolean => isRemote(collection) || !!collection.virtual;
+/** Whether a collection's items can't be changed here: a remote one's rows, a virtual one's (the backlinks), a blend's. */
+export const isReadOnly = (collection: Pick<Collection, "source" | "virtual" | "blend">): boolean => isRemote(collection) || !!collection.virtual || !!collection.blend;
 
 /** Field types a column's field can be shown as (they read the same values): text also as Markdown or HTML. */
 export const columnKinds = (kind: FieldKind): FieldKind[] => (kind === "string" || kind === "markdown" || kind === "html" ? ["string", "markdown", "html"] : [kind]);
@@ -150,14 +150,22 @@ export function groupLabel(field: FieldDef | undefined, key: string): string {
  * too (as rules on removed fields are); a rule that can't match (a value that can't be compared, as
  * in the app) is `{ or: [] }`, which keeps no row.
  */
-/** A rule with the field and column it filters. */
-type Paired = FilterRule & { field: FieldDef; column: string };
+/** A rule with the field and column it filters, or (a field every row has the same value of) whether it holds for them all. */
+type Paired = FilterRule & { field: FieldDef; column: string; always?: boolean };
+
+/**
+ * Fields the source has no column for but whose value is the same on every row (a blend's part: a field of the blend it
+ * doesn't map has no value, its Source field is the part's name): by field id, the field and that value. A rule on one
+ * holds for all the rows or for none of them, which `sourceQuery` settles itself.
+ */
+export type ConstantFields = Map<string, { field: FieldDef; value: FieldValue }>;
 
 export function sourceQuery(
   collection: Collection,
   query: ViewQuery,
   search: string,
   timeZone: string,
+  constants?: ConstantFields,
 ): Omit<SourceQuery, "offset" | "limit" | "counts"> {
   const shape = sourceShape(collection);
   // The item itself is its row's key ("Item is This Row": the page's row).
@@ -165,6 +173,11 @@ export function sourceQuery(
   // A rule still without its value (just added) doesn't filter yet; one on a column the source can't filter by neither.
   const paired = (rules: FilterRule[]): Paired[] =>
     rules.flatMap((rule) => {
+      const constant = constants?.get(rule.fieldId);
+      if (constant && !byId.has(rule.fieldId)) {
+        if (waitsForValue(constant.field, rule) || !operatorsFor(constant.field.kind).some((o) => o.id === rule.operator || rule.operator === "between")) return [];
+        return [{ ...rule, field: constant.field, column: "", always: ruleMatches(constant.field, constant.value, rule, { refLabel: () => "" }) }];
+      }
       const field = byId.get(rule.fieldId);
       if (!field?.column || waitsForValue(field, rule)) return [];
       if (!fieldOperators(collection, field).some((o) => o.id === rule.operator || rule.operator === "between")) return [];
@@ -172,10 +185,12 @@ export function sourceQuery(
     });
   const tree = filterTree([paired(query.inherited ?? []), paired(query.filters)]);
   const never: SourceCondition = { or: [] };
+  const all: SourceCondition = { and: [] };
   const filter: SourceCondition =
     tree === null
       ? { and: [] }
       : mapTree<Paired, SourceFilter>(tree, (rule) => {
+          if (rule.always !== undefined) return rule.always ? all : never;
           const value = rule.value.trim();
           if (filterValueProblem(rule.field, rule.operator, value)) return never;
           if (rule.field.id === SELF_FIELD) {
