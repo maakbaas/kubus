@@ -5,6 +5,7 @@ import {
   itemPageFields,
   itemViewOf,
   newItemViewId,
+  orderFields,
   parseFieldLayout,
   parseItemViews,
   parseLayout,
@@ -109,6 +110,22 @@ describe("sameLayout", () => {
     for (const change of [{ editable: false }, { hideEmpty: true }, { fields: ["title"] }, { hiddenLabels: ["title"] }, { blocks: [newBlock("table", null, "b")] }, { filters: [{ id: "r", fieldId: "t", operator: "is", value: "" }] }]) {
       expect(sameLayout(FULL_LAYOUT, { ...FULL_LAYOUT, ...change } as never)).toBe(false);
     }
+  });
+});
+
+describe("orderFields", () => {
+  const all = [...fields, blankField("$created", "Created", "datetime"), blankField("$updated", "Updated", "datetime")];
+
+  it("by default (null) every field but created / updated, in the collection's order", () => {
+    expect(orderFields(all, null).map((f) => f.id)).toEqual(["title", "pages", "note"]);
+  });
+
+  it("a layout that names created / updated shows them, in its order; unknown ids are skipped", () => {
+    expect(orderFields(all, ["$updated", "title", "gone", "$created"]).map((f) => f.id)).toEqual(["$updated", "title", "$created"]);
+  });
+
+  it("an explicit layout without them leaves them out", () => {
+    expect(orderFields(all, ["note", "title"]).map((f) => f.id)).toEqual(["note", "title"]);
   });
 });
 
