@@ -3,7 +3,7 @@ import type { Db } from "../migrations";
 import { SqliteEngine } from "./engine";
 import type { Bind, OpenResult, SqlClient, Statement } from "./protocol";
 
-/** The database in this process, in memory: the server's headless device (and tests) under Node. */
+/** The database in this process, in memory, on sqlite-wasm (as the browser's worker runs it): the app's tests. The server's headless device uses `NodeSqlClient` (node.ts). */
 export class DirectSqlClient implements SqlClient {
   private constructor(
     private engine: SqliteEngine,

@@ -2,10 +2,12 @@
 // The Repository contract beyond the basics (repository.test.ts): refusals, soft deletes, AI values,
 // files and their clean-up, bookmarks, item views, remote collections. Without sync or the HTTP API.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { nodeEngine } from "../../test/engine";
 import { bytes, device } from "../../test/fakeServer";
 import type { Component } from "../../domain/components";
 import type { ItemView } from "../../domain/fieldLayout";
 import { collectionDraft, newId, type Collection, type FieldDef, type FieldKind } from "../../domain/model";
+import { rowItemId } from "../../domain/sources";
 import type { DataChange } from "../repository";
 
 // Each test builds devices and a database: on a busy machine that outlasts the default 5 s.
@@ -642,6 +644,18 @@ describe("remote collections", () => {
     return (await repo.listCollections()).find((c) => c.id === id)!;
   };
 
+  it("keep a bookmark of a row (its id is a key: no stored item), until the collection goes", async () => {
+    const people = await remote();
+    const row = rowItemId("42");
+    await repo.addBookmark("item", people.id, row, "Ada", "default");
+    expect((await repo.listBookmarks("default")).map((b) => [b.targetId, b.label])).toEqual([[row, "Ada"]]);
+    await repo.removeBookmark(row, "default");
+    expect(await repo.listBookmarks("default")).toEqual([]);
+    await repo.addBookmark("item", people.id, row, "Ada", "default");
+    await repo.deleteCollection(people.id);
+    expect(await repo.listBookmarks("default")).toEqual([]);
+  });
+
   it("store their source and the column each field shows", async () => {
     const people = await remote();
     expect(people.source).toMatchObject({ name: "CRM", key: "id" });
@@ -674,7 +688,7 @@ describe("remote collections", () => {
 
 describe("the device", () => {
   it("reports whether its storage is persistent", () => {
-    expect(repo.storage).toEqual({ persistent: false });
+    expect(repo.storage).toEqual({ persistent: nodeEngine }); // a file under node:sqlite, memory under sqlite-wasm
   });
 
   it("wipes everything locally, pausing sync, and starts over with the default space", async () => {

@@ -10,6 +10,14 @@ Extension points are registries, not special cases in pages:
   `applyQuery()`. Everything field-kind specific (filter operators, sort key, group keys, text for
   search) is in one `KIND_RULES` table: a new field kind or operator is added there. Pseudo fields
   `$title`, `$updated`, `$created` can be sorted on; the default query sorts by `$title`.
+  **Group by a date or date & time field** (`domain/groupDate.ts`, `ViewQuery.groupDate`, stored on the block as
+  `groupDate`, absent = day): by year, month, week (ISO: Monday to Sunday, week 1 holds the year's first Thursday), day or
+  hour (date & time only; a date falls back to day), chosen in "Group dates by" beside Group by. A group's key sorts as time
+  does (`2026`, `2026-10`, `2026-W44`, `2026-10-28`, `2026-10-28T14`) and Group order sorts by keys, so groups run
+  chronologically; its label reads out ("October 2026", "Week 44, 2026", "28 Oct 2026, 14:00"). A date & time is grouped in
+  the device's time zone. Items without a date form the "(empty)" group, always last. Local collections only: a remote
+  collection's source still groups by the column's value (the contract `shared/sources.ts` and the connectors have no
+  date parts), so "Group dates by" isn't offered there (its day keys do read out as dates).
   A filter value may hold `{{ }}` code, typed and shown as raw text (the one place besides
   components where code runs): `resolveFilterValues` / `filterCodeValue` work it out when the filter
   runs, as if its result had been typed (`{{ 1 == 1 }}` is "true"), reading `$now` and, on an item
@@ -65,7 +73,12 @@ Extension points are registries, not special cases in pages:
   group in a collapsible Carbon Accordion; columns as wide as their content on one line while
   there's room, the actions column widened by `FillTable` so the table spans the pane; an editing
   cell overlays its input on the invisibly kept value so the column never resizes; columns are
-  selectable per view, the title column too (rows then get an open button); a table looks the
+  selectable per view, the title column too (rows then get an open button); the Fields popover
+  offers each shown field's name toggle (tag icon, as on item pages: `FieldLayout.hiddenLabels` in the block's layout, JSON
+  in the view's config, so it syncs like the other layout options and older devices ignore it): a hidden name leaves
+  the header visually (kept for screen readers and the sort button) and the column sizes to its content, e.g. a checkbox;
+  rows have Edit and Delete only, no Duplicate (it saves width; a table row has no overflow menu, so
+  `ItemActions.duplicate` stays for other callers); a table looks the
   same at every width: one too wide for its pane (a phone, a narrow tiled pane) scrolls sideways,
   all its columns together (none is pinned), a fade at an edge with more beyond it; while the pane scrolls down its
   header row stays in view a margin below the pane's top (`--table-head-gap`, covered by the page's background once
@@ -135,7 +148,7 @@ Extension points are registries, not special cases in pages:
   - **Parts of a whole** (pie or donut, meter, treemap, word cloud; `partsOf`): the X axis's categories (by the first
     series' value), number fields (each made into one by its aggregate: fat, muscle and bone mass) or one value, against
     a Total (a pie or meter; a treemap and a word cloud draw their parts alone): the sum of the parts, a number or a field (made into one like the value). A total larger than the parts
-    adds a "Remaining" slice; a meter shows it as its empty part (Carbon's proportional meter); one value on a meter is a
+    adds a "Remaining" slice; a meter shows it as its empty part (Carbon's proportional meter); a meter's label row above the bar (its name and total) is Carbon's `meter.showLabels`, off by the "Show the label above the meter" checkbox (`showLabel`); one value on a meter is a
     bar of its share. A gauge measures its value against its total likewise (none: the value is a %), shows its % (Carbon's
     gauge: no unit, the decimals as set), and the increase or decrease from a comparison value (any value, and "Previous
     value" after the Last value, or a number; Carbon's delta arrow). A stat (`StatView`, like Grafana's stat panel, made
@@ -228,6 +241,7 @@ Extension points are registries, not special cases in pages:
 - Closing every tab leaves an empty workspace (no tab is reopened automatically); middle click
   on a tab closes it.
 - Phones show only the active pane.
+- Pressing a pane makes it active (`Workspace.tsx`), except on an element marked `data-keeps-active-pane`: the strip's Search button (it ends the right-most pane's strip) acts on the pane that was active, so the results open there.
 - **Tab width** (`fit` in `PaneView`, `Workspace.tsx`, plus `.ws-pane__tabs` in `styles.css`): a
   tab's natural width is its text plus padding and close button. Cap = min(16rem, 80% of the room
   for tabs), where the room is the `.cds--tabs` box minus the scroll buttons while they show

@@ -377,7 +377,9 @@ function PaneView({ pane }: { pane: PaneNode }) {
     const el = root.current;
     const body = frame.current;
     if (!el || !body) return;
-    const activate = () => {
+    const activate = (e: globalThis.PointerEvent) => {
+      // Tools that act on the active pane (Search) sit in a pane's strip without activating it.
+      if ((e.target as Element | null)?.closest?.("[data-keeps-active-pane]")) return;
       const { ws, active, paneId } = latest.current;
       if (!active) ws.update((w) => ({ ...w, activePaneId: paneId }));
     };

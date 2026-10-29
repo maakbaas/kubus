@@ -130,15 +130,8 @@ for (const vp of ["desktop", "laptop"]) {
       await box.locator("label, input").first().click({ force: true });
       await t.wait(200);
     }, { scope: ".ws-pane--active .ws-pane__body" });
-    // Row actions: duplicate, then delete (asks first; cancel).
-    const dup = t.page.locator(".items-table tbody").getByRole("button", { name: "Duplicate", exact: true }).first();
-    if (await dup.count()) {
-      const rowsBefore = await rows.count();
-      await dup.click();
-      await t.settle();
-      // The copy is written, then the list hears the change: under load that is after the settle.
-      await t.until("Duplicate adds a row", async () => (await rows.count()) === rowsBefore + 1 || `${rowsBefore} → ${await rows.count()}`);
-    }
+    // Row actions: no Duplicate (saves space; the table's rows have no overflow menu), then delete (asks first; cancel).
+    await t.check("rows have no Duplicate button", (await t.page.locator(".items-table tbody").getByRole("button", { name: "Duplicate", exact: true }).count()) === 0);
     const del = t.page.locator(".items-table tbody").getByRole("button", { name: "Delete", exact: true }).first();
     if (await del.count()) {
       await rows.first().hover();
@@ -323,5 +316,47 @@ for (const vp of ["desktop", "phone"]) {
     await t.settle(150);
     const back = await at();
     await t.check("scrolled back up: the header row is in its place again", Math.abs(back.head - before.head) <= 1, JSON.stringify({ before, back }));
+  }, { viewport: vp });
+}
+
+for (const vp of ["desktop", "phone"]) {
+  test(`table: a field's name can be hidden, its column sizes to the content @ ${vp}`, async (t) => {
+    await t.boot();
+    const spec = profileSpec("typical", { items: 6 });
+    spec.collections[0].views = [{ name: "All", blocks: [{ kind: "table", layout: { fields: ["title", "done", "count"] } }] }];
+    const ids = await t.seed(spec);
+    const coll = ids.collections.books;
+    const done = ids.fields["books.done"];
+    const path = t.listPath(coll);
+    // The header names shown (a hidden name stays in the DOM for screen readers and the sort button, visually hidden).
+    const labels = () => t.page.evaluate(() => [...document.querySelectorAll(".items-table thead th")].map((h) => (h.classList.contains("cell--name-hidden") ? "" : h.querySelector(".cds--table-header-label")?.textContent.trim() ?? "")));
+    const save = async () => { await t.openPanel(t.page.locator(".views-bar").first(), "Save changes to view"); await t.until("the view is saved", async () => !(await t.page.locator(".views-bar").first().innerText()).includes("*")); };
+    const stored = () => t.page.evaluate(async (c) => (await window.kubus.repo.listViews(c, "default")).find((v) => v.name === "All").blocks[0].layout.hiddenLabels, coll);
+    const header = () => t.page.locator(".block").first().locator(".section-header").first();
+    await t.open(path);
+    const wide = await t.page.evaluate(() => [...document.querySelectorAll(".items-table thead th")].find((h) => h.textContent.includes("Done")).getBoundingClientRect().width);
+    await openTool(t, header(), "Fields");
+    const row = t.page.locator(".cds--popover--open .field-order__row", { hasText: "Done" }).first();
+    await t.check("the Fields popover offers the name toggle per field", (await t.page.locator(".cds--popover--open").getByRole("button", { name: "Hide field name" }).count()) >= 3);
+    await row.getByRole("button", { name: "Hide field name" }).click();
+    await t.until("the header label is gone, the column stays", async () => { const l = await labels(); return (l.length === 4 && l[1] === "" && l[0] !== "" && l[2] !== "") || JSON.stringify(l); });
+    await t.check("the toggle now offers to show it", (await row.getByRole("button", { name: "Show field name" }).count()) === 1);
+    await t.closeAll();
+    await t.settle();
+    const narrow = await t.page.evaluate(() => document.querySelectorAll(".items-table thead th")[1].getBoundingClientRect().width);
+    await t.check("the column sizes to its checkbox, not to the header", narrow < wide - 8 && narrow < 80, `${wide} → ${narrow}`);
+    await t.check("the column is still sortable and named", (await t.page.locator(".items-table thead th").nth(1).getByRole("button", { name: /Done/ }).count()) === 1);
+    await t.audit("table with a hidden header label");
+    await save();
+    await t.check("hiding the name is stored with the view", JSON.stringify(await stored()) === JSON.stringify([done]), JSON.stringify(await stored()));
+    await t.open(path);
+    await t.until("it persists after reopening", async () => (await labels())[1] === "");
+    // Show it again.
+    await openTool(t, header(), "Fields");
+    await t.page.locator(".cds--popover--open .field-order__row", { hasText: "Done" }).first().getByRole("button", { name: "Show field name" }).click();
+    await t.until("showing it brings the header back", async () => (await labels())[1] === "Done");
+    await t.closeAll(); // Save is held while the panel is open
+    await save();
+    await t.check("showing the name is stored", (await stored()).length === 0);
   }, { viewport: vp });
 }

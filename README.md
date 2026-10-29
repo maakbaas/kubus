@@ -84,5 +84,8 @@ In the app, the server's own settings set up what it offers every device: a lang
 set its own instead) and remote sources (Settings → Connections), databases the server reads (read-only: Postgres, MySQL / MariaDB, n8n, InfluxDB 2, Cloudflare D1, Actual Budget, ICS calendars, JSON and CSV over HTTP) for remote
 collections. Both are stored on the server only; keys and passwords are never shown again, and
 with `KUBUS_SECRET_KEY` set (commented in `docker-compose.yml`) they are stored encrypted.
+The API's copy of your data (the *headless device*) is kept in `KUBUS_HEADLESS_DIR` (`/data/headless` in the image,
+a volume in `docker-compose.yml`), so after a restart the API answers at once instead of downloading everything first;
+it is only a cache, and one server may use the directory. Unset, it is kept in memory.
 Running the server from the repository instead of the image: `npm run build:headless` first, or the
 API answers 503.

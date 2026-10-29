@@ -37,6 +37,8 @@ import type { EditStart } from "./editStart";
 import { cachedFileUrl, fileUrl, IMAGE_TYPES, storeImageFile } from "./images";
 import { errorMessage } from "./useConfirm";
 import { TAG_CLASSES } from "./TagChip";
+import { LINK_KEY, LINK_PICKER_OPEN, LINK_TRIGGER, LinkPicker, type LinkTrigger } from "./LinkPicker";
+import type { LinkTarget } from "../domain/linkTargets";
 
 // Strictly GitHub Flavored Markdown: the CommonMark preset plus the GFM preset
 // (tables, task lists, strikethrough, autolinks, footnotes) and nothing else.
@@ -109,6 +111,63 @@ const linkInputRule = $inputRule(
       return state.tr
         .replaceWith(start + prefix.length, end, state.schema.text(text, [mark]))
         .removeStoredMark(mark.type);
+    }),
+);
+
+/** What is typed before the caret to begin a local link: `[text](target` (text may be empty), or `#/target` after a space. */
+const LINK_BEGIN = /\[([^[\]]*)\]\(([^()]*)$/;
+const LINK_BEGIN_HASH = /(?:^|\s)(#\/\S*)$/;
+
+/** The local link being typed at the caret, if one is (not in code, not inside a link, not an image's `![alt](`). */
+function linkBeingTyped(view: EditorView): Omit<LinkTrigger, "caret"> | null {
+  const { selection } = view.state;
+  if (!selection.empty) return null;
+  const { $from } = selection;
+  const parent = $from.parent;
+  if (!parent.isTextblock || parent.type.spec.code || $from.marks().some((m) => m.type.name === "link" || m.type.spec.code)) return null;
+  const before = parent.textBetween(0, $from.parentOffset, undefined, "￼");
+  const link = LINK_BEGIN.exec(before);
+  if (link && before[link.index - 1] !== "!") return { from: $from.pos - link[0].length, to: $from.pos, text: link[1], query: link[2] };
+  const hash = LINK_BEGIN_HASH.exec(before);
+  return hash ? { from: $from.pos - hash[1].length, to: $from.pos, text: "", query: hash[1] } : null;
+}
+
+/**
+ * Tells the component around the editor (LinkPicker) that a local link is being typed, and hands it
+ * the keys it takes (↑ ↓ Enter Tab Escape) while it shows its options. It adds no syntax: choosing
+ * writes an ordinary `[text](target)` link.
+ */
+const linkTrigger = $prose(
+  () =>
+    new Plugin({
+      props: {
+        handleKeyDown(view, event) {
+          const box = view.dom.closest<HTMLElement>(".md-editor");
+          if (box?.dataset.linkPicker !== LINK_PICKER_OPEN || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
+          if (!["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"].includes(event.key)) return false;
+          event.preventDefault();
+          event.stopPropagation();
+          view.dom.dispatchEvent(new CustomEvent(LINK_KEY, { bubbles: true, detail: event.key }));
+          return true;
+        },
+      },
+      view: () => {
+        let last = "";
+        return {
+          update: (view) => {
+            const typing = view.hasFocus() ? linkBeingTyped(view) : null;
+            let trigger: LinkTrigger | null = null;
+            if (typing) {
+              const c = view.coordsAtPos(typing.to);
+              trigger = { ...typing, caret: { left: c.left, top: c.top, bottom: c.bottom } };
+            }
+            const key = JSON.stringify(trigger);
+            if (key === last) return;
+            last = key;
+            view.dom.dispatchEvent(new CustomEvent(LINK_TRIGGER, { bubbles: true, detail: trigger }));
+          },
+        };
+      },
     }),
 );
 
@@ -416,6 +475,31 @@ function EditorChrome(props: Props) {
     box.addEventListener(OPEN_LINK, onOpen);
     return () => box.removeEventListener(OPEN_LINK, onOpen);
   }, []);
+  // A local link being typed (linkTrigger): LinkPicker offers the pages it can point at.
+  const [trigger, setTrigger] = useState<LinkTrigger | null>(null);
+  useEffect(() => {
+    const box = editorBox.current;
+    if (!box) return;
+    const onTrigger = (e: Event) => setTrigger((e as CustomEvent<LinkTrigger | null>).detail);
+    const onBlur = (e: FocusEvent) => !box.contains(e.relatedTarget as Node | null) && setTrigger(null);
+    box.addEventListener(LINK_TRIGGER, onTrigger);
+    box.addEventListener("focusout", onBlur);
+    return () => {
+      box.removeEventListener(LINK_TRIGGER, onTrigger);
+      box.removeEventListener("focusout", onBlur);
+    };
+  }, []);
+  /** Writes the chosen page as an ordinary link, by id; the text typed so far, else the page's name, is what shows. */
+  const pickLink = (target: LinkTarget, typing: LinkTrigger) => {
+    withView((view) => {
+      const type = view.state.schema.marks.link;
+      if (!type || typing.to > view.state.doc.content.size) return;
+      const text = typing.text || target.name || "Link";
+      const tr = view.state.tr.replaceWith(typing.from, typing.to, view.state.schema.text(text, [type.create({ href: target.href })]));
+      view.dispatch(tr.setStoredMarks([]));
+    });
+    setTrigger(null);
+  };
   // A link typed or pasted by name is stored by id as soon as it names a page (a rename then breaks
   // nothing). Each href is tried once: one that names nothing (yet) stays as written.
   const tried = useRef(new Set<string>());
@@ -737,6 +821,8 @@ function EditorChrome(props: Props) {
           );
         })()}
 
+        <LinkPicker box={editorBox} trigger={trigger} onPick={pickLink} />
+
         {hovered && (
           // Positioned box exactly over the link; the Carbon Popover anchors to it.
           <div className="md-link-popover" style={hovered.box} onMouseEnter={cancelHide} onMouseLeave={scheduleHide}>
@@ -910,6 +996,7 @@ function EditorSurface({
         .use(tabAddsRow)
         .use(linkInputRule)
         .use(linkClick)
+        .use(linkTrigger)
         .use(tags)
         .use(storedImages(repo))
         .use(codeBlockLanguage)

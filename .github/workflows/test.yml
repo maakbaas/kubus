@@ -7,7 +7,7 @@ name: Test
 # - server: the connectors' and the server's vitest projects against Postgres, MySQL 8 and MariaDB;
 # - gui-smoke: the GUI suite's smoke tests of the suites this branch's changes reach (gui-tests/areas.mjs),
 #   all of them on main; not the screenshot baselines (machine-dependent).
-# The slow part stays out of the way: nightly.yml has the connectors' real services (n8n alone takes 1 to 2
+# The slow part stays out of the way: full.yml has the connectors' real services (n8n alone takes 1 to 2
 # minutes to start), the whole GUI suite sharded over jobs, and coverage. build.yml (Windows) runs `unit` there.
 # tests/README.md is the catalog of the suites.
 on:
@@ -100,7 +100,7 @@ jobs:
       - run: npm ci --prefix server
       # /api/v1 answers from it: the server's HTTP tests use it.
       - run: npm run build:headless
-      - run: npm run suite -- connectors server
+      - run: npm run suite -- nodesqlite connectors server
 
   gui-smoke:
     runs-on: ubuntu-latest
