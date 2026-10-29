@@ -300,13 +300,15 @@ function __audit(opts) {
   lap();
   /**
    * A table's header row stays in view while the pane scrolls down, the rows passing under it
-   * (styles.css, `data-head-shift`): a body cell shows only below it. Narrows `area` to that.
+   * (styles.css, `data-head-shift`, or `data-head-follow` where the browser moves it as it scrolls): a body cell shows only below it. Narrows `area` to that.
    */
   function underStuckHeader(el, area) {
-    const cell = el.closest?.(".table-wrap[data-head-shift] .items-table tbody td");
+    const cell = el.closest?.(".table-wrap:is([data-head-shift], [data-head-follow]) .items-table tbody td");
     const head = cell?.closest("table")?.tHead;
-    if (!cell || !head) return area;
-    return { ...area, top: Math.max(area.top, head.getBoundingClientRect().bottom) };
+    if (!cell || !head?.rows[0]) return area;
+    // The header cells are what moves (not the thead around them): where they end.
+    const bottom = Math.max(...[...head.rows[0].cells].map((th) => th.getBoundingClientRect().bottom));
+    return { ...area, top: Math.max(area.top, bottom) };
   }
 
   section = "text-overlap";
