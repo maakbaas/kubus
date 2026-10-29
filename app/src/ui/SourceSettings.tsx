@@ -80,8 +80,8 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
         helperText={isNew ? "The databases the Kubus server reads for you (set up on the server)." : undefined}
         items={offered ?? []}
         disabled={!isNew || !offered?.length}
-        // null, not undefined: Downshift must stay controlled while the sources are still being read.
-        selectedItem={info ?? null}
+        // null, not undefined: always controlled (Downshift warns when a value appears later); Carbon's type only allows undefined.
+        selectedItem={(info ?? null) as SourceInfo | undefined}
         itemToString={(s) => (s ? (s.problem ? `${s.name} (${s.problem})` : s.name) : sourceName)}
         onChange={({ selectedItem }) => {
           if (!selectedItem || selectedItem.name === sourceName) return;
@@ -113,7 +113,7 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
           label="The column that tells rows apart"
           helperText="Unique for each row: it opens a row's page. The primary key when there is one."
           items={source.columns.map((c) => c.name)}
-          selectedItem={source.key || undefined}
+          selectedItem={(source.key || null) as string | undefined}
           invalid={!!problem}
           invalidText={problem}
           onChange={({ selectedItem }) => selectedItem && onChange({ ...draft, source: { ...source, key: selectedItem } })}
