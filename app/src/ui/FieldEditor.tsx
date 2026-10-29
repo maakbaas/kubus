@@ -130,6 +130,8 @@ export function FieldEditor({ field: fieldDef, value, refs, start, compact, idPr
       const target = e.target as HTMLElement;
       const inField = box.current?.contains(target) || target === document.body || !!target.closest(".flatpickr-calendar");
       if (!inField) return;
+      // A dialog's keys are its own (the Markdown editor's Edit link: Escape closes it, or its list).
+      if (target.closest(".cds--modal")) return;
       // A list's rows handle these themselves: Enter adds an item, Escape removes an empty one.
       const listRow = target.closest("[data-list-row]");
       if (e.key === "Escape" && target.closest("[data-list-row-removable]")) return;

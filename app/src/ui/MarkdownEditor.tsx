@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { FormLabel, IconButton, InlineNotification, Modal, Popover, PopoverContent, TextInput } from "@carbon/react";
+import { FormLabel, IconButton, InlineNotification, Modal, Popover, PopoverContent } from "@carbon/react";
 import { ColumnDelete, ColumnInsert, Edit, Launch, OverflowMenuHorizontal, OverflowMenuVertical, RowDelete, RowInsert, TrashCan, Unlink } from "@carbon/icons-react";
 import { Editor, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, rootCtx, serializerCtx } from "@milkdown/kit/core";
 import type { Ctx } from "@milkdown/kit/ctx";
@@ -38,6 +38,7 @@ import { cachedFileUrl, fileUrl, IMAGE_TYPES, storeImageFile } from "./images";
 import { errorMessage } from "./useConfirm";
 import { TAG_CLASSES } from "./TagChip";
 import { LINK_KEY, LINK_PICKER_OPEN, LINK_TRIGGER, LinkPicker, type LinkTrigger } from "./LinkPicker";
+import { LinkTargetInput } from "./LinkTargetInput";
 import type { LinkTarget } from "../domain/linkTargets";
 
 // Strictly GitHub Flavored Markdown: the CommonMark preset plus the GFM preset
@@ -886,12 +887,11 @@ function EditorChrome(props: Props) {
           setLinkEdit(null);
         }}
       >
-        <TextInput size="sm"
+        <LinkTargetInput
           id={`${labelId}-href`}
-          labelText="URL"
-          placeholder="https://"
           value={linkEdit?.href ?? ""}
-          onChange={(e) => setLinkEdit((d) => (d ? { ...d, href: e.target.value } : d))}
+          onChange={(href) => setLinkEdit((d) => (d ? { ...d, href } : d))}
+          toShown={links.toShown}
         />
       </Modal>
 

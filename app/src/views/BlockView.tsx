@@ -300,7 +300,7 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
             />
           )}
           {onRemove && (
-            <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} className="block-settings__remove" onClick={onRemove}>
+            <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} onClick={onRemove}>
               Remove block
             </Button>
           )}

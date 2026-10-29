@@ -40,7 +40,7 @@ export function slugs(names: string[]): string[] {
 }
 
 /** The name a block goes by: its title, else its type ("table", "cards"). */
-const blockName = (b: ViewBlock) => b.title || b.kind;
+export const blockName = (b: ViewBlock) => b.title || b.kind;
 
 const indexOfSlug = (names: string[], wanted: string) => slugs(names).indexOf(wanted);
 

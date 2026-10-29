@@ -16,12 +16,18 @@ import type { Collection, ItemLabel } from "./model";
 import type { CollectionView } from "./views";
 
 const field = (id: string, name: string) => ({ id, name }) as Collection["fields"][number];
-const books = { id: "c1", name: "Book", pluralName: "Books", fields: [field("f1", "Title"), field("f2", "Author")], itemViews: [] } as unknown as Collection;
+const block = (id: string, title: string, kind = "table") => ({ id, title, kind });
+const itemViews = [
+  { id: "iv1", name: "Default", isDefault: true, layout: { blocks: [block("ib1", "Notes", "markdown")] } },
+  { id: "iv2", name: "Compact", isDefault: false, layout: { blocks: [] } },
+];
+const books = { id: "c1", name: "Book", pluralName: "Books", fields: [field("f1", "Title"), field("f2", "Author")], itemViews } as unknown as Collection;
 const people = { id: "c2", name: "Person", pluralName: "People", fields: [field("f3", "Name")], itemViews: [] } as unknown as Collection;
 const remote = { id: "c3", name: "Row", pluralName: "Rows", fields: [], itemViews: [], source: { kind: "x" } } as unknown as Collection;
 const views = [
-  { id: "v1", collectionId: "c1", name: "Reading list" },
-  { id: "v2", collectionId: "c2", name: "Authors" },
+  { id: "v1", collectionId: "c1", name: "Reading list", isDefault: false, blocks: [block("b1", ""), block("b2", "Shelf", "cards")] },
+  { id: "v2", collectionId: "c2", name: "Authors", isDefault: false, blocks: [] },
+  { id: "v3", collectionId: "c1", name: "All", isDefault: true, blocks: [block("b3", "Overview")] },
 ] as unknown as CollectionView[];
 const labelsOf: Record<string, ItemLabel[]> = {
   c1: [
@@ -98,7 +104,7 @@ describe("withoutShown", () => {
 
 describe("searchLinkTargets", () => {
   it("offers collections and views, and items when asked, of the shown space's native collections", async () => {
-    expect(names(await searchLinkTargets("", data, { items: false }))).toEqual(["Books", "People", "Rows", "Authors", "Reading list"]);
+    expect(names(await searchLinkTargets("", data, { items: false }))).toEqual(["Books", "People", "Rows", "All", "Authors", "Reading list"]);
     const withItems = await searchLinkTargets("", data, { items: true });
     expect(names(withItems)).toContain("Dune");
     expect(names(withItems)).not.toContain("Elsewhere");
@@ -126,6 +132,46 @@ describe("searchLinkTargets", () => {
   });
   it("storedLinkTarget does not look for the items of a remote collection", async () => {
     expect(await storedLinkTarget({ collectionId: "c3", itemId: "r1" }, data)).toBeNull();
+  });
+});
+
+describe("searchLinkTargets by name, part by part", () => {
+  const hrefs = async (q: string) => (await searchLinkTargets(q, data, { items: true })).map((t) => t.href);
+  it("lists a collection's views and items after its name and a /, filtered by the part typed", async () => {
+    expect(names(await searchLinkTargets("books/", data, { items: true }))).toEqual(["Reading list", "All"]);
+    expect(names(await searchLinkTargets("book/", data, { items: true }))).toEqual(["Dune", "Authority"]);
+    expect(await hrefs("books/reading-l")).toEqual(["#/collections/c1/items?view=v1"]);
+    expect(await hrefs("book/du")).toEqual(["#/collections/c1/items/i1"]);
+    expect(names(await searchLinkTargets("books/views/", data, { items: true }))).toEqual(["Reading list", "All"]);
+    expect(await hrefs("#/book/dune")).toEqual(["#/collections/c1/items/i1"]);
+  });
+  it("lists the blocks of a view, and the fields and blocks of an item's page, after the #", async () => {
+    expect(await hrefs("books/reading-list#")).toEqual(["#/collections/c1/items?view=v1&block=b1", "#/collections/c1/items?view=v1&block=b2"]);
+    expect(await hrefs("books/reading-list#shelf")).toEqual(["#/collections/c1/items?view=v1&block=b2"]);
+    expect(await hrefs("books#over")).toEqual(["#/collections/c1/items?block=b3"]);
+    expect(names(await searchLinkTargets("book/dune#", data, { items: true }))).toEqual(["Title", "Author", "Notes"]);
+    expect(await hrefs("book/dune#author")).toEqual(["#/collections/c1/items/i1?field=f2"]);
+    expect(await hrefs("book/dune/compact#author")).toEqual(["#/collections/c1/items/i1?view=iv2&field=f2"]);
+    expect(await hrefs("book/dune/comp")).toEqual(["#/collections/c1/items/i1?view=iv2"]);
+  });
+  it("offers nothing for a path that names nothing, and leaves other words to the name search", async () => {
+    for (const gone of ["books/zzz", "book/zzz#author", "books/reading-list#zzz", "book/elsewhere#author", "book/dune/zzz#author"]) {
+      expect(await searchLinkTargets(gone, data, { items: true })).toEqual([]);
+    }
+    expect(names(await searchLinkTargets("dune#auth", data, { items: true }))).toEqual(["Author"]);
+  });
+  it("gives every option its link by name", async () => {
+    const links = async (q: string) => (await searchLinkTargets(q, data, { items: true })).map((t) => t.link);
+    expect(await links("books/")).toEqual(["books/reading-list", "books/all"]);
+    expect(await links("book/dune#")).toEqual(["book/dune#title", "book/dune#author", "book/dune#notes"]);
+    expect(await links("book/dune/compact#auth")).toEqual(["book/dune/compact#author"]);
+    expect(await links("books/reading-list#shelf")).toEqual(["books/reading-list#shelf"]);
+    expect(await links("herbert")).toEqual(["person/frank-herbert"]);
+  });
+  it("finds the block and the item view a stored link names", async () => {
+    expect((await searchLinkTargets("#/collections/c1/items?view=v1&block=b2", data, { items: false })).map((t) => t.name)).toEqual(["Shelf"]);
+    expect((await searchLinkTargets("#/collections/c1/items/i1?view=iv2", data, { items: false })).map((t) => t.key)).toEqual(["itemview:i1:iv2"]);
+    expect((await searchLinkTargets("#/collections/c1/items/i1?block=ib1", data, { items: false })).map((t) => t.name)).toEqual(["Notes"]);
   });
 });
 

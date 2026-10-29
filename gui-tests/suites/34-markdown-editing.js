@@ -220,8 +220,8 @@ test("markdown editing: the link picker completes collections, views, items and 
   await openEditor(t);
   const pm = t.page.locator(".ProseMirror").first();
   const picker = t.page.locator(".link-picker");
-  const rows = picker.locator(".link-target");
-  const kindsOf = async () => rows.evaluateAll((els) => els.map((e) => `${e.dataset.kind}:${e.querySelector(".link-target__name").textContent}`));
+  const rows = picker.locator(".link-option");
+  const kindsOf = async () => rows.evaluateAll((els) => els.map((e) => `${e.dataset.kind}:${e.querySelector(".link-option__name").textContent}`));
   const base = `#/collections/${ids.collections.books}/items`;
   await pm.click({ position: { x: 4, y: 4 } });
   await t.page.keyboard.press("Control+End");
@@ -251,7 +251,7 @@ test("markdown editing: the link picker completes collections, views, items and 
   await t.page.keyboard.type(" [](author");
   await t.until("collections are offered first", async () => (await kindsOf())[0] === "collection:Authors", { timeout: 8000 });
   await t.page.keyboard.press("ArrowDown");
-  const activeName = () => picker.locator('[data-active="true"] .link-target__name').first().innerText({ timeout: 1000 }).catch(() => "");
+  const activeName = () => picker.locator('[data-active="true"] .link-option__name').first().innerText({ timeout: 1000 }).catch(() => "");
   await t.until("↓ moves the choice", async () => (await activeName()) !== "Authors" && (await activeName()) !== "");
   await t.page.keyboard.press("ArrowUp");
   await t.until("↑ moves it back", async () => (await activeName()) === "Authors");
@@ -281,6 +281,48 @@ test("markdown editing: the link picker completes collections, views, items and 
   await t.page.keyboard.press("Enter");
   await t.until("…and written with the name as text", async () => (await pm.locator(`a[href="#/collections/${ids.collections.authors}/items"]`).count()) === 2);
 
+  // A link by name, part by part: `books/` the views, `book/item#` the item page's fields, `books/view#` the view's blocks;
+  // every option shows its link by name, in one compact row.
+  await t.page.keyboard.type(" [](books/grou");
+  await t.until("collection/ offers its views", async () => (await kindsOf()).join() === "view:Grouped", { timeout: 8000 });
+  await t.check("…showing the link it is", (await picker.locator(".link-option__link").first().innerText()) === "books/grouped", await picker.locator(".link-option__link").first().innerText());
+  const rowHeight = await rows.first().evaluate((e) => e.closest(".cds--contained-list-item").getBoundingClientRect().height);
+  await t.check("…in a compact row (one line)", rowHeight <= 40, `${rowHeight}px`);
+  await t.check("…with no flash", (await rows.first().evaluate((e) => getComputedStyle(e).animationName)) === "none");
+  await t.page.keyboard.press("Enter");
+  await t.until("…chosen as the view by id", async () => (await pm.locator(`a[href="${base}?view=${viewId}"]`).count()) === 2);
+  await t.page.keyboard.type(" [](book/zanzibar-target#snip");
+  await t.until("collection/item#field offers the field", async () => (await kindsOf()).join() === "field:Snippet", { timeout: 8000 });
+  await t.page.keyboard.press("Escape");
+  await t.page.keyboard.type(") [](books/grouped#");
+  await t.until("collection/view# offers its blocks", async () => (await kindsOf()).join() === "block:table", { timeout: 8000 });
+  await t.page.keyboard.press("Enter");
+  await t.until("…chosen as the view's block by id", async () => (await pm.locator(`a[href^="${base}?view=${viewId}&block="]`).count()) === 1);
+
+  // The Edit link dialog completes the same way under its URL field.
+  await pm.locator(`a[href="${base}/${ids.items["books/zz"]}"]`).first().hover();
+  await t.page.locator(".md-link-popover").getByRole("button", { name: "Edit link" }).click();
+  const url = t.page.getByRole("textbox", { name: "URL" });
+  await url.waitFor();
+  await url.fill("");
+  await url.pressSequentially("authors/");
+  const dialogRows = t.page.locator(".link-target-input .link-option");
+  await t.until("the dialog lists the pages that fit", async () => (await dialogRows.count()) > 0, { timeout: 8000 });
+  await t.audit("edit link dialog with the link picker");
+  await url.fill("");
+  await url.pressSequentially("book/zanzibar-target#snip");
+  await t.until("…by name, part by part", async () => (await dialogRows.count()) === 1, { timeout: 8000 });
+  await url.press("Enter");
+  await t.until("Enter writes the link by name in the field", async () => (await url.inputValue()) === "book/zanzibar-target#snippet", await url.inputValue());
+  await t.check("…and the dialog stays open, the list closed", (await url.count()) === 1 && (await dialogRows.count()) === 0);
+  await url.press("Backspace");
+  await t.until("typing on opens it again", async () => (await dialogRows.count()) > 0, { timeout: 8000 });
+  await url.press("Escape");
+  await t.check("Escape closes the list, not the dialog", (await url.count()) === 1 && (await dialogRows.count()) === 0);
+  await url.fill("book/zanzibar-target#snippet");
+  await t.page.getByRole("button", { name: "Apply" }).click();
+  await t.until("Apply stores it by id", async () => (await pm.locator(`a[href^="${base}/${ids.items["books/zz"]}?field="]`).count()) === 2);
+
   // Nothing fits: nothing shows, and typing is not disturbed.
   await t.page.keyboard.type(" [](qqqqzzzz");
   await t.wait(500);
@@ -289,7 +331,8 @@ test("markdown editing: the link picker completes collections, views, items and 
   const notes = await storedNotes(t, ids);
   await t.check(
     "stored: plain GFM links by id",
-    notes.includes(`[Zanzibar Target](${base}/${ids.items["books/zz"]})`) &&
+    // The first item link, edited in the dialog to the item's Snippet field.
+    new RegExp(`\\[Zanzibar Target\\]\\(${base}/${ids.items["books/zz"]}\\?field=[^)]+\\)`).test(notes) &&
       notes.includes(`[my text](${base}?view=${viewId})`) &&
       notes.includes(`[Authors](#/collections/${ids.collections.authors}/items)`) &&
       new RegExp(`\\[Snippet\\]\\(${base}/${ids.items["books/zz"]}\\?field=[^)]+\\)`).test(notes) &&
