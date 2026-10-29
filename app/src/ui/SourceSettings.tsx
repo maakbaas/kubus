@@ -80,7 +80,8 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
         helperText={isNew ? "The databases the Kubus server reads for you (set up on the server)." : undefined}
         items={offered ?? []}
         disabled={!isNew || !offered?.length}
-        selectedItem={info}
+        // null, not undefined: Downshift must stay controlled while the sources are still being read.
+        selectedItem={info ?? null}
         itemToString={(s) => (s ? (s.problem ? `${s.name} (${s.problem})` : s.name) : sourceName)}
         onChange={({ selectedItem }) => {
           if (!selectedItem || selectedItem.name === sourceName) return;
@@ -99,7 +100,8 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
           items={tables ?? []}
           selectedItem={chosenTable}
           itemToString={(t) => (t ? `${tableLabel(t)}${t.type === "view" ? " (view)" : ""}` : "")}
-          onChange={({ selectedItem }) => selectedItem && void read(sourceName, { table: { schema: selectedItem.schema, name: selectedItem.name } })}
+          // Not the table already read: Carbon calls onChange when the chosen table arrives as a prop (the tables listed).
+          onChange={({ selectedItem }) => selectedItem && selectedItem !== chosenTable && void read(sourceName, { table: { schema: selectedItem.schema, name: selectedItem.name } })}
         />
       )}
       {source && source.columns.length > 0 && (
