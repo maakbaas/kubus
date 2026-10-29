@@ -83,6 +83,8 @@ interface MenusProps {
   home: Collection;
   block: ViewBlock;
   refs: RefOptions;
+  /** The block's items as it shows them, for its type's settings. */
+  result?: QueryResult;
   place: BlockPlace;
   /** The filter the block builds on: its view's, or its item page's (that page's rules for its collection). */
   viewFilters: FilterRule[] | null;
@@ -98,7 +100,7 @@ interface MenusProps {
 }
 
 /** A block's menus: Filter, Sort and group, Fields (each where its block type uses it), and its type's settings. */
-export function BlockMenus({ collection, home, block, refs, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange }: MenusProps) {
+export function BlockMenus({ collection, home, block, refs, result, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange }: MenusProps) {
   const uid = useId();
   const { components, collections } = useStore();
   // The virtual collections (Backlinks) are listed only here, among the page's block collections.
@@ -307,7 +309,7 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
             onBlur={(e) => e.target.value.trim() !== block.title && onSet({ title: e.target.value.trim() })}
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           />
-          {type.OptionsEditor && <type.OptionsEditor collection={collection} options={block.options} place={place} pageCollectionId={page?.id} onChange={(options) => onSet({ options })} />}
+          {type.OptionsEditor && <type.OptionsEditor collection={collection} options={block.options} place={place} pageCollectionId={page?.id} result={result} refs={refs} onChange={(options) => onSet({ options })} />}
           {/* Offered while the text can be one (not empty, nothing a static component can't read). */}
           {markdownLocal && markdownLocal.code.trim() && !placeProblem(markdownLocal, "static") && (
             <Button kind="tertiary" size="sm" renderIcon={Save} onClick={() => setPromoting(true)}>
@@ -462,6 +464,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
           home={home}
           block={block}
           refs={data.refs}
+          result={result}
           place={place}
           viewFilters={viewFilters}
           page={page?.collection}

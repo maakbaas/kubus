@@ -246,11 +246,16 @@ Extension points are registries, not special cases in pages:
     (`regions.file`, `files/<id>`: the same bytes on every device, so one file; synced like an image, kept while a block
     names it: docs/data-model.md, block_file_uses; "Downloading the map…" under the select meanwhile, the map shown until it's done;
     offline it says so); and Regions from, the field whose values are the regions (a category per value, as the X axis's). A
-    value is a region when it is its code ("NL", "NL-DR") or one of its names (`name`, English `NAME_ENG`), ignoring case,
+    value is a region when it is its code (`id`: "NL", "NL-DR") or its name (`name`), the two properties every amCharts map has
+    (an English name is in a few maps only, under several keys: not used), ignoring case,
     accents and punctuation ("noord holland" is Noord-Holland, "Fryslan" Fryslân), a code first (`regionFinder`); two
     values of one region ("NL", "Netherlands") are one. A region without items is striped (Carbon's missing data); the
     values that are no region are listed under the map ("Not on the map: Atlantis (1)", ellipsized, the whole list in its
-    title). The whole map is shown, whichever regions have values: Carbon fits its projection to the regions with a value
+    title). "Show regions" (Data, under Regions from) opens the map's regions (`views/RegionsDialog.tsx`, a small dialog:
+    a long name, a code and a number don't fit an xs one): every region's name, its code and how many of the
+    block's items are in it (`RegionValues.matches`; the Block settings get the block's result for it,
+    `BlockOptionsProps.result`), searchable, "Only regions without a value", and the values that are no region above; "Export to CSV" saves the rows shown
+    (Region, Code, Items; `toCsv`: RFC 4180, UTF-8 with a byte-order mark; `platform/download.ts`). The whole map is shown, whichever regions have values: Carbon fits its projection to the regions with a value
     only (and no data can change that: it reads 0 and empty alike as missing), so after every render the regions are drawn
     again fitted to the whole map (`frameWholeMap` in ChartCanvas: the size Carbon fitted to, `width.baseVal`, each path's
     bound feature), centred on its own longitudes (`centreOf`: opposite the widest gap, so a map across 180°, the Aleutians,

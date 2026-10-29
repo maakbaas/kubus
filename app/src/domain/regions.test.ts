@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { centreOf, defaultRegions, matchKey, normalizeRegions, regionFinder, regionsOf } from "./regions";
+import { centreOf, defaultRegions, matchKey, normalizeRegions, regionFinder, regionsOf, toCsv } from "./regions";
 
 describe("regions", () => {
   it("are a map's named features, a repeated name made unique by its code", () => {
@@ -18,7 +18,7 @@ describe("regions", () => {
     ]);
   });
 
-  it("are found by code or name, ignoring case, accents and punctuation, a code first", () => {
+  it("are found by code or name only, ignoring case, accents and punctuation, a code first", () => {
     const find = regionFinder(
       regionsOf([
         { properties: { name: "Noord-Holland", id: "NL-NH" } },
@@ -28,7 +28,8 @@ describe("regions", () => {
     );
     expect(find("noord holland")?.id).toBe("NL-NH");
     expect(find("Fryslan")?.id).toBe("NL-FR");
-    expect(find("FRIESLAND")?.id).toBe("NL-FR");
+    expect(find("FRIESLAND")).toBeNull(); // an English name (only in some maps) is not matched
+    expect(find("NL-FR")?.id).toBe("NL-FR");
     expect(find("nl-nh")?.id).toBe("NL-NH");
     expect(find("Utrecht")).toBeNull();
     expect(matchKey("  São  Paulo! ")).toBe("sao paulo");
@@ -52,5 +53,13 @@ describe("centreOf", () => {
     expect(Math.abs(fiji)).toBeGreaterThan(170);
     expect(centreOf(Array.from({ length: 36 }, (_, i) => i * 10 - 180))).toBe(0);
     expect(centreOf([])).toBe(0);
+  });
+});
+
+describe("toCsv", () => {
+  it("quotes what needs it, ends rows in CRLF and starts with a byte-order mark", () => {
+    expect(toCsv([["Region", "Code", "Items"], ["Fryslân", "NL-FR", 1], ['Bonaire, "Sint" Eustatius', "BQ", 0]])).toBe(
+      '\uFEFFRegion,Code,Items\r\nFryslân,NL-FR,1\r\n"Bonaire, ""Sint"" Eustatius",BQ,0\r\n',
+    );
   });
 });

@@ -3229,6 +3229,29 @@ img[data-lightbox] {
 .chart-block__problem {
   margin: 0;
 }
+/* A choropleth's regions (RegionsDialog): the table scrolls inside the dialog, its cells one line each. */
+.regions-dialog__table {
+  max-block-size: 50vh;
+  overflow-y: auto;
+}
+.regions-dialog__table td {
+  max-inline-size: 20rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.regions-dialog__unmatched {
+  margin: 0;
+}
+.regions-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cds-spacing-05);
+}
+.regions-dialog__footer .helper {
+  margin: 0;
+}
 /* A choropleth's values that are no region of its map: one line, the whole list in its title. */
 .chart-block__unmatched {
   margin: var(--cds-spacing-03) 0 0;

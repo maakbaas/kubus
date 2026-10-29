@@ -840,4 +840,12 @@ describe("regionValues", () => {
     });
     expect(values(options({ chart: "choropleth", series: [sumPages] }, byGenre)).values).toEqual([["Denmark", 80], ["Netherlands", 500]]);
   });
+
+  it("list which values each region is, with their items", () => {
+    const r = regionValues(input(visits), options({ chart: "choropleth", series: [count] }, byGenre), countries);
+    expect(r.matches.map((m) => [m.region.key, m.labels, m.items])).toEqual([
+      ["Denmark", ["Denmark"], 1],
+      ["Netherlands", ["Netherlands", "NL"], 2],
+    ]);
+  });
 });
