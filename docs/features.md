@@ -217,6 +217,7 @@ What the app does, feature by feature (read the part you work on).
   `ViewBlock.hideHeader`, stored right away), on an item page with the layout's name toggle (a
   Markdown block too: unnamed, it is headed "Markdown" like any block): the header row goes with
   its menus (no buttons at all), so the content keeps the full width; the block can't collapse. A
+  table block's Fields popover has the same name toggle per field (hides that column's header label, `hiddenLabels`). A
   field shown without its name does the same with its label row's buttons ("Generate again"). The line between fields and
   blocks stays either way: a hidden header or name never joins two sections. What
   arranges a view is stored right away, applied to the shown and the saved view alike, so it never

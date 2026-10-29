@@ -65,7 +65,12 @@ Extension points are registries, not special cases in pages:
   group in a collapsible Carbon Accordion; columns as wide as their content on one line while
   there's room, the actions column widened by `FillTable` so the table spans the pane; an editing
   cell overlays its input on the invisibly kept value so the column never resizes; columns are
-  selectable per view, the title column too (rows then get an open button); a table looks the
+  selectable per view, the title column too (rows then get an open button); the Fields popover
+  offers each shown field's name toggle (tag icon, as on item pages: `FieldLayout.hiddenLabels` in the block's layout, JSON
+  in the view's config, so it syncs like the other layout options and older devices ignore it): a hidden name leaves
+  the header visually (kept for screen readers and the sort button) and the column sizes to its content, e.g. a checkbox;
+  rows have Edit and Delete only, no Duplicate (it saves width; a table row has no overflow menu, so
+  `ItemActions.duplicate` stays for other callers); a table looks the
   same at every width: one too wide for its pane (a phone, a narrow tiled pane) scrolls sideways,
   all its columns together (none is pinned), a fade at an edge with more beyond it; while the pane scrolls down its
   header row stays in view a margin below the pane's top (`--table-head-gap`, covered by the page's background once
