@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
-import { Button, Checkbox, Dropdown, InlineNotification, NumberInput, ProgressBar, TextInput } from "@carbon/react";
+import { LoadingBar } from "../ui/LoadingBar";
+import { Button, Checkbox, Dropdown, InlineNotification, NumberInput, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { orderFields } from "../domain/fieldLayout";
@@ -421,18 +422,19 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           none), then filling as the rows come in; it doesn't change shape when the total arrives. */}
       {!collapsed && remote && (remote.waiting || remote.progress) && (
         <div className="block-more">
-          <ProgressBar
-            className="block-more__bar"
-            size="small"
+          <LoadingBar
             label={remote.progress ? `Loading rows: ${remote.progress.loaded} of ${remote.progress.total}` : "Loading rows"}
-            value={remote.progress?.loaded ?? 0}
-            max={Math.max(remote.progress?.total ?? 1, 1)}
+            value={remote.progress?.loaded}
+            max={remote.progress?.total}
+            onStop={remote.progress?.cancel ?? remote.stop}
           />
-          {remote.everything && (
-            <Button kind="tertiary" size="sm" onClick={remote.progress?.cancel ?? remote.stop}>
-              Cancel
-            </Button>
-          )}
+        </div>
+      )}
+      {!collapsed && remote?.stopped && (
+        <div className="block-more">
+          <Button kind="tertiary" size="sm" onClick={remote.resume}>
+            Load rows
+          </Button>
         </div>
       )}
       {!collapsed && items && stepped && (

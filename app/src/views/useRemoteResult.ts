@@ -33,6 +33,9 @@ export interface RemoteResult {
   waiting: boolean;
   /** Stops loading every row (`all`): the pages in stay, "Load all rows" goes on. */
   stop: () => void;
+  /** The first page was stopped before it came in (its answer is dropped): nothing is shown until `resume` asks again. */
+  stopped: boolean;
+  resume: () => void;
 }
 
 const EMPTY: QueryResult = { groups: [], total: 0 };
@@ -97,6 +100,9 @@ export function useRemoteResult(
   const [refreshes, setRefreshes] = useState(0);
   // The request whose remaining pages the person stopped loading.
   const [stopped, setStopped] = useState("");
+  // The request whose first page was stopped while on its way: its answer is dropped.
+  const [cancelled, setCancelled] = useState("");
+  const cancelledRef = useRef("");
   const pageSize = all ? MAX_SOURCE_PAGE : Math.min(page ?? PAGE, MAX_SOURCE_PAGE);
   // The request now, so a late answer to an older one is dropped.
   const current = useRef("");
@@ -113,7 +119,7 @@ export function useRemoteResult(
     const request = requestRef.current;
     if (!request) return;
     const got = (l: Omit<Loaded, "key" | "batch">) => {
-      if (current.current !== asked) return;
+      if (current.current !== asked || cancelledRef.current === asked) return;
       setAnswered(asked);
       setLoaded({ key, batch: ++batches.current, ...l });
     };
@@ -179,7 +185,15 @@ export function useRemoteResult(
     more: fresh && loaded?.more && !loadingAll ? (all ? () => setStopped("") : more) : null,
     loadingMore,
     progress: loadingAll && loaded ? { loaded: loaded.rows.length, total: loaded.total, cancel: () => setStopped(current.current) } : null,
-    waiting: answered !== current.current,
-    stop: () => setStopped(current.current),
+    waiting: answered !== current.current && cancelled !== current.current,
+    stop: () => {
+      setStopped(current.current);
+      if (answered !== current.current) {
+        cancelledRef.current = current.current;
+        setCancelled(current.current);
+      }
+    },
+    stopped: cancelled === current.current && answered !== current.current,
+    resume: () => setRefreshes((n) => n + 1),
   };
 }

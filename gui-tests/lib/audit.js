@@ -73,6 +73,7 @@ const CRITERIA = {
   "block-fit": "Every block, on an item page too, ends inside its page's content box, and a chart's svg or a map's canvas inside its block (a wider one pushes the block's \"⋮\" menu out).",
   "phone-width": "On a phone-wide pane the page's content box is the window minus the page padding (spacing-05) on both sides: no extra gutter, no max-width.",
   rhythm: "The gaps between an item page's fields and between a view's blocks are all equal.",
+  "progress-stop": "A progress bar is a LoadingBar with a \"×\" stop button on the right edge of its block's header buttons.",
   "toolbar-pitch": "Icon buttons side by side in a row touch: a 32px pitch, no gaps, no overlaps.",
   "type-style": "Text is set in one of the type styles the app uses (Carbon's label-01, body-compact-01, body-01, code-02, heading-compact-02, heading-04 …, and the item fields' one step up); weights only 300, 400, 600.",
   baseline: "A checkbox's label is centred on its box.",

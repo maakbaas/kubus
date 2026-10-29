@@ -2463,8 +2463,16 @@ img[data-lightbox] {
 .block-more .helper {
   margin-bottom: 0;
 }
-/* A chart loading all rows: the bar takes the room beside Cancel. */
-.block-more__bar {
+/* The app's loading bar (ui/LoadingBar.tsx): the bar takes the room beside its "×" stop button, a 32px icon
+   button at the row's right edge, in line with the heading's buttons above. */
+.loading-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-05);
+  flex: 1;
+  min-inline-size: 0;
+}
+.loading-bar__bar {
   flex: 1;
   min-inline-size: 0;
 }
@@ -2641,6 +2649,11 @@ img[data-lightbox] {
 .items-table td.cell--editing:nth-last-child(2) .cell-overlay {
   inset-inline-end: auto;
   inline-size: max(100%, 12rem);
+}
+/* …and where it does, the row's buttons under it are not drawn while it is open (they keep their
+   place, nothing moves): an editor never lies over a button you could still see, or tap by mistake. */
+.items-table tr:has(> td.cell--editing:nth-last-child(2)) > td.row-actions > * {
+  visibility: hidden;
 }
 .items-table .table-add-row:not(.table-add-row--bare) td:nth-last-child(2) .add-cell {
   inset-inline-end: auto;
