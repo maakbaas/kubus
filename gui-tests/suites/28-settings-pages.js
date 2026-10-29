@@ -735,11 +735,11 @@ for (const vp of ["desktop", "phone"]) {
     await t.until("the model list opens with both models", async () => (await t.page.getByRole("listbox").getByRole("option").allInnerTexts()).map((s) => s.trim()).join() === "fake-model,other-model");
     await t.audit("ai, model list open");
     await t.page.getByRole("option", { name: "fake-model", exact: true }).click();
-    await t.check("picking a model fills the box", (await fieldModel.inputValue()) === "fake-model");
+    await t.until("picking a model fills the box", async () => (await fieldModel.inputValue()) === "fake-model");
     await t.check("Test is possible now", !(await test.isDisabled()));
     await codeModel.click();
     await t.page.getByRole("option", { name: "other-model", exact: true }).click();
-    await t.check("the component model is picked too", (await codeModel.inputValue()) === "other-model");
+    await t.until("the component model is picked too", async () => (await codeModel.inputValue()) === "other-model");
     // Test: one request per model, with the key.
     await test.click();
     await t.until("Test reports each model", async () => (await results(t)).filter((r) => r.includes("replied: ok")).length === 2, { timeout: 8000 });
