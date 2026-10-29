@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HeadlessOptions } from "../../../shared/api";
 import { SqliteRepository } from "../data/sqlite/SqliteRepository";
-import { SYNC_COMPATIBLE, SYNC_VERSION } from "../../../shared/sync";
+import { SYNC_VERSION } from "../../../shared/sync";
 import { FakeServer, SERVER_URL, TOKEN } from "../test/fakeServer";
 import { HeadlessDevice, startHeadless } from "./index";
 
@@ -34,8 +34,8 @@ const get = (api: Awaited<ReturnType<typeof startHeadless>>, path: string, metho
 
 describe("starting", () => {
   it("fails with 503 and the reason when the server can't be synced with", async () => {
-    server.compatible = 99;
-    await expect(startHeadless(options())).rejects.toMatchObject({ status: 503, message: "The server's headless device can't sync: Update the app" });
+    server.version = 99;
+    await expect(startHeadless(options())).rejects.toMatchObject({ status: 503, message: "The server's headless device can't sync: Update Kubus to keep syncing" });
   });
 
   it("fails with 503 when the server can't be reached or refuses the token", async () => {
@@ -62,7 +62,7 @@ describe("a request", () => {
     server.log.length = 0;
     await get(api, "/spaces");
     expect(server.log.filter((l) => l === "POST /api/sync")).toHaveLength(0);
-    server.sync({ since: 0, changes: { spaces: [{ id: "elsewhere", name: "Elsewhere", icon: null, position: 3, created_at: "2026-10-28T10:00:00.000Z", updated_at: "2026-10-28T10:00:00.000Z", deleted_at: null }] }, version: 1, compatible: 1 });
+    server.sync({ since: 0, changes: { spaces: [{ id: "elsewhere", name: "Elsewhere", icon: null, position: 3, created_at: "2026-10-28T10:00:00.000Z", updated_at: "2026-10-28T10:00:00.000Z", deleted_at: null }] }, version: SYNC_VERSION });
     expect((await get(api, "/spaces")).json).toEqual(expect.arrayContaining([expect.objectContaining({ id: "elsewhere" })]));
   });
 
@@ -150,7 +150,7 @@ describe("a replaced server database", () => {
     // The wipe restarts the server's counter; another device then makes two writes. No /api/events signal reaches the device.
     server.wipe();
     const row = (id: string, name: string) => ({ id, name, icon: null, position: 1, created_at: "2026-10-28T10:00:00.000Z", updated_at: "2026-10-28T10:00:00.000Z", deleted_at: null });
-    server.sync({ since: 0, changes: { spaces: [row("n1", "New 1"), row("n2", "New 2")] }, version: SYNC_VERSION, compatible: SYNC_COMPATIBLE });
+    server.sync({ since: 0, changes: { spaces: [row("n1", "New 1"), row("n2", "New 2")] }, version: SYNC_VERSION });
     expect(server.seq).toBeGreaterThan(0);
     expect(server.seq).toBeLessThan(before);
     const names = ((await get(api, "/spaces")).json as { name: string }[]).map((s) => s.name);

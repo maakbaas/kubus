@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Headless, HeadlessOptions, StartHeadless } from "../../shared/api.ts";
+import { SYNC_VERSION } from "../../shared/sync.ts";
 
 // Loads the headless device (app/src/headless, built into ../headless by `npm run build:headless`)
 // that answers /api/v1. Without the bundle the rest of the server works as before and /api/v1
@@ -25,7 +26,11 @@ export class HeadlessHost {
       return;
     }
     try {
-      const { startHeadless } = (await import(pathToFileURL(BUNDLE).href)) as { startHeadless: StartHeadless };
+      const { startHeadless, syncVersion } = (await import(pathToFileURL(BUNDLE).href)) as { startHeadless: StartHeadless; syncVersion?: number };
+      // Built from another version of the app (a stale bundle after an update): it would be refused by this server's strict gate.
+      if (syncVersion !== SYNC_VERSION) {
+        throw new Error(`The built API is for sync version ${syncVersion ?? "?"}, this server's is ${SYNC_VERSION}: run \`npm run build:headless\` and restart the server`);
+      }
       this.device = await startHeadless(options);
       options.log("API ready at /api/v1");
     } catch (e) {

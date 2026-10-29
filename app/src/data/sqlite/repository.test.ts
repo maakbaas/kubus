@@ -234,6 +234,17 @@ describe("views", () => {
     expect((await repo.listViews(book.id, "default")).map((v) => v.name)).toEqual(["All"]);
     expect((await repo.listAllViews()).map((v) => v.name)).toEqual(["All"]);
   });
+
+  it("keep \"Show filter bar\" in their config, and drop it when it is taken off", async () => {
+    const book = await collection("Book", [field("Title")]);
+    const [all] = await repo.listViews(book.id, "default");
+    expect(all.filterBar).toBeUndefined();
+    await repo.saveView({ ...all, filterBar: true });
+    expect((await repo.listViews(book.id, "default"))[0].filterBar).toBe(true);
+    const { filterBar: _on, ...off } = (await repo.listViews(book.id, "default"))[0];
+    await repo.saveView(off);
+    expect("filterBar" in (await repo.listViews(book.id, "default"))[0]).toBe(false);
+  });
 });
 
 describe("bookmarks", () => {

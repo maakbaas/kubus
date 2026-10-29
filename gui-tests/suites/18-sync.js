@@ -1,17 +1,19 @@
 // Sync, against a fake server (routes on the test's browser context): the settings form, the first
 // connection's confirmation, uploading to an empty server, the status button and its popover in
 // every state (off, up to date, failed), a rejected token, disconnecting, and connecting to a
-// server that already holds data, which replaces this device's data.
+// server that already holds data, which replaces this device's data, and a server of another sync
+// version (the strict gate: both sides must be equal), which the status and the settings name.
 
 /**
  * A fake Kubus server at `url`: POST /api/sync stores the rows it is sent and answers with the rows
  * changed since the cursor, as the server's database `fake.database`; /api/health answers ok,
  * /api/events 204 (no live signal), /api/settings `fake.settings` when set (a PUT is kept in
  * `fake.saved`), anything else 404. `rows` preloads it
- * ({ table: [row] }); `fake.reject` makes it answer 401.
+ * ({ table: [row] }); `fake.reject` makes it answer 401; `fake.refuse` ("app" | "server") makes
+ * /api/sync answer the version gate's 426 (nothing stored).
  */
 async function fakeServer(t, url, rows = {}) {
-  const fake = { requests: [], seq: 0, store: [], reject: false, settings: null, saved: null, database: { id: "db-gui", createdAt: "2026-10-01T00:00:00.000Z" } };
+  const fake = { requests: [], seq: 0, store: [], reject: false, refuse: null, settings: null, saved: null, database: { id: "db-gui", createdAt: "2026-10-01T00:00:00.000Z" } };
   for (const [table, list] of Object.entries(rows)) for (const row of list) fake.store.push({ seq: ++fake.seq, table, row });
   await t.context.route(`${url}/api/**`, async (route) => {
     const req = route.request();
@@ -30,6 +32,10 @@ async function fakeServer(t, url, rows = {}) {
     try {
       body = JSON.parse(req.postData() || "{}");
     } catch {}
+    if (fake.refuse) {
+      const error = fake.refuse === "app" ? "This device is older than the server: update Kubus on it" : "The server is older than this device: update the server";
+      return route.fulfill({ status: 426, headers: cors, json: { error, update: fake.refuse } });
+    }
     fake.requests.push({ since: body.since, tables: Object.fromEntries(Object.entries(body.changes || {}).map(([k, v]) => [k, v.length])), auth: req.headers().authorization || "" });
     for (const [table, list] of Object.entries(body.changes || {})) for (const row of list) fake.store.push({ seq: ++fake.seq, table, row });
     const changes = {};
@@ -166,6 +172,75 @@ test("sync: a server that holds data replaces this device's data, after asking",
   await t.open(t.listPath(ids.collections.books));
   await t.until("this device now shows the server's data", async () => (await t.page.locator(".ws-pane--active").innerText()).includes("Changed on the server"), { timeout: 10000 });
   await t.audit("data replaced by the server's");
+});
+
+test("sync: a server of another version is named in the status and the settings, the changes stay queued and go once it matches", async (t) => {
+  await t.boot();
+  const fake = await fakeServer(t, "https://gate.test");
+  await t.seed(profileSpec("typical", { items: 3 }));
+  await connect(t, "https://gate.test");
+  await t.page.locator(".cds--modal.is-visible").getByRole("button", { name: "Connect" }).click();
+  await t.until("connected", async () => (await t.page.locator(".ws-pane--active").innerText()).includes("Up to date"), { timeout: 10000 });
+  const make = (title) =>
+    t.page.evaluate(async (title) => {
+      const repo = window.kubus.repo;
+      const c = (await repo.listCollections())[0];
+      const space = (await repo.listSpaces())[0];
+      await repo.createItem(c, { [c.fields[0].id]: title }, space.id);
+      await repo.sync.syncNow();
+    }, title);
+  const here = (title) =>
+    t.page.evaluate(async (title) => {
+      const repo = window.kubus.repo;
+      const c = (await repo.listCollections())[0];
+      const space = (await repo.listSpaces())[0];
+      return JSON.stringify(await repo.listItems(c, space.id)).includes(title);
+    }, title);
+  const stored = (title) => JSON.stringify(serverRows(fake)).includes(title);
+  const pane = t.page.locator(".ws-pane--active");
+
+  const cases = [
+    { refuse: "app", status: "Update Kubus to keep syncing", detail: "older version of Kubus than the server", reload: true },
+    { refuse: "server", status: "The server needs updating", detail: "server runs an older version", reload: false },
+  ];
+  for (const c of cases) {
+    fake.refuse = c.refuse;
+    const title = `Queued while ${c.refuse} is outdated`;
+    await make(title);
+    const button = t.page.getByRole("button", { name: c.status }).first();
+    await t.until(`the status button says "${c.status}"`, async () => (await button.count()) === 1, { timeout: 10000 });
+    await button.click();
+    await t.settle();
+    const panel = t.page.locator(".toolbar-popover.cds--popover--open");
+    const text = await panel.innerText();
+    await t.check("the popover names what to update, not a generic failure", text.includes(c.status) && text.includes(c.detail) && !text.includes("Sync failed"), text);
+    await t.check(c.reload ? "a device that can reload to update offers Reload" : "an outdated server has no Reload", (await panel.getByRole("button", { name: "Reload to update" }).count()) === (c.reload ? 1 : 0));
+    await t.check("Configure sync is beside it", (await panel.getByRole("button", { name: "Configure sync" }).count()) === 1);
+    await t.audit(`${c.refuse} outdated: the status popover`);
+    await t.escapeCloses("Escape closes the popover");
+
+    await t.open("/settings?section=sync");
+    await t.until("Settings → Sync says it", async () => (await pane.innerText()).includes(c.status));
+    const settings = await pane.innerText();
+    await t.check("Settings → Sync has the explanation, not the generic failure", settings.includes(c.detail) && !settings.includes("Sync failed") && settings.includes("Not syncing"), settings);
+    await t.audit(`${c.refuse} outdated: Settings → Sync`);
+
+    // Nothing was lost: the change is here, not on the server; a reload still tells the same.
+    await t.check("the change is kept on this device", await here(title));
+    await t.check("…and not on the server", !stored(title));
+    await t.page.reload();
+    await t.settle();
+    await t.until("after a reload it is still named", async () => (await t.page.getByRole("button", { name: c.status }).count()) === 1, { timeout: 15000 });
+  }
+
+  // The versions match again: the queued changes go, and the status is up to date.
+  fake.refuse = null;
+  await t.page.evaluate(() => window.kubus.repo.sync.syncNow());
+  await t.until("both queued changes reach the server", () => stored("Queued while app is outdated") && stored("Queued while server is outdated"), { timeout: 10000 });
+  await t.until("the status is up to date again", async () => (await t.page.getByRole("button", { name: "Up to date" }).count()) >= 1, { timeout: 10000 });
+  await t.open("/settings?section=sync");
+  await t.until("Settings → Sync is up to date", async () => !(await pane.innerText()).includes("Update Kubus") && (await pane.innerText()).includes("Up to date"));
+  await t.audit("outdated notice gone after the versions match");
 });
 
 test("connections: a source is set up with its kind's own fields", async (t) => {

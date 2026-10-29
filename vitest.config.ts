@@ -18,6 +18,10 @@ const project = (name: string, include: string[], timeout = 30_000, env: Record<
   test: { name, include, exclude: [...configDefaults.exclude, ...exclude], env, environment: "node", testTimeout: coverage ? Math.max(timeout, 60_000) : timeout },
 });
 
+// The connectors' `*.real.test.ts` need their service and fail without it in CI: only `npm run suite --
+// connectors-real` (the filter "real.test" on the command line) runs them. (A CLI --exclude doesn't reach a project.)
+const realTests = process.argv.includes("real.test");
+
 const serverInstalled = existsSync(new URL("server/node_modules/pg", import.meta.url));
 if (!serverInstalled) console.warn("The connectors and server tests are left out: install the server's packages (npm ci in server/)");
 
@@ -55,7 +59,7 @@ export default defineConfig({
       ),
       project("app", ["app/src/{app,platform,ui,views,pages,workspace,test}/**/*.test.{ts,tsx}"]),
       ...(serverInstalled
-        ? [project("connectors", ["server/test/connectors/**/*.test.ts"], 30_000), project("server", ["server/test/*.test.ts"], 30_000)]
+        ? [project("connectors", ["server/test/connectors/**/*.test.ts"], 30_000, {}, realTests ? [] : ["**/*.real.test.ts"]), project("server", ["server/test/*.test.ts"], 30_000)]
         : []),
     ],
   },

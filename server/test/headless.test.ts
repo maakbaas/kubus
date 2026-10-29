@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HeadlessOptions } from "../../shared/api.ts";
+import { SYNC_VERSION } from "../../shared/sync.ts";
 
 const bundle = vi.hoisted(() => ({ exists: true, stub: "", start: async (_options: unknown): Promise<unknown> => ({ handle: async () => ({ status: 200 }), close: async () => {} }) }));
 
@@ -14,18 +15,26 @@ vi.mock("node:fs", async (importOriginal) => ({ ...(await importOriginal<typeof 
 vi.mock("node:url", async (importOriginal) => ({ ...(await importOriginal<typeof import("node:url")>()), pathToFileURL: () => new URL(bundle.stub) }));
 
 const dir = mkdtempSync(join(tmpdir(), "kubus-headless-"));
-writeFileSync(join(dir, "index.js"), "export const startHeadless = (options) => globalThis.__startHeadless(options);");
+writeFileSync(
+  join(dir, "index.js"),
+  `export let syncVersion = ${SYNC_VERSION};\nglobalThis.__setSyncVersion = (v) => { syncVersion = v; };\nexport const startHeadless = (options) => globalThis.__startHeadless(options);`,
+);
 bundle.stub = `file://${join(dir, "index.js")}`;
 (globalThis as Record<string, unknown>).__startHeadless = (options: unknown) => bundle.start(options);
 
+const setVersion = async (v: number | undefined) => {
+  await import(/* @vite-ignore */ bundle.stub); // the stand-in's version, as the bundle would report it
+  (globalThis as unknown as { __setSyncVersion(v: number | undefined): void }).__setSyncVersion(v);
+};
 const { HeadlessHost } = await import("../src/headless.ts");
 
 describe("the headless device's host", () => {
   const options = (log: string[]): HeadlessOptions => ({ serverUrl: "http://127.0.0.1:1", token: "t", cursor: () => 0, webhooks: { urls: [], secret: null }, log: (m) => log.push(m) });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     bundle.exists = true;
     bundle.start = async () => ({ handle: async () => ({ status: 200 }), close: async () => {} });
+    await setVersion(SYNC_VERSION);
   });
   afterEach(() => vi.useRealTimers());
 
@@ -55,6 +64,22 @@ describe("the headless device's host", () => {
     expect(host.device).not.toBeNull();
     expect(given).toBe(o);
     expect(log).toEqual(["API ready at /api/v1"]);
+  });
+
+  it("doesn't start a device built for another sync version than the server's (the strict gate would refuse it)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const log: string[] = [];
+    let started = 0;
+    bundle.start = async () => ((started += 1), { handle: async () => ({ status: 200 }), close: async () => {} });
+    for (const version of [SYNC_VERSION - 1, SYNC_VERSION + 1, undefined]) {
+      await setVersion(version);
+      const host = new HeadlessHost();
+      await host.start(options(log));
+      expect(host.device).toBeNull();
+      expect(host.problem).toBe(`The API couldn't start: The built API is for sync version ${version ?? "?"}, this server's is ${SYNC_VERSION}: run \`npm run build:headless\` and restart the server`);
+      await host.close();
+    }
+    expect(started).toBe(0);
   });
 
   it("keeps the reason when the device can't start, and tries again", async () => {

@@ -130,7 +130,7 @@ Any field can also have a choiceFilter, a toggleIcon and strikeThrough.
 |---|---|
 | `GET /collections/{c}/views` | the collection views (optional: space) |
 | `GET /collections/{c}/views/{v}/items` | a view's result: the items one of its blocks shows (block: its title or id, default the first), through the view's and the block's filter, sort and grouping. `{ view, block, blocks, items, total, limit, offset }`; grouped, `groups` (each `{ key, label, total, items }`) instead of items. Optional: block, space, limit, offset |
-| `POST /collections/{c}/views` | create one from `{ name, space?, filters?, blocks?, editable? }` |
+| `POST /collections/{c}/views` | create one from `{ name, space?, filters?, blocks?, editable?, filterBar? }` (`filterBar`: "Show filter bar") |
 | `PATCH /collections/{c}/views/{v}` | change one (optional: space) |
 | `DELETE /collections/{c}/views/{v}` | delete one (optional: space) |
 | `PUT /collections/{c}/default-view` | set the default view: `{ space?, view }` (null for none) |

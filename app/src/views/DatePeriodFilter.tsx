@@ -2,36 +2,30 @@ import { useId, useState } from "react";
 import { ContentSwitcher, DatePicker, DatePickerInput, IconButton, NumberInput, Select, SelectItem, Switch, Tag } from "@carbon/react";
 import { Calendar, ChevronLeft, ChevronRight, Close } from "@carbon/icons-react";
 import { formatDate } from "../domain/fieldKinds";
-import { newId, type Collection } from "../domain/model";
+import type { Collection } from "../domain/model";
 import type { FilterRule } from "../domain/query";
 import {
-  anchoredValue,
   dateFields,
   defaultDateField,
+  kindValue,
   nowMinute,
-  parseRolling,
-  parseRollingRange,
-  parseToDate,
   periodAround,
-  periodKind,
-  periodLabel,
   periodRule,
+  periodState,
+  periodText,
   rangeValue,
-  resolveRange,
   rollingLabel,
-  rollingRangeLabel,
-  rollingRangeValue,
-  rollingValue,
-  shiftPeriod,
   splitAnchor,
+  stepValue,
   toDateLabel,
-  toDateValue,
+  windowValue,
+  withPeriod,
   type Period,
   type PeriodKind,
-  type RangeUnit,
+  type Unit,
+  type Window,
 } from "../domain/datePeriod";
 
-type Unit = Exclude<PeriodKind, "range">;
 const KINDS: { kind: PeriodKind; text: string }[] = [
   { kind: "hour", text: "Hour" },
   { kind: "day", text: "Day" },
@@ -40,15 +34,6 @@ const KINDS: { kind: PeriodKind; text: string }[] = [
   { kind: "year", text: "Year" },
   { kind: "range", text: "Range" },
 ];
-
-/**
- * Which one of its kind a period is: counted from now (this week, last week: it moves on with
- * time), this week, month or year so far, the last n of them up to now (n minutes for an hour), or
- * a chosen one (fixed days).
- */
-type Window = "current" | "toDate" | "last" | "lastMinutes" | "fixed";
-/** The n a "Last n" starts with. */
-const LAST: Record<RangeUnit, number> = { minute: 30, hour: 24, day: 7, week: 4, month: 12, year: 3 };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
 const MONTHS = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString(undefined, { month: "long" }));
@@ -89,74 +74,48 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
   const now = nowMinute();
   const today = now.slice(0, 10);
   const { value, fieldId: anchor } = rule ? splitAnchor(rule.value) : { value: "", fieldId: null };
-  const rolling = rule ? parseRolling(value) : null;
-  const rollingRange = rule ? parseRollingRange(value) : null;
-  const toDate = rule ? parseToDate(value) : null;
-  // The last n up to now; another rolling range (days ago, not up to today) is a range.
-  const last = rollingRange && rollingRange.to === 0 ? rollingRange : null;
-  const counted = !!(rolling || rollingRange || toDate);
+  const state = rule ? periodState(value, now) : null;
+  const { toDate, last, counted } = state ?? { toDate: null, last: null, counted: false };
   // The page's item's dates a period can be counted from; the one it is.
   const pageDates = page ? page.fields.filter((f) => f.kind === "date" || f.kind === "datetime") : [];
   const anchorField = anchor ? pageDates.find((f) => f.id === anchor) : undefined;
-  const period = rule ? resolveRange(value, now) : null;
+  const period = state?.period ?? null;
   // The field and "Range" before a period is set (no rule yet), and "Range" for a period
   // that is also a whole month (say), so the switcher doesn't jump to "Month" while start and end are chosen.
   const [chosenField, setChosenField] = useState<string>();
   const [rangeChosen, setRangeChosen] = useState(false);
   const fieldId = rule?.fieldId ?? (fields.some((f) => f.id === chosenField) ? chosenField! : defaultDateField(collection));
-  const lastKind: PeriodKind | null = last ? (last.unit === "minute" ? "hour" : (last.unit ?? "day")) : null;
-  const kind: PeriodKind | null = rangeChosen
-    ? "range"
-    : (lastKind ?? (toDate || (rolling ? rolling.kind : rollingRange ? "range" : period ? periodKind(period) : null)));
-  const window: Window | null =
-    !kind || kind === "range" ? null : last ? (last.unit === "minute" ? "lastMinutes" : "last") : toDate ? "toDate" : rolling ? "current" : period ? "fixed" : null;
+  const kind: PeriodKind | null = rangeChosen ? "range" : (state?.kind ?? null);
+  const window: Window | null = kind === "range" ? null : (state?.window ?? null);
 
   // Counted from the page's item's date stays so while the period is counted from a day (a fixed one has its days).
-  const store = (next: string, from = anchor) => {
-    const fromDay = parseRolling(next) || parseRollingRange(next) || parseToDate(next);
-    const written: FilterRule = { id: rule?.id ?? newId(), fieldId, operator: "between", value: anchoredValue(next, fromDay ? from : null) };
-    onChange(rule ? filters.map((r) => (r === rule ? written : r)) : [written, ...filters]);
-  };
+  const store = (next: string, from = anchor) => onChange(withPeriod(filters, fieldId, next, from));
   const clear = () => {
     setRangeChosen(false);
     onChange(filters.filter((r) => r !== rule));
   };
   const fixed = (p: Period) => store(rangeValue(p));
   /** A window of a kind: the current one, so far, the last n (`n`, else the unit's own), or the chosen one around `at`. */
-  const choose = (next: Unit, w: Window, at = period?.start ?? now, n?: number) => {
-    if (w === "current") return store(rollingValue({ kind: next, offset: 0 }));
-    if (w === "toDate" && next !== "hour" && next !== "day") return store(toDateValue(next));
-    if (w === "last" || w === "lastMinutes") {
-      const unit: RangeUnit = w === "lastMinutes" ? "minute" : next;
-      return store(rollingRangeValue({ unit, from: 1 - (n ?? LAST[unit]), to: 0 }));
-    }
-    fixed(periodAround(next, at));
-  };
+  const choose = (next: Unit, w: Window, at = period?.start ?? now, n?: number) => store(windowValue(next, w, at, n));
   const pick = (next: PeriodKind) => {
     setRangeChosen(next === "range");
     // A range starts as the days shown (to change).
     if (next === "range") return period && fixed({ start: period.start.slice(0, 10), end: period.end.slice(0, 10) });
-    // The same window in the other kind (a chosen one around the period shown; nothing yet: the current one);
-    // so far isn't of an hour or a day, n minutes are of an hour.
-    const w = window === "toDate" && (next === "hour" || next === "day") ? "current" : window === "lastMinutes" && next !== "hour" ? "last" : (window ?? "current");
-    // The last n in another unit starts as its own n (the last 7 days: the last 12 months, not 7).
-    choose(next, w, period?.start ?? now);
+    // The same window in the other kind (see kindValue).
+    store(kindValue(rule && !rangeChosen ? value : null, next, now));
   };
   const step = (direction: 1 | -1) => {
-    if (rolling) return store(rollingValue({ kind: rolling.kind, offset: rolling.offset + direction }));
-    if (period && kind) fixed(shiftPeriod(period, kind, direction));
+    const next = rule && stepValue(value, direction, now, kind ?? undefined);
+    if (next) store(next);
   };
 
-  const counting = toDate ? toDateLabel(toDate) : rolling ? rollingLabel(rolling) : rollingRange ? rollingRangeLabel(rollingRange) : "";
-  const label = !period || !kind
+  const label = !state || !kind
     ? kind === "range"
       ? "Choose the first and last day"
       : "Any date"
     : anchor
-      ? `${counting} · counted from this ${page?.name ?? "item"}'s ${anchorField?.name ?? "date"}`
-      : counting
-        ? `${counting} · ${periodLabel(period, toDate || rollingRange ? "range" : kind)}`
-        : periodLabel(period, kind);
+      ? `${state.counting} · counted from this ${page?.name ?? "item"}'s ${anchorField?.name ?? "date"}`
+      : periodText(state, kind);
   const unit = kind && kind !== "range" ? kind : null;
 
   return (

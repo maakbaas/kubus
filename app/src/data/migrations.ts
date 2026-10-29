@@ -7,8 +7,8 @@
 // Rules (docs/migrations.md):
 //  * Never edit or remove a released migration; fix one with the next.
 //  * Change schema.sql and add the migration together; a synced table or column also goes in
-//    shared/sync.ts (with SYNC_VERSION raised, SYNC_COMPATIBLE too if older devices would get the
-//    new data wrong) and, beyond an added table or column, in server/src/migrations.ts.
+//    shared/sync.ts (with SYNC_VERSION raised: only equal
+//    versions sync) and, beyond an added table or column, in server/src/migrations.ts.
 //  * They run in one transaction with foreign keys off (a table can be rebuilt: SQLite's "12 steps"
 //    of ALTER TABLE), before anything else reads the database; a failure leaves it as it was, and
 //    the app shows the error. They don't sync: the outbox triggers are off meanwhile (each side

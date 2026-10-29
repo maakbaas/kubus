@@ -43,11 +43,13 @@ export const AREAS = [
   [/^app\/src\/(views\/(MapView|ComponentBlock|MarkdownBlock)|domain\/geo|ui\/MapSettings)/, [25]],
   // Filter, sort, group, date period (rows asserted), a reference field's Choices.
   [/^app\/src\/(views\/(QueryEditor|DatePeriodFilter|BlockView|TableView|CardsView)|domain\/(query|filterTree|datePeriod|views)|pages\/(CollectionPage|ItemPage)|ui\/ChoiceFilterEditor)/, [26]],
+  // The collection view's filter bar (Show filter bar): its setting, Filter button and date period.
+  [/^app\/src\/(views\/(FilterBar|DatePeriodFilter)|domain\/(datePeriod|views)|pages\/CollectionPage|data\/sqlite\/SqliteRepository)/, [44]],
   [/^app\/src\/ui\/(ToolbarPopover|panelRoom|OverflowBar)|^app\/src\/platform\/keyboardInset/, [10, 14, 20]],
 
   // Backlinks: the virtual collection of item-page blocks and the item links behind it.
   [/^app\/src\/(domain\/(backlinks|sources|views)|views\/(useBacklinks|BlockView|useItemActions|itemActions|cells|TableView|CardsView)|pages\/ItemPage|data\/sqlite\/SqliteRepository|data\/sync\/SyncEngine)/, [43]],
-  [/^app\/src\/(domain\/(blend|blendMerge|query|sources|views)|views\/(useBlendResult|MergeFields|BlockView|useRemoteResult|remotePages|index)|pages\/CollectionPage)/, [44]],
+  [/^app\/src\/(domain\/(blend|blendMerge|query|sources|views)|views\/(useBlendResult|MergeFields|BlockView|useRemoteResult|remotePages|index)|pages\/CollectionPage)/, [45]],
 
   // Collections, fields, components.
   [/^app\/src\/(pages\/(CollectionEditorPage|CollectionsPage|RemotesPage)|ui\/(SourceSettings|FieldEditor|FieldModal|FieldOrderEditor|FieldSettings|fieldKindIcons|ChoiceFilterEditor)|domain\/(collectionDraft|fieldKinds|fieldLayout))/, [7, 17, 22, 27, 29]],
@@ -56,7 +58,7 @@ export const AREAS = [
 
   // AI, sync, live changes, settings.
   [/^app\/src\/(app\/(ai|aiBackfill|aiScan|useAi|AiBackfillRunner)|ui\/(Ai|WriteWithAi)|domain\/ai|platform\/llm)/, [15, 31]],
-  [/^app\/src\/(data\/sync\/|ui\/(SyncSettings|ServerConnection|ApiTokens|SyncStatusButton|ServerReplaced))/, [13, 18, 33]],
+  [/^app\/src\/(data\/sync\/|ui\/(SyncSettings|ServerConnection|ApiTokens|SyncStatusButton|ServerReplaced|OutdatedNotice))/, [13, 18, 33]],
   [/^app\/src\/(app\/(useDataChanges|itemCache|useItems|useItemCounts|useLinks)|views\/useCollectionData)/, [12, 13]],
   [/^app\/src\/(pages\/SettingsPage|ui\/(ConnectionSettings|useServerSettings|SourceSettings|localPrefs))/, [7, 18]],
   [/^app\/src\/(pages\/SettingsPage|platform\/download|ui\/(AiSettings|BackupSettings|MapSettings|ServerConnection|ConnectionSettings|ApiTokens|SyncSettings|SourceSettings|useServerSettings)|app\/mapStyle|data\/remote\/client|data\/sync\/SyncEngine)/, [28]],

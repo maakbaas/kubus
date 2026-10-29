@@ -95,6 +95,12 @@ const collectionOut = (c: Collection, itemCount?: number) => ({
   updatedAt: c.updatedAt,
 });
 
+/** The view's "Show filter bar" setting as sent (absent: as it is), without the key when off. */
+const filterBarIn = (o: Body, existing: CollectionView): { filterBar?: true } =>
+  o.filterBar === undefined ? (existing.filterBar ? { filterBar: true } : {}) : o.filterBar === true ? { filterBar: true } : {};
+
+const withoutFilterBar = ({ filterBar: _bar, ...view }: CollectionView): CollectionView => view;
+
 const viewOut = ({ collapsed: _collapsed, ...view }: CollectionView) => view;
 
 const bookmarkOut = (b: Bookmark) => b;
@@ -303,7 +309,7 @@ export function createApi(repo: Repository): Router {
   };
 
   const viewIn = (w: World, collection: Collection, o: Body, existing: CollectionView): CollectionView => ({
-    ...existing,
+    ...withoutFilterBar(existing),
     name: o.name === undefined ? existing.name : text(o, "name", true),
     filters: o.filters === undefined ? existing.filters : resolveRules<FilterRule>(collection, o.filters, "filters"),
     blocks:
@@ -315,6 +321,7 @@ export function createApi(repo: Repository): Router {
               throw new HttpError(400, "`blocks` must be a list of at least one block");
             })(),
     editable: o.editable === undefined ? existing.editable : o.editable !== false,
+    ...filterBarIn(o, existing),
   });
 
   const itemViewsIn = (w: World, collection: Collection, v: unknown): ItemView[] => {

@@ -24,9 +24,9 @@ import { DatePeriodFilter } from "./DatePeriodFilter";
 import { useStore } from "../app/store";
 import { hasRemotePart } from "../domain/blend";
 
-/** The ways to group by a date field (none for another kind, and for a remote collection or a blend with a remote part: its source groups by the value). An hour is of a date & time only. */
-function dateParts(collection: Collection, field: FieldDef | undefined, remoteBlend: boolean) {
-  if (collection.source || remoteBlend || (field?.kind !== "date" && field?.kind !== "datetime")) return [];
+/** The ways to group by a date field (none for another kind, and for a merged collection with a remote part: its source groups by the value). An hour is of a date & time only. A remote collection's rows are grouped by a part other than the day in the app (groupsInApp). */
+function dateParts(field: FieldDef | undefined, remoteBlend: boolean) {
+  if (remoteBlend || (field?.kind !== "date" && field?.kind !== "datetime")) return [];
   return GROUP_DATES.filter((p) => p.value !== "hour" || field.kind === "datetime");
 }
 
@@ -177,7 +177,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
   const dated = dateFields(collection).length > 0;
   const { collections } = useStore();
   const remoteBlend = hasRemotePart(collection, collections);
-  const groupDates = dateParts(collection, query.groupBy ? fieldsById.get(query.groupBy) : undefined, remoteBlend);
+  const groupDates = dateParts(query.groupBy ? fieldsById.get(query.groupBy) : undefined, remoteBlend);
 
   return (
     <div className="query-editor">
@@ -317,7 +317,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
               // A date grouping goes with a date field (an hour only with a date & time one).
               const next = groupBy ? fieldsById.get(groupBy) : undefined;
               const { groupDate: _old, ...rest } = query;
-              const keep = query.groupDate && dateParts(collection, next, remoteBlend).some((p) => p.value === query.groupDate);
+              const keep = query.groupDate && dateParts(next, remoteBlend).some((p) => p.value === query.groupDate);
               onChange({ ...rest, groupBy, ...(keep && { groupDate: query.groupDate }) });
             }}
           >

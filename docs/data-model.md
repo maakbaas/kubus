@@ -80,9 +80,8 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   - *Merge*: the row and its value have the same stamp and are written together, so the newest-wins merge (`updated_at`, ties stay as they
     were first stored) picks the same version for both on every side, whichever device syncs first. A tie leaves a pair per device, each
     consistent in itself.
-  - *Healed*: a device of the version before the table (`SYNC_VERSION` 1) writes values but no rows. After a sync applied values
-    (`SyncEngine`: `healAppliedLinks`; after a first connection for every value) `healLinks` rebuilds the row of each value whose row is
-    missing or older than the value, with the value's stamp, and queues it, so it syncs out; the same rebuild is the same row on every device.
+  - *Healed*: a server filled before the table existed holds values but no rows. After a first connection (`SyncEngine`) `healLinks`
+    rebuilds the row of each value whose row is missing or older than the value, with the value's stamp, and queues it, so it syncs out; the same rebuild is the same row on every device.
     `Repository.rebuildLinks` runs it over all values (and rewrites rows of the same stamp holding other targets, for a change in what
     counts as a link). Migration 2 builds the rows of the values already there and queues them.
 - Reference fields (`item`, `item_list`) carry `fields.target_collection_id`, and optionally

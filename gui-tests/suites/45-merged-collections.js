@@ -199,12 +199,11 @@ async function choose(t, scope, title, option) {
 }
 /** Block settings of block i: toggles the collection `name` in the Collections picker. */
 async function toggleCollection(t, name, i = 0) {
-  await t.openPanel(header(t, i), "Block settings");
+  if (!(await popover(t).locator(".cds--multi-select").count())) await t.openPanel(header(t, i), "Block settings");
   await popover(t).locator(".cds--multi-select .cds--list-box__field").first().click();
   await t.settle(80);
   await t.page.getByRole("option", { name, exact: true }).filter({ visible: true }).first().click();
-  await t.settle(80);
-  await t.closeAll();
+  await t.settle(300);
 }
 const header = (t, i = 0) => block(t, i).locator(".section-header").first();
 
@@ -251,12 +250,16 @@ test("merged collections: the Collections picker reads two collections as one ta
 
   const stored = (await storedBlocks(t, ids))[0];
   await t.check("the choice is stored with the block", JSON.stringify(stored.collectionIds) === JSON.stringify([ids.collections.inv, ids.sales]), JSON.stringify(stored.collectionIds));
+  // Escape (which clears a Carbon multi-select) closes the panel and keeps the choice.
+  await t.closeAll();
+  await expectSet(t, "closing the panel keeps both collections", BY_DATE);
   await t.audit("a table of two collections");
 
   await t.open(t.listPath(ids.collections.inv));
   await expectSet(t, "after a reload", BY_DATE);
   await toggleCollection(t, "Shop sales");
   await expectTitles(t, "taking the shop out again: Invoices alone", ["Ada", "Bo", "Cy", "Di", "Ed", "Flo"]);
+  await t.closeAll();
   await t.check("the choice is gone from the block", (await storedBlocks(t, ids))[0].collectionIds === undefined);
 }, { smoke: true });
 

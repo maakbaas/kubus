@@ -4,7 +4,7 @@
 import { createHash } from "node:crypto";
 import { vi } from "vitest";
 import type { ServerAi } from "../../../shared/api";
-import { SYNC_COMPATIBLE, SYNC_TABLES, SYNC_VERSION, type SyncMismatch, type SyncOutdated, type SyncRequest, type SyncResponse, type WireRow } from "../../../shared/sync";
+import { SYNC_TABLES, SYNC_VERSION, type SyncMismatch, type SyncOutdated, type SyncRequest, type SyncResponse, type WireRow } from "../../../shared/sync";
 import { SqliteRepository } from "../data/sqlite/SqliteRepository";
 import { memoryEnvironment } from "../data/sync/environment";
 import { openTestClient } from "./engine";
@@ -25,9 +25,8 @@ export class FakeServer {
   /** The language model it offers (GET /api/ai); null: none set up. Requests to it, by body. */
   ai: ServerAi | null = null;
   aiRequests: { model: string; authorization: string | null }[] = [];
-  /** Its SYNC_VERSION and SYNC_COMPATIBLE (another version's server). */
+  /** Its SYNC_VERSION (another version's server); only equal versions sync (the strict gate). */
   version = SYNC_VERSION;
-  compatible = SYNC_COMPATIBLE;
   /** Answers a sync gives on top of the protocol's (tests of later additions). */
   extra: (request: SyncRequest) => Partial<SyncResponse> = () => ({});
 
@@ -45,8 +44,8 @@ export class FakeServer {
 
   /** Why it refuses a device of another version (server/src/sync.ts `refusal`), or null. */
   refusal(request: SyncRequest): SyncOutdated | null {
-    if (!(request.version >= this.compatible)) return { error: "Update the app", update: "app" };
-    if (request.compatible > this.version) return { error: "Update the server", update: "server" };
+    if (request.version < this.version) return { error: "Update the app", update: "app", version: this.version };
+    if (request.version > this.version) return { error: "Update the server", update: "server", version: this.version };
     return null;
   }
 
@@ -75,13 +74,14 @@ export class FakeServer {
       const rows = [...table.values()].filter((r) => r.seq > since && r.seq <= before).sort((a, b) => a.seq - b.seq).map((r) => r.row);
       if (rows.length > 0) changes[name] = rows;
     }
-    return { cursor: this.seq, changes, database: this.database, ...this.extra(request) };
+    return { cursor: this.seq, changes, database: this.database, version: this.version, ...this.extra(request) };
   }
 
   fetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
     const method = init.method ?? "GET";
     const path = url.slice(SERVER_URL.length);
     this.log.push(`${method} ${path}`);
+    if (path === "/api/health") return Response.json({ ok: true, syncVersion: this.version });
     const headers = new Headers(init.headers);
     if (headers.get("Authorization") !== `Bearer ${TOKEN}`) return Response.json({ error: "Wrong token" }, { status: 401 });
     if (path === "/api/events") return new Response(new ReadableStream({ start() {} }));

@@ -30,11 +30,21 @@ export interface SyncConfig {
    */
   originals: "always" | "opened";
 }
+/** What a refused device (or server) is told: `SyncStatus.outdated`. */
+export const SYNC_OUTDATED = { app: "Update Kubus to keep syncing", server: "The server needs updating" } as const;
+
 export interface SyncStatus {
   state: "off" | "idle" | "syncing" | "error";
   /** ISO time of the last successful sync. */
   lastSync: string | null;
   error: string | null;
+  /**
+   * The strict version gate refused this device (or the server): only equal sync versions sync.
+   * `app`: this device is older than the server, `server`: the server is older. The device keeps
+   * working offline and its changes stay queued; sync tries again at every sync, until updated.
+   * `state` is "error" meanwhile, with no `error`.
+   */
+  outdated: "app" | "server" | null;
   /**
    * The server's database is another one than this device synced with (wiped or replaced since):
    * sync is paused until the user connects again (`reconnect`) or disconnects. When the new one was

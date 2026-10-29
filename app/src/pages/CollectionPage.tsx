@@ -21,6 +21,7 @@ import { blockType, normalizeBlock, normalizeView } from "../views";
 import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
 import type { NewBlockSpec } from "../views/AddBlockButton";
 import { BlockView } from "../views/BlockView";
+import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
 import { useCollectionData } from "../views/useCollectionData";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
@@ -34,6 +35,12 @@ export function CollectionPage() {
 
 /** A view state valid for this collection (stored blocks may be outdated). */
 const normalized = (collection: Collection, state: ViewState, all?: Collection[]): ViewState => normalizeView(collection, { filters: state.filters, blocks: state.blocks, editable: state.editable }, all);
+
+/** A view with "Show filter bar" set or taken off (absent when off). */
+const withFilterBar = (view: CollectionView, on: boolean): CollectionView => {
+  const { filterBar: _old, ...rest } = view;
+  return on ? { ...rest, filterBar: true } : rest;
+};
 
 /** Id of the virtual "All" view of a space that has no stored view of the collection. */
 const VIRTUAL_VIEW = "default";
@@ -199,11 +206,27 @@ function CollectionContent({ collection }: { collection: Collection }) {
     </IconButton>
   );
   const panels = usePanelsOpen();
+  // The view's Filter button is on the filter bar while that is shown. It moves only once a panel
+  // closes (View settings is where the bar is switched on): leaving the toolbar, it would move the
+  // buttons after it, and their open panels with them. The bar itself shows at once, and stays until then when switched off.
+  const filterInBar = panels.hold("filterInBar", !!active?.filterBar);
 
   async function updateActive() {
     if (!active) return;
     const id = (await storeVirtual()) ?? active.id;
     await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), filters: view.filters, blocks: view.blocks });
+    await loadViews();
+  }
+
+  /**
+   * "Show filter bar": stored with the shown view right away (its unsaved changes left alone), like
+   * arranging blocks; it shows no other items, so it is no change to save.
+   */
+  async function setFilterBar(on: boolean) {
+    if (!active) return;
+    setSavedViews((list) => list && list.map((v) => (v.id === active.id ? withFilterBar(v, on) : v)));
+    const id = (await storeVirtual()) ?? active.id;
+    await repo.saveView({ ...withFilterBar(active, on), id, createdAt: active.createdAt || now() });
     await loadViews();
   }
 
@@ -281,6 +304,25 @@ function CollectionContent({ collection }: { collection: Collection }) {
     selectView(defaultViewOf(rest), rest);
   }
 
+
+  // The view's filter (every block uses it unless it has its own), in the toolbar or on the filter bar.
+  const filterButton = (
+    <ToolbarPopover
+      label={view.filters.length > 0 ? `Filter (${view.filters.length})` : "Filter"}
+      icon={Filter}
+      width="wide"
+      active={view.filters.length > 0}
+      onOpenChange={panels.onOpenChange}
+    >
+      <QueryEditor
+        collection={collection}
+        query={{ filters: view.filters, sort: [], groupBy: null }}
+        refs={data.refs}
+        part="filter"
+        onChange={(q) => setView((v) => ({ ...v, filters: q.filters }))}
+      />
+    </ToolbarPopover>
+  );
 
   return (
     <>
@@ -395,21 +437,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
           >
             <SearchIcon />
           </IconButton>
-          <ToolbarPopover
-            label={view.filters.length > 0 ? `Filter (${view.filters.length})` : "Filter"}
-            icon={Filter}
-            width="wide"
-            active={view.filters.length > 0}
-            onOpenChange={panels.onOpenChange}
-          >
-            <QueryEditor
-              collection={collection}
-              query={{ filters: view.filters, sort: [], groupBy: null }}
-              refs={data.refs}
-              part="filter"
-              onChange={(q) => setView((v) => ({ ...v, filters: q.filters }))}
-            />
-          </ToolbarPopover>
+          {!filterInBar && filterButton}
           <ToolbarPopover label="View settings" icon={SettingsAdjust} width="narrow" openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
             <div className="view-settings">
               {active && (
@@ -424,6 +452,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
                   onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                 />
               )}
+              {active && <Checkbox id={`${uid}-view-filter-bar`} labelText="Show filter bar" checked={!!active.filterBar} onChange={(_, { checked }) => setFilterBar(checked).catch((e) => setError(errorMessage(e)))} />}
               {!readOnly && (
                 <Checkbox id={`${uid}-view-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
               )}
@@ -438,6 +467,13 @@ function CollectionContent({ collection }: { collection: Collection }) {
           </ToolbarPopover>
           </OverflowBar>
         </div>
+      )}
+
+      {/* The filter bar ("Show filter bar" in View settings): the view's Filter button and date period. */}
+      {savedViews !== null && (active?.filterBar || filterInBar) && (
+        <FilterBar collection={collection} filters={view.filters} onChange={(filters) => setView((v) => ({ ...v, filters }))}>
+          {filterInBar && filterButton}
+        </FilterBar>
       )}
 
       {/* Search in the view (all its blocks), opened from its icon; never saved. Escape on an

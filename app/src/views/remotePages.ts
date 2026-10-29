@@ -1,6 +1,6 @@
 import type { SourceResult, SourceRow } from "../../../shared/sources";
 import type { Collection } from "../domain/model";
-import type { ItemGroup, QueryResult } from "../domain/query";
+import { groupItems, type ItemGroup, type QueryResult, type ViewQuery } from "../domain/query";
 import { groupLabel, type BuiltRows } from "../domain/sources";
 
 // The pure part of a remote block's paging (useRemoteResult): what the rows held are, and how a page,
@@ -41,10 +41,22 @@ export function withPageError(l: Loaded | null, e: unknown): Loaded | null {
   return l && { ...l, error: messageOf(e) };
 }
 
-/** The block's result from the items built: grouped in the source's order (a group shows once rows of it are in), else one group. Copies: what the block got before stays as it was. */
-export function remoteQueryResult(built: BuiltRows, loaded: Pick<Loaded, "groups" | "total">, collection: Collection, groupBy: string | null | undefined, grouped: boolean) {
+const NO_REFS = { refLabel: () => "" };
+
+/** The block's result from the items built: grouped in the source's order (or, by a date part, here) (a group shows once rows of it are in), else one group. Copies: what the block got before stays as it was. */
+export function remoteQueryResult(
+  built: BuiltRows,
+  loaded: Pick<Loaded, "groups" | "total">,
+  collection: Collection,
+  groupBy: string | null | undefined,
+  grouped: boolean,
+  /** Grouped here (groupsInApp): by this query's date part, of the rows in so far. */
+  inApp?: ViewQuery,
+) {
   const groupField = groupBy ? collection.fields.find((f) => f.id === groupBy) : undefined;
-  const groups: ItemGroup[] = grouped
+  const groups: ItemGroup[] = inApp
+    ? groupItems(collection, built.computed, inApp, NO_REFS)
+    : grouped
     ? loaded.groups!.filter((g) => built.byGroup.has(g.key)).map((g) => ({ key: g.key, label: groupLabel(groupField, g.key), items: built.byGroup.get(g.key)!.slice() }))
     : [{ key: "", label: "", items: built.computed.slice() }];
   return { result: { groups, total: loaded.total } satisfies QueryResult, items: built.all.slice() };

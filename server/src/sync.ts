@@ -2,7 +2,7 @@ import type pg from "pg";
 import { missingFiles } from "./files.ts";
 import { PG_TYPE } from "./schema.ts";
 import {
-  SYNC_COMPATIBLE, SYNC_TABLES, SYNC_VERSION,
+  SYNC_TABLES, SYNC_VERSION,
   type ColumnType, type DatabaseInfo, type SyncMismatch, type SyncOutdated, type SyncRequest, type SyncResponse, type SyncTable, type WireRow, type WireValue,
 } from "../../shared/sync.ts";
 
@@ -14,8 +14,8 @@ import {
 // device hasn't seen. The whole request runs under an advisory lock: sequence order is then
 // commit order, and a cursor can never skip a row that commits late.
 // A pushed row only replaces the stored one when its updated_at is newer (last writer wins), and
-// only in the columns it has: an older device leaves the columns it doesn't know as they are.
-// Devices of another SYNC_VERSION are checked first (`refusal`, docs/migrations.md).
+// only in the columns it has.
+// Only a device of this server's SYNC_VERSION syncs (`refusal` checks first, docs/migrations.md).
 
 /** Serializes sync requests. */
 export const LOCK_ID = 7_236_001;
@@ -75,22 +75,16 @@ function toRecord(t: SyncTable, cols: string[], row: WireRow): Record<string, st
 }
 
 /**
- * Why this device and this server can't sync (nothing is written then), or null. An older device
- * is fine down to SYNC_COMPATIBLE; a newer one as long as its data is compatible with this
- * version and it sends no table or column this server doesn't have (it would be lost here).
+ * Why this device and this server can't sync (nothing is written then), or null: the strict gate,
+ * only equal SYNC_VERSIONs sync. A missing version is a device from before versions (0).
  */
 export function refusal(req: SyncRequest): SyncOutdated | null {
   const version = Number(req.version) || 0;
-  const compatible = Number(req.compatible) || 0;
-  if (version < SYNC_COMPATIBLE) {
-    return { error: "This version of Kubus is too old for the server's data: update the app", update: "app" };
+  if (version < SYNC_VERSION) {
+    return { error: "This device is older than the server: update Kubus on it", update: "app", version: SYNC_VERSION };
   }
-  const tooNew = { error: "The server is older than this version of Kubus: update the server", update: "server" } as const;
-  if (compatible > SYNC_VERSION) return tooNew;
-  for (const [name, rows] of Object.entries(req.changes ?? {})) {
-    const t = SYNC_TABLES.find((s) => s.name === name);
-    if (!t) return tooNew;
-    for (const row of rows) for (const c of Object.keys(row)) if (!(c in t.columns)) return tooNew;
+  if (version > SYNC_VERSION) {
+    return { error: "The server is older than this device: update the server", update: "server", version: SYNC_VERSION };
   }
   return null;
 }
@@ -171,7 +165,7 @@ export async function handleSync(
       changes[t.name] = result.rows.map((r) => Object.fromEntries(cols.map((c) => [c, fromDb(t.columns[c], r[c])])));
     }
     await client.query("COMMIT");
-    return { cursor, changes, database, wrote, ...(missing.length > 0 && { missingFiles: missing }) };
+    return { cursor, changes, database, version: SYNC_VERSION, wrote, ...(missing.length > 0 && { missingFiles: missing }) };
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
     throw e;

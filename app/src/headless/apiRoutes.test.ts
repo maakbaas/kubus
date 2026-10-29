@@ -465,6 +465,10 @@ describe("views", () => {
     expect(patched).toMatchObject({ id: made.id, name: "Plainer", editable: true, spaceId: made.spaceId });
     expect(patched.blocks[0].kind).toBe("cards");
     expect(await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, {})).toMatchObject({ name: "Plainer" });
+    // "Show filter bar": set, kept when not sent, taken off.
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filterBar: true })).filterBar).toBe(true);
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { name: "Plainer" })).filterBar).toBe(true);
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filterBar: false })).filterBar).toBeUndefined();
     expect(await ok("DELETE", "/collections/Book/views/Plainer?space=work")).toEqual({ ok: true });
     expect(await ok("GET", "/collections/Book/views?space=work")).toEqual([]);
   });

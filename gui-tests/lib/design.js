@@ -343,14 +343,14 @@ function __design(opts) {
         }
       }
       // Blocks end where the page's content box does, and what a block draws stays inside the block:
-      // a chart's svg or a map's canvas that is wider than its block would push its "⋮" menu out.
+      // a chart's svg or a map's canvas (the outermost svg: Carbon's heatmap draws wider axes inside it, clipped by it) that is wider than its block would push its "⋮" menu out.
       const cb = content.getBoundingClientRect();
       const cstyle = cs(content);
       const boxRight = cb.right - px(cstyle.paddingRight) - (content.offsetWidth - content.clientWidth);
       for (const b of blocks.slice(0, 12)) {
         const br = b.getBoundingClientRect().right;
         judge("block-fit", br <= boxRight + 1, b, `block ${Math.round(br - boxRight)}`, `ends ${Math.round(br - boxRight)}px beyond the page's content box`);
-        for (const d of [...b.querySelectorAll("svg, canvas")].filter((e) => visible(e) && !e.closest(".cds--popover-content, button, .cds--btn")).slice(0, 6)) {
+        for (const d of [...b.querySelectorAll("svg, canvas")].filter((e) => visible(e) && !e.closest(".cds--popover-content, button, .cds--btn") && !e.parentElement.closest("svg")).slice(0, 6)) {
           const r = d.getBoundingClientRect();
           if (r.width < 100) continue;
           judge("block-fit", r.right <= br + 1, d, `drawn ${Math.round(r.right - br)}`, `a ${Math.round(r.width)}px-wide ${d.tagName.toLowerCase()} ends ${Math.round(r.right - br)}px beyond its block`);

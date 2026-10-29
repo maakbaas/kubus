@@ -6,6 +6,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { newId, type Collection } from "../../app/src/domain/model";
 import { bytes, device as fakeServerDevice, settled } from "../../app/src/test/fakeServer";
+import { SYNC_VERSION } from "../../shared/sync.ts";
 import { startServer, TOKEN, type RunningServer } from "./serve.ts";
 
 // ./postgres.ts loads pg, whose types are the server's packages: the app's typecheck goes without them.
@@ -111,17 +112,19 @@ describe.skipIf(!ADMIN)("devices syncing through the server", () => {
     const id = await a.createItem(note, { [body]: `See [Ada](#/collections/${personId}/items/${ada}?field=x)`, [about]: bob }, "default");
     await settled(a);
 
-    const post = async (changes: Record<string, unknown[]>, version: number) => {
-      const response = await fetch(`${server.url}/api/sync`, {
+    const send = (changes: Record<string, unknown[]>, version: number) =>
+      fetch(`${server.url}/api/sync`, {
         method: "POST",
         headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ since: 0, changes, version, compatible: version === 1 ? 1 : version }),
+        body: JSON.stringify({ since: 0, changes, version, compatible: version }),
       });
+    const post = async (changes: Record<string, unknown[]>, version: number) => {
+      const response = await send(changes, version);
       expect(response.status).toBe(200);
       return ((await response.json()) as { changes: Record<string, Record<string, unknown>[]> }).changes;
     };
     // As the device wrote them: jsonb gave the targets back as the same text.
-    const stored = await post({}, 2);
+    const stored = await post({}, SYNC_VERSION);
     const item = await a.getItem(note, id);
     expect(stored.item_links.map((r) => [r.id, r.targets, r.updated_at, r.deleted_at]).sort((x, y) => String(x[0]).localeCompare(String(y[0])))).toEqual(
       [
@@ -134,16 +137,18 @@ describe.skipIf(!ADMIN)("devices syncing through the server", () => {
     expect((await b.listBacklinks(personId, ada, "default")).map((l) => [l.sourceItemId, l.fieldId])).toEqual([[id, body]]);
     expect((await b.listBacklinks(personId, bob, "default")).map((l) => [l.sourceItemId, l.fieldId])).toEqual([[id, about]]);
 
-    // A device of the version before the table writes the body without the link; the newer devices make its row (and send it).
+    // A device of the version before the table is refused (the strict gate): its value, written without the link, goes nowhere.
     const value = stored.field_values.find((r) => r.item_id === id && r.field_id === body)!;
     const later = new Date(Date.parse(String(value.updated_at)) + 5000).toISOString();
-    expect(await post({ field_values: [{ ...value, value_text: "no link any more", updated_at: later }] }, 1)).toBeTruthy();
+    const refused = await send({ field_values: [{ ...value, value_text: "no link any more", updated_at: later }] }, SYNC_VERSION - 1);
+    expect(refused.status).toBe(426);
+    expect(await refused.json()).toMatchObject({ update: "app", version: SYNC_VERSION });
     await settled(a);
     await settled(b);
-    expect(await a.listBacklinks(personId, ada, "default")).toEqual([]);
-    expect(await b.listBacklinks(personId, ada, "default")).toEqual([]);
-    const healed = (await post({}, 2)).item_links.find((r) => r.id === `${id}/${body}`)!;
-    expect(healed).toMatchObject({ targets: "[]", updated_at: later, deleted_at: later });
+    expect((await a.listBacklinks(personId, ada, "default")).map((l) => l.sourceItemId)).toEqual([id]);
+    expect((await b.listBacklinks(personId, ada, "default")).map((l) => l.sourceItemId)).toEqual([id]);
+    const kept = (await post({}, SYNC_VERSION)).item_links.find((r) => r.id === `${id}/${body}`)!;
+    expect(kept).toMatchObject({ updated_at: item!.updatedAt, deleted_at: null });
   });
 
   it("notice a wiped server and start over on it", async () => {

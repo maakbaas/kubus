@@ -67,6 +67,18 @@ export function canGroup(collection: Collection, field: FieldDef): boolean {
   return !!column && !column.plain;
 }
 
+/**
+ * Whether a remote block's rows are grouped by the app: its grouping is by a date (or date & time) column's year,
+ * month, week or hour. The source groups by the value itself (a day), so the block loads every row, filtered and
+ * sorted by the source, and groups them with groupDate, as a native collection's items are.
+ */
+export function groupsInApp(collection: Collection, query: Pick<ViewQuery, "groupBy" | "groupDate">): boolean {
+  if (!collection.source || !query.groupBy || !query.groupDate) return false;
+  const field = collection.fields.find((f) => f.id === query.groupBy);
+  if (!field || (field.kind !== "date" && field.kind !== "datetime") || !canGroup(collection, field)) return false;
+  return query.groupDate === "hour" ? field.kind === "datetime" : query.groupDate !== "day";
+}
+
 /** The fields made for a table's or query's columns (hidden ones too: they are left out of the first view). */
 export function columnFields(columns: SourceColumn[]): FieldDef[] {
   return columns.map((c) => blankField(newId(), c.name, c.kind, { column: c.name }));
@@ -195,8 +207,8 @@ export function sourceQuery(
     return field?.column && canSort(collection, field.id) ? [{ column: field.column, direction: s.direction }] : [];
   });
   const groupField = query.groupBy ? byId.get(query.groupBy) : undefined;
-  const groupBy = groupField?.column && canGroup(collection, groupField) ? groupField.column : null;
-  return { ...shape, filter, search: search.trim(), sort, groupBy, groupOrder: query.groupOrder ?? "asc", timeZone };
+  const groupBy = groupField?.column && canGroup(collection, groupField) && !groupsInApp(collection, query) ? groupField.column : null;
+  return { ...shape, filter, search: search.trim(), sort, groupBy, groupOrder: groupsInApp(collection, query) ? "asc" : (query.groupOrder ?? "asc"), timeZone };
 }
 
 /** The device's time zone (its days: dates are compared and grouped by them). */

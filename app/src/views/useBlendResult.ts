@@ -197,6 +197,7 @@ export function useBlendResult(collection: Collection, query: ViewQuery, search:
   return {
     result: nothing ? EMPTY : (shown?.result ?? EMPTY),
     items: nothing ? [] : (shown?.items ?? null),
+    everything: all,
     error: fresh ? loaded?.error : undefined,
     more: fresh && loaded?.more && !loadingAll ? (all ? () => setStopped("") : more) : null,
     loadingMore,

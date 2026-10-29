@@ -123,6 +123,11 @@ export interface CollectionView extends ViewState {
   isDefault: boolean;
   /** Its collapsed blocks and groups (saved as toggled, see Collapsed). */
   collapsed: Collapsed;
+  /**
+   * "Show filter bar": the view's filter (its Filter button) and date period are on a bar below the tabs.
+   * Stored with the view as soon as it is set, not a change to save (it shows no other items). Absent = off.
+   */
+  filterBar?: true;
   createdAt: string;
   updatedAt: string;
 }
@@ -221,8 +226,8 @@ export function parseBlock(raw: unknown): ViewBlock | null {
   return o.groupOrder === "desc" || o.groupOrder === "count" ? { ...block, groupOrder: o.groupOrder } : block;
 }
 
-/** A view's stored config (JSON `{ filters, blocks, editable, collapsed }`); unreadable: no filter, no blocks. */
-export function parseViewConfig(json: string): ViewState & { collapsed: Collapsed } {
+/** A view's stored config (JSON `{ filters, blocks, editable, collapsed, filterBar? }`); unreadable: no filter, no blocks. */
+export function parseViewConfig(json: string): ViewState & { collapsed: Collapsed; filterBar?: true } {
   let o: Record<string, unknown> = {};
   try {
     o = (JSON.parse(json) ?? {}) as Record<string, unknown>;
@@ -234,6 +239,7 @@ export function parseViewConfig(json: string): ViewState & { collapsed: Collapse
     blocks: array<unknown>(o.blocks).map(parseBlock).filter((b): b is ViewBlock => b !== null),
     editable: o.editable !== false,
     collapsed: parseCollapsed(o.collapsed),
+    ...(o.filterBar === true && { filterBar: true as const }),
   };
 }
 

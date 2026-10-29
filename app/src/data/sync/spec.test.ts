@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { schema } from "../schema";
 import firstRelease from "../schema-v1.sql?raw";
-import { SYNC_COMPATIBLE, SYNC_TABLES, SYNC_VERSION } from "../../../../shared/sync";
+import { SYNC_TABLES, SYNC_VERSION } from "../../../../shared/sync";
 
 /**
  * The synced tables of SYNC_VERSION as this test last saw them. When the list changes, raise
- * SYNC_VERSION (and SYNC_COMPATIBLE if older devices would get the new data wrong), write the
+ * SYNC_VERSION, write the
  * migrations (docs/migrations.md) and record the new version and fingerprint here.
  */
 const RECORDED = { version: 2, fingerprint: "6298a7f4" };
@@ -51,7 +51,6 @@ describe("sync spec", () => {
   });
 
   it("has a version for each shape of the list", () => {
-    expect(SYNC_COMPATIBLE).toBeLessThanOrEqual(SYNC_VERSION);
     expect({ version: SYNC_VERSION, fingerprint: fingerprint(SYNC_TABLES) }, "SYNC_TABLES changed: see RECORDED in this file").toEqual(RECORDED);
   });
 

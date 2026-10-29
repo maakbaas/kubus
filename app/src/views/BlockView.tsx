@@ -8,6 +8,7 @@ import { BACKLINKS_FIELDS, VIRTUAL_COLLECTIONS } from "../domain/backlinks";
 import { orderFields } from "../domain/fieldLayout";
 import { newId, pickableFields, titleFields, type Collection } from "../domain/model";
 import { placeProblem } from "../domain/components";
+import { groupsInApp } from "../domain/sources";
 import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
@@ -214,6 +215,8 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
             // Other collections' fields and filter don't apply: it starts afresh (linked to the page's item where it can be).
             onChange={({ selectedItems }) => {
               let list = selectedItems ?? [];
+              // Escape clears a Carbon multi-select: a block always lists at least one collection.
+              if (list.length === 0) return;
               // A collection view's block always lists the view's collection.
               if (!page && !list.some((c) => c.id === home.id)) list = [home, ...list];
               if (list.length > 1) list = list.filter((c) => !c.virtual);
@@ -346,7 +349,9 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   // A remote collection's rows come from its source a page at a time, filtered and sorted there; a blend's from its parts, merged.
   // Its Limit: items shown at first and added by each "Show more" (0: all, a remote collection's loaded page by page).
   const limit = blockLimit(block, !!uses.all);
-  const remoteRows = useRemoteResult(collection, query, search, uses.query, limit === 0, limit || undefined);
+  // A block that doesn't show groups (a chart: its X axis is its own) doesn't make a remote collection load every row to group by a date part.
+  const remoteQuery = useMemo(() => (uses.groups || !query.groupDate ? query : { ...query, groupDate: undefined }), [uses.groups, query]);
+  const remoteRows = useRemoteResult(collection, remoteQuery, search, uses.query, limit === 0, limit || undefined);
   const blended = useBlendResult(collection, query, search, uses.query, limit === 0, limit || undefined);
   const remote = remoteRows ?? blended;
   const local = useMemo(
@@ -370,6 +375,8 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
     return { ...local, groups };
   }, [stepped, local, shown]);
   const result = remote ? remote.result : cut;
+  // A date part (month, …) of a remote collection is grouped here, of the rows loaded: stopped early, the groups are marked as partial.
+  const groupedHere = !!remote && groupsInApp(collection, remoteQuery);
   const items = remote ? remote.items : data.items;
   const error = remote?.error ?? data.error;
   // Every block of a page asking the same server: its error (it can't be reached) shows once.
@@ -396,7 +403,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   // Searching the view: a block listing items that has none matching is left out altogether.
   if (search.trim() && uses.query && items && result.total === 0) return null;
   // Not even its header until its items are in: a header alone would sit where the blocks above are about to push it away.
-  if (!items && !error) return null;
+  if (!items && !error && !remote?.waiting && !remote?.stopped) return null;
   return (
     <section className="block" data-block-id={block.id}>
       <SectionHeader
@@ -484,10 +491,10 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
       {!collapsed && items && remote?.more && (
         <div className="block-more">
           <Button kind="tertiary" size="sm" disabled={remote.loadingMore} onClick={remote.more}>
-            {limit === 0 ? "Load all rows" : "Show more"}
+            {remote.everything ? "Load all rows" : "Show more"}
           </Button>
           <span className="helper">
-            {items.length} of {result.total}
+            {groupedHere ? `Groups of the rows loaded so far: ${items.length} of ${result.total}` : `${items.length} of ${result.total}`}
           </span>
         </div>
       )}

@@ -85,7 +85,7 @@ describe("settings", () => {
       if (saved) env.storage.set("kubus.sync", saved);
       const repo = await openDevice(env);
       expect(repo.sync.config).toEqual({ url: "", token: "", enabled: false, originals: "always" });
-      expect(repo.sync.status).toEqual({ state: "off", lastSync: null, error: null, replaced: null });
+      expect(repo.sync.status).toEqual({ state: "off", lastSync: null, error: null, outdated: null, replaced: null });
     }
   });
 
@@ -152,17 +152,6 @@ describe("status", () => {
     const repo = await device({ connect: false });
     await repo.sync.configure({ ...settings, token: "wrong" });
     expect(repo.sync.status).toMatchObject({ state: "error", error: "The server did not accept the token" });
-  });
-
-  it("says when the app and the server are of versions that can't sync", async () => {
-    const repo = await device();
-    server.compatible = 99;
-    await repo.sync.syncNow();
-    expect(repo.sync.status).toMatchObject({ state: "error", error: "Update the app" });
-    server.compatible = 1;
-    server.version = 0;
-    await repo.sync.syncNow();
-    expect(repo.sync.status.error).toBe("Update the server");
   });
 });
 
@@ -356,7 +345,7 @@ describe("leaving a server", () => {
     await a.createItem(n, {}, "default"); // queued, not sent
     await a.sync.disconnect();
     expect(a.sync.config).toEqual({ url: "", token: "", enabled: false, originals: "always" });
-    expect(a.sync.status).toEqual({ state: "off", lastSync: null, error: null, replaced: null });
+    expect(a.sync.status).toEqual({ state: "off", lastSync: null, error: null, outdated: null, replaced: null });
     expect((await a.listItems(n, "default"))).toHaveLength(1);
     // Connecting again to an empty server uploads everything, the item queued earlier included.
     server.wipe();

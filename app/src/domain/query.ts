@@ -542,9 +542,18 @@ export function applyQuery(
   keyed.sort((a, b) => compareSortKeys(desc, a.keys, b.keys));
   const sorted = keyed.map((k) => k.item);
 
-  const groupField = query.groupBy ? fieldsById.get(query.groupBy) : undefined;
+  return { groups: groupItems(collection, sorted, query, ctx), total: sorted.length };
+}
+
+/**
+ * Items (already filtered and sorted) in the groups of a query: the groups of its field, ordered as it says
+ * (a date's by its part: year, month, …), the "(empty)" group last; one group of all when it groups by none.
+ * Also where a remote collection's rows are grouped by a date part, in the app (domain/sources.ts groupsInApp).
+ */
+export function groupItems(collection: Collection, sorted: Item[], query: ViewQuery, ctx: QueryContext): ItemGroup[] {
+  const groupField = query.groupBy ? pickableFields(collection).find((f) => f.id === query.groupBy) : undefined;
   const groupKeys = groupField && KIND_RULES[groupField.kind].groupKeys;
-  if (!groupField || !groupKeys) return { groups: [{ key: "", label: "", items: sorted }], total: sorted.length };
+  if (!groupField || !groupKeys) return [{ key: "", label: "", items: sorted }];
 
   // A date's groups: by what the query says (a date has no hours).
   const by = query.groupDate === "hour" && groupField.kind !== "datetime" ? "day" : query.groupDate;
@@ -560,5 +569,5 @@ export function applyQuery(
   const order = query.groupOrder ?? "asc";
   const isDate = groupField.kind === "date" || groupField.kind === "datetime";
   const ordered = [...groups.values()].sort((a, b) => compareGroups({ ...a, count: a.items.length }, { ...b, count: b.items.length }, order, isDate));
-  return { groups: ordered, total: sorted.length };
+  return ordered;
 }
