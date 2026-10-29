@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Tag } from "@carbon/react";
 import { ArrowDown, ArrowUp } from "@carbon/icons-react";
 import { AGGREGATES, A_NUMBER, formatValue, PREVIOUS, widthCss, type ChartOptions, type Stat } from "../domain/chart";
+import { blockHeightCss } from "../domain/views";
 
 /** "+2.1 kg", "−3%": a change with its sign (a minus sign, not a hyphen). */
 function signed(n: number, text: string): string {
@@ -33,7 +34,12 @@ export function StatView({ stat, options, sparkline }: { stat: Stat; options: Ch
         : signed(stat.change, formatValue(Math.abs(stat.change), options));
   const from = stat.baseline === null ? "" : baselineText(options, stat.baseline);
   return (
-    <div className="stat-block" style={{ maxInlineSize: widthCss(options.width) }}>
+    // Fitting its content, as tall as that (a 4rem sparkline); else its Height (and Aspect ratio; a row's height in a row),
+    // the number centred in what the sparkline leaves (it grows with the height: styles.css .stat-block--sized).
+    <div
+      className={options.fitContent ? "stat-block" : "stat-block stat-block--sized"}
+      style={{ maxInlineSize: widthCss(options.width), ...(!options.fitContent && { blockSize: blockHeightCss(options.height, options.aspect) }) }}
+    >
       <div className="stat-block__body">
         <div className="stat-block__text">
           {options.showLabel && <span className="stat-block__label">{stat.label}</span>}

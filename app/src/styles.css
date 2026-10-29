@@ -3223,6 +3223,12 @@ img[data-lightbox] {
   .block-row--fit .block-cell > :is(.block--fills, .block--fixed) > .block__body {
     overflow: hidden;
   }
+  /* A stat, meter or compact chart at its own height: centred in the row (never less tall than it). */
+  .block-row--fit .block-cell > .block--fixed > .block__body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
   .block-row--fit .block-cell > .block--fills > .block__body {
     --row-fill-box: var(--row-body);
   }
@@ -3352,6 +3358,24 @@ img[data-lightbox] {
 .stat-block__sparkline > * {
   position: absolute;
   inset: 0;
+}
+/* A stat of a Height of its own (Fits its content off; in a row, the row's height): the number and what is around it
+   centred in what the sparkline leaves, the sparkline growing with the height (from 4rem, at most 16rem). */
+.stat-block--sized {
+  display: flex;
+  flex-direction: column;
+}
+.stat-block--sized .stat-block__body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+.stat-block--sized .stat-block__text {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+.stat-block--sized .stat-block__sparkline {
+  flex: 0 0 clamp(4rem, 40%, 16rem);
+  block-size: auto;
 }
 .stat-block__label,
 .stat-block__from {

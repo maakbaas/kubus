@@ -484,7 +484,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
   const offerScope = place === "item" && (pageCollectionId === collection.id || o.scope === "page");
 
   // A setting that does nothing with the others as they are (downstream of one of them) isn't shown.
-  const check = (key: "points" | "compact" | "donut" | "fullCircle" | "horizontal" | "showLabel" | "showUnmatched", label: string, shown = true) =>
+  const check = (key: "points" | "compact" | "donut" | "fullCircle" | "horizontal" | "showLabel" | "showUnmatched" | "fitContent", label: string, shown = true) =>
     shown && <Checkbox id={`${uid}-${key}`} labelText={label} checked={o[key]} onChange={(_, { checked }) => set({ [key]: checked })} />;
   const aggregateSelect = (id: string, label: string, value: Aggregate, onAggregate: (a: Aggregate) => void, noCount = false, hideLabel = false) => (
     <Select size="sm" id={id} labelText={label} hideLabel={hideLabel} value={value} onChange={(e) => onAggregate(e.target.value as Aggregate)}>
@@ -972,6 +972,17 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
           {compact && <p className="helper chart-options__note">A compact chart has its own, low height.</p>}
         </>
       )}
+      {/* A stat as tall as its content (as stats always were), or its own Height: the number centred, the sparkline growing. */}
+      {o.chart === "stat" && (
+        <div className="view-options__checks">{check("fitContent", "Fits its content")}</div>
+      )}
+      {o.chart === "stat" && !o.fitContent && (
+        <>
+          <HeightSlider id={`${uid}-height`} value={o.height} onChange={(height) => set({ height })} />
+          <AspectSelect id={`${uid}-aspect`} value={o.aspect} onChange={(aspect) => set({ aspect })} />
+          {inRow && <InRowNote />}
+        </>
+      )}
       <SettledSlider
         id={`${uid}-width`}
         labelText="Width"
@@ -1025,7 +1036,8 @@ export const chartBlock = defineBlockType<ChartOptions>({
   defaultOptions: (collection: Collection) => defaultChartOptions(collection),
   normalizeOptions: (raw, collection) => normalizeChartOptions(raw, collection),
   // Its X axis is its own setting (not the block's grouping); "This item" charts the page's item, not a query's.
-  // Drawn at its Height (a compact chart, a meter or a stat at their own): in a row, that and the space above it (.chart-block) count, and it fills the row.
+  // Drawn at its Height (a compact chart, a meter or a stat fitting its content at their own): in a row, that and the space
+  // above it (.chart-block) count, and it fills the row; one at its own height is centred in the row, never less tall.
   uses: (options) => ({
     query: options.scope !== "page",
     all: true,
@@ -1033,7 +1045,10 @@ export const chartBlock = defineBlockType<ChartOptions>({
     fields: null,
     ...(kindHas(options.chart).height && !(isXY(options.chart) && options.compact)
       ? { ownHeight: { height: options.height, aspect: options.aspect, extra: "var(--cds-spacing-05)" } }
-      : { fixedHeight: true }),
+      : // A stat of a Height of its own: the Height is the whole block (its space above inside it).
+        options.chart === "stat" && !options.fitContent
+        ? { ownHeight: { height: options.height, aspect: options.aspect } }
+        : { fixedHeight: true }),
   }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,

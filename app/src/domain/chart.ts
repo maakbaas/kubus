@@ -273,6 +273,8 @@ export interface ChartOptions {
   height: number;
   /** With the height: the less of the two (domain/views.ts blockHeightCss). */
   aspect: AspectRatio;
+  /** Stat: as tall as its content (its number, and a 4rem sparkline), as stats always were; off, its Height and Aspect ratio (the number centred, the sparkline growing). */
+  fitContent: boolean;
   /** At most this wide, in rem (CHART_WIDTH), or "full": as wide as its pane, whatever that is (FULL_WIDTH). */
   width: ChartWidth;
 }
@@ -392,6 +394,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     legendPosition: "bottom",
     height: BLOCK_HEIGHT.initial,
     aspect: DEFAULT_ASPECT,
+    fitContent: true,
     width: FULL_WIDTH,
   };
 }
@@ -494,6 +497,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     legendPosition: oneOf<LegendPosition>(["bottom", "top", "left", "right"], o.legendPosition, d.legendPosition),
     height: normalizeBlockHeight(o.height),
     aspect: normalizeAspect(o.aspect),
+    fitContent: flag(o.fitContent, d.fitContent),
     width: normalizeWidth(o.width),
   };
 }
