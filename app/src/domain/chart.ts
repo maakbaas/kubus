@@ -261,12 +261,35 @@ export interface ChartOptions {
   height: number;
   /** With the height: the less of the two (domain/views.ts blockHeightCss). */
   aspect: AspectRatio;
-  /** At most this wide, in rem (CHART_WIDTH). */
-  width: number;
+  /** At most this wide, in rem (CHART_WIDTH), or "full": as wide as its pane, whatever that is (FULL_WIDTH). */
+  width: ChartWidth;
 }
 
-/** How wide a chart may get, in rem (a slider like the cards'; the maximum is about 1920px, wider than any pane). */
-export const CHART_WIDTH = { min: 8, max: 120, step: 1 };
+/** A chart's Width: at most this many rem, or "full" (the pane's whole width, no maximum). */
+export type ChartWidth = number | "full";
+export const FULL_WIDTH = "full";
+/** How wide a chart may get, in rem: the slider runs min..max rem, and one stop past it (`stop`) is Full width. */
+export const CHART_WIDTH = { min: 8, max: 99, step: 1, stop: 100 };
+
+/** The Width slider's position for a width (Full width is its last stop). */
+export const widthToStop = (w: ChartWidth): number => (w === FULL_WIDTH ? CHART_WIDTH.stop : w);
+/** The width a slider position stands for (its last stop is Full width). */
+export const widthFromStop = (stop: number): ChartWidth => (stop >= CHART_WIDTH.stop ? FULL_WIDTH : Math.max(CHART_WIDTH.min, Math.round(stop)));
+/** A width as the slider labels it. */
+export const widthLabel = (w: ChartWidth): string => (w === FULL_WIDTH ? "Full width" : `${w}rem`);
+/** The block's maximum width in CSS: none for Full width. */
+export const widthCss = (w: ChartWidth): string | undefined => (w === FULL_WIDTH ? undefined : `${w}rem`);
+/** The width after switching chart kind: a full-width chart narrows to GAUGE_WIDTH on a gauge, which widens back to Full when it leaves with that width. */
+export function widthAfterSwitch(o: Pick<ChartOptions, "chart" | "width">, chart: ChartKind): ChartWidth {
+  if (chart === "gauge" && o.width === FULL_WIDTH) return GAUGE_WIDTH;
+  if (o.chart === "gauge" && chart !== "gauge" && o.width === GAUGE_WIDTH) return FULL_WIDTH;
+  return o.width;
+}
+/** A stored width, read: "full" or a number of 100 and more (the old maximum was 120) is Full width; anything unreadable too (the default). */
+export function normalizeWidth(v: unknown): ChartWidth {
+  if (typeof v !== "number" || !Number.isFinite(v) || v >= CHART_WIDTH.stop) return FULL_WIDTH;
+  return Math.max(CHART_WIDTH.min, Math.round(v));
+}
 /** What a gauge gets when switched to (as wide as a pane it is mostly empty). */
 export const GAUGE_WIDTH = 24;
 /** The most decimals a value is given. */
@@ -343,7 +366,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     legendPosition: "bottom",
     height: BLOCK_HEIGHT.initial,
     aspect: DEFAULT_ASPECT,
-    width: CHART_WIDTH.max,
+    width: FULL_WIDTH,
   };
 }
 
@@ -441,7 +464,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     legendPosition: oneOf<LegendPosition>(["bottom", "top", "left", "right"], o.legendPosition, d.legendPosition),
     height: normalizeBlockHeight(o.height),
     aspect: normalizeAspect(o.aspect),
-    width: typeof o.width === "number" && Number.isFinite(o.width) ? Math.min(CHART_WIDTH.max, Math.max(CHART_WIDTH.min, Math.round(o.width))) : d.width,
+    width: normalizeWidth(o.width),
   };
 }
 

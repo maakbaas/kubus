@@ -205,7 +205,9 @@ Extension points are registries, not special cases in pages:
     only its delta arrow with it: offered only while it compares with something) and a meter's status ranges (there a % of the total or values: `thresholdPercent`, `statusOf`, `statusRanges`).
   - **Values and legend**: a unit and decimals for axes and tooltips, decimals for a gauge (`formatValue`); the legend automatic (with
     more than one series or part), shown or hidden, and where.
-  - **Size**: Height (see below) and Width (a slider like the cards', 8 to 120rem (about 1920px) at most; a gauge as wide
+  - **Size**: Height (see below) and Width (a slider, 8 to 99rem, its last stop labelled "Full width": no maximum, the block fills its pane, wide or
+    narrow; stored as the number of rem or `"full"`, the default; the definition is `CHART_WIDTH` and `widthToStop` / `widthFromStop` /
+    `normalizeWidth` in `domain/chart.ts`, and a stored 100 or more, e.g. the former maximum 120, reads as Full width; a gauge as wide
     as a pane is mostly empty, so switching to one makes a full-width chart 24rem).
   A setting still to choose (a field, three spokes) or nothing to chart says so instead of an empty chart. The chart follows
   the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of `MAX_SOURCE_PAGE` (10,000) rows one after the other, a loading bar of the rows in against the source's total; its "×" stops it, the chart then shows the rows in and "Load all rows" goes on).

@@ -31,6 +31,14 @@ import {
   type ChartOptions,
   type ChartSeries,
   type ChartX,
+  CHART_WIDTH,
+  GAUGE_WIDTH,
+  normalizeWidth,
+  widthAfterSwitch,
+  widthCss,
+  widthFromStop,
+  widthLabel,
+  widthToStop,
 } from "./chart";
 import { blankField, fieldValue, type Collection, type Item } from "./model";
 import { applyQuery, defaultQuery, type QueryContext } from "./query";
@@ -102,7 +110,7 @@ describe("normalizeChartOptions", () => {
       const o = normalizeChartOptions(raw, collection);
       expect({ ...o, series: o.series.map((s) => ({ ...s, id: "" })) }).toEqual({ ...d, series: d.series.map((s) => ({ ...s, id: "" })) });
     }
-    expect(defaultChartOptions(collection)).toMatchObject({ chart: "bar", series: [{ value: "count", field: "pages" }], spreadField: "pages", width: 120, height: 24 });
+    expect(defaultChartOptions(collection)).toMatchObject({ chart: "bar", series: [{ value: "count", field: "pages" }], spreadField: "pages", width: "full", height: 24 });
   });
 
   it("drops fields that are gone (and the X axis's field)", () => {
@@ -142,7 +150,7 @@ describe("normalizeChartOptions", () => {
     // "Drawn as 0" is gone: joined over.
     expect(normalizeChartOptions({ missing: "zero" }, collection).missing).toBe("connect");
     expect([null, undefined, "2", NaN].map((decimals) => normalizeChartOptions({ decimals }, collection).decimals)).toEqual([null, null, null, null]);
-    expect([NaN, "s", Infinity].map((width) => normalizeChartOptions({ width }, collection).width)).toEqual([120, 120, 120]);
+    expect([NaN, "s", Infinity].map((width) => normalizeChartOptions({ width }, collection).width)).toEqual(["full", "full", "full"]);
   });
 
   it("validates each series", () => {
@@ -175,6 +183,28 @@ describe("normalizeChartOptions", () => {
     expect(o.thresholds).toEqual([{ value: 50, status: "danger" }, { value: 70, status: "warning" }]);
     expect(o.thresholdMode).toBe("absolute");
     expect(normalizeChartOptions({ thresholds: "x" }, collection).thresholds).toEqual([]);
+  });
+});
+
+describe("chart width", () => {
+  it("is 8 to 99 rem, then Full width as the slider's last stop", () => {
+    expect([CHART_WIDTH.min, CHART_WIDTH.max, CHART_WIDTH.stop]).toEqual([8, 99, 100]);
+    expect([8, 50, 99].map((w) => widthToStop(w))).toEqual([8, 50, 99]);
+    expect(widthToStop("full")).toBe(100);
+    expect([8, 99, 100].map(widthFromStop)).toEqual([8, 99, "full"]);
+    expect([widthLabel(99), widthLabel("full")]).toEqual(["99rem", "Full width"]);
+    expect([widthCss(24), widthCss("full")]).toEqual(["24rem", undefined]);
+  });
+  it("reads old and odd stored widths: 100 and more (the old maximum was 120) is Full width", () => {
+    expect([120, 100, 1000, "full", Infinity, NaN, "s", null, undefined].map(normalizeWidth)).toEqual(Array(9).fill("full"));
+    expect([99, 98.6, 50.4, 8, 3, -4].map(normalizeWidth)).toEqual([99, 99, 50, 8, 8, 8]);
+  });
+  it("narrows a full-width chart for a gauge and widens it back", () => {
+    expect(widthAfterSwitch({ chart: "bar", width: "full" }, "gauge")).toBe(GAUGE_WIDTH);
+    expect(widthAfterSwitch({ chart: "gauge", width: GAUGE_WIDTH }, "stat")).toBe("full");
+    expect(widthAfterSwitch({ chart: "bar", width: 40 }, "gauge")).toBe(40);
+    expect(widthAfterSwitch({ chart: "gauge", width: 40 }, "bar")).toBe(40);
+    expect(widthAfterSwitch({ chart: "bar", width: GAUGE_WIDTH }, "line")).toBe(GAUGE_WIDTH);
   });
 });
 
