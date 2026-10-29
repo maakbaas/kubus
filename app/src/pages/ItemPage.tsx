@@ -852,7 +852,8 @@ function ItemPageBlockContent({
 }: Parameters<typeof ItemPageBlock>[0] & { collection: Collection }) {
   // Its items, shared with every pane showing that collection.
   const data = useCollectionData(collection);
-  const normalized = useMemo(() => normalizeBlock(collection, block), [collection, block]);
+  const { collections } = useStore();
+  const normalized = useMemo(() => normalizeBlock(collection, block, collections), [collection, block, collections]);
   const applying = useMemo(() => pageFiltersFor(collection, pageFilters), [collection, pageFilters]);
   return <BlockView collection={collection} data={data} block={normalized} viewFilters={applying} search="" place="item" {...rest} />;
 }
@@ -860,7 +861,8 @@ function ItemPageBlockContent({
 /** A block of the Backlinks collection: the items linking to the page's item (not in the shared item cache: they depend on the page's item). */
 function BacklinksBlockContent({ collection, block, pageFilters, ...rest }: Parameters<typeof ItemPageBlock>[0] & { collection: Collection }) {
   const data = useBacklinkData(rest.page);
-  const normalized = useMemo(() => normalizeBlock(collection, block), [collection, block]);
+  const { collections } = useStore();
+  const normalized = useMemo(() => normalizeBlock(collection, block, collections), [collection, block, collections]);
   const applying = useMemo(() => pageFiltersFor(collection, pageFilters), [collection, pageFilters]);
   return <BlockView collection={collection} data={data} block={normalized} viewFilters={applying} search="" place="item" {...rest} />;
 }

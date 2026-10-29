@@ -242,6 +242,33 @@ What the app does, feature by feature (read the part you work on).
   filter's references (`filterPreset`). On item pages the same split holds: arranging the page
   (its layout: fields and blocks and their order, names shown, editable, hide empty) is stored
   right away too; only what a block shows waits for Save changes.
+- **Several collections in one block** (merged collections: `domain/blend.ts` `mergeCollections`, `domain/blendMerge.ts`,
+  `views/useBlendResult.ts`, `views/MergeFields.tsx`): a block's Collections picker (Block settings, on collection views and item pages)
+  takes more than one collection, native and remote mixed (Backlinks can't be merged). The block then reads them as one
+  read-only collection made when it is shown (never stored: the block keeps `ViewBlock.collectionIds` and `merges`, JSON in the view's
+  config or the item view's layout, no schema or sync change; older devices ignore both and show the first collection). Columns: fields of one
+  name (case aside) whose types fit are one column (the matrix, `canShow`: text, Markdown and HTML show each other; a date also a
+  date & time, shown as its day in the device's time zone; a date & time only a date & time; number, checkbox and list only their own type),
+  a field only one collection has is a column that is empty for the others' rows, fields of one name that can't be shown alike are
+  separate columns, the later ones named with their collection ("Total (Shop sales)"); references, images, checklists and component
+  fields are left out. Always there: Collection (the part a row is from; never the title unless chosen), Title, Created and Updated
+  (rows of a remote collection have neither). Fields → Merge fields merges two differently named fields of different collections that
+  fit (Total and Price as Amount; stored with the block, "Unmerge" takes it apart). Column ids are stable (`merged:name:<name>`,
+  `merged:<id>`, `merged:collection`), so the block's fields, filters, sort, grouping and chart settings stay. The view's (or page's)
+  filter, written over the first collection's fields, is translated to the columns that show them (`translateRules`; its date period too);
+  a rule on a field no column shows is left out. How rows come: a native part's items become merged items in memory and the query runs over
+  them (`applyQuery`); a remote part is asked by its source with the query rewritten to its columns (`partProjection` + `sourceQuery`:
+  no connector changes); a rule on a column a part has no field for (or on Collection) holds for all of that part's rows or none, by whether
+  the rule matches an empty value (`ConstantFields`); a sort on such a column is dropped for that part. Paging is a k-way merge
+  (`BlendCursor`): each part's page comes in its own order, the merged list takes the next row in the query's sort order, a part is asked for
+  its next page only when its rows are used up (Show more across parts); grouped, the groups' sizes and the total are summed over the
+  parts, groups are listed in the query's order (by value or summed size) and a group's rows come from every part before the next group's.
+  A chart or stat loads every part's rows (a remote part's pages one after the other, with the loading bar and its ×). Text sorts in the app's
+  order; a remote part comes in its source's collation, so rows of text sorted by a source that orders differently can be slightly out of
+  order in the merged list. Group dates by month, week and the like aren't offered while a part is remote (its source groups by the value).
+  Rows are read-only (`isReadOnly`: no edit, add or delete, no "Fields are editable") and open their own item or remote row (`itemPath`;
+  the row id is `<collection id>:<item id>`). A collection that is deleted, or a merged column that lost a field, is a warning on the block
+  (the rest is shown), never a crash. Component blocks see the merged items as `$items`. Terms: "merged collection" is runtime only; the UI says "Collections".
 - **Backlinks** (`domain/backlinks.ts`, `views/useBacklinks.ts`, docs/data-model.md "Item links"): the items that link to an item. A link is a
   reference field's item(s) (Item, List of items) or a link to an item in a Markdown, HTML or AI text
   (`#/collections/<c>/items/<id>`, whatever of its page the link names: a field, view or block counts as the item; the new item

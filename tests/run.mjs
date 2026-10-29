@@ -97,7 +97,7 @@ if (process.argv[2] !== "shards") for (const w of guiNumbers.map((n) => overBudg
 // of a CI runner; the loaded machine of the last measure makes it conservative). Suite 21 (screenshot
 // baselines) is machine-dependent and runs where it was made, 23 only with --perf. Suites in no group
 // (a new one) land in the last shard: add them here when they are measured.
-const SHARDS = [["01", "25"], ["02", "19"], ["03", "22", "28"], ["04", "27"], ["05", "29", "30"], ["06", "42"], ["07", "35"], ["08"], ["09", "39"], ["10"], ["11", "24"], ["12", "15", "16", "38"], ["13", "32", "40"], ["14", "33", "36"], ["17", "20", "37"], ["18", "26", "41"], ["31", "34", "43"]];
+const SHARDS = [["01", "25"], ["02", "19"], ["03", "22", "28"], ["04", "27"], ["05", "29", "30"], ["06", "42"], ["07", "35"], ["08"], ["09", "39"], ["10"], ["11", "24"], ["12", "15", "16", "38"], ["13", "32", "40"], ["14", "33", "36"], ["17", "20", "37"], ["18", "26", "41"], ["31", "34", "43", "44"]];
 const LOCAL_ONLY = ["21", "23"];
 const listed = new Set([...SHARDS.flat(), ...LOCAL_ONLY]);
 const shards = SHARDS.map((g) => g.filter((n) => guiNumbers.includes(n))).filter((g) => g.length);

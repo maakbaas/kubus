@@ -109,6 +109,11 @@ export interface Collection {
    * (domain/backlinks.ts). Not in the store's list of collections. null (or absent) = an ordinary one.
    */
   virtual?: "backlinks" | null;
+  /**
+   * A merged collection: what a block listing several collections reads (domain/blend.ts `mergeCollections`), made when the
+   * block is shown, never stored. Its fields (columns) are mapped to a field of each part. null (or absent) = an ordinary one.
+   */
+  blend?: CollectionBlend | null;
   /** The field its items' titles are (a field id: text, a number or a date, TITLE_KINDS), NO_TITLE for none; null (or absent) = the first text field with a value. */
   titleField?: string | null;
   createdAt: string;
@@ -148,6 +153,23 @@ export interface CollectionSource {
   hiddenColumns?: string[];
   /** A time series' time column (SourceDescription.time): a new view of it starts with a date period on it. */
   time?: string;
+}
+
+/** One part of a merged collection: a collection, and the field of it each column shows. */
+export interface BlendPart {
+  /** The collection (native or remote) whose items (rows) are the part's. A collection is a part once. */
+  collectionId: string;
+  /** By the blend's field id: the id of the part's field it shows; null (or absent) = none (the part's rows have no value there). */
+  map: Record<string, string | null>;
+}
+
+/** What makes a collection a merge of others. */
+export interface CollectionBlend {
+  parts: BlendPart[];
+  /** The id of its built-in Source field: a text field that names the part a row came from. */
+  sourceField: string;
+  /** What was wrong when it was made (a collection that is gone): shown by the block. */
+  problems?: { part: string; message: string }[];
 }
 
 /** A field as edited and saved: the field without what the repository fills in (its collection, its place). */
@@ -255,7 +277,7 @@ export const SELF_FIELD = "$id";
 export const selfField = (collection: Collection): FieldDef =>
   blankField(SELF_FIELD, "Item", "item", { collectionId: collection.id, targetCollectionId: collection.id });
 /** The collection's fields plus created / updated (which a remote collection's rows don't have): what pickers offer. */
-export const pickableFields = (collection: Collection): FieldDef[] => (collection.source ? collection.fields : [...collection.fields, ...META_FIELDS]);
+export const pickableFields = (collection: Pick<Collection, "source" | "fields">): FieldDef[] => (collection.source ? collection.fields : [...collection.fields, ...META_FIELDS]);
 /** A field's value on an item (created / updated included). */
 export function fieldValue(item: Item, field: FieldDef): FieldValue {
   if (field.id === "$created") return item.createdAt;
@@ -281,10 +303,11 @@ export const canBeTitle = (f: Pick<FieldDef, "kind">) => TITLE_KINDS.includes(f.
  * The fields an item's title can come from, in order: the collection's title field, none (NO_TITLE),
  * else (not set, or its field gone) every text field: the first with a value is the title.
  */
-export function titleFields<F extends Pick<FieldDef, "id" | "kind">>(collection: { titleField?: string | null; fields: F[] }): F[] {
+export function titleFields<F extends Pick<FieldDef, "id" | "kind">>(collection: { titleField?: string | null; fields: F[]; blend?: Pick<CollectionBlend, "sourceField"> | null }): F[] {
   if (collection.titleField === NO_TITLE) return [];
   const chosen = collection.fields.find((f) => f.id === collection.titleField && canBeTitle(f));
-  return chosen ? [chosen] : collection.fields.filter((f) => f.kind === "string");
+  // A blend's Source field names the part a row came from, it doesn't call the row (unless chosen as the title).
+  return chosen ? [chosen] : collection.fields.filter((f) => f.kind === "string" && f.id !== collection.blend?.sourceField);
 }
 
 /** A title field's value as the title ("" for none): text as it is, a number, a date as shown. */

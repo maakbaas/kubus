@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { LoadingBar } from "../ui/LoadingBar";
-import { Button, Checkbox, Dropdown, InlineNotification, NumberInput, TextInput } from "@carbon/react";
+import { Button, Checkbox, Dropdown, InlineNotification, MultiSelect, NumberInput, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { isReadOnly } from "../domain/sources";
@@ -24,9 +24,12 @@ import { QueryEditor } from "./QueryEditor";
 import type { CollectionData } from "./useCollectionData";
 import { useItemActions } from "./useItemActions";
 import { useRemoteResult } from "./useRemoteResult";
+import { useBlendResult } from "./useBlendResult";
 import { useBlockName } from "./BlockListEditor";
 import { useShownOnce } from "../ui/useShownOnce";
-import { BLOCK_HEIGHT, DEFAULT_ASPECT } from "../domain/views";
+import { BLOCK_HEIGHT, DEFAULT_ASPECT, listedCollection } from "../domain/views";
+import { MergeFields } from "./MergeFields";
+import { translateRules } from "../domain/blend";
 
 // One block: a collection's items shown one way (its block type), with its own sort, grouping,
 // and fields, and the view's filter unless it has its own. Collection views and item pages
@@ -64,7 +67,10 @@ const isDefaultSort = (block: ViewBlock, grouped: boolean) =>
   (!grouped || block.groupBy === null) && JSON.stringify(block.sort) === JSON.stringify(defaultQuery().sort);
 
 interface MenusProps {
+  /** The collection the block reads: its own, or the one several chosen are read as (domain/blend.ts). */
   collection: Collection;
+  /** The collection the block starts from: the view's, or the page's (the first of several chosen on an item page is the block's own). */
+  home: Collection;
   block: ViewBlock;
   refs: RefOptions;
   place: BlockPlace;
@@ -82,11 +88,14 @@ interface MenusProps {
 }
 
 /** A block's menus: Filter, Sort and group, Fields (each where its block type uses it), and its type's settings. */
-export function BlockMenus({ collection, block, refs, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange }: MenusProps) {
+export function BlockMenus({ collection, home, block, refs, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange }: MenusProps) {
   const uid = useId();
   const { components, collections } = useStore();
   // The virtual collections (Backlinks) are listed only here, among the page's block collections.
-  const pageCollections = useMemo(() => [...collections, ...VIRTUAL_COLLECTIONS], [collections]);
+  // The Backlinks collection can't be read together with others (its rows depend on the page's item).
+  const pageCollections = useMemo(() => (page ? [...collections, ...VIRTUAL_COLLECTIONS] : collections), [collections, page]);
+  const chosen = useMemo(() => (block.collectionIds ?? [block.collectionId ?? home.id]).flatMap((id) => pageCollections.filter((c) => c.id === id)), [block.collectionIds, block.collectionId, home.id, pageCollections]);
+  const merged = !!block.collectionIds && block.collectionIds.length > 1;
   // A Markdown block's text is its own static component: promoted, it becomes a shared one (named
   // like the block), which the block then shows as a component block: the same text, now reusable
   // elsewhere and edited in the component editor.
@@ -167,6 +176,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
                 />
               </div>
             )}
+            {merged && <MergeFields block={block} parts={chosen} onSet={onSet} />}
             <FieldOrderEditor
               id={`${uid}-fields`}
               label="Fields"
@@ -185,30 +195,40 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
       {/* A gear, not the type's icon: this is also where the type is switched. */}
       <ToolbarPopover label="Block settings" icon={Settings} width="narrow" onOpenChange={onOpenChange}>
         <div className="view-settings">
-          {page && (
-            <Dropdown<Collection>
-              autoAlign
-              size="sm"
-              id={`${uid}-collection`}
-              titleText="Collection"
-              label="Collection"
-              items={pageCollections}
-              selectedItem={collection}
-              itemToString={(c) => c?.pluralName ?? ""}
-              itemToElement={(c) => (
-                <span className="view-kind">
-                  <CollectionIcon name={c.icon} />
-                  {c.pluralName}
-                </span>
-              )}
-              // Another collection's fields and filter don't apply: it starts afresh, linked to the page's item where it can be.
-              onChange={({ selectedItem }) => {
-                if (!selectedItem || selectedItem.id === collection.id) return;
-                const { id: _id, title: _title, ...fresh } = newPageBlock(selectedItem, page);
-                onSet({ ...fresh, groupOrder: undefined, groupDate: undefined });
-              }}
-            />
-          )}
+          {/* One collection, or several read as one (native and remote ones mixed; their fields of one name are one column). */}
+          <MultiSelect<Collection>
+            autoAlign
+            size="sm"
+            id={`${uid}-collection`}
+            titleText="Collections"
+            label={chosen.map((c) => c.pluralName).join(", ") || "Collections"}
+            items={pageCollections}
+            selectedItems={chosen}
+            itemToString={(c) => c?.pluralName ?? ""}
+            itemToElement={(c) => (
+              <span className="view-kind">
+                <CollectionIcon name={c.icon} />
+                {c.pluralName}
+              </span>
+            )}
+            // Other collections' fields and filter don't apply: it starts afresh (linked to the page's item where it can be).
+            onChange={({ selectedItems }) => {
+              let list = selectedItems ?? [];
+              // A collection view's block always lists the view's collection.
+              if (!page && !list.some((c) => c.id === home.id)) list = [home, ...list];
+              if (list.length > 1) list = list.filter((c) => !c.virtual);
+              if (list.length === 0 || (list.length === chosen.length && list.every((c) => chosen.some((x) => x.id === c.id)))) return;
+              const ids = list.map((c) => c.id);
+              if (list.length === 1) {
+                const { id: _id, title: _title, ...fresh } = newPageBlock(list[0], page ?? list[0]);
+                onSet({ ...fresh, collectionId: page ? list[0].id : null, collectionIds: undefined, merges: undefined, groupOrder: undefined, groupDate: undefined });
+                return;
+              }
+              const { collection: read } = listedCollection(home, { collectionIds: ids }, collections);
+              const { id: _id, title: _title, ...fresh } = newPageBlock(read, page ?? read);
+              onSet({ ...fresh, collectionId: page ? ids[0] : null, collectionIds: ids, merges: undefined, groupOrder: undefined, groupDate: undefined });
+            }}
+          />
           {/* A dropdown, not a switch: it lists every registered block type, however many there are. */}
           <Dropdown<BlockTypeDefinition>
             autoAlign
@@ -307,9 +327,15 @@ interface Props {
   onOpenChange?(open: boolean): void;
 }
 
-export function BlockView({ collection, data, block, viewFilters, search, place, page, editable, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange }: Props) {
-  const { components } = useStore();
+export function BlockView({ collection: home, data: given, block, viewFilters: givenFilters, search, place, page, editable, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange }: Props) {
+  const { components, collections } = useStore();
   const { confirm, dialog } = useConfirm();
+  // Several collections chosen: the block reads them as one (its columns merged by name), from the parts, not the item cache.
+  const listed = useMemo(() => listedCollection(home, block, collections), [home, block.collectionIds, block.merges, collections]); // eslint-disable-line react-hooks/exhaustive-deps
+  const collection = listed.collection;
+  const data = useMemo(() => (collection === home ? given : { items: [], stored: [], refs: {}, ctx: given.ctx, error: given.error }), [collection, home, given]);
+  // The view's (or page's) filter is written over the view's collection: for several collections, over their columns.
+  const viewFilters = useMemo(() => (givenFilters && collection !== home ? translateRules(givenFilters, collection, home) : givenFilters), [givenFilters, collection, home]);
   const type = blockType(block.kind);
   const uses = type.uses(block.options, components);
   // Page-item values ("this item") filled in from the page's item; {{ }} code worked out.
@@ -317,10 +343,12 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const filters = useMemo(() => resolveFilterValues(base.filters, page ?? null), [base.filters, page]);
   const inherited = useMemo(() => resolveFilterValues(viewFilters ?? NO_FILTERS, page ?? null), [viewFilters, page]);
   const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder, base.groupDate]); // eslint-disable-line react-hooks/exhaustive-deps
-  // A remote collection's rows come from its source a page at a time, filtered and sorted there.
+  // A remote collection's rows come from its source a page at a time, filtered and sorted there; a blend's from its parts, merged.
   // Its Limit: items shown at first and added by each "Show more" (0: all, a remote collection's loaded page by page).
   const limit = blockLimit(block, !!uses.all);
-  const remote = useRemoteResult(collection, query, search, uses.query, limit === 0, limit || undefined);
+  const remoteRows = useRemoteResult(collection, query, search, uses.query, limit === 0, limit || undefined);
+  const blended = useBlendResult(collection, query, search, uses.query, limit === 0, limit || undefined);
+  const remote = remoteRows ?? blended;
   const local = useMemo(
     () => (!remote && data.items && uses.query ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),
     [remote, collection, data.items, data.ctx, uses.query, query, search],
@@ -385,6 +413,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
       >
         <BlockMenus
           collection={collection}
+          home={home}
           block={block}
           refs={data.refs}
           place={place}
@@ -398,6 +427,10 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
         />
       </SectionHeader>
       {!collapsed && showError && <InlineNotification kind="error" title="Error" subtitle={error} hideCloseButton />}
+      {/* A block whose collection is gone (or a merged column that lost a field) says so (the rest of it is shown). */}
+      {!collapsed && blended && blended.problems.length > 0 && (
+        <InlineNotification kind="warning" title="Collections problem" subtitle={blended.problems.map((p) => p.message).join(" ")} hideCloseButton />
+      )}
       {/* Nothing until everything is in (a fraction of a second): a placeholder table would only
           flash, shaped unlike the real one. */}
       {!collapsed && items && (

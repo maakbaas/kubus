@@ -125,6 +125,11 @@ headless device that answers the server's HTTP API (bundled into `server/headles
   item-page blocks and read-only through the same guard (`isReadOnly`); its rows are the items linking to the page's item, read from the
   synced `item_links` index (docs/data-model.md "Item links": one row per value with the value's own `updated_at`, kept by triggers on
   `field_values`, healed after a sync of values written by an older app). Keep `item_links` in step with what counts as a link (`linkTargets`).
+- **A block may list several collections** (`ViewBlock.collectionIds`, native and remote mixed): `domain/blend.ts` makes one read-only
+  collection of them when the block is shown (nothing stored: fields merged by name, Collection / Title / Created / Updated), and
+  `views/useBlendResult.ts` fans the query out to the parts (native via the item cache + `applyQuery`, remote via `sourceQuery`), merged a
+  page at a time (`domain/blendMerge.ts`). Never import `blend.ts` (or anything that reaches `query.ts`) from what the database worker loads
+  (`domain/backlinks.ts`, `linkTargets`): it has no `document`. `docs/features.md` "Several collections in one block".
 - **Workspace**: every tab renders `AppRoutes` in its own `MemoryRouter`; in-app links are plain
   `href="#/…"` anchors; navigate with `useNavigate()` (this tab) or `useOpenRelated()`.
 

@@ -36,14 +36,14 @@ export interface RemoteResult {
   resume: () => void;
 }
 
-const EMPTY: QueryResult = { groups: [], total: 0 };
+export const EMPTY: QueryResult = { groups: [], total: 0 };
 const noLabel = () => "";
 
 /** While rows come in, a block is shown them at most this often (its chart or map drawn anew each time). */
-const LOADING_SHOWN_MS = 1000;
+export const LOADING_SHOWN_MS = 1000;
 
 /** `value`, but while `ms` is more than 0 at most once per `ms` (then the latest); at once when it is 0. */
-function useThrottled<T>(value: T, ms: number): T {
+export function useThrottled<T>(value: T, ms: number): T {
   const [shown, setShown] = useState(value);
   const last = useRef(0);
   useEffect(() => {
@@ -61,7 +61,7 @@ function useThrottled<T>(value: T, ms: number): T {
 }
 
 /** The value after it stopped changing for `ms`. */
-function useSettled<T>(value: T, ms: number): T {
+export function useSettled<T>(value: T, ms: number): T {
   const [settled, setSettled] = useState(value);
   useEffect(() => {
     if (Object.is(value, settled)) return;

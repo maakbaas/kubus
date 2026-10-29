@@ -5,7 +5,8 @@ import { Add, Filter, Renew, Save, Search as SearchIcon, SettingsAdjust, Star, S
 import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { newName, now, newId, type Collection } from "../domain/model";
-import { firstShownFields, isRemote, sourcePeriod } from "../domain/sources";
+import { firstShownFields, isReadOnly, isRemote, sourcePeriod } from "../domain/sources";
+
 import { defaultViewState, newBlock, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
 import { NotFound } from "../ui/NotFound";
 import { CollectionIcon } from "../ui/collectionIcons";
@@ -32,7 +33,7 @@ export function CollectionPage() {
 }
 
 /** A view state valid for this collection (stored blocks may be outdated). */
-const normalized = (collection: Collection, state: ViewState): ViewState => normalizeView(collection, { filters: state.filters, blocks: state.blocks, editable: state.editable });
+const normalized = (collection: Collection, state: ViewState, all?: Collection[]): ViewState => normalizeView(collection, { filters: state.filters, blocks: state.blocks, editable: state.editable }, all);
 
 /** Id of the virtual "All" view of a space that has no stored view of the collection. */
 const VIRTUAL_VIEW = "default";
@@ -43,10 +44,11 @@ const SEARCH_DELAY_MS = 150;
 function CollectionContent({ collection }: { collection: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { repo, space, sources } = useStore();
+  const { repo, space, sources, collections } = useStore();
   const navigate = useNavigate();
-  // A remote collection's rows are read from its source, read-only (domain/sources.ts).
+  // A remote collection's rows are read from its source, read-only (domain/sources.ts); a block's several collections are read-only too (domain/blend.ts).
   const remote = isRemote(collection);
+  const readOnly = isReadOnly(collection);
   const { confirm, dialog } = useConfirm();
   // The collection's items (component fields computed), shared with every other pane showing them
   // and current from the change feed; every block of the view lists them.
@@ -59,8 +61,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // without one (the collection is shared from another space) shows `base` as a virtual "All"
   // view, stored once it is changed, renamed or joined by another view; a collection always has a view.
   const base = useMemo(
-    () => normalized(collection, defaultViewState(blockType("table").defaultOptions(collection), firstShownFields(collection), !isRemote(collection), sourcePeriod(collection))),
-    [collection],
+    () => normalized(collection, defaultViewState(blockType("table").defaultOptions(collection), firstShownFields(collection), !readOnly, sourcePeriod(collection))),
+    [collection, readOnly],
   );
   const virtualView = useMemo<CollectionView>(
     () => ({ ...base, id: VIRTUAL_VIEW, collectionId: collection.id, spaceId: space.id, name: "All", position: 0, isDefault: false, collapsed: NOTHING_COLLAPSED, createdAt: "", updatedAt: "" }),
@@ -69,6 +71,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const withVirtual = (list: CollectionView[]) => (list.length > 0 ? list : [virtualView]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>(base);
+  // Rows of a source are read again on demand (they aren't kept current by themselves).
+  const readsSource = remote || view.blocks.some((b) => b.collectionIds?.some((id) => collections.find((c) => c.id === id)?.source));
   const [search, setSearch] = useState("");
   // What the blocks search for: the typed text once typing pauses (each search goes over every item), an emptied box at once.
   const [searched, setSearched] = useState("");
@@ -103,9 +107,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
         // elsewhere, instead of turning into "changed".
         const cur = shown.current;
         const next = cur?.activeId ? list.find((v) => v.id === cur.activeId) : undefined;
-        if (cur && next && sameView(cur.view, cur.reference)) setView(normalized(collection, next));
+        if (cur && next && sameView(cur.view, cur.reference)) setView(normalized(collection, next, collections));
       }, (e) => setError(errorMessage(e))),
-    [repo, collection, space.id],
+    [repo, collection, collections, space.id],
   );
   useEffect(() => {
     loadViews();
@@ -122,7 +126,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
 
   const views = savedViews === null ? [] : withVirtual(savedViews);
   const active = views.find((v) => v.id === activeId) ?? null;
-  const reference = active ? normalized(collection, active) : base;
+  const reference = active ? normalized(collection, active, collections) : base;
   const changed = !sameView(view, reference);
   const viewsBar = useRef<HTMLDivElement>(null);
   const clippedTabs = useClippedTabs(viewsBar);
@@ -134,7 +138,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
     (id: string | null, list: CollectionView[] = savedViews ?? []) => {
       const next = withVirtual(list).find((v) => v.id === id);
       setActiveId(next ? next.id : null);
-      setView(next ? normalized(collection, next) : base);
+      setView(next ? normalized(collection, next, collections) : base);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [savedViews, collection, base, virtualView],
@@ -293,7 +297,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
         actions={
           // Like "New collection" and "New component": the page's main action, in its header. A
           // remote collection's rows are the source's: none are added here.
-          !remote && <NewButton label={`New ${collection.name}`} onClick={() => navigate(`/collections/${collection.id}/items/new`)} />
+          !readOnly && <NewButton label={`New ${collection.name}`} onClick={() => navigate(`/collections/${collection.id}/items/new`)} />
         }
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
@@ -368,8 +372,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
             />
           )}
           {/* A remote collection's rows, read again from its source (they aren't kept current by themselves). */}
-          {remote && (
-            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label={`Read again from ${collection.source!.name}`} onClick={() => sources.refresh(collection.id)}>
+          {readsSource && (
+            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label={remote ? `Read again from ${collection.source!.name}` : "Read the remote parts again"} onClick={() => sources.refresh(collection.id)}>
               <Renew />
             </IconButton>
           )}
@@ -420,7 +424,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
                   onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                 />
               )}
-              {!remote && (
+              {!readOnly && (
                 <Checkbox id={`${uid}-view-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
               )}
               <BlockListEditor
@@ -470,7 +474,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
             search={searched}
             place="collection"
             page={null}
-            editable={view.editable && !remote}
+            editable={view.editable && !readOnly}
             collapsed={active?.collapsed ?? NOTHING_COLLAPSED}
             onCollapse={(next) => setCollapsed(next).catch((e) => setError(errorMessage(e)))}
             onChange={setBlock}
