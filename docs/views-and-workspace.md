@@ -248,7 +248,7 @@ Extension points are registries, not special cases in pages:
     offline it says so); and Regions from, the field whose values are the regions (a category per value, as the X axis's).
     Display: Colour (`ChartOptions.scaleColor`: Carbon's first five series colours, purple by default), whose shades Carbon is given
     (`color.gradient.colors`, `scaleShades` in chartSpec.ts): its own scale without white (from 10 to 100), so a region with
-    little is its palest shade rather than white (on a dark theme from 90 to 20); Max (`scaleMax`, none by default): when a
+    little is its palest shade rather than white (on a dark theme from 100 to 20); Max (`scaleMax`, none by default): when a
     value is above it, the values above are drawn as it (the darkest shade; Carbon fits its scale and legend to the values,
     it takes no domain for a choropleth's fill) and the tooltip shows a region's own value, so one large value doesn't leave the rest of the map pale.
     The Values section's Unit and Decimals apply to the tooltip and the legend's numbers (Carbon's `locale.number`). Not offered,

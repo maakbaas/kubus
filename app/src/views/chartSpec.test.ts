@@ -65,7 +65,7 @@ describe("chartSpec", () => {
     expect((s.options.color as { gradient: { colors: string[] } }).gradient.colors).not.toContain("#ffffff");
     const dark = chartSpec(input(), { ...o, scaleColor: "teal" }, "g100", undefined, regions) as ChartSpec;
     expect((dark.options.color as { gradient: { colors: string[] } }).gradient.colors).toEqual(scaleShades("teal", "g100"));
-    expect(scaleShades("teal", "g100")[0]).toBe("#022b30");
+    expect(scaleShades("teal", "g100")[0]).toBe("#081a1c");
     // A Max: values above it drawn as it, the tooltip the region's own value; the legend with the unit and decimals.
     const capped = chartSpec(input(), { ...o, scaleMax: 100 }, "white", undefined, regions) as ChartSpec;
     expect(capped.data).toEqual([{ name: "Novel", value: 100 }, { name: "Poetry", value: 80 }]);
