@@ -213,6 +213,9 @@ const facts = (t, i = 0) =>
       holderBox: rect(holder),
       rootBox: rect(root),
       barBoxes: all("path.bar").map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }),
+      lineStrokes: all("path.line").map((e) => e.getAttribute("stroke") || ""),
+      areaFills: all("path.area").map((e) => e.getAttribute("fill") || ""),
+      dotFills: uniq(all("circle.dot").map((e) => e.getAttribute("fill") || "")),
       pathD: all("path.line").map((e) => e.getAttribute("d")),
       svg: !!root.querySelector("svg"),
       tag: root.querySelector(".cds--tag")?.className ?? "",
@@ -672,6 +675,30 @@ test("meter: hiding the label row above the bar also takes its height (the gap f
     await t.check(`${name}: the block is shorter by about the label row (${a?.height} vs ${b?.height})`, !!a && !!b && b.height < a.height - 8);
   }
   await t.audit("meters with and without their label row");
+});
+
+test("meter: toggling the label row off and on resizes the live chart, without a reload", async (t) => {
+  const one = { ...RICH, chart: "meter", parts: "one", legend: "show", total: { from: "number", number: 5000, field: null }, showLabel: true };
+  const several = { ...RICH, chart: "meter", legend: "show", showLabel: true };
+  await seeded(t, [{ title: "One", options: one }, { title: "Parts", options: several }]);
+  for (const i of [0, 1]) {
+    await drawn(t, `meter ${i + 1} is drawn`, (f) => f.meters >= 1 && !!f.legendBox, i);
+    const panel = await openSettings(t, i);
+    const a = await meterGap(t, i);
+    for (const round of [1, 2]) {
+      await tick(t, panel, "Value", "Show the label above the meter (its name and total)", false);
+      await t.until(`meter ${i + 1}, round ${round}: label off: shorter, the same gap`, async () => {
+        const b = await meterGap(t, i);
+        return (!!b && b.height < a.height - 8 && Math.abs(b.gap - a.gap) <= 1) || JSON.stringify([a, b]);
+      }, { timeout: 5000 });
+      await tick(t, panel, "Value", "Show the label above the meter (its name and total)", true);
+      await t.until(`meter ${i + 1}, round ${round}: label on: the first height and gap again`, async () => {
+        const b = await meterGap(t, i);
+        return (!!b && Math.abs(b.height - a.height) <= 1 && Math.abs(b.gap - a.gap) <= 1) || JSON.stringify([a, b]);
+      }, { timeout: 5000 });
+    }
+    await t.closeAll();
+  }
 });
 
 test("radar: spokes, a shape per group, value", async (t) => {
@@ -1212,4 +1239,60 @@ test("default sort: picking Title explicitly on a chart is honoured (title order
   await waitDrawn(t, 0);
   await drawn(t, "after a reload: still by title", (f) => f.kind === "stat" && f.lines_.includes("11"), 0);
   await t.check("the Sort button is still marked", (await sortButton().getAttribute("data-active")) !== null);
+});
+
+/** Weight (hundreds) on the left, Bone (tens) on the right: each axis is fitted to its own series, or one scale would flatten the right one. */
+const eachScale = (f) => f.yTicks.length > 0 && f.rTicks.length > 0 && maxTick(f.rTicks) * 3 < maxTick(f.yTicks);
+const sameDay = { by: "item", field: "@date" };
+
+const TWO_AXES = [
+  { name: "line + line", options: { chart: "line", x: BY_PHASE, series: [S("a", "sum", "@weight"), S("b", "sum", "@bone", { axis: "right" })] },
+    ok: (f) => f.lines === 2 && eachScale(f) },
+  { name: "bar + bar (a bar per series and Phase)", options: { chart: "bar", x: BY_PHASE, series: [S("a", "sum", "@weight"), S("b", "sum", "@bone", { axis: "right" })] },
+    ok: (f) => f.bars === 6 && f.barFills === 2 && eachScale(f) },
+  { name: "area + area", options: { chart: "area", x: BY_PHASE, series: [S("a", "sum", "@weight"), S("b", "sum", "@bone", { axis: "right" })] },
+    ok: (f) => f.areas === 2 && eachScale(f) },
+  { name: "bar left + line right", options: { chart: "bar", x: BY_PHASE, series: [S("a", "sum", "@weight"), S("b", "sum", "@bone", { axis: "right", style: "line" })] },
+    ok: (f) => f.bars === 3 && f.lines === 1 && eachScale(f) },
+  { name: "line left + bar right", options: { chart: "line", x: BY_PHASE, series: [S("a", "sum", "@weight"), S("b", "sum", "@bone", { axis: "right", style: "bar" })] },
+    ok: (f) => f.bars === 3 && f.lines === 1 && eachScale(f) },
+  { name: "both on the right (one axis, drawn on the left)", options: { chart: "line", x: BY_PHASE, series: [S("a", "sum", "@weight", { axis: "right" }), S("b", "sum", "@fat", { axis: "right" })] },
+    ok: (f) => f.lines === 2 && f.yTicks.length > 0 && f.rTicks.length === 0 },
+  { name: "stacked bars left, a line right", options: { chart: "bar", stack: "stacked", x: BY_PHASE, series: [S("a", "sum", "@weight"), S("b", "sum", "@fat"), S("c", "sum", "@bone", { axis: "right", style: "line" })] },
+    ok: (f) => f.bars === 6 && f.lines === 1 && eachScale(f) },
+  { name: "a line left, stacked bars right", options: { chart: "line", stack: "stacked", x: BY_PHASE, series: [S("a", "sum", "@bone", { style: "line" }), S("b", "sum", "@weight", { axis: "right", style: "bar" }), S("c", "sum", "@fat", { axis: "right", style: "bar" })] },
+    ok: (f) => f.bars === 6 && f.lines === 1 && f.yTicks.length > 0 && maxTick(f.rTicks) > maxTick(f.yTicks) * 3 },
+  { name: "a running total on the right", options: { chart: "line", x: sameDay, series: [S("a", "sum", "@bone"), S("b", "sum", "@bone", { axis: "right", transform: "cumulative" })] },
+    ok: (f) => f.lines === 2 && maxTick(f.rTicks) > maxTick(f.yTicks) * 3 },
+  { name: "a moving average on the right", options: { chart: "area", x: sameDay, series: [S("a", "sum", "@weight"), S("b", "sum", "@bone", { axis: "right", transform: "moving", window: 4 })] },
+    ok: (f) => f.areas === 2 && eachScale(f) },
+  { name: "titles, min and max per axis", options: { chart: "line", x: BY_PHASE, left: { title: "Mass", min: 0, max: 2000, log: false }, right: { title: "Dense", min: 0, max: 100, log: false }, series: [S("a", "sum", "@weight"), S("b", "sum", "@bone", { axis: "right" })] },
+    ok: (f) => f.lines === 2 && f.axisTitles.includes("Mass") && f.axisTitles.includes("Dense") && maxTick(f.yTicks) >= 2000 && maxTick(f.rTicks) >= 100 && maxTick(f.rTicks) <= 110 },
+  { name: "logarithmic right axis", options: { chart: "line", x: sameDay, right: { title: "", min: 1, max: 1000, log: true }, series: [S("a", "sum", "@weight"), S("b", "sum", "@bone", { axis: "right" })] },
+    ok: (f) => f.lines === 2 && [1, 10, 100].every((n) => f.rTicks.some((x) => num(x) === n)) && f.yTicks.some((x) => num(x) % 20 === 0) },
+];
+
+test("two axes: a series on the left and one on the right are both drawn, each on its own scale, whatever they are drawn as", async (t) => {
+  await seeded(t, TWO_AXES.map((s) => ({ title: s.name, options: s.options })));
+  for (const [i, s] of TWO_AXES.entries()) {
+    await drawn(t, `${s.name}: both series drawn, each axis with its own scale`, s.ok, i);
+    const f = await facts(t, i);
+    await t.check(`${s.name}: the legend has both series`, f.legend.length === s.options.series.length, f.legend.join(", "));
+    if (s.options.series.some((x) => x.axis === "left") && s.options.series.some((x) => x.axis === "right")) await t.check(`${s.name}: an axis title each`, f.axisTitles.length >= 2, f.axisTitles.join(", "));
+  }
+});
+
+test("two axes: moving a series to the other axis takes effect at once, without a reload", async (t) => {
+  const ids = await seeded(t, [{ options: { chart: "line", x: BY_PHASE, series: [S("a", "sum", "@weight"), S("b", "sum", "@bone")] } }]);
+  const panel = await openSettings(t);
+  await section(panel, "Series");
+  await drawn(t, "both on the left: one scale, two lines, no right ticks", (f) => f.lines === 2 && f.rTicks.length === 0);
+  await choose(t, rows(panel).nth(1), null, "Axis", "Right");
+  await drawn(t, "Bone on the right: its own scale", (f) => f.lines === 2 && eachScale(f));
+  await t.audit("a line chart on two axes");
+  await choose(t, rows(panel).nth(1), null, "Draw as", "Bars");
+  await drawn(t, "drawn as bars on the right: a line and bars, both scales", (f) => f.lines === 1 && f.bars === 3 && eachScale(f));
+  await choose(t, rows(panel).nth(1), null, "Axis", "Left");
+  await drawn(t, "back on the left: one scale", (f) => f.lines === 1 && f.bars === 3 && f.rTicks.length === 0);
+  await storedWhen(t, ids, "the series are stored on the left", (o) => o.series.every((x) => x.axis === "left"));
 });
