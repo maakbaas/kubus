@@ -22,11 +22,13 @@ import {
   withPeriod,
   type Period,
   type PeriodKind,
+  type PeriodState,
   type Unit,
   type Window,
 } from "../domain/datePeriod";
 
-const KINDS: { kind: PeriodKind; text: string }[] = [
+/** The kinds of period, as the filter panel's switcher names them (the filter bar's switch: all but Range). */
+export const KINDS: { kind: PeriodKind; text: string }[] = [
   { kind: "hour", text: "Hour" },
   { kind: "day", text: "Day" },
   { kind: "week", text: "Week" },
@@ -34,6 +36,9 @@ const KINDS: { kind: PeriodKind; text: string }[] = [
   { kind: "year", text: "Year" },
   { kind: "range", text: "Range" },
 ];
+
+/** Whether ‹ › step the period: one up to now (so far, the last n) has nothing before or after it, nor has one counted from a page's item. */
+export const steps = (state: PeriodState | null, anchored: boolean): boolean => !!state && !anchored && !state.toDate && !state.last;
 
 const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
 const MONTHS = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString(undefined, { month: "long" }));
@@ -75,7 +80,7 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
   const today = now.slice(0, 10);
   const { value, fieldId: anchor } = rule ? splitAnchor(rule.value) : { value: "", fieldId: null };
   const state = rule ? periodState(value, now) : null;
-  const { toDate, last, counted } = state ?? { toDate: null, last: null, counted: false };
+  const { last, counted } = state ?? { last: null, counted: false };
   // The page's item's dates a period can be counted from; the one it is.
   const pageDates = page ? page.fields.filter((f) => f.kind === "date" || f.kind === "datetime") : [];
   const anchorField = anchor ? pageDates.find((f) => f.id === anchor) : undefined;
@@ -153,11 +158,10 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
         </Select>
         {(rule || rangeChosen) && (
           <>
-            {/* A period up to now (so far, the last n) has nothing before or after it. */}
-            <IconButton autoAlign label="Previous" kind="ghost" size="sm" disabled={!period || !kind || !!anchor || !!toDate || !!last} onClick={() => step(-1)}>
+            <IconButton autoAlign label="Previous" kind="ghost" size="sm" disabled={!steps(state, !!anchor)} onClick={() => step(-1)}>
               <ChevronLeft />
             </IconButton>
-            <IconButton autoAlign label="Next" kind="ghost" size="sm" disabled={!period || !kind || !!anchor || !!toDate || !!last} onClick={() => step(1)}>
+            <IconButton autoAlign label="Next" kind="ghost" size="sm" disabled={!steps(state, !!anchor)} onClick={() => step(1)}>
               <ChevronRight />
             </IconButton>
             <IconButton

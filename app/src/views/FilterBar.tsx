@@ -3,6 +3,7 @@ import { Dropdown, IconButton } from "@carbon/react";
 import { Calendar, ChevronLeft, ChevronRight } from "@carbon/icons-react";
 import type { Collection } from "../domain/model";
 import type { FilterRule } from "../domain/query";
+import { KINDS, steps } from "./DatePeriodFilter";
 import {
   defaultDateField,
   kindValue,
@@ -19,14 +20,10 @@ import {
   type Unit,
 } from "../domain/datePeriod";
 
+type UnitChoice = { kind: Unit; text: string };
+
 /** The kinds of the bar's switch (a range is only chosen in the filter panel). */
-const UNITS: { unit: Unit; text: string }[] = [
-  { unit: "hour", text: "Hour" },
-  { unit: "day", text: "Day" },
-  { unit: "week", text: "Week" },
-  { unit: "month", text: "Month" },
-  { unit: "year", text: "Year" },
-];
+const UNITS = KINDS.filter((k): k is UnitChoice => k.kind !== "range");
 
 /**
  * A collection view's filter bar ("Show filter bar" in View settings), below its tabs: the view's
@@ -47,10 +44,9 @@ export function FilterBar({ collection, filters, onChange, children }: { collect
   const set = (next: string | null) => next && onChange(withPeriod(filters, defaultDateField(collection), next));
   const label = state ? periodText(state) : "Any date";
   const parts = state ? periodParts(state) : { counting: "", days: "Any date" };
-  const kind = state && state.kind !== "range" ? UNITS.find((u) => u.unit === state.kind) : undefined;
+  const kind = state && state.kind !== "range" ? UNITS.find((u) => u.kind === state.kind) : undefined;
   const latest = state && state.kind !== "range" ? rollingLabel({ kind: state.kind, offset: 0 }) : "Most recent";
-  // Up to now (so far, the last n) has nothing before or after it; nor has one counted from an item of a page.
-  const still = !state || !!value?.fieldId || !!state.toDate || !!state.last;
+  const still = !steps(state, !!value?.fieldId);
   return (
     <div className="filter-bar">
       {children}
@@ -76,7 +72,7 @@ export function FilterBar({ collection, filters, onChange, children }: { collect
       >
         <Calendar />
       </IconButton>
-      <Dropdown<{ unit: Unit; text: string } | null>
+      <Dropdown<UnitChoice | null>
         autoAlign
         size="sm"
         id={`${uid}-kind`}
@@ -88,7 +84,7 @@ export function FilterBar({ collection, filters, onChange, children }: { collect
         selectedItem={kind ?? null}
         itemToString={(u) => u?.text ?? ""}
         // The same window in the other kind; with no period yet, the current one (kindValue).
-        onChange={({ selectedItem }) => selectedItem && set(kindValue(value ? value.value : null, selectedItem.unit, now))}
+        onChange={({ selectedItem }) => selectedItem && set(kindValue(value ? value.value : null, selectedItem.kind, now))}
       />
     </div>
   );
