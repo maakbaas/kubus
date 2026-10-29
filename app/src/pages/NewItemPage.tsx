@@ -76,15 +76,6 @@ function NewItemForm({ collection }: { collection: Collection }) {
         ]}
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
-      {collection.fields.length === 0 && (
-        <InlineNotification
-          kind="info"
-          title="This collection has no fields yet."
-          subtitle="Edit the collection to add some."
-          hideCloseButton
-          lowContrast
-        />
-      )}
       <Form onSubmit={save} noValidate>
         <Stack gap={6} className="item-fields item-fields--form">
           {/* Component fields are computed and AI fields generated, not entered. */}
