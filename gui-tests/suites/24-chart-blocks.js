@@ -623,6 +623,19 @@ for (const p of PARTS) {
       await drawn(t, "Meter: and past a danger at 50%", (f) => /danger/.test(f.meterStatus));
       await t.audit("a meter with thresholds");
       await storedWhen(t, ids, "the meter's thresholds are stored", (o) => o.thresholds.length === 2 && o.thresholds[0].status === "warning" && o.thresholds[1].status === "danger" && o.thresholdMode === "percent");
+      // The label row above the bar (Carbon's meter.showLabels): shown, hidden by its checkbox, stored, still hidden after a reload.
+      await drawn(t, "Meter: the label row is shown", (f) => f.lines_.some((l) => /of 5,?000/.test(l)));
+      await tick(t, panel, "Value", "Show the label above the meter (its name and total)", false);
+      await drawn(t, "Meter: no label row, the bar stays", (f) => f.meters === 1 && !f.lines_.some((l) => /of 5,?000/.test(l)));
+      await t.check("Meter: with the label off, its Label text is not offered", (await panel.getByLabel("Label", { exact: true }).count()) === 0);
+      await t.audit("a meter without its label");
+      await storedWhen(t, ids, "the meter's label is stored as off", (o) => o.showLabel === false);
+      await t.open(t.listPath(ids.collections.w));
+      await drawn(t, "Meter: still no label row after a reload", (f) => f.meters === 1 && !f.lines_.some((l) => /of 5,?000/.test(l)));
+      const reopened = await openSettings(t);
+      await tick(t, reopened, "Value", "Show the label above the meter (its name and total)");
+      await drawn(t, "Meter: the label row is back", (f) => f.lines_.some((l) => /of 5,?000/.test(l)));
+      await storedWhen(t, ids, "the meter's label is stored as on", (o) => o.showLabel === true);
     }
     await storedWhen(t, ids, "the chart is stored", (o) => o.chart === p.chart && (p.chart === "treemap" ? o.parts === "fields" : o.parts === "one"));
     await t.open(t.listPath(ids.collections.w));

@@ -502,7 +502,7 @@ const GROUP_KEYS = {
   Author: (b) => [b.author ? [b.author, authorName(b.author)] : ["", ""]],
   Tags: (b) => (b.tags.length ? b.tags.map((x) => [x, x]) : [["", ""]]),
   Pages: (b) => [b.pages === null ? ["", ""] : [String(b.pages), String(b.pages)]],
-  Published: (b) => [b.pub === null ? ["", ""] : [pubDay(b), pubDay(b)]],
+  Published: (b) => [b.pub === null ? ["", ""] : [pubDay(b), dateGroupOf(new Date(`${pubDay(b)}T12:00`), "day")[1]]],
   "Co-authors": (b) => (b.authors.length ? b.authors.map((a) => [a, authorName(a)]) : [["", ""]]),
 };
 
@@ -516,7 +516,8 @@ function groupsModel(field, order) {
   const sorted = [...groups.values()].sort((a, b) => {
     if (a.key === "" || b.key === "") return a.key === "" ? 1 : -1;
     if (order === "count" && a.titles.length !== b.titles.length) return b.titles.length - a.titles.length;
-    return compareKeys(a.label, b.label) * (order === "desc" ? -1 : 1);
+    // A date's groups are in time order (by their keys), the others by their labels.
+    return compareKeys(field === "Published" ? a.key : a.label, field === "Published" ? b.key : b.label) * (order === "desc" ? -1 : 1);
   });
   return sorted.map((g) => [g.label, g.titles]);
 }
@@ -598,6 +599,145 @@ test(`group: Group by ${label} and every Group order, rows per group @ desktop`,
   await t.check("no groups on screen", (await groupsOf(t)).length === 0);
 }, { viewport: "desktop" });
 }
+
+// --- group dates by year, month, week, day or hour ------------------------------------------------
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** The ISO week (Monday to Sunday, week 1 holds the first Thursday) of a local day, worked out here apart from the app. */
+function isoWeekOf(d) {
+  const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  x.setUTCDate(x.getUTCDate() + 4 - (x.getUTCDay() || 7));
+  return { year: x.getUTCFullYear(), week: Math.ceil(((x - Date.UTC(x.getUTCFullYear(), 0, 1)) / DAY_MS + 1) / 7) };
+}
+/** [key, label] of the group a local moment falls in by `part`. */
+function dateGroupOf(d, part) {
+  const y = d.getFullYear();
+  const day = `${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${y}`;
+  const ymdKey = `${y}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  if (part === "year") return [String(y), String(y)];
+  if (part === "month") return [`${y}-${pad2(d.getMonth() + 1)}`, `${MONTH_NAMES[d.getMonth()]} ${y}`];
+  if (part === "week") {
+    const w = isoWeekOf(d);
+    return [`${w.year}-W${pad2(w.week)}`, `Week ${w.week}, ${w.year}`];
+  }
+  if (part === "hour") return [`${ymdKey}T${pad2(d.getHours())}`, `${day}, ${pad2(d.getHours())}:00`];
+  return [ymdKey, day];
+}
+
+// Fixed moments (local), across a year's end and the ISO weeks that differ from the calendar's.
+const ENTRIES = [
+  { title: "Anna", day: "2026-10-28", at: new Date(2026, 9, 28, 14, 30) },
+  { title: "Bert", day: "2026-10-26", at: new Date(2026, 9, 28, 14, 5) },
+  { title: "Cora", day: "2025-12-30", at: new Date(2026, 0, 3, 9, 0) },
+  { title: "Dirk", day: "2026-11-02", at: new Date(2026, 10, 2, 0, 15) },
+  { title: "Eva", day: null, at: null },
+  { title: "Finn", day: "2026-10-28", at: new Date(2026, 9, 28, 23, 59) },
+  { title: "Gus", day: "2024-12-30", at: new Date(2027, 0, 1, 10, 0) },
+];
+const entryDate = (e, field) => (field === "Day" ? (e.day ? new Date(`${e.day}T12:00`) : null) : e.at);
+function dateSpec() {
+  return {
+    collections: [
+      {
+        key: "entries", name: "Entry", plural: "Entries", icon: "Calendar",
+        fields: [{ key: "title", name: "Title", kind: "string" }, { key: "day", name: "Day", kind: "date" }, { key: "at", name: "At", kind: "datetime" }],
+        items: ENTRIES.map((e) => ({ key: e.title.toLowerCase(), values: { title: e.title, day: e.day, at: e.at ? e.at.toISOString() : null } })),
+        views: [{ name: "All", blocks: [{ kind: "table" }] }],
+      },
+    ],
+  };
+}
+/** What the groups of a date field should be: [label, titles] by `part` and Group order, "(empty)" last. */
+function dateGroupsModel(field, part, order) {
+  const groups = new Map();
+  for (const e of ENTRIES) {
+    const d = entryDate(e, field);
+    const [key, label] = d ? dateGroupOf(d, part) : ["", "(empty)"];
+    if (!groups.has(key)) groups.set(key, { key, label, titles: [] });
+    groups.get(key).titles.push(e.title);
+  }
+  const sorted = [...groups.values()].sort((a, b) => {
+    if (a.key === "" || b.key === "") return a.key === "" ? 1 : -1;
+    if (order === "count" && a.titles.length !== b.titles.length) return b.titles.length - a.titles.length;
+    return (a.key < b.key ? -1 : a.key > b.key ? 1 : 0) * (order === "desc" ? -1 : 1);
+  });
+  return sorted.map((g) => [g.label, g.titles.sort()]);
+}
+
+test("group: a date by year, month, week, day or hour, in time order; stored, kept after a reload @ desktop", async (t) => {
+  await t.boot();
+  const ids = await t.seed(dateSpec());
+  await t.open(t.listPath(ids.collections.entries));
+  await openBlock(t, "Sort and group");
+  const panel = panelOf(t);
+  const groupBy = panel.getByLabel("Group by", { exact: true });
+  const by = panel.getByLabel("Group dates by", { exact: true });
+  const order = panel.getByLabel("Group order", { exact: true });
+  const shown = async (label, model) =>
+    t.until(label, async () => {
+      const got = (await groupsOf(t)).map(([l, rows]) => [l, [...rows].sort()]);
+      return JSON.stringify(got) === JSON.stringify(model) || `${JSON.stringify(got)} vs ${JSON.stringify(model)}`;
+    });
+  await t.check("without grouping: no Group dates by", (await by.count()) === 0);
+  await groupBy.selectOption({ label: "Title" });
+  await t.check("grouped by a text field: none either", (await by.count()) === 0);
+
+  for (const [field, parts] of [["Day", ["year", "month", "week", "day"]], ["At", ["year", "month", "week", "day", "hour"]]]) {
+    await groupBy.selectOption({ label: field });
+    await order.selectOption({ label: "Ascending" });
+    const offered = await optionsOf(by);
+    const expected = parts.map((p) => p[0].toUpperCase() + p.slice(1));
+    await t.check(`${field}: Group dates by offers ${expected.join(", ")} (an hour only of a date & time)`, JSON.stringify(offered) === JSON.stringify(expected), JSON.stringify(offered));
+    await t.check(`${field}: Day is the default`, (await by.inputValue()) === "day");
+    await shown(`${field}: by day, with readable labels`, dateGroupsModel(field, "day", "asc"));
+    for (const part of parts) {
+      await by.selectOption({ label: part[0].toUpperCase() + part.slice(1) });
+      await t.settle(100);
+      for (const o of ["asc", "desc", "count"]) {
+        await order.selectOption({ value: o });
+        await t.settle(100);
+        await shown(`${field} by ${part}, order ${o}: ${dateGroupsModel(field, part, o).map((g) => g[0]).join(" | ")}`, dateGroupsModel(field, part, o));
+      }
+      await order.selectOption({ value: "asc" });
+      if (field === "At" && (part === "week" || part === "hour")) await t.audit(`grouped by ${field} by ${part}`, { shotOnFail: true });
+    }
+  }
+
+  // The readable labels, spelled out once (apart from the model above).
+  await groupBy.selectOption({ label: "At" });
+  await by.selectOption({ label: "Week" });
+  await t.until("a week reads 'Week 44, 2026' (ISO)", async () => (await groupsOf(t)).some(([l, rows]) => l === "Week 44, 2026" && rows.length === 3) || JSON.stringify(await groupsOf(t)));
+  await by.selectOption({ label: "Hour" });
+  await t.until("an hour reads '28 Oct 2026, 14:00'", async () => (await groupsOf(t)).some(([l, rows]) => l === "28 Oct 2026, 14:00" && rows.length === 2) || JSON.stringify(await groupsOf(t)));
+
+  // Stored with the view (the default, day, is not), and back after a reload.
+  await by.selectOption({ label: "Month" });
+  await order.selectOption({ label: "Descending" });
+  await t.closeAll();
+  await saveView(t);
+  const stored = await storedView(t, ids.collections.entries);
+  await t.check("the view stores the date grouping and the order", stored.blocks[0].groupBy === ids.fields["entries.at"] && stored.blocks[0].groupDate === "month" && stored.blocks[0].groupOrder === "desc", JSON.stringify(stored.blocks[0]));
+  await t.open(t.listPath(ids.collections.entries));
+  await shown("reloaded: by month, newest first", dateGroupsModel("At", "month", "desc"));
+  await openBlock(t, "Sort and group");
+  await t.check("and the panel shows it", (await panelOf(t).getByLabel("Group dates by", { exact: true }).inputValue()) === "month");
+  await t.audit("sort and group popover, a date grouped by month", { shotOnFail: true });
+
+  // Hours are of a date & time: another date field falls back to days; day is not stored.
+  await panelOf(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Hour" });
+  await panelOf(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Day" });
+  await shown("a date field after hours: by day", dateGroupsModel("Day", "day", "desc"));
+  await t.check("a date has no Hour to choose", !(await optionsOf(panelOf(t).getByLabel("Group dates by", { exact: true }))).includes("Hour"));
+  await panelOf(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Year" });
+  await panelOf(t).getByLabel("Group by", { exact: true }).selectOption({ label: "At" });
+  await shown("another date field keeps the year", dateGroupsModel("At", "year", "desc"));
+  await panelOf(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Title" });
+  await t.check("a text field: no Group dates by", (await panelOf(t).getByLabel("Group dates by", { exact: true }).count()) === 0);
+  await t.closeAll();
+  await saveView(t);
+  const after = await storedView(t, ids.collections.entries);
+  await t.check("grouped by text: no date grouping stored", after.blocks[0].groupDate === undefined, JSON.stringify(after.blocks[0]));
+}, { viewport: "desktop" });
 
 test("group: collapsed groups and blocks are kept @ desktop", async (t) => {
   await t.boot();

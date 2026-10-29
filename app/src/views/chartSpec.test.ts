@@ -152,13 +152,21 @@ describe("chartSpec", () => {
   it("shows one value on a meter, or parts on a proportional one", () => {
     const one = spec({ chart: "meter", parts: "one", series: [sum("pages")], total: { from: "number", number: 1000, field: null }, thresholds: [{ value: 50, status: "warning" }] });
     expect(one.data).toEqual([{ group: "Sum of Pages: 580 of 1000", value: 58 }]);
-    expect(one.options.meter).toEqual({ status: { ranges: [{ range: [0, 50], status: "success" }, { range: [50, 100], status: "warning" }] } });
+    expect(one.options.meter).toEqual({ showLabels: true, status: { ranges: [{ range: [0, 50], status: "success" }, { range: [50, 100], status: "warning" }] } });
     const parts = spec({ chart: "meter", parts: "fields", fields: ["pages", "rating"], total: { from: "number", number: 1000, field: null } });
     // Carbon's statuses only: a target is its success, an info none of its own (left out).
     const targets = spec({ chart: "meter", parts: "one", series: [sum("pages")], total: { from: "number", number: 1000, field: null }, thresholds: [{ value: 20, status: "info" }, { value: 50, status: "target" }] });
-    expect(targets.options.meter).toEqual({ status: { ranges: [{ range: [0, 20], status: "success" }, { range: [50, 100], status: "success" }] } });
+    expect(targets.options.meter).toEqual({ showLabels: true, status: { ranges: [{ range: [0, 20], status: "success" }, { range: [50, 100], status: "success" }] } });
     expect(parts.data).toEqual([{ group: "Pages", value: 580 }, { group: "Rating", value: 11 }]);
     expect((parts.options.meter as { proportional: { total: number } }).proportional.total).toBe(1000);
+  });
+
+  it("hides a meter's label row (Carbon's meter.showLabels) when the label is off", () => {
+    const total = { from: "number" as const, number: 1000, field: null };
+    for (const o of [{ parts: "one" as const, series: [sum("pages")] }, { parts: "fields" as const, fields: ["pages", "rating"] }]) {
+      expect((spec({ chart: "meter", total, ...o }).options.meter as { showLabels: boolean }).showLabels).toBe(true);
+      expect((spec({ chart: "meter", total, showLabel: false, ...o }).options.meter as { showLabels: boolean }).showLabels).toBe(false);
+    }
   });
 
   it("gives a gauge its status by its thresholds (a % of the total or values), its % with the decimals", () => {
