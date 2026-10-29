@@ -45,7 +45,7 @@ Extension points are registries, not special cases in pages:
   under it, what the code works out to ("= true").
 - **Several collections in one block**: the block's Collections picker (Block settings) reads them as one read-only collection, fields
   merged by name, Collection / Title / Created / Updated always there, Fields → Merge fields by hand, the view's filter translated to its
-  columns, a page at a time from every part, a chart over all rows: docs/features.md "Several collections in one block".
+  columns, a page at a time from every part, a chart over all rows: docs/features.md "Several collections in one block". Choosing other collections (more, fewer, another one) keeps the block's type and its type's options (field ids found again by name: `carryOptions`); filter, sort and fields start afresh.
 - **Virtual collections** (`domain/backlinks.ts` `VIRTUAL_COLLECTIONS`, `Collection.virtual`): a block on an item page may list a collection
   that stores nothing, **Backlinks** (docs/features.md): offered in that block's Collection picker only (`BlockMenus`, when it has a
   page), resolved by id next to the store's collections (`findCollection`, in `ItemPageBlock` and the page-wide filter's scope).

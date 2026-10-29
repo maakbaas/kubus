@@ -49,6 +49,20 @@ export function normalizeBlock(base: Collection, block: ViewBlock, all?: Collect
   return block.groupOrder ? { ...normalized, groupOrder: block.groupOrder } : normalized;
 }
 
+/**
+ * A block's options carried to another collection (the block's collection changed, or several were chosen): every field id in
+ * them (any string equal to a field's id, however deep) becomes the field of the same name (case aside) in `to`; ids with no
+ * such field stay and fall back when the type normalizes them. Merged columns are named like the fields they merge.
+ */
+export function carryOptions(options: unknown, from: Collection, to: Collection): unknown {
+  const key = (name: string) => name.trim().toLowerCase();
+  const target = new Map(to.fields.map((f) => [key(f.name), f.id]));
+  const ids = new Map(from.fields.flatMap((f) => (target.has(key(f.name)) ? [[f.id, target.get(key(f.name))!] as const] : [])));
+  const walk = (v: unknown): unknown =>
+    typeof v === "string" ? (ids.get(v) ?? v) : Array.isArray(v) ? v.map(walk) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)])) : v;
+  return walk(options);
+}
+
 /** A view state made valid for its collection (stored ones may be outdated); always at least one block. */
 export function normalizeView(collection: Collection, state: ViewState, all?: Collection[]): ViewState {
   // A fixed id: normalizing the same state twice gives the same result.

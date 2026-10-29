@@ -20,7 +20,7 @@ import { ToolbarPopover } from "../ui/ToolbarPopover";
 import { SectionHeader } from "../ui/SectionHeader";
 import { useConfirm } from "../ui/useConfirm";
 import type { RefOptions } from "../ui/useReferenceOptions";
-import { BLOCK_TYPES, blockType, normalizeBlock, type BlockPlace, type BlockTypeDefinition, type PageItem } from ".";
+import { BLOCK_TYPES, blockType, carryOptions, normalizeBlock, type BlockPlace, type BlockTypeDefinition, type PageItem } from ".";
 import { QueryEditor } from "./QueryEditor";
 import type { CollectionData } from "./useCollectionData";
 import { useItemActions } from "./useItemActions";
@@ -226,13 +226,15 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
               else if (list.length > 1) list = list.filter((c) => !c.virtual);
               if (list.length === 0 || (list.length === chosen.length && list.every((c) => chosen.some((x) => x.id === c.id)))) return;
               const ids = list.map((c) => c.id);
+              // The block keeps its type and the options that still apply (fields found again by name).
+              const keep = (to: Collection) => ({ kind: type.kind, options: carryOptions(block.options, collection, to) });
               if (list.length === 1) {
-                const { id: _id, title: _title, ...fresh } = newPageBlock(list[0], page ?? list[0]);
+                const { id: _id, title: _title, ...fresh } = newPageBlock(list[0], page ?? list[0], keep(list[0]));
                 onSet({ ...fresh, collectionId: page ? list[0].id : null, collectionIds: undefined, merges: undefined, groupOrder: undefined, groupDate: undefined });
                 return;
               }
               const { collection: read } = listedCollection(home, { collectionIds: ids }, collections);
-              const { id: _id, title: _title, ...fresh } = newPageBlock(read, page ?? read);
+              const { id: _id, title: _title, ...fresh } = newPageBlock(read, page ?? read, keep(read));
               onSet({ ...fresh, collectionId: page ? ids[0] : null, collectionIds: ids, merges: undefined, groupOrder: undefined, groupDate: undefined });
             }}
           />

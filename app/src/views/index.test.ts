@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { blankField, type Collection } from "../domain/model";
 import { newBlock } from "../domain/views";
+import { mergeCollections } from "../domain/mergedCollection";
 
 // The block types' components (Carbon, charts, maps) are not what is tested here: the registry's
 // normalization is, so each type is a stand-in that marks the options it normalized.
@@ -13,7 +14,7 @@ vi.mock("./MapView", () => ({ mapView: stub("map") }));
 vi.mock("./MarkdownBlock", () => ({ markdownBlock: stub("markdown") }));
 vi.mock("./TableView", () => ({ tableView: stub("table") }));
 
-const { BLOCK_TYPES, blockType, normalizeBlock, normalizeView } = await import("./index");
+const { BLOCK_TYPES, blockType, carryOptions, normalizeBlock, normalizeView } = await import("./index");
 
 const collection = {
   id: "c", name: "Book", pluralName: "Books", icon: null, description: "", itemViews: [], spaceIds: null, createdAt: "", updatedAt: "",
@@ -100,5 +101,29 @@ describe("a block's chosen sort", () => {
   it("is kept by normalizing", () => {
     expect(normalizeBlock(collection, { ...newBlock("chart", null), sortChosen: true }).sortChosen).toBe(true);
     expect(normalizeBlock(collection, newBlock("chart", null))).not.toHaveProperty("sortChosen");
+  });
+});
+
+describe("carryOptions", () => {
+  const coll = (id: string, fields: [string, string][]) => ({ ...collection, id, pluralName: id, fields: fields.map(([fid, name]) => blankField(fid, name, "number", { collectionId: id })) }) as Collection;
+  const sales = coll("sales", [["s-date", "Date"], ["s-total", "Total"], ["s-only", "Only sales"]]);
+  const costs = coll("costs", [["c-date", "Date"], ["c-total", "Total"]]);
+
+  it("maps field ids, however deep, to the merged columns of the same name, so a chart keeps its axes", () => {
+    const { collection: merged } = mergeCollections(["sales", "costs"], [sales, costs]);
+    const opts = { x: "s-date", series: [{ field: "s-total" }, { field: "s-only" }], title: "s-total-not" };
+    const out = carryOptions(opts, sales, merged) as typeof opts;
+    const col = (name: string) => merged.fields.find((f) => f.name === name)!.id;
+    expect(out.x).toBe(col("Date"));
+    expect(out.series[0].field).toBe(col("Total"));
+    expect(out.series[1].field).toBe(col("Only sales"));
+    expect(out.title).toBe("s-total-not");
+  });
+
+  it("maps merged columns back to a single collection's fields, and leaves fields it has no match for", () => {
+    const { collection: merged } = mergeCollections(["sales", "costs"], [sales, costs]);
+    const total = merged.fields.find((f) => f.name === "Total")!.id;
+    expect(carryOptions({ y: total, z: "x" }, merged, costs)).toEqual({ y: "c-total", z: "x" });
+    expect(carryOptions({ y: "s-only" }, sales, costs)).toEqual({ y: "s-only" });
   });
 });

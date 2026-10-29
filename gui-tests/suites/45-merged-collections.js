@@ -376,3 +376,53 @@ test("merged collections: a deleted collection is a problem shown on the block, 
   await expectSet(t, "the invoices are still listed", INVOICES.map((i) => i[0]));
   await t.audit("a block with a collection gone");
 });
+
+test("merged collections: adding or removing a collection keeps the block's kind, and the options that still apply", async (t) => {
+  const { ids } = await world(t, { blocks: [] });
+  const inv = ids.collections.inv;
+  const date = await fieldId(t, inv, "Date");
+  const price = await fieldId(t, inv, "Price");
+  const series = (field) => [{ id: "a", value: "sum", field, label: "", style: null, axis: "left", transform: "none", window: 3 }];
+  const KINDS = {
+    chart: { chart: "bar", stack: "none", x: { by: "field", field: date, dateStep: "month" }, series: series(price) },
+    stat: { chart: "stat", series: series(price) },
+    cards: {},
+    map: {},
+  };
+  const store = (kind) =>
+    t.page.evaluate(
+      async ([inv, base, kind, options]) => {
+        const repo = window.kubus.repo;
+        const [view] = await repo.listViews(inv, "default");
+        await repo.saveView({ ...view, blocks: [{ ...base, id: "b0", kind, options, collectionId: null }] });
+      },
+      [inv, BLOCK, kind === "stat" ? "chart" : kind, KINDS[kind]],
+    );
+  for (const kind of Object.keys(KINDS)) {
+    // A stat is a chart block with a stat chart.
+    const real = kind === "stat" ? "chart" : kind;
+    await store(kind);
+    await t.open(t.listPath(inv));
+    await t.until(`${kind}: stored as given`, async () => (await storedBlocks(t, ids))[0]?.kind === real, { timeout: 10000 });
+    await toggleCollection(t, "Shop sales");
+    await t.until(`${kind}: two collections are listed`, async () => ((await storedBlocks(t, ids))[0].collectionIds ?? []).length === 2, { timeout: 10000 });
+    const two = (await storedBlocks(t, ids))[0];
+    await t.check(`${kind}: adding a second collection keeps the kind`, two.kind === real && two.options.chart === KINDS[kind].chart, `${two.kind} ${two.options?.chart}`);
+    if (kind === "chart" || kind === "stat") {
+      await t.check(`${kind}: its series is the merged Price column`, two.options.series[0].field === COL.price, JSON.stringify(two.options.series));
+      if (kind === "chart") await t.check("chart: its X axis is the merged Date column", two.options.x.field === COL.date && two.options.x.dateStep === "month", JSON.stringify(two.options.x));
+      await t.until(`${kind}: still drawn after a reload`, async () => {
+        await t.open(t.listPath(inv));
+        return (await block(t).locator(kind === "chart" ? ".chart-block" : ".stat-block").count()) > 0;
+      }, { timeout: 20000 });
+    }
+    await t.closeAll();
+    await t.audit(`a ${kind} block of two collections`);
+    await toggleCollection(t, "Shop sales");
+    await t.until(`${kind}: one collection again`, async () => (await storedBlocks(t, ids))[0].collectionIds === undefined, { timeout: 10000 });
+    const one = (await storedBlocks(t, ids))[0];
+    await t.check(`${kind}: removing it keeps the kind`, one.kind === real, one.kind);
+    if (kind === "chart") await t.check("chart: its X axis and series are the Invoices' fields again", one.options.x.field === date && one.options.series[0].field === price, JSON.stringify(one.options));
+    await t.closeAll();
+  }
+});
