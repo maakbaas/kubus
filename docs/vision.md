@@ -69,7 +69,7 @@ The stages, in order:
   paging, groups, totals and charts over all of them: docs/features.md "Several collections in one block"), so one chart can total two
   sources. Dashboards are built too (docs/features.md "Dashboards": pages of blocks of any collections, in tabs per space, with one
   filter whose Date steps every dated block), and their blocks stand side by side in rows (docs/features.md "Blocks side by
-  side"; what is left: roadmap #17).
+  side").
 
 ## Open items
 
@@ -141,7 +141,5 @@ Charts:
     behaviour: the value axes left out of that filter, and the plot clipped by hand (Carbon draws
     this chart without a clip, and dots never clipped), so a bar below the min doesn't cover the axis.
     Parked: not worth patching Carbon's internals for now.
-17. Blocks side by side, what is left (docs/features.md "Blocks side by side"): a chart, map or component block filling
-    the height of its row (its box keeps its own Height now, shrinking with its width at its aspect ratio, the row's
-    other cells being as tall as the tallest).
+17. (done: blocks side by side, docs/features.md "Blocks side by side")
 

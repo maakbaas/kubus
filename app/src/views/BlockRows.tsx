@@ -1,11 +1,13 @@
-import { Fragment, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { blockRows, canBeside, moveDivider, placeBlock, rowShares, rowStart, setBeside, setRowMaxHeight, setRowShares, SHARE_STEP, type RowZone } from "../domain/blockRows";
-import type { ViewBlock } from "../domain/views";
+import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { blockRows, canBeside, moveDivider, placeBlock, rowHeightPx, rowOf, rowShares, rowStart, setBeside, setRowSettings, setRowShares, SHARE_STEP, type RowSettings, type RowZone } from "../domain/blockRows";
+import { withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 
 // A page's blocks in rows (domain/blockRows.ts): a row's blocks side by side, where the row is wide enough (a container
-// query, styles.css .block-row: so the narrow column of a page without "Full width" too), as tall as each other, each at
-// most the row's max height (then scrolling inside); where it isn't (a phone, a narrow pane), stacked as they always were,
-// their heights their own. A block is
+// query, styles.css .block-row: so the narrow column of a page without "Full width" too), all as tall as the row: its
+// tallest or shortest block's height (measured here, `rowHeightPx`), at most or at least its height setting; what is taller
+// scrolls inside, a chart, map or HTML component fills it. A row of one block keeps its height, only limited (at most or at
+// least). Where it isn't wide enough (a phone, a narrow pane) the blocks stack as they always were, their heights their own.
+// A block is
 // dragged by its name onto another: beside it (its left or right quarter, side by side only) or in a row of its own above or
 // below that block's row. The divider between two blocks in a row changes their shares (drag it, or its arrow keys).
 
@@ -16,15 +18,38 @@ export interface RowControls {
   /** It can be: a block is right above it, and that row has room. */
   canBeside: boolean;
   onBeside(on: boolean): void;
-  /** Its row's max height (rem), undefined: none. */
-  maxHeight: number | undefined;
-  onMaxHeight(rem: number | undefined): void;
+  /** Its row has more blocks than it: side by side its Height and Aspect ratio are set aside (it fills the row). */
+  inRow: boolean;
+  /** Its row's height: as its tallest or shortest block, and the limit (rem; undefined: none): at most, or at least. */
+  fit: "tallest" | "shortest";
+  height: number | undefined;
+  onRowSettings(settings: { fit: "tallest" | "shortest"; height: number | undefined }): void;
 }
 
-/** What a row is made of, as shown (held as it was while a toolbar panel is open: nothing moves under the pointer). */
-export type RowShape = Pick<ViewBlock, "beside" | "width" | "rowMaxHeight">;
-export const rowShape = (blocks: ViewBlock[]): Record<string, RowShape> =>
-  Object.fromEntries(blocks.map((b) => [b.id, { beside: b.beside, width: b.width, rowMaxHeight: b.rowMaxHeight }]));
+/**
+ * A row collapses as one, not a block: any block's caret collapses or expands all its blocks, stored as its first block's
+ * (so a row of one is collapsed as that block was). `store` keeps the page's collapse state.
+ */
+export function rowCollapse(order: string[], blocks: ViewBlock[], state: Collapsed, block: ViewBlock, store: (next: Collapsed) => void) {
+  const first = rowStart(order, blocks, block.id)?.id ?? block.id;
+  const collapsed = state.blocks.includes(first);
+  return { collapsed, onToggle: () => store(withBlockCollapsed(state, first, !collapsed)) };
+}
+
+/** A block's row controls from the page's order of ids and its blocks; `arrange` applies a change to the blocks. */
+export function rowControls(order: string[], blocks: ViewBlock[], block: ViewBlock, arrange: (change: (blocks: ViewBlock[], order: string[]) => ViewBlock[]) => void): RowControls {
+  const first = rowStart(order, blocks, block.id);
+  return {
+    beside: !!block.beside,
+    canBeside: canBeside(order, blocks, block.id),
+    onBeside: (on) => arrange((list, ids) => setBeside(ids, list, block.id, on)),
+    inRow: rowOf(order, blocks, block.id).length > 1,
+    fit: first?.rowFit ?? "tallest",
+    height: first?.rowHeight,
+    onRowSettings: (settings) => arrange((list, ids) => setRowSettings(ids, list, block.id, settings)),
+  };
+}
+
 
 /**
  * Arranging the rows of a page whose blocks are its order (a collection view, a dashboard tab): Block settings' row
@@ -33,13 +58,7 @@ export const rowShape = (blocks: ViewBlock[]): Record<string, RowShape> =>
 export function listRowActions(blocks: ViewBlock[], arrange: (change: (blocks: ViewBlock[]) => ViewBlock[]) => void) {
   const ids = (list: ViewBlock[]) => list.map((b) => b.id);
   return {
-    controls: (block: ViewBlock): RowControls => ({
-      beside: !!block.beside,
-      canBeside: canBeside(ids(blocks), blocks, block.id),
-      onBeside: (on) => arrange((list) => setBeside(ids(list), list, block.id, on)),
-      maxHeight: rowStart(ids(blocks), blocks, block.id)?.rowMaxHeight,
-      onMaxHeight: (rem) => arrange((list) => setRowMaxHeight(ids(list), list, block.id, rem)),
-    }),
+    controls: (block: ViewBlock): RowControls => rowControls(ids(blocks), blocks, block, (change) => arrange((list) => change(list, ids(list)))),
     place: (dragId: string, targetId: string, zone: RowZone) =>
       arrange((list) => {
         const r = placeBlock(ids(list), list, dragId, targetId, zone);
@@ -72,8 +91,6 @@ interface Props<T extends { id: string }> {
   entries: T[];
   /** The block an entry is (absent: a field of an item page, a row of its own). */
   blockOf(entry: T): ViewBlock | undefined;
-  /** Rows as shown (held while a panel is open); a block not in it, its own. */
-  shape?: Record<string, RowShape>;
   render(entry: T, placed: PlacedBlock): ReactNode;
   /** A block dropped on another (absent: blocks aren't dragged here). */
   onPlace?(dragId: string, targetId: string, zone: RowZone): void;
@@ -81,11 +98,10 @@ interface Props<T extends { id: string }> {
   onShares?(row: string[], shares: number[]): void;
 }
 
-/** The rows shown: entries grouped by their (held) shape. */
-export function shownRows<T extends { id: string }>(entries: T[], blockOf: (entry: T) => ViewBlock | undefined, shape?: Record<string, RowShape>): T[][] {
-  return blockRows(entries, (e) => shapeOf(blockOf(e), shape));
+/** The rows shown: entries grouped by their blocks' `beside`. */
+export function shownRows<T extends { id: string }>(entries: T[], blockOf: (entry: T) => ViewBlock | undefined): T[][] {
+  return blockRows(entries, blockOf);
 }
-const shapeOf = (block: ViewBlock | undefined, shape?: Record<string, RowShape>): RowShape | undefined => block && (shape?.[block.id] ?? block);
 
 /**
  * Which drop zone the pointer is in: a block dragged over a row standing side by side, the outer quarters beside the block;
@@ -103,23 +119,24 @@ export function zoneAt(e: DragEvent, cell: HTMLElement): RowZone {
   return e.clientY - r.top < r.height / 2 ? "top" : "bottom";
 }
 
-export function BlockRows<T extends { id: string }>({ entries, blockOf, shape, render, onPlace, onShares }: Props<T>) {
+export function BlockRows<T extends { id: string }>({ entries, blockOf, render, onPlace, onShares }: Props<T>) {
   const [drop, setDrop] = useState<{ id: string; zone: RowZone } | null>(null);
-  const shaped = (e: T) => shapeOf(blockOf(e), shape);
-  const rows = shownRows(entries, blockOf, shape);
+  const rows = shownRows(entries, blockOf);
   return (
     <>
       {rows.map((row) => {
         const first = row[0];
         if (!blockOf(first)) return <Fragment key={first.id}>{render(first, {})}</Fragment>;
-        const max = shaped(first)?.rowMaxHeight;
+        const head = blockOf(first)!;
         return (
           <Row
             key={first.id}
             ids={row.map((e) => e.id)}
-            shares={rowShares(row.map((e) => shaped(e) ?? {}))}
-            maxHeight={max}
+            shares={rowShares(row.map((e) => blockOf(e) ?? {}))}
+            settings={{ ...(head.rowFit && { rowFit: head.rowFit }), ...(head.rowHeight !== undefined && { rowHeight: head.rowHeight }) }}
             onShares={onShares}
+            // Above or below a block of the row: a line across the whole row (it gets a row of its own there).
+            dropLine={drop && row.some((e) => e.id === drop.id) && (drop.zone === "top" || drop.zone === "bottom") ? drop.zone : null}
             cell={(e: T, share: number) => (
               <div
                 className="block-cell"
@@ -141,7 +158,8 @@ export function BlockRows<T extends { id: string }>({ entries, blockOf, shape, r
                 }}
               >
                 {render(e, onPlace ? { onDragStart: dragStart(e.id, "block") } : {})}
-                {drop?.id === e.id && <div className={`ws-drop ws-drop--${drop.zone}`} aria-hidden="true" />}
+                {/* Beside it: a line at its edge (nothing is split: it joins the row). */}
+                {drop?.id === e.id && (drop.zone === "left" || drop.zone === "right") && <div className={`block-drop block-drop--${drop.zone}`} aria-hidden="true" />}
               </div>
             )}
             entries={row}
@@ -158,18 +176,20 @@ function Row<T extends { id: string }>({
   ids,
   entries,
   shares: stored,
-  maxHeight,
+  settings,
   onShares,
   cell,
   onDragEnd,
+  dropLine,
 }: {
   ids: string[];
   entries: T[];
   shares: number[];
-  maxHeight: number | undefined;
+  settings: RowSettings;
   onShares?(row: string[], shares: number[]): void;
   cell(entry: T, share: number): ReactNode;
   onDragEnd(): void;
+  dropLine: "top" | "bottom" | null;
 }) {
   // While a divider is dragged: the shares shown (stored when it is let go).
   const [moving, setMoving] = useState<number[] | null>(null);
@@ -204,9 +224,43 @@ function Row<T extends { id: string }>({
     e.preventDefault();
     onShares(ids, moveDivider(stored, i, e.key === "ArrowLeft" ? -SHARE_STEP : SHARE_STEP));
   };
-  const className = ["block-row", maxHeight !== undefined && "block-row--capped", onShares && "block-row--resizable"].filter(Boolean).join(" ");
+  // Several blocks: the row's height, measured from those with a height of their own (not those filling it), in px.
+  const several = entries.length > 1;
+  const [bodyPx, setBodyPx] = useState<number | null>(null);
+  const fit = settings.rowFit ?? "tallest";
+  const limit = settings.rowHeight;
+  useLayoutEffect(() => {
+    const box = cells.current;
+    if (!several || !box) return setBodyPx(null);
+    const measure = () => {
+      const contents = [...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block:not(.block--fills) > .block__body > .block__content")];
+      const heights = contents.map((c) => c.offsetHeight).filter((h) => h > 0);
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const px = Math.round(rowHeightPx({ ...(fit === "shortest" && { rowFit: "shortest" }), ...(limit !== undefined && { rowHeight: limit }) }, heights, rem));
+      setBodyPx((old) => (old === px ? old : px));
+    };
+    const sizes = new ResizeObserver(measure);
+    const watch = () => {
+      sizes.disconnect();
+      for (const c of box.querySelectorAll(":scope > .block-cell > .block > .block__body > .block__content")) sizes.observe(c);
+      measure();
+    };
+    // Blocks come and go (their items loading, collapsed, a search leaving one out): watched anew.
+    const tree = new MutationObserver(watch);
+    tree.observe(box, { childList: true, subtree: true });
+    watch();
+    return () => {
+      sizes.disconnect();
+      tree.disconnect();
+    };
+  }, [several, fit, limit]);
+  // One block: its own height, at most or at least the limit.
+  const one = !several && limit !== undefined ? (fit === "shortest" ? "block-row--min" : "block-row--max") : null;
+  const className = ["block-row", several && bodyPx !== null && "block-row--fit", one, onShares && "block-row--resizable"].filter(Boolean).join(" ");
+  const style = several && bodyPx !== null ? { "--row-body": `${bodyPx}px` } : one ? { "--row-limit": `${limit}rem` } : undefined;
   return (
-    <div className={className} style={maxHeight !== undefined ? ({ "--row-max": `${maxHeight}rem` } as CSSProperties) : undefined} onDragEnd={onDragEnd}>
+    <div className={className} style={style as CSSProperties | undefined} onDragEnd={onDragEnd}>
+      {dropLine && <div className={`block-drop block-drop--${dropLine}`} aria-hidden="true" />}
       <div className="block-row__cells" ref={cells}>
         {entries.map((e, i) => (
           <Fragment key={e.id}>

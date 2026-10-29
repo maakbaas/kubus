@@ -13,7 +13,7 @@
 //                              choiceFilter?: [{ field: targetFieldKey, operator, value }] }],
 //                   items: [{ key?, space?: spaceKey, values: { fieldKey: value } }],
 //                   views?: [{ name, blocks: [partial ViewBlock with kind/options/layout/groupBy/sort;
-//                              componentKey (a shared component) or local: code (its own); beside / width / rowMaxHeight (rows)],
+//                              componentKey (a shared component) or local: code (its own); beside / width / rowFit / rowHeight (rows)],
 //                              filters?, isDefault?, filterBar? (Show filter bar), fullWidth? (Full width) }],
 //                   (a block filter value "$item.@key": the page item's field by key)
 //                   (a block's `collection` is a collection key, or the id of a virtual collection: "$backlinks")
@@ -121,7 +121,8 @@ async function __seedInPage(spec) {
       ...(b.hideHeader ? { hideHeader: true } : {}),
       ...(b.beside ? { beside: true } : {}),
       ...(b.width ? { width: b.width } : {}),
-      ...(b.rowMaxHeight ? { rowMaxHeight: b.rowMaxHeight } : {}),
+      ...(b.rowHeight ? { rowHeight: b.rowHeight } : {}),
+      ...(b.rowFit ? { rowFit: b.rowFit } : {}),
       ...(b.componentKey ? { kind: "component", options: { componentId: ids.components[b.componentKey], local: null } } : {}),
       ...(b.local != null ? { kind: "component", options: { componentId: null, local: { code: b.local, output: b.output || "markdown", frameRatio: null, ai: false } } } : {}),
       ...(b.collections ? { collectionIds: b.collections.map((k) => ids.collections[k] ?? k) } : {}),

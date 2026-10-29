@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockRows, canBeside, moveDivider, placeBlock, reordered, rowShares, rowStart, setBeside, setRowMaxHeight, setRowShares, withoutBlock } from "./blockRows";
+import { blockRows, canBeside, moveDivider, placeBlock, reordered, rowShares, rowStart, setBeside, rowHeightPx, setRowSettings, setRowShares, withCopy, withoutBlock } from "./blockRows";
 import { newBlock, parseBlock, type ViewBlock } from "./views";
 
 const block = (id: string, extra: Partial<ViewBlock> = {}): ViewBlock => ({ ...newBlock("table", null, id), ...extra });
@@ -43,17 +43,17 @@ describe("block rows", () => {
   });
 
   it("hands a row's settings on to the block that becomes its first, and evens the shares of a changed row", () => {
-    const blocks = [block("a", { rowMaxHeight: 20, width: 70 }), block("b", { beside: true, width: 30 }), block("c")];
+    const blocks = [block("a", { rowHeight: 20, rowFit: "shortest", width: 70 }), block("b", { beside: true, width: 30 }), block("c")];
     const left = placed(blocks, "c", "a", "left");
     expect(rowsOf(left)).toEqual(["cab"]);
-    expect(left.find((b) => b.id === "c")?.rowMaxHeight).toBe(20);
-    expect(left.find((b) => b.id === "a")?.rowMaxHeight).toBeUndefined();
+    expect(left.find((b) => b.id === "c")).toMatchObject({ rowHeight: 20, rowFit: "shortest" });
+    expect([left.find((b) => b.id === "a")?.rowHeight, left.find((b) => b.id === "a")?.rowFit]).toEqual([undefined, undefined]);
     expect(left.every((b) => b.width === undefined)).toBe(true);
     const out = placed(blocks, "a", "c", "bottom");
     expect(rowsOf(out)).toEqual(["b", "c", "a"]);
-    expect(out.find((b) => b.id === "b")).toMatchObject({ rowMaxHeight: 20 });
+    expect(out.find((b) => b.id === "b")).toMatchObject({ rowHeight: 20, rowFit: "shortest" });
     expect(out.find((b) => b.id === "b")?.beside).toBeUndefined();
-    expect(out.find((b) => b.id === "a")?.rowMaxHeight).toBeUndefined();
+    expect(out.find((b) => b.id === "a")?.rowHeight).toBeUndefined();
   });
 
   it("refuses a fifth block in a row and a drop on itself", () => {
@@ -66,12 +66,12 @@ describe("block rows", () => {
   });
 
   it("puts a block beside the one above it and back on a row of its own", () => {
-    const blocks = [block("a"), block("b", { rowMaxHeight: 12 }), block("c", { beside: true })];
+    const blocks = [block("a"), block("b", { rowHeight: 12 }), block("c", { beside: true })];
     expect(canBeside(ids(blocks), blocks, "a")).toBe(false);
     expect(canBeside(ids(blocks), blocks, "b")).toBe(true);
     const joined = setBeside(ids(blocks), blocks, "b", true);
     expect(rowsOf(joined)).toEqual(["abc"]);
-    expect(joined.find((b) => b.id === "b")?.rowMaxHeight).toBeUndefined();
+    expect(joined.find((b) => b.id === "b")?.rowHeight).toBeUndefined();
     const split = setBeside(ids(joined), joined, "b", false);
     expect(rowsOf(split)).toEqual(["a", "bc"]);
     // A field above it: no block to be beside.
@@ -80,11 +80,12 @@ describe("block rows", () => {
 
   it("keeps a row's max height on its first block, and its shares as whole percents", () => {
     const blocks = [block("a"), block("b", { beside: true })];
-    const capped = setRowMaxHeight(ids(blocks), blocks, "b", 20.4);
-    expect(capped[0].rowMaxHeight).toBe(20);
+    const capped = setRowSettings(ids(blocks), blocks, "b", { fit: "shortest", height: 20.4 });
+    expect(capped[0]).toMatchObject({ rowHeight: 20, rowFit: "shortest" });
     expect(rowStart(ids(capped), capped, "b")?.id).toBe("a");
-    expect(setRowMaxHeight(ids(capped), capped, "a", undefined)[0].rowMaxHeight).toBeUndefined();
-    expect(setRowMaxHeight(ids(blocks), blocks, "a", 500)[0].rowMaxHeight).toBe(96);
+    const plain = setRowSettings(ids(capped), capped, "a", { fit: "tallest", height: undefined })[0];
+    expect([plain.rowHeight, plain.rowFit]).toEqual([undefined, undefined]);
+    expect(setRowSettings(ids(blocks), blocks, "a", { fit: "tallest", height: 500 })[0].rowHeight).toBe(96);
     expect(setRowShares(blocks, ["a", "b"], [66.6, 33.4]).map((b) => b.width)).toEqual([67, 33]);
   });
 
@@ -95,18 +96,20 @@ describe("block rows", () => {
   });
 
   it("reads and checks the stored row keys of a block", () => {
-    expect(parseBlock({ ...block("a"), beside: true, width: 40, rowMaxHeight: 3 })).toMatchObject({ beside: true, width: 40, rowMaxHeight: 8 });
-    const plain = parseBlock({ ...block("a"), beside: "yes", width: 400, rowMaxHeight: "x" })!;
-    expect([plain.beside, plain.width, plain.rowMaxHeight]).toEqual([undefined, undefined, undefined]);
+    expect(parseBlock({ ...block("a"), beside: true, width: 40, rowHeight: 3, rowFit: "shortest" })).toMatchObject({ beside: true, width: 40, rowHeight: 8, rowFit: "shortest" });
+    // Its name before the fit: a max height.
+    expect(parseBlock({ ...block("a"), rowMaxHeight: 30 })).toMatchObject({ rowHeight: 30 });
+    const plain = parseBlock({ ...block("a"), beside: "yes", width: 400, rowHeight: "x", rowFit: "short" })!;
+    expect([plain.beside, plain.width, plain.rowHeight, plain.rowFit]).toEqual([undefined, undefined, undefined, undefined]);
   });
 });
 
 describe("block rows kept sound", () => {
   it("lets the next block of a row start it when its first is removed", () => {
-    const blocks = [block("a"), block("b", { rowMaxHeight: 12 }), block("c", { beside: true })];
+    const blocks = [block("a"), block("b", { rowHeight: 12 }), block("c", { beside: true })];
     const left = withoutBlock(ids(blocks), blocks, "b");
     expect(rowsOf(left)).toEqual(["a", "c"]);
-    expect(left.find((b) => b.id === "c")).toMatchObject({ rowMaxHeight: 12 });
+    expect(left.find((b) => b.id === "c")).toMatchObject({ rowHeight: 12 });
   });
 
   it("takes a block out of a row when the list reorders what is above it", () => {
@@ -139,5 +142,32 @@ describe("an item page's fields among its blocks", () => {
     expect(place("c", "f1", "top").order).toEqual(["c", "f1", "a", "b", "f2"]);
     expect(place("c", "f1", "right").order).toEqual(order);
     expect(place("f2", "a", "left").order).toEqual(order);
+  });
+});
+
+describe("a row's height", () => {
+  it("is its tallest block, at most its height; or its shortest, at least its height", () => {
+    expect(rowHeightPx({}, [100, 300], 16)).toBe(300);
+    expect(rowHeightPx({ rowHeight: 10 }, [100, 300], 16)).toBe(160);
+    expect(rowHeightPx({ rowFit: "shortest" }, [100, 300], 16)).toBe(100);
+    expect(rowHeightPx({ rowFit: "shortest", rowHeight: 10 }, [100, 300], 16)).toBe(160);
+    expect(rowHeightPx({ rowFit: "shortest", rowHeight: 5 }, [100, 300], 16)).toBe(100);
+  });
+
+  it("with nothing to measure (only blocks filling it): its height, else 24rem", () => {
+    expect(rowHeightPx({ rowHeight: 10 }, [], 16)).toBe(160);
+    expect(rowHeightPx({ rowFit: "shortest" }, [], 16)).toBe(384);
+  });
+});
+
+describe("a copy of a block", () => {
+  it("is the same block under a new id, in a row of its own after the original's row", () => {
+    const blocks = [block("a", { title: "Mine", rowHeight: 12 }), block("b", { beside: true, width: 40 }), block("c")];
+    const copied = withCopy(blocks, "a", "a2");
+    expect(rowsOf(copied)).toEqual(["ab", "a2", "c"]);
+    const copy = copied.find((b) => b.id === "a2")!;
+    expect(copy.title).toBe("Mine");
+    expect([copy.beside, copy.width, copy.rowHeight]).toEqual([undefined, undefined, undefined]);
+    expect(rowsOf(withCopy(blocks, "b", "b2"))).toEqual(["ab", "b2", "c"]);
   });
 });

@@ -21,8 +21,8 @@ import { blockType, normalizeBlock, normalizeView } from "../views";
 import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
 import type { NewBlockSpec } from "../views/AddBlockButton";
 import { BlockView } from "../views/BlockView";
-import { BlockRows, listRowActions, rowShape } from "../views/BlockRows";
-import { reordered, withoutBlock } from "../domain/blockRows";
+import { BlockRows, listRowActions, rowCollapse } from "../views/BlockRows";
+import { reordered, withCopy, withoutBlock } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
 import { useCollectionData } from "../views/useCollectionData";
@@ -215,11 +215,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // closes (View settings is where the bar is switched on): leaving the toolbar, it would move the
   // buttons after it, and their open panels with them. The bar itself shows at once, and stays until then when switched off.
   const filterInBar = panels.hold("filterInBar", !!active?.filterBar);
-  // "Full width" (View settings): off, the view is the narrow column of an item page. Held while a panel is
-  // open, like the filter bar: the width moves the toolbar's buttons, and the open panel with them.
-  const fullWidth = panels.hold("fullWidth", isFullWidth("collection", active?.fullWidth));
-  // The rows as shown: held while a panel is open, like the width (Block settings' "Beside the block above" moves the block).
-  const shape = panels.hold("rows", rowShape(view.blocks));
+  // "Full width" (View settings): off, the view is the narrow column of an item page. It changes as it is clicked, the
+  // panel open (the page is seen changing; the toolbar and the open panel move with it).
+  const fullWidth = isFullWidth("collection", active?.fullWidth);
 
   async function updateActive() {
     if (!active) return;
@@ -500,6 +498,10 @@ function CollectionContent({ collection }: { collection: Collection }) {
                 onRemove={(ids, asked) => removeBlocks(ids, asked).catch((e) => setError(errorMessage(e)))}
                 onAdd={addBlock}
                 onHeader={(id, shown) => setBlockNow(id, { hideHeader: shown ? undefined : true })}
+                onDuplicate={(id) => {
+                  const copy = newId();
+                  arrangeNow((blocks) => withCopy(blocks, id, copy));
+                }}
               />
             </div>
           </ToolbarPopover>
@@ -540,7 +542,6 @@ function CollectionContent({ collection }: { collection: Collection }) {
           <BlockRows
             entries={view.blocks}
             blockOf={(b) => b}
-            shape={shape}
             onPlace={rowActions.place}
             onShares={rowActions.shares}
             render={(block, placed) => (
@@ -563,6 +564,14 @@ function CollectionContent({ collection }: { collection: Collection }) {
                 onRemove={view.blocks.length > 1 ? () => removeBlocks([block.id]).catch((e) => setError(errorMessage(e))) : undefined}
                 onError={setError}
                 onOpenChange={panels.onOpenChange}
+                // A row collapses as one (views/BlockRows.tsx rowCollapse).
+                collapse={rowCollapse(
+                  view.blocks.map((b) => b.id),
+                  view.blocks,
+                  active?.collapsed ?? NOTHING_COLLAPSED,
+                  block,
+                  (next) => setCollapsed(next).catch((e) => setError(errorMessage(e))),
+                )}
                 onDragStart={placed.onDragStart}
                 row={rowActions.controls(block)}
               />

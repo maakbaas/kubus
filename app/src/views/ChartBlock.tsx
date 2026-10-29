@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { Accordion, AccordionItem, Button, Checkbox, IconButton, MultiSelect, NumberInput, Select, SelectItem, SelectItemGroup, Slider, TextInput } from "@carbon/react";
+import { Accordion, AccordionItem, Button, Checkbox, IconButton, MultiSelect, NumberInput, Select, SelectItem, SelectItemGroup, TextInput } from "@carbon/react";
 import type { Repository } from "../data";
 import { Add, ChartColumn, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
@@ -62,7 +62,8 @@ import { COUNTRY_MAPS, downloadRegionMap, loadRegionMap, type RegionMap } from "
 import { errorMessage } from "../ui/useConfirm";
 import { RegionsDialog } from "./RegionsDialog";
 import { StatView } from "./StatView";
-import { AspectSelect, HeightSlider } from "./HeightSlider";
+import { AspectSelect, HeightSlider, InRowNote } from "./HeightSlider";
+import { SettledSlider } from "./SettledSlider";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
 // A chart of the block's items (Carbon Charts). Its filter and sort pick the items (on an item
@@ -450,7 +451,7 @@ function RegionsSelect({ id, value, onChange }: { id: string; value: ChartRegion
   );
 }
 
-function ChartOptionsEditor({ collection, options, place, pageCollectionId, result, refs, onChange }: BlockOptionsProps<ChartOptions>) {
+function ChartOptionsEditor({ collection, options, place, pageCollectionId, result, refs, inRow, onChange }: BlockOptionsProps<ChartOptions>) {
   const uid = useId();
   const openings = usePanelOpenings();
   const [showRegions, setShowRegions] = useState(false);
@@ -965,12 +966,13 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
     <Section key="size" title="Size">
       {has.height && (
         <>
-          {!compact && <HeightSlider id={`${uid}-height`} value={o.height} onChange={(height) => set({ height })} />}
-          {!compact && <AspectSelect id={`${uid}-aspect`} value={o.aspect} onChange={(aspect) => set({ aspect })} />}
+          {!compact && <HeightSlider id={`${uid}-height`} value={o.height} disabled={inRow} onChange={(height) => set({ height })} />}
+          {!compact && <AspectSelect id={`${uid}-aspect`} value={o.aspect} disabled={inRow} onChange={(aspect) => set({ aspect })} />}
+          {!compact && inRow && <InRowNote />}
           {compact && <p className="helper chart-options__note">A compact chart has its own, low height.</p>}
         </>
       )}
-      <Slider
+      <SettledSlider
         id={`${uid}-width`}
         labelText="Width"
         min={CHART_WIDTH.min}
@@ -979,7 +981,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
         value={widthToStop(o.width)}
         formatLabel={(v) => widthLabel(widthFromStop(v))}
         hideTextInput
-        onChange={({ value }) => set({ width: widthFromStop(value) })}
+        onChange={(value) => set({ width: widthFromStop(value) })}
       />
     </Section>
   );
@@ -1023,7 +1025,8 @@ export const chartBlock = defineBlockType<ChartOptions>({
   defaultOptions: (collection: Collection) => defaultChartOptions(collection),
   normalizeOptions: (raw, collection) => normalizeChartOptions(raw, collection),
   // Its X axis is its own setting (not the block's grouping); "This item" charts the page's item, not a query's.
-  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null }),
+  // Drawn at its Height (a compact chart, a meter or a stat at their own): such a chart fills a row's height.
+  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null, fillsRow: kindHas(options.chart).height && !(isXY(options.chart) && options.compact) }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,
 });

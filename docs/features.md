@@ -287,8 +287,7 @@ What the app does, feature by feature (read the part you work on).
   copies of the tabs of the space it was first given tabs in, stored there all at once, `storeDashboardViews`, before one is changed,
   starred or bookmarked), " *" for unsaved changes, "+" (a copy of what is shown, named "New", opened with Tab settings and its name
   selected), Save changes (held while a panel is open), delete (not the last), star, bookmark, search in its blocks, Filter and
-  **Tab settings**: Tab name, Show filter bar (default off), Full width (default on; blocks side by side: "Blocks side by side",
-  where a row collapses as one), Fields are editable and the block list
+  **Tab settings**: Tab name, Show filter bar (default off), Full width (default on), Fields are editable and the block list
   (reorder, header, remove: a tab may have no blocks; Add block). What changes the shown items (the tab's filter, a block's filter,
   sort, grouping, fields, Fields are editable) waits for Save changes; arranging (blocks, their type, options, name and collections),
   the tab's name, Show filter bar, Full width and collapsing are stored at once. A tab without blocks shows an empty state with
@@ -300,8 +299,7 @@ What the app does, feature by feature (read the part you work on).
   so the filter bar's period (on Date unless another field is picked) steps every dated block at once (`dashboardFiltersFor`, applied
   by `BlockView` for `place="dashboard"`); a block's own filter builds on it ("the dashboard's filter"). A block whose collections
   were all deleted shows a warning (closing it removes the block). Remote collections' blocks read their source a page at a time, with
-  "Read the remote collections again" in the tab bar. Blocks stack one under another, as on a collection view (side by side is
-  roadmap). Component blocks see their block's items as `$items`; there is no `$item` on a dashboard.
+  "Read the remote collections again" in the tab bar. Blocks stand in rows as on a collection view ("Blocks side by side"). Component blocks see their block's items as `$items`; there is no `$item` on a dashboard.
 - **Backlinks** (`domain/backlinks.ts`, `views/useBacklinks.ts`, docs/data-model.md "Item links"): the items that link to an item. A link is a
   reference field's item(s) (Item, List of items) or a link to an item in a Markdown, HTML or AI text
   (`#/collections/<c>/items/<id>`, whatever of its page the link names: a field, view or block counts as the item; the new item
@@ -335,36 +333,40 @@ What the app does, feature by feature (read the part you work on).
   away with the item view's `Collapsed` (field ids among the block ids). The layout's name toggle
   (tag icon, `hiddenLabels`) also covers blocks there: it hides the block's header (its menus move to a "⋮" beside it).
 - **Blocks side by side** (`domain/blockRows.ts`, `views/BlockRows.tsx`): a collection view's, an item page's or a
-  dashboard tab's blocks stand in rows, with or without "Full width" (its 700px column is wide enough). Stored on the blocks, the list staying the page's order: `beside`
-  (it joins the row of the block just before it; on an item page a field in between starts a new row), `width` (its share
-  of the row in percent; absent = equal) and, on a row's first block, `rowMaxHeight` (rem). At most 4 to a row. Where the
-  row is at least 40rem wide (a container query, so a narrow tiled pane counts like a phone) its blocks stand side by side,
-  each its share, all as tall as the tallest (the line between them spans the row); with a max height the part of each
-  below its name scrolls inside beyond it. A chart, map or component block keeps its own height (its Height, less where
-  its narrower width at its aspect ratio is less), so beside a taller block it leaves room below. Narrower (a phone), a
-  row's blocks stack exactly as
-  blocks always did, their heights their own, no max height, nothing scrolling inside: a dashboard is a list there. A block
-  is placed by dragging its name onto another block: its left or right quarter puts it beside that
-  block (side by side only), its top or bottom half in a row of its own above or below that block's row (highlighted like
-  the workspace's drop zones); the divider between two blocks moves their shares in 5% steps (drag it, or focus it and use
-  the arrow keys; at least 10% each). Block settings has "Beside the block above" (only where a block is right above it
-  with room in its row) and "Row's max height (rem)" (empty: none). All of it is arranging: stored at once, no " *"; a change in
-  Block settings moves the block only once the panel closes (the rows are held, `usePanelsOpen().hold`). A row stays sound
-  when it changes (`Arrangement` in `blockRows.ts`): the next block takes over a removed or moved first block's settings,
-  a changed row gets equal shares again, and a block reordered in the block list (or a Fields list) away from the block
-  it was beside starts a row of its own (`reordered`). On an item page fields are dragged by their name too (above or
-  below a field or a row of blocks, never beside), and a drop there turns an item view showing all fields into the list
-  of its fields and blocks in the order shown (a field added to the collection later is then left out, as with any list).
-  Not while the standard page (edit icon) is shown. **On a dashboard a row collapses, not a block**: any block's caret
-  collapses (or expands) its whole row, stored as the row's first block's id in the tab's `Collapsed`; collection views
-  and item pages keep collapsing blocks one by one.
+  dashboard tab's blocks stand in rows, with or without "Full width" (its 700px column is wide enough). Stored on the
+  blocks, the list staying the page's order: `beside` (it joins the row of the block just before it; on an item page a
+  field in between starts a new row), `width` (its share of the row in percent; absent = equal) and, on a row's first
+  block, the row's height: `rowFit` (absent: as its tallest block; "shortest": as its shortest) and `rowHeight` (rem: at
+  most that tall with the tallest, at least with the shortest; `rowMaxHeight`, its name before the fit, is read as it). At
+  most 4 to a row. Where the row is at least 40rem wide (a container query, so a narrow tiled pane counts like a phone)
+  its blocks stand side by side, each its share, all exactly as tall as the row: the part of each below its name is the
+  height measured from the blocks with a height of their own (tables, cards, text; `rowHeightPx`), what is taller scrolls
+  inside, and a chart, map or HTML component (`BlockUses.fillsRow`) fills it, its own Height and Aspect ratio set aside
+  (greyed out in its settings while it is in a row; `blockHeightCss` reads `--row-fill-box`); with nothing measured, the
+  row's height, else 24rem. A row of one block keeps its own height, only limited (at most / at least). Narrower (a
+  phone), a row's blocks stack exactly as blocks always did, their heights their own, nothing limited or scrolling inside:
+  a dashboard is a list there. A block is placed by dragging its name onto another block: its left or right quarter puts
+  it beside that block (side by side only; a line down that block's edge marks it), its top or bottom half in a row of its
+  own above or below that block's row (a line across the row); the divider between two blocks moves their shares in 5%
+  steps (drag it, or focus it and use the arrow keys; at least 10% each). In a row of several, what is wider than its
+  share scrolls sideways inside the block, never the page. Block settings has "Beside the block above" (only where a block
+  is right above it with room in its row), Row height (As its tallest / shortest block) and Max / Min height (rem; empty:
+  none). All of it is arranging: stored and shown at once, no " *". A row stays sound when it changes (`Arrangement` in
+  `blockRows.ts`): the next block takes over a removed or moved first block's settings, a changed row gets equal shares
+  again, and a block reordered in the block list (or a Fields list) away from the block it was beside starts a row of its
+  own (`reordered`). On an item page fields are dragged by their name too (above or below a field or a row of blocks,
+  never beside), and a drop there turns an item view showing all fields into the list of its fields and blocks in the
+  order shown (a field added to the collection later is then left out, as with any list). Not while the standard page
+  (edit icon) is shown. **A row collapses, not a block** (`rowCollapse`): any block's caret collapses (or expands) its
+  whole row, stored as the row's first block's id in the view's `Collapsed`. The block list (View settings, Tab settings)
+  has **Duplicate block**: the same block with all its settings, in a row of its own after the original's (`withCopy`).
 - **Full width** (a checkbox in a collection view's View settings, an item view's Page layout popover and a dashboard tab's
   settings): on, the page uses the pane's whole width (as collection views always did); off, it keeps to the narrow
   700px column of an item page, centred. Defaults (absent): collection views and dashboard tabs on, item views off, so
   every view made before it looks as it did (`isFullWidth`, `FULL_WIDTH_DEFAULT` in `domain/views.ts`). Stored with the
   view as soon as it is set (`fullWidth` in the view's config JSON, on the `ItemView` in `collections.item_views`), like
-  "Show filter bar": no " *", nothing to save. The page changes width once the panel closes (`usePanelsOpen().hold`):
-  the toolbar's buttons would move under the open panel. The standard page (edit icon) keeps the item view's width; a new
+  "Show filter bar": no " *", nothing to save. The page changes width as it is clicked, the panel open (the page is seen
+  changing; the toolbar and the open panel move with it). The standard page (edit icon) keeps the item view's width; a new
   item's page is always narrow.
 - **Spaces** (`app/src/domain/spaces.ts`, table `spaces`, `#/spaces`): separate environments (e.g.
   Work / Private) in one database. Every item belongs to one space (`items.space_id`) and shows only

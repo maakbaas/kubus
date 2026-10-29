@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { Accordion, AccordionItem, Checkbox, Link, Select, SelectItem, Slider, Tile } from "@carbon/react";
+import { Accordion, AccordionItem, Checkbox, Link, Select, SelectItem, Tile } from "@carbon/react";
 import { Grid as GridIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { itemPath } from "../domain/backlinks";
@@ -15,6 +15,7 @@ import { isEmptyValue, isGrouped } from "../domain/query";
 import { itemLinkProps, FieldCell } from "./cells";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { defineBlockType, type BlockOptionsProps, type BlockProps, type ItemActions } from "./registry";
+import { SettledSlider } from "./SettledSlider";
 
 /** Card options: which field is the cover, and the cards' shape (the fields on a card are the block's). */
 export interface CardOptions {
@@ -381,7 +382,7 @@ function CardOptionsEditor({ collection, options, onChange }: BlockOptionsProps<
           onChange={(_, { checked }) => onChange({ ...options, coverBeside: checked })}
         />
       </div>
-      <Slider
+      <SettledSlider
         id={`${uid}-cards-width`}
         labelText="Card width"
         min={CARD_WIDTH.min}
@@ -390,7 +391,7 @@ function CardOptionsEditor({ collection, options, onChange }: BlockOptionsProps<
         value={options.cardWidth}
         formatLabel={(v) => `${v}rem`}
         hideTextInput
-        onChange={({ value }) => onChange({ ...options, cardWidth: value })}
+        onChange={(value) => onChange({ ...options, cardWidth: value })}
       />
       <Select size="sm"
         id={`${uid}-cards-cover`}

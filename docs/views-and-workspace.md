@@ -303,7 +303,7 @@ Extension points are registries, not special cases in pages:
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
 - **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + JSON config
-  `{ filters, blocks, editable, collapsed, filterBar?, fullWidth? }` (a block's `beside`, `width`, `rowMaxHeight`: its row,
+  `{ filters, blocks, editable, collapsed, filterBar?, fullWidth? }` (a block's `beside`, `width`, `rowFit`, `rowHeight`: its row,
   docs/features.md "Blocks side by side"; `parseViewConfig`; `fullWidth`: "Full width", absent =
   on for a collection view and a dashboard tab, `isFullWidth`; off, the page is wrapped in `.view-page--narrow`, the item
   page's 700px column; an item view's own is on the `ItemView`, absent = off, on = `.item-view--full`; docs/features.md "Full width").

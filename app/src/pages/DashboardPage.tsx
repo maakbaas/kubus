@@ -12,7 +12,7 @@ import { DASHBOARD_ICON, findTab, dashboardBlockCollection,
 import { newId, newName, now, type Collection } from "../domain/model";
 import { isRemote } from "../domain/sources";
 import type { Space } from "../domain/spaces";
-import { isFullWidth, NOTHING_COLLAPSED, sameView, withBlockCollapsed, type Collapsed, type ViewBlock, type ViewState } from "../domain/views";
+import { isFullWidth, NOTHING_COLLAPSED, sameView, type Collapsed, type ViewBlock, type ViewState } from "../domain/views";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { IconPicker } from "../ui/IconPicker";
@@ -30,8 +30,8 @@ import type { NewBlockSpec } from "../views/AddBlockButton";
 import { AddBlockButton } from "../views/AddBlockButton";
 import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
 import { BlockView } from "../views/BlockView";
-import { BlockRows, listRowActions, rowShape, type RowControls } from "../views/BlockRows";
-import { reordered, rowStart, withoutBlock } from "../domain/blockRows";
+import { BlockRows, listRowActions, rowCollapse, type RowControls } from "../views/BlockRows";
+import { reordered, withCopy, withoutBlock } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
 import { useCollectionData } from "../views/useCollectionData";
@@ -254,11 +254,9 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
     </IconButton>
   );
   const panels = usePanelsOpen();
-  // As a collection view's: the Filter button moves to the filter bar, and the width changes, once the panels close.
+  // As a collection view's: the Filter button moves to the filter bar once the panels close; the width changes at once.
   const filterInBar = panels.hold("filterInBar", !!active?.filterBar);
-  const fullWidth = panels.hold("fullWidth", isFullWidth("dashboard", active?.fullWidth));
-  // The rows as shown: held while a panel is open, like the width (Block settings' "Beside the block above" moves the block).
-  const shape = panels.hold("rows", rowShape(view.blocks));
+  const fullWidth = isFullWidth("dashboard", active?.fullWidth);
 
   async function updateActive() {
     const tab = await stored();
@@ -297,16 +295,16 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   };
   // Blocks side by side (rows: views/BlockRows.tsx), stored right away like the rest of the tab's arrangement.
   const rowActions = listRowActions(view.blocks, (change) => arrangeNow(change));
-  /**
-   * A dashboard collapses a row, not a block: all its blocks at once (stored as its first block's, so a row of one is
-   * collapsed as that block was).
-   */
+  // A row collapses as one (views/BlockRows.tsx rowCollapse).
   const collapsedState = active?.collapsed ?? NOTHING_COLLAPSED;
-  const rowCollapse = (block: ViewBlock) => {
-    const first = rowStart(view.blocks.map((b) => b.id), view.blocks, block.id)?.id ?? block.id;
-    const collapsed = collapsedState.blocks.includes(first);
-    return { collapsed, onToggle: () => storeNow({ collapsed: withBlockCollapsed(collapsedState, first, !collapsed) }).catch(fail) };
-  };
+  const collapseOf = (block: ViewBlock) =>
+    rowCollapse(
+      view.blocks.map((b) => b.id),
+      view.blocks,
+      collapsedState,
+      block,
+      (next) => storeNow({ collapsed: next }).catch(fail),
+    );
   const blockName = useBlockName();
   /** Removing blocks (a dashboard's tab may be left without any): asked first, unless asked already. */
   async function removeBlocks(ids: string[], asked = false) {
@@ -511,6 +509,10 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
                   onRemove={(ids, asked) => removeBlocks(ids, asked).catch(fail)}
                   onAdd={addBlock}
                   onHeader={(id, shownHeader) => setBlockNow(id, { hideHeader: shownHeader ? undefined : true })}
+                  onDuplicate={(id) => {
+                    const copy = newId();
+                    arrangeNow((blocks) => withCopy(blocks, id, copy));
+                  }}
                 />
               </div>
             </ToolbarPopover>
@@ -552,7 +554,6 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
         <BlockRows
           entries={view.blocks}
           blockOf={(b) => b}
-          shape={shape}
           onPlace={rowActions.place}
           onShares={rowActions.shares}
           render={(block, placed) => (
@@ -564,7 +565,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
               editable={view.editable}
               collapsed={collapsedState}
               onCollapse={(next) => storeNow({ collapsed: next }).catch(fail)}
-              collapse={rowCollapse(block)}
+              collapse={collapseOf(block)}
               onChange={setBlock}
               onSet={(patch) => setBlockNow(block.id, patch)}
               onRemove={() => removeBlocks([block.id]).catch(fail)}

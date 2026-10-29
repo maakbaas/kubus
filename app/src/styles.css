@@ -3208,35 +3208,77 @@ img[data-lightbox] {
   .block-row__divider:focus-visible {
     outline: none;
   }
-  /* Its scroll box reaches 1rem into the room left of it, so what a block hangs there (a Markdown block's box, as on
-     the page) isn't cut off: the padding puts the content back where it was. */
-  .block-row--capped .block-cell > .block > .block__body {
-    max-block-size: var(--row-max);
+  /* Several blocks: each one's part below its name is the row's height (--row-body, measured: BlockRows.tsx); what is
+     taller scrolls inside it, what is wider (cards of a set width, a wide table) sideways, never the page. A chart, map
+     or HTML component fills it (--row-fill-box: domain/views.ts blockHeightCss), less a chart's own space above it.
+     Its scroll box reaches 1rem into the room left of it, so what a block hangs there (a Markdown block's box, as on the
+     page) isn't cut off: the padding puts it back. */
+  .block-row--fit .block-cell > .block > .block__body {
+    block-size: var(--row-body);
     overflow: auto;
     margin-inline-start: calc(-1 * var(--cds-spacing-05));
     padding-inline-start: var(--cds-spacing-05);
   }
+  .block-row--fit .block-cell > .block--fills > .block__body {
+    overflow: hidden;
+    --row-fill-box: var(--row-body);
+  }
+  .block-row--fit .block--fills .chart-block {
+    --row-fill-box: calc(var(--row-body) - var(--cds-spacing-05));
+  }
+  /* One block: its own height, at most (scrolling inside past it) or at least the row's height setting. */
+  .block-row--max .block-cell > .block > .block__body {
+    max-block-size: var(--row-limit);
+    overflow-y: auto;
+    margin-inline-start: calc(-1 * var(--cds-spacing-05));
+    padding-inline-start: var(--cds-spacing-05);
+  }
+  .block-row--min .block-cell > .block > .block__body {
+    min-block-size: var(--row-limit);
+  }
 }
-/* An item page's field under a dragged field or block: above or below it, marked like the workspace's drop zones
-   (ItemPage's `fieldDrops`). Its ::before is the line between fields. */
-.item-fields [data-drop] {
+/* Where a dragged block or field goes: a 2px line in the gap there (views/BlockRows.tsx; an item page's field: ItemPage's
+   `fieldDrops`), not a highlighted part of a block: nothing is split, a block only joins a row or gets one of its own.
+   Above or below a row it spans the row (in the gap); beside a block it runs down the block's edge. */
+.block-row {
   position: relative;
 }
+.block-drop,
 .item-fields [data-drop]::after {
   content: "";
   position: absolute;
-  inset-inline: 0;
   pointer-events: none;
-  background: var(--cds-highlight);
-  opacity: 0.6;
-  outline: 2px solid var(--cds-focus);
-  outline-offset: -2px;
+  background: var(--cds-focus);
+  z-index: 1;
 }
+.block-drop--top,
+.block-drop--bottom,
+.item-fields [data-drop]::after {
+  inset-inline: 0;
+  block-size: 2px;
+}
+.block-drop--top,
 .item-fields [data-drop="top"]::after {
-  inset-block: 0 50%;
+  inset-block-start: calc(var(--cds-spacing-07) / -2 - 1px);
 }
+.block-drop--bottom,
 .item-fields [data-drop="bottom"]::after {
-  inset-block: 50% 0;
+  inset-block-end: calc(var(--cds-spacing-07) / -2 - 1px);
+}
+.block-drop--left,
+.block-drop--right {
+  inset-block: 0;
+  inline-size: 2px;
+}
+/* On the block's own edge: past it, the last block's line would reach beyond the page and make it scroll sideways. */
+.block-drop--left {
+  inset-inline-start: -1px;
+}
+.block-drop--right {
+  inset-inline-end: -1px;
+}
+.item-fields [data-drop] {
+  position: relative;
 }
 /* A block's name drags it to another place on the page. */
 .section-header__title--drag {

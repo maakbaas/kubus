@@ -1,22 +1,45 @@
 // Blocks side by side: a page's blocks are a flat list (its reading order), and a block marked `beside` joins the row
 // of the block before it. Where the page is wide enough (a container query on the row, styles.css `.block-row`) a row's
-// blocks stand side by side, as tall as each other (the tallest's height, at most the row's max height: beyond it they
-// scroll inside); narrower (a phone, a narrow pane) they stack as single blocks always did, their heights their own.
-// A row's settings (`rowMaxHeight`) are on its first block; widths are shares in percent (`width`, absent: equal).
+// blocks stand side by side, all as tall as the row: its tallest or its shortest block (`rowFit`), at most or at least
+// `rowHeight` (rem); what is taller scrolls inside, and a chart, map or HTML component fills it (its own Height and Aspect
+// ratio set aside). Narrower (a phone, a narrow pane) they stack as single blocks always did, their heights their own.
+// A row's settings (`rowFit`, `rowHeight`) are on its first block; widths are shares in percent (`width`, absent: equal).
 // On an item page fields lie between blocks: a row is blocks next to each other.
 
 import type { ViewBlock } from "./views";
 
 /** At most this many blocks in a row. */
 export const ROW_MAX_BLOCKS = 4;
-/** A row's max height (rem): the range offered. */
-export const ROW_MAX_HEIGHT = { min: 8, max: 96 };
+/** A row's height limit (rem: its max height, or with `rowFit` "shortest" its min height): the range offered. */
+export const ROW_HEIGHT = { min: 8, max: 96 };
+/** A row's height with nothing to measure (only charts, maps, HTML components) and no height set, in rem. */
+export const ROW_HEIGHT_DEFAULT = 24;
 /** A block's least share of its row (percent) and the step a divider moves by. */
 export const MIN_SHARE = 10;
 export const SHARE_STEP = 5;
 
-/** A stored row max height made valid: whole rem within ROW_MAX_HEIGHT. */
-export const normalizeRowMaxHeight = (rem: number): number => Math.min(ROW_MAX_HEIGHT.max, Math.max(ROW_MAX_HEIGHT.min, Math.round(rem)));
+/** A stored row height made valid: whole rem within ROW_HEIGHT. */
+export const normalizeRowHeight = (rem: number): number => Math.min(ROW_HEIGHT.max, Math.max(ROW_HEIGHT.min, Math.round(rem)));
+
+/** A row's settings, on its first block. */
+export type RowSettings = Pick<ViewBlock, "rowFit" | "rowHeight">;
+const rowSettingsOf = (b: ViewBlock): RowSettings => ({ ...(b.rowFit && { rowFit: b.rowFit }), ...(b.rowHeight !== undefined && { rowHeight: b.rowHeight }) });
+const withoutRowSettings = (b: ViewBlock): ViewBlock => {
+  const { rowFit: _fit, rowHeight: _height, ...rest } = b;
+  return rest;
+};
+
+/**
+ * The height of a row of blocks side by side, in px: its tallest or (`rowFit` "shortest") its shortest measured block
+ * (`heights`: blocks with a height of their own, not those that fill the row), at most or at least its `rowHeight`; with
+ * nothing measured, its `rowHeight`, else ROW_HEIGHT_DEFAULT. `rem` is the px of a rem.
+ */
+export function rowHeightPx(settings: RowSettings, heights: number[], rem: number): number {
+  const limit = settings.rowHeight === undefined ? undefined : settings.rowHeight * rem;
+  if (heights.length === 0) return limit ?? ROW_HEIGHT_DEFAULT * rem;
+  if (settings.rowFit === "shortest") return Math.max(Math.min(...heights), limit ?? 0);
+  return Math.min(Math.max(...heights), limit ?? Infinity);
+}
 
 /**
  * Entries (blocks, on an item page fields too) in rows: a block marked `beside` joins the row of the block just before it
@@ -44,8 +67,8 @@ export function rowShares(row: Pick<ViewBlock, "width">[]): number[] {
 
 /** A block without its place in a row (beside, width, the row's settings). */
 const loose = (b: ViewBlock): ViewBlock => {
-  const { beside: _beside, width: _width, rowMaxHeight: _max, ...rest } = b;
-  return rest;
+  const { beside: _beside, width: _width, ...rest } = b;
+  return withoutRowSettings(rest);
 };
 const withoutWidth = (b: ViewBlock): ViewBlock => {
   const { width: _width, ...rest } = b;
@@ -94,7 +117,7 @@ class Arrangement {
     if (at === 0 && next) {
       this.set(next, (b) => {
         const { beside: _beside, ...rest } = b;
-        return { ...rest, ...(block.rowMaxHeight !== undefined && { rowMaxHeight: block.rowMaxHeight }) };
+        return { ...rest, ...rowSettingsOf(block) };
       });
     }
     for (const other of row) if (other !== id) this.set(other, withoutWidth);
@@ -128,11 +151,8 @@ export function placeBlock(order: string[], blocks: ViewBlock[], dragId: string,
     const target = a.byId.get(targetId)!;
     insert(a.order.indexOf(targetId));
     // It takes the target's place: the row's first, with the row's settings, when the target was.
-    a.set(dragId, (b) => ({ ...b, ...(target.beside && { beside: true as const }), ...(target.rowMaxHeight !== undefined && { rowMaxHeight: target.rowMaxHeight }) }));
-    a.set(targetId, (b) => {
-      const { rowMaxHeight: _max, ...rest } = b;
-      return { ...rest, beside: true };
-    });
+    a.set(dragId, (b) => ({ ...b, ...(target.beside && { beside: true as const }), ...rowSettingsOf(target) }));
+    a.set(targetId, (b) => ({ ...withoutRowSettings(b), beside: true }));
   } else if (zone === "right") {
     insert(a.order.indexOf(targetId) + 1);
     a.set(dragId, (b) => ({ ...b, beside: true }));
@@ -157,16 +177,13 @@ export function setBeside(order: string[], blocks: ViewBlock[], id: string, on: 
     if (!canBeside(order, blocks, id)) return blocks;
     a.evenRow(a.order[a.order.indexOf(id) - 1]);
     a.evenRow(id);
-    a.set(id, (b) => {
-      const { rowMaxHeight: _max, ...rest } = b;
-      return { ...rest, beside: true };
-    });
+    a.set(id, (b) => ({ ...withoutRowSettings(b), beside: true }));
   } else {
     a.evenRow(id);
-    const max = a.byId.get(a.rowOf(id)![0])?.rowMaxHeight;
+    const first = a.byId.get(a.rowOf(id)![0]);
     a.set(id, (b) => {
       const { beside: _beside, ...rest } = b;
-      return { ...rest, ...(max !== undefined && { rowMaxHeight: max }) };
+      return { ...rest, ...(first && rowSettingsOf(first)) };
     });
     a.evenRow(id);
   }
@@ -182,6 +199,11 @@ export function canBeside(order: string[], blocks: ViewBlock[], id: string): boo
   return a.byId.get(id)?.beside ? true : a.rowOf(above)!.length + own.length <= ROW_MAX_BLOCKS;
 }
 
+/** The ids of the row a block is in. */
+export function rowOf(order: string[], blocks: ViewBlock[], id: string): string[] {
+  return new Arrangement(order, blocks).rowOf(id) ?? [id];
+}
+
 /** The first block of the row a block is in (holding the row's settings). */
 export function rowStart(order: string[], blocks: ViewBlock[], id: string): ViewBlock | undefined {
   const a = new Arrangement(order, blocks);
@@ -189,15 +211,15 @@ export function rowStart(order: string[], blocks: ViewBlock[], id: string): View
   return first === undefined ? undefined : a.byId.get(first);
 }
 
-/** The row of a block given its max height (rem; undefined: none), set on the row's first block. */
-export function setRowMaxHeight(order: string[], blocks: ViewBlock[], id: string, rem: number | undefined): ViewBlock[] {
+/** The row of a block given these settings (on its first block): a fit ("tallest" is the default, stored as none) and a height (undefined: none). */
+export function setRowSettings(order: string[], blocks: ViewBlock[], id: string, settings: { fit: "tallest" | "shortest"; height: number | undefined }): ViewBlock[] {
   const first = rowStart(order, blocks, id);
   if (!first) return blocks;
-  return blocks.map((b) => {
-    if (b.id !== first.id) return b;
-    const { rowMaxHeight: _max, ...rest } = b;
-    return rem === undefined ? rest : { ...rest, rowMaxHeight: normalizeRowMaxHeight(rem) };
-  });
+  return blocks.map((b) =>
+    b.id !== first.id
+      ? b
+      : { ...withoutRowSettings(b), ...(settings.fit === "shortest" && { rowFit: "shortest" as const }), ...(settings.height !== undefined && { rowHeight: normalizeRowHeight(settings.height) }) },
+  );
 }
 
 /** A row's blocks given these shares (percent, in the row's order): stored as whole numbers. */
@@ -236,4 +258,18 @@ export function reordered(before: string[], after: string[], blocks: ViewBlock[]
   const moved = new Set(blocks.filter((b) => b.beside && above(before, b.id) !== above(after, b.id)).map((b) => b.id));
   if (moved.size === 0) return blocks;
   return blocks.map((b) => (moved.has(b.id) ? loose(b) : b.width !== undefined ? withoutWidth(b) : b));
+}
+
+/**
+ * The blocks with a copy of one (Duplicate block): the same block (type, options, filter, sort, fields, name) under `id`,
+ * in a row of its own right after the original's row. In the order given (a view's blocks are its order).
+ */
+export function withCopy(blocks: ViewBlock[], originalId: string, id: string): ViewBlock[] {
+  const original = blocks.find((b) => b.id === originalId);
+  if (!original) return blocks;
+  const order = blocks.map((b) => b.id);
+  const row = rowOf(order, blocks, originalId);
+  const at = order.indexOf(row[row.length - 1]) + 1;
+  const copy = loose({ ...structuredClone(original), id });
+  return [...blocks.slice(0, at), copy, ...blocks.slice(at)];
 }

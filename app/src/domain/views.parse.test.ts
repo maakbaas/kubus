@@ -150,9 +150,9 @@ describe("block sizes", () => {
   });
 
   it("a block is as tall as the less of its height and its width at its aspect ratio", () => {
-    expect(blockHeightCss(24, "none")).toBe("24rem");
-    expect(blockHeightCss(24, "4:3")).toBe("min(24rem, calc(100cqi * 3 / 4))");
-    expect(blockHeightCss(10, "16:9")).toBe("min(10rem, calc(100cqi * 9 / 16))");
+    expect(blockHeightCss(24, "none")).toBe("var(--row-fill-box, 24rem)");
+    expect(blockHeightCss(24, "4:3")).toBe("var(--row-fill-box, min(24rem, calc(100cqi * 3 / 4)))");
+    expect(blockHeightCss(10, "16:9")).toBe("var(--row-fill-box, min(10rem, calc(100cqi * 9 / 16)))");
   });
 });
 

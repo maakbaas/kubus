@@ -181,7 +181,8 @@ stale peer range.
   shadows only on floating layers, 1–2px borders, ellipsized text readable whole (a title or tooltip), 24px touch targets.
 - **Nothing moves under the pointer while a panel or dialog is used** (the GUI suite checks it):
   what a change in a toolbar panel would add to the bar or header around its button (Save /
-  Discard, a switch) is held with `usePanelsOpen().hold` until the panel closes; dialogs hang from a
+  Discard, a switch) is held with `usePanelsOpen().hold` until the panel closes (not "Full width" or a block's place in a
+  row: they show as they are clicked, the change being what is looked at); dialogs hang from a
   fixed top edge and grow downwards (styles.css), never re-centred.
 - **Dialogs and focus**: a Modal rendered only while shown gets `open` from `useMountedDialog()`
   (Carbon moves focus into a dialog only when `open` turns true; it also gives focus back to the

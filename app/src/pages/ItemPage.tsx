@@ -6,8 +6,8 @@ import { Add, Checkmark, Code, Edit, Filter, Information, Pin, PinFilled, Renew,
 import { isFullWidth, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
-import { BlockRows, draggedEntry, dragStart, isEntryDrag, rowShape, shownRows, zoneAt, type RowControls } from "../views/BlockRows";
-import { canBeside, placeBlock, reordered, rowStart, setBeside, setRowMaxHeight, setRowShares, withoutBlock, type RowZone } from "../domain/blockRows";
+import { BlockRows, draggedEntry, dragStart, isEntryDrag, rowCollapse, rowControls, shownRows, zoneAt, type RowControls } from "../views/BlockRows";
+import { placeBlock, reordered, setRowShares, withoutBlock, type RowZone } from "../domain/blockRows";
 import { QueryEditor } from "../views/QueryEditor";
 import { useBlockName } from "../views/BlockListEditor";
 import { AddBlockButton, type NewBlockSpec } from "../views/AddBlockButton";
@@ -294,8 +294,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const collapsed = activeView ? (local[activeView.id]?.collapsed ?? activeView.collapsed) : NOTHING_COLLAPSED;
   /** The shown view's "Full width" as stored (absent: off). */
   const storedFullWidth = activeView ? (local[activeView.id]?.fullWidth ?? activeView.fullWidth) : undefined;
-  // The page's width follows it once the panels are closed: the header's buttons would move under the open popover.
-  const fullWidth = panels.hold("fullWidth", isFullWidth("item", storedFullWidth));
+  // The page's width follows it as it is clicked (the panel open: the page is seen changing).
+  const fullWidth = isFullWidth("item", storedFullWidth);
   /** Stores the shown item view with these (the virtual "Default" view is stored then), shown at once. */
   const storeNow = (patch: { collapsed?: Collapsed; layout?: ItemLayout; fullWidth?: boolean }) => {
     if (!activeView) return;
@@ -365,9 +365,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const entries = itemPageFields<FieldDef | ViewBlock>([...pickableFields(collection), ...layout.blocks], layout, titleField?.id).filter(
     (f) => blocksById.has(f.id) || !layout.hideEmpty || editing?.fieldId === f.id || !isEmpty(shown ? fieldValue(shown, f as FieldDef) : null),
   );
-  // Blocks side by side (rows: views/BlockRows.tsx): blocks next to each other on the page, held while a panel is open.
-  const shape = panels.hold("rows", rowShape(layout.blocks));
-  fieldIndex.current = shownRows(entries, (e) => blocksById.get(e.id), shape).map((r) => r[0].id);
+  // Blocks side by side (rows: views/BlockRows.tsx): blocks next to each other on the page.
+  fieldIndex.current = shownRows(entries, (e) => blocksById.get(e.id)).map((r) => r[0].id);
   /** The page's order of fields and blocks, empty ones too (what "Beside the block above" looks at). */
   const orderOf = (l: ItemLayout) => itemPageFields<{ id: string }>([...pickableFields(collection), ...l.blocks], l, titleField?.id).map((e) => e.id);
   /**
@@ -418,13 +417,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
         onDragEnd: clearDrop,
       }
     : {};
-  const rowControls = (block: ViewBlock): RowControls => ({
-    beside: !!block.beside,
-    canBeside: canBeside(orderOf(layout), layout.blocks, block.id),
-    onBeside: (on) => arrange((l) => ({ ...l, blocks: setBeside(orderOf(l), l.blocks, block.id, on) })),
-    maxHeight: rowStart(orderOf(layout), layout.blocks, block.id)?.rowMaxHeight,
-    onMaxHeight: (rem) => arrange((l) => ({ ...l, blocks: setRowMaxHeight(orderOf(l), l.blocks, block.id, rem) })),
-  });
+  const blockRowControls = (block: ViewBlock): RowControls =>
+    rowControls(orderOf(layout), layout.blocks, block, (change) => arrange((l) => ({ ...l, blocks: change(l.blocks, orderOf(l)) })));
   const restricted = !!item && isRestricted(collection, item, remote ? { ...shownLayout, editable: true } : layout);
 
   async function saveField(field: FieldDef, value: FieldValue) {
@@ -673,7 +667,6 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
           <BlockRows
             entries={entries}
             blockOf={(e) => blocksById.get(e.id)}
-            shape={shape}
             onPlace={canPlace ? placeOnPage : undefined}
             onShares={(row, shares) => arrange((l) => ({ ...l, blocks: setRowShares(l.blocks, row, shares) }))}
             render={(entry, placed) => {
@@ -694,8 +687,10 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                     onRemove={() => removeBlock(block)}
                     onError={setError}
                     onOpenChange={panels.onOpenChange}
-                    row={activeView ? rowControls(block) : undefined}
+                    row={activeView ? blockRowControls(block) : undefined}
                     onDragStart={placed.onDragStart}
+                    // A row collapses as one (views/BlockRows.tsx rowCollapse).
+                    collapse={rowCollapse(orderOf(layout), layout.blocks, collapsed, block, setCollapsed)}
                   />
                 );
               }
@@ -886,6 +881,7 @@ function ItemPageBlock({
   onOpenChange,
   row,
   onDragStart,
+  collapse,
 }: {
   block: ViewBlock;
   page: PageItem;
@@ -904,6 +900,8 @@ function ItemPageBlock({
   row?: RowControls;
   /** Its name drags it to another place on the page. */
   onDragStart?(e: React.DragEvent): void;
+  /** Its row's collapse (a row collapses as one). */
+  collapse?: { collapsed: boolean; onToggle(): void };
 }) {
   const { collections } = useStore();
   const collection = findCollection(collections, block.collectionId ?? page.collection.id);
@@ -933,6 +931,7 @@ function ItemPageBlock({
       onOpenChange={onOpenChange}
       row={row}
       onDragStart={onDragStart}
+      collapse={collapse}
     />
   );
 }
