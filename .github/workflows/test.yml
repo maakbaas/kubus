@@ -1,13 +1,15 @@
 name: Test
 
-# On every push, on Linux, beside build.yml (the Windows installers, which also runs the unit tests):
-# - unit: both typechecks and every vitest project, the server's tests against a real Postgres (and
-#   MySQL 8 and MariaDB for their connector, InfluxDB 2 and n8n for theirs) and the headless device (a few minutes);
-# - gui: the GUI suite's smoke tests (gui-tests/), only those of the suites covering the files this
-#   branch changed (gui-tests/areas.mjs), all of them on main; skipped when nothing the GUI shows
-#   changed; not the screenshot baselines (machine-dependent). The full GUI suite (an hour) stays a
-#   local run before larger changes.
-# docs/testing.md says which suite covers what.
+# The critical regression tests on every push, on Linux: four parallel jobs, each within 10 minutes
+# (`tests/run.mjs` fails a suite over its budget), so a push is judged in about the longest of them:
+# - typecheck: the app, the server and the server's tests;
+# - unit: the vitest projects that need nothing (domain, storage, sync, api, app);
+# - server: the connectors' and the server's vitest projects against Postgres, MySQL 8 and MariaDB;
+# - gui-smoke: the GUI suite's smoke tests of the suites this branch's changes reach (gui-tests/areas.mjs),
+#   all of them on main; not the screenshot baselines (machine-dependent).
+# The slow part stays out of the way: nightly.yml has the connectors' real services (n8n alone takes 1 to 2
+# minutes to start), the whole GUI suite sharded over jobs, and coverage. build.yml (Windows) runs `unit` there.
+# tests/README.md is the catalog of the suites.
 on:
   push:
   workflow_dispatch:
@@ -23,9 +25,37 @@ env:
   IBM_TELEMETRY_DISABLED: 'true'
 
 jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # the server's Node (it runs its TypeScript directly)
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix server
+      - run: npm run suite -- typecheck
+
   unit:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run suite -- unit
+
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
     services:
       postgres:
         image: postgres:16
@@ -52,43 +82,13 @@ jobs:
           - 3307:3306
         options: >-
           --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 5s --health-retries 20
-      # The connectors' real services (tests/services.yml; Actual Budget, which needs two and a seed script, only runs locally).
-      influxdb:
-        image: influxdb:2.7.12
-        env:
-          DOCKER_INFLUXDB_INIT_MODE: setup
-          DOCKER_INFLUXDB_INIT_USERNAME: kubus
-          DOCKER_INFLUXDB_INIT_PASSWORD: kubus-test-password
-          DOCKER_INFLUXDB_INIT_ORG: kubus
-          DOCKER_INFLUXDB_INIT_BUCKET: setup
-          DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: kubus-test-admin-token
-        ports:
-          - 8086:8086
-        options: >-
-          --health-cmd "influx ping" --health-interval 5s --health-timeout 5s --health-retries 20
-      n8n:
-        image: n8nio/n8n:2.45.5
-        env:
-          N8N_DIAGNOSTICS_ENABLED: 'false'
-          N8N_VERSION_NOTIFICATIONS_ENABLED: 'false'
-          N8N_PERSONALIZATION_ENABLED: 'false'
-          N8N_HIRING_BANNER_ENABLED: 'false'
-          N8N_LISTEN_ADDRESS: 0.0.0.0
-        ports:
-          - 5678:5678
-        options: >-
-          --health-cmd "wget -qO- http://127.0.0.1:5678/healthz/readiness" --health-interval 5s --health-timeout 5s --health-retries 30
     env:
       # server/test/postgres.ts and mysql.ts; in CI a missing database fails the tests instead of skipping them.
       KUBUS_TEST_POSTGRES: postgres://postgres:postgres@localhost:5432/postgres
       KUBUS_TEST_MYSQL: mysql://root:mysql@127.0.0.1:3306
       KUBUS_TEST_MARIADB: mysql://root:mariadb@127.0.0.1:3307
-      KUBUS_TEST_INFLUX: http://localhost:8086
-      KUBUS_TEST_N8N: http://localhost:5678
     steps:
       - uses: actions/checkout@v4
-
-      # The server's Node (it runs its TypeScript directly).
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -96,44 +96,30 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             server/package-lock.json
-
       - run: npm ci
       - run: npm ci --prefix server
-
-      - name: Type check (app)
-        run: npm run typecheck
-      - name: Type check (server, and its tests)
-        run: npm run typecheck --prefix server && npm run typecheck:test --prefix server
-
       # /api/v1 answers from it: the server's HTTP tests use it.
-      - name: Build the headless device
-        run: npm run build:headless
+      - run: npm run build:headless
+      - run: npm run suite -- connectors server
 
-      - name: Test
-        run: npm test
-
-  gui:
+  gui-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # --changed compares with origin/main
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - run: npm ci
       # The runner's Chrome is the browser.
       - run: npm install -g @playwright/cli@0.1.22
-
-      # Not the screenshot baselines (suite 21): pixels depend on the machine's Chrome and font
-      # rendering, so they are compared where they were made (gui-tests/README.md).
+      # The GUI build (gui-tests/.build) is not cached: the runner remakes it when a source file is newer, and a
+      # checkout stamps every file with the present time, so a restored cache would be rebuilt anyway (~30 s).
       - name: GUI smoke tests
-        run: npm run test:gui:smoke -- --suite '^(?!21-)' ${{ github.ref == 'refs/heads/main' && '' || '--changed origin/main' }}
-
+        run: npm run suite -- gui-smoke
       - name: Report
         if: failure()
         uses: actions/upload-artifact@v4

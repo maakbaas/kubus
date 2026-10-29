@@ -2,7 +2,8 @@
 
 A browser test suite that clicks through the whole app and checks layout rules on every page, at
 many window sizes and with content of every shape. Not part of `npm test`; CI runs only the smoke tests
-of the suites a branch's changes reach (`--smoke --changed`, `.github/workflows/test.yml`): run the rest by hand.
+of the suites a branch's changes reach (`--smoke --changed`, `.github/workflows/test.yml`): the full suite runs sharded in `nightly.yml`
+(`npm run suite -- gui-NN` / `gui-shard-N` run a suite or a shard with a time budget: `tests/README.md`).
 
 ```
 npm run test:gui                                  # everything (~265 tests, about an hour; browsers in parallel by free memory)
@@ -34,6 +35,10 @@ before calling the GUI stable). No test throttles the CPU: that would only measu
 paths again at several times the cost. A test that fails and then
 passes on its retry (`--retries`, default 1) is reported as **flaky** and fails the run; so does a
 test whose `--repeat` runs disagree.
+
+A hung test cannot stall the run: one that takes longer than `--test-timeout <s>` (wall clock, default 300; `heavy`
+tests get three times that) is recorded as errored ("Timed out"), not retried, and its browser session is killed and
+reopened; the run goes on.
 
 Every test also fails when the app loads a font, script, style or image from another host: the
 app is offline first and must look the same without a network (IBM Plex is bundled, `app/src/fonts.css`). It tests a
@@ -165,8 +170,11 @@ strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 | `23-perf` | perf tests, run only with `--perf` (left out of other runs): the app's hot paths, each phase (a load, a click, a key, to the state it leads to) timed with main-thread busy time, long tasks, elements and heap; seeding, settling and audits reported apart |
 | `24-chart-blocks` | the Chart block: the Chart select through all 14 kinds (what is drawn, which sections and controls are offered, phone and desktop), then each kind's options (X axis, order, date steps, largest n, series, Draw as, axis, transform, stack, curve, missing values, parts of a whole and their total, spokes, gauge and stat's compare with, bins, scatter fields, heatmap, axes, thresholds, unit, decimals, legend, height, aspect ratio, width) with the result drawn and stored, kept after a reload; a chart that can't be drawn says why; Of this item on an item page |
 | `25-map-and-view-options` | the Map block against a stubbed OpenFreeMap (Location text or Latitude / Longitude, Show as route, zoom, a dot hovered and clicked), Cards (Show title, Cover beside the text, Card width, Cover, Cover shape), Table (Title links, Items shown at a time, Show more), the Component and Markdown blocks, a block's Name, Hide empty fields and header, the Collection picker of an item page's block; each change read back from the stored view and after a reload |
+| `29-remotes-collections-search` | the Remotes page against a fake server (`page.route`): the side nav branch, a new remote collection from a source and table, editing (hidden columns, read again), duplicate / delete, a remote block's pages, Show more, the progress of loading every row and its Cancel; the Collections page (groups by space, sort, description in place, duplicate, delete asks first); the collection editor (new, rename / add / remove with the Remove fields? dialog, title, spaces, cancel, remote vs local fields); search (hit groups, highlights, where a hit leads, nothing found, tags, the 50+ count, the search bar in a pane) |
 | `27-field-kinds-settings` | field kinds and their settings in the collection editor and the field dialog: the type menu lists every kind and each brings its own settings (Refers to, the toggle icons, strike through, component code and Output, Value AI prompt); every kind stored with its settings and shown again after a reload; validation (names, a reference without a collection), a type changed before saving, a removed field, plural / singular name and description, the Title choice, a list of items edited in an item |
 | `31-item-page-components` | the item page's Details and Page layout popovers (View name, Fields are editable, Hide empty fields, Fields) read back from the stored item view and after a reload; item views added, unsaved block changes discarded / saved, deleted; a block whose collection is gone; Generate again against a fake model; the New item form (defaults, errors, every kind stored, Cancel); the Components list (kinds, duplicate, delete with Also delete these fields), creating / editing a component, code errors, every Output, the preview (item, grouped by, fields), AI prompt Try against a fake model, Save as shared / back to Local, a component field edited in place |
+| `30-workspace-shell-actions` | the shell's behaviour, each step followed by its result (page, stored layout, stored data): click / Ctrl+click (beside, or a new tab on narrow windows) / middle click, side nav and "+", per-tab history (Alt+arrows, mouse buttons), reload keeping tabs, closing tabs (neighbour active, split collapsing, empty workspace); Spaces (new, rename in place, switch, delete with its question, the only space, what each space lists, one workspace per space, an item moved); Bookmarks (button on an item and a view, side nav, label refreshed, the page: sort, New bookmark, remove, per space); Help tabs and deep links; `/` redirect and Not found for bad routes and ids |
+
 
 ## Adding to it
 

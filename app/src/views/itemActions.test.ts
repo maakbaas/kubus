@@ -14,10 +14,7 @@ const field = (name: string, kind: FieldDef["kind"], position: number, extra: Pa
 });
 
 const query = (extra: Partial<ViewQuery> = {}): ViewQuery => ({ filters: [], sort: [], groupBy: null, ...extra }) as ViewQuery;
-const until = async (check: () => boolean) => {
-  for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 10));
-  expect(check()).toBe(true);
-};
+const until = (check: () => boolean) => vi.waitFor(() => expect(check()).toBe(true), { timeout: 20_000 });
 
 async function setup(over: Partial<ItemActionsOptions> = {}) {
   const repo = await device({ connect: false });

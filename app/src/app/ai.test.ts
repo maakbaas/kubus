@@ -8,14 +8,14 @@ beforeEach(() => {
   server = new FakeServer().install();
 });
 
-/** Lets the look at the server's offer finish. */
-const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+/** Waits for the look at the server's offer to finish (an offer or a problem). */
+const settle = (ai: AiService) => vi.waitFor(() => expect(ai.serverOffer.ai !== null || ai.serverOffer.problem !== null).toBe(true));
 
 describe("the server's language model", () => {
   it("is used by a device without its own, through the server with the sync token", async () => {
     server.ai = { available: true, fieldModel: "small", codeModel: "" };
     const ai = new AiService(await device());
-    await settle();
+    await settle(ai);
     expect(ai.settings.source).toBe("server");
     expect(ai.configured).toBe(true);
     expect(ai.modelFor("code")).toBe("small");
@@ -25,7 +25,7 @@ describe("the server's language model", () => {
 
   it("says why there is none, and the device's own model takes over when chosen", async () => {
     const ai = new AiService(await device());
-    await settle();
+    await settle(ai);
     expect(ai.configured).toBe(false);
     expect(ai.serverOffer.problem).toMatch(/offers no language model/);
     ai.setSettings({ ...ai.settings, source: "own", baseUrl: "https://llm.test/v1", apiKey: "k", fieldModel: "mine" });
@@ -35,7 +35,7 @@ describe("the server's language model", () => {
 
   it("needs a server to be set up", async () => {
     const ai = new AiService(await device({ connect: false }));
-    await settle();
+    await settle(ai);
     expect(ai.serverOffer.problem).toMatch(/No server/);
     expect(ai.configured).toBe(false);
   });

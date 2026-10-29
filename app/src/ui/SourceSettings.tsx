@@ -100,7 +100,8 @@ export function SourceSettings({ draft, isNew, namesFree, problem, onChange }: P
           items={tables ?? []}
           selectedItem={chosenTable}
           itemToString={(t) => (t ? `${tableLabel(t)}${t.type === "view" ? " (view)" : ""}` : "")}
-          onChange={({ selectedItem }) => selectedItem && void read(sourceName, { table: { schema: selectedItem.schema, name: selectedItem.name } })}
+          // Not the table already read: Carbon calls onChange when the chosen table arrives as a prop (the tables listed).
+          onChange={({ selectedItem }) => selectedItem && selectedItem !== chosenTable && void read(sourceName, { table: { schema: selectedItem.schema, name: selectedItem.name } })}
         />
       )}
       {source && source.columns.length > 0 && (

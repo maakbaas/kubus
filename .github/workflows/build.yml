@@ -1,6 +1,6 @@
 name: Build
 
-# On every push: type check, tests and linting, then the Windows installers and the portable
+# On every push: the app's unit tests and linting, then the Windows installers and the portable
 # executable, the macOS disk image and the Linux packages as downloadable artifacts of the run
 # (Actions tab > the run > Artifacts). A tag `v1.2.3` also publishes them on the Releases page.
 # Can be started by hand too.
@@ -47,11 +47,11 @@ jobs:
         shell: bash
         run: node .github/version-from-tag.mjs "${GITHUB_REF_NAME#v}"
 
-      - name: Type check
-        run: npm run typecheck
-
+      # The platform-dependent tests only (paths, line endings): the app's vitest projects run in node
+      # and take half a minute. The type check (build:web runs tsc too) and the server's tests don't
+      # depend on the platform and are in test.yml.
       - name: Test
-        run: npm test
+        run: npm run suite -- unit
 
       # The Rust side compiles against the built frontend (tauri's frontendDist), so it comes first.
       - name: Build web
@@ -95,7 +95,7 @@ jobs:
 
   # macOS (one universal disk image for Apple silicon and Intel) and Linux (.deb, .rpm, AppImage).
   # Only the bundles: the checks above don't depend on the platform and run on Windows, the
-  # tests on Linux in test.yml.
+  # other tests on Linux in test.yml.
   desktop:
     name: desktop (${{ matrix.name }})
     strategy:
@@ -177,22 +177,12 @@ jobs:
         with:
           files: dist-artifacts/*
 
-  # The server: type check, and the Docker image builds (web app included).
+  # The server: the Docker image builds (web app included); its type check is in test.yml.
   server:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Type check
-        working-directory: server
-        run: |
-          npm ci
-          npm run typecheck
 
       - name: Docker image
         run: docker build -f server/Dockerfile .

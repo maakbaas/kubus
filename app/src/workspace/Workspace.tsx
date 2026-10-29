@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
   type PointerEvent,
   type ReactNode,
@@ -209,13 +210,14 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
     window.addEventListener("touchend", onTouchEnd, { passive: true });
     window.addEventListener("touchcancel", onTouchCancel, { passive: true });
     window.addEventListener("mouseup", onMouseUp);
-    window.addEventListener("keydown", onKeyDown);
+    // Capture phase: before the tab list's onKeyDownCapture (below) stops the event.
+    window.addEventListener("keydown", onKeyDown, true);
     return () => {
       window.removeEventListener("touchstart", onTouchStart);
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("touchcancel", onTouchCancel);
       window.removeEventListener("mouseup", onMouseUp);
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
     };
   }, []);
   const setTitle = useCallback(
@@ -565,7 +567,12 @@ function PaneView({ pane }: { pane: PaneNode }) {
           dismissable
           onTabCloseRequest={(i) => ws.update((w) => closeTab(w, pane.tabs[i].id))}
         >
-          <TabList aria-label="Open pages" contained>
+          <TabList
+            aria-label="Open pages"
+            contained
+            // Alt+←/→ is history (the window listener has it already); Carbon would also take it as previous / next tab.
+            onKeyDownCapture={(e: ReactKeyboardEvent) => e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight") && e.stopPropagation()}
+          >
             {pane.tabs.map((t) => (
               <Tab
                 key={t.id}
