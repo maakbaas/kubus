@@ -216,7 +216,8 @@ Extension points are registries, not special cases in pages:
   - **Regions** (choropleth: Carbon's `ChoroplethChart`; `domain/regions.ts`, `regionValues` in domain/chart.ts,
     `views/regionMaps.ts`): a map's regions coloured by the value (the first series, Value section). Data: Regions, the map
     (`ChartOptions.regions`: an amCharts geodata map by name, @amcharts/amcharts5-geodata, its LICENSE in `app/src/geodata`):
-    the world's or Europe's countries (bundled, `app/src/geodata`, each a chunk loaded when shown) or a country's regions
+    the countries of the world, a continent or an area (World, Africa, Asia, Europe, North and South America, Oceania, Central
+    America, Caribbean, Latin America, Middle East: `BUNDLED_MAPS`, bundled in `app/src/geodata`, each a chunk loaded when shown) or a country's regions
     (244 maps of 213 countries and territories, `app/src/geodata/maps.json`, grouped by continent: "Netherlands" its provinces, "France ·
     Departments"), downloaded from jsDelivr at a pinned version (`GEODATA_VERSION`) when chosen and stored as a file
     (`regions.file`, `files/<id>`: the same bytes on every device, so one file; synced like an image, kept while a block
@@ -226,8 +227,11 @@ Extension points are registries, not special cases in pages:
     accents and punctuation ("noord holland" is Noord-Holland, "Fryslan" Fryslân), a code first (`regionFinder`); two
     values of one region ("NL", "Netherlands") are one. A region without items is striped (Carbon's missing data); the
     values that are no region are listed under the map ("Not on the map: Atlantis (1)", ellipsized, the whole list in its
-    title). Carbon fits the map to the regions with values (their neighbours drawn round them, clipped), the world as
-    Natural Earth, the rest Mercator; its tooltip is a region's name and value. Carbon's quirks it works round
+    title). The whole map is shown, whichever regions have values: Carbon fits its projection to the regions with a value
+    only (and no data can change that: it reads 0 and empty alike as missing), so after every render the regions are drawn
+    again fitted to the whole map (`frameWholeMap` in ChartCanvas: the size Carbon fitted to, `width.baseVal`, each path's
+    bound feature), centred on its own longitudes (`centreOf`: opposite the widest gap, so a map across 180°, the Aleutians,
+    Fiji, is drawn whole; a world on 0°); the world as Natural Earth, the rest Mercator. Its tooltip is a region's name and value. Carbon's quirks it works round
     (ChartCanvas): the map must be TopoJSON with the regions in `objects.countries` named by `properties.NAME` (made of the
     GeoJSON, `topojson-server`, named by the regions' unique keys: `prepare`), and it works the values out once and writes them
     onto the map's geometries, so new data is a new chart, each on its own copy of the geometries (`copyOfMap`); the

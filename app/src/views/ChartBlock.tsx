@@ -431,7 +431,7 @@ function RegionsSelect({ id, value, onChange }: { id: string; value: ChartRegion
       invalidText={error ?? undefined}
       onChange={(e) => void choose(e.target.value)}
     >
-      <SelectItemGroup label="Countries">
+      <SelectItemGroup label="Countries of">
         {BUNDLED_MAPS.map((m) => (
           <SelectItem key={m.map} value={m.map} text={m.label} />
         ))}

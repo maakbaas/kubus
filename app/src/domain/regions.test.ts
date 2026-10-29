@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultRegions, matchKey, normalizeRegions, regionFinder, regionsOf } from "./regions";
+import { centreOf, defaultRegions, matchKey, normalizeRegions, regionFinder, regionsOf } from "./regions";
 
 describe("regions", () => {
   it("are a map's named features, a repeated name made unique by its code", () => {
@@ -41,5 +41,16 @@ describe("regions", () => {
     expect(normalizeRegions({ map: "netherlandsLow", file: null })).toEqual(defaultRegions());
     expect(normalizeRegions({ map: "europeLow", file })).toEqual({ map: "europeLow", file: null });
     expect(normalizeRegions({ map: "../evil", file })).toEqual(defaultRegions());
+  });
+});
+
+describe("centreOf", () => {
+  it("centres a map opposite its widest gap, a map across 180° whole, a world on 0", () => {
+    expect(centreOf([3, 7])).toBeCloseTo(5, 0); // the Netherlands
+    expect(Math.abs(centreOf([172, 179, -179, -160, -60]))).toBeGreaterThan(100); // North America with the Aleutians: on the Pacific side of its gap
+    const fiji = centreOf([177, 179, -179]);
+    expect(Math.abs(fiji)).toBeGreaterThan(170);
+    expect(centreOf(Array.from({ length: 36 }, (_, i) => i * 10 - 180))).toBe(0);
+    expect(centreOf([])).toBe(0);
   });
 });

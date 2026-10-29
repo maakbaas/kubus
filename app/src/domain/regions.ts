@@ -13,13 +13,23 @@ export interface ChartRegions {
   file: string | null;
 }
 
-/** The world's countries, bundled (views/regionMaps.ts). */
+/** The world's countries, bundled (views/regionMaps.ts) like those of every continent and area below. */
 export const WORLD_MAP = "worldLow";
-/** Europe's countries, bundled. */
+/** Europe's countries. */
 export const EUROPE_MAP = "europeLow";
+/** The bundled maps, each its countries (app/src/geodata: `<map>.json`), in the order the Regions select lists them. */
 export const BUNDLED_MAPS: { map: string; label: string }[] = [
-  { map: WORLD_MAP, label: "World (countries)" },
-  { map: EUROPE_MAP, label: "Europe (countries)" },
+  { map: WORLD_MAP, label: "World" },
+  { map: "africaLow", label: "Africa" },
+  { map: "asiaLow", label: "Asia" },
+  { map: EUROPE_MAP, label: "Europe" },
+  { map: "northAmericaLow", label: "North America" },
+  { map: "southAmericaLow", label: "South America" },
+  { map: "oceaniaLow", label: "Oceania" },
+  { map: "centralAmericaLow", label: "Central America" },
+  { map: "caribbeanLow", label: "Caribbean" },
+  { map: "latinAmericaLow", label: "Latin America" },
+  { map: "middleEastLow", label: "Middle East" },
 ];
 export const isBundledMap = (map: string) => BUNDLED_MAPS.some((m) => m.map === map);
 
@@ -93,4 +103,25 @@ export function regionFinder(regions: Region[]): (label: string) => Region | nul
     const key = matchKey(label);
     return byCode.get(key) ?? byName.get(key) ?? null;
   };
+}
+
+/**
+ * The longitude a map is centred on: opposite the widest gap between its regions' longitudes, so a map
+ * across 180° (the Aleutians, Chukotka, Fiji) is drawn whole rather than at both edges; 0 for a map
+ * round the world (no gap of 30°).
+ */
+export function centreOf(longitudes: number[]): number {
+  const degrees = [...new Set(longitudes.map((l) => Math.floor(((l % 360) + 540) % 360) - 180))].sort((a, b) => a - b);
+  if (degrees.length === 0) return 0;
+  let gap = 360 - degrees[degrees.length - 1] + degrees[0];
+  let after = degrees[degrees.length - 1];
+  for (let i = 1; i < degrees.length; i++) {
+    if (degrees[i] - degrees[i - 1] > gap) {
+      gap = degrees[i] - degrees[i - 1];
+      after = degrees[i - 1];
+    }
+  }
+  if (gap < 30) return 0;
+  const centre = after + gap / 2 + 180;
+  return ((centre + 540) % 360) - 180;
 }

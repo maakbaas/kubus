@@ -23,7 +23,10 @@ import {
   WordCloudChart,
 } from "@carbon/charts-react";
 import "@carbon/charts-react/styles.css";
+import { geoMercator, geoNaturalEarth1, geoPath, type GeoPermissibleObjects } from "d3-geo";
+import { feature } from "topojson-client";
 import type { GeometryCollection, Topology } from "topojson-specification";
+import { centreOf } from "../domain/regions";
 import type { CarbonChart, ChartSpec } from "./chartSpec";
 
 // The Carbon Charts part of a chart block, in its own chunk: loaded (with d3) the first time a
@@ -122,6 +125,56 @@ function copyOfMap(map: Topology): Topology {
   return { ...map, objects: { ...map.objects, countries: { ...countries, geometries: countries.geometries.map((g) => ({ ...g })) } } };
 }
 
+/** The projections a choropleth uses (chartSpec's `thematic.projection`). */
+const PROJECTIONS: Record<string, () => ReturnType<typeof geoMercator>> = { geoNaturalEarth1, geoMercator };
+
+/** A map's regions as GeoJSON and the longitude it is centred on (`centreOf`), worked out once per map. */
+const wholeMaps = new WeakMap<Topology, { regions: ReturnType<typeof feature>; centre: number }>();
+
+function longitudesOf(value: unknown, into: number[]): number[] {
+  if (Array.isArray(value)) {
+    if (typeof value[0] === "number") into.push(value[0]);
+    else for (const v of value) longitudesOf(v, into);
+  }
+  return into;
+}
+
+function wholeMap(map: Topology) {
+  let whole = wholeMaps.get(map);
+  if (!whole) {
+    const regions = feature(map, map.objects.countries as GeometryCollection);
+    const longitudes: number[] = [];
+    for (const f of "features" in regions ? regions.features : [regions]) longitudesOf((f.geometry as { coordinates?: unknown } | null)?.coordinates, longitudes);
+    whole = { regions, centre: centreOf(longitudes) };
+    wholeMaps.set(map, whole);
+  }
+  return whole;
+}
+
+/**
+ * Frames a drawn choropleth on its whole map. Carbon fits the projection to the regions with a value
+ * only (GeoProjection.render), so a world of values in the Americas showed the Americas alone; here
+ * it is fitted to every region, centred on the map (`centreOf`), and the regions are drawn again with
+ * it (each path keeps the feature d3 bound to it, `__data__`, and its event handlers). Runs on every
+ * render-finished (a resize too).
+ */
+function frameWholeMap(holder: HTMLElement, map: Topology, projection: string) {
+  const geo = holder.querySelector("g.geo");
+  const svg = geo?.parentElement;
+  const make = PROJECTIONS[projection];
+  if (!geo || !(svg instanceof SVGSVGElement) || !make) return;
+  // The size Carbon fitted to: its container's resolved width and height ("100%" of its frame; DOMUtils.getSVGElementSize).
+  // Not its bounding box: that is the drawing's, which overflows the frame.
+  const width = svg.width.baseVal.value;
+  const height = svg.height.baseVal.value;
+  if (width < 1 || height < 1) return;
+  const { regions, centre } = wholeMap(map);
+  const path = geoPath(make().rotate([-centre, 0]).fitSize([width, height], regions));
+  for (const el of holder.querySelectorAll<SVGPathElement & { __data__?: GeoPermissibleObjects }>("g.geo path, g.missing-data path")) {
+    if (el.__data__) el.setAttribute("d", path(el.__data__) ?? "");
+  }
+}
+
 /**
  * A Carbon chart; clicking a dot of a scatter opens its item (`onItem`, by the item's id). Its
  * height (the spec's) is the most it takes: a round chart narrower than that is fitted to its drawing.
@@ -171,6 +224,8 @@ export default function ChartCanvas({
     let frame = 0;
     const rendered = () => {
       const el = box.current;
+      // Before the browser paints Carbon's framing.
+      if (el && geoRef.current && spec.chart === "ChoroplethChart") frameWholeMap(el, geoRef.current, String((spec.options.thematic as { projection?: string })?.projection));
       if (!part || !el) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
@@ -190,6 +245,8 @@ export default function ChartCanvas({
     };
   }, [drawing, part]);
   const map = useMemo(() => (geoData ? copyOfMap(geoData) : null), [geoData, drawing]); // eslint-disable-line react-hooks/exhaustive-deps
+  const geoRef = useRef(geoData);
+  geoRef.current = geoData;
   const options = useMemo(() => {
     const sized = fitted === null ? spec.options : { ...spec.options, height: `${fitted}px` };
     return map ? { ...sized, geoData: map } : sized;

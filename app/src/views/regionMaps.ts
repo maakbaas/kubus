@@ -2,13 +2,13 @@ import { topology } from "topojson-server";
 import type { Topology } from "topojson-specification";
 import type { Repository } from "../data";
 import { fileIdFromSrc, fileSrc } from "../domain/files";
-import { EUROPE_MAP, regionsOf, WORLD_MAP, type ChartRegions, type Region } from "../domain/regions";
+import { BUNDLED_MAPS, regionsOf, type ChartRegions, type Region } from "../domain/regions";
 import { MAX_FILE_BYTES } from "../../../shared/sync";
 import maps from "../geodata/maps.json";
 
 // The maps a choropleth shows: amCharts' geodata (@amcharts/amcharts5-geodata, its LICENSE in
-// app/src/geodata). The world's and Europe's countries are bundled (app/src/geodata, each its own
-// chunk, loaded when shown); a country's regions are downloaded once, when chosen, from jsDelivr at a
+// app/src/geodata). The countries of the world and of each continent or area are bundled
+// (app/src/geodata, each its own chunk, loaded when shown); a country's regions are downloaded once, when chosen, from jsDelivr at a
 // pinned version and stored as a file (`ChartRegions.file`), so the chart looks the same offline and
 // on every synced device. Carbon's choropleth takes TopoJSON with the regions in `objects.countries`,
 // each named by `properties.NAME`: a map is made into that here, named by its regions' keys.
@@ -26,8 +26,7 @@ export interface CountryMap {
   continent: string;
 }
 export const COUNTRY_MAPS: CountryMap[] = maps;
-export const mapLabel = (map: string): string =>
-  map === WORLD_MAP ? "World" : map === EUROPE_MAP ? "Europe" : (COUNTRY_MAPS.find((m) => m.map === map)?.label ?? map);
+export const mapLabel = (map: string): string => (BUNDLED_MAPS.find((m) => m.map === map) ?? COUNTRY_MAPS.find((m) => m.map === map))?.label ?? map;
 
 /** A map ready to draw: its regions and Carbon's TopoJSON of them. */
 export interface RegionMap {
@@ -38,10 +37,10 @@ export interface RegionMap {
 type FeatureCollection = { type: "FeatureCollection"; features: { type: "Feature"; id?: unknown; geometry: unknown; properties?: Record<string, unknown> | null }[] };
 
 // As text (parsed when loaded): TypeScript would otherwise type every coordinate.
-const BUNDLED: Record<string, () => Promise<unknown>> = {
-  [WORLD_MAP]: () => import("../geodata/worldLow.json?raw").then((m) => JSON.parse(m.default)),
-  [EUROPE_MAP]: () => import("../geodata/europeLow.json?raw").then((m) => JSON.parse(m.default)),
-};
+const BUNDLED_FILES = import.meta.glob<string>("../geodata/*Low.json", { query: "?raw", import: "default" });
+const BUNDLED: Record<string, () => Promise<unknown>> = Object.fromEntries(
+  BUNDLED_MAPS.map((m) => [m.map, () => BUNDLED_FILES[`../geodata/${m.map}.json`]().then((text) => JSON.parse(text))]),
+);
 
 function asFeatures(json: unknown): FeatureCollection {
   const c = json as Partial<FeatureCollection> | null;
