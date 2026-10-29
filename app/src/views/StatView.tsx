@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Tag } from "@carbon/react";
 import { ArrowDown, ArrowUp } from "@carbon/icons-react";
 import { AGGREGATES, A_NUMBER, formatValue, PREVIOUS, widthCss, type ChartOptions, type Stat } from "../domain/chart";
@@ -21,7 +21,10 @@ function baselineText(options: ChartOptions, baseline: number): string {
  * A stat (a Grafana-like stat panel, built of Carbon parts), centred: the value's name, the number in
  * Carbon's heading-06 (light) with the change from the baseline beside it as a Carbon tag with an up or
  * down arrow (green where the change is good, red where bad: `better`), what it is compared with,
- * and its sparkline (`sparkline`: a compact Carbon chart, or nothing) across the whole width below.
+ * and its sparkline (`sparkline`: a compact Carbon chart, or nothing) across the whole width below. As tall as its Height
+ * (and Aspect ratio; in a row side by side, the row's): the text centred in what the sparkline leaves, the sparkline
+ * growing with the height (styles.css). Never less tall than its text and a 4rem sparkline: that least height is also
+ * what its row may not go below (`data-row-min`, views/BlockRows.tsx).
  */
 export function StatView({ stat, options, sparkline }: { stat: Stat; options: ChartOptions; sparkline: ReactNode }) {
   const unit = options.unit.trim();
@@ -33,15 +36,31 @@ export function StatView({ stat, options, sparkline }: { stat: Stat; options: Ch
         ? signed(stat.change, `${formatValue(Math.abs(stat.percent), { unit: "", decimals: options.decimals ?? 1 })}%`)
         : signed(stat.change, formatValue(Math.abs(stat.change), options));
   const from = stat.baseline === null ? "" : baselineText(options, stat.baseline);
+  // Its least height: the space above, its text, and (with one) the gap and a 4rem sparkline. Set on it, not a render.
+  const box = useRef<HTMLDivElement>(null);
+  const text = useRef<HTMLDivElement>(null);
+  const withLine = !!sparkline;
+  useLayoutEffect(() => {
+    const el = box.current;
+    const t = text.current;
+    if (!el || !t) return;
+    const update = () => {
+      const cs = getComputedStyle(el);
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const gap = parseFloat(getComputedStyle(t.parentElement!).rowGap) || 0;
+      const least = Math.ceil(parseFloat(cs.paddingBlockStart) + t.offsetHeight + (withLine ? gap + 4 * rem : 0));
+      el.style.minBlockSize = `${least}px`;
+      el.dataset.rowMin = String(least);
+    };
+    const sizes = new ResizeObserver(update);
+    sizes.observe(t);
+    update();
+    return () => sizes.disconnect();
+  }, [withLine]);
   return (
-    // Fitting its content, as tall as that (a 4rem sparkline); else its Height (and Aspect ratio; a row's height in a row),
-    // the number centred in what the sparkline leaves (it grows with the height: styles.css .stat-block--sized).
-    <div
-      className={options.fitContent ? "stat-block" : "stat-block stat-block--sized"}
-      style={{ maxInlineSize: widthCss(options.width), ...(!options.fitContent && { blockSize: blockHeightCss(options.height, options.aspect) }) }}
-    >
+    <div ref={box} className="stat-block" style={{ maxInlineSize: widthCss(options.width), blockSize: blockHeightCss(options.height, options.aspect) }}>
       <div className="stat-block__body">
-        <div className="stat-block__text">
+        <div ref={text} className="stat-block__text">
           {options.showLabel && <span className="stat-block__label">{stat.label}</span>}
           <div className="stat-block__value">
             <span className="stat-block__number">

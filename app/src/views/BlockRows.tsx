@@ -250,7 +250,11 @@ function Row<T extends { id: string }>({
       const boxes = [...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block--fills:has(> .block__body) > .block__own > div")];
       const heights = [...contents.map((c) => c.scrollHeight), ...boxes.map((b) => b.offsetHeight)].filter((h) => h > 0);
       // A stat, a meter, a compact chart: never cut or scrolled, the row at least as tall.
-      const floors = [...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block--fixed > .block__body > .block__content")].map((c) => c.scrollHeight);
+      const floors = [
+        ...[...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block--fixed > .block__body > .block__content")].map((c) => c.scrollHeight),
+        // A block filling the row that can't be less tall than this (a stat: its text and a 4rem sparkline).
+        ...[...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block--fills > .block__body [data-row-min]")].map((el) => Number(el.dataset.rowMin) || 0),
+      ];
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       const px = Math.round(rowHeightPx({ ...(fit === "shortest" && { rowFit: "shortest" }), ...(limit !== undefined && { rowHeight: limit }) }, heights, rem, floors));
       setBodyPx((old) => (old === px ? old : px));
@@ -263,7 +267,7 @@ function Row<T extends { id: string }>({
     };
     // Blocks come and go (their items loading, collapsed, a search leaving one out): watched anew.
     const tree = new MutationObserver(watch);
-    tree.observe(box, { childList: true, subtree: true });
+    tree.observe(box, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-row-min"] });
     watch();
     return () => {
       sizes.disconnect();

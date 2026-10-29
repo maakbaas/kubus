@@ -3359,21 +3359,22 @@ img[data-lightbox] {
   position: absolute;
   inset: 0;
 }
-/* A stat of a Height of its own (Fits its content off; in a row, the row's height): the number and what is around it
-   centred in what the sparkline leaves, the sparkline growing with the height (from 4rem, at most 16rem). */
-.stat-block--sized {
+/* A stat is as tall as its Height (and Aspect ratio; a row's height in a row; never less than its text and a 4rem
+   sparkline: StatView): its text centred in what the sparkline leaves, the sparkline growing with the height (40% of
+   it, 4 to 16rem). */
+.stat-block {
   display: flex;
   flex-direction: column;
 }
-.stat-block--sized .stat-block__body {
+.stat-block .stat-block__body {
   flex: 1 1 auto;
   min-block-size: 0;
 }
-.stat-block--sized .stat-block__text {
-  flex: 1 1 auto;
-  justify-content: center;
+.stat-block .stat-block__text {
+  flex: none;
+  margin-block: auto;
 }
-.stat-block--sized .stat-block__sparkline {
+.stat-block .stat-block__sparkline {
   flex: 0 0 clamp(4rem, 40%, 16rem);
   block-size: auto;
 }

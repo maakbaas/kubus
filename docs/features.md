@@ -343,8 +343,8 @@ What the app does, feature by feature (read the part you work on).
   row's tallest or shortest block's own height (`rowHeightPx`: what a table, cards or text take, overhang included; a
   chart's, map's or HTML component's Height at its Aspect ratio, `BlockUses.ownHeight`, measured by an invisible
   `.block__own`), limited by the row's height; what is taller scrolls inside, while a chart, map or HTML component fills
-  the row (`blockHeightCss` reads `--row-fill-box`) and never scrolls; a stat, meter or compact chart (`fixedHeight`) never
-  scrolls either: the row is at least as tall, and it is centred in it. With nothing measured (all collapsed), the row's height, else 24rem. A row of one block keeps its own height, only limited (at most / at least). Narrower (a
+  the row (`blockHeightCss` reads `--row-fill-box`) and never scrolls; a meter or compact chart (`fixedHeight`) never
+  scrolls either: the row is at least as tall, and it is centred in it (a stat fills the row, never less tall than its text and a 4rem sparkline). With nothing measured (all collapsed), the row's height, else 24rem. A row of one block keeps its own height, only limited (at most / at least). Narrower (a
   phone), a row's blocks stack exactly as blocks always did, their heights their own, nothing limited or scrolling inside:
   a dashboard is a list there. A block is placed by dragging its name onto another block: its left or right quarter puts
   it beside that block (side by side only; that half of the block is highlighted), its top or bottom half in a row of its
