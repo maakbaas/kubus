@@ -89,7 +89,9 @@ a device that hasn't reloaded yet can be older or newer.
   rows are always written whole). A table derived from other rows (as `item_links` is) must also say who writes its rows for
   values an older device wrote without them, and who rebuilds them (`healLinks` after a sync).
 4. Decide `SYNC_COMPATIBLE`. **Unchanged** for an added table or column (and a new optional value):
-   older devices leave it alone. **Raised to `SYNC_VERSION`** when older devices would get the data
+   older devices leave it alone. (A new optional key in a JSON column, like a view's `filterBar` in its
+   config, is such a value: an older device ignores it, and drops it only if it saves that view itself; a
+   display preference lost that way is not worth locking older devices out.) **Raised to `SYNC_VERSION`** when older devices would get the data
    wrong: a value's meaning or format changes (a view's config JSON, say), a value an older device's
    CHECK refuses (a new field kind), a renamed or dropped column. The server then turns older devices
    away until they are updated, so update the server first.

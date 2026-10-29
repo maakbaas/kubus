@@ -43,6 +43,8 @@ export const AREAS = [
   [/^app\/src\/(views\/(MapView|ComponentBlock|MarkdownBlock)|domain\/geo|ui\/MapSettings)/, [25]],
   // Filter, sort, group, date period (rows asserted), a reference field's Choices.
   [/^app\/src\/(views\/(QueryEditor|DatePeriodFilter|BlockView|TableView|CardsView)|domain\/(query|filterTree|datePeriod|views)|pages\/(CollectionPage|ItemPage)|ui\/ChoiceFilterEditor)/, [26]],
+  // The collection view's filter bar (Show filter bar): its setting, Filter button and date period.
+  [/^app\/src\/(views\/(FilterBar|DatePeriodFilter)|domain\/(datePeriod|views)|pages\/CollectionPage|data\/sqlite\/SqliteRepository)/, [44]],
   [/^app\/src\/ui\/(ToolbarPopover|panelRoom|OverflowBar)|^app\/src\/platform\/keyboardInset/, [10, 14, 20]],
 
   // Backlinks: the virtual collection of item-page blocks and the item links behind it.

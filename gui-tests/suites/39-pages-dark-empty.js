@@ -7,7 +7,7 @@ matrixTests("long", ["wide"]);
 for (const vp of ["desktop", "phone"]) {
   test(`typical content, dark theme @ ${vp}`, async (t) => {
     await t.boot();
-    const ids = await t.seed(matrixSpec("typical"));
+    const ids = await t.seed(matrixSpec("typical", { filterBar: true }));
     for (const [label, path] of matrixPages(ids)) {
       await t.open(path);
       await t.audit(label);

@@ -72,6 +72,12 @@ describe("parseViewConfig", () => {
     expect(config.editable).toBe(false);
     expect(config.collapsed).toEqual({ blocks: ["a"], groups: {} });
   });
+
+  it("reads \"Show filter bar\" only when it is on", () => {
+    expect(parseViewConfig(JSON.stringify({ filters: [], blocks: [], filterBar: true })).filterBar).toBe(true);
+    for (const filterBar of [false, "yes", 1, null]) expect("filterBar" in parseViewConfig(JSON.stringify({ filters: [], blocks: [], filterBar }))).toBe(false);
+    expect("filterBar" in parseViewConfig(JSON.stringify({ filters: [], blocks: [] }))).toBe(false);
+  });
 });
 
 describe("collapsed", () => {

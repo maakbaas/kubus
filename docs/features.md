@@ -230,7 +230,10 @@ What the app does, feature by feature (read the part you work on).
   view; groups per grouped-by field). What changes which items show, and how, waits for Save
   changes: filters, sort, grouping and fields (`onChange` vs `onSet` in `BlockView`; `arrange` in
   the pages). The toolbar holds only the view's
-  search, filter and settings (at the right of its tab bar). View settings lists the blocks (reorder, remove, "Add block" = a
+  search, filter and settings (at the right of its tab bar). "Show filter bar" in View settings (per view, stored right away with
+  it) puts the filter on a bar below the tabs instead: the Filter button and the view's date period with ‹ › to step it, a
+  "most recent" button (this week, month, …, rolling) and a kind switch (Hour to Year); each step is an unsaved change of the
+  view's filter (docs/views-and-workspace.md, "Filter bar"). View settings lists the blocks (reorder, remove, "Add block" = a
   copy of the last; a view keeps one). Item pages hold blocks too, among the
   fields (`ItemLayout.blocks`, their ids in `fields`): a block there may list another collection
   (`ViewBlock.collectionId`) and filter on the page's item (rule values `$item` = this item,
