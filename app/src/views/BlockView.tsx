@@ -360,6 +360,8 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
   // Searching the view: a block listing items that has none matching is left out altogether.
   if (search.trim() && uses.query && items && result.total === 0) return null;
+  // Not even its header until its items are in: a header alone would sit where the blocks above are about to push it away.
+  if (!items && !error) return null;
   return (
     <section className="block" data-block-id={block.id}>
       <SectionHeader

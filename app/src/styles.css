@@ -3237,7 +3237,7 @@ img[data-lightbox] {
   inset-inline-start: var(--cds-spacing-05);
 }
 @media (max-width: 42rem) {
-  .item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label)::before,
+  .item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label, .block)::before,
   .item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > :not(.image-input, .view-field--image)::before {
     inset-inline: calc(0.5 * var(--cds-spacing-05));
   }
@@ -3254,9 +3254,11 @@ img[data-lightbox] {
   padding-inline-start: 0;
 }
 /* Phones: no room to push boxes to the pane edge. Boxes sit half an inset in from both sides
-   (centred, a little space each side) and labels follow, so text stays near the title's edge. */
+   (centred, a little space each side) and labels follow, so text stays near the title's edge.
+   Blocks are left out, as on wider panes: they sit on the page's edges (the same edges as the title
+   and the header's "⋮"), not half an inset outside them. */
 @media (max-width: 42rem) {
-  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label),
+  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label, .block),
   .item-field--no-label > :not(.image-input, .view-field--image) {
     margin-inline: calc(-0.5 * var(--cds-spacing-05));
   }

@@ -432,3 +432,52 @@ test("AI prompt preview: an empty prompt for the item says so; Try against a fai
   await t.check("one request was made and Try is available again", calls === 1 && !(await t.page.getByRole("button", { name: "Try", exact: true }).isDisabled()));
   await t.audit("AI Try failed");
 });
+
+// ---- phones: blocks and the page use the pane's whole width ---------------------------------------
+// Reported on a phone: on an item page the chart and map blocks were wider than the other blocks
+// ("⋮" menus further right), and the portrait layout did not seem to use the full width.
+
+for (const vp of ["phone-360", "phone", "phone-412"]) {
+  test(`phone portrait: item and collection pages use the window's width, every block fits it @ ${vp}`, async (t) => {
+    await t.boot();
+    const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "*" };
+    await t.page.route("https://tiles.openfreemap.org/**", (route) => {
+      if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
+      if (route.request().url().includes("/styles/")) return route.fulfill({ status: 200, headers: CORS, json: { version: 8, name: "stub", sources: {}, layers: [{ id: "background", type: "background", paint: { "background-color": "#ffffff" } }] } });
+      return route.fulfill({ status: 404, headers: CORS, body: "" });
+    });
+    const ids = await t.seed(matrixSpec("typical", { items: 6, drawn: true }));
+    const W = t.vp.width;
+    const measure = () =>
+      t.page.evaluate(() => {
+        const r = (el) => { const b = el.getBoundingClientRect(); return { left: Math.round(b.left * 10) / 10, right: Math.round(b.right * 10) / 10, width: Math.round(b.width * 10) / 10 }; };
+        const content = document.querySelector(".ws-pane--active .ws-tab-slot:not([hidden]) .ws-tab-content");
+        return {
+          inner: window.innerWidth, scroll: document.documentElement.scrollWidth,
+          content: r(content),
+          header: r(content.querySelector(".page-header")),
+          blocks: [...content.querySelectorAll(".block")].map((b) => ({ title: b.querySelector(".section-header")?.textContent.trim().slice(0, 12), box: r(b), head: b.querySelector(".section-header") ? r(b.querySelector(".section-header")) : null, menu: (() => { const m = [...b.querySelectorAll(".section-header button")].filter((x) => x.checkVisibility()).pop(); return m ? r(m).right : null; })(), drawn: Math.max(0, ...[...b.querySelectorAll("svg, canvas")].filter((x) => x.getBoundingClientRect().width > 100).map((x) => r(x).right)) })),
+        };
+      });
+    for (const [label, path] of [
+      ["item page", `/collections/${ids.collections.books}/items/${ids.items["books/i0"]}`],
+      ["collection blocks view", `/collections/${ids.collections.books}/items?view=${ids.views["books/Blocks"]}`],
+    ]) {
+      await t.open(path);
+      await t.until(`${label}: the blocks are shown`, async () => (await t.count(".block")) >= 4);
+      await t.settle(500);
+      const m = await measure();
+      await t.check(`${label}: layout viewport is the window (${m.inner} of ${W}) and nothing scrolls sideways`, m.inner === W && m.scroll <= W, JSON.stringify(m));
+      const pad = 16;
+      await t.check(`${label}: the page's content box spans the window minus the page padding`, Math.abs(m.header.left - pad) <= 1 && Math.abs(m.header.right - (W - pad)) <= 1, `header ${JSON.stringify(m.header)}`);
+      const wide = m.blocks.filter((b) => b.box.right > m.header.right + 1 || b.box.left < m.header.left - 1);
+      await t.check(`${label}: no block is wider than the page's content box`, wide.length === 0, JSON.stringify(wide));
+      const menus = [...new Set(m.blocks.filter((b) => b.menu).map((b) => b.menu))];
+      await t.check(`${label}: every block's "⋮" menu ends on one right edge`, menus.length === 1, menus.join(", "));
+      const over = m.blocks.filter((b) => b.drawn > m.header.right + 1);
+      await t.check(`${label}: charts and maps stay inside the content box`, over.length === 0, JSON.stringify(over));
+      const heads = [...new Set(m.blocks.filter((b) => b.head).map((b) => b.head.right))];
+      await t.check(`${label}: every block header ends on one right edge`, heads.length === 1, heads.join(", ") + " " + JSON.stringify(m.blocks));
+    }
+  }, { viewport: vp });
+}
