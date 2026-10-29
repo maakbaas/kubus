@@ -83,8 +83,7 @@ Extension points are registries, not special cases in pages:
   `withPeriod` (domain/datePeriod.ts), shared with `DatePeriodFilter`. Every change is an edit of the view's filter
   (`view.filters`): the tab gets its * and Save appears, which is how the view shows it deviates from its saved period;
   all blocks follow. The setting itself is stored with the view right away (like arranging blocks; no *), as
-  `filterBar: true` in the view's config JSON (absent = off; an optional key, so `SYNC_COMPATIBLE` is unchanged:
-  an older device ignores it, and saves the view without it if it edits it). One row down to 320 px: icon buttons for
+  `filterBar: true` in the view's config JSON (absent = off; an optional key). One row down to 320 px: icon buttons for
   ‹ › and the calendar (tooltips), the label takes the room that is left between ‹ and › (ellipsized, whole in its
   tooltip), so the buttons never move while stepping. Switching the setting while a panel (View settings) is open moves
   the Filter button only when it closes (`panels.hold`), so the buttons after it don't jump under the open panel; the

@@ -1,5 +1,4 @@
 import {
-  SYNC_COMPATIBLE,
   SYNC_TABLES,
   SYNC_VERSION,
   type SyncMismatch,
@@ -13,7 +12,7 @@ import {
 } from "../../../../shared/sync";
 import { observeStamp } from "../../domain/model";
 import { healLinks } from "../schema";
-import type { DataChange, SyncConfig, SyncControl, SyncStatus } from "../repository";
+import { SYNC_OUTDATED, type DataChange, type SyncConfig, type SyncControl, type SyncStatus } from "../repository";
 import type { SqlClient, Statement } from "../sqlite/protocol";
 import type { SyncEnvironment } from "./environment";
 
@@ -33,11 +32,11 @@ import type { SyncEnvironment } from "./environment";
 //    answers 409, and this device pauses until the user connects again (a first connection to the
 //    new database) or disconnects: its outbox only holds what changed since the last sync, which
 //    would land on the new database as fragments.
-//  * Versions (docs/migrations.md): every request carries this device's SYNC_VERSION; a server
-//    that can't take its data, or that has data this device is too old for, answers 426 and
-//    writes nothing (the outbox keeps everything until one of them is updated). Rows are applied
-//    in the columns they have (a server without a column leaves it as it is here), and a column
-//    this device doesn't know is left out.
+//  * Versions (docs/migrations.md): a strict gate, only equal SYNC_VERSIONs sync. Every request
+//    carries this device's; a server of another one answers 426 and writes nothing, and a
+//    response of another one is refused here too. The device then keeps working offline with its
+//    outbox untouched (`status.outdated`: update this device, or the server) and tries again at
+//    every sync (reload, poll, change signal) until the versions are equal.
 //  * When: shortly after a local change, every 30 s, when coming online or back to the app, and
 //    when the server signals a change (server-sent events) this device doesn't have yet (the
 //    signal carries the server's cursor: a device's own push is not fetched again).
@@ -93,8 +92,15 @@ class DatabaseReplaced extends Error {
   }
 }
 
-/** What every request says about this device's data (shared/sync.ts). */
-const VERSION = { version: SYNC_VERSION, compatible: SYNC_COMPATIBLE };
+/** This device and the server have different SYNC_VERSIONs: `update` is the side that is older (the 426 answer). */
+class SyncRefused extends Error {
+  constructor(readonly update: "app" | "server") {
+    super(SYNC_OUTDATED[update]);
+  }
+}
+
+/** What every request says about this device's data (shared/sync.ts; `compatible` only for servers from before the strict gate). */
+const VERSION = { version: SYNC_VERSION, compatible: SYNC_VERSION };
 
 const toWire = (t: SyncTable, row: Record<string, unknown>): WireRow =>
   Object.fromEntries(Object.keys(t.columns).map((c) => [c, (row[c] ?? null) as WireValue]));
@@ -140,17 +146,6 @@ const requeueFiles = (ids: string[]): Statement[] =>
         { sql: "INSERT INTO sync_outbox (tbl, pk) SELECT 'thumbnails', file_id FROM thumbnails WHERE file_id IN (SELECT value FROM json_each(?1))", bind: [JSON.stringify(ids)] },
       ];
 
-/**
- * After rows were applied (with sync_applying off again): the item_links rows of the values among them that are
- * missing or older than their value get rebuilt, and so are queued for the server. A device of this version sent
- * its rows along with its values, so there is nothing to do for those; a value written by an older app has no row,
- * or a stale one, until the first device of this version that gets it makes it (identically on every device).
- */
-export function healAppliedLinks(changes: WireChanges): Statement[] {
-  const keys = (changes.field_values ?? []).map((r): [string, string] => [String(r.item_id), String(r.field_id)]);
-  return keys.length > 0 ? [healLinks(keys)] : [];
-}
-
 export const keyOf = (t: SyncTable) => (t.key.length > 1 ? `json_array(${t.key.join(", ")})` : t.key[0]);
 
 /** Rows a sync brought, after they were applied, and the rows it sent (the headless device's webhooks). */
@@ -191,7 +186,7 @@ export class SyncEngine implements SyncControl {
     private files: { release(fileIds: string[]): Promise<void>; sweep(): Promise<void> } = { release: async () => {}, sweep: async () => {} },
   ) {
     this.config = loadConfig(env);
-    this.status = { state: "off", lastSync: null, error: null, replaced: loadReplaced(env) };
+    this.status = { state: "off", lastSync: null, error: null, outdated: null, replaced: loadReplaced(env) };
     setInterval(() => void this.syncNow(), POLL_MS);
     env.watch(() => void this.syncNow());
     this.listenForChanges();
@@ -236,14 +231,14 @@ export class SyncEngine implements SyncControl {
     await this.running; // a sync in flight finishes first
     await this.forgetServer([{ sql: "DELETE FROM sync_outbox" }]);
     this.setReplaced(null);
-    this.setStatus({ state: "off", lastSync: null, error: null });
+    this.setStatus({ state: "off", lastSync: null, error: null, outdated: null });
   }
 
   async pause(): Promise<void> {
     this.stop({ ...this.config, enabled: false });
     await this.running; // a sync in flight finishes first
     await this.forgetServer();
-    this.setStatus({ state: "off", error: null });
+    this.setStatus({ state: "off", error: null, outdated: null });
   }
 
   async reconnect(): Promise<void> {
@@ -276,7 +271,7 @@ export class SyncEngine implements SyncControl {
     this.stop({ ...this.config, enabled: false });
     await this.forgetServer();
     this.setReplaced({ createdAt: database.createdAt, empty });
-    this.setStatus({ state: "off", error: null });
+    this.setStatus({ state: "off", error: null, outdated: null });
   }
 
   /** A request to the server with the token; network failures and a refused token throw. */
@@ -302,7 +297,11 @@ export class SyncEngine implements SyncControl {
       }
     };
     const health = await ask("/api/health");
-    if (!(health.ok && ((await health.json().catch(() => null)) as { ok?: boolean } | null)?.ok)) throw new Error(`${root} is not a Kubus server`);
+    const info = health.ok ? ((await health.json().catch(() => null)) as { ok?: boolean; syncVersion?: number } | null) : null;
+    if (!info?.ok) throw new Error(`${root} is not a Kubus server`);
+    if (typeof info.syncVersion === "number" && info.syncVersion !== SYNC_VERSION) {
+      throw new Error(`${SYNC_OUTDATED[info.syncVersion > SYNC_VERSION ? "app" : "server"]} (sync version ${info.syncVersion} on the server, ${SYNC_VERSION} here)`);
+    }
     // Any answer past the token check means it was accepted.
     if ((await ask("/api/settings", { headers: { Authorization: `Bearer ${token}` } })).status === 401) throw new Error("The server did not accept the token");
   }
@@ -327,7 +326,7 @@ export class SyncEngine implements SyncControl {
   /** Syncs now; a request while one is running makes it run once more afterwards. */
   syncNow(): Promise<void> {
     if (!this.active) {
-      this.setStatus({ state: "off", error: null });
+      this.setStatus({ state: "off", error: null, outdated: null });
       return Promise.resolve();
     }
     if (this.running) {
@@ -344,15 +343,16 @@ export class SyncEngine implements SyncControl {
           await this.syncOnce();
           // Switched off while it ran: it stays off (not "up to date").
           if (!this.active) {
-            this.setStatus({ state: "off", error: null });
+            this.setStatus({ state: "off", error: null, outdated: null });
             break;
           }
-          this.setStatus({ state: "idle", lastSync: new Date().toISOString(), error: null });
+          this.setStatus({ state: "idle", lastSync: new Date().toISOString(), error: null, outdated: null });
           // With what other devices did applied: files unused long enough go (here and on the server).
           await this.files.sweep().catch((e) => console.warn("File clean-up failed", e));
           void this.downloadFiles();
         } catch (e) {
           if (e instanceof DatabaseReplaced) await this.stopForReplaced(e.mismatch);
+          else if (e instanceof SyncRefused) this.setStatus({ state: "error", error: null, outdated: e.update });
           else this.setStatus({ state: "error", error: e instanceof Error ? e.message : String(e) });
           break;
         }
@@ -397,9 +397,12 @@ export class SyncEngine implements SyncControl {
       body: JSON.stringify(request),
     });
     if (response.status === 409) throw new DatabaseReplaced((await response.json()) as SyncMismatch);
-    if (response.status === 426) throw new Error(((await response.json()) as SyncOutdated).error);
+    if (response.status === 426) throw new SyncRefused(((await response.json()) as SyncOutdated).update === "server" ? "server" : "app");
     if (!response.ok) throw new Error(`Server error ${response.status}`);
-    return (await response.json()) as SyncResponse;
+    const answer = (await response.json()) as SyncResponse;
+    // The server checks the versions first; this is the device's own check of what it applies.
+    if (typeof answer.version === "number" && answer.version !== SYNC_VERSION) throw new SyncRefused(answer.version > SYNC_VERSION ? "app" : "server");
+    return answer;
   }
 
   private async syncOnce() {
@@ -431,7 +434,6 @@ export class SyncEngine implements SyncControl {
       { sql: "DELETE FROM meta WHERE key = 'sync_applying'" },
       rememberDatabase(current.id),
       ...requeueFiles(missingFiles),
-      ...healAppliedLinks(changes),
     );
     await this.db.write(statements);
     this.cursor = cursor;
@@ -641,7 +643,7 @@ export class SyncEngine implements SyncControl {
         { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_cursor', ?1)", bind: [String(remote.cursor)] },
         ...remember,
         { sql: "DELETE FROM meta WHERE key = 'sync_applying'" },
-        // Values written by an app that doesn't make item_links rows get theirs (queued for the server).
+        // Values the server holds without item_links rows (it was filled before the table existed) get theirs, queued for the server.
         healLinks(null),
       );
       await this.db.write(statements);

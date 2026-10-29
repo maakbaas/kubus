@@ -4,6 +4,7 @@ import type { SyncConfig } from "../data/repository";
 import { useStore } from "../app/store";
 import { useConfirm } from "./useConfirm";
 import { ServerReplaced } from "./ServerReplaced";
+import { OutdatedNotice } from "./OutdatedNotice";
 
 const STATE_TEXT = { off: "Off", idle: "Up to date", syncing: "Syncing…", error: "Failed" } as const;
 
@@ -71,6 +72,7 @@ export function SyncSettings() {
   return (
     <>
       <p className="helper">Keeps this device's data in step with your Kubus server. The data stays on this device too, so Kubus works offline.</p>
+      {status.outdated && <OutdatedNotice update={status.outdated} className="sync-popover" />}
       {status.error && <InlineNotification kind="error" title="Sync failed" subtitle={status.error} hideCloseButton />}
       {status.replaced && (
         <div className="sync-popover">
@@ -109,7 +111,7 @@ export function SyncSettings() {
             <SelectItem value="opened" text="Full size when opened" />
           </Select>
           <p className="helper">
-            {STATE_TEXT[status.state]}
+            {status.outdated ? "Not syncing" : STATE_TEXT[status.state]}
             {status.lastSync && `, last synced ${new Date(status.lastSync).toLocaleString()}`}
           </p>
         </Stack>

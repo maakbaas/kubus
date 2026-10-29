@@ -1,14 +1,14 @@
 # Schema changes and migrations
 
 From the first release on, a schema change never costs data: a device's database, the server's
-database and devices of different app versions syncing through one server all carry on. Three
+database all carry on, and a device or server that is not yet updated is told so and loses nothing. Three
 mechanisms, each with a test that fails when a change skips it:
 
 | Where | What | Code | Test |
 |---|---|---|---|
 | A device (SQLite) | numbered migrations from the first release's schema | `app/src/data/migrations.ts`, `sqlite/engine.ts` | `data/migrations.test.ts` (also: `fixture-v1.sql` migrated keeps every row), `sqlite/engine.test.ts` |
 | The server (Postgres) | added tables / columns by themselves; anything else a numbered migration | `server/src/schema.ts`, `server/src/migrations.ts` | `server/test/database.test.ts` (with `KUBUS_TEST_POSTGRES`: `docs/testing.md`) |
-| Between versions (sync) | `SYNC_VERSION` / `SYNC_COMPATIBLE`; rows written in the columns they have | `shared/sync.ts`, `server/src/sync.ts`, `SyncEngine.applyStatement` | `data/sync/spec.test.ts`, `versions.test.ts`, `outbox.test.ts` |
+| Between versions (sync) | the strict `SYNC_VERSION` gate: only equal versions sync | `shared/sync.ts`, `server/src/sync.ts` (`refusal`), `SyncEngine` | `data/sync/spec.test.ts`, `versions.test.ts`, `outbox.test.ts`, `server/test/sync.test.ts` |
 
 There was no ready-made way: SQLite has only `PRAGMA user_version`, and a migration library for
 Postgres (node-pg-migrate and the like) would cover only the server and not keep the device and the
@@ -39,7 +39,7 @@ append-only migrations in one transaction, the version stored in the database.
 
 | Version | What | SYNC |
 |---|---|---|
-| 2 | `item_links` (which items each value links to, for backlinks; docs/data-model.md "Item links"): the table, its index and the two triggers on `field_values`, the rows of the values already there (`link_targets`, defined by the engine before it migrates), queued for the server as a migration queues nothing by itself | `SYNC_VERSION` 2, `SYNC_COMPATIBLE` stays 1: an added table, older devices leave it alone and their values get rows from the devices that know it. The server makes the table by itself. |
+| 2 | `item_links` (which items each value links to, for backlinks; docs/data-model.md "Item links"): the table, its index and the two triggers on `field_values`, the rows of the values already there (`link_targets`, defined by the engine before it migrates), queued for the server as a migration queues nothing by itself | `SYNC_VERSION` 2. The server makes the table by itself. |
 
 ## The server's database
 
@@ -55,27 +55,39 @@ append-only migrations in one transaction, the version stored in the database.
 - A database migrated by a **newer** server (a migration this one doesn't know) is not touched: the
   server starts but sync answers with the error until it is updated (or the database wiped).
 
-## Devices and server of different versions
+## Devices and server of different versions: the strict gate
 
-The web app and the iOS home-screen app come from the server, so they match it; the desktop app and
-a device that hasn't reloaded yet can be older or newer.
+Only a device and a server with the **same** `SYNC_VERSION` sync, in both directions. There is no
+compatibility range and no code for talking to an older or newer side: every release with a sync
+change is rolled out together, the server first, then every device. The web and home-screen app come
+from the server, so they match it once reloaded; the desktop app is reinstalled.
 
 - `SYNC_VERSION` (`shared/sync.ts`) is the version of the synced data's shape: the list of tables and
   columns and what their values may hold. `spec.test.ts` records the list of the current version
-  and fails when it changes until the version is raised and recorded again.
-- `SYNC_COMPATIBLE` is the oldest version that still reads and writes the data correctly.
-- Every sync request carries the device's two numbers. The server answers **426** (`SyncOutdated`)
-  and writes nothing when the device is older than its `SYNC_COMPATIBLE` ("update the app"), or its
-  `SYNC_COMPATIBLE` is newer than the server's `SYNC_VERSION`, or it sends a table or column the
-  server doesn't have ("update the server"). The device shows the message and keeps its outbox: once
-  one side is updated, everything goes.
-- Rows are written **in the columns they have**, on both sides: an older device's row leaves the
-  columns it doesn't know as they are on the server (`server/src/sync.ts`), a row from the server
-  leaves a device's column the server doesn't send (an older server's) as it is, and a column a
-  device doesn't know is left out (`applyStatement`).
+  and fails when it changes until the version is raised and recorded again. **Every release that changes
+  the list or what a synced value may hold raises it** (an added column or table, a new field kind, a changed
+  JSON format: all of them).
+- Every sync request carries the device's version. The server answers **426** (`SyncOutdated`) and writes
+  nothing when it differs: `update: "app"` when the device is older ("update this device"),
+  `update: "server"` when it is newer ("update the server"). Every sync answer and `/api/health` carry the
+  server's version, and the device refuses a response of another one too (and "Test connection" says so before
+  connecting). The server's own headless device (the API) is the same build and so always equal: the server
+  checks the bundle's `syncVersion` before starting it, and a stale `server/headless` (built before an update)
+  says to run `npm run build:headless`.
+- **A refused device loses nothing.** It keeps working fully offline; its outbox is untouched (nothing is
+  dropped or marked as sent, and a first connection that was refused made no change); the status button and
+  Settings → Sync say "Update Kubus to keep syncing" (the device is older) or "The server needs updating"
+  (the server is older), not a generic error, with "Reload to update" in a browser. It asks again at every
+  sync (reload, every 30 s, a change signal): once the versions match, a sync sends what was queued. A new
+  build opens the old build's database as always (its migrations run first), so after updating, the queued
+  changes sync normally. A device that never updates only stops syncing.
+- The web app picks a new build up on reload: its service worker (`app/sw.js`) is stamped per build, takes over
+  at once (`skipWaiting`, `clients.claim`) and serves pages network first.
 - A row written before a column existed has it NULL on the server; a NOT NULL column added after the
   first release needs a value for that (`SyncTable.defaults`: the server's column default and what
   a device stores for such a NULL). `spec.test.ts` checks every such column has one.
+- Rows are still written in the columns they have, on both sides (`server/src/sync.ts`, `applyStatement`),
+  but that is robustness, not a way to sync across versions.
 
 ## Making a change
 
@@ -84,20 +96,19 @@ a device that hasn't reloaded yet can be older or newer.
    the previous version into it, data included. SQLite can add, rename and drop columns; anything
    else (a CHECK, a type, NOT NULL) rebuilds the table: create the new one, copy, drop, rename, and
    create its indexes and triggers again. `npm test` compares the result with `schema.sql`.
-3. A synced table or column: change `SYNC_TABLES` in `shared/sync.ts` too, raise `SYNC_VERSION` and
-   record the new fingerprint in `spec.test.ts`. A NOT NULL column added to an existing table gets `defaults` (a new table's
-  rows are always written whole). A table derived from other rows (as `item_links` is) must also say who writes its rows for
-  values an older device wrote without them, and who rebuilds them (`healLinks` after a sync).
-4. Decide `SYNC_COMPATIBLE`. **Unchanged** for an added table or column (and a new optional value):
-   older devices leave it alone. (A new optional key in a JSON column, like a view's `filterBar` in its
-   config, is such a value: an older device ignores it, and drops it only if it saves that view itself; a
-   display preference lost that way is not worth locking older devices out.) **Raised to `SYNC_VERSION`** when older devices would get the data
-   wrong: a value's meaning or format changes (a view's config JSON, say), a value an older device's
-   CHECK refuses (a new field kind), a renamed or dropped column. The server then turns older devices
-   away until they are updated, so update the server first.
+3. A synced table or column, or anything a synced value may newly hold (a new field kind, a new key in a
+   JSON column, another format): change `SYNC_TABLES` in `shared/sync.ts` if the list changes, **raise
+   `SYNC_VERSION`** and record the new fingerprint in `spec.test.ts`. A NOT NULL column added to an existing
+   table gets `defaults` (a new table's rows are always written whole). A table derived from other rows (as
+   `item_links` is) is written by every device together with its values, and rebuilt (`healLinks`) only on a
+   first connection to a server that holds values without rows, or by `Repository.rebuildLinks`.
+4. Nothing to write for older versions: the gate refuses them. Say in the release notes that the server is
+   updated first and then every device (README, "Sync server"); devices that are not updated yet keep their
+   changes queued.
 5. On the server: nothing for an added synced table or column. A rename, a type change, converted
    values, a dropped column or a change to `server/schema.sql`: a migration in
-   `server/src/migrations.ts` doing to the server's rows what the device's migration does to its own.
+   `server/src/migrations.ts` doing to the server's rows what the device's migration does to its own. The
+   gate makes that safe: no older device writes the old format to the converted server.
 6. Never edit or remove a released migration (or `schema-v1.sql`); fix one with the next.
 7. Run `npm test` (with `KUBUS_TEST_POSTGRES` for the server's migrations) and write a test for a
    migration that converts data: a database of the previous version with rows, migrated.

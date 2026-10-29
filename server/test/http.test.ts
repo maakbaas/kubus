@@ -68,7 +68,7 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
   describe("access", () => {
     it("answers its health check without the token", async () => {
       const response = await fetch(`${server.url}/api/health`);
-      expect(await response.json()).toEqual({ ok: true });
+      expect(await response.json()).toEqual({ ok: true, syncVersion: SYNC_VERSION });
     });
 
     it("refuses /api without the right token", async () => {
@@ -170,6 +170,9 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
       const outdated = await sync({ version: 0, compatible: 0, changes: { spaces: [space("http-s3", "Lost")] } });
       expect(outdated.status).toBe(426);
       expect(outdated.body.update).toBe("app");
+      const newer = await sync({ version: SYNC_VERSION + 1, compatible: SYNC_VERSION + 1, changes: { spaces: [space("http-s3", "Lost")] } });
+      expect(newer.status).toBe(426);
+      expect(newer.body.update).toBe("server");
       expect((await sync({})).body.changes.spaces?.some((r) => r.id === "http-s3")).toBeFalsy();
     });
 
