@@ -45,6 +45,9 @@ export const AREAS = [
   [/^app\/src\/(views\/(QueryEditor|DatePeriodFilter|BlockView|TableView|CardsView)|domain\/(query|filterTree|datePeriod|views)|pages\/(CollectionPage|ItemPage)|ui\/ChoiceFilterEditor)/, [26]],
   [/^app\/src\/ui\/(ToolbarPopover|panelRoom|OverflowBar)|^app\/src\/platform\/keyboardInset/, [10, 14, 20]],
 
+  // Backlinks: the virtual collection of item-page blocks and the item links behind it.
+  [/^app\/src\/(domain\/(backlinks|sources|views)|views\/(useBacklinks|BlockView|useItemActions|itemActions|cells|TableView|CardsView)|pages\/ItemPage|data\/sqlite\/SqliteRepository|data\/sync\/SyncEngine)/, [43]],
+
   // Collections, fields, components.
   [/^app\/src\/(pages\/(CollectionEditorPage|CollectionsPage|RemotesPage)|ui\/(SourceSettings|FieldEditor|FieldModal|FieldOrderEditor|FieldSettings|fieldKindIcons|ChoiceFilterEditor)|domain\/(collectionDraft|fieldKinds|fieldLayout))/, [7, 17, 22, 27, 29]],
   [/^app\/src\/ui\/useReorder/, [17]],

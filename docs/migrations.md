@@ -35,6 +35,12 @@ append-only migrations in one transaction, the version stored in the database.
   new one, table by table (columns, types, NOT NULL, defaults, keys, foreign keys, CHECKs), indexes
   and triggers. Changing `schema.sql` without a migration, or the other way round, fails it.
 
+### The migrations so far
+
+| Version | What | SYNC |
+|---|---|---|
+| 2 | `item_links` (which items each value links to, for backlinks; docs/data-model.md "Item links"): the table, its index and the two triggers on `field_values`, the rows of the values already there (`link_targets`, defined by the engine before it migrates), queued for the server as a migration queues nothing by itself | `SYNC_VERSION` 2, `SYNC_COMPATIBLE` stays 1: an added table, older devices leave it alone and their values get rows from the devices that know it. The server makes the table by itself. |
+
 ## The server's database
 
 - The synced tables follow `SYNC_TABLES` (`server/src/schema.ts`): `CREATE TABLE IF NOT EXISTS`
@@ -79,7 +85,9 @@ a device that hasn't reloaded yet can be older or newer.
    else (a CHECK, a type, NOT NULL) rebuilds the table: create the new one, copy, drop, rename, and
    create its indexes and triggers again. `npm test` compares the result with `schema.sql`.
 3. A synced table or column: change `SYNC_TABLES` in `shared/sync.ts` too, raise `SYNC_VERSION` and
-   record the new fingerprint in `spec.test.ts`. A NOT NULL column gets `defaults`.
+   record the new fingerprint in `spec.test.ts`. A NOT NULL column added to an existing table gets `defaults` (a new table's
+  rows are always written whole). A table derived from other rows (as `item_links` is) must also say who writes its rows for
+  values an older device wrote without them, and who rebuilds them (`healLinks` after a sync).
 4. Decide `SYNC_COMPATIBLE`. **Unchanged** for an added table or column (and a new optional value):
    older devices leave it alone. **Raised to `SYNC_VERSION`** when older devices would get the data
    wrong: a value's meaning or format changes (a view's config JSON, say), a value an older device's

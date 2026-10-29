@@ -238,6 +238,18 @@ What the app does, feature by feature (read the part you work on).
   filter's references (`filterPreset`). On item pages the same split holds: arranging the page
   (its layout: fields and blocks and their order, names shown, editable, hide empty) is stored
   right away too; only what a block shows waits for Save changes.
+- **Backlinks** (`domain/backlinks.ts`, `views/useBacklinks.ts`, docs/data-model.md "Item links"): the items that link to an item. A link is a
+  reference field's item(s) (Item, List of items) or a link to an item in a Markdown, HTML or AI text
+  (`#/collections/<c>/items/<id>`, whatever of its page the link names: a field, view or block counts as the item; the new item
+  form doesn't). On an item page a block can list **Backlinks**, offered only in the Collection picker of such blocks (Block settings;
+  `VIRTUAL_COLLECTIONS`; it is not in the store's collections, the side nav or any other picker): a virtual collection (`Collection.virtual`,
+  read-only like a remote one: `isReadOnly`, so its rows only open) with one row per link from a live native item of the shown space
+  that isn't the item itself, also for a remote collection's row. Fields: Item (a Markdown link to the linking item), Title (its label,
+  the collection's title), Collection (its plural name: group by it), Field (the name of the field its link is in); Created and Updated
+  are the linking item's. Every block type shows it (table, cards, chart, map, a Component block over `$items` / `$groups`) with filter, sort
+  and group; a new block starts with Title, Collection, Field and Updated (the title is already the row's link, `BACKLINKS_FIELDS`). A row opens
+  the linking item (`itemPath`). Its rows are read when the page shows and again with every item change (`useBacklinkData`,
+  `Repository.listBacklinks`). No backlinks to collections, views or blocks. Text in Component and string fields isn't scanned (not stored / not a link).
 - **Field order and layouts** (`app/src/domain/fieldLayout.ts`, `ui/FieldOrderEditor.tsx`): one
   approach for which fields show in which order: a block's fields (table columns, card fields)
   and item pages (`orderFields`; null = all in the collection's order). Item pages show an item view

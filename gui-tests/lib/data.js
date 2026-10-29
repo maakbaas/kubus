@@ -15,6 +15,7 @@
 //                   views?: [{ name, blocks: [partial ViewBlock with kind/options/layout/groupBy/sort;
 //                              componentKey (a shared component) or local: code (its own)], filters?, isDefault? }],
 //                   (a block filter value "$item.@key": the page item's field by key)
+//                   (a block's `collection` is a collection key, or the id of a virtual collection: "$backlinks")
 //                   itemViews?: [{ name, layout }] }],
 //   bookmarks: [{ kind: "item"|"view", collection, item?, view?, label }],
 //   prefs: { localStorageKey: value },
@@ -113,7 +114,7 @@ async function __seedInPage(spec) {
     const mapBlock = (b) => ({
       id: b.id || uid(), title: b.title || "", kind: b.kind || "table", filters: b.filters ? b.filters.map((r) => ({ id: uid(), fieldId: fieldId(r.field), operator: r.operator, value: String(r.value).replace(/@([a-z0-9_]+)/gi, (_, k) => fieldId(k)) })) : null,
       sort: b.sort ? b.sort.map((s) => ({ fieldId: fieldId(s.field), direction: s.direction || "asc" })) : [{ fieldId: "$title", direction: "asc" }],
-      groupBy: b.groupBy ? fieldId(b.groupBy) : null, layout: mapLayout(b.layout), collectionId: b.collection ? ids.collections[b.collection] : null,
+      groupBy: b.groupBy ? fieldId(b.groupBy) : null, layout: mapLayout(b.layout), collectionId: b.collection ? (ids.collections[b.collection] ?? b.collection) : null,
       options: b.options ? JSON.parse(JSON.stringify(b.options).replace(/"@([a-z0-9_]+)"/gi, (_, k) => JSON.stringify(fieldId(k)))) : b.kind === "cards" ? { coverFieldId: null, cardWidth: 16, coverRatio: "auto", showTitle: true, coverBeside: false } : b.kind === "markdown" ? { text: "" } : { titleLink: true, editable: true },
       ...(b.hideHeader ? { hideHeader: true } : {}),
       ...(b.componentKey ? { kind: "component", options: { componentId: ids.components[b.componentKey], local: null } } : {}),

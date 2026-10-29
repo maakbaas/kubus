@@ -107,4 +107,32 @@ describe("migrations", () => {
     expect((await repo.listBookmarks("default")).map((b) => b.label)).toEqual(["Dune", "Unread books"]);
     expect((await repo.listComponents()).map((c) => [c.name, c.ai])).toEqual([["Badge", false], ["Summary", true]]);
   });
+
+  it("build the item links of the values already there (migration 2), queued for the server, and keep them as the app does after", async () => {
+    // The first release's data plus a Markdown note linking to two items, one with a block anchor.
+    const note = "See [Frank](#/collections/collection-person/items/item-herbert) and [a block](#/collections/collection-book/items/item-emma?block=b)";
+    const client = await DirectSqlClient.open((db) => {
+      db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
+      db.exec(firstRelease);
+      db.exec(firstReleaseData);
+      db.exec(`INSERT INTO field_values (item_id, field_id, value_text, updated_at) VALUES ('item-emma', 'field-notes', '${note}', '2026-10-28T10:00:00.000Z')`);
+      db.exec("PRAGMA user_version = 1");
+    });
+    const rows = await client.select<{ id: string; targets: string; updated_at: string; deleted_at: string | null }>("SELECT id, targets, updated_at, deleted_at FROM item_links ORDER BY id");
+    const stamp = (id: string) => (id === "item-emma/field-notes" ? "2026-10-28T10:00:00.000Z" : "2026-10-27T20:13:00.396Z");
+    expect(rows.map((r) => r.id)).toEqual(["item-dune/field-also", "item-dune/field-author", "item-emma/field-notes"]);
+    expect(rows.every((r) => r.deleted_at === null && r.updated_at === stamp(r.id))).toBe(true);
+    expect(rows.map((r) => JSON.parse(r.targets))).toEqual([
+      [{ item: "item-emma", collection: "collection-book" }],
+      [{ item: "item-herbert", collection: "collection-person" }],
+      [{ item: "item-emma", collection: "collection-book" }, { item: "item-herbert", collection: "collection-person" }],
+    ]);
+    // Queued for the server (a migration queues nothing by itself).
+    expect((await client.select<{ pk: string }>("SELECT DISTINCT pk FROM sync_outbox WHERE tbl = 'item_links' ORDER BY pk")).map((r) => r.pk)).toEqual(rows.map((r) => r.id));
+    const repo = await SqliteRepository.open(client, memoryEnvironment());
+    expect((await repo.listBacklinks("collection-person", "item-herbert", "default")).map((l) => [l.sourceItemId, l.fieldId])).toEqual([["item-dune", "field-author"]]);
+    // From then on the triggers keep it: rebuilding from the values changes nothing.
+    await repo.rebuildLinks();
+    expect(await client.select("SELECT id, targets, updated_at, deleted_at FROM item_links ORDER BY id")).toEqual(rows);
+  });
 });

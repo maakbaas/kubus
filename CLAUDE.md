@@ -121,6 +121,10 @@ headless device that answers the server's HTTP API (bundled into `server/headles
   the source a page at a time (`useRemoteResult`: it filters, sorts and groups), never from the item cache, and
   whatever edits items checks `isRemote` (their `ItemActions` have no `remove` / `setValue`). App and server talk
   connector-neutral (`shared/sources.ts`); everything database-specific stays in `server/src/connectors/`.
+- **Backlinks are a virtual collection** (`domain/backlinks.ts`, `Collection.virtual`): offered only in the Collection picker of
+  item-page blocks and read-only through the same guard (`isReadOnly`); its rows are the items linking to the page's item, read from the
+  synced `item_links` index (docs/data-model.md "Item links": one row per value with the value's own `updated_at`, kept by triggers on
+  `field_values`, healed after a sync of values written by an older app). Keep `item_links` in step with what counts as a link (`linkTargets`).
 - **Workspace**: every tab renders `AppRoutes` in its own `MemoryRouter`; in-app links are plain
   `href="#/…"` anchors; navigate with `useNavigate()` (this tab) or `useOpenRelated()`.
 

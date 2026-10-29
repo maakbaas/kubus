@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fileIds, schema } from "../schema";
+import { fileIds, linkTargetsFn, schema } from "../schema";
 import { SYNC_COMPATIBLE, SYNC_VERSION, type SyncRequest, type SyncResponse } from "../../../../shared/sync";
 import { SyncEngine } from "./SyncEngine";
 import { memoryEnvironment } from "./environment";
@@ -16,6 +16,7 @@ class FakeClient {
   db = new DatabaseSync(":memory:");
   constructor() {
     this.db.function("file_ids", { deterministic: true }, fileIds as (...args: unknown[]) => string);
+    this.db.function("link_targets", { deterministic: true }, linkTargetsFn as (...args: unknown[]) => string);
     this.db.exec(schema);
     this.db.exec("PRAGMA foreign_keys = ON");
   }
