@@ -350,8 +350,9 @@ test("the add row: an invalid value stays open with its error, a valid one is ad
   await t.page.keyboard.press("Enter");
   await t.until("the number says it is not valid", async () => /Not a valid number/.test(await row.innerText()));
   await t.check("nothing was added and the row is still open", (await count()) === 2 && (await row.count()) === 1);
-  // Known: the error text of an input laid over the add row is clipped by the table and the input rises over the row above.
-  await t.audit("add row with an error", { skip: ["occluded", "controls-overlap", "contrast"] });
+  // The error is an outline plus a title on the cell; its text never pushes the input over the row above.
+  await t.check("the invalid cell carries its message as a title", (await row.locator(".add-cell[title*='Not a valid number']").count()) === 1);
+  await t.audit("add row with an error");
   // Clicking away with the error keeps the row too.
   await t.page.locator(".ws-pane--active .page-header__title").first().click();
   await t.settle(200);
