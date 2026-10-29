@@ -10,11 +10,12 @@ import { defineConfig } from "vitest/config";
 // without them they are left out, with a note. server's tests also need Postgres (KUBUS_TEST_POSTGRES,
 // server/test/postgres.ts); without it they are skipped, except in CI.
 
-// Coverage slows the code down (and the machine is often busy): more time per test. The server's and the
-// connectors' tests start real servers and databases: their timeout only guards against a hang.
+// A test's timeout only guards against a hang, never paces a test: setting up a database (SQLite WASM
+// and migrations) takes seconds on a busy machine, and coverage slows the code further. The server's and
+// the connectors' tests start real servers and databases: more still.
 const coverage = process.argv.includes("--coverage");
-const project = (name: string, include: string[], timeout = 5_000) => ({
-  test: { name, include, environment: "node", testTimeout: coverage ? Math.max(timeout, 20_000) : timeout },
+const project = (name: string, include: string[], timeout = 30_000) => ({
+  test: { name, include, environment: "node", testTimeout: coverage ? Math.max(timeout, 60_000) : timeout },
 });
 
 const serverInstalled = existsSync(new URL("server/node_modules/pg", import.meta.url));

@@ -72,7 +72,7 @@ describe("webhooks", () => {
     const api = await startHeadless(options());
     await call(api, "POST", "/collections", { name: "Book", fields: [{ name: "Title", kind: "string" }] });
     const item = (await call(api, "POST", "/collections/Book/items", { values: { Title: "Dune" } })) as { id: string };
-    await vi.waitFor(() => expect(types()).toContain("item.created"));
+    await vi.waitFor(() => expect(types()).toContain("item.created"), { timeout: 20_000 });
     expect(received.flatMap((r) => r.body.events).find((e) => e.type === "item.created")).toMatchObject({ id: item.id, item: { values: { Title: "Dune" } } });
   });
 

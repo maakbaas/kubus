@@ -225,7 +225,7 @@ describe("when it syncs", () => {
     await settled(repo);
     server.log.length = 0;
     wake();
-    await vi.waitFor(() => expect(syncs()).toBe(1));
+    await vi.waitFor(() => expect(syncs()).toBe(1), { timeout: 20_000 });
   });
 
   it("catches up only when the server has news: not when the device already has its latest write", async () => {
@@ -267,13 +267,13 @@ describe("the server's change signal", () => {
     const events = stream();
     route({ "GET /api/events": events.response });
     const a = await device();
-    await vi.waitFor(() => expect(server.log).toContain("GET /api/events"));
+    await vi.waitFor(() => expect(server.log).toContain("GET /api/events"), { timeout: 20_000 });
     server.log.length = 0;
     events.send("data: 99\n");
-    await vi.waitFor(() => expect(syncs()).toBe(1));
+    await vi.waitFor(() => expect(syncs()).toBe(1), { timeout: 20_000 });
     events.send("da");
     events.send("ta: 100\n: a comment\n\nid: 7\n");
-    await vi.waitFor(() => expect(syncs()).toBe(2));
+    await vi.waitFor(() => expect(syncs()).toBe(2), { timeout: 20_000 });
     expect(a.sync.status.state).toBe("idle");
   });
 
@@ -284,15 +284,15 @@ describe("the server's change signal", () => {
     const n = await notes(a);
     await a.createItem(n, {}, "default");
     await settled(a);
-    await vi.waitFor(() => expect(server.log).toContain("GET /api/events"));
+    await vi.waitFor(() => expect(server.log).toContain("GET /api/events"), { timeout: 20_000 });
     server.log.length = 0;
     events.send(`data: ${server.seq}\n`);
     await sleep(50);
     expect(syncs()).toBe(0);
     events.send("data: 0\n");
-    await vi.waitFor(() => expect(syncs()).toBe(1));
+    await vi.waitFor(() => expect(syncs()).toBe(1), { timeout: 20_000 });
     events.send("data: nonsense\n"); // not a number: treated as a wipe
-    await vi.waitFor(() => expect(syncs()).toBe(2));
+    await vi.waitFor(() => expect(syncs()).toBe(2), { timeout: 20_000 });
   });
 
   it("is listened to again after a failure, waiting longer each time", async () => {

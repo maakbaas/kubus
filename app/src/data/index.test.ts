@@ -48,7 +48,7 @@ describe("openRepository", { timeout: 30_000 }, () => {
     open.mockRejectedValueOnce(new Error("Kubus is open in another tab or window."));
     const { openRepository } = await import("./index");
     await expect(openRepository()).rejects.toThrow("another tab");
-    await vi.waitFor(async () => expect(await openRepository()).toBeDefined());
+    await vi.waitFor(async () => expect(await openRepository()).toBeDefined(), { timeout: 20_000 });
     expect(open).toHaveBeenCalledTimes(2);
   });
 });
