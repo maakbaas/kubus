@@ -400,6 +400,8 @@ for (const vp of ["phone", "phone-small", "desktop"]) {
         await t.settle(100);
       }
     }
+  }, { viewport: vp });
+}
 
 for (const vp of ["desktop", "phone"]) {
   test(`table: a field's name can be hidden, its column sizes to the content @ ${vp}`, async (t) => {
