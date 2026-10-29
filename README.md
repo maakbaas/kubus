@@ -67,7 +67,9 @@ the server: it syncs through a Postgres database and also serves the web app.
 2. Change `KUBUS_TOKEN` (a long random secret shared by your devices) and the Postgres password
    (in both `POSTGRES_PASSWORD` and `DATABASE_URL`).
 3. Run `docker compose up -d`. The server listens on port 8080. Update later with
-   `docker compose pull && docker compose up -d`.
+   `docker compose pull && docker compose up -d`: update the server first, then reload the web or home-screen app on
+   each device (or reinstall the desktop app). A server and a device sync only when they run the same version; until a
+   device is updated it keeps working offline, shows "Update Kubus to keep syncing" and sends what it queued once updated.
 4. In the app, open Settings → Server, enter the server's address and the token ("Test connection"
    checks both), save, then turn sync on in Settings → Sync (or "Configure sync" under the status icon
    at the top right).

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { collectionDraft, newId, type Collection, type FieldDef } from "../../domain/model";
 import { device, FakeServer, settled } from "../../test/fakeServer";
 import type { DataChange } from "../repository";
+import { SYNC_VERSION } from "../../../../shared/sync";
 
 // Each test builds devices and a database: on a busy machine that outlasts the default 5 s.
 vi.setConfig({ testTimeout: 30_000 });
@@ -176,7 +177,7 @@ describe("clocks", () => {
     // A device with a clock far ahead writes the title.
     const future = "2999-01-01T00:00:00.000Z";
     const old = server.rows("field_values").find((r) => r.item_id === id && r.field_id === title)!;
-    server.sync({ since: 0, changes: { field_values: [{ ...old, value_text: "from the future", updated_at: future }] }, version: 1, compatible: 1 });
+    server.sync({ since: 0, changes: { field_values: [{ ...old, value_text: "from the future", updated_at: future }] }, version: SYNC_VERSION });
     await settled(b);
     expect((await valuesOn(b, n.b, id))?.[title]).toBe("from the future");
     // B edits after having seen it: its stamp is later than the one it saw, so its edit is the newest.

@@ -4,7 +4,7 @@
 
 import { dollarNames, ERROR_PREFIX, fieldLookup, render, splitWarnings, type RefLabel } from "./components";
 import { checklistItems } from "./checklist";
-import { formatMinute, inMinutes, momentOfValue, resolveRange, splitAnchor } from "./datePeriod";
+import { formatMinute, inMinutes, momentOfValue, resolveAnchored, resolveRange, splitAnchor } from "./datePeriod";
 import { formatDate, htmlPlainText } from "./fieldKinds";
 import { dateGroup, dateGroupValue, type GroupDate } from "./groupDate";
 import { filterTree, holds, requiredRules } from "./filterTree";
@@ -261,7 +261,7 @@ export function resolvePageValues(filters: FilterRule[], page: Item | null): Fil
     if (anchored(r)) {
       const { value, fieldId } = splitAnchor(r.value);
       const moment = page ? momentOfValue(page.values[fieldId!]) : null;
-      const period = moment ? resolveRange(value, moment) : null;
+      const period = moment ? resolveAnchored(value, moment) : null;
       if (period) return { ...r, value: `${period.start}..${period.end}` };
       return { ...r, value: `${ERROR_PREFIX}${page ? "This item has no date to count the period from" : "A period counted from the page's item: only on an item page"}` };
     }
@@ -433,6 +433,9 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
   }
 }
 
+/** Whether a value satisfies one filter rule (its operator, its value as entered): what filtering an item by that field does. */
+export const ruleMatches = (field: FieldDef, value: FieldValue, rule: FilterRule, ctx: QueryContext): boolean => matches(field, value, rule, ctx);
+
 function sortKey(collection: Collection, item: Item, field: FieldDef | string | undefined, ctx: QueryContext): string | number | null {
   if (field === TITLE) return itemLabel(collection, item).toLowerCase();
   if (field === UPDATED) return item.updatedAt;
@@ -452,6 +455,42 @@ function compareKeys(a: string | number | null, b: string | number | null): numb
   if (b === null) return -1;
   if (typeof a === "number" && typeof b === "number") return a - b;
   return naturalCompare(String(a), String(b));
+}
+
+/**
+ * Two groups in the order a query lists them: by their value (either way; dates by their keys, which sort as time does, the
+ * rest by their labels) or the largest first; the "(empty)" group (key "") always last.
+ */
+export function compareGroups(a: { key: string; label: string; count: number }, b: { key: string; label: string; count: number }, order: GroupOrder, isDate: boolean): number {
+  if (a.key === "" || b.key === "") return a.key === "" ? 1 : -1;
+  if (order === "count" && a.count !== b.count) return b.count - a.count;
+  return (isDate ? compareKeys(a.key, b.key) : compareKeys(a.label, b.label)) * (order === "desc" ? -1 : 1);
+}
+
+/** Two items' sort keys compared: the first key that differs decides; empty values stay last in both directions. */
+function compareSortKeys(desc: boolean[], a: (string | number | null)[], b: (string | number | null)[]): number {
+  for (let i = 0; i < desc.length; i++) {
+    const c = a[i] === null || b[i] === null ? compareKeys(a[i], b[i]) : compareKeys(a[i], b[i]) * (desc[i] ? -1 : 1);
+    if (c !== 0) return c;
+  }
+  return 0;
+}
+
+/**
+ * Two items compared as a query's sort orders them (applyQuery's order): for merging lists that are each in that order
+ * (a blend's parts, domain/blend.ts). Keys are worked out once per item.
+ */
+export function sortComparator(collection: Collection, sort: SortRule[], ctx: QueryContext): (a: Item, b: Item) => number {
+  const fieldsById = new Map(pickableFields(collection).map((f) => [f.id, f]));
+  const sortBy = sort.map((rule) => ({ field: rule.fieldId.startsWith("$") ? rule.fieldId : fieldsById.get(rule.fieldId), desc: rule.direction === "desc" }));
+  const desc = sortBy.map((s) => s.desc);
+  const keys = new WeakMap<Item, (string | number | null)[]>();
+  const keysOf = (item: Item) => {
+    let k = keys.get(item);
+    if (!k) keys.set(item, (k = sortBy.map((s) => sortKey(collection, item, s.field, ctx))));
+    return k;
+  };
+  return (a, b) => compareSortKeys(desc, keysOf(a), keysOf(b));
 }
 
 /**
@@ -499,16 +538,8 @@ export function applyQuery(
     desc: rule.direction === "desc",
   }));
   const keyed = filtered.map((item) => ({ item, keys: sortBy.map((s) => sortKey(collection, item, s.field, ctx)) }));
-  keyed.sort((a, b) => {
-    for (let i = 0; i < sortBy.length; i++) {
-      const ka = a.keys[i];
-      const kb = b.keys[i];
-      // Empty values stay last in both directions.
-      const c = ka === null || kb === null ? compareKeys(ka, kb) : compareKeys(ka, kb) * (sortBy[i].desc ? -1 : 1);
-      if (c !== 0) return c;
-    }
-    return 0;
-  });
+  const desc = sortBy.map((s) => s.desc);
+  keyed.sort((a, b) => compareSortKeys(desc, a.keys, b.keys));
   const sorted = keyed.map((k) => k.item);
 
   return { groups: groupItems(collection, sorted, query, ctx), total: sorted.length };
@@ -537,11 +568,6 @@ export function groupItems(collection: Collection, sorted: Item[], query: ViewQu
   // Groups by value (either direction) or size, the "(empty)" group always last.
   const order = query.groupOrder ?? "asc";
   const isDate = groupField.kind === "date" || groupField.kind === "datetime";
-  const ordered = [...groups.values()].sort((a, b) => {
-    if (a.key === "" || b.key === "") return a.key === "" ? 1 : -1;
-    if (order === "count" && a.items.length !== b.items.length) return b.items.length - a.items.length;
-    // Dates by their keys (they sort as the time does; their labels read out).
-    return (isDate ? compareKeys(a.key, b.key) : compareKeys(a.label, b.label)) * (order === "desc" ? -1 : 1);
-  });
+  const ordered = [...groups.values()].sort((a, b) => compareGroups({ ...a, count: a.items.length }, { ...b, count: b.items.length }, order, isDate));
   return ordered;
 }

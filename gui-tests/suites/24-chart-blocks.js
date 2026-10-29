@@ -278,7 +278,7 @@ const OFFERS = {
   Heatmap: { sections: ["Data", "Value", LEGEND, "Size"], has: ["Columns", "Rows (Split by)", "Value", "Of", "Label", "Unit"], not: ["Logarithmic", "Draw as", "Bins", "Parts from", "Compare with"] },
 };
 
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["phone", "desktop", "wide"]) {
   test(`kinds: the Chart select through all 14 kinds, what is drawn and offered @ ${vp}`, async (t) => {
     const ids = await seeded(t, [{ title: "Weight", options: { ...RICH, chart: "bar" } }]);
     await t.audit("a bar chart");
@@ -310,7 +310,7 @@ for (const vp of ["desktop", "phone"]) {
         await t.check("Gauge: drawn no wider than that", (await facts(t)).rootBox.width <= 24 * 16 + 1, JSON.stringify((await facts(t)).rootBox));
       }
       if (kind.label === "Stat") {
-        await storedWhen(t, ids, "Stat: full width again", (o) => o.chart === "stat" && o.width === 120);
+        await storedWhen(t, ids, "Stat: full width again", (o) => o.chart === "stat" && o.width === "full");
         {
           // As wide as the block (a phone's is narrower than 24rem).
           const f = await facts(t);
@@ -982,12 +982,57 @@ test("size: height, aspect ratio and width", async (t) => {
   await choose(t, panel, null, "Aspect ratio", "None: the height");
   await drawn(t, "no aspect ratio: the height", (f) => near(f.holderBox.height, 768));
   await slide(t, panel, "Width", "max");
-  await drawn(t, "120rem: as wide as the pane", (f) => near(f.rootBox.width, width));
-  await storedWhen(t, ids, "the size is stored", (o) => o.height === 48 && o.aspect === "none" && o.width === 120);
+  await drawn(t, "Full width: as wide as the pane", (f) => near(f.rootBox.width, width));
+  await storedWhen(t, ids, "the size is stored", (o) => o.height === 48 && o.aspect === "none" && o.width === "full");
   await slide(t, panel, "Width", "min");
   await storedWhen(t, ids, "8rem wide is stored", (o) => o.width === 8);
   await t.open(t.listPath(ids.collections.w));
   await drawn(t, "after a reload: still 8rem wide and 48rem high", (f) => near(f.rootBox.width, 128) && near(f.holderBox.height, 768));
+});
+
+// The Width slider runs 8 to 99 rem and ends in Full width: no maximum, the block fills its pane, wide or narrow.
+for (const vp of ["phone", "desktop", "wide"]) {
+  test(`width: 99rem caps a chart, the last stop is Full width (${vp})`, async (t) => {
+    const ids = await seeded(t, [{ options: { chart: "bar", x: BY_PHASE, series: [S("a", "sum", "@weight")] } }]);
+    const panel = await openSettings(t);
+    const near = (a, b) => Math.abs(a - b) <= 4;
+    const pane = async () => (await t.page.locator(PANE).boundingBox()).width;
+    const item = () => panel.locator(".cds--form-item", { has: panel.page().locator('label:text-is("Width")') });
+    const thumb = () => item().locator(".cds--slider__thumb").first();
+    const now = async () => (await thumb().getAttribute("aria-valuenow")) + "/" + (await thumb().getAttribute("aria-valuemax"));
+    await section(panel, "Size");
+    await t.check("a new chart is at Full width: the slider's last stop", (await now()) === "100/100", await now());
+    const labels = await item().innerText();
+    await t.check("the slider labels its ends 8rem and Full width", /8rem/.test(labels) && /Full width/.test(labels), labels);
+    const full = (await facts(t)).rootBox.width;
+    await t.check("Full width fills the pane (less its padding)", full > (await pane()) - 80, JSON.stringify([full, await pane()]));
+    // One step back from the end: 99rem, the most a number can be.
+    await thumb().focus();
+    await t.page.keyboard.press("ArrowLeft");
+    await storedWhen(t, ids, "one step back is 99rem", (o) => o.width === 99);
+    await drawn(t, "99rem caps the chart (or it fills a pane narrower than that)", (f) => near(f.rootBox.width, Math.min(99 * 16, full)));
+    if (full > 99 * 16 + 8) await t.check("99rem is narrower than a wide pane", (await facts(t)).rootBox.width < full - 4, "");
+    await t.audit(`99rem wide (${vp})`);
+    await t.page.keyboard.press("ArrowRight");
+    await storedWhen(t, ids, "the last stop is stored as Full width", (o) => o.width === "full");
+    await drawn(t, "Full width again fills the pane", (f) => near(f.rootBox.width, full));
+    await t.open(t.listPath(ids.collections.w));
+    await drawn(t, "after a reload: still Full width", (f) => near(f.rootBox.width, full));
+    const again = await openSettings(t);
+    await section(again, "Size");
+    await t.check("after a reload the slider is at its last stop", (await again.locator(".cds--slider__thumb").last().getAttribute("aria-valuenow")) === "100");
+  }, { viewport: vp });
+}
+
+test("a stored width of 100rem or more (the old maximum was 120) is Full width", async (t) => {
+  const ids = await seeded(t, [{ options: { chart: "bar", x: BY_PHASE, series: [S("a", "sum", "@weight")], width: 120 } }]);
+  const wide = (await facts(t)).rootBox.width;
+  const paneW = (await t.page.locator(PANE).boundingBox()).width;
+  await t.check("a chart stored at 120 fills the pane", wide > paneW - 80, JSON.stringify([wide, paneW]));
+  const panel = await openSettings(t);
+  await section(panel, "Size");
+  const item = panel.locator(".cds--form-item", { has: panel.page().locator('label:text-is("Width")') });
+  await t.check("its slider is at Full width", (await item.locator(".cds--slider__thumb").first().getAttribute("aria-valuenow")) === "100");
 });
 
 test("a chart that can't be drawn says why, and is mended in the settings", async (t) => {
@@ -1031,4 +1076,43 @@ test("on an item page: Of this item or these items", async (t) => {
   await choose(t, panel, null, "Of", "This item");
   await drawn(t, "this item again", (f) => f.lines_.includes(String(WEIGH_INS[0].values.weight)));
   await t.audit("the item's settings");
+});
+
+test("on an item page: a stat's Last, First, Previous value and count follow a period counted from the page's item, up to its time", async (t) => {
+  // "Last 2 months" and "Last 60 days", each counted from the weigh-in's own moment (not from today, nor to the end of its month).
+  const periods = [
+    { value: "month-1..month+0", from: (m) => Date.UTC(m.getUTCFullYear(), m.getUTCMonth() - 1, 1) },
+    { value: "day-59..day+0", from: (m) => Date.UTC(m.getUTCFullYear(), m.getUTCMonth(), m.getUTCDate() - 59) },
+  ];
+  for (const period of periods) {
+    const stat = (id, value, extra = {}) => ({ kind: "chart", title: id, collection: "w", filters: [{ field: "moment", operator: "between", value: `${period.value}@$item.@moment` }], options: { chart: "stat", sparkline: "none", series: [S("a", value, "@weight")], ...extra } });
+    const spec = chartSpec([{ options: RICH }]);
+    spec.collections[0].itemViews = [{
+      name: "Main",
+      layout: { fields: null, blocks: [stat("Last", "last", { compare: "prev" }), stat("First", "first"), stat("Count", "count"), stat("Max", "max"), { kind: "table", title: "All", collection: "w", limit: 0, layout: { fields: ["name"] } }] },
+    }];
+    await t.boot();
+    const ids = await t.seed(spec);
+    let first = true;
+    for (const n of [20, 10, 30, 20]) {
+      const at = new Date(WEIGH_INS[n].values.moment);
+      const window = WEIGH_INS.filter((i) => Date.parse(i.values.moment) >= period.from(at) && Date.parse(i.values.moment) <= at.getTime());
+      const weights = window.filter((i) => i.values.weight !== undefined).map((i) => i.values.weight);
+      const num = (v) => String(Math.round(v * 100) / 100);
+      // The first by a load, then by the table's link (the page stays mounted: the stats must follow the new page item).
+      if (first) await t.open(t.itemPath(ids.collections.w, ids.items[`w/w${n}`]));
+      else {
+        await t.page.locator(`.ws-pane--active .block a[href$="/items/${ids.items[`w/w${n}`]}"]`).first().click();
+        await t.until(`the page of Weigh-in ${n + 1}`, async () => (await t.page.locator(".ws-pane--active .page-header").innerText()).includes(`Weigh-in ${n + 1}`));
+      }
+      first = false;
+      await waitDrawn(t, 3);
+      const expected = [num(weights[weights.length - 1]), num(weights[0]), String(window.length), num(Math.max(...weights))];
+      for (const [i, name] of ["Last", "First", "Count", "Max"].entries()) {
+        await drawn(t, `${period.value}, Weigh-in ${n + 1}: ${name} is ${expected[i]}`, (f) => f.kind === "stat" && f.lines_.includes(expected[i]), i);
+      }
+      await drawn(t, `${period.value}, Weigh-in ${n + 1}: the Last compared with the value before it`, (f) => f.lines_.some((l) => l.includes(`(${num(weights[weights.length - 2])}`)), 0);
+    }
+    await t.audit(`stats counted from the page's item (${period.value})`);
+  }
 });

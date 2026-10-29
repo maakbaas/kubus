@@ -2,7 +2,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fileIds, linkTargetsFn, schema } from "../schema";
-import { SYNC_COMPATIBLE, SYNC_VERSION, type SyncRequest, type SyncResponse } from "../../../../shared/sync";
+import { SYNC_VERSION, type SyncRequest, type SyncResponse } from "../../../../shared/sync";
 import { SyncEngine } from "./SyncEngine";
 import { memoryEnvironment } from "./environment";
 
@@ -99,7 +99,7 @@ describe("first connection to a server", () => {
     expect(db.db.prepare("SELECT count(*) AS n FROM sync_outbox").get()).toEqual({ n: 0 }); // nothing sent back
     expect(db.db.prepare("SELECT value FROM meta WHERE key = 'sync_cursor'").get()).toEqual({ value: "7" });
     expect(requests).toHaveLength(1); // only the pull; no local rows were sent
-    expect(requests[0]).toEqual({ since: 0, changes: {}, version: SYNC_VERSION, compatible: SYNC_COMPATIBLE });
+    expect(requests[0]).toEqual({ since: 0, changes: {}, version: SYNC_VERSION, compatible: SYNC_VERSION });
     expect(emitted).toContainEqual({ scope: "collections" });
     expect(emitted).toContainEqual({ scope: "items", collectionId: "mine" }); // the old collection's views reload
     expect(engine.isNewServer(config.url)).toBe(false);
@@ -216,7 +216,7 @@ describe("the server's database id", () => {
     await engine.reconnect();
 
     expect(engine.status.replaced).toBeNull();
-    expect(requests[1]).toEqual({ since: 0, changes: {}, version: SYNC_VERSION, compatible: SYNC_COMPATIBLE }); // the probe, without an id
+    expect(requests[1]).toEqual({ since: 0, changes: {}, version: SYNC_VERSION, compatible: SYNC_VERSION }); // the probe, without an id
     // everything on the device (since the first connection: what the old database held)
     expect(requests[2].changes.collections.map((r) => r.id)).toEqual(["t1"]);
     expect(requests[2].database).toBe("db-b");

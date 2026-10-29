@@ -7,10 +7,14 @@ import {
   axisFields,
   CHART_KINDS,
   CHART_WIDTH,
+  widthAfterSwitch,
+  widthCss,
+  widthFromStop,
+  widthLabel,
+  widthToStop,
   chartItems,
   DATE_STEPS,
   defaultChartOptions,
-  GAUGE_WIDTH,
   isParts,
   isXY,
   MAX_DECIMALS,
@@ -92,7 +96,7 @@ function ChartView({ collection, result, options, refs, actions, page }: BlockPr
     );
   }
   return (
-    <div className="chart-block" style={{ maxInlineSize: `${options.width}rem` }}>
+    <div className="chart-block" style={{ maxInlineSize: widthCss(options.width) }}>
       <Suspense fallback={<div className="chart-block__loading" style={{ blockSize: String(spec.options.height) }} />}>
         <ChartCanvas
           spec={spec}
@@ -174,8 +178,7 @@ const unique = <T,>(list: T[]) => [...new Set(list)];
 function switchKind(o: ChartOptions, chart: ChartKind, axis: FieldDef[]): ChartOptions {
   const next: ChartOptions = { ...o, chart };
   // A gauge is narrow: as wide as a pane it is mostly empty (a stat spans the block, its sparkline across).
-  if (chart === "gauge" && o.width === CHART_WIDTH.max) next.width = GAUGE_WIDTH;
-  else if (o.chart === "gauge" && chart !== "gauge" && o.width === GAUGE_WIDTH) next.width = CHART_WIDTH.max;
+  next.width = widthAfterSwitch(o, chart);
   // A stat's sparkline runs along a date the first time.
   if (chart === "stat" && o.x.by === "none") {
     const date = axis.find((f) => f.kind === "date" || f.kind === "datetime");
@@ -825,12 +828,12 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
         id={`${uid}-width`}
         labelText="Width"
         min={CHART_WIDTH.min}
-        max={CHART_WIDTH.max}
+        max={CHART_WIDTH.stop}
         step={CHART_WIDTH.step}
-        value={o.width}
-        formatLabel={(v) => `${v}rem`}
+        value={widthToStop(o.width)}
+        formatLabel={(v) => widthLabel(widthFromStop(v))}
         hideTextInput
-        onChange={({ value }) => set({ width: value })}
+        onChange={({ value }) => set({ width: widthFromStop(value) })}
       />
     </Section>
   );

@@ -1,7 +1,7 @@
 // @vitest-environment node
 // The item links (item_links, docs/data-model.md "Item links") through sync: the index row and its value
-// carry the same stamp, so they merge to the same version, whichever device syncs first; devices of
-// the version before the table (SYNC_VERSION 1) write values only, and the devices that know it make their rows.
+// carry the same stamp, so they merge to the same version, whichever device syncs first, and a first
+// connection to a server holding values without index rows (filled before the table existed) makes them.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { newId, now, type Collection, type FieldDef, type FieldKind } from "../../domain/model";
 import { SERVER_URL, TOKEN, FakeServer, settled } from "../../test/fakeServer";
@@ -209,53 +209,7 @@ describe("two devices editing the same Markdown", () => {
   });
 });
 
-describe("a device from before the table", () => {
-  /** What an older device sends: field values only (SYNC_VERSION 1), no index rows. */
-  const olderDeviceWrites = (rows: WireRow[]) => {
-    const answer = server.sync({ since: server.seq, changes: { field_values: rows }, version: 1, compatible: 1 });
-    expect("cursor" in answer).toBe(true);
-  };
-
-  it("is accepted by the server of this version, and its values get their index rows from the first newer device that pulls them", async () => {
-    const a = await open();
-    const w = await world(a, []);
-    const { person, note } = await w.on(a);
-    const body = note.fields[1].id;
-    const id = await a.repo.createItem(note, {}, "default");
-    await settled(a.repo);
-    const at = later();
-    olderDeviceWrites([
-      { item_id: id, field_id: body, value_text: link(person, w.ada), value_number: null, value_date: null, value_datetime: null, value_bool: null, value_ref: null, value_file: null, value_json: null, updated_at: at },
-    ]);
-    expect(server.rows("item_links")).toEqual([]);
-    await settled(a.repo);
-    // a has the value and made the row at the value's stamp, which went to the server.
-    expect(await backlinks(a, person, w.ada)).toEqual([id]);
-    expect(server.rows("item_links")).toMatchObject([{ id: `${id}/${body}`, updated_at: at, deleted_at: null }]);
-    // A second newer device gets both and makes (and sends) nothing more.
-    const b = await open();
-    expect(await indexOf(b)).toEqual(await indexOf(a));
-    expect(await queuedLinks(b)).toEqual([]);
-  });
-
-  it("renews a row the older device's edit left stale, with the value's stamp", async () => {
-    const a = await open();
-    const w = await world(a, []);
-    const { person, note } = await w.on(a);
-    const body = note.fields[1].id;
-    const id = await a.repo.createItem(note, { [body]: link(person, w.ada) }, "default");
-    await settled(a.repo);
-    const row = server.rows("field_values").find((r) => r.item_id === id && r.field_id === body)!;
-    const at = later();
-    olderDeviceWrites([{ ...row, value_text: link(person, w.bob), updated_at: at }]);
-    await settled(a.repo);
-    expect(await backlinks(a, person, w.ada)).toEqual([]);
-    expect(await backlinks(a, person, w.bob)).toEqual([id]);
-    const stored = server.rows("item_links").find((r) => r.id === `${id}/${body}`)!;
-    expect(stored).toMatchObject({ updated_at: at });
-    expect(JSON.parse(String(stored.targets)).map((t: { item: string }) => t.item)).toEqual([w.bob]);
-  });
-
+describe("a server filled before the table", () => {
   it("gets index rows for everything a server holds without any, on its first connection (they are sent to the server)", async () => {
     const a = await open();
     const w = await world(a, []);
@@ -269,15 +223,5 @@ describe("a device from before the table", () => {
     await settled(b.repo);
     expect(await backlinks(b, person, w.ada)).toEqual([id]);
     expect(server.rows("item_links").map((r) => r.id)).toEqual([`${id}/${note.fields[2].id}`]);
-  });
-
-  it("is answered with the table's rows among the others, which it leaves aside (an engine reads the tables it lists)", async () => {
-    const a = await open();
-    const w = await world(a, []);
-    const { note } = await w.on(a);
-    await a.repo.createItem(note, { [note.fields[2].id]: w.ada }, "default");
-    await settled(a.repo);
-    const answer = server.sync({ since: 0, changes: {}, version: 1, compatible: 1 });
-    expect("changes" in answer && Object.keys(answer.changes)).toContain("item_links");
   });
 });

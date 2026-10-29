@@ -95,6 +95,10 @@ Never use `$item` together with a block's names: such a component fits nowhere.
 
 A block on an item's page doesn't see that page's item as `$item`. Its filter picks the items that belong to it instead, for example "Author is this Author".
 
+### Several collections in one block
+
+A block's Block settings → **Collections** can choose more than one collection, native and remote ones together. The block then lists them as one: `$items` holds the rows of all of them. Fields with the same name (and a type that fits) are one field; a field only one has is empty for the others' rows; **Collection** is the name of the collection a row is from, and Created and Updated are there too. Fields → **Merge fields** makes one field of two with different names. These rows can't be changed.
+
 ### Backlinks
 
 A block on an item's page can list **Backlinks**: choose it as the block's Collection in Block settings. These are the items that link to the page's item (also a row of a remote collection), one row for each link: a link in a Markdown, HTML or AI text, or a field of type Item or List of items that holds it. A link to a field, view or block of the item counts as one to the item. Backlinks can't be changed. Their fields:

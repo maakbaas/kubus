@@ -45,7 +45,13 @@ test("markdown editing: Tab in a table, task boxes and typed links", async (t) =
   const pm = t.page.locator(".ProseMirror").first();
 
   // Tab moves between cells; in the last cell it adds a row and goes into it.
-  await pm.locator("td").first().click();
+  // The editor puts its caret where the opening click was once it has loaded: a click on the cell
+  // before that is undone by it, so click until the caret stays in the cell.
+  await t.until("the caret is in the first cell", async () => {
+    await pm.locator("td").first().click();
+    await t.wait(150);
+    return t.page.evaluate(() => !!document.getSelection()?.anchorNode?.parentElement?.closest(".ProseMirror td"));
+  });
   await t.page.keyboard.press("Tab");
   await t.page.keyboard.type("X");
   await t.check("Tab moves to the next cell", (await pm.locator("td").nth(1).innerText()).includes("X"), await pm.locator("td").nth(1).innerText());

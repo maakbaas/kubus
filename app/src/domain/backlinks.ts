@@ -115,9 +115,15 @@ export function backlinkPath(id: string): string {
   return `/collections/${collection}/items/${item}`;
 }
 
-/** Where an item opens: its own page, a backlink row the linking item's. */
-export const itemPath = (collection: Pick<Collection, "id" | "virtual">, item: Pick<Item, "id">): string =>
-  collection.virtual === "backlinks" ? backlinkPath(item.id) : `/collections/${collection.id}/items/${item.id}`;
+/** The route of the item or row a merged collection's row stands for (its id: the part's collection and the part's item, domain/blend.ts). Here, not in blend.ts: the database worker imports this file and must not load the rest. */
+export function blendPath(id: string): string {
+  const at = id.indexOf(":");
+  return `/collections/${id.slice(0, at)}/items/${id.slice(at + 1)}`;
+}
+
+/** Where an item opens: its own page, a backlink row the linking item's, a blend's row its part's item or row. */
+export const itemPath = (collection: Pick<Collection, "id" | "virtual" | "blend">, item: Pick<Item, "id">): string =>
+  collection.virtual === "backlinks" ? backlinkPath(item.id) : collection.blend ? blendPath(item.id) : `/collections/${collection.id}/items/${item.id}`;
 
 const escapeLabel = (text: string) => text.replace(/[\\[\]]/g, "\\$&");
 

@@ -6,7 +6,7 @@ import { markdownBlock } from "./MarkdownBlock";
 import type { BlockTypeDefinition } from "./registry";
 import { tableView } from "./TableView";
 import { pickableFields, type Collection } from "../domain/model";
-import { newBlock, type ViewBlock, type ViewState } from "../domain/views";
+import { listedCollection, newBlock, type ViewBlock, type ViewState } from "../domain/views";
 
 /** All block types, in the order the "Show as" menu lists them. Add new block types here. */
 export const BLOCK_TYPES: BlockTypeDefinition[] = [tableView, cardsView, chartBlock, mapView, markdownBlock, componentBlock];
@@ -19,7 +19,9 @@ export const blockType = (kind: string): BlockTypeDefinition => BLOCK_TYPES.find
  * exist dropped. Keys always in the same order, so a normalized stored block compares equal to
  * the same block shown (sameView).
  */
-export function normalizeBlock(collection: Collection, block: ViewBlock): ViewBlock {
+export function normalizeBlock(base: Collection, block: ViewBlock, all?: Collection[]): ViewBlock {
+  // A block listing several collections is normalized against the collection they are read as (its columns).
+  const collection = all ? listedCollection(base, block, all).collection : base;
   const type = blockType(block.kind);
   const ids = new Set(pickableFields(collection).map((f) => f.id));
   const normalized: ViewBlock = {
@@ -40,15 +42,17 @@ export function normalizeBlock(collection: Collection, block: ViewBlock): ViewBl
   };
   if (block.hideHeader) normalized.hideHeader = true;
   if (block.limit !== undefined) normalized.limit = block.limit;
+  if (block.collectionIds) normalized.collectionIds = block.collectionIds;
+  if (block.merges) normalized.merges = block.merges;
   if (block.groupDate) normalized.groupDate = block.groupDate;
   return block.groupOrder ? { ...normalized, groupOrder: block.groupOrder } : normalized;
 }
 
 /** A view state made valid for its collection (stored ones may be outdated); always at least one block. */
-export function normalizeView(collection: Collection, state: ViewState): ViewState {
+export function normalizeView(collection: Collection, state: ViewState, all?: Collection[]): ViewState {
   // A fixed id: normalizing the same state twice gives the same result.
   const blocks = state.blocks.length > 0 ? state.blocks : [newBlock("table", null, "main")];
-  return { filters: state.filters, blocks: blocks.map((b) => normalizeBlock(collection, b)), editable: state.editable };
+  return { filters: state.filters, blocks: blocks.map((b) => normalizeBlock(collection, b, all)), editable: state.editable };
 }
 
 export type { BlockOptionsProps, BlockPlace, BlockProps, BlockTypeDefinition, BlockUses, ItemActions, PageItem } from "./registry";

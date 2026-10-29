@@ -31,6 +31,9 @@ Extension points are registries, not special cases in pages:
   checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
   nothing, never the wrong items (so does a value from the page's item that it doesn't have: "Author is this Book's Mentor" on a Book without one). The value input is text for every kind (the braces must be typable);
   under it, what the code works out to ("= true").
+- **Several collections in one block**: the block's Collections picker (Block settings) reads them as one read-only collection, fields
+  merged by name, Collection / Title / Created / Updated always there, Fields → Merge fields by hand, the view's filter translated to its
+  columns, a page at a time from every part, a chart over all rows: docs/features.md "Several collections in one block".
 - **Virtual collections** (`domain/backlinks.ts` `VIRTUAL_COLLECTIONS`, `Collection.virtual`): a block on an item page may list a collection
   that stores nothing, **Backlinks** (docs/features.md): offered in that block's Collection picker only (`BlockMenus`, when it has a
   page), resolved by id next to the store's collections (`findCollection`, in `ItemPageBlock` and the page-wide filter's scope).
@@ -68,7 +71,7 @@ Extension points are registries, not special cases in pages:
   hour `…T14:00..…T14:59`, a date there by its day). On an item page a rolling period can be counted from the page's
   item's date instead ("Counted from": Today or "This measurement's Date"; stored as the value then
   `@$item.<field>`, `anchoredValue` in domain/datePeriod.ts, worked out for each page's item by `resolvePageValues`;
-  elsewhere, or for an item without that date, it matches nothing). `between` isn't in the operator menus
+  elsewhere, or for an item without that date, it matches nothing). A period that ends now ("Last 2 months", "Last 7 days", a year to date) then ends at that date or time (`resolveAnchored`: with a time, the period is in minutes), not at the end of its month, so a historical weigh-in's page counts only what came up to it; "This month" alone stays the whole month. `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.
 - **Filter bar** (View settings → "Show filter bar", `CollectionView.filterBar`, `views/FilterBar.tsx`): a bar just below the
   view tab strip with the view's Filter button (it leaves the toolbar for the bar while the bar is shown; same states:
@@ -83,8 +86,7 @@ Extension points are registries, not special cases in pages:
   `withPeriod` (domain/datePeriod.ts), shared with `DatePeriodFilter`. Every change is an edit of the view's filter
   (`view.filters`): the tab gets its * and Save appears, which is how the view shows it deviates from its saved period;
   all blocks follow. The setting itself is stored with the view right away (like arranging blocks; no *), as
-  `filterBar: true` in the view's config JSON (absent = off; an optional key, so `SYNC_COMPATIBLE` is unchanged:
-  an older device ignores it, and saves the view without it if it edits it). One row down to 320 px: icon buttons for
+  `filterBar: true` in the view's config JSON (absent = off; an optional key). One row down to 320 px: icon buttons for
   ‹ › and the calendar (tooltips), the label takes the room that is left between ‹ and › (ellipsized, whole in its
   tooltip), so the buttons never move while stepping. Switching the setting while a panel (View settings) is open moves
   the Filter button only when it closes (`panels.hold`), so the buttons after it don't jump under the open panel; the
@@ -206,7 +208,9 @@ Extension points are registries, not special cases in pages:
     only its delta arrow with it: offered only while it compares with something) and a meter's status ranges (there a % of the total or values: `thresholdPercent`, `statusOf`, `statusRanges`).
   - **Values and legend**: a unit and decimals for axes and tooltips, decimals for a gauge (`formatValue`); the legend automatic (with
     more than one series or part), shown or hidden, and where.
-  - **Size**: Height (see below) and Width (a slider like the cards', 8 to 120rem (about 1920px) at most; a gauge as wide
+  - **Size**: Height (see below) and Width (a slider, 8 to 99rem, its last stop labelled "Full width": no maximum, the block fills its pane, wide or
+    narrow; stored as the number of rem or `"full"`, the default; the definition is `CHART_WIDTH` and `widthToStop` / `widthFromStop` /
+    `normalizeWidth` in `domain/chart.ts`, and a stored 100 or more, e.g. the former maximum 120, reads as Full width; a gauge as wide
     as a pane is mostly empty, so switching to one makes a full-width chart 24rem).
   A setting still to choose (a field, three spokes) or nothing to chart says so instead of an empty chart. The chart follows
   the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of `MAX_SOURCE_PAGE` (10,000) rows one after the other, a loading bar of the rows in against the source's total; its "×" stops it, the chart then shows the rows in and "Load all rows" goes on).

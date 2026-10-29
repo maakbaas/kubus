@@ -91,6 +91,20 @@ describe("page item filter values", () => {
     expect(resolvePageValues([rule("read", "between", "day-6..day+0")], dated)[0].value).toBe("day-6..day+0");
   });
 
+  it("count a period that ends now (last n, so far) up to the page's item's date or time, not to the end of its month", () => {
+    const dated = { ...page, values: { ...page.values, read: "2026-03-10" } };
+    expect(resolvePageValues([rule("read", "between", "month-1..month+0@$item.read")], dated)[0].value).toBe("2026-02-01..2026-03-10");
+    expect(resolvePageValues([rule("read", "between", "year+0..day+0@$item.read")], dated)[0].value).toBe("2026-01-01..2026-03-10");
+    // A date & time: the period in minutes, ending at its minute (the same day's later weigh-in is not in it).
+    const moment = new Date(2026, 2, 10, 7, 45);
+    const timed = { ...page, values: { ...page.values, read: moment.toISOString() } };
+    expect(resolvePageValues([rule("read", "between", "month-1..month+0@$item.read")], timed)[0].value).toBe("2026-02-01T00:00..2026-03-10T07:45");
+    expect(resolvePageValues([rule("read", "between", "day-6..day+0@$item.read")], timed)[0].value).toBe("2026-03-04T00:00..2026-03-10T07:45");
+    expect(resolvePageValues([rule("read", "between", "hour-1..hour+0@$item.read")], timed)[0].value).toBe("2026-03-10T06:00..2026-03-10T07:45");
+    // This period alone (not "last n") is the whole period around its date.
+    expect(resolvePageValues([rule("read", "between", "month+0@$item.read")], timed)[0].value).toBe("2026-03-01..2026-03-31");
+  });
+
   it("presets new items to pass reference rules", () => {
     const preset = filterPreset(books, [rule("author", "is", "a1"), rule("tags", "is", "t1"), rule("tags", "is", "t2"), rule("pages", "is", "3"), rule("author", "is", PAGE_ITEM)]);
     expect(preset).toEqual({ author: "a1", tags: ["t1", "t2"] });

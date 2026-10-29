@@ -21,7 +21,7 @@ is what this split avoids. Keep them current when behaviour changes.
   download, thumbnails, clean-up), the server's settings (Settings → AI and Connections), remote sources and their
   connectors, the HTTP API (headless device) and webhooks, iOS home-screen app, known sync limits.
 - `docs/migrations.md`: schema changes: the device's and the server's migrations, sync between versions
-  (`SYNC_VERSION` / `SYNC_COMPATIBLE`), the steps of a change.
+  (the strict `SYNC_VERSION` gate), the steps of a change.
 - `tests/README.md`: the catalog of every test suite (what, needs, time budget, how to run, which CI job); `npm run suite -- list`.
 - `docs/testing.md`: the test suites (vitest projects `domain`, `storage`, `sync`, `api`, `app`, `connectors`,
   `server`; the GUI suites), what each covers and needs (Postgres), what to run for a change, and CI.
@@ -42,11 +42,13 @@ is what this split avoids. Keep them current when behaviour changes.
 - **Every schema change is a migration; no data is ever lost** (`docs/migrations.md`, read it first).
   `app/src/data/schema.sql` is the newest schema; with it goes the next migration in
   `app/src/data/migrations.ts` (from the first release's `schema-v1.sql`, never edited, nor are released
-  migrations). A synced table/column also goes in `shared/sync.ts` with `SYNC_VERSION` raised (and
-  `SYNC_COMPATIBLE` when older devices would get the new data wrong); the outbox triggers and the server's
+  migrations). A synced table/column also goes in `shared/sync.ts` with `SYNC_VERSION` raised; the outbox triggers and the server's
   added tables/columns follow from it (`data/schema.ts`, `server/src/schema.ts`), anything else on the server
-  is a migration in `server/src/migrations.ts`. Devices and servers of other versions keep syncing: never
-  drop a column or value a side doesn't know.
+  is a migration in `server/src/migrations.ts`. **The version gate is strict**: only a device and a server with the same
+  `SYNC_VERSION` sync (the server answers 426 to any other, a device refuses a server of another), so a release with a sync
+  change is rolled out to the server and all devices together, with no interop code for older versions. A refused device keeps
+  working offline and keeps its outbox (nothing is dropped or marked sent), says "Update Kubus to keep syncing" or "The server needs
+  updating", and syncs what it queued once the versions match. Never drop a local value on a refusal.
 - **Never install the SAH-pool VFS while another worker may hold its files** (it deletes the
   database): keep `acquireDbLock` / `poolFilesFree` / `waitForPoolFiles` (`dbLock.ts`) in front of it in `worker.ts`.
 - Changing the app identifier `com.kubus.app`, database / pool names, the lock or `kubus.*` storage
@@ -125,6 +127,11 @@ headless device that answers the server's HTTP API (bundled into `server/headles
   item-page blocks and read-only through the same guard (`isReadOnly`); its rows are the items linking to the page's item, read from the
   synced `item_links` index (docs/data-model.md "Item links": one row per value with the value's own `updated_at`, kept by triggers on
   `field_values`, healed after a sync of values written by an older app). Keep `item_links` in step with what counts as a link (`linkTargets`).
+- **A block may list several collections** (`ViewBlock.collectionIds`, native and remote mixed): `domain/blend.ts` makes one read-only
+  collection of them when the block is shown (nothing stored: fields merged by name, Collection / Title / Created / Updated), and
+  `views/useBlendResult.ts` fans the query out to the parts (native via the item cache + `applyQuery`, remote via `sourceQuery`), merged a
+  page at a time (`domain/blendMerge.ts`). Never import `blend.ts` (or anything that reaches `query.ts`) from what the database worker loads
+  (`domain/backlinks.ts`, `linkTargets`): it has no `document`. `docs/features.md` "Several collections in one block".
 - **Workspace**: every tab renders `AppRoutes` in its own `MemoryRouter`; in-app links are plain
   `href="#/…"` anchors; navigate with `useNavigate()` (this tab) or `useOpenRelated()`.
 

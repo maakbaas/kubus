@@ -9,19 +9,12 @@
 
 /**
  * The version of the synced data's shape: this list and what its values may hold. Raised with
- * every change to them (app/src/data/sync/spec.test.ts fails until it is). Devices send it with every
- * sync; the server turns away those older than its SYNC_COMPATIBLE.
+ * every change to them (app/src/data/sync/spec.test.ts fails until it is). The gate is strict:
+ * a device and a server sync only when their versions are equal, in both directions (the server
+ * answers 426 `SyncOutdated` to a device of another version and writes nothing), so every release
+ * with a sync change is rolled out to the server and all devices together: docs/migrations.md.
  */
 export const SYNC_VERSION = 2;
-/**
- * The oldest SYNC_VERSION that still reads and writes this version's data correctly: unchanged by
- * an added column or table (an older device leaves what it doesn't know as it is), raised to
- * SYNC_VERSION by a change older devices would get wrong (a value's meaning or format, a value an
- * older device's CHECK refuses, a renamed or dropped column). The server then turns them away until
- * they are updated; a device whose SYNC_COMPATIBLE is newer than the server's SYNC_VERSION is turned away too
- * (the server's data isn't converted yet: update the server first).
- */
-export const SYNC_COMPATIBLE = 1;
 
 /** Maps to SQLite / Postgres: text, number = real / double precision, int, bool = 0|1 / boolean,
  *  json = text / jsonb, date = text YYYY-MM-DD / date, timestamp = ISO text / timestamptz,
@@ -38,7 +31,7 @@ export interface SyncTable {
   columns: Record<string, ColumnType>;
   /**
    * The value of a column added after the first release (SYNC_VERSION 1) for rows written without it
-   * (by older devices, or before it existed): the server's column default, and what a device stores
+   * (before it existed): the server's column default, and what a device stores
    * for such a row's null when its own column is NOT NULL. Not needed for a nullable column.
    */
   defaults?: Record<string, WireValue>;
@@ -163,9 +156,13 @@ export interface SyncRequest {
    * Another one there: nothing is written and the server answers 409 with a `SyncMismatch`.
    */
   database?: string;
-  /** The device's SYNC_VERSION and SYNC_COMPATIBLE (missing: a device from before versions, 0). */
+  /** The device's SYNC_VERSION (missing: a device from before versions, 0). */
   version: number;
-  compatible: number;
+  /**
+   * Sent equal to `version`, for servers from before the strict gate: they turn away a device whose
+   * `compatible` is newer than their own SYNC_VERSION. This server ignores it.
+   */
+  compatible?: number;
 }
 export interface SyncResponse {
   /** Pass as `since` next time. */
@@ -177,6 +174,8 @@ export interface SyncResponse {
   changes: WireChanges;
   /** The server's database. */
   database: DatabaseInfo;
+  /** The server's SYNC_VERSION: always the device's (otherwise the answer is a 426 `SyncOutdated`). */
+  version?: number;
   /**
    * Files the pushed rows use whose bytes the server doesn't have (deleted as unused meanwhile):
    * a device that has them queues them again.
@@ -192,14 +191,15 @@ export interface SyncMismatch {
 }
 
 /**
- * The 426 answer: this device and the server can't sync until one is updated (nothing was written).
- * `app`: the device is older than the server's SYNC_COMPATIBLE. `server`: the device's data needs a
- * newer server (its SYNC_COMPATIBLE is newer than the server's SYNC_VERSION, or it sends a table or
- * column the server doesn't have).
+ * The 426 answer: this device and the server have different SYNC_VERSIONs, so they can't sync
+ * until the older one is updated (nothing was written). `update` says which: `app` when the
+ * device is older than the server, `server` when the server is older than the device. `version`
+ * is the server's SYNC_VERSION.
  */
 export interface SyncOutdated {
   error: string;
   update: "app" | "server";
+  version?: number;
 }
 
 /** The largest file a device stores and the server accepts (PUT /api/files/<id>). */
