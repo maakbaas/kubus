@@ -120,3 +120,10 @@ What protects it:
   Kubus is refused. Sync is switched off after a restore: switching it on again is a first connection
   to the server, which then either replaces the restored data (when it holds data) or receives it (when it
   is empty).
+
+**Editing the same thing on two devices.** Sync merges per field, and the newer edit wins. When two
+devices change the *same* field while apart (offline, or before either synced), the field ends up with
+the edit made last and the other is gone: for a long Markdown note that is the whole other version of
+the note, not a merge of the two. Edits to different fields or items never collide. A merge of
+concurrent text edits is roadmap #9 (`docs/vision.md`); until then, let a device sync before editing the
+same note elsewhere.
