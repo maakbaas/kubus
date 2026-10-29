@@ -1,9 +1,11 @@
 // @vitest-environment node
-// The headless device with a data directory (KUBUS_HEADLESS_DIR): a restart resumes from the saved
-// database, a replaced server database starts it over, and one directory belongs to one process.
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+// The headless device with a data directory (KUBUS_HEADLESS_DIR): its database is a real file
+// (node:sqlite, WAL), a restart resumes from it, a replaced server database starts it over, and one
+// directory belongs to one process.
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HeadlessOptions } from "../../../shared/api";
 import { SYNC_COMPATIBLE, SYNC_VERSION, type SyncRequest } from "../../../shared/sync";
@@ -85,12 +87,42 @@ describe("a restart with a data directory", () => {
     await second.close();
   });
 
-  it("saves by itself shortly after a write, not only on close", async () => {
+  it("has every write in the file at once, not only on close: a second connection sees it", async () => {
     const api = await startHeadless(options());
-    await get(api, "/spaces", "POST", { name: "Soon saved" });
-    await vi.waitFor(() => expect(readdirSync(dir)).toContain("headless.db"), { timeout: 5_000 });
-    expect(readdirSync(dir)).not.toContain("headless.db.tmp");
+    await get(api, "/spaces", "POST", { name: "Committed" });
+    const other = new DatabaseSync(join(dir, "headless.db"), { readOnly: true });
+    expect(other.prepare("SELECT name FROM spaces WHERE name = 'Committed'").all()).toEqual([{ name: "Committed" }]);
+    expect(other.prepare("PRAGMA journal_mode").get()).toEqual({ journal_mode: "wal" });
+    other.close();
     await api.close();
+  });
+
+  it("leaves one file when it closes: the write-ahead log is folded into the database", async () => {
+    const api = await startHeadless(options());
+    await get(api, "/spaces", "POST", { name: "Folded in" });
+    await api.close();
+    expect(readdirSync(dir)).toEqual(["headless.db"]);
+  });
+
+  it("is consistent after a crash: a log left behind is replayed, the cursor and the data agree", async () => {
+    const first = await startHeadless(options());
+    await get(first, "/spaces", "POST", { name: "Before the crash" });
+    // A crash: the process is gone without closing the database, so its log and lock stay behind.
+    // (The copy is what a disk holds at that moment; the lock is a dead process's.)
+    const crashed = join(dir, "..", "crashed");
+    mkdirSync(crashed);
+    for (const f of readdirSync(dir)) if (f !== "headless.lock") copyFileSync(join(dir, f), join(crashed, f));
+    expect(readdirSync(crashed)).toContain("headless.db-wal");
+    await first.close();
+
+    sinces = [];
+    const second = await startHeadless(options({ dataDir: crashed }));
+    expect(sinces).toEqual([server.seq]); // resumed from the cursor the log held
+    expect(await spaces(second)).toContain("Before the crash");
+    await second.close();
+    const check = new DatabaseSync(join(crashed, "headless.db"), { readOnly: true });
+    expect(check.prepare("PRAGMA integrity_check").all()).toEqual([{ integrity_check: "ok" }]);
+    check.close();
   });
 
   it("starts over when the server's database was wiped while it was down", async () => {
@@ -136,6 +168,19 @@ describe("a restart with a data directory", () => {
     expect(readdirSync(dir).some((f) => f.startsWith("headless.db.damaged-"))).toBe(true);
     expect(await spaces(api)).toContain("Elsewhere");
     await api.close();
+  });
+
+  it("leaves a database of a newer version alone and doesn't start", async () => {
+    const first = await startHeadless(options());
+    await first.close();
+    const file = new DatabaseSync(join(dir, "headless.db"));
+    file.exec("PRAGMA user_version = 9999");
+    file.close();
+    await expect(startHeadless(options())).rejects.toThrow(/newer version of Kubus/);
+    expect(readdirSync(dir).sort()).toEqual(["headless.db"]); // not set aside, and the lock given up
+    const again = new DatabaseSync(join(dir, "headless.db"));
+    expect(again.prepare("PRAGMA user_version").get()).toEqual({ user_version: 9999 });
+    again.close();
   });
 });
 

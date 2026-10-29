@@ -2,6 +2,7 @@
 // The Repository contract beyond the basics (repository.test.ts): refusals, soft deletes, AI values,
 // files and their clean-up, bookmarks, item views, remote collections. Without sync or the HTTP API.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { nodeEngine } from "../../test/engine";
 import { bytes, device } from "../../test/fakeServer";
 import type { Component } from "../../domain/components";
 import type { ItemView } from "../../domain/fieldLayout";
@@ -674,7 +675,7 @@ describe("remote collections", () => {
 
 describe("the device", () => {
   it("reports whether its storage is persistent", () => {
-    expect(repo.storage).toEqual({ persistent: false });
+    expect(repo.storage).toEqual({ persistent: nodeEngine }); // a file under node:sqlite, memory under sqlite-wasm
   });
 
   it("wipes everything locally, pausing sync, and starts over with the default space", async () => {

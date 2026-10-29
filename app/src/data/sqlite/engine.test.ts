@@ -1,15 +1,14 @@
 // @vitest-environment node
-import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import { beforeAll, describe, expect, it } from "vitest";
+import { bareDatabases, nodeEngine, openTestClient } from "../../test/engine";
 import type { Db } from "../migrations";
-import { DirectSqlClient } from "./direct";
 import { ensureSchema, type SchemaPlan } from "./engine";
 
-let sqlite3: Db;
+// The engine under test: sqlite-wasm, or node:sqlite with KUBUS_TEST_ENGINE=node (test/engine.ts).
+let open: () => Db;
 beforeAll(async () => {
-  sqlite3 = await sqlite3InitModule();
+  open = await bareDatabases();
 });
-const open = (): Db => new sqlite3.oo1.DB(":memory:", "c");
 const version = (db: Db) => db.selectValue("PRAGMA user_version");
 const rows = (db: Db, sql: string) => db.exec({ sql, rowMode: "object", returnValue: "resultRows" });
 
@@ -129,7 +128,7 @@ describe("migrations that break references", () => {
 
 describe("the engine", () => {
   it("commits a change set whole or not at all, and answers reads as objects", async () => {
-    const client = await DirectSqlClient.open();
+    const client = await openTestClient();
     await expect(
       client.write([
         { sql: "INSERT INTO meta (key, value) VALUES (?1, ?2)", bind: ["a", "1"] },
@@ -142,12 +141,12 @@ describe("the engine", () => {
   });
 
   it("enforces foreign keys once its schema is in place", async () => {
-    const client = await DirectSqlClient.open();
+    const client = await openTestClient();
     await expect(client.write([{ sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES ('i', 'nowhere', 'default', 't', 't')" }])).rejects.toThrow(/FOREIGN KEY/);
   });
 
   it("wipes to a new database: every table empty, the schema in place, foreign keys back on", async () => {
-    const client = await DirectSqlClient.open();
+    const client = await openTestClient();
     await client.write([
       { sql: "INSERT INTO collections (id, name, plural_name, created_at, updated_at) VALUES ('c', 'C', 'Cs', 't', 't')" },
       { sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES ('i', 'c', 'default', 't', 't')" },
@@ -161,8 +160,8 @@ describe("the engine", () => {
   });
 
   it("reports SQLite's version", async () => {
-    const client = await DirectSqlClient.open();
-    expect(client.info).toEqual({ persistent: false, sqliteVersion: expect.stringMatching(/^3\.\d+/) });
+    const client = await openTestClient();
+    expect(client.info).toEqual({ persistent: nodeEngine, sqliteVersion: expect.stringMatching(/^3\.\d+/) });
   });
 });
 

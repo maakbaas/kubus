@@ -96,7 +96,7 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 ```
 
 Repo layout: `app/` the web app (what Tauri and the phone run), `desktop/` the Tauri shell,
-`server/` the sync server (Node 24, dependencies `pg`, `@sqlite.org/sqlite-wasm` and the connectors' `mysql2`, `ical.js`), `shared/` what
+`server/` the sync server (Node 24, dependencies `pg` and the connectors' `mysql2`, `ical.js`), `shared/` what
 both import (`sync.ts` the sync protocol, `files.ts`, `router.ts`, `api.ts`), `app/src/headless` the
 headless device that answers the server's HTTP API (bundled into `server/headless`).
 
@@ -105,7 +105,7 @@ headless device that answers the server's HTTP API (bundled into `server/headles
   `repo.subscribe`; anything that shows data refreshes through `useDataChanges`
   (`app/src/app/useDataChanges.ts`), not via whoever made the edit. Sync emits the same changes.
 - **Writes are change sets**: each mutating repository method commits its statements in one
-  transaction (`SqlClient.write`; `WorkerSqlClient` in the browser, `DirectSqlClient` in Node).
+  transaction (`SqlClient.write`; `WorkerSqlClient` in the browser, `NodeSqlClient` on node:sqlite in the server, `DirectSqlClient` in tests).
 - **Items are loaded once and shared** (`app/src/app/itemCache.ts`, `useItems`). Unchanged items
   keep their identity, which memoized rows (`ItemRow` / `ItemCard`) and `withComputed` rely on:
   don't copy or rebuild items needlessly. Reference pickers use `Repository.listLabels`. Stable

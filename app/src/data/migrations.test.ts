@@ -2,11 +2,10 @@
 // The local migrations: a database of the first release, migrated, is the schema a new database
 // gets (schema.sql), table by table, column by column. Fails when schema.sql changes without a
 // migration, or a migration without schema.sql.
-import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import { describe, expect, it } from "vitest";
+import { bareDatabases, openTestClient } from "../test/engine";
 import firstRelease from "./schema-v1.sql?raw";
 import firstReleaseData from "./fixture-v1.sql?raw";
-import { DirectSqlClient } from "./sqlite/direct";
 import { SqliteRepository } from "./sqlite/SqliteRepository";
 import { memoryEnvironment } from "./sync/environment";
 import { MIGRATIONS, type Db } from "./migrations";
@@ -44,12 +43,12 @@ describe("migrations", () => {
   });
 
   it("bring a database of the first release to exactly the schema of a new one", async () => {
-    const sqlite3 = await sqlite3InitModule();
-    const migrated = new sqlite3.oo1.DB(":memory:", "c");
+    const open = await bareDatabases();
+    const migrated = open();
     migrated.exec(firstRelease);
     migrated.exec("PRAGMA user_version = 1");
     ensureSchema(migrated);
-    const made = new sqlite3.oo1.DB(":memory:", "c");
+    const made = open();
     ensureSchema(made);
     const plan = { schema, triggers: outboxTriggerSql, migrations: MIGRATIONS };
     expect(migrated.selectValue("PRAGMA user_version")).toBe(latestVersion(plan));
@@ -67,7 +66,7 @@ describe("migrations", () => {
         .join(" UNION ALL ");
     let before: Record<string, number> = {};
     // Opened as the app opens it: the engine migrates it.
-    const client = await DirectSqlClient.open((db) => {
+    const client = await openTestClient((db) => {
       db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
       db.exec(firstRelease);
       db.exec(firstReleaseData);
