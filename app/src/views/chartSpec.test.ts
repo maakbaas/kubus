@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CHART_KINDS, defaultChartOptions, newSeries, type ChartInput, type ChartOptions, type ChartX } from "../domain/chart";
 import { blankField, type Collection, type Item } from "../domain/model";
 import type { QueryContext } from "../domain/query";
-import { chartSpec, type ChartSpec } from "./chartSpec";
+import { chartSpec, meterHeight, METER_LABEL_ROW_REM, type ChartSpec } from "./chartSpec";
 
 const collection: Collection = {
   id: "books", name: "Book", pluralName: "Books", icon: null, description: "", itemViews: [], spaceIds: null, createdAt: "", updatedAt: "",
@@ -167,6 +167,18 @@ describe("chartSpec", () => {
       expect((spec({ chart: "meter", total, ...o }).options.meter as { showLabels: boolean }).showLabels).toBe(true);
       expect((spec({ chart: "meter", total, showLabel: false, ...o }).options.meter as { showLabels: boolean }).showLabels).toBe(false);
     }
+  });
+
+  it("takes the label row's height off a meter's height when the label is hidden", () => {
+    const total = { from: "number" as const, number: 1000, field: null };
+    const height = (o: Partial<ChartOptions>) => spec({ chart: "meter", total, ...o }).options.height;
+    const one = { parts: "one" as const, series: [sum("pages")] };
+    const several = { parts: "fields" as const, fields: ["pages", "rating"] };
+    expect(height(one)).toBe("5rem");
+    expect(height(several)).toBe("6rem");
+    expect(height({ ...one, showLabel: false })).toBe(meterHeight(5, "one", false));
+    expect(parseFloat(height({ ...one, showLabel: false }) as string)).toBeCloseTo(5 - METER_LABEL_ROW_REM.one, 3);
+    expect(parseFloat(height({ ...several, showLabel: false }) as string)).toBeCloseTo(6 - METER_LABEL_ROW_REM.proportional, 3);
   });
 
   it("gives a gauge its status by its thresholds (a % of the total or values), its % with the decimals", () => {

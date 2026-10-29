@@ -643,6 +643,37 @@ for (const p of PARTS) {
   });
 }
 
+/** A meter's bar and legend, as drawn: the gap between them, and the height of the block. */
+const meterGap = (t, i) =>
+  t.page.evaluate((i) => {
+    const root = document.querySelectorAll(".ws-pane--active .block")[i]?.querySelector(".chart-block");
+    const bar = root?.querySelector("rect.value, rect.total")?.getBoundingClientRect();
+    const legend = root?.querySelector(".cds--cc--legend")?.getBoundingClientRect();
+    const holder = root?.getBoundingClientRect();
+    return bar && legend && holder ? { gap: legend.top - bar.bottom, barTop: bar.top - holder.top, height: holder.height } : null;
+  }, i);
+
+test("meter: hiding the label row above the bar also takes its height (the gap from bar to legend stays), proportional too", async (t) => {
+  const one = { ...RICH, chart: "meter", parts: "one", legend: "show", total: { from: "number", number: 5000, field: null } };
+  const several = { ...RICH, chart: "meter", legend: "show" };
+  const blocks = [
+    { title: "One, label", options: { ...one, showLabel: true } },
+    { title: "One, no label", options: { ...one, showLabel: false } },
+    { title: "Parts, label", options: { ...several, showLabel: true } },
+    { title: "Parts, no label", options: { ...several, showLabel: false } },
+  ];
+  await seeded(t, blocks);
+  for (const i of [0, 1, 2, 3]) await drawn(t, `meter ${i + 1} is drawn with its legend`, (f) => f.meters >= 1 && !!f.legendBox, i);
+  for (const [withLabel, without, name] of [[0, 1, "one value"], [2, 3, "parts"]]) {
+    const a = await meterGap(t, withLabel);
+    const b = await meterGap(t, without);
+    t.at(`${name}: with ${JSON.stringify(a)}, without ${JSON.stringify(b)}`);
+    await t.check(`${name}: the gap from the bar to the legend is the same without the label row (${JSON.stringify(a)} vs ${JSON.stringify(b)})`, !!a && !!b && Math.abs(a.gap - b.gap) <= 1);
+    await t.check(`${name}: the block is shorter by about the label row (${a?.height} vs ${b?.height})`, !!a && !!b && b.height < a.height - 8);
+  }
+  await t.audit("meters with and without their label row");
+});
+
 test("radar: spokes, a shape per group, value", async (t) => {
   const ids = await seeded(t, [{ options: { ...RICH, chart: "radar", fields: ["@fat"] } }]);
   const panel = await openSettings(t);

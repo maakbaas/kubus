@@ -95,6 +95,17 @@ function base(options: ChartOptions, theme: string, several: boolean, extra: Rec
   };
 }
 
+/**
+ * A meter's height in rem. Carbon draws a label row above the bar (its name and total, and a spacer): with
+ * `meter.showLabels` off the bar would keep its place against the legend only if the row's height, measured
+ * in the GUI suite (27.33px for one value's label, 37.33px for a proportional meter's with its breakdown),
+ * were taken off, so it is.
+ */
+export const METER_LABEL_ROW_REM = { one: 27.33 / 16, proportional: 37.33 / 16 };
+export function meterHeight(rem: number, row: keyof typeof METER_LABEL_ROW_REM, showLabel: boolean): string {
+  return `${showLabel ? rem : Math.round((rem - METER_LABEL_ROW_REM[row]) * 1000) / 1000}rem`;
+}
+
 const DATE_FORMAT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
 
 /**
@@ -364,7 +375,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
           chart: "MeterChart",
           // The bar is in %; the label gives the value itself against its total.
           data: [{ group: label, value: clampPercent(percent) }],
-          options: base(options, theme, false, { height: "5rem", meter: { showLabels: options.showLabel, ...(ranges && { status: { ranges } }) } }),
+          options: base(options, theme, false, { height: meterHeight(5, "one", options.showLabel), meter: { showLabels: options.showLabel, ...(ranges && { status: { ranges } }) } }),
           format,
         };
       }
@@ -378,7 +389,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         chart: "MeterChart",
         data: parts.parts.map((p) => ({ group: p.name, value: p.value })),
         options: base(options, theme, true, {
-          height: "6rem",
+          height: meterHeight(6, "proportional", options.showLabel),
           tooltip: tooltip(options, input),
           meter: {
             showLabels: options.showLabel,
