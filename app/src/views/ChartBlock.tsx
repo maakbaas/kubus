@@ -194,7 +194,7 @@ function kindHas(kind: ChartKind) {
     axes: xy || kind === "histogram" || kind === "boxplot" || kind === "scatter",
     legend: kind !== "gauge" && kind !== "stat",
     height: kind !== "meter" && kind !== "stat",
-    display: xy || kind === "pie" || kind === "gauge" || kind === "histogram" || kind === "stat",
+    display: xy || kind === "pie" || kind === "gauge" || kind === "histogram" || kind === "stat" || kind === "choropleth",
   };
 }
 
@@ -602,19 +602,6 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
           <Button kind="tertiary" size="sm" className="chart-options__add" onClick={() => setShowRegions(true)}>
             Show regions
           </Button>
-          {check("showUnmatched", "Show the values not on the map (below it)")}
-          <Select size="sm" id={`${uid}-scale-color`} labelText="Colour" value={o.scaleColor} onChange={(e) => set({ scaleColor: e.target.value as ScaleColor })}>
-            {SCALE_COLORS.map((c) => (
-              <SelectItem key={c.value} value={c.value} text={c.text} />
-            ))}
-          </Select>
-          <NumberField
-            id={`${uid}-scale-max`}
-            label="Max"
-            value={o.scaleMax}
-            helper="Higher values get the darkest shade too"
-            onChange={(scaleMax) => set({ scaleMax })}
-          />
           {showRegions && <RegionsDialog regions={o.regions} options={o} collection={collection} result={result} refs={refs} onClose={() => setShowRegions(false)} />}
         </>
       )}
@@ -799,6 +786,17 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
               <SelectItem value="gap" text="Leave a gap (the line breaks)" />
             </Select>
           )}
+        </>
+      )}
+      {o.chart === "choropleth" && (
+        <>
+          <Select size="sm" id={`${uid}-scale-color`} labelText="Colour" value={o.scaleColor} onChange={(e) => set({ scaleColor: e.target.value as ScaleColor })}>
+            {SCALE_COLORS.map((c) => (
+              <SelectItem key={c.value} value={c.value} text={c.text} />
+            ))}
+          </Select>
+          <NumberField id={`${uid}-scale-max`} label="Max" value={o.scaleMax} helper="Higher values get the darkest shade too" onChange={(scaleMax) => set({ scaleMax })} />
+          {check("showUnmatched", "Show values not on the map")}
         </>
       )}
       {o.chart === "pie" && check("donut", "Donut (the total in the middle)")}
