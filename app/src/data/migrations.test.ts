@@ -134,4 +134,22 @@ describe("migrations", () => {
     await repo.rebuildLinks();
     expect(await client.select("SELECT id, targets, updated_at, deleted_at FROM item_links ORDER BY id")).toEqual(rows);
   });
+
+  it("record the files the blocks already there use (migration 3), of live views and collections only", async () => {
+    const [a, b, c] = ["a", "b", "c"].map((x) => x.repeat(64));
+    const client = await openTestClient((db: Db) => {
+      db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
+      db.exec(firstRelease);
+      db.exec(firstReleaseData);
+      const config = (file: string) => JSON.stringify({ filters: [], blocks: [{ id: "m", kind: "markdown", options: { text: `![](files/${file})` } }] });
+      db.exec(`INSERT INTO views (id, collection_id, space_id, name, config, created_at, updated_at) VALUES ('view-images', 'collection-book', 'default', 'Images', '${config(a)}', '2026-10-28T10:00:00.000Z', '2026-10-28T10:00:00.000Z')`);
+      db.exec(`INSERT INTO views (id, collection_id, space_id, name, config, created_at, updated_at, deleted_at) VALUES ('view-gone', 'collection-book', 'default', 'Gone', '${config(b)}', '2026-10-28T10:00:00.000Z', '2026-10-28T10:00:00.000Z', '2026-10-28T10:00:00.000Z')`);
+      db.exec(`UPDATE collections SET item_views = '${JSON.stringify([{ id: "v", name: "Default", isDefault: true, layout: { blocks: [{ id: "m", kind: "chart", options: { regions: { file: `files/${c}` } } }] } }])}' WHERE id = 'collection-book'`);
+      db.exec("PRAGMA user_version = 1");
+    });
+    expect(await client.select("SELECT file_id, owner_id FROM block_file_uses ORDER BY file_id")).toEqual([
+      { file_id: a, owner_id: "view-images" },
+      { file_id: c, owner_id: "collection-book" },
+    ]);
+  });
 });

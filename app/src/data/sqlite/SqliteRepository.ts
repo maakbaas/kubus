@@ -279,7 +279,10 @@ export class SqliteRepository implements Repository {
       [spaceId],
     );
     // Read before the items are deleted; the release statements run after that, in the same transaction.
-    const released = await this.releaseFilesWhere("item_id IN (SELECT id FROM items WHERE space_id = ?1 AND deleted_at IS NULL)", [spaceId]);
+    const released = [
+      ...(await this.releaseFilesWhere("item_id IN (SELECT id FROM items WHERE space_id = ?1 AND deleted_at IS NULL)", [spaceId])),
+      ...(await this.releaseBlockFiles("SELECT id FROM views WHERE space_id = ?1 AND deleted_at IS NULL", [spaceId])),
+    ];
     await this.db.write([
       { sql: "UPDATE items SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
       { sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE space_id = ?2 AND deleted_at IS NULL", bind: [ts, spaceId] },
@@ -424,6 +427,7 @@ export class SqliteRepository implements Repository {
       },
       { sql: "UPDATE collections SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, collectionId] },
       ...(await this.releaseFilesWhere("item_id IN (SELECT id FROM items WHERE collection_id = ?1)", [collectionId])),
+      ...(await this.releaseBlockFiles("SELECT id FROM views WHERE collection_id = ?1 UNION SELECT ?1", [collectionId])),
     ]);
     this.emit({ scope: "collections" }, { scope: "items", collectionId }, { scope: "views", collectionId });
   }
@@ -625,6 +629,7 @@ export class SqliteRepository implements Repository {
                 position = excluded.position, updated_at = excluded.updated_at`,
         bind: [view.id, view.collectionId, view.name, config, view.position, ts, view.spaceId],
       },
+      ...(await this.releaseBlockFiles("SELECT ?1", [view.id])),
     ]);
     this.emit({ scope: "views", collectionId: view.collectionId });
   }
@@ -643,6 +648,7 @@ export class SqliteRepository implements Repository {
   async saveItemViews(collectionId: string, views: ItemView[]): Promise<void> {
     await this.db.write([
       { sql: "UPDATE collections SET item_views = ?1, updated_at = ?2 WHERE id = ?3", bind: [JSON.stringify(views), now(), collectionId] },
+      ...(await this.releaseBlockFiles("SELECT ?1", [collectionId])),
     ]);
     this.emit({ scope: "collections" });
   }
@@ -776,7 +782,10 @@ export class SqliteRepository implements Repository {
 
   async deleteView(viewId: string): Promise<void> {
     const collectionId = (await this.db.select<{ collection_id: string }>("SELECT collection_id FROM views WHERE id = ?1", [viewId]))[0]?.collection_id;
-    await this.db.write([{ sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [now(), viewId] }]);
+    await this.db.write([
+      { sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [now(), viewId] },
+      ...(await this.releaseBlockFiles("SELECT ?1", [viewId])),
+    ]);
     if (collectionId) this.emit({ scope: "views", collectionId });
   }
 
@@ -866,6 +875,15 @@ export class SqliteRepository implements Repository {
     return rows.flatMap((r) => releaseFile(r.file_id));
   }
 
+  /**
+   * Release statements for every file the blocks of these owners (`owners`: a SELECT of view ids or collection
+   * ids, block_file_uses) name: read before the write that changes or deletes them, run after it.
+   */
+  private async releaseBlockFiles(owners: string, bind: string[]): Promise<Statement[]> {
+    const rows = await this.db.select<{ file_id: string }>(`SELECT DISTINCT file_id FROM block_file_uses WHERE owner_id IN (${owners})`, bind);
+    return rows.flatMap((r) => releaseFile(r.file_id));
+  }
+
   async putFile(data: Uint8Array, mime: string): Promise<string> {
     const digest = await crypto.subtle.digest("SHA-256", data as Uint8Array<ArrayBuffer>);
     const id = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -944,13 +962,14 @@ export class SqliteRepository implements Repository {
 
 /**
  * Whether the file `id` (an SQL expression) is in use: a live item uses it through a live field
- * (file_uses), or it is the thumbnail of such a file.
+ * (file_uses) or a live view's or collection's blocks do (block_file_uses), or it is the thumbnail
+ * of such a file.
  */
 const fileInUse = (id: string) => {
-  const used = (file: string) => `EXISTS (SELECT 1 FROM file_uses u
+  const used = (file: string) => `(EXISTS (SELECT 1 FROM file_uses u
       JOIN items o ON o.id = u.item_id AND o.deleted_at IS NULL
       JOIN fields f ON f.id = u.field_id AND f.deleted_at IS NULL
-     WHERE u.file_id = ${file})`;
+     WHERE u.file_id = ${file}) OR EXISTS (SELECT 1 FROM block_file_uses b WHERE b.file_id = ${file}))`;
   return `(${used(id)} OR EXISTS (SELECT 1 FROM thumbnails t WHERE t.thumb_id = ${id} AND ${used("t.file_id")}))`;
 };
 

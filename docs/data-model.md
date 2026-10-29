@@ -59,9 +59,12 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 - Images live in `files` (content-addressed: id = SHA-256, immutable; the bytes in the local-only,
   nullable BLOB `data`: NULL until downloaded from the server) and are referenced from
   `field_values.value_file` (no foreign key: a file's row can arrive after its use) or from markdown
-  as `files/<sha256>` (`file_uses`, kept by triggers, records which values name which files). `thumbnails` links an image to its small copy (another `files` row). Files are stored as soon as they're picked and
+  as `files/<sha256>` (`file_uses`, kept by triggers, records which values name which files), or from a block: `files/<sha256>` anywhere in a
+  live collection view's config or a live collection's item views (a Markdown block's images, a choropleth's downloaded map;
+  `block_file_uses`, local only, kept by triggers on `views` and `collections`, one row per file and view or collection id). `thumbnails` links an image to its small copy (another `files` row). Files are stored as soon as they're picked and
   released (`releaseFile` in `SqliteRepository.ts`: marked `unused_since`, with their thumbnail) in the same transaction as any write that drops
-  the last reference (changed/removed image, deleted item/field), and after a sync that drops one; the item editor releases
+  the last reference (changed/removed image, deleted item/field, a view or item views saved without it, a deleted view, collection or
+  space), and after a sync that drops one; the item editor releases
   unsaved uploads when it closes. A week later `sweepFiles` deletes them, here and on the server, unless used again. Bytes travel
   apart from the rows (`/api/files`); the server keeps them in Postgres (`file_bytes`) until a device deletes them. See `docs/sync.md`, "Files".
 - **Item links** (`item_links`, synced; `domain/backlinks.ts`): which items each value points at, for backlinks. One row per (source item,

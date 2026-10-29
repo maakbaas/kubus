@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Accordion, AccordionItem, Button, Checkbox, IconButton, MultiSelect, NumberInput, Select, SelectItem, SelectItemGroup, Slider, TextInput } from "@carbon/react";
+import type { Repository } from "../data";
 import { Add, ChartColumn, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import {
@@ -27,6 +28,7 @@ import {
   SERIES_STYLES,
   seriesLabel,
   splitFields,
+  regionValues,
   statOf,
   styleOf,
   drawsTimeline,
@@ -45,6 +47,7 @@ import {
   type XBy,
 } from "../domain/chart";
 import type { Collection, FieldDef } from "../domain/model";
+import { BUNDLED_MAPS, isBundledMap, type ChartRegions } from "../domain/regions";
 import type { GroupOrder } from "../domain/query";
 import { useMediaQuery } from "../ui/useMediaQuery";
 import { useBuffered } from "../ui/useBuffered";
@@ -53,6 +56,8 @@ import { moveBlock, useReorder } from "../ui/useReorder";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { openModeOf } from "../workspace/Workspace";
 import { chartSpec } from "./chartSpec";
+import { COUNTRY_MAPS, downloadRegionMap, loadRegionMap, type RegionMap } from "./regionMaps";
+import { errorMessage } from "../ui/useConfirm";
 import { StatView } from "./StatView";
 import { AspectSelect, HeightSlider } from "./HeightSlider";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
@@ -65,20 +70,53 @@ import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./regi
 
 const ChartCanvas = lazy(() => import("./ChartCanvas"));
 
+/** A choropleth's map (null for another chart, or while it loads), or why it can't be shown. */
+function useRegionMap(repo: Repository, options: ChartOptions): { map: RegionMap | null; error: string | null } {
+  const shown = options.chart === "choropleth";
+  const { map: name, file } = options.regions;
+  const [state, setState] = useState<{ key: string; map: RegionMap | null; error: string | null } | null>(null);
+  const key = file ?? name;
+  useEffect(() => {
+    if (!shown) return;
+    let live = true;
+    loadRegionMap(repo, { map: name, file }).then(
+      (map) => live && setState({ key, map, error: null }),
+      (e) => live && setState({ key, map: null, error: errorMessage(e) }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [repo, shown, name, file, key]);
+  return shown && state?.key === key ? state : { map: null, error: null };
+}
+
 function ChartView({ collection, result, options, refs, actions, page }: BlockProps<ChartOptions>) {
   const dark = useMediaQuery("(prefers-color-scheme: dark)");
+  const { repo } = useStore();
+  const regionMap = useRegionMap(repo, options);
   // "This item" charts the page's item, which only a block listing the page's collection has.
   const pageItem = page && page.collection.id === collection.id ? page.item : null;
   const wrongPage = options.scope === "page" && !!page && !pageItem;
   const items = useMemo(() => chartItems(result, options.scope, pageItem), [result, options.scope, pageItem]);
-  const { spec, stat } = useMemo(() => {
+  const { spec, stat, unmatched } = useMemo(() => {
     const input = { collection, items, ctx: { refLabel: refLabelOf(refs, "(deleted)") } };
     // A stat's spec is its sparkline, coloured by the stat's trend.
     const stat = options.chart === "stat" ? statOf(input, options) : null;
-    return { spec: chartSpec(input, options, dark ? "g100" : "white", stat ?? undefined), stat };
-  }, [collection, items, refs, options, dark]);
+    const regions = regionMap.map?.regions;
+    const unmatched = regions ? regionValues(input, options, regions).unmatched : [];
+    return { spec: chartSpec(input, options, dark ? "g100" : "white", stat ?? undefined, regions), stat, unmatched };
+  }, [collection, items, refs, options, dark, regionMap.map]);
   if (wrongPage) return <p className="helper chart-block__problem">“Of this item” charts the page's item: the block lists {collection.pluralName}, not the page's collection.</p>;
-  if ("problem" in spec) return <p className="helper chart-block__problem">{spec.problem}</p>;
+  if (regionMap.error) return <p className="helper chart-block__problem">{regionMap.error}</p>;
+  // Values that are no region of the map, with their items' number: what to correct in the data.
+  const notOnMap = unmatched.length > 0 && <Unmatched unmatched={unmatched} />;
+  if ("problem" in spec)
+    return (
+      <>
+        <p className="helper chart-block__problem">{spec.problem}</p>
+        {notOnMap}
+      </>
+    );
   if (stat) {
     // A sparkline of more than one step only (no X axis: one).
     const line = options.sparkline !== "none" && options.x.by !== "none" && spec.data.length > 1;
@@ -101,13 +139,25 @@ function ChartView({ collection, result, options, refs, actions, page }: BlockPr
       <Suspense fallback={<div className="chart-block__loading" style={{ blockSize: String(spec.options.height) }} />}>
         <ChartCanvas
           spec={spec}
+          geoData={spec.map ? regionMap.map?.topology : undefined}
           onItem={(id, event) => {
             const item = items.find((i) => i.id === id);
             if (item) actions.open(item, event ? openModeOf(event) : "here");
           }}
         />
       </Suspense>
+      {notOnMap}
     </div>
+  );
+}
+
+/** A choropleth's values that are no region of its map ("Not on the map: Noord Holand (3), Fryslan (1)"), the whole list in its title. */
+function Unmatched({ unmatched }: { unmatched: { label: string; items: number }[] }) {
+  const text = `Not on the map: ${unmatched.map((u) => `${u.label} (${u.items})`).join(", ")}`;
+  return (
+    <p className="helper chart-block__unmatched" title={text}>
+      {text}
+    </p>
   );
 }
 
@@ -131,8 +181,8 @@ function kindHas(kind: ChartKind) {
     x: xy || parts || kind === "radar" || kind === "boxplot" || kind === "heatmap" || kind === "stat",
     /** A list of series: bar / line / area (every setting), scatter (each a Y field). */
     seriesList: xy || kind === "scatter",
-    /** One value (the first series): parts, gauge, heatmap. */
-    value: parts || kind === "gauge" || kind === "heatmap" || kind === "stat",
+    /** One value (the first series): parts, gauge, heatmap, choropleth. */
+    value: parts || kind === "gauge" || kind === "heatmap" || kind === "stat" || kind === "choropleth",
     /** A number or date field whose values are spread. */
     spread: kind === "histogram" || kind === "boxplot",
     /** What the rest of a pie or meter and a gauge's % are measured against (a treemap's and word cloud's parts are not drawn against one). */
@@ -176,7 +226,7 @@ const unique = <T,>(list: T[]) => [...new Set(list)];
  * and parts from number fields start from the series' fields when none are chosen yet; a histogram
  * or box plot without a field starts from the first series'.
  */
-function switchKind(o: ChartOptions, chart: ChartKind, axis: FieldDef[]): ChartOptions {
+function switchKind(o: ChartOptions, chart: ChartKind, axis: FieldDef[], splits: FieldDef[]): ChartOptions {
   const next: ChartOptions = { ...o, chart };
   // A gauge is narrow: as wide as a pane it is mostly empty (a stat spans the block, its sparkline across).
   next.width = widthAfterSwitch(o, chart);
@@ -192,6 +242,11 @@ function switchKind(o: ChartOptions, chart: ChartKind, axis: FieldDef[]): ChartO
   const seriesFields = unique(o.series.flatMap((s) => (s.field && s.value !== "count" ? [s.field] : [])));
   if ((chart === "radar" || (isParts(chart) && o.parts === "fields")) && o.fields.length === 0) next.fields = seriesFields;
   if ((chart === "histogram" || chart === "boxplot") && !o.spreadField) next.spreadField = seriesFields[0] ?? axis[0]?.id ?? null;
+  // A choropleth's regions are a field's values: the X axis's field when it has one, else the first text field.
+  if (chart === "choropleth") {
+    const field = o.x.by === "field" && splits.some((f) => f.id === o.x.field) ? o.x.field : (splits.find((f) => f.kind === "string")?.id ?? splits[0]?.id ?? null);
+    next.x = { ...o.x, by: "field", field };
+  }
   return next;
 }
 
@@ -336,6 +391,62 @@ function RowHead({ title, count, noun, handle, onRemove }: { title: string; coun
   );
 }
 
+/**
+ * The map a choropleth shows: the world's or Europe's countries (bundled), or a country's regions,
+ * downloaded and stored when chosen (views/regionMaps.ts); the map shown stays until that is done.
+ */
+function RegionsSelect({ id, value, onChange }: { id: string; value: ChartRegions; onChange(regions: ChartRegions): void }) {
+  const { repo } = useStore();
+  const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const latest = useRef<string | null>(null);
+  const continents = unique(COUNTRY_MAPS.map((m) => m.continent)).sort();
+  const choose = async (map: string) => {
+    setError(null);
+    if (isBundledMap(map)) {
+      latest.current = null;
+      setPending(null);
+      onChange({ map, file: null });
+      return;
+    }
+    latest.current = map;
+    setPending(map);
+    try {
+      const regions = await downloadRegionMap(repo, map);
+      if (latest.current === map) onChange(regions);
+    } catch (e) {
+      if (latest.current === map) setError(errorMessage(e));
+    } finally {
+      if (latest.current === map) setPending(null);
+    }
+  };
+  return (
+    <Select
+      size="sm"
+      id={id}
+      labelText="Regions"
+      value={pending ?? value.map}
+      helperText={pending ? "Downloading the map…" : undefined}
+      invalid={!!error}
+      invalidText={error ?? undefined}
+      onChange={(e) => void choose(e.target.value)}
+    >
+      <SelectItemGroup label="Countries">
+        {BUNDLED_MAPS.map((m) => (
+          <SelectItem key={m.map} value={m.map} text={m.label} />
+        ))}
+      </SelectItemGroup>
+      {continents.map((c) => (
+        <SelectItemGroup key={c} label={`Regions of a country: ${c}`}>
+          {COUNTRY_MAPS.filter((m) => m.continent === c).map((m) => (
+            <SelectItem key={m.map} value={m.map} text={m.label} />
+          ))}
+        </SelectItemGroup>
+      ))}
+    </Select>
+  );
+}
+
 function ChartOptionsEditor({ collection, options, place, pageCollectionId, onChange }: BlockOptionsProps<ChartOptions>) {
   const uid = useId();
   const openings = usePanelOpenings();
@@ -472,6 +583,19 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
         </Select>
       )}
       {xControls}
+      {o.chart === "choropleth" && (
+        <>
+          <RegionsSelect id={`${uid}-regions`} value={o.regions} onChange={(regions) => set({ regions })} />
+          <FieldSelect
+            id={`${uid}-region-field`}
+            label="Regions from"
+            fields={splits}
+            value={o.x.by === "field" ? o.x.field : null}
+            helper="A field whose values are the regions' names or codes"
+            onChange={(field) => setX({ by: "field", field })}
+          />
+        </>
+      )}
       {has.parts && o.parts === "fields" && <FieldList id={`${uid}-part-fields`} label="Number fields" fields={numbers} value={o.fields} onChange={(fields) => set({ fields })} />}
       {has.spread && <FieldSelect id={`${uid}-spread`} label="Field" fields={axis} value={o.spreadField} helper="The number or date whose values are spread" onChange={(spreadField) => set({ spreadField })} />}
       {o.chart === "histogram" && splitSelect("Split by")}
@@ -485,7 +609,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
       )}
     </>
   );
-  const hasData = offerScope || has.parts || has.x || has.spread || o.chart === "histogram" || o.chart === "heatmap" || o.chart === "scatter";
+  const hasData = offerScope || has.parts || has.x || has.spread || o.chart === "histogram" || o.chart === "heatmap" || o.chart === "scatter" || o.chart === "choropleth";
 
   // --- Series: bar / line / area (every series' settings), scatter (each a Y field)
   const seriesRows = o.series.map((s, i) => {
@@ -560,7 +684,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
   // what takes it away: nothing above the pointer moves), one value's part, a word cloud's words
   // (number fields as parts are named by their aggregate; a gauge shows only its number).
   const labelShown =
-    o.chart === "heatmap" || o.chart === "stat" || (!fieldsParts && ((has.parts && o.parts === "one" && o.chart !== "treemap") || o.chart === "pie" || o.chart === "wordcloud"));
+    o.chart === "heatmap" || o.chart === "choropleth" || o.chart === "stat" || (!fieldsParts && ((has.parts && o.parts === "one" && o.chart !== "treemap") || o.chart === "pie" || o.chart === "wordcloud"));
   const valueSection = has.value && (
     <Section key="value" title="Value">
       {aggregateSelect(`${uid}-value`, "Value", first.value, (value) =>
@@ -841,7 +965,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
 
   return (
     <div className="view-options chart-options">
-      <Select size="sm" id={`${uid}-chart`} labelText="Chart" value={o.chart} onChange={(e) => update(switchKind(o, e.target.value as ChartKind, axis))}>
+      <Select size="sm" id={`${uid}-chart`} labelText="Chart" value={o.chart} onChange={(e) => update(switchKind(o, e.target.value as ChartKind, axis, splits))}>
         {sections.map((s) => (
           <SelectItemGroup key={s} label={s}>
             {CHART_KINDS.filter((k) => k.section === s).map((k) => (

@@ -11,7 +11,8 @@
 // - parts of a whole (pie, meter, treemap, word cloud): the groups, several number fields (fat,
 //   muscle, bone) or one value, against a total (a number or a field: the rest is "Remaining");
 // - thresholds (warning / danger: absolute or a % of the total), the axes (title, min, max, log),
-//   the values' unit and decimals, the legend and the size.
+//   the values' unit and decimals, the legend and the size;
+// - a choropleth: the X axis's categories are regions of a map (domain/regions.ts), coloured by the value.
 
 import type { Component } from "./components";
 import { outputOf } from "./components";
@@ -20,6 +21,7 @@ import { formatDate, formatTime } from "./fieldKinds";
 import { fieldValue, itemLabel, newId, pickableFields, type Collection, type FieldDef, type Item } from "./model";
 import { BLOCK_HEIGHT, DEFAULT_ASPECT, normalizeAspect, normalizeBlockHeight, type AspectRatio } from "./views";
 import { applyQuery, defaultQuery, groupKeysOf, isGroupable, naturalCompare, type GroupOrder, type QueryContext, type QueryResult } from "./query";
+import { defaultRegions, normalizeRegions, regionFinder, type ChartRegions, type Region } from "./regions";
 
 export type ChartKind =
   | "bar"
@@ -35,7 +37,8 @@ export type ChartKind =
   | "histogram"
   | "boxplot"
   | "scatter"
-  | "heatmap";
+  | "heatmap"
+  | "choropleth";
 
 /** The chart types, in the order (and sections) the Chart menu lists them. */
 export const CHART_KINDS: { kind: ChartKind; label: string; section: string }[] = [
@@ -53,6 +56,7 @@ export const CHART_KINDS: { kind: ChartKind; label: string; section: string }[] 
   { kind: "boxplot", label: "Box plot", section: "Spread" },
   { kind: "scatter", label: "Scatter", section: "Spread" },
   { kind: "heatmap", label: "Heatmap", section: "Spread" },
+  { kind: "choropleth", label: "Choropleth", section: "Regions" },
 ];
 
 /** Bar, line and area: one chart of series over an X axis, each series drawn its own way (a combo when they differ). */
@@ -242,6 +246,8 @@ export interface ChartOptions {
   bins: number;
   /** Scatter: the size of the dots (bubbles). */
   sizeField: string | null;
+  /** Choropleth: the map whose regions the X axis's categories are. */
+  regions: ChartRegions;
   /** Warning and danger levels: lines on a bar, line or area chart's left axis, a gauge's or meter's colour. */
   thresholds: Threshold[];
   /** Gauge and meter: thresholds as a % of the total, or values. */
@@ -355,6 +361,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     spreadField: number,
     bins: 0,
     sizeField: null,
+    regions: defaultRegions(),
     thresholds: [],
     thresholdMode: "percent",
     xTitle: "",
@@ -447,6 +454,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     spreadField: field(o.spreadField, o.spreadField === null ? null : d.spreadField),
     bins: count(o.bins, 100),
     sizeField: field(o.sizeField),
+    regions: normalizeRegions(o.regions),
     thresholds: Array.isArray(o.thresholds)
       ? o.thresholds.flatMap((t) => {
           const r = record(t);
@@ -1157,3 +1165,32 @@ export function heatmapCells(input: ChartInput, options: ChartOptions): { x: str
 /** The weekdays' short names, Sunday first (a calendar heatmap's rows). */
 export const weekdays = (locale?: string): string[] =>
   Array.from({ length: 7 }, (_, i) => new Date(2026, 0, 4 + i).toLocaleDateString(locale, { weekday: "short" })); // 4 January 2026 was a Sunday
+
+/** A choropleth's values: a region's, and the categories that are no region of the map (with their items' number). */
+export interface RegionValues {
+  values: { region: Region; value: number }[];
+  unmatched: { label: string; items: number }[];
+}
+
+/**
+ * The value of each region of a map: the X axis's categories (a field's values) that are the region
+ * (by its code or a name: domain/regions.ts), their items made into the first series' value. Two
+ * categories of one region ("NL", "Netherlands") are one; a region without items has no value.
+ */
+export function regionValues(input: ChartInput, options: ChartOptions, regions: Region[]): RegionValues {
+  const find = regionFinder(regions);
+  const first = options.series[0] ?? newSeries();
+  const field = first.field ? fieldsOf(input.collection).get(first.field) : undefined;
+  const byRegion = new Map<Region, Item[]>();
+  const unmatched: RegionValues["unmatched"] = [];
+  for (const c of chartCategories(input, { ...options.x, by: "field", showEmpty: false, top: 0 })) {
+    const region = find(c.label);
+    if (!region) unmatched.push({ label: c.label, items: c.items.length });
+    else byRegion.set(region, [...(byRegion.get(region) ?? []), ...c.items]);
+  }
+  const values = [...byRegion].flatMap(([region, items]) => {
+    const value = aggregate(unique(items), first.value, field);
+    return value === null ? [] : [{ region, value }];
+  });
+  return { values, unmatched };
+}

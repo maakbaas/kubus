@@ -3,6 +3,7 @@ import {
   AreaChart,
   BoxplotChart,
   BubbleChart,
+  ChoroplethChart,
   ComboChart,
   DonutChart,
   GaugeChart,
@@ -22,6 +23,7 @@ import {
   WordCloudChart,
 } from "@carbon/charts-react";
 import "@carbon/charts-react/styles.css";
+import type { GeometryCollection, Topology } from "topojson-specification";
 import type { CarbonChart, ChartSpec } from "./chartSpec";
 
 // The Carbon Charts part of a chart block, in its own chunk: loaded (with d3) the first time a
@@ -48,6 +50,7 @@ const CHARTS: Record<CarbonChart, unknown> = {
   HeatmapChart,
   GaugeChart,
   MeterChart,
+  ChoroplethChart,
 };
 
 /** The chart instance a Carbon Charts component holds, as far as it is used here: its events. */
@@ -103,16 +106,37 @@ function useStableSpec(spec: ChartSpec): { spec: ChartSpec; drawing: string } {
   const key = JSON.stringify(spec);
   if (last.current?.key !== key) {
     const series = [...new Set(spec.data.map((d) => (d as { group?: unknown }).group))];
-    last.current = { key, spec, drawing: `${spec.chart}:${JSON.stringify([spec.options, spec.format, series])}` };
+    // A choropleth works its regions' values out once (Carbon's ChoroplethModel keeps them): new data is a new chart.
+    const data = spec.chart === "ChoroplethChart" ? spec.data : null;
+    last.current = { key, spec, drawing: `${spec.chart}:${JSON.stringify([spec.options, spec.format, series, data])}` };
   }
   return last.current;
 }
 
 /**
+ * A choropleth's map for one drawing: Carbon writes the regions' values onto the map's geometries
+ * (ChoroplethModel.getCombinedData), so each chart gets its own copy of them (the shapes are shared).
+ */
+function copyOfMap(map: Topology): Topology {
+  const countries = map.objects.countries as GeometryCollection;
+  return { ...map, objects: { ...map.objects, countries: { ...countries, geometries: countries.geometries.map((g) => ({ ...g })) } } };
+}
+
+/**
  * A Carbon chart; clicking a dot of a scatter opens its item (`onItem`, by the item's id). Its
  * height (the spec's) is the most it takes: a round chart narrower than that is fitted to its drawing.
+ * A choropleth is drawn on `geoData`, its map's TopoJSON (views/regionMaps.ts), kept out of the spec,
+ * which is compared as JSON.
  */
-export default function ChartCanvas({ spec: latest, onItem }: { spec: ChartSpec; onItem?(itemId: string, event: MouseEvent | undefined): void }) {
+export default function ChartCanvas({
+  spec: latest,
+  geoData,
+  onItem,
+}: {
+  spec: ChartSpec;
+  geoData?: Topology;
+  onItem?(itemId: string, event: MouseEvent | undefined): void;
+}) {
   const { spec, drawing } = useStableSpec(latest);
   const Chart = CHARTS[spec.chart] as React.ComponentType<{ data: unknown; options: unknown; ref: React.Ref<Instance> }>;
   const ref = useRef<Instance>(null);
@@ -165,7 +189,11 @@ export default function ChartCanvas({ spec: latest, onItem }: { spec: ChartSpec;
       events.removeEventListener("render-finished", rendered);
     };
   }, [drawing, part]);
-  const options = useMemo(() => (fitted === null ? spec.options : { ...spec.options, height: `${fitted}px` }), [spec, fitted]);
+  const map = useMemo(() => (geoData ? copyOfMap(geoData) : null), [geoData, drawing]); // eslint-disable-line react-hooks/exhaustive-deps
+  const options = useMemo(() => {
+    const sized = fitted === null ? spec.options : { ...spec.options, height: `${fitted}px` };
+    return map ? { ...sized, geoData: map } : sized;
+  }, [spec, fitted, map]);
   // New options (or a new chart type) are a new chart: Carbon merges new options into its old ones,
   // so whatever was taken out (a threshold, an axis's min, a title) would stay drawn. New data alone
   // is drawn in place.

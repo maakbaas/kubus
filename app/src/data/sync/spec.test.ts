@@ -18,7 +18,7 @@ function fingerprint(value: unknown): string {
   return (h >>> 0).toString(16).padStart(8, "0");
 }
 
-const LOCAL_ONLY = ["meta", "sync_outbox", "file_uses"];
+const LOCAL_ONLY = ["meta", "sync_outbox", "file_uses", "block_file_uses"];
 /** Columns of synced tables that stay on the device. */
 const LOCAL_COLUMNS: Record<string, string[]> = { files: ["data", "unused_since"] };
 

@@ -195,6 +195,43 @@ CREATE TRIGGER file_uses_delete AFTER DELETE ON field_values BEGIN
   DELETE FROM file_uses WHERE item_id = OLD.item_id AND field_id = OLD.field_id;
 END;
 
+-- The files blocks use: a row per file a live collection view's config (views.id) or a live
+-- collection's item views (collections.id) names as `files/<id>` (a Markdown block's images, a
+-- choropleth's map). Local only and derived like file_uses, by the triggers below (file_ids()); a
+-- deleted view or collection has none. Whether a file is in use (fileInUse) looks here too.
+CREATE TABLE block_file_uses (
+  file_id  TEXT NOT NULL,
+  owner_id TEXT NOT NULL,
+  PRIMARY KEY (file_id, owner_id)
+);
+CREATE INDEX idx_block_file_uses_owner ON block_file_uses(owner_id);
+CREATE TRIGGER block_file_uses_view_insert AFTER INSERT ON views BEGIN
+  DELETE FROM block_file_uses WHERE owner_id = NEW.id;
+  INSERT OR IGNORE INTO block_file_uses (file_id, owner_id)
+    SELECT value, NEW.id FROM json_each(CASE WHEN NEW.deleted_at IS NULL AND instr(NEW.config, 'files/') > 0 THEN file_ids(NULL, NEW.config) ELSE '[]' END);
+END;
+CREATE TRIGGER block_file_uses_view_update AFTER UPDATE ON views BEGIN
+  DELETE FROM block_file_uses WHERE owner_id = NEW.id;
+  INSERT OR IGNORE INTO block_file_uses (file_id, owner_id)
+    SELECT value, NEW.id FROM json_each(CASE WHEN NEW.deleted_at IS NULL AND instr(NEW.config, 'files/') > 0 THEN file_ids(NULL, NEW.config) ELSE '[]' END);
+END;
+CREATE TRIGGER block_file_uses_view_delete AFTER DELETE ON views BEGIN
+  DELETE FROM block_file_uses WHERE owner_id = OLD.id;
+END;
+CREATE TRIGGER block_file_uses_collection_insert AFTER INSERT ON collections BEGIN
+  DELETE FROM block_file_uses WHERE owner_id = NEW.id;
+  INSERT OR IGNORE INTO block_file_uses (file_id, owner_id)
+    SELECT value, NEW.id FROM json_each(CASE WHEN NEW.deleted_at IS NULL AND instr(NEW.item_views, 'files/') > 0 THEN file_ids(NULL, NEW.item_views) ELSE '[]' END);
+END;
+CREATE TRIGGER block_file_uses_collection_update AFTER UPDATE ON collections BEGIN
+  DELETE FROM block_file_uses WHERE owner_id = NEW.id;
+  INSERT OR IGNORE INTO block_file_uses (file_id, owner_id)
+    SELECT value, NEW.id FROM json_each(CASE WHEN NEW.deleted_at IS NULL AND instr(NEW.item_views, 'files/') > 0 THEN file_ids(NULL, NEW.item_views) ELSE '[]' END);
+END;
+CREATE TRIGGER block_file_uses_collection_delete AFTER DELETE ON collections BEGIN
+  DELETE FROM block_file_uses WHERE owner_id = OLD.id;
+END;
+
 -- Which items a value points at, for backlinks (domain/backlinks.ts; docs/data-model.md "Item links"): a
 -- row per (source item, source field) whose value links to items, a reference field's item(s), or
 -- the items a Markdown / HTML / AI text links to (any of their field, view or block anchors too).

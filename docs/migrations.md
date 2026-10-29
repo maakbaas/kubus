@@ -40,7 +40,9 @@ append-only migrations in one transaction, the version stored in the database.
 | Version | What | SYNC |
 |---|---|---|
 | 2 | `item_links` (which items each value links to, for backlinks; docs/data-model.md "Item links"): the table, its index and the two triggers on `field_values`, the rows of the values already there (`link_targets`, defined by the engine before it migrates), queued for the server as a migration queues nothing by itself | `SYNC_VERSION` 2. The server makes the table by itself. |
+| 3 | `block_file_uses` (the files blocks use: a Markdown block's images, a choropleth's map; docs/data-model.md): the table, its index, the insert / update / delete triggers on `views` (`config`) and `collections` (`item_views`), and the rows of the live views and collections already there (`file_ids`). Before it a Markdown block's pasted image was released when its editor closed and swept a week later. | None: local only and derived, nothing synced changes. |
 
+A chart's `regions` (a choropleth's map) is a key in its block's options, like the next: no sync version; an older device shows the chart as its default kind.
 A block listing several collections keeps `collectionIds` and `merges` in its JSON (a view's config, an item view's layout): no schema change, no
 migration, no sync version. An older device parses blocks leniently (`parseBlock`, `parseLayout` leave what they don't know) and shows such a block
 as its first collection only; saving a view there drops the two keys.
