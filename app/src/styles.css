@@ -3217,6 +3217,27 @@ img[data-lightbox] {
     padding-inline-start: var(--cds-spacing-05);
   }
 }
+/* An item page's field under a dragged field or block: above or below it, marked like the workspace's drop zones
+   (ItemPage's `fieldDrops`). Its ::before is the line between fields. */
+.item-fields [data-drop] {
+  position: relative;
+}
+.item-fields [data-drop]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  pointer-events: none;
+  background: var(--cds-highlight);
+  opacity: 0.6;
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+.item-fields [data-drop="top"]::after {
+  inset-block: 0 50%;
+}
+.item-fields [data-drop="bottom"]::after {
+  inset-block: 50% 0;
+}
 /* A block's name drags it to another place on the page. */
 .section-header__title--drag {
   cursor: grab;

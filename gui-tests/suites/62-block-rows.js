@@ -3,7 +3,7 @@
 // each block its own height, nothing scrolling inside; a dashboard row collapsing as one; Block settings' "Beside the block
 // above" (stored at once, the block moving once the panel closes) and the row's max height; a block dragged onto another's
 // side; the divider resizing with its arrow keys; a collection view with "Full width" on and off (its 700px column wide
-// enough) and an item page in rows, a block dragged there.
+// enough) and an item page in rows, a block and a field dragged there.
 
 const R_SHOWN = ".ws-pane--active .ws-tab-slot:not([hidden])";
 const MANY = 30;
@@ -209,4 +209,14 @@ test("rows with and without Full width: a collection view's blocks beside each o
     return !two.beside && oneB.beside === true && f.indexOf("i-two") === f.indexOf("i-one") - 1;
   });
   await t.until("shown: Two left of One", async () => sideBySide(await rRect(t, "i-two"), await rRect(t, "i-one")));
+  // A field dragged by its name below the row: the list follows.
+  const field = t.page.locator(`${R_SHOWN} .item-fields .icon-label`, { hasText: "Title" }).first();
+  const row = t.page.locator(`${R_SHOWN} .item-fields > .block-row`).first();
+  const rowBox = await row.boundingBox();
+  await field.dragTo(row, { targetPosition: { x: 40, y: rowBox.height - 4 } });
+  await t.until("stored: Title after the row of blocks", async () => {
+    const view = (await t.page.evaluate(async (cid) => (await window.kubus.repo.listCollections()).find((c) => c.id === cid).itemViews, ids.collections.books))[0];
+    const f = view.layout.fields;
+    return f.indexOf("i-one") < f.indexOf(ids.fields["books.title"]) && f.indexOf("i-two") < f.indexOf(ids.fields["books.title"]);
+  });
 }, { viewport: "desktop" });

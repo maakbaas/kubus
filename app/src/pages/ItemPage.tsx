@@ -6,7 +6,7 @@ import { Add, Checkmark, Code, Edit, Filter, Information, Pin, PinFilled, Renew,
 import { isFullWidth, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
-import { BlockRows, rowShape, shownRows, type RowControls } from "../views/BlockRows";
+import { BlockRows, draggedEntry, dragStart, isEntryDrag, rowShape, shownRows, zoneAt, type RowControls } from "../views/BlockRows";
 import { canBeside, placeBlock, reordered, rowStart, setBeside, setRowMaxHeight, setRowShares, withoutBlock, type RowZone } from "../domain/blockRows";
 import { QueryEditor } from "../views/QueryEditor";
 import { useBlockName } from "../views/BlockListEditor";
@@ -371,15 +371,53 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   /** The page's order of fields and blocks, empty ones too (what "Beside the block above" looks at). */
   const orderOf = (l: ItemLayout) => itemPageFields<{ id: string }>([...pickableFields(collection), ...l.blocks], l, titleField?.id).map((e) => e.id);
   /**
-   * A block dropped on another (dragged by its name). Only blocks move, next to blocks: with "all fields" (no list) the
-   * blocks follow the fields, so the drop only reorders the blocks and the layout keeps following the collection's fields.
+   * A field or block dropped on another (dragged by its name), as blocks are on other pages: the layout lists its fields
+   * and blocks in the order shown from then on ("all fields" becomes that list).
    */
-  const placeBlockOnPage = (dragId: string, targetId: string, zone: RowZone) =>
+  const placeOnPage = (dragId: string, targetId: string, zone: RowZone) =>
     arrange((l) => {
       const r = placeBlock(orderOf(l), l.blocks, dragId, targetId, zone);
+      if (r.blocks === l.blocks) return l;
       const at = (id: string) => r.order.indexOf(id);
-      return { ...l, blocks: [...r.blocks].sort((a, b) => at(a.id) - at(b.id)), fields: l.fields && r.order };
+      return { ...l, blocks: [...r.blocks].sort((a, b) => at(a.id) - at(b.id)), fields: r.order };
     }, true);
+  const canPlace = !!activeView && !standard;
+  // A field (not a row of blocks: its cells take their own drops) under a drag: above or below it, marked like a drop zone.
+  const dropTarget = (e: React.DragEvent): { el: HTMLElement; id: string } | null => {
+    const list = fieldList.current;
+    const child = list && [...list.children].find((c) => c.contains(e.target as Node));
+    if (!child || child.classList.contains("block-row")) return null;
+    const id = fieldIndex.current[[...list.children].indexOf(child)];
+    // A field shown without its name is a wrapper without a box (display: contents): its field is.
+    const el = (child.classList.contains("item-field--no-label") ? child.firstElementChild : child) as HTMLElement | null;
+    return el && id ? { el, id } : null;
+  };
+  const clearDrop = () => fieldList.current?.querySelectorAll("[data-drop]").forEach((el) => el.removeAttribute("data-drop"));
+  const fieldDrops = canPlace
+    ? {
+        onDragOver: (e: React.DragEvent) => {
+          const target = isEntryDrag(e) && dropTarget(e);
+          if (!target) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          const zone = zoneAt(e, target.el);
+          if (target.el.dataset.drop !== zone) {
+            clearDrop();
+            target.el.dataset.drop = zone;
+          }
+        },
+        onDragLeave: (e: React.DragEvent) => !e.currentTarget.contains(e.relatedTarget as Node) && clearDrop(),
+        onDrop: (e: React.DragEvent) => {
+          const target = isEntryDrag(e) && dropTarget(e);
+          clearDrop();
+          if (!target) return;
+          e.preventDefault();
+          const dragId = draggedEntry(e);
+          if (dragId) placeOnPage(dragId, target.id, zoneAt(e, target.el));
+        },
+        onDragEnd: clearDrop,
+      }
+    : {};
   const rowControls = (block: ViewBlock): RowControls => ({
     beside: !!block.beside,
     canBeside: canBeside(orderOf(layout), layout.blocks, block.id),
@@ -631,14 +669,14 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
       {/* Hidden (in place) until its HTML frames know their height, so nothing below one jumps. */}
       {item && (
         <FramesSizing>
-        <Stack ref={fieldList} gap={7} className="item-fields">
+        <Stack ref={fieldList} gap={7} className="item-fields" {...fieldDrops}>
           <BlockRows
             entries={entries}
             blockOf={(e) => blocksById.get(e.id)}
             shape={shape}
-            onPlace={activeView ? placeBlockOnPage : undefined}
+            onPlace={canPlace ? placeOnPage : undefined}
             onShares={(row, shares) => arrange((l) => ({ ...l, blocks: setRowShares(l.blocks, row, shares) }))}
-            render={(entry) => {
+            render={(entry, placed) => {
               const block = blocksById.get(entry.id);
               if (block) {
                 return page && (
@@ -657,6 +695,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                     onError={setError}
                     onOpenChange={panels.onOpenChange}
                     row={activeView ? rowControls(block) : undefined}
+                    onDragStart={placed.onDragStart}
                   />
                 );
               }
@@ -732,7 +771,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                 setCollapsed(withBlockCollapsed(collapsed, f.id, !fieldCollapsed));
               };
               return (
-                <FieldCollapse.Provider key={f.id} value={{ collapsed: fieldCollapsed, onToggle: toggle }}>
+                <FieldCollapse.Provider key={f.id} value={{ collapsed: fieldCollapsed, onToggle: toggle, ...(canPlace && { onDragStart: dragStart(f.id, "field") }) }}>
                   {fieldCollapsed ? (
                     // Only the label row, its buttons kept (like a collapsed block's menus).
                     <div className="view-field">
@@ -846,6 +885,7 @@ function ItemPageBlock({
   onError,
   onOpenChange,
   row,
+  onDragStart,
 }: {
   block: ViewBlock;
   page: PageItem;
@@ -860,8 +900,10 @@ function ItemPageBlock({
   onRemove(): void;
   onError(message: string): void;
   onOpenChange(open: boolean): void;
-  /** Its place in a row (Block settings), while "Full width" is on. */
+  /** Its place in a row (Block settings). */
   row?: RowControls;
+  /** Its name drags it to another place on the page. */
+  onDragStart?(e: React.DragEvent): void;
 }) {
   const { collections } = useStore();
   const collection = findCollection(collections, block.collectionId ?? page.collection.id);
@@ -890,6 +932,7 @@ function ItemPageBlock({
       onError={onError}
       onOpenChange={onOpenChange}
       row={row}
+      onDragStart={onDragStart}
     />
   );
 }

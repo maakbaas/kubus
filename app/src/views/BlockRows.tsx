@@ -49,7 +49,18 @@ export function listRowActions(blocks: ViewBlock[], arrange: (change: (blocks: V
   };
 }
 
+// What is dragged: a block (it can go beside another) or an item page's field (above or below only).
 const BLOCK_MIME = "application/x-kubus-block";
+const FIELD_MIME = "application/x-kubus-field";
+
+/** Starts dragging a block or an item page's field (by its name). */
+export const dragStart = (id: string, kind: "block" | "field") => (e: DragEvent) => {
+  e.dataTransfer.setData(kind === "block" ? BLOCK_MIME : FIELD_MIME, id);
+  e.dataTransfer.effectAllowed = "move";
+};
+/** Whether a drag is of a block or a field of the page (dropped here), and which. */
+export const isEntryDrag = (e: DragEvent) => e.dataTransfer.types.includes(BLOCK_MIME) || e.dataTransfer.types.includes(FIELD_MIME);
+export const draggedEntry = (e: DragEvent) => e.dataTransfer.getData(BLOCK_MIME) || e.dataTransfer.getData(FIELD_MIME);
 
 /** What the page gives a block it renders in a row. */
 export interface PlacedBlock {
@@ -76,11 +87,14 @@ export function shownRows<T extends { id: string }>(entries: T[], blockOf: (entr
 }
 const shapeOf = (block: ViewBlock | undefined, shape?: Record<string, RowShape>): RowShape | undefined => block && (shape?.[block.id] ?? block);
 
-/** Which drop zone the pointer is in: the outer quarters beside the block where the row stands side by side, else above or below. */
-function zoneAt(e: DragEvent, cell: HTMLElement): RowZone {
+/**
+ * Which drop zone the pointer is in: a block dragged over a row standing side by side, the outer quarters beside the block;
+ * else above or below it.
+ */
+export function zoneAt(e: DragEvent, cell: HTMLElement): RowZone {
   const r = cell.getBoundingClientRect();
   const cells = cell.parentElement;
-  const sideBySide = !!cells && getComputedStyle(cells).flexDirection === "row";
+  const sideBySide = e.dataTransfer.types.includes(BLOCK_MIME) && !!cells && getComputedStyle(cells).flexDirection === "row";
   if (sideBySide) {
     const x = (e.clientX - r.left) / r.width;
     if (x < 0.25) return "left";
@@ -93,11 +107,6 @@ export function BlockRows<T extends { id: string }>({ entries, blockOf, shape, r
   const [drop, setDrop] = useState<{ id: string; zone: RowZone } | null>(null);
   const shaped = (e: T) => shapeOf(blockOf(e), shape);
   const rows = shownRows(entries, blockOf, shape);
-  const dragStart = (id: string) => (e: DragEvent) => {
-    e.dataTransfer.setData(BLOCK_MIME, id);
-    e.dataTransfer.effectAllowed = "move";
-  };
-  const isBlockDrag = (e: DragEvent) => e.dataTransfer.types.includes(BLOCK_MIME);
   return (
     <>
       {rows.map((row) => {
@@ -116,7 +125,7 @@ export function BlockRows<T extends { id: string }>({ entries, blockOf, shape, r
                 className="block-cell"
                 style={{ "--share": share } as CSSProperties}
                 onDragOver={(ev) => {
-                  if (!onPlace || !isBlockDrag(ev)) return;
+                  if (!onPlace || !isEntryDrag(ev)) return;
                   ev.preventDefault();
                   ev.dataTransfer.dropEffect = "move";
                   const zone = zoneAt(ev, ev.currentTarget);
@@ -124,14 +133,14 @@ export function BlockRows<T extends { id: string }>({ entries, blockOf, shape, r
                 }}
                 onDragLeave={(ev) => !ev.currentTarget.contains(ev.relatedTarget as Node) && setDrop((d) => (d?.id === e.id ? null : d))}
                 onDrop={(ev) => {
-                  if (!onPlace || !isBlockDrag(ev)) return;
+                  if (!onPlace || !isEntryDrag(ev)) return;
                   ev.preventDefault();
-                  const dragId = ev.dataTransfer.getData(BLOCK_MIME);
+                  const dragId = draggedEntry(ev);
                   setDrop(null);
                   if (dragId) onPlace(dragId, e.id, zoneAt(ev, ev.currentTarget));
                 }}
               >
-                {render(e, onPlace ? { onDragStart: dragStart(e.id) } : {})}
+                {render(e, onPlace ? { onDragStart: dragStart(e.id, "block") } : {})}
                 {drop?.id === e.id && <div className={`ws-drop ws-drop--${drop.zone}`} aria-hidden="true" />}
               </div>
             )}

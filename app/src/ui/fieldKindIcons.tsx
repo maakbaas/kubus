@@ -1,4 +1,4 @@
-import { useContext, type ComponentType, type MouseEvent } from "react";
+import { useContext, type ComponentType, type DragEvent, type MouseEvent } from "react";
 import {
   AiGenerate,
   Calendar,
@@ -39,9 +39,10 @@ export const FIELD_KIND_ICONS: Record<FieldKind, Icon> = {
   ai: AiGenerate,
 };
 
-function IconLabel({ icon: Icon, children, onClick }: { icon: Icon; children: string; onClick?(e: MouseEvent): void }) {
+function IconLabel({ icon: Icon, children, onClick, onDragStart }: { icon: Icon; children: string; onClick?(e: MouseEvent): void; onDragStart?(e: DragEvent): void }) {
+  const className = ["icon-label", onClick && "section-header__toggle", onDragStart && "section-header__title--drag"].filter(Boolean).join(" ");
   return (
-    <span className={onClick ? "icon-label section-header__toggle" : "icon-label"} onClick={onClick}>
+    <span className={className} onClick={onClick} draggable={!!onDragStart || undefined} onDragStart={onDragStart}>
       <Icon size={16} aria-hidden="true" />
       {/* A long name is cut with "…": its whole text on hover. */}
       <span className="icon-label__text" title={children}>
@@ -64,13 +65,13 @@ export function FieldLabel({ field }: { field: FieldDef }) {
       }
     : undefined;
   const label = (
-    <IconLabel icon={FIELD_KIND_ICONS[field.editedAi ? "ai" : field.kind]} onClick={toggle}>
+    <IconLabel icon={FIELD_KIND_ICONS[field.editedAi ? "ai" : field.kind]} onClick={toggle} onDragStart={collapse?.onDragStart}>
       {field.name}
     </IconLabel>
   );
   return collapse ? (
     <>
-      <CollapseCaret {...collapse} />
+      <CollapseCaret collapsed={collapse.collapsed} onToggle={collapse.onToggle} />
       {label}
     </>
   ) : (

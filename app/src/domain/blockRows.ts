@@ -81,10 +81,14 @@ class Arrangement {
   evenRow(id: string) {
     for (const other of this.rowOf(id) ?? []) this.set(other, withoutWidth);
   }
-  /** Takes a block out of the order: the block after it in its row starts the row instead (with its settings). */
+  /** Takes a block (or an item page's field) out of the order: the block after it in its row starts the row instead (with its settings). */
   detach(id: string) {
+    const block = this.byId.get(id);
+    if (!block) {
+      this.order = this.order.filter((o) => o !== id);
+      return;
+    }
     const row = this.rowOf(id) ?? [id];
-    const block = this.byId.get(id)!;
     const at = row.indexOf(id);
     const next = row[at + 1];
     if (at === 0 && next) {
@@ -106,13 +110,15 @@ class Arrangement {
 export type RowZone = "left" | "right" | "top" | "bottom";
 
 /**
- * A block moved next to another (dragged by its header). `order` is the page's order of ids (blocks; on an item page
- * fields too); the result's blocks are in the order given (the caller orders them by `order` where that is their order).
- * Unchanged when a full row would take one more, or a block is dropped on itself.
+ * A block moved next to another (dragged by its header); on an item page a field too, by its name. `order` is the page's
+ * order of ids (blocks; on an item page fields too); the result's blocks are in the order given (the caller orders them by
+ * `order` where that is their order). Beside (left, right) is for a block on a block; a field goes above or below what it
+ * is dropped on (a block's: its whole row). Unchanged when a full row would take one more, or it is dropped on itself.
  */
 export function placeBlock(order: string[], blocks: ViewBlock[], dragId: string, targetId: string, zone: RowZone): { order: string[]; blocks: ViewBlock[] } {
   const a = new Arrangement(order, blocks);
-  if (dragId === targetId || !a.byId.has(dragId) || !a.byId.has(targetId)) return { order, blocks };
+  if (dragId === targetId || !order.includes(dragId) || !order.includes(targetId)) return { order, blocks };
+  if ((zone === "left" || zone === "right") && (!a.byId.has(dragId) || !a.byId.has(targetId))) return { order, blocks };
   const sameRow = a.rowOf(targetId)?.includes(dragId);
   if ((zone === "left" || zone === "right") && !sameRow && (a.rowOf(targetId)?.length ?? 0) >= ROW_MAX_BLOCKS) return { order, blocks };
   a.detach(dragId);

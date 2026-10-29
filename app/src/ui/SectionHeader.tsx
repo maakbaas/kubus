@@ -6,6 +6,8 @@ import { OverflowBar } from "./OverflowBar";
 interface Collapse {
   collapsed: boolean;
   onToggle(): void;
+  /** Its name can be dragged (an item page's field, to another place on the page: views/BlockRows.tsx). */
+  onDragStart?(e: DragEvent): void;
 }
 
 /**
@@ -19,7 +21,7 @@ export const FieldCollapse = createContext<Collapse | null>(null);
  * The collapse caret before a label's icon. It takes a label's height (the 2rem button overhangs)
  * and is pulled left by the button's inset, so its chevron starts where the label's text would.
  */
-export function CollapseCaret({ collapsed, onToggle }: Collapse) {
+export function CollapseCaret({ collapsed, onToggle }: Pick<Collapse, "collapsed" | "onToggle">) {
   return (
     <span className="collapse-caret">
       <IconButton autoAlign kind="ghost" size="sm" align="top-start" label={collapsed ? "Expand" : "Collapse"} aria-expanded={!collapsed} onClick={onToggle}>

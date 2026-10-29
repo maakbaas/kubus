@@ -123,3 +123,21 @@ describe("block rows kept sound", () => {
     expect(reordered(["a", "b", "f"], ["a", "f", "b"], blocks).find((b) => b.id === "b")?.beside).toBeUndefined();
   });
 });
+
+describe("an item page's fields among its blocks", () => {
+  const blocks = [block("a"), block("b", { beside: true }), block("c")];
+  const order = ["f1", "a", "b", "f2", "c"];
+  const place = (drag: string, target: string, zone: Parameters<typeof placeBlock>[4]) => placeBlock(order, blocks, drag, target, zone);
+
+  it("moves a field above or below what it is dropped on, a block's whole row", () => {
+    expect(place("f1", "f2", "bottom").order).toEqual(["a", "b", "f2", "f1", "c"]);
+    expect(place("f2", "b", "top").order).toEqual(["f1", "f2", "a", "b", "c"]);
+    expect(place("f1", "a", "bottom").order).toEqual(["a", "b", "f1", "f2", "c"]);
+  });
+
+  it("puts a block above or below a field, never beside one; a field never beside a block", () => {
+    expect(place("c", "f1", "top").order).toEqual(["c", "f1", "a", "b", "f2"]);
+    expect(place("c", "f1", "right").order).toEqual(order);
+    expect(place("f2", "a", "left").order).toEqual(order);
+  });
+});

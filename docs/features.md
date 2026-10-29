@@ -352,8 +352,10 @@ What the app does, feature by feature (read the part you work on).
   Block settings moves the block only once the panel closes (the rows are held, `usePanelsOpen().hold`). A row stays sound
   when it changes (`Arrangement` in `blockRows.ts`): the next block takes over a removed or moved first block's settings,
   a changed row gets equal shares again, and a block reordered in the block list (or a Fields list) away from the block
-  it was beside starts a row of its own (`reordered`). On an item page only blocks move, next to blocks: an item view
-  showing all fields (no field list) keeps doing so, its blocks (after the fields) only reordered. **On a dashboard a row collapses, not a block**: any block's caret
+  it was beside starts a row of its own (`reordered`). On an item page fields are dragged by their name too (above or
+  below a field or a row of blocks, never beside), and a drop there turns an item view showing all fields into the list
+  of its fields and blocks in the order shown (a field added to the collection later is then left out, as with any list).
+  Not while the standard page (edit icon) is shown. **On a dashboard a row collapses, not a block**: any block's caret
   collapses (or expands) its whole row, stored as the row's first block's id in the tab's `Collapsed`; collection views
   and item pages keep collapsing blocks one by one.
 - **Full width** (a checkbox in a collection view's View settings, an item view's Page layout popover and a dashboard tab's
