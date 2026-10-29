@@ -136,7 +136,8 @@ for (const vp of ["desktop", "laptop"]) {
       const rowsBefore = await rows.count();
       await dup.click();
       await t.settle();
-      await t.check("Duplicate adds a row", (await rows.count()) === rowsBefore + 1, `${rowsBefore} → ${await rows.count()}`);
+      // The copy is written, then the list hears the change: under load that is after the settle.
+      await t.until("Duplicate adds a row", async () => (await rows.count()) === rowsBefore + 1 || `${rowsBefore} → ${await rows.count()}`);
     }
     const del = t.page.locator(".items-table tbody").getByRole("button", { name: "Delete", exact: true }).first();
     if (await del.count()) {
@@ -233,8 +234,16 @@ for (const n of [200, 1000]) {
     const limit = Math.min(pace * (n / 20) * 1.25, 120000);
     await t.check(`${n} rows show within ${(limit / 1000).toFixed(1)}s, ${n / 20}× the 20-row time and some (${(ms / 1000).toFixed(1)}s)`, ms <= limit, `${ms}ms; 20 rows took ${pace}ms`);
     await t.audit(`${n} rows`);
+    // A block shows 100 items at first (DEFAULT_LIMIT) and 100 more with each "Show more".
+    const first = Math.min(n, 100);
     const rows = await t.count(".items-table tbody tr");
-    await t.check(`all ${n} rows are listed (${rows})`, rows >= n, `${rows} rows`);
+    await t.check(`the first ${first} of ${n} rows are listed (${rows})`, rows >= first && rows <= first + 1, `${rows} rows`);
+    const more = t.page.locator(".ws-pane--active .block").first().getByRole("button", { name: "Show more", exact: true });
+    for (let page = 1; page * 100 < n; page++) {
+      await more.click();
+      await t.until(`Show more lists ${Math.min(n, (page + 1) * 100)} rows`, async () => (await t.count(".items-table tbody tr")) >= Math.min(n, (page + 1) * 100));
+    }
+    await t.check(`all ${n} rows are listed, no Show more left`, (await t.count(".items-table tbody tr")) >= n && (await more.count()) === 0, `${await t.count(".items-table tbody tr")} rows`);
     for (const pos of [0.5, 1]) {
       await t.page.locator(".ws-pane--active .ws-pane__body").evaluate((el, pos) => (el.scrollTop = el.scrollHeight * pos), pos);
       await t.audit(`scrolled to ${pos * 100}%`, { shotOnFail: true });
@@ -299,7 +308,8 @@ for (const vp of ["desktop", "phone"]) {
     await t.settle(150);
     const down = await at();
     await t.check("the pane scrolled down past the table's top", down.scrollTop > 0 && before.head - down.scrollTop < down.pane, JSON.stringify({ before, down }));
-    await t.check("scrolled down: the header row is at the pane's top", Math.abs(down.head - down.pane) <= 1, JSON.stringify({ before, down }));
+    // It stops a spacing-05 (16px) below the pane's top edge, as at rest (--table-head-gap).
+    await t.check("scrolled down: the header row is at the pane's top (a spacing-05 below it)", Math.abs(down.head - (down.pane + 16)) <= 1, JSON.stringify({ before, down }));
     await t.audit("table scrolled down, header row held", { shotOnFail: true });
     // Sideways too (a phone): the header cells stay above their columns.
     await t.page.evaluate(() => {
