@@ -96,6 +96,9 @@ export interface BlockOptionsProps<O> {
   place: BlockPlace;
   /** On an item page: its collection (a chart offers "This item" only when it lists that collection). */
   pageCollectionId?: string;
+  /** The block's items as it shows them (a choropleth's settings list which of them each region of its map has), and their references' labels. */
+  result?: QueryResult;
+  refs?: RefOptions;
   onChange(options: O): void;
 }
 

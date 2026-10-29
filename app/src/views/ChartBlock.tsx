@@ -58,6 +58,7 @@ import { openModeOf } from "../workspace/Workspace";
 import { chartSpec } from "./chartSpec";
 import { COUNTRY_MAPS, downloadRegionMap, loadRegionMap, type RegionMap } from "./regionMaps";
 import { errorMessage } from "../ui/useConfirm";
+import { RegionsDialog } from "./RegionsDialog";
 import { StatView } from "./StatView";
 import { AspectSelect, HeightSlider } from "./HeightSlider";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
@@ -447,9 +448,10 @@ function RegionsSelect({ id, value, onChange }: { id: string; value: ChartRegion
   );
 }
 
-function ChartOptionsEditor({ collection, options, place, pageCollectionId, onChange }: BlockOptionsProps<ChartOptions>) {
+function ChartOptionsEditor({ collection, options, place, pageCollectionId, result, refs, onChange }: BlockOptionsProps<ChartOptions>) {
   const uid = useId();
   const openings = usePanelOpenings();
+  const [showRegions, setShowRegions] = useState(false);
   const { components } = useStore();
   // Everything typed here (numbers, labels, titles) is stored after a pause: each change of a block's options is stored.
   const [o, update] = useBuffered(options, onChange);
@@ -594,6 +596,11 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, onCh
             helper="A field whose values are the regions' names or codes"
             onChange={(field) => setX({ by: "field", field })}
           />
+          {/* The map's regions: what a value has to be, and which of the block's values are which. */}
+          <Button kind="tertiary" size="sm" className="chart-options__add" onClick={() => setShowRegions(true)}>
+            Show regions
+          </Button>
+          {showRegions && <RegionsDialog regions={o.regions} options={o} collection={collection} result={result} refs={refs} onClose={() => setShowRegions(false)} />}
         </>
       )}
       {has.parts && o.parts === "fields" && <FieldList id={`${uid}-part-fields`} label="Number fields" fields={numbers} value={o.fields} onChange={(fields) => set({ fields })} />}

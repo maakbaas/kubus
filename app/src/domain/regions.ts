@@ -55,6 +55,8 @@ export interface Region {
   feature: number;
   /** Its code, "" without one. */
   id: string;
+  /** Its English name, where the map has one other than its name ("" else). */
+  english: string;
   /** Its names and code as matched (`matchKey`). */
   names: string[];
 }
@@ -83,7 +85,8 @@ export function regionsOf(features: Feature[]): Region[] {
     for (let i = 2; taken.has(key); i++) key = `${name} (${i})`;
     taken.add(key);
     const names = [name, p.NAME_ENG, id].filter((n): n is string => typeof n === "string" && n.trim() !== "").map(matchKey);
-    regions.push({ key, feature, id, names: [...new Set(names)] });
+    const english = typeof p.NAME_ENG === "string" && p.NAME_ENG.trim() && p.NAME_ENG.trim() !== name ? p.NAME_ENG.trim() : "";
+    regions.push({ key, feature, id, english, names: [...new Set(names)] });
   }
   return regions;
 }

@@ -1166,9 +1166,11 @@ export function heatmapCells(input: ChartInput, options: ChartOptions): { x: str
 export const weekdays = (locale?: string): string[] =>
   Array.from({ length: 7 }, (_, i) => new Date(2026, 0, 4 + i).toLocaleDateString(locale, { weekday: "short" })); // 4 January 2026 was a Sunday
 
-/** A choropleth's values: a region's, and the categories that are no region of the map (with their items' number). */
+/** A choropleth's values: a region's, which categories each region is (with its items' number), and the categories that are no region of the map. */
 export interface RegionValues {
   values: { region: Region; value: number }[];
+  /** Every region some category is, in the categories' order: the categories' labels ("NL", "Netherlands") and how many items they have. */
+  matches: { region: Region; labels: string[]; items: number }[];
   unmatched: { label: string; items: number }[];
 }
 
@@ -1181,16 +1183,20 @@ export function regionValues(input: ChartInput, options: ChartOptions, regions: 
   const find = regionFinder(regions);
   const first = options.series[0] ?? newSeries();
   const field = first.field ? fieldsOf(input.collection).get(first.field) : undefined;
-  const byRegion = new Map<Region, Item[]>();
+  const byRegion = new Map<Region, { labels: string[]; items: Item[] }>();
   const unmatched: RegionValues["unmatched"] = [];
   for (const c of chartCategories(input, { ...options.x, by: "field", showEmpty: false, top: 0 })) {
     const region = find(c.label);
     if (!region) unmatched.push({ label: c.label, items: c.items.length });
-    else byRegion.set(region, [...(byRegion.get(region) ?? []), ...c.items]);
+    else {
+      const m = byRegion.get(region) ?? { labels: [], items: [] };
+      byRegion.set(region, { labels: [...m.labels, c.label], items: [...m.items, ...c.items] });
+    }
   }
-  const values = [...byRegion].flatMap(([region, items]) => {
-    const value = aggregate(unique(items), first.value, field);
+  const values = [...byRegion].flatMap(([region, m]) => {
+    const value = aggregate(unique(m.items), first.value, field);
     return value === null ? [] : [{ region, value }];
   });
-  return { values, unmatched };
+  const matches = [...byRegion].map(([region, m]) => ({ region, labels: m.labels, items: unique(m.items).length }));
+  return { values, matches, unmatched };
 }
