@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HeadlessOptions } from "../../shared/api.ts";
 
-const bundle = vi.hoisted(() => ({ exists: true, stub: "", start: async (_options: unknown): Promise<unknown> => ({ handle: async () => ({ status: 200 }) }) }));
+const bundle = vi.hoisted(() => ({ exists: true, stub: "", start: async (_options: unknown): Promise<unknown> => ({ handle: async () => ({ status: 200 }), close: async () => {} }) }));
 
 vi.mock("node:fs", async (importOriginal) => ({ ...(await importOriginal<typeof import("node:fs")>()), existsSync: () => bundle.exists }));
 // The bundle (built by `npm run build:headless`, git-ignored) is replaced by a stand-in module that
@@ -25,7 +25,7 @@ describe("the headless device's host", () => {
 
   beforeEach(() => {
     bundle.exists = true;
-    bundle.start = async () => ({ handle: async () => ({ status: 200 }) });
+    bundle.start = async () => ({ handle: async () => ({ status: 200 }), close: async () => {} });
   });
   afterEach(() => vi.useRealTimers());
 
@@ -48,7 +48,7 @@ describe("the headless device's host", () => {
   it("starts the device with the server's options and says when /api/v1 is ready", async () => {
     const log: string[] = [];
     let given: unknown;
-    bundle.start = async (o) => ((given = o), { handle: async () => ({ status: 200 }) });
+    bundle.start = async (o) => ((given = o), { handle: async () => ({ status: 200 }), close: async () => {} });
     const host = new HeadlessHost();
     const o = options(log);
     await host.start(o);
@@ -63,7 +63,7 @@ describe("the headless device's host", () => {
     let attempts = 0;
     bundle.start = async () => {
       if (++attempts === 1) throw new Error("the server isn't up");
-      return { handle: async () => ({ status: 200 }) };
+      return { handle: async () => ({ status: 200 }), close: async () => {} };
     };
     const host = new HeadlessHost();
     await host.start(options(log));
@@ -86,5 +86,27 @@ describe("the headless device's host", () => {
     await host.start(options([]));
     expect(host.problem).toBe("The API couldn't start: boom");
     vi.clearAllTimers();
+  });
+
+  it("closes the device when the server stops, and stops trying again", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    let closed = 0;
+    bundle.start = async () => ({ handle: async () => ({ status: 200 }), close: async () => void closed++ });
+    const host = new HeadlessHost();
+    await host.start(options([]));
+    await host.close();
+    expect(closed).toBe(1);
+    await new HeadlessHost().close(); // nothing started: nothing to close
+
+    let attempts = 0;
+    bundle.start = async () => {
+      attempts++;
+      throw new Error("down");
+    };
+    const failing = new HeadlessHost();
+    await failing.start(options([]));
+    await failing.close();
+    vi.advanceTimersByTime(60_000);
+    expect(attempts).toBe(1);
   });
 });
