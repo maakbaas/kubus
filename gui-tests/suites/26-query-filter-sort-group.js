@@ -572,11 +572,14 @@ test(`group: Group by ${label} and every Group order, rows per group @ desktop`,
 // --- group dates by year, month, week, day or hour ------------------------------------------------
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-/** The ISO week (Monday to Sunday, week 1 holds the first Thursday) of a local day, worked out here apart from the app. */
-function isoWeekOf(d) {
-  const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  x.setUTCDate(x.getUTCDate() + 4 - (x.getUTCDay() || 7));
-  return { year: x.getUTCFullYear(), week: Math.ceil(((x - Date.UTC(x.getUTCFullYear(), 0, 1)) / DAY_MS + 1) / 7) };
+/** The week (Sunday to Saturday; week 1 holds 1 January, so a week belongs to the year of its Saturday) of a local day, worked out here apart from the app. */
+function weekGroupOf(d) {
+  const sat = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 6 - d.getDay());
+  const year = sat.getFullYear();
+  const jan1 = new Date(year, 0, 1);
+  const firstSun = new Date(year, 0, 1 - jan1.getDay());
+  const sunday = new Date(sat.getFullYear(), sat.getMonth(), sat.getDate() - 6);
+  return { year, week: Math.round((Date.UTC(sunday.getFullYear(), sunday.getMonth(), sunday.getDate()) - Date.UTC(firstSun.getFullYear(), firstSun.getMonth(), firstSun.getDate())) / DAY_MS / 7) + 1 };
 }
 /** [key, label] of the group a local moment falls in by `part`. */
 function dateGroupOf(d, part) {
@@ -586,14 +589,14 @@ function dateGroupOf(d, part) {
   if (part === "year") return [String(y), String(y)];
   if (part === "month") return [`${y}-${pad2(d.getMonth() + 1)}`, `${MONTH_NAMES[d.getMonth()]} ${y}`];
   if (part === "week") {
-    const w = isoWeekOf(d);
+    const w = weekGroupOf(d);
     return [`${w.year}-W${pad2(w.week)}`, `Week ${w.week}, ${w.year}`];
   }
   if (part === "hour") return [`${ymdKey}T${pad2(d.getHours())}`, `${day}, ${pad2(d.getHours())}:00`];
   return [ymdKey, day];
 }
 
-// Fixed moments (local), across a year's end and the ISO weeks that differ from the calendar's.
+// Fixed moments (local), across a year's end and the weeks (Sunday to Saturday) across it.
 const ENTRIES = [
   { title: "Anna", day: "2026-10-28", at: new Date(2026, 9, 28, 14, 30) },
   { title: "Bert", day: "2026-10-26", at: new Date(2026, 9, 28, 14, 5) },
@@ -675,7 +678,7 @@ test("group: a date by year, month, week, day or hour, in time order; stored, ke
   // The readable labels, spelled out once (apart from the model above).
   await groupBy.selectOption({ label: "At" });
   await by.selectOption({ label: "Week" });
-  await t.until("a week reads 'Week 44, 2026' (ISO)", async () => (await groupsOf(t)).some(([l, rows]) => l === "Week 44, 2026" && rows.length === 3) || JSON.stringify(await groupsOf(t)));
+  await t.until("a week reads 'Week 44, 2026' (Sunday to Saturday)", async () => (await groupsOf(t)).some(([l, rows]) => l === "Week 44, 2026" && rows.length === 3) || JSON.stringify(await groupsOf(t)));
   await by.selectOption({ label: "Hour" });
   await t.until("an hour reads '28 Oct 2026, 14:00'", async () => (await groupsOf(t)).some(([l, rows]) => l === "28 Oct 2026, 14:00" && rows.length === 2) || JSON.stringify(await groupsOf(t)));
 

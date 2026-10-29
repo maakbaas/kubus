@@ -116,7 +116,7 @@ describe.skipIf(!ADMIN)("devices syncing through the server", () => {
       fetch(`${server.url}/api/sync`, {
         method: "POST",
         headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ since: 0, changes, version, compatible: version }),
+        body: JSON.stringify({ since: 0, changes, version }),
       });
     const post = async (changes: Record<string, unknown[]>, version: number) => {
       const response = await send(changes, version);

@@ -5,6 +5,7 @@ import { itemLabel, labelField, nextName, type Collection, type FieldValue, type
 import { groupPreset, type ViewQuery } from "../domain/query";
 import type { OpenMode } from "../workspace/Workspace";
 import type { ItemActions } from "./registry";
+import { errorMessage } from "../domain/errors";
 
 // What a block can do with its items (useItemActions wires these to the app): the handlers worked out
 // from the collection and the block's query, and the stable object blocks get, which delegates to the
@@ -32,7 +33,6 @@ export interface ItemActionsEnvironment {
   openRelated(path: string, mode?: OpenMode): void;
 }
 
-const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 /** What a block can do with read-only items (a remote collection's rows): open them, sort them. */
 export function readOnlyActions(actions: ItemActions): ItemActions {

@@ -32,7 +32,7 @@ describe.skipIf(!ADMIN)("the server's database", () => {
   }
   const applied = async () => (await pool.query<{ version: number }>("SELECT version FROM schema_migrations ORDER BY version")).rows.map((r) => r.version);
   const sync = (changes: Record<string, WireRow[]>, over: Partial<SyncRequest> = {}) =>
-    handleSync(pool, { since: 0, changes, version: SYNC_VERSION, compatible: SYNC_VERSION, ...over });
+    handleSync(pool, { since: 0, changes, version: SYNC_VERSION, ...over });
 
   beforeAll(async () => {
     schemaSql = await loadSchema();
@@ -97,7 +97,7 @@ describe.skipIf(!ADMIN)("the server's database", () => {
     await sync({ spaces: [older] });
     expect((await pool.query("SELECT name, icon FROM spaces")).rows).toEqual([{ name: "Office", icon: "Briefcase" }]);
 
-    expect(await sync({ spaces: [{ ...row, name: "Old" }] }, { version: 0, compatible: 0 })).toMatchObject({ outdated: { update: "app" } });
+    expect(await sync({ spaces: [{ ...row, name: "Old" }] }, { version: 0 })).toMatchObject({ outdated: { update: "app" } });
     expect(await sync({}, { version: SYNC_VERSION + 1 })).toMatchObject({ outdated: { update: "server" } });
     expect((await pool.query("SELECT name FROM spaces")).rows).toEqual([{ name: "Office" }]);
   });

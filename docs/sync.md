@@ -56,8 +56,7 @@ needs server-side queries (docs/vision.md).
   before the table existed) rebuilds the rows of every value (`healLinks`, queued for the server). Nothing is computed on the server; it stores
   the rows (jsonb `targets`, handed back as the same text). A row that arrives alone announces its source item's change (`announce`).
 - *Versions* (a strict gate, `docs/migrations.md`): only a device and a server of the same `SYNC_VERSION` sync, both ways. Every request
-  carries the device's (`version`; `compatible`, equal to it, only for servers from before the gate, which then turn the device
-  away); the server answers 426 (`SyncOutdated`: `update` is `app` when the device is older, `server` when the server is older, plus its
+  carries the device's (`version`); the server answers 426 (`SyncOutdated`: `update` is `app` when the device is older, `server` when the server is older, plus its
   `version`) and writes nothing; every answer and `/api/health` carry the server's (`SyncResponse.version`, `syncVersion`), and
   the device refuses a response of another one itself (`SyncRefused`), and "Test connection" says so before connecting. The device
   keeps working offline and its outbox is not touched (nothing is dropped or marked as sent, a first connection is not made);

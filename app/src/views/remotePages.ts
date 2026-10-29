@@ -2,6 +2,7 @@ import type { SourceResult, SourceRow } from "../../../shared/sources";
 import type { Collection } from "../domain/model";
 import { groupItems, type ItemGroup, type QueryResult, type ViewQuery } from "../domain/query";
 import { groupLabel, type BuiltRows } from "../domain/sources";
+import { errorMessage } from "../domain/errors";
 
 // The pure part of a remote block's paging (useRemoteResult): what the rows held are, and how a page,
 // a failure or the items built from them change what the block shows.
@@ -21,13 +22,12 @@ export interface Loaded {
 /** What a page of the source gives (the first page also what the whole answer is about). */
 export type Page = Omit<Loaded, "key" | "batch">;
 
-const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** The first page as it is held: a total under the rows in (a source that couldn't count them all) counts at least those; a failure holds its message. */
 export function firstPage(answer: Promise<SourceResult>): Promise<Page> {
   return answer.then(
     (r) => ({ rows: r.rows, total: Math.max(r.total ?? 0, r.rows.length), groups: r.groups, more: r.more }),
-    (e) => ({ rows: [], total: 0, groups: [], more: false, error: messageOf(e) }),
+    (e) => ({ rows: [], total: 0, groups: [], more: false, error: errorMessage(e) }),
   );
 }
 
@@ -38,7 +38,7 @@ export function withNextPage(l: Loaded | null, r: SourceResult): Loaded | null {
 
 /** The rows held with the failure of the next page noted; they stay. */
 export function withPageError(l: Loaded | null, e: unknown): Loaded | null {
-  return l && { ...l, error: messageOf(e) };
+  return l && { ...l, error: errorMessage(e) };
 }
 
 const NO_REFS = { refLabel: () => "" };

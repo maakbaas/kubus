@@ -220,7 +220,10 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
               if (list.length === 0) return;
               // A collection view's block always lists the view's collection.
               if (!page && !list.some((c) => c.id === home.id)) list = [home, ...list];
-              if (list.length > 1) list = list.filter((c) => !c.virtual);
+              // The virtual Backlinks collection stands alone: picking it leaves the others, picking another leaves it.
+              const picked = list.find((c) => c.virtual && !chosen.some((x) => x.id === c.id));
+              if (picked) list = [picked];
+              else if (list.length > 1) list = list.filter((c) => !c.virtual);
               if (list.length === 0 || (list.length === chosen.length && list.every((c) => chosen.some((x) => x.id === c.id)))) return;
               const ids = list.map((c) => c.id);
               if (list.length === 1) {

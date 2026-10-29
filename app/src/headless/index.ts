@@ -20,6 +20,7 @@ import { createApi } from "./api";
 import { contextCompiler } from "./compiler";
 import { DiskStore } from "./diskStore";
 import { Webhooks } from "./webhooks";
+import { errorMessage } from "../domain/errors";
 
 export class HeadlessDevice {
   private queue: Promise<unknown> = Promise.resolve();
@@ -83,7 +84,7 @@ export class HeadlessDevice {
     } catch (e) {
       // A newer version's database waits for its version (it is never touched); a file that isn't a database is put aside.
       if (!existed || /newer version of Kubus/.test(String(e))) throw e;
-      options.log(`The saved database can't be opened (${e instanceof Error ? e.message : String(e)}): kept as ${await store.setAside()}, starting over`);
+      options.log(`The saved database can't be opened (${errorMessage(e)}): kept as ${await store.setAside()}, starting over`);
       return NodeSqlClient.open(store.dbPath);
     }
   }

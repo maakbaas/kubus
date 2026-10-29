@@ -5,6 +5,7 @@
 import { MIGRATIONS, type Db, type Migration } from "../migrations";
 import { fileIds, linkTargetsFn, outboxTriggerSql, schema } from "../schema";
 import type { Bind, Statement } from "./protocol";
+import { errorMessage } from "../../domain/errors";
 
 export class SqliteEngine {
   /** `sqlite3` is the initialized module, `db` an open oo1 database. Brings its schema up to date. */
@@ -137,7 +138,7 @@ function migrate(db: Db, version: number, plan: SchemaPlan) {
         if (typeof m.up === "string") db.exec(m.up);
         else m.up(db);
       } catch (e) {
-        throw new Error(`Updating the database failed (migration ${m.version}, ${m.description}): ${e instanceof Error ? e.message : String(e)}`);
+        throw new Error(`Updating the database failed (migration ${m.version}, ${m.description}): ${errorMessage(e)}`);
       }
     }
     const triggers: string[] = db.selectValues("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'sync\\_%' ESCAPE '\\'");

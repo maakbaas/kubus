@@ -28,7 +28,7 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
   const providerRequests: { path: string; authorization?: string; body: string }[] = [];
 
   const sync = async (body: Partial<SyncRequest>) => {
-    const response = await request(server, "/api/sync", { method: "POST", json: { since: 0, changes: {}, version: SYNC_VERSION, compatible: SYNC_VERSION, ...body } });
+    const response = await request(server, "/api/sync", { method: "POST", json: { since: 0, changes: {}, version: SYNC_VERSION, ...body } });
     return { status: response.status, body: (await response.json()) as SyncResponse & { error?: string; update?: string } };
   };
 
@@ -167,10 +167,10 @@ describe.skipIf(!ADMIN)("the server over HTTP", () => {
       const mismatch = await sync({ database: "another", changes: { spaces: [space("http-s3", "Lost")] } });
       expect(mismatch.status).toBe(409);
       expect(mismatch.body.error).toMatch(/wiped or replaced/);
-      const outdated = await sync({ version: 0, compatible: 0, changes: { spaces: [space("http-s3", "Lost")] } });
+      const outdated = await sync({ version: 0, changes: { spaces: [space("http-s3", "Lost")] } });
       expect(outdated.status).toBe(426);
       expect(outdated.body.update).toBe("app");
-      const newer = await sync({ version: SYNC_VERSION + 1, compatible: SYNC_VERSION + 1, changes: { spaces: [space("http-s3", "Lost")] } });
+      const newer = await sync({ version: SYNC_VERSION + 1, changes: { spaces: [space("http-s3", "Lost")] } });
       expect(newer.status).toBe(426);
       expect(newer.body.update).toBe("server");
       expect((await sync({})).body.changes.spaces?.some((r) => r.id === "http-s3")).toBeFalsy();
@@ -475,10 +475,10 @@ describe.skipIf(!ADMIN)("a server on a database migrated by a newer one", () => 
 
   it("starts, but refuses to sync until it is wiped", async () => {
     expect(server.output()).toMatch(/newer Kubus server/);
-    const refused = await request(server, "/api/sync", { method: "POST", json: { since: 0, changes: {}, version: SYNC_VERSION, compatible: SYNC_VERSION } });
+    const refused = await request(server, "/api/sync", { method: "POST", json: { since: 0, changes: {}, version: SYNC_VERSION } });
     expect(refused.status).toBe(500);
     expect((await refused.json()).error).toMatch(/doesn't fit its schema/);
     expect((await request(server, "/api/wipe", { method: "POST", json: { confirm: "wipe" } })).status).toBe(200);
-    expect((await request(server, "/api/sync", { method: "POST", json: { since: 0, changes: {}, version: SYNC_VERSION, compatible: SYNC_VERSION } })).status).toBe(200);
+    expect((await request(server, "/api/sync", { method: "POST", json: { since: 0, changes: {}, version: SYNC_VERSION } })).status).toBe(200);
   });
 });

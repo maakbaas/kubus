@@ -34,6 +34,7 @@
 import { checklistItems } from "./checklist";
 import { fileSrc } from "./files";
 import type { AiOutput, FieldDef, FieldKind, FieldValue, Item, Collection } from "./model";
+import { errorMessage } from "./errors";
 
 /**
  * What a component's result is, and so how it shows: Markdown (rendered), plain text, a number
@@ -374,7 +375,7 @@ export function evaluate(code: string, item?: Item, fields?: FieldLookup, block?
     const b = block ?? NO_BLOCK;
     return toValue(fn(itemValue(item, fields), new Date(), b.items, b.groups, b.fields, b.all));
   } catch (e) {
-    return ERROR_PREFIX + (e instanceof Error ? e.message : String(e));
+    return ERROR_PREFIX + errorMessage(e);
   }
 }
 

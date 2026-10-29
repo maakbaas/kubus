@@ -6,6 +6,7 @@ import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import { acquireDbLock, POOL_NAME, waitForPoolFiles } from "./dbLock";
 import { SqliteEngine } from "./engine";
 import type { OpenResult, Request, Response } from "./protocol";
+import { errorMessage } from "../../domain/errors";
 
 const DB_FILE = "/kubus.sqlite3";
 
@@ -56,7 +57,7 @@ self.onmessage = async (event: MessageEvent<Request>) => {
       res = { id: req.id, ok: true, result: null };
     }
   } catch (e) {
-    res = { id: req.id, ok: false, error: e instanceof Error ? e.message : String(e) };
+    res = { id: req.id, ok: false, error: errorMessage(e) };
   }
   self.postMessage(res);
 };
