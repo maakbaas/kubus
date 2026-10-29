@@ -11,22 +11,18 @@ export function LoadingBar({
   value,
   max,
   onStop,
-  stopLabel = "Stop loading",
-  className,
 }: {
   label: string;
   /** Without a value the bar is empty (the total isn't known yet). */
   value?: number;
   max?: number;
   onStop?(): void;
-  stopLabel?: string;
-  className?: string;
 }) {
   return (
-    <div className={`loading-bar${className ? ` ${className}` : ""}`}>
+    <div className="loading-bar">
       <ProgressBar className="loading-bar__bar" size="small" label={label} value={value ?? 0} max={Math.max(max ?? 1, 1)} />
       {onStop && (
-        <IconButton autoAlign kind="ghost" size="sm" align="top-end" label={stopLabel} onClick={onStop}>
+        <IconButton autoAlign kind="ghost" size="sm" align="top-end" label="Stop loading" onClick={onStop}>
           <Close />
         </IconButton>
       )}

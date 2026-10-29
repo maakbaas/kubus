@@ -45,7 +45,7 @@ import {
   type XBy,
 } from "../domain/chart";
 import type { Collection, FieldDef } from "../domain/model";
-import { type GroupOrder } from "../domain/query";
+import type { GroupOrder } from "../domain/query";
 import { useMediaQuery } from "../ui/useMediaQuery";
 import { useBuffered } from "../ui/useBuffered";
 import { usePanelOpenings } from "../ui/ToolbarPopover";

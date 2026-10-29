@@ -6,7 +6,6 @@ import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { newName, now, newId, type Collection } from "../domain/model";
 import { firstShownFields, isReadOnly, isRemote, sourcePeriod } from "../domain/sources";
-
 import { defaultViewState, newBlock, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
 import { NotFound } from "../ui/NotFound";
 import { CollectionIcon } from "../ui/collectionIcons";
@@ -79,7 +78,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>(base);
   // Rows of a source are read again on demand (they aren't kept current by themselves).
-  const readsSource = remote || view.blocks.some((b) => b.collectionIds?.some((id) => collections.find((c) => c.id === id)?.source));
+  const readsSource = remote || view.blocks.some((b) => b.collectionIds?.some((id) => collections.some((c) => c.id === id && isRemote(c))));
   const [search, setSearch] = useState("");
   // What the blocks search for: the typed text once typing pauses (each search goes over every item), an emptied box at once.
   const [searched, setSearched] = useState("");

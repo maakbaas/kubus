@@ -2,7 +2,7 @@ import { useId, useReducer, useState, useSyncExternalStore } from "react";
 import { Button, FormGroup, InlineNotification, Select, SelectItem, Stack, Toggle } from "@carbon/react";
 import type { SyncConfig } from "../data/repository";
 import { useStore } from "../app/store";
-import { useConfirm } from "./useConfirm";
+import { errorMessage, useConfirm } from "./useConfirm";
 import { ServerReplaced } from "./ServerReplaced";
 import { OutdatedNotice } from "./OutdatedNotice";
 
@@ -65,7 +65,7 @@ export function SyncSettings() {
       await sync.wipeServer();
       configChanged();
     } catch (e) {
-      setWipeError(e instanceof Error ? e.message : String(e));
+      setWipeError(errorMessage(e));
     }
   };
 

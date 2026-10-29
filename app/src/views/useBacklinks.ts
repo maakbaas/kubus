@@ -4,6 +4,7 @@ import { useDataChanges } from "../app/useDataChanges";
 import { backlinkItems } from "../domain/backlinks";
 import type { Item } from "../domain/model";
 import type { QueryContext } from "../domain/query";
+import { errorMessage } from "../ui/useConfirm";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import type { CollectionData } from "./useCollectionData";
 import type { PageItem } from "./registry";
@@ -52,7 +53,7 @@ export function useBacklinkData(page: PageItem): CollectionData {
         setError(undefined);
         setItems(shown);
       },
-      (e) => reads.current === n && setError(e instanceof Error ? e.message : String(e)),
+      (e) => reads.current === n && setError(errorMessage(e)),
     );
   }, [repo, pageCollection, pageItem, space.id]);
 

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Button } from "@carbon/react";
 import type { SyncStatus } from "../data/repository";
 import { useStore } from "../app/store";
-import { useConfirm } from "./useConfirm";
+import { errorMessage, useConfirm } from "./useConfirm";
 
 /**
  * Sync paused because the server's database is another one than this device synced with (wiped
@@ -32,7 +32,7 @@ export function ServerReplaced({ replaced, onConnect, children }: { replaced: No
     try {
       await repo.sync.reconnect();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     }
   };
   return (
