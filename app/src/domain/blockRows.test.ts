@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockRows, canBeside, moveDivider, placeBlock, reordered, rowShares, rowStart, setBeside, rowHeightPx, setRowSettings, setRowShares, withCopy, withoutBlock } from "./blockRows";
+import { columnsFor, rowLines, sideBySide, blockRows, canBeside, moveDivider, placeBlock, reordered, rowShares, rowStart, setBeside, rowHeightPx, setRowSettings, setRowShares, withCopy, withoutBlock } from "./blockRows";
 import { newBlock, parseBlock, type ViewBlock } from "./views";
 
 const block = (id: string, extra: Partial<ViewBlock> = {}): ViewBlock => ({ ...newBlock("table", null, id), ...extra });
@@ -87,6 +87,37 @@ describe("block rows", () => {
     expect([plain.rowHeight, plain.rowFit]).toEqual([undefined, undefined]);
     expect(setRowSettings(ids(blocks), blocks, "a", { fit: "tallest", height: 500 })[0].rowHeight).toBe(96);
     expect(setRowShares(blocks, ["a", "b"], [66.6, 33.4]).map((b) => b.width)).toEqual([67, 33]);
+  });
+
+  it("keeps each block at least 15rem wide when the divider moves (as a share of the row's width)", () => {
+    // A 40rem row: 15rem is 37.5%.
+    expect(moveDivider([50, 50], 1, -30, 37.5)).toEqual([37.5, 62.5]);
+    expect(moveDivider([50, 50], 1, 30, 37.5)).toEqual([62.5, 37.5]);
+  });
+
+  it("wraps a row onto lines of as many blocks as get 15rem, stacked below 40rem", () => {
+    expect(columnsFor(4, 66 * 16, 16)).toBe(4);
+    expect(columnsFor(4, 50 * 16, 16)).toBe(3);
+    expect(columnsFor(4, 48 * 16, 16)).toBe(2);
+    expect(columnsFor(3, 45 * 16, 16)).toBe(2);
+    expect(columnsFor(4, 39 * 16, 16)).toBe(1);
+    expect(columnsFor(2, 100 * 16, 16)).toBe(2);
+  });
+
+  it("balances the lines: 4 blocks 3 to a line make 2 and 2, 5 make 3 and 2", () => {
+    expect(rowLines(["a", "b", "c", "d"], 3)).toEqual([["a", "b"], ["c", "d"]]);
+    expect(rowLines(["a", "b", "c", "d", "e"], 3)).toEqual([["a", "b", "c"], ["d", "e"]]);
+    expect(rowLines(["a", "b", "c"], 3)).toEqual([["a", "b", "c"]]);
+    expect(rowLines(["a", "b", "c"], 1)).toEqual([["a", "b", "c"]]);
+  });
+
+  it("stands side by side only where every block gets 15rem, and the row is 40rem", () => {
+    expect(sideBySide(2, 40 * 16, 16)).toBe(true);
+    expect(sideBySide(2, 39 * 16, 16)).toBe(false);
+    expect(sideBySide(3, 48 * 16, 16)).toBe(false);
+    expect(sideBySide(3, 49 * 16, 16)).toBe(true);
+    expect(sideBySide(4, 66 * 16, 16)).toBe(true);
+    expect(sideBySide(1, 40 * 16, 16)).toBe(true);
   });
 
   it("moves a divider in steps, each side keeping its least share", () => {

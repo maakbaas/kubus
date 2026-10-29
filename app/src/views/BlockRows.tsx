@@ -1,9 +1,10 @@
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { blockRows, canBeside, moveDivider, placeBlock, rowHeightPx, rowOf, rowShares, rowStart, setBeside, setRowSettings, setRowShares, SHARE_STEP, type RowSettings, type RowZone } from "../domain/blockRows";
+import { blockRows, canBeside, columnsFor, MIN_COLUMN_REM, moveDivider, rowLines, placeBlock, rowHeightPx, rowOf, rowShares, rowStart, setBeside, setRowSettings, setRowShares, SHARE_STEP, sideBySide, type RowSettings, type RowZone } from "../domain/blockRows";
 import { withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 
-// A page's blocks in rows (domain/blockRows.ts): a row's blocks side by side, where the row is wide enough (a container
-// query, styles.css .block-row: so the narrow column of a page without "Full width" too), all as tall as the row: its
+// A page's blocks in rows (domain/blockRows.ts): a row's blocks side by side, as many on a line as get 15rem each
+// (`columnsFor`; a row of more wraps onto lines, `rowLines`; measured here, so the narrow column of a page without "Full
+// width" too, and `.block-row--side`), all as tall as the row: its
 // tallest or shortest block's height (measured here, `rowHeightPx`), at most or at least its height setting; what is taller
 // scrolls inside, a chart, map or HTML component fills it. A row of one block keeps its height, only limited (at most or at
 // least). Where it isn't wide enough (a phone, a narrow pane) the blocks stack as they always were, their heights their own.
@@ -121,8 +122,8 @@ export function shownRows<T extends { id: string }>(entries: T[], blockOf: (entr
 export function zoneAt(e: DragEvent, cell: HTMLElement): RowZone {
   const r = cell.getBoundingClientRect();
   const cells = cell.parentElement;
-  const sideBySide = e.dataTransfer.types.includes(BLOCK_MIME) && !!cells && getComputedStyle(cells).flexDirection === "row";
-  if (sideBySide) {
+  const besideZones = e.dataTransfer.types.includes(BLOCK_MIME) && !!cells && getComputedStyle(cells).flexDirection === "row";
+  if (besideZones) {
     const x = (e.clientX - r.left) / r.width;
     if (x < 0.25) return "left";
     if (x > 0.75) return "right";
@@ -182,7 +183,12 @@ export function BlockRows<T extends { id: string }>({ entries, blockOf, beside, 
   );
 }
 
-/** One row: its blocks, with a divider between each two (a line; side by side, it changes their shares). */
+/**
+ * One row: its blocks, with a divider between each two (a line; side by side on one line, it changes their shares). Where
+ * not all of them get MIN_COLUMN_REM side by side, on lines of as many as do (`columnsFor`, `rowLines`), every line the
+ * row's height, as if unbroken (a line's blocks keep their shares among themselves; dividers only resize on one line);
+ * where not even two do, stacked as on a phone.
+ */
 function Row<T extends { id: string }>({
   ids,
   entries,
@@ -205,20 +211,45 @@ function Row<T extends { id: string }>({
   // While a divider is dragged: the shares shown (stored when it is let go).
   const [moving, setMoving] = useState<number[] | null>(null);
   const shares = moving ?? stored;
-  const cells = useRef<HTMLDivElement>(null);
-  const startResize = (i: number) => (e: PointerEvent<HTMLDivElement>) => {
-    if (!onShares || e.button !== 0) return;
-    e.preventDefault();
-    const box = cells.current;
-    if (!box) return;
-    // The width the shares divide: the row's without its dividers.
+  const rowEl = useRef<HTMLDivElement>(null);
+  const count = entries.length;
+  // How many stand side by side on a line (1: stacked), and whether side-by-side rules apply (a row of one: its height limit).
+  const [layout, setLayout] = useState<{ columns: number; side: boolean }>({ columns: 1, side: false });
+  useLayoutEffect(() => {
+    const el = rowEl.current;
+    if (!el) return;
+    const update = () => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const columns = columnsFor(count, el.clientWidth, rem);
+      const side = columns > 1 || (count === 1 && sideBySide(1, el.clientWidth, rem));
+      setLayout((old) => (old.columns === columns && old.side === side ? old : { columns, side }));
+    };
+    const sizes = new ResizeObserver(update);
+    sizes.observe(el);
+    update();
+    return () => sizes.disconnect();
+  }, [count]);
+  const { columns, side } = layout;
+  const lines = rowLines(entries, columns);
+  const resizable = !!onShares && lines.length === 1 && columns > 1;
+  /** The first line's blocks container (the one resized: a row on one line), and the width its shares divide. */
+  const lineWidth = () => {
+    const box = rowEl.current?.querySelector<HTMLElement>(":scope > .block-row__cells");
+    if (!box) return 0;
     const dividers = [...box.querySelectorAll<HTMLElement>(":scope > .block-row__divider")].reduce((n, d) => n + d.offsetWidth, 0);
-    const width = box.clientWidth - dividers;
+    return box.clientWidth - dividers;
+  };
+  /** A block's least share of the row (percent): MIN_COLUMN_REM of its width. */
+  const leastShare = (width: number) => ((MIN_COLUMN_REM * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16)) / width) * 100;
+  const startResize = (i: number) => (e: PointerEvent<HTMLDivElement>) => {
+    if (!resizable || !onShares || e.button !== 0) return;
+    e.preventDefault();
+    const width = lineWidth();
     if (width <= 0) return;
     const x0 = e.clientX;
     let next = stored;
     const move = (ev: globalThis.PointerEvent) => {
-      next = moveDivider(stored, i, ((ev.clientX - x0) / width) * 100);
+      next = moveDivider(stored, i, ((ev.clientX - x0) / width) * 100, leastShare(width));
       setMoving(next);
     };
     const up = () => {
@@ -231,29 +262,31 @@ function Row<T extends { id: string }>({
     window.addEventListener("pointerup", up);
   };
   const keyResize = (i: number) => (e: KeyboardEvent<HTMLDivElement>) => {
-    if (!onShares || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+    if (!resizable || !onShares || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
     e.preventDefault();
-    onShares(ids, moveDivider(stored, i, e.key === "ArrowLeft" ? -SHARE_STEP : SHARE_STEP));
+    const width = lineWidth();
+    onShares(ids, moveDivider(stored, i, e.key === "ArrowLeft" ? -SHARE_STEP : SHARE_STEP, width > 0 ? leastShare(width) : undefined));
   };
   // Several blocks: the row's height, measured from each block's own (what a table, cards or text take, overhang too; a
-  // chart's, map's or HTML component's Height, `.block__own`, which then fills the row), in px.
-  const several = entries.length > 1;
+  // chart's, map's or HTML component's Height, `.block__own`, which then fills the row), in px. Over all its lines.
+  const several = count > 1;
   const [bodyPx, setBodyPx] = useState<number | null>(null);
   const fit = settings.rowFit ?? "tallest";
   const limit = settings.rowHeight;
   useLayoutEffect(() => {
-    const box = cells.current;
+    const box = rowEl.current;
     if (!several || !box) return setBodyPx(null);
+    const CELL = ":scope > .block-row__cells > .block-cell";
     const measure = () => {
-      const contents = [...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block:not(.block--fills) > .block__body > .block__content")];
+      const contents = [...box.querySelectorAll<HTMLElement>(`${CELL} > .block:not(.block--fills) > .block__body > .block__content`)];
       // Collapsed blocks have no body: not counted.
-      const boxes = [...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block--fills:has(> .block__body) > .block__own > div")];
+      const boxes = [...box.querySelectorAll<HTMLElement>(`${CELL} > .block--fills:has(> .block__body) > .block__own > div`)];
       const heights = [...contents.map((c) => c.scrollHeight), ...boxes.map((b) => b.offsetHeight)].filter((h) => h > 0);
       // A stat, a meter, a compact chart: never cut or scrolled, the row at least as tall.
       const floors = [
-        ...[...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block--fixed > .block__body > .block__content")].map((c) => c.scrollHeight),
+        ...[...box.querySelectorAll<HTMLElement>(`${CELL} > .block--fixed > .block__body > .block__content`)].map((c) => c.scrollHeight),
         // A block filling the row that can't be less tall than this (a stat: its text and a 4rem sparkline).
-        ...[...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block--fills > .block__body [data-row-min]")].map((el) => Number(el.dataset.rowMin) || 0),
+        ...[...box.querySelectorAll<HTMLElement>(`${CELL} > .block--fills > .block__body [data-row-min]`)].map((el) => Number(el.dataset.rowMin) || 0),
       ];
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       const px = Math.round(rowHeightPx({ ...(fit === "shortest" && { rowFit: "shortest" }), ...(limit !== undefined && { rowHeight: limit }) }, heights, rem, floors));
@@ -262,10 +295,10 @@ function Row<T extends { id: string }>({
     const sizes = new ResizeObserver(measure);
     const watch = () => {
       sizes.disconnect();
-      for (const c of box.querySelectorAll(":scope > .block-cell > .block > .block__body > .block__content, :scope > .block-cell > .block > .block__own > div")) sizes.observe(c);
+      for (const c of box.querySelectorAll(`${CELL} > .block > .block__body > .block__content, ${CELL} > .block > .block__own > div`)) sizes.observe(c);
       measure();
     };
-    // Blocks come and go (their items loading, collapsed, a search leaving one out): watched anew.
+    // Blocks come and go (their items loading, collapsed, a search leaving one out, onto another line): watched anew.
     const tree = new MutationObserver(watch);
     tree.observe(box, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-row-min"] });
     watch();
@@ -276,33 +309,48 @@ function Row<T extends { id: string }>({
   }, [several, fit, limit]);
   // One block: its own height, at most or at least the limit.
   const one = !several && limit !== undefined ? (fit === "shortest" ? "block-row--min" : "block-row--max") : null;
-  const className = ["block-row", several && bodyPx !== null && "block-row--fit", one, onShares && "block-row--resizable"].filter(Boolean).join(" ");
+  const className = ["block-row", side && "block-row--side", several && bodyPx !== null && "block-row--fit", one, resizable && "block-row--resizable"].filter(Boolean).join(" ");
   const style = several && bodyPx !== null ? { "--row-body": `${bodyPx}px` } : one ? { "--row-limit": `${limit}rem` } : undefined;
+  let at = 0;
   return (
-    <div className={className} style={style as CSSProperties | undefined} onDragEnd={onDragEnd}>
+    <div ref={rowEl} className={className} style={style as CSSProperties | undefined} onDragEnd={onDragEnd}>
       {dropLine && <div className={`block-drop block-drop--${dropLine}`} aria-hidden="true" />}
-      <div className="block-row__cells" ref={cells}>
-        {entries.map((e, i) => (
-          <Fragment key={e.id}>
-            {i > 0 && (
-              // Side by side it is a handle (role separator, its value the share before it); stacked, only the line between.
-              <div
-                className="block-row__divider"
-                role={onShares ? "separator" : undefined}
-                aria-orientation={onShares ? "vertical" : undefined}
-                aria-label={onShares ? "Resize blocks" : undefined}
-                aria-valuenow={onShares ? Math.round(shares[i - 1]) : undefined}
-                aria-valuemin={onShares ? 0 : undefined}
-                aria-valuemax={onShares ? 100 : undefined}
-                tabIndex={onShares ? 0 : undefined}
-                onPointerDown={startResize(i)}
-                onKeyDown={keyResize(i)}
-              />
-            )}
-            {cell(e, shares[i])}
+      {lines.map((line, l) => {
+        const first = at;
+        at += line.length;
+        // A line's blocks keep their shares among themselves.
+        const sum = line.reduce((n, _, k) => n + shares[first + k], 0) || 1;
+        return (
+          <Fragment key={l}>
+            {l > 0 && <div className="block-row__break" aria-hidden="true" />}
+            <div className="block-row__cells">
+              {line.map((e, k) => {
+                const i = first + k;
+                return (
+                  <Fragment key={e.id}>
+                    {k > 0 && (
+                      // On one line side by side it is a handle (role separator, its value the share before it); else only the line between.
+                      <div
+                        className="block-row__divider"
+                        role={resizable ? "separator" : undefined}
+                        aria-orientation={resizable ? "vertical" : undefined}
+                        aria-label={resizable ? "Resize blocks" : undefined}
+                        aria-valuenow={resizable ? Math.round(shares[i - 1]) : undefined}
+                        aria-valuemin={resizable ? 0 : undefined}
+                        aria-valuemax={resizable ? 100 : undefined}
+                        tabIndex={resizable ? 0 : undefined}
+                        onPointerDown={startResize(i)}
+                        onKeyDown={keyResize(i)}
+                      />
+                    )}
+                    {cell(e, (shares[i] * 100) / sum)}
+                  </Fragment>
+                );
+              })}
+            </div>
           </Fragment>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

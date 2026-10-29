@@ -3135,9 +3135,6 @@ img[data-lightbox] {
    them (an item page's: as its fields, below). A row's blocks stack the same way,
    the divider being the line between them, unless the row is wide enough to stand them side by side (below). A row or
    cell whose block isn't shown yet (its items loading, none matching a search) takes no room. */
-.block-row {
-  container: block-row / inline-size;
-}
 .block-row:not(:has(.block)),
 .block-cell:empty,
 .block-row__divider:has(+ .block-cell:empty),
@@ -3180,71 +3177,86 @@ img[data-lightbox] {
   inset-inline: 0;
   border-block-start: 1px solid var(--cds-border-subtle);
 }
-/* Side by side (the row at least 40rem wide: also the narrow column of a page without "Full width"): each block its share
+/* Side by side: each block its share
    of the row, all as tall as the tallest (the cells stretch; the line between them spans the row), the divider between
    them a vertical line that resizes them. With a max height a block's part below its name scrolls beyond it. Narrower, nothing of this applies:
    stacked as above, each block its own height (a phone shows a dashboard as a list). */
-@container block-row (min-width: 40rem) {
-  .block-row__cells {
-    flex-direction: row;
-    align-items: stretch;
-  }
-  .block-row .block-cell {
-    flex: var(--share) 1 0%;
-  }
-  .block-row .block-row__divider::before {
-    inset-block: 0;
-    inset-inline: 50% auto;
-    border-block-start: 0;
-    border-inline-start: 1px solid var(--cds-border-subtle);
-  }
-  .block-row--resizable .block-row__divider {
-    cursor: col-resize;
-    touch-action: none;
-  }
-  .block-row--resizable .block-row__divider:is(:hover, :focus-visible)::before {
-    border-inline-start: 2px solid var(--cds-border-interactive);
-  }
-  .block-row__divider:focus-visible {
-    outline: none;
-  }
-  /* Several blocks: each one's part below its name is the row's height (--row-body, measured: BlockRows.tsx); what is
-     taller scrolls inside it, what is wider (cards of a set width, a wide table) sideways, never the page. A chart, map
-     or HTML component fills it (--row-fill-box: domain/views.ts blockHeightCss), less a chart's own space above it; it
-     and a stat, meter or compact chart (the row is at least as tall) never scroll.
-     Its scroll box reaches 1rem into the room left of it, so what a block hangs there (a Markdown block's box, as on the
-     page) isn't cut off: the padding puts it back. */
-  .block-row--fit .block-cell > .block > .block__body {
-    block-size: var(--row-body);
-    overflow: auto;
-    margin-inline-start: calc(-1 * var(--cds-spacing-05));
-    padding-inline-start: var(--cds-spacing-05);
-  }
-  .block-row--fit .block-cell > :is(.block--fills, .block--fixed) > .block__body {
-    overflow: hidden;
-  }
-  /* A stat, meter or compact chart at its own height: centred in the row (never less tall than it). */
-  .block-row--fit .block-cell > .block--fixed > .block__body {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-  .block-row--fit .block-cell > .block--fills > .block__body {
-    --row-fill-box: var(--row-body);
-  }
-  .block-row--fit .block--fills .chart-block {
-    --row-fill-box: calc(var(--row-body) - var(--cds-spacing-05));
-  }
-  /* One block: its own height, at most (scrolling inside past it) or at least the row's height setting. */
-  .block-row--max .block-cell > .block > .block__body {
-    max-block-size: var(--row-limit);
-    overflow-y: auto;
-    margin-inline-start: calc(-1 * var(--cds-spacing-05));
-    padding-inline-start: var(--cds-spacing-05);
-  }
-  .block-row--min .block-cell > .block > .block__body {
-    min-block-size: var(--row-limit);
-  }
+/* A row wrapped onto lines (not all its blocks get 15rem side by side): between two lines, room and a line as between
+   rows. */
+.block-row__break {
+  position: relative;
+  block-size: var(--cds-spacing-07);
+}
+.block-row__break::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline: 0;
+  border-block-start: 1px solid var(--cds-border-subtle);
+}
+/* Side by side (`.block-row--side`: at least two blocks of 15rem on a line, a row wrapping onto lines of as many, and
+   the row 40rem; measured in BlockRows.tsx; also the narrow column of a page without "Full width"): what follows. Else
+   stacked as above, each block its own height. */
+.block-row--side > .block-row__cells {
+  flex-direction: row;
+  align-items: stretch;
+}
+.block-row--side > .block-row__cells > .block-cell {
+  flex: var(--share) 1 0%;
+  min-inline-size: 15rem; /* MIN_COLUMN_REM: a share stored on a wider screen squeezes no block below it */
+}
+.block-row--side .block-row__divider::before {
+  inset-block: 0;
+  inset-inline: 50% auto;
+  border-block-start: 0;
+  border-inline-start: 1px solid var(--cds-border-subtle);
+}
+.block-row--side.block-row--resizable .block-row__divider {
+  cursor: col-resize;
+  touch-action: none;
+}
+.block-row--side.block-row--resizable .block-row__divider:is(:hover, :focus-visible)::before {
+  border-inline-start: 2px solid var(--cds-border-interactive);
+}
+.block-row--side .block-row__divider:focus-visible {
+  outline: none;
+}
+/* Several blocks: each one's part below its name is the row's height (--row-body, measured: BlockRows.tsx); what is
+   taller scrolls inside it, what is wider (cards of a set width, a wide table) sideways, never the page. A chart, map
+   or HTML component fills it (--row-fill-box: domain/views.ts blockHeightCss), less a chart's own space above it; it
+   and a stat, meter or compact chart (the row is at least as tall) never scroll.
+   Its scroll box reaches 1rem into the room left of it, so what a block hangs there (a Markdown block's box, as on the
+   page) isn't cut off: the padding puts it back. */
+.block-row--side.block-row--fit .block-cell > .block > .block__body {
+  block-size: var(--row-body);
+  overflow: auto;
+  margin-inline-start: calc(-1 * var(--cds-spacing-05));
+  padding-inline-start: var(--cds-spacing-05);
+}
+.block-row--side.block-row--fit .block-cell > :is(.block--fills, .block--fixed) > .block__body {
+  overflow: hidden;
+}
+/* A stat, meter or compact chart at its own height: centred in the row (never less tall than it). */
+.block-row--side.block-row--fit .block-cell > .block--fixed > .block__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.block-row--side.block-row--fit .block-cell > .block--fills > .block__body {
+  --row-fill-box: var(--row-body);
+}
+.block-row--side.block-row--fit .block--fills .chart-block {
+  --row-fill-box: calc(var(--row-body) - var(--cds-spacing-05));
+}
+/* One block: its own height, at most (scrolling inside past it) or at least the row's height setting. */
+.block-row--side.block-row--max .block-cell > .block > .block__body {
+  max-block-size: var(--row-limit);
+  overflow-y: auto;
+  margin-inline-start: calc(-1 * var(--cds-spacing-05));
+  padding-inline-start: var(--cds-spacing-05);
+}
+.block-row--side.block-row--min .block-cell > .block > .block__body {
+  min-block-size: var(--row-limit);
 }
 /* Where a dragged block or field goes, highlighted like the workspace's drop zones (views/BlockRows.tsx; an item page's
    field: ItemPage's `fieldDrops`): above or below, the top or bottom half of the whole row (it gets a row of its own

@@ -338,7 +338,11 @@ What the app does, feature by feature (read the part you work on).
   field in between starts a new row), `width` (its share of the row in percent; absent = equal) and, on a row's first
   block, the row's height: `rowFit` (absent: as its tallest block; "shortest": as its shortest) and `rowHeight` (rem: at
   most that tall with the tallest, at least with the shortest; `rowMaxHeight`, its name before the fit, is read as it). At
-  most 4 to a row. Where the row is at least 40rem wide (a container query, so a narrow tiled pane counts like a phone)
+  most 4 to a row. Where at least two blocks get 15rem each and the row is at least 40rem wide (`columnsFor`, measured on the row:
+  2 blocks from 40rem, 3 from 49rem, 4 from 66rem; a narrow tiled pane counts like a phone), as many as do stand side
+  by side, a row of more wrapping onto lines of that many, as even as can be (`rowLines`: 4 three to a line make 2 and
+  2), every line the row's height as if unbroken (a line's blocks keep their shares among themselves; the divider
+  resizes only a row on one line)
   its blocks stand side by side, each its share, all exactly as tall as the row: the part of each below its name is the
   row's tallest or shortest block's own height (`rowHeightPx`: what a table, cards or text take, overhang included; a
   chart's, map's or HTML component's Height at its Aspect ratio, `BlockUses.ownHeight`, measured by an invisible
@@ -349,7 +353,8 @@ What the app does, feature by feature (read the part you work on).
   a dashboard is a list there. A block is placed by dragging its name onto another block: its left or right quarter puts
   it beside that block (side by side only; that half of the block is highlighted), its top or bottom half in a row of its
   own above or below that block's row (the top or bottom half of the whole row highlighted); the divider between two blocks moves their shares in 5%
-  steps (drag it, or focus it and use the arrow keys; at least 10% each). In a row of several, what is wider than its
+  steps (drag it, or focus it and use the arrow keys; each block keeps at least 15rem, `MIN_COLUMN_REM`, and a share
+  stored on a wider screen squeezes none below it). In a row of several, what is wider than its
   share scrolls sideways inside the block, never the page. Block settings has "Beside the block above" (only where a block
   is right above it with room in its row), Row height (As its tallest / shortest block) and Max / Min height (rem; empty:
   none). All of it is arranging: stored at once, no " *"; a block put beside another in Block settings moves once the panel
