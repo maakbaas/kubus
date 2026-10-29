@@ -1,10 +1,10 @@
 // Regions of a choropleth (domain/chart.ts): the areas of a map (amCharts' geodata: views/regionMaps.ts
 // loads them) and which of them a category's label is. Storage-free and UI-free.
 //
-// A map is a GeoJSON FeatureCollection whose features carry a code (`id`: "NL", "NL-DR") and names
-// (`name`, and in many maps `NAME_ENG`: "Drenthe", "North Denmark Region"). A label is a region when it
-// is its code or one of its names, ignoring case, accents and punctuation ("noord holland" is
-// "Noord-Holland", "Fryslân" is "fryslan").
+// A map is a GeoJSON FeatureCollection whose features carry a code (`id`: "NL", "NL-DR", in every map) and a
+// name (`name`: "Drenthe", "Fryslân", in every map); their other properties differ from map to map (an English
+// name in a few, under several keys) and are not used. A label is a region when it is its code or its name,
+// ignoring case, accents and punctuation ("noord holland" is "Noord-Holland", "Fryslân" is "fryslan").
 
 /** The map a choropleth shows: an amCharts map by name ("worldLow", "netherlandsLow") and, when it isn't bundled, the stored file. */
 export interface ChartRegions {
@@ -55,9 +55,7 @@ export interface Region {
   feature: number;
   /** Its code, "" without one. */
   id: string;
-  /** Its English name, where the map has one other than its name ("" else). */
-  english: string;
-  /** Its names and code as matched (`matchKey`). */
+  /** Its name and code as matched (`matchKey`). */
   names: string[];
 }
 
@@ -84,9 +82,8 @@ export function regionsOf(features: Feature[]): Region[] {
     let key = taken.has(name) && id ? `${name} (${id})` : name;
     for (let i = 2; taken.has(key); i++) key = `${name} (${i})`;
     taken.add(key);
-    const names = [name, p.NAME_ENG, id].filter((n): n is string => typeof n === "string" && n.trim() !== "").map(matchKey);
-    const english = typeof p.NAME_ENG === "string" && p.NAME_ENG.trim() && p.NAME_ENG.trim() !== name ? p.NAME_ENG.trim() : "";
-    regions.push({ key, feature, id, english, names: [...new Set(names)] });
+    const names = [name, id].filter((n) => n.trim() !== "").map(matchKey);
+    regions.push({ key, feature, id, names: [...new Set(names)] });
   }
   return regions;
 }

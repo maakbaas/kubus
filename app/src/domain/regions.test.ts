@@ -18,7 +18,7 @@ describe("regions", () => {
     ]);
   });
 
-  it("are found by code or name, ignoring case, accents and punctuation, a code first", () => {
+  it("are found by code or name only, ignoring case, accents and punctuation, a code first", () => {
     const find = regionFinder(
       regionsOf([
         { properties: { name: "Noord-Holland", id: "NL-NH" } },
@@ -28,7 +28,8 @@ describe("regions", () => {
     );
     expect(find("noord holland")?.id).toBe("NL-NH");
     expect(find("Fryslan")?.id).toBe("NL-FR");
-    expect(find("FRIESLAND")?.id).toBe("NL-FR");
+    expect(find("FRIESLAND")).toBeNull(); // an English name (only in some maps) is not matched
+    expect(find("NL-FR")?.id).toBe("NL-FR");
     expect(find("nl-nh")?.id).toBe("NL-NH");
     expect(find("Utrecht")).toBeNull();
     expect(matchKey("  São  Paulo! ")).toBe("sao paulo");

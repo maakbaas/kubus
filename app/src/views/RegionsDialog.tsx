@@ -13,8 +13,7 @@ import { useMountedDialog } from "../ui/useMountedDialog";
 import { refLabelOf, type RefOptions } from "../ui/useReferenceOptions";
 import { loadRegionMap, mapLabel, type RegionMap } from "./regionMaps";
 
-// A choropleth's map's regions, from its Block settings ("Show regions"): every region's name (and
-// English name) and code, what a value has to be to be it (domain/regions.ts), and how many of the
+// A choropleth's map's regions, from its Block settings ("Show regions"): every region's name and code, what a value has to be to be it (domain/regions.ts), and how many of the
 // block's items are in it; searchable, and narrowed to the regions with none. "Export to CSV" saves the rows shown.
 // The values that are no region are listed above, as under the chart.
 
@@ -62,7 +61,7 @@ export function RegionsDialog({
 
   const rows = useMemo(() => {
     const q = matchKey(query);
-    const text = (r: Region) => matchKey([r.key, r.english, r.id].join(" "));
+    const text = (r: Region) => matchKey(`${r.key} ${r.id}`);
     return (map?.regions ?? [])
       .filter((r) => !onlyEmpty || !byRegion.has(r))
       .filter((r) => !q || text(r).includes(q))
@@ -71,8 +70,8 @@ export function RegionsDialog({
 
   /** The rows shown as a CSV file ("Netherlands regions.csv"). */
   const exportCsv = () => {
-    const header = ["Region", "English name", "Code", ...(matched ? ["Items"] : [])];
-    const lines = rows.map((r) => [r.key, r.english, r.id, ...(matched ? [byRegion.get(r)?.items ?? 0] : [])]);
+    const header = ["Region", "Code", ...(matched ? ["Items"] : [])];
+    const lines = rows.map((r) => [r.key, r.id, ...(matched ? [byRegion.get(r)?.items ?? 0] : [])]);
     const name = `${mapLabel(regions.map).replace(/[\\/:*?"<>|]/g, "-")} regions.csv`;
     downloadFile(name, new TextEncoder().encode(toCsv([header, ...lines])), "text/csv;charset=utf-8");
   };
@@ -80,11 +79,11 @@ export function RegionsDialog({
   const notOnMap = matched && matched.unmatched.length > 0 ? matched.unmatched.map((u) => `${u.label} (${u.items})`).join(", ") : null;
 
   // At the window level (opened from the Block settings popover), inside the app root for the theme. Small, not
-  // the dialogs' xs: a name, its English name, a code and a number don't fit an xs one.
+  // the dialogs' xs: a long name ("Noord-Holland"), a code and a number don't fit an xs one.
   return createPortal(
     <Modal open={open} size="sm" passiveModal modalHeading={`Regions of ${mapLabel(regions.map)}`} onRequestClose={onClose} className="regions-dialog">
       <Stack gap={5}>
-        <p className="helper">A value is a region when it is the region's name, English name or code (case, accents and punctuation aside).</p>
+        <p className="helper">A value is a region when it is the region's name or code (case, accents and punctuation aside).</p>
         {error && <p className="helper">{error}</p>}
         {!map && !error && <InlineLoading description="Loading the map…" />}
         {map && (
@@ -116,10 +115,9 @@ export function RegionsDialog({
                 </TableHead>
                 <TableBody>
                   {rows.map((r) => {
-                    const name = r.english ? `${r.key} (${r.english})` : r.key;
                     return (
                       <TableRow key={r.key}>
-                        <TableCell title={name}>{name}</TableCell>
+                        <TableCell title={r.key}>{r.key}</TableCell>
                         <TableCell>{r.id}</TableCell>
                         {matched && <TableCell>{byRegion.get(r)?.items ?? ""}</TableCell>}
                       </TableRow>
