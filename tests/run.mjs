@@ -31,6 +31,7 @@ add("typecheck", "tsc of the app, the server and the server's tests", {
   steps: [["npm", "run", "typecheck"], ["npm", "run", "typecheck", "--prefix", "server"], ["npm", "run", "typecheck:test", "--prefix", "server"]],
 });
 add("unit", "vitest: domain, storage, sync, api, app (no services)", { steps: [vitest("domain", "storage", "sync", "api", "app")] });
+add("nodesqlite", "vitest: the storage contract (storage, sync, api) again on node:sqlite files, the server's engine", { steps: [vitest("nodesqlite")] });
 add("connectors", "vitest: the connectors, real services excluded (Postgres, MySQL, MariaDB; build:headless first)", { steps: [[...vitest("connectors"), ...noReal]], needs: ["KUBUS_TEST_POSTGRES", "KUBUS_TEST_MYSQL", "KUBUS_TEST_MARIADB"] });
 add("server", "vitest: the sync server and its HTTP API (Postgres; build:headless first)", { steps: [vitest("server")], needs: ["KUBUS_TEST_POSTGRES"] });
 add("connectors-real", "vitest: the connectors against InfluxDB, n8n and Actual (tests/setup-env.sh --connectors)", {
@@ -114,7 +115,7 @@ add("gui-smoke", "GUI smoke tests of the suites the changes reach (all on main; 
   steps: [gui("--smoke", "--suite", "^(?!21-)", ...(process.env.GITHUB_REF === "refs/heads/main" || process.env.GUI_ALL ? [] : ["--changed", "origin/main"]))],
 });
 
-const CRITICAL = ["typecheck", "unit", "connectors", "server", "gui-smoke"];
+const CRITICAL = ["typecheck", "unit", "nodesqlite", "connectors", "server", "gui-smoke"];
 add("critical", "what CI's critical jobs run (test.yml); in CI each is a job of its own", { members: CRITICAL });
 add("nightly", "typecheck, every vitest project, the real services, every GUI shard (all but the baselines and perf)", {
   budget: 0,
