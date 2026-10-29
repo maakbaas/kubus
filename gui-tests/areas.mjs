@@ -29,7 +29,7 @@ export const AREAS = [
 
   // Item pages and editing values in place.
   [/^app\/src\/(pages\/(ItemPage|NewItemPage)|ui\/(FieldInput|ListField|ToggleInput|TagChip|RefCombo|editStart|useBuffered|useReferenceOptions|Highlight))/, [4, 12, 19, 27, 31, 32]],
-  [/^app\/src\/ui\/(MarkdownEditor|MarkdownView|codeHighlight)/, [8, 19]],
+  [/^app\/src\/ui\/(MarkdownEditor|MarkdownView|codeHighlight)/, [8, 19, 34]],
   [/^app\/src\/(ui\/(Lightbox|images|thumbnails)|domain\/files)/, [16]],
 
   // Collection views and their blocks.

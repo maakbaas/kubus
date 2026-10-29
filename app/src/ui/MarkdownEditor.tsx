@@ -118,6 +118,12 @@ const DOC_CHANGED = "kubus-doc-changed";
 /** Dispatched on a link that was clicked; its detail is `{ href, mode }`. */
 const OPEN_LINK = "kubus-open-link";
 
+/**
+ * Whether a click ends a text selection (a drag), which opens nothing. A Ctrl / Cmd click is never one: ProseMirror
+ * answers it by selecting the clicked block (a node selection), yet it is the click that opens beside.
+ */
+const endsSelection = (view: EditorView, event: MouseEvent) => !view.state.selection.empty && !event.ctrlKey && !event.metaKey;
+
 /** A plain click on a link opens it (a drag that selects text does not). */
 const linkClick = $prose(
   () =>
@@ -126,7 +132,7 @@ const linkClick = $prose(
         handleDOMEvents: {
           click(view, event) {
             const a = (event.target as HTMLElement).closest?.("a");
-            if (!a || !view.dom.contains(a) || !view.state.selection.empty) return false;
+            if (!a || !view.dom.contains(a) || endsSelection(view, event)) return false;
             event.preventDefault();
             // The component around the editor opens it (a page of the app needs its router).
             a.dispatchEvent(new CustomEvent(OPEN_LINK, { bubbles: true, detail: { href: a.getAttribute("href") ?? "", mode: openModeOf(event) } }));
@@ -176,7 +182,7 @@ const tags = $prose(
         handleDOMEvents: {
           click(view, event) {
             const tag = (event.target as HTMLElement).closest?.("[data-tag]");
-            if (!tag || !view.dom.contains(tag) || !view.state.selection.empty) return false;
+            if (!tag || !view.dom.contains(tag) || endsSelection(view, event)) return false;
             event.preventDefault();
             const href = `#${tagSearchPath(tag.getAttribute("data-tag") ?? "")}`;
             tag.dispatchEvent(new CustomEvent(OPEN_LINK, { bubbles: true, detail: { href, mode: openModeOf(event) } }));
@@ -438,6 +444,8 @@ function EditorChrome(props: Props) {
           const mark = node.marks.find((m) => m.type === type && m.attrs.href === href);
           if (mark) tr.removeMark(pos, pos + node.nodeSize, mark).addMark(pos, pos + node.nodeSize, type.create({ ...mark.attrs, href: stored }));
         });
+        // A dispatch drops the stored marks (the link typed just now is not to go on with the next letter).
+        if (view.state.storedMarks) tr.setStoredMarks(view.state.storedMarks);
         if (tr.docChanged || tr.steps.length) view.dispatch(tr);
       }
     };
