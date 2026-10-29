@@ -5,8 +5,8 @@
 //   npm run suite -- gui-02 -- --name ur --port 1449   what follows the second `--` goes to the suite's last command
 //   npm run suite -- 'gui:^(02|04)-'           the GUI suites whose file name matches a regex
 //   npm run suite -- critical                  what CI's critical jobs run (test.yml)
-//   npm run suite -- nightly                   everything (nightly.yml shards the GUI part over jobs)
-//   node tests/run.mjs shards                  the GUI shards as JSON (the matrix of nightly.yml)
+//   npm run suite -- full                      everything (full.yml shards the GUI part over jobs)
+//   node tests/run.mjs shards                  the GUI shards as JSON (the matrix of full.yml)
 // A suite delegates to vitest or gui-tests/run.mjs (this file only names, times and bounds them), prints
 // a summary, and fails when it exceeds its budget (10 minutes unless it says otherwise, --budget <min>
 // for all named): it is interrupted then, so a hang can't eat the whole job. tests/README.md is the catalog.
@@ -105,7 +105,7 @@ shards.push(guiNumbers.filter((n) => !listed.has(n))); // the rest: 28 and whate
 const shardRegex = (g) => `^(${g.join("|")})-`;
 shards.forEach((g, i) => {
   if (!g.length) return;
-  add(`gui-shard-${i + 1}`, `GUI suites ${g.join(", ")} (one nightly job)`, { steps: [gui("--suite", shardRegex(g))] });
+  add(`gui-shard-${i + 1}`, `GUI suites ${g.join(", ")} (one job of full.yml)`, { steps: [gui("--suite", shardRegex(g))] });
 });
 add("gui-all", `every GUI suite but ${LOCAL_ONLY.join(" and ")} in one run (an hour or more: not within a budget; CI shards it)`, {
   budget: 120,
@@ -117,7 +117,7 @@ add("gui-smoke", "GUI smoke tests of the suites the changes reach (all on main; 
 
 const CRITICAL = ["typecheck", "unit", "nodesqlite", "connectors", "server", "gui-smoke"];
 add("critical", "what CI's critical jobs run (test.yml); in CI each is a job of its own", { members: CRITICAL });
-add("nightly", "typecheck, every vitest project, the real services, every GUI shard (all but the baselines and perf)", {
+add("full", "typecheck, every vitest project, the real services, every GUI shard (all but the baselines and perf)", {
   budget: 0,
   members: ["typecheck", "unit", "connectors", "server", "connectors-real", "image", ...shards.map((g, i) => (g.length ? `gui-shard-${i + 1}` : null)).filter(Boolean)],
 });

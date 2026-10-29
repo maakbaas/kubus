@@ -132,7 +132,7 @@ stale peer range.
 - `npm run dev`: Tauri desktop app with hot reload (runs `dev:web` on port 1420).
 - `npm run dev:web`: same app in a normal browser at http://localhost:1420.
 - `npm run typecheck`, `npm run build:web` (to `app/dist`), `npm run build` (desktop bundle).
-- `npm run suite -- <name…>` (`list`, `unit`, `server`, `critical`, `nightly`, `gui-NN`, …): any suite by name, timed and held to its budget (`tests/README.md`).
+- `npm run suite -- <name…>` (`list`, `unit`, `server`, `critical`, `full`, `gui-NN`, …): any suite by name, timed and held to its budget (`tests/README.md`).
 - `npm test`: every vitest project; `npm test -- --project sync` one part, `npm run test:changed` the tests reaching
   files changed since origin/main. The server's projects need `npm ci --prefix server` and Postgres
   (`KUBUS_TEST_POSTGRES`): `docs/testing.md`. Run the projects of what a change touches before pushing.
