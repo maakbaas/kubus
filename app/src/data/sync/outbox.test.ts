@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it } from "vitest";
-import { fileIds, schema } from "../schema";
+import { fileIds, linkTargetsFn, schema } from "../schema";
 import { SYNC_TABLES, type SyncTable, type WireRow } from "../../../../shared/sync";
 import { applyStatement, keyOf } from "./SyncEngine";
 
@@ -18,6 +18,7 @@ const apply = (table: string | SyncTable, row: WireRow) => {
 beforeEach(() => {
   db = new DatabaseSync(":memory:");
   db.function("file_ids", { deterministic: true }, fileIds as (...args: unknown[]) => string);
+  db.function("link_targets", { deterministic: true }, linkTargetsFn as (...args: unknown[]) => string);
   db.exec(schema);
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(`INSERT INTO collections (id, name, plural_name, created_at, updated_at) VALUES ('t1', 'Note', 'Notes', '${T1}', '${T1}')`);

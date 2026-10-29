@@ -160,7 +160,7 @@ export function pageFilterScope(collections: Collection[]): Collection {
   const names = new Map<string, number>();
   for (const c of collections) for (const f of c.fields) names.set(f.name, (names.get(f.name) ?? 0) + 1);
   const fields = collections.flatMap((c) => c.fields.map((f) => ((names.get(f.name) ?? 0) > 1 ? { ...f, name: `${f.name} (${c.name})` } : f)));
-  return { ...collections[0], fields, source: collections.every((c) => c.source) ? collections[0].source : null };
+  return { ...collections[0], fields, source: collections.every((c) => c.source) ? collections[0].source : null, virtual: collections.every((c) => c.virtual) ? collections[0].virtual : null };
 }
 
 /** No filter rules: always this array (frozen), so what is memoized on a query's filters stays. */

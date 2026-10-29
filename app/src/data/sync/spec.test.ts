@@ -8,7 +8,7 @@ import { SYNC_COMPATIBLE, SYNC_TABLES, SYNC_VERSION } from "../../../../shared/s
  * SYNC_VERSION (and SYNC_COMPATIBLE if older devices would get the new data wrong), write the
  * migrations (docs/migrations.md) and record the new version and fingerprint here.
  */
-const RECORDED = { version: 1, fingerprint: "5c16a825" };
+const RECORDED = { version: 2, fingerprint: "6298a7f4" };
 
 /** A short, stable fingerprint of the list (FNV-1a of its JSON). */
 function fingerprint(value: unknown): string {
@@ -59,6 +59,8 @@ describe("sync spec", () => {
     const first = definitions(firstRelease);
     const now = definitions(schema);
     for (const t of SYNC_TABLES) {
+      // A table added since has no rows from before it existed: whoever writes a row writes all its columns.
+      if (!first.has(t.name)) continue;
       for (const c of Object.keys(t.columns)) {
         if (first.get(t.name)?.has(c) || !/NOT NULL/.test(now.get(t.name)?.get(c) ?? "")) continue;
         expect(t.defaults?.[c], `${t.name}.${c}: NOT NULL, new since the first release`).toBeDefined();

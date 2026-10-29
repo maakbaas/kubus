@@ -104,6 +104,11 @@ export interface Collection {
    * sources, read-only (domain/sources.ts). null (or absent) = its own items (a native collection).
    */
   source?: CollectionSource | null;
+  /**
+   * A collection that stores nothing: its items are made from elsewhere and only shown, on item pages
+   * (domain/backlinks.ts). Not in the store's list of collections. null (or absent) = an ordinary one.
+   */
+  virtual?: "backlinks" | null;
   /** The field its items' titles are (a field id: text, a number or a date, TITLE_KINDS), NO_TITLE for none; null (or absent) = the first text field with a value. */
   titleField?: string | null;
   createdAt: string;

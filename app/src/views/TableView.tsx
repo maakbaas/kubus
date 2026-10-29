@@ -28,6 +28,7 @@ import {
 import { Add, ArrowRight, Close, DataTable as TableIcon, Edit, Save, TrashCan } from "@carbon/icons-react";
 import { RowActions, ROW_BUTTON, RowIconButton } from "../ui/RowActions";
 import { useStore } from "../app/store";
+import { itemPath } from "../domain/backlinks";
 import { isStruckThrough, itemLabel, labelField, titleFields, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
 import { cellEditStart, type EditStart } from "../ui/editStart";
 import { itemViewOf, FULL_LAYOUT, isRestricted } from "../domain/fieldLayout";
@@ -207,7 +208,7 @@ interface CellProps {
 function Cell({ collection, isTitle, field, item, refs, search, actions, editable, editing, onEdit, onDone }: CellProps) {
   if (isTitle) {
     return (
-      <Link href={`#/collections/${collection.id}/items/${item.id}`} {...itemLinkProps(item, actions)}>
+      <Link href={`#${itemPath(collection, item)}`} {...itemLinkProps(item, actions)}>
         <Highlight text={itemLabel(collection, item)} query={search} />
       </Link>
     );

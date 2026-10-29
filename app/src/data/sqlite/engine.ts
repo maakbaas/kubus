@@ -3,7 +3,7 @@
 // (worker.ts); the server's headless device runs it in-process on node:sqlite, in a file (node.ts); tests also use sqlite-wasm in memory (direct.ts).
 
 import { MIGRATIONS, type Db, type Migration } from "../migrations";
-import { fileIds, outboxTriggerSql, schema } from "../schema";
+import { fileIds, linkTargetsFn, outboxTriggerSql, schema } from "../schema";
 import type { Bind, Statement } from "./protocol";
 
 export class SqliteEngine {
@@ -68,6 +68,11 @@ const MAX_VERSION = 1_000_000;
  */
 export function ensureSchema(db: Db, plan: SchemaPlan = CURRENT) {
   db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
+  db.createFunction(
+    "link_targets",
+    (_ctx: number, kind: unknown, target: unknown, text: unknown, ref: unknown, json: unknown) => linkTargetsFn(kind, target, text, ref, json),
+    { arity: 5, deterministic: true },
+  );
   const latest = latestVersion(plan);
   const version = Number(db.selectValue("PRAGMA user_version"));
   if (version === latest) return;

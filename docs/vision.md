@@ -55,7 +55,8 @@ Rules that keep this from becoming three products glued together:
 
 The stages, in order:
 
-- **Native Kubus core**: item links (reference fields), field and block components. Built.
+- **Native Kubus core**: item links (reference fields, links in Markdown), backlinks (the virtual Backlinks collection of an
+  item page's blocks, read from the synced `item_links` index: docs/features.md "Backlinks"), field and block components. Built.
 - **The server + sync** (docs/sync.md). Built.
 - **Remote sources**, read-only: tables and SQL queries through the server, same views and
   components (docs/sync.md "Remote sources"). Built for Postgres, MySQL / MariaDB, n8n data tables, InfluxDB 2,

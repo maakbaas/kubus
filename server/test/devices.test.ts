@@ -89,6 +89,63 @@ describe.skipIf(!ADMIN)("devices syncing through the server", () => {
     }
   });
 
+  it("carry the item links: the server stores a device's rows as they are, another device reads the same backlinks, and one from before the table is served", async () => {
+    const a = await device();
+    const fieldOf = (name: string, kind: "string" | "markdown" | "item", position: number, targetCollectionId: string | null = null) => ({
+      id: newId(), collectionId: "", name, kind, targetCollectionId, componentId: null, code: null, output: null,
+      frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position,
+    });
+    const personId = newId();
+    await a.saveCollection({ id: personId, name: "Person", pluralName: "People", icon: null, description: "", spaceIds: null, fields: [fieldOf("Name", "string", 0)] }, "default");
+    const noteId = newId();
+    await a.saveCollection(
+      { id: noteId, name: "Note", pluralName: "Notes", icon: null, description: "", spaceIds: null, fields: [fieldOf("Body", "markdown", 0), fieldOf("About", "item", 1, personId)] },
+      "default",
+    );
+    const listed = await a.listCollections();
+    const person = listed.find((c) => c.id === personId)!;
+    const note = listed.find((c) => c.id === noteId)!;
+    const ada = await a.createItem(person, { [person.fields[0].id]: "Ada" }, "default");
+    const bob = await a.createItem(person, { [person.fields[0].id]: "Bob" }, "default");
+    const [body, about] = note.fields.map((f) => f.id);
+    const id = await a.createItem(note, { [body]: `See [Ada](#/collections/${personId}/items/${ada}?field=x)`, [about]: bob }, "default");
+    await settled(a);
+
+    const post = async (changes: Record<string, unknown[]>, version: number) => {
+      const response = await fetch(`${server.url}/api/sync`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ since: 0, changes, version, compatible: version === 1 ? 1 : version }),
+      });
+      expect(response.status).toBe(200);
+      return ((await response.json()) as { changes: Record<string, Record<string, unknown>[]> }).changes;
+    };
+    // As the device wrote them: jsonb gave the targets back as the same text.
+    const stored = await post({}, 2);
+    const item = await a.getItem(note, id);
+    expect(stored.item_links.map((r) => [r.id, r.targets, r.updated_at, r.deleted_at]).sort((x, y) => String(x[0]).localeCompare(String(y[0])))).toEqual(
+      [
+        [`${id}/${body}`, JSON.stringify([{ item: ada, collection: personId }]), item!.updatedAt, null],
+        [`${id}/${about}`, JSON.stringify([{ item: bob, collection: personId }]), item!.updatedAt, null],
+      ].sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
+    );
+
+    const b = await device();
+    expect((await b.listBacklinks(personId, ada, "default")).map((l) => [l.sourceItemId, l.fieldId])).toEqual([[id, body]]);
+    expect((await b.listBacklinks(personId, bob, "default")).map((l) => [l.sourceItemId, l.fieldId])).toEqual([[id, about]]);
+
+    // A device of the version before the table writes the body without the link; the newer devices make its row (and send it).
+    const value = stored.field_values.find((r) => r.item_id === id && r.field_id === body)!;
+    const later = new Date(Date.parse(String(value.updated_at)) + 5000).toISOString();
+    expect(await post({ field_values: [{ ...value, value_text: "no link any more", updated_at: later }] }, 1)).toBeTruthy();
+    await settled(a);
+    await settled(b);
+    expect(await a.listBacklinks(personId, ada, "default")).toEqual([]);
+    expect(await b.listBacklinks(personId, ada, "default")).toEqual([]);
+    const healed = (await post({}, 2)).item_links.find((r) => r.id === `${id}/${body}`)!;
+    expect(healed).toMatchObject({ targets: "[]", updated_at: later, deleted_at: later });
+  });
+
   it("notice a wiped server and start over on it", async () => {
     const a = await device();
     await photos(a);

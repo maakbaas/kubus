@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, 
 import { Accordion, AccordionItem, Checkbox, Link, Select, SelectItem, Slider, Tile } from "@carbon/react";
 import { Grid as GridIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
+import { itemPath } from "../domain/backlinks";
 import { fileIdFromSrc } from "../domain/files";
 import { isStruckThrough, itemLabel, fieldValue, pickableFields, type FieldDef, type Item, type Collection } from "../domain/model";
 import type { FieldLayout } from "../domain/fieldLayout";
@@ -191,7 +192,7 @@ const ItemCard = memo(function ItemCard({ collection, item, options, layout, sho
     >
       <Link
         className="item-card__link"
-        href={`#/collections/${collection.id}/items/${item.id}`}
+        href={`#${itemPath(collection, item)}`}
         {...itemLinkProps(item, actions)}
         aria-label={itemLabel(collection, item)}
       />

@@ -3,6 +3,8 @@ import { LoadingBar } from "../ui/LoadingBar";
 import { Button, Checkbox, Dropdown, InlineNotification, NumberInput, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
+import { isReadOnly } from "../domain/sources";
+import { BACKLINKS_FIELDS, VIRTUAL_COLLECTIONS } from "../domain/backlinks";
 import { orderFields } from "../domain/fieldLayout";
 import { newId, pickableFields, titleFields, type Collection } from "../domain/model";
 import { placeProblem } from "../domain/components";
@@ -52,7 +54,9 @@ export function newPageBlock(target: Collection, page: Collection, spec?: { kind
   const link = target.fields.find((f) => (f.kind === "item" || f.kind === "item_list") && f.targetCollectionId === page.id);
   const filters: FilterRule[] = link ? [{ id: newId(), fieldId: link.id, operator: "is", value: PAGE_ITEM }] : [];
   const kind = spec?.kind ?? "table";
-  return normalizeBlock(target, { ...newBlock(kind, spec?.options ?? blockType(kind).defaultOptions(target)), collectionId: target.id, filters });
+  const block = { ...newBlock(kind, spec?.options ?? blockType(kind).defaultOptions(target)), collectionId: target.id, filters };
+  // The Backlinks collection starts with the fields that tell something (the title already is the link).
+  return normalizeBlock(target, target.virtual === "backlinks" ? { ...block, layout: { ...block.layout, fields: BACKLINKS_FIELDS } } : block);
 }
 
 /** Sorted by title (ascending), not grouped (where grouping applies): what every block starts with. */
@@ -81,6 +85,8 @@ interface MenusProps {
 export function BlockMenus({ collection, block, refs, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange }: MenusProps) {
   const uid = useId();
   const { components, collections } = useStore();
+  // The virtual collections (Backlinks) are listed only here, among the page's block collections.
+  const pageCollections = useMemo(() => [...collections, ...VIRTUAL_COLLECTIONS], [collections]);
   // A Markdown block's text is its own static component: promoted, it becomes a shared one (named
   // like the block), which the block then shows as a component block: the same text, now reusable
   // elsewhere and edited in the component editor.
@@ -186,7 +192,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
               id={`${uid}-collection`}
               titleText="Collection"
               label="Collection"
-              items={collections}
+              items={pageCollections}
               selectedItem={collection}
               itemToString={(c) => c?.pluralName ?? ""}
               itemToElement={(c) => (
@@ -401,7 +407,7 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
           fields={fields}
           layout={block.layout}
           options={block.options}
-          editable={editable}
+          editable={editable && !isReadOnly(collection)}
           onOptions={(options) => onSet({ options })}
           refs={data.refs}
           search={search}

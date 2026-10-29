@@ -31,6 +31,8 @@ import { decodeAiInput } from "../../domain/ai";
 import { draftProblem } from "../../domain/collectionDraft";
 import { firstShownFields, isRemote, sourcePeriod } from "../../domain/sources";
 import type { SqlClient, Statement } from "./protocol";
+import type { Backlink } from "../../domain/backlinks";
+import { healLinks } from "../schema";
 
 interface CollectionRow {
   id: string;
@@ -479,6 +481,26 @@ export class SqliteRepository implements Repository {
           AND (?2 IS NULL OR o.id IN (SELECT value FROM json_each(?2)))`,
       [collection.id, itemIds ? JSON.stringify(itemIds) : null],
     );
+  }
+
+  async listBacklinks(collectionId: string, itemId: string, spaceId: string): Promise<Backlink[]> {
+    // The index row holds the targets as JSON; instr() narrows to the rows that mention the item at all.
+    const rows = await this.db.select<{ collection_id: string; item_id: string; field_id: string; created_at: string; updated_at: string }>(
+      `SELECT o.collection_id, o.id AS item_id, l.source_field_id AS field_id, o.created_at, o.updated_at
+         FROM item_links l
+         JOIN items o ON o.id = l.source_item_id AND o.deleted_at IS NULL AND o.space_id = ?3
+         JOIN collections c ON c.id = o.collection_id AND c.deleted_at IS NULL
+         JOIN fields f ON f.id = l.source_field_id AND f.deleted_at IS NULL
+        WHERE l.deleted_at IS NULL AND o.id <> ?2 AND instr(l.targets, ?2) > 0
+          AND EXISTS (SELECT 1 FROM json_each(l.targets) t WHERE json_extract(t.value, '$.item') = ?2 AND json_extract(t.value, '$.collection') = ?1)
+        ORDER BY o.updated_at DESC, o.id, f.position`,
+      [collectionId, itemId, spaceId],
+    );
+    return rows.map((r) => ({ sourceCollectionId: r.collection_id, sourceItemId: r.item_id, fieldId: r.field_id, itemCreatedAt: r.created_at, itemUpdatedAt: r.updated_at }));
+  }
+
+  async rebuildLinks(): Promise<void> {
+    await this.db.write([healLinks(null, true)]);
   }
 
   async createItem(collection: Collection, values: Record<string, FieldValue>, spaceId: string): Promise<string> {

@@ -49,6 +49,14 @@ needs server-side queries (docs/vision.md).
   missing. `now()`
   never goes below a timestamp received from the server (`observeStamp`), a cheap guard against clock
   skew instead of a hybrid logical clock.
+- *Item links* (`item_links`, docs/data-model.md "Item links"): derived from the values but synced, so devices and the server hold the
+  index. The row carries its value's own `updated_at` and is written in the same transaction (triggers on `field_values`, not while
+  `sync_applying`), so the newest-wins merge keeps value and row together. Values from a device that doesn't know the table (`SYNC_VERSION`
+  1, which `SYNC_COMPATIBLE` still lets sync; it never reads the table's rows) have no row: after applying a sync the engine
+  rebuilds the rows of the applied values that are missing or older (`healAppliedLinks`, after `sync_applying` is cleared, so the table's outbox trigger queues
+  them and the next sync sends them), and after a first download for every value. Nothing is computed on the server; it stores the rows
+  (jsonb `targets`, handed back as the same text). A newer app talking to a server that lacks the table is told to update the server
+  (the usual answer to an unknown table); a row that arrives alone announces its source item's change (`announce`).
 - *First connection to a server* (or a changed server URL): the server is the source of truth. If it
   holds data, that replaces everything on the device (one local transaction, nothing is sent; the
   Server tab (saving a new address while sync is on) and the Sync tab (switching it on) ask for confirmation first, `isNewServer`). Only an empty server takes the device's data

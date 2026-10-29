@@ -25,6 +25,13 @@ Extension points are registries, not special cases in pages:
   checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
   nothing, never the wrong items (so does a value from the page's item that it doesn't have: "Author is this Book's Mentor" on a Book without one). The value input is text for every kind (the braces must be typable);
   under it, what the code works out to ("= true").
+- **Virtual collections** (`domain/backlinks.ts` `VIRTUAL_COLLECTIONS`, `Collection.virtual`): a block on an item page may list a collection
+  that stores nothing, **Backlinks** (docs/features.md): offered in that block's Collection picker only (`BlockMenus`, when it has a
+  page), resolved by id next to the store's collections (`findCollection`, in `ItemPageBlock` and the page-wide filter's scope).
+  Its rows come from `useBacklinkData` (the items linking to the page's item, current from the change feed) instead of the shared item
+  cache or a remote source, then go through `applyQuery` like any collection's items, so every block type, filter, sort, group and
+  component (`$items`) works. Read-only through the same guard as remote collections (`isReadOnly` in `useItemActions`: rows open
+  and sort only); a row opens the linking item (`itemPath`: table title, card, map dot, `ItemActions.open`).
 - **And / Or** (`app/src/domain/filterTree.ts`): each rule says how it joins what comes before it
   (`FilterRule.join`: absent = And, narrowing; "or" lets more items in), read in order without precedence
   (`A or B and C` = `(A or B) and C`); the first rule of a filter building on nothing shows "Where". A

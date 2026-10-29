@@ -95,6 +95,24 @@ Never use `$item` together with a block's names: such a component fits nowhere.
 
 A block on an item's page doesn't see that page's item as `$item`. Its filter picks the items that belong to it instead, for example "Author is this Author".
 
+### Backlinks
+
+A block on an item's page can list **Backlinks**: choose it as the block's Collection in Block settings. These are the items that link to the page's item (also a row of a remote collection), one row for each link: a link in a Markdown, HTML or AI text, or a field of type Item or List of items that holds it. A link to a field, view or block of the item counts as one to the item. Backlinks can't be changed. Their fields:
+
+| Field | What it is |
+|---|---|
+| Item | a Markdown link to the linking item |
+| Title | the linking item's title |
+| Collection | the collection the linking item is in (plural, such as "Books") |
+| Field | the name of the field its link is in |
+| Created, Updated | when the linking item was created and last changed |
+
+A table, cards, a chart or a Component block shows them like any items: filter, sort and group them (for example by Collection), and in a component they are `$items`, `$groups` and `$fields`, read through `$item` as usual (`i.Title`, `i.Collection`, `i.Field`, `i.createdAt`, `i.updatedAt`, and `i.Item` for the link).
+
+```component
+{{ $items.map((i) => `- ${i.Item} (${i.Collection}, ${i.Field})`).join("\n") }}
+```
+
 ## Examples
 
 Reading time for a book, empty when the page count is missing:

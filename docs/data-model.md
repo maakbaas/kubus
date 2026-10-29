@@ -64,6 +64,27 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   the last reference (changed/removed image, deleted item/field), and after a sync that drops one; the item editor releases
   unsaved uploads when it closes. A week later `sweepFiles` deletes them, here and on the server, unless used again. Bytes travel
   apart from the rows (`/api/files`); the server keeps them in Postgres (`file_bytes`) until a device deletes them. See `docs/sync.md`, "Files".
+- **Item links** (`item_links`, synced; `domain/backlinks.ts`): which items each value points at, for backlinks. One row per (source item,
+  source field) whose value links anywhere: `id` = `<item id>/<field id>` (so every device makes the same row), `targets` = JSON array of
+  `{ item, collection }` (a native item's id, or a remote row's item id; sorted, each once, keys in Postgres' jsonb order so the text
+  survives the server unchanged), `updated_at` = **exactly the value's own** `field_values.updated_at`, `deleted_at` (= `updated_at`) when
+  the value stopped linking anywhere (kept, so it syncs). Targets come from the field's kind: `item` (`value_ref`) and `item_list`
+  (`value_json`, a list of item ids) point at `fields.target_collection_id`; `markdown`, `html` and `ai` text at the items it links to
+  (`linkTargets`; a link to a field, view or block of an item counts as the item; `/items/new` and collection links don't). Other kinds
+  (`value_json` also holds string lists, checklists, AI fingerprints) have no row. No foreign keys (a target can be a remote row, rows
+  arrive in any order). A deleted source item or field isn't copied into the row: it is left out when reading (`listBacklinks` joins
+  `items` and `fields`), so a restore needs nothing, and so does moving an item between spaces.
+  - *Kept by triggers on `field_values`* (insert and update, `schema.sql`; the SQL function `link_targets`, defined by the engine like
+    `file_ids`), so every write path (items, import, generated AI values, the API) maintains it in the same transaction, unless
+    `sync_applying` is set: rows applied from a sync arrive with their own. The outbox triggers queue them like any synced row.
+  - *Merge*: the row and its value have the same stamp and are written together, so the newest-wins merge (`updated_at`, ties stay as they
+    were first stored) picks the same version for both on every side, whichever device syncs first. A tie leaves a pair per device, each
+    consistent in itself.
+  - *Healed*: a device of the version before the table (`SYNC_VERSION` 1) writes values but no rows. After a sync applied values
+    (`SyncEngine`: `healAppliedLinks`; after a first connection for every value) `healLinks` rebuilds the row of each value whose row is
+    missing or older than the value, with the value's stamp, and queues it, so it syncs out; the same rebuild is the same row on every device.
+    `Repository.rebuildLinks` runs it over all values (and rewrites rows of the same stamp holding other targets, for a change in what
+    counts as a link). Migration 2 builds the rows of the values already there and queues them.
 - Reference fields (`item`, `item_list`) carry `fields.target_collection_id`, and optionally
   `fields.choice_filter` (JSON filter rules over the target, edited with the views' filter editor:
   `ui/ChoiceFilterEditor.tsx`): pickers offer only matching items (`choicesFor`); a value

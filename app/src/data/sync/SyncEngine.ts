@@ -12,6 +12,7 @@ import {
   type WireValue,
 } from "../../../../shared/sync";
 import { observeStamp } from "../../domain/model";
+import { healLinks } from "../schema";
 import type { DataChange, SyncConfig, SyncControl, SyncStatus } from "../repository";
 import type { SqlClient, Statement } from "../sqlite/protocol";
 import type { SyncEnvironment } from "./environment";
@@ -138,6 +139,17 @@ const requeueFiles = (ids: string[]): Statement[] =>
         },
         { sql: "INSERT INTO sync_outbox (tbl, pk) SELECT 'thumbnails', file_id FROM thumbnails WHERE file_id IN (SELECT value FROM json_each(?1))", bind: [JSON.stringify(ids)] },
       ];
+
+/**
+ * After rows were applied (with sync_applying off again): the item_links rows of the values among them that are
+ * missing or older than their value get rebuilt, and so are queued for the server. A device of this version sent
+ * its rows along with its values, so there is nothing to do for those; a value written by an older app has no row,
+ * or a stale one, until the first device of this version that gets it makes it (identically on every device).
+ */
+export function healAppliedLinks(changes: WireChanges): Statement[] {
+  const keys = (changes.field_values ?? []).map((r): [string, string] => [String(r.item_id), String(r.field_id)]);
+  return keys.length > 0 ? [healLinks(keys)] : [];
+}
 
 export const keyOf = (t: SyncTable) => (t.key.length > 1 ? `json_array(${t.key.join(", ")})` : t.key[0]);
 
@@ -419,6 +431,7 @@ export class SyncEngine implements SyncControl {
       { sql: "DELETE FROM meta WHERE key = 'sync_applying'" },
       rememberDatabase(current.id),
       ...requeueFiles(missingFiles),
+      ...healAppliedLinks(changes),
     );
     await this.db.write(statements);
     this.cursor = cursor;
@@ -628,6 +641,8 @@ export class SyncEngine implements SyncControl {
         { sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_cursor', ?1)", bind: [String(remote.cursor)] },
         ...remember,
         { sql: "DELETE FROM meta WHERE key = 'sync_applying'" },
+        // Values written by an app that doesn't make item_links rows get theirs (queued for the server).
+        healLinks(null),
       );
       await this.db.write(statements);
       this.cursor = remote.cursor;
@@ -673,7 +688,8 @@ export class SyncEngine implements SyncControl {
     const out: DataChange[] = [];
     const items = new Map<string, string>(); // item id -> collection id
     for (const r of changes.items ?? []) items.set(String(r.id), String(r.collection_id));
-    const valueOf = (changes.field_values ?? []).map((r) => String(r.item_id)).filter((id) => !items.has(id));
+    // A link row alone (its value came earlier) changes the backlinks of the items it points at: shown from its source's change.
+    const valueOf = [...(changes.field_values ?? []).map((r) => String(r.item_id)), ...(changes.item_links ?? []).map((r) => String(r.source_item_id))].filter((id) => !items.has(id));
     if (valueOf.length > 0) {
       const rows = await this.db.select<{ id: string; collection_id: string }>(
         "SELECT id, collection_id FROM items WHERE id IN (SELECT value FROM json_each(?1))",
