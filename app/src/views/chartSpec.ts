@@ -148,6 +148,9 @@ const thresholdLines = (options: ChartOptions) =>
     valueFormatter: (v: number) => formatValue(v, options),
   }));
 
+/** The key the right axis' series carry their value under, with two axes (the left's is "value"). */
+const RIGHT_KEY = "valueRight";
+
 const CURVES: Record<ChartOptions["curve"], string> = { smooth: "curveMonotoneX", straight: "curveLinear", step: "curveStepAfter" };
 
 const isDate = (f: FieldDef | undefined) => f?.kind === "date" || f?.kind === "datetime";
@@ -212,9 +215,12 @@ function xyChart(input: ChartInput, options: ChartOptions, theme: string): Chart
   // A missing value is left out (the line joins its neighbours) or, as a gap, kept empty: Carbon breaks a
   // line or an unstacked area there. Bars, dots and stacks leave it out either way.
   const gapped = (d: DrawnSeries) => options.missing === "gap" && ["line", "area"].includes(styleOfDrawn(d)) && !stacked(d);
+  // With two axes each axis maps its own key (Carbon fits and filters every value axis by all the rows' values of its
+  // `mapsTo`, whatever its `correspondingDatasets`): the right axis' series carry their value as `valueRight`.
+  const valueKey = (side: "left" | "right") => (dual && side === "right" ? RIGHT_KEY : "value");
   const rows = t.points
     .filter((p) => (p.value === null ? gapped(bySeries.get(p.series)!) : !(axisOf(sideOf(bySeries.get(p.series)!)).log && p.value <= 0)))
-    .map((p) => ({ group: p.series, [dataKey]: place(p.category), value: p.value }));
+    .map((p) => ({ group: p.series, [dataKey]: place(p.category), [valueKey(sideOf(bySeries.get(p.series)!))]: p.value }) as Record<string, unknown>);
 
   const domainAxis = {
     mapsTo: dataKey,
@@ -231,19 +237,25 @@ function xyChart(input: ChartInput, options: ChartOptions, theme: string): Chart
     const percent = isStacked && options.stack === "percent";
     const fitted = a.min === null && !isStacked && series.every((d) => !isBarStyle(styleOfDrawn(d)));
     // The values' extremes (stacked: the stacks'), from 0 unless fitted, for a min or max set alone.
-    const values = rows.filter((r) => names.has(r.group)).map((r) => r.value!);
+    const key = valueKey(side);
+    const mine = rows.filter((r) => names.has(r.group as string));
+    const values = mine.map((r) => r[key] as number | null).filter((v): v is number => v !== null);
     if (isStacked) {
       const stacks = new Map<unknown, [number, number]>();
-      for (const r of rows.filter((r) => names.has(r.group))) {
+      for (const r of mine) {
+        const v = r[key] as number | null;
+        if (v === null) continue;
         const [lo, hi] = stacks.get(r[dataKey]) ?? [0, 0];
-        stacks.set(r[dataKey], r.value! < 0 ? [lo + r.value!, hi] : [lo, hi + r.value!]);
+        stacks.set(r[dataKey], v < 0 ? [lo + v, hi] : [lo, hi + v]);
       }
       values.push(...[...stacks.values()].flat());
     }
     if (!fitted && !a.log) values.push(0);
-    const domain = percent ? null : domainOf(a, values);
+    // Carbon fits every value axis to ALL the data under its `mapsTo`, whatever its `correspondingDatasets`
+    // (the right axis would show the left series' scale): with two axes each is given its own series' extremes.
+    const domain = percent ? null : (domainOf(a, values) ?? (dual ? ([Math.min(...values), Math.max(...values)] as [number, number]) : null));
     return {
-      mapsTo: "value",
+      mapsTo: key,
       scaleType: a.log && !percent ? "log" : "linear",
       title: a.title.trim() || (series.length === 1 ? series[0].name : options.unit.trim()) || undefined,
       ...(isStacked && { stacked: true }),
@@ -255,10 +267,16 @@ function xyChart(input: ChartInput, options: ChartOptions, theme: string): Chart
       ...(dual && side === "left" && { main: true }),
     };
   };
+  const leftAxis = valueAxis("left");
+  const rightAxis = dual ? valueAxis("right") : null;
+  // Carbon drops the rows outside an axis' domain, and any without that axis' key: every row also carries the other
+  // axis' key, at that axis' lower end (inside its domain, so kept; its own series never read it).
+  const lowerEnd = (axis: { domain?: number[] } | null) => axis?.domain?.[0] ?? 0;
+  const data = dual ? rows.map((r) => ({ ...r, [RIGHT_KEY in r ? "value" : RIGHT_KEY]: lowerEnd(RIGHT_KEY in r ? leftAxis : rightAxis) })) : rows;
   const hidden = options.compact ? { visible: false, title: undefined } : {};
   const axes: Record<string, unknown> = horizontal
-    ? { left: { ...domainAxis, ...hidden }, bottom: { ...valueAxis("left"), ...hidden } }
-    : { bottom: { ...domainAxis, ...hidden }, left: { ...valueAxis("left"), ...hidden }, ...(dual && { right: { ...valueAxis("right"), ...hidden } }) };
+    ? { left: { ...domainAxis, ...hidden }, bottom: { ...leftAxis, ...hidden } }
+    : { bottom: { ...domainAxis, ...hidden }, left: { ...leftAxis, ...hidden }, ...(rightAxis && { right: { ...rightAxis, ...hidden } }) };
 
   const styles = new Set(t.series.map(styleOfDrawn));
   const several = t.series.length > 1;
@@ -295,7 +313,7 @@ function xyChart(input: ChartInput, options: ChartOptions, theme: string): Chart
   const lines = styles.has("line") || styles.has("area");
   return {
     chart,
-    data: rows,
+    data,
     options: base(options, theme, several, {
       axes,
       tooltip: tooltip(options, input, [t.categoryLabel || (horizontal ? "y-value" : "x-value")]),
