@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dateGroup, dateGroupLabel, dateGroupValue, isoWeek, parseGroupDate } from "./groupDate";
+import { dateGroup, dateGroupLabel, dateGroupValue, parseGroupDate } from "./groupDate";
 import type { Collection, FieldDef, Item } from "./model";
 import { applyQuery, defaultQuery, type QueryContext } from "./query";
 
@@ -27,16 +27,25 @@ const entries = [
 const grouped = (by: string, groupDate?: "year" | "month" | "week" | "day" | "hour", groupOrder?: "asc" | "desc" | "count") =>
   applyQuery(collection, entries, { ...defaultQuery(), groupBy: by, groupDate, groupOrder }, ctx).groups.map((g) => [g.key, g.label, g.items.map((i) => i.id).join("")]);
 
-describe("isoWeek", () => {
-  it("numbers weeks Monday to Sunday, week 1 holding the first Thursday", () => {
-    expect(isoWeek(2026, 10, 28)).toEqual({ year: 2026, week: 44 });
-    expect(isoWeek(2026, 1, 1)).toEqual({ year: 2026, week: 1 });
-    // A week across the new year belongs to the year holding its Thursday.
-    expect(isoWeek(2025, 12, 29)).toEqual({ year: 2026, week: 1 });
-    expect(isoWeek(2027, 1, 1)).toEqual({ year: 2026, week: 53 });
-    expect(isoWeek(2024, 12, 30)).toEqual({ year: 2025, week: 1 });
-    expect(isoWeek(2026, 10, 25)).toEqual({ year: 2026, week: 43 });
-    expect(isoWeek(2026, 10, 26)).toEqual({ year: 2026, week: 44 });
+describe("week groups", () => {
+  it("numbers weeks Sunday to Saturday, week 1 holding 1 January, like the date filter", () => {
+    const week = (y: number, m: number, d: number) => dateGroup(y, m, d, null, "week").key;
+    expect(week(2026, 10, 28)).toBe("2026-W44");
+    expect(week(2026, 1, 1)).toBe("2026-W01");
+    // 1 January 2026 is a Thursday: the week from Sunday 28 December is week 1 of 2026.
+    expect(week(2025, 12, 28)).toBe("2026-W01");
+    expect(week(2025, 12, 27)).toBe("2025-W52");
+    expect(week(2026, 1, 3)).toBe("2026-W01");
+    expect(week(2026, 1, 4)).toBe("2026-W02");
+    expect(week(2026, 10, 24)).toBe("2026-W43");
+    expect(week(2026, 10, 25)).toBe("2026-W44");
+    expect(week(2026, 10, 26)).toBe("2026-W44");
+    expect(week(2026, 10, 31)).toBe("2026-W44");
+    expect(week(2026, 11, 1)).toBe("2026-W45");
+    // A week across the new year belongs to the year of its Saturday.
+    expect(week(2027, 1, 1)).toBe("2027-W01");
+    expect(week(2026, 12, 26)).toBe("2026-W52");
+    expect(week(2026, 12, 27)).toBe("2027-W01");
   });
 });
 
@@ -54,7 +63,7 @@ describe("dateGroup", () => {
 
   it("labels a key of any shape, a value for a new item in it, and reads a stored option", () => {
     expect(["2026", "2026-10", "2026-W44", "2026-10-28", "2026-10-28T14", "x"].map(dateGroupLabel)).toEqual(["2026", "October 2026", "Week 44, 2026", "28 Oct 2026", "28 Oct 2026, 14:00", "x"]);
-    expect(["2026", "2026-10", "2026-W44", "2026-W01", "2026-10-28"].map(dateGroupValue)).toEqual(["2026-01-01", "2026-10-01", "2026-10-26", "2025-12-29", "2026-10-28"]);
+    expect(["2026", "2026-10", "2026-W44", "2026-W01", "2026-10-28"].map(dateGroupValue)).toEqual(["2026-01-01", "2026-10-01", "2026-10-25", "2025-12-28", "2026-10-28"]);
     expect([parseGroupDate("year"), parseGroupDate("hour"), parseGroupDate("day"), parseGroupDate("decade"), parseGroupDate(undefined)]).toEqual(["year", "hour", undefined, undefined, undefined]);
   });
 });
@@ -70,7 +79,7 @@ describe("applyQuery grouped by a date", () => {
     ]);
   });
 
-  it("groups a date by year, month and ISO week, in time order either way", () => {
+  it("groups a date by year, month and week, in time order either way", () => {
     expect(grouped("day", "year")).toEqual([["2025", "2025", "c"], ["2026", "2026", "abdf"], ["", "(empty)", "e"]]);
     expect(grouped("day", "month")).toEqual([["2025-12", "December 2025", "c"], ["2026-10", "October 2026", "abf"], ["2026-11", "November 2026", "d"], ["", "(empty)", "e"]]);
     expect(grouped("day", "week")).toEqual([["2026-W01", "Week 1, 2026", "c"], ["2026-W44", "Week 44, 2026", "abf"], ["2026-W45", "Week 45, 2026", "d"], ["", "(empty)", "e"]]);

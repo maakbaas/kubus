@@ -170,14 +170,14 @@ const toDate = (day: string) => {
   const [y, m, d] = day.split("-").map(Number);
   return new Date(y, m - 1, d);
 };
-const addDays = (day: string, n: number) => {
+export const addDays = (day: string, n: number) => {
   const d = toDate(day);
   d.setDate(d.getDate() + n);
   return formatDate(d);
 };
 const daysBetween = (a: string, b: string) => Math.round((toDate(b).getTime() - toDate(a).getTime()) / 86_400_000);
 /** Sunday of the day's week. */
-const weekStart = (day: string) => addDays(day, -toDate(day).getDay());
+export const weekStart = (day: string) => addDays(day, -toDate(day).getDay());
 
 /** The hour, day, week, month or year a day or minute falls in (a range: that day alone; an hour of a day: its first). */
 export function periodAround(kind: PeriodKind, at: string): Period {

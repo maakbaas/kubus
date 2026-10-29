@@ -23,7 +23,7 @@ Extension points are registries, not special cases in pages:
   differs from the block type's default (an explicit Title on a chart is marked), and the Sort panel shows the sort in effect.
   A remote collection gets the default like any sort (it goes to the source when the date column can be sorted).
   **Group by a date or date & time field** (`domain/groupDate.ts`, `ViewQuery.groupDate`, stored on the block as
-  `groupDate`, absent = day): by year, month, week (ISO: Monday to Sunday, week 1 holds the year's first Thursday), day or
+  `groupDate`, absent = day): by year, month, week (Sunday to Saturday, week 1 holds 1 January: the date filter's `weekNumber`, one implementation), day or
   hour (date & time only; a date falls back to day), chosen in "Group dates by" beside Group by. A group's key sorts as time
   does (`2026`, `2026-10`, `2026-W44`, `2026-10-28`, `2026-10-28T14`) and Group order sorts by keys, so groups run
   chronologically; its label reads out ("October 2026", "Week 44, 2026", "28 Oct 2026, 14:00"). A date & time is grouped in

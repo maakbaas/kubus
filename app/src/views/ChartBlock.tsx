@@ -73,8 +73,9 @@ function ChartView({ collection, result, options, refs, actions, page }: BlockPr
   const items = useMemo(() => chartItems(result, options.scope, pageItem), [result, options.scope, pageItem]);
   const { spec, stat } = useMemo(() => {
     const input = { collection, items, ctx: { refLabel: refLabelOf(refs, "(deleted)") } };
-    // A stat's spec is its sparkline.
-    return { spec: chartSpec(input, options, dark ? "g100" : "white"), stat: options.chart === "stat" ? statOf(input, options) : null };
+    // A stat's spec is its sparkline, coloured by the stat's trend.
+    const stat = options.chart === "stat" ? statOf(input, options) : null;
+    return { spec: chartSpec(input, options, dark ? "g100" : "white", stat ?? undefined), stat };
   }, [collection, items, refs, options, dark]);
   if (wrongPage) return <p className="helper chart-block__problem">“Of this item” charts the page's item: the block lists {collection.pluralName}, not the page's collection.</p>;
   if ("problem" in spec) return <p className="helper chart-block__problem">{spec.problem}</p>;

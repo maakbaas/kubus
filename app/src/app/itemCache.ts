@@ -9,6 +9,7 @@
 
 import type { DataChange, Repository } from "../data/repository";
 import type { Item, ItemLabel, Collection } from "../domain/model";
+import { errorMessage } from "../domain/errors";
 
 /** What a viewer sees of a collection's list; replaced (never changed) whenever the list changes. */
 export interface Snapshot<T> {
@@ -44,7 +45,6 @@ interface Entry<T> {
 }
 
 const fieldKeyOf = (collection: Collection | undefined) => (collection ? collection.fields.map((f) => f.id).join(",") : "");
-const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** The loaded items of each collection, by collection id. */
 export class SharedCache<T extends { id: string }> {
@@ -101,7 +101,7 @@ export class SharedCache<T extends { id: string }> {
       if (same && held && !entry.snapshot.error && held.length === items.length && held.every((x, i) => same(x, items[i]))) return;
       this.set(entry, items);
     } catch (e) {
-      if (entry.generation === generation) this.set(entry, entry.snapshot.items, messageOf(e));
+      if (entry.generation === generation) this.set(entry, entry.snapshot.items, errorMessage(e));
     }
   }
 
@@ -127,7 +127,7 @@ export class SharedCache<T extends { id: string }> {
         if (!item) return this.set(entry, rest);
         this.set(entry, rest.length === list.length ? [item, ...rest] : list.map((x) => (x.id === id ? item : x)));
       })
-      .catch((e) => this.set(entry, entry.snapshot.items, messageOf(e)))
+      .catch((e) => this.set(entry, entry.snapshot.items, errorMessage(e)))
       .finally(() => {
         if (entry.reloading.get(id) === job) entry.reloading.delete(id);
       });

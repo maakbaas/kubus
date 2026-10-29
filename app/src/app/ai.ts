@@ -32,6 +32,7 @@ import { isAiOutput } from "../domain/components";
 import type { Collection, FieldDef } from "../domain/model";
 import { createLlmClient, DEFAULT_LLM_SETTINGS } from "../platform/llm";
 import { readPref, writePref } from "../ui/localPrefs";
+import { errorMessage } from "../domain/errors";
 
 const SETTINGS_KEY = "kubus.ai";
 /** Requests in flight at once. */
@@ -130,7 +131,6 @@ export interface AiProgress {
 }
 
 const keyOf = (itemId: string, fieldId: string) => `${itemId}:${fieldId}`;
-const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const isRateLimit = (message: string) => /^429\b/.test(message) || /rate.?limit|too many requests/i.test(message);
 
 export class AiService {
@@ -447,7 +447,7 @@ export class AiService {
         await this.repo.setGenerated(job.collection, job.itemId, job.field, parsed.value, job.request.hash);
       }
     } catch (e) {
-      const message = messageOf(e);
+      const message = errorMessage(e);
       if (isRateLimit(message) && (job.attempts ?? 0) < MAX_ATTEMPTS) {
         // Too many requests: everything waits a while, and this value is tried again.
         this.pausedUntil = Date.now() + RATE_LIMIT_PAUSE_MS;

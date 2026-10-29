@@ -15,6 +15,7 @@ import { healLinks } from "../schema";
 import { SYNC_OUTDATED, type DataChange, type SyncConfig, type SyncControl, type SyncStatus } from "../repository";
 import type { SqlClient, Statement } from "../sqlite/protocol";
 import type { SyncEnvironment } from "./environment";
+import { errorMessage } from "../../domain/errors";
 
 // Keeps this device's database in step with the Kubus server (server/src/sync.ts).
 //
@@ -102,8 +103,8 @@ class SyncRefused extends Error {
 /** Which side is older, given the server's SYNC_VERSION (another than this device's). */
 const olderOf = (serverVersion: number): "app" | "server" => (serverVersion > SYNC_VERSION ? "app" : "server");
 
-/** What every request says about this device's data (shared/sync.ts; `compatible` only for servers from before the strict gate). */
-const VERSION = { version: SYNC_VERSION, compatible: SYNC_VERSION };
+/** What every request says about this device's data (shared/sync.ts). */
+const VERSION = { version: SYNC_VERSION };
 
 const toWire = (t: SyncTable, row: Record<string, unknown>): WireRow =>
   Object.fromEntries(Object.keys(t.columns).map((c) => [c, (row[c] ?? null) as WireValue]));
@@ -356,7 +357,7 @@ export class SyncEngine implements SyncControl {
         } catch (e) {
           if (e instanceof DatabaseReplaced) await this.stopForReplaced(e.mismatch);
           else if (e instanceof SyncRefused) this.setStatus({ state: "error", error: null, outdated: e.update });
-          else this.setStatus({ state: "error", error: e instanceof Error ? e.message : String(e) });
+          else this.setStatus({ state: "error", error: errorMessage(e) });
           break;
         }
       } while (this.again);
