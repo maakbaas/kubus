@@ -1,13 +1,13 @@
 // Where the headless device keeps its database between server starts (KUBUS_HEADLESS_DIR): one
-// directory holding `headless.db`, a SQLite file, and `headless.lock`, which keeps a second server
-// process off it. sqlite-wasm under Node has no file system, so the database lives in memory and
-// is saved as a whole: a snapshot (`DirectSqlClient.export`) written to a temporary file, flushed,
-// and renamed over the old one. The file is therefore always one complete database, never half of
-// a write; and because the sync cursor, the server's database id and the data are all rows of that
-// one database, a snapshot is consistent by construction: after a crash the device resumes from the
-// cursor of its last snapshot and fetches what came after (a sync is idempotent).
+// directory holding `headless.db`, a real SQLite file the device opens directly (NodeSqlClient,
+// node:sqlite, WAL mode: every commit is on disk when it returns, a crash leaves a consistent
+// database), and `headless.lock`, which keeps a second server process off it. This class only
+// takes the directory (the lock) and puts a damaged file aside; the database itself is the client's.
+// Because the sync cursor, the server's database id and the data are rows of that one database,
+// committed together, after a crash the device resumes from the cursor of its last commit and
+// fetches what came after (a sync is idempotent).
 
-import { mkdir, open, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
 
@@ -16,8 +16,6 @@ const LOCK_FILE = "headless.lock";
 /** The lock holder touches its file this often; one untouched for STALE_MS is a dead holder's. */
 const BEAT_MS = 5_000;
 const STALE_MS = 20_000;
-/** Snapshots are at least this far apart, and 10 times as far as the last one took to write. */
-const MIN_GAP_MS = 1_000;
 
 /** Directories this process holds (a second device in the same process must not take over its own). */
 const held = new Set<string>();
@@ -32,22 +30,19 @@ const alive = (pid: number) => {
 };
 
 export class DiskStore {
-  /** The database file's bytes as found at start, undefined when there is none yet. */
-  loaded: Uint8Array | undefined;
-  private export: (() => Uint8Array) | null = null;
-  private timer: ReturnType<typeof setTimeout> | null = null;
+  /** The database file (it may not exist yet). */
+  readonly dbPath: string;
   private beat: ReturnType<typeof setInterval> | null = null;
-  private writing: Promise<void> = Promise.resolve();
-  private lastCost = 0;
-  private dirty = false;
   private closed = false;
 
   private constructor(
     readonly dir: string,
     private lock: string,
-  ) {}
+  ) {
+    this.dbPath = join(dir, DB_FILE);
+  }
 
-  /** Takes the directory (it is made if needed) and reads its database; throws when another server process uses it. */
+  /** Takes the directory (it is made if needed); throws when another server process uses it. */
   static async open(dir: string): Promise<DiskStore> {
     await mkdir(dir, { recursive: true });
     const lock = join(dir, LOCK_FILE);
@@ -68,15 +63,6 @@ export class DiskStore {
     const store = new DiskStore(dir, lock);
     store.beat = setInterval(() => void utimes(lock, new Date(), new Date()).catch(() => {}), BEAT_MS);
     store.beat.unref();
-    try {
-      store.loaded = await readFile(join(dir, DB_FILE)).then((b) => new Uint8Array(b.buffer, b.byteOffset, b.length), (e: NodeJS.ErrnoException) => {
-        if (e.code === "ENOENT") return undefined;
-        throw e;
-      });
-    } catch (e) {
-      await store.close();
-      throw e;
-    }
     return store;
   }
 
@@ -97,60 +83,17 @@ export class DiskStore {
     }
   }
 
-  /** The database could not be opened (damaged file): keeps it aside, so the device starts over. */
+  /** The database could not be opened (damaged file): keeps it aside (with its write-ahead log), so the device starts over. */
   async setAside(): Promise<string> {
     const aside = join(this.dir, `${DB_FILE}.damaged-${Date.now()}`);
-    await rename(join(this.dir, DB_FILE), aside);
-    this.loaded = undefined;
+    await rename(this.dbPath, aside);
+    for (const suffix of ["-wal", "-shm"]) await rm(`${this.dbPath}${suffix}`, { force: true });
     return aside;
   }
 
-  /** The database to save: `changed` (to give it) saves a snapshot soon after a write. */
-  attach(exportDb: () => Uint8Array) {
-    this.export = exportDb;
-  }
-
-  readonly changed = () => {
-    this.dirty = true;
-    if (this.timer || this.closed) return;
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      void this.flush();
-    }, Math.max(MIN_GAP_MS, this.lastCost * 10));
-    this.timer.unref();
-  };
-
-  /** Writes a snapshot now if anything changed since the last one. */
-  flush(): Promise<void> {
-    this.writing = this.writing.then(async () => {
-      if (!this.dirty || !this.export) return;
-      this.dirty = false;
-      const started = Date.now();
-      const tmp = join(this.dir, `${DB_FILE}.tmp`);
-      try {
-        const file = await open(tmp, "w");
-        try {
-          await file.writeFile(this.export());
-          await file.sync();
-        } finally {
-          await file.close();
-        }
-        await rename(tmp, join(this.dir, DB_FILE));
-        this.lastCost = Date.now() - started;
-      } catch (e) {
-        this.dirty = true; // the next write tries again
-        console.warn(`Saving the headless device's database failed: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    });
-    return this.writing;
-  }
-
-  /** Saves the last changes and lets go of the directory. */
+  /** Lets go of the directory (the database is closed by then). */
   async close(): Promise<void> {
     if (this.closed) return;
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = null;
-    await this.flush();
     this.closed = true;
     if (this.beat) clearInterval(this.beat);
     held.delete(this.dir);

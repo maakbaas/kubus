@@ -1,7 +1,7 @@
 // @vitest-environment node
 // openRepository (data/index.ts): one database connection per page, retried after a failure.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DirectSqlClient } from "./sqlite/direct";
+import { nodeEngine, openTestClient } from "../test/engine";
 
 const open = vi.fn();
 vi.mock("./sqlite/client", () => ({ WorkerSqlClient: { open: () => open() }, terminateWorkers: vi.fn() }));
@@ -9,7 +9,7 @@ vi.mock("./sqlite/client", () => ({ WorkerSqlClient: { open: () => open() }, ter
 let persist: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   vi.resetModules();
-  open.mockReset().mockImplementation(() => DirectSqlClient.open());
+  open.mockReset().mockImplementation(() => openTestClient());
   persist = vi.fn().mockResolvedValue(true);
   vi.stubGlobal("navigator", { storage: { persist } });
   vi.stubGlobal("localStorage", { getItem: () => null, setItem() {}, removeItem() {} });
@@ -28,7 +28,7 @@ describe("openRepository", { timeout: 30_000 }, () => {
     expect(await openRepository()).toBe(a);
     expect(open).toHaveBeenCalledTimes(1);
     expect(persist).toHaveBeenCalledTimes(1);
-    expect(a.storage).toEqual({ persistent: false });
+    expect(a.storage).toEqual({ persistent: nodeEngine });
     expect(await a.listSpaces()).toHaveLength(1);
   });
 

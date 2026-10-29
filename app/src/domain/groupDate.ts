@@ -1,0 +1,74 @@
+// Grouping by a date or date & time field: by its year, month, week (ISO: Monday to Sunday, week 1
+// holds the year's first Thursday), day or hour (date & time only). A group's key sorts as the time
+// does ("2026", "2026-10", "2026-W44", "2026-10-28", "2026-10-28T14"), so groups order
+// chronologically by key; its label reads out ("2026", "October 2026", "Week 44, 2026", "28 Oct 2026",
+// "28 Oct 2026, 14:00"). Storage-free and UI-free.
+
+export type GroupDate = "year" | "month" | "week" | "day" | "hour";
+
+/** The ways to group by a date, as the Group by panel lists them; `hour` is of a date & time only. */
+export const GROUP_DATES: readonly { value: GroupDate; text: string }[] = [
+  { value: "year", text: "Year" },
+  { value: "month", text: "Month" },
+  { value: "week", text: "Week" },
+  { value: "day", text: "Day" },
+  { value: "hour", text: "Hour" },
+];
+
+/** What a group of a date field is by when none is chosen. */
+export const DEFAULT_GROUP_DATE: GroupDate = "day";
+
+/** A stored value made valid (anything else, and the default, day: absent). */
+export const parseGroupDate = (v: unknown): GroupDate | undefined => (v === "year" || v === "month" || v === "week" || v === "hour" ? v : undefined);
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const pad = (n: number, width = 2) => String(n).padStart(width, "0");
+const DAY_MS = 86_400_000;
+
+/** A day's ISO week: its year (the one holding its Thursday) and number. */
+export function isoWeek(year: number, month: number, day: number): { year: number; week: number } {
+  const date = Date.UTC(year, month - 1, day);
+  const thursday = new Date(date + (3 - ((new Date(date).getUTCDay() + 6) % 7)) * DAY_MS);
+  const first = Date.UTC(thursday.getUTCFullYear(), 0, 1);
+  return { year: thursday.getUTCFullYear(), week: Math.floor((thursday.getTime() - first) / DAY_MS / 7) + 1 };
+}
+
+/** The group a moment (month 1 to 12; an hour 0 to 23 for a date & time) falls in. `hour` of a date (no hour) is its day. */
+export function dateGroup(year: number, month: number, day: number, hour: number | null, by: GroupDate = DEFAULT_GROUP_DATE): { key: string; label: string } {
+  const dayKey = `${pad(year, 4)}-${pad(month)}-${pad(day)}`;
+  const dayLabel = `${day} ${MONTHS[month - 1].slice(0, 3)} ${year}`;
+  if (by === "year") return { key: pad(year, 4), label: String(year) };
+  if (by === "month") return { key: `${pad(year, 4)}-${pad(month)}`, label: `${MONTHS[month - 1]} ${year}` };
+  if (by === "week") {
+    const w = isoWeek(year, month, day);
+    return { key: `${pad(w.year, 4)}-W${pad(w.week)}`, label: `Week ${w.week}, ${w.year}` };
+  }
+  if (by === "hour" && hour !== null) return { key: `${dayKey}T${pad(hour)}`, label: `${dayLabel}, ${pad(hour)}:00` };
+  return { key: dayKey, label: dayLabel };
+}
+
+/** The label of a date group by its key (any of the five shapes); the key itself when it is none. */
+export function dateGroupLabel(key: string): string {
+  let m = /^(\d{4})$/.exec(key);
+  if (m) return dateGroup(+m[1], 1, 1, null, "year").label;
+  m = /^(\d{4})-(\d{2})$/.exec(key);
+  if (m) return dateGroup(+m[1], +m[2], 1, null, "month").label;
+  m = /^(\d{4})-W(\d{2})$/.exec(key);
+  if (m) return `Week ${+m[2]}, ${+m[1]}`;
+  m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}))?$/.exec(key);
+  if (m) return dateGroup(+m[1], +m[2], +m[3], m[4] === undefined ? null : +m[4], m[4] === undefined ? "day" : "hour").label;
+  return key;
+}
+
+/** The date a new item in a group of a date field gets: the group's first day ("2026" 1 January, "2026-W44" its Monday). */
+export function dateGroupValue(key: string): string {
+  if (/^\d{4}$/.test(key)) return `${key}-01-01`;
+  if (/^\d{4}-\d{2}$/.test(key)) return `${key}-01`;
+  const w = /^(\d{4})-W(\d{2})$/.exec(key);
+  if (w) {
+    const jan4 = Date.UTC(+w[1], 0, 4);
+    const monday = new Date(jan4 - ((new Date(jan4).getUTCDay() + 6) % 7) * DAY_MS + (+w[2] - 1) * 7 * DAY_MS);
+    return `${pad(monday.getUTCFullYear(), 4)}-${pad(monday.getUTCMonth() + 1)}-${pad(monday.getUTCDate())}`;
+  }
+  return key.slice(0, 10);
+}

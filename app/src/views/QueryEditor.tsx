@@ -17,9 +17,16 @@ import {
   type GroupOrder,
   type ViewQuery,
 } from "../domain/query";
+import { DEFAULT_GROUP_DATE, GROUP_DATES, type GroupDate } from "../domain/groupDate";
 import { dateFields, periodRule } from "../domain/datePeriod";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { DatePeriodFilter } from "./DatePeriodFilter";
+
+/** The ways to group by a date field (none for another kind, and for a remote collection: its source groups by the value). An hour is of a date & time only. */
+function dateParts(collection: Collection, field: FieldDef | undefined) {
+  if (collection.source || (field?.kind !== "date" && field?.kind !== "datetime")) return [];
+  return GROUP_DATES.filter((p) => p.value !== "hour" || field.kind === "datetime");
+}
 
 interface Props {
   collection: Collection;
@@ -166,6 +173,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
   const sort = query.sort[0];
   const groupable = pickableFields(collection).filter((f) => canGroup(collection, f));
   const dated = dateFields(collection).length > 0;
+  const groupDates = dateParts(collection, query.groupBy ? fieldsById.get(query.groupBy) : undefined);
 
   return (
     <div className="query-editor">
@@ -300,13 +308,38 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
             labelText="Group by"
             size="sm"
             value={query.groupBy ?? ""}
-            onChange={(e) => onChange({ ...query, groupBy: e.target.value || null })}
+            onChange={(e) => {
+              const groupBy = e.target.value || null;
+              // A date grouping goes with a date field (an hour only with a date & time one).
+              const next = groupBy ? fieldsById.get(groupBy) : undefined;
+              const { groupDate: _old, ...rest } = query;
+              const keep = query.groupDate && dateParts(collection, next).some((p) => p.value === query.groupDate);
+              onChange({ ...rest, groupBy, ...(keep && { groupDate: query.groupDate }) });
+            }}
           >
             <SelectItem value="" text="No grouping" />
             {groupable.map((f) => (
               <SelectItem key={f.id} value={f.id} text={f.name} />
             ))}
           </Select>
+          {groupDates.length > 0 && (
+            <Select
+              id={`${uid}-group-date`}
+              labelText="Group dates by"
+              size="sm"
+              value={query.groupDate ?? DEFAULT_GROUP_DATE}
+              onChange={(e) => {
+                const groupDate = e.target.value as GroupDate;
+                // The default isn't stored, so views saved before the option compare equal.
+                const { groupDate: _old, ...rest } = query;
+                onChange(groupDate === DEFAULT_GROUP_DATE ? rest : { ...rest, groupDate });
+              }}
+            >
+              {groupDates.map((p) => (
+                <SelectItem key={p.value} value={p.value} text={p.text} />
+              ))}
+            </Select>
+          )}
           <Select
             id={`${uid}-group-order`}
             labelText="Group order"

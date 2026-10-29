@@ -6,8 +6,8 @@ home-screen app.
 ## Sync with Postgres (the server and the sync engine)
 
 Repo layout: `app/` the web app (what Tauri and the phone run), `desktop/` the Tauri shell,
-`server/` the sync server (Node 24, runs its TypeScript directly, dependencies `pg` and
-`@sqlite.org/sqlite-wasm` for the headless device), `shared/` what both sides import: `sync.ts`
+`server/` the sync server (Node 24, runs its TypeScript directly, dependency `pg`; the headless device
+uses Node's built-in `node:sqlite`), `shared/` what both sides import: `sync.ts`
 the protocol (the list of synced tables / columns / types and the request shapes), `files.ts`
 (file ids, `fileIdsIn`), `router.ts` (the routes of the server and the API), `api.ts` (types of the
 server ↔ headless device interface).
@@ -382,7 +382,7 @@ takes the new one when its settings are opened. A source's name: letters, digits
 app's own `SqliteRepository` running inside the server process as one more synced device
 (`app/src/headless`), never by writing to Postgres: so it follows the GUI's rules (field diffing,
 file release, AI fields, the "All" view, soft deletes, change sets).
-- *Device*: `DirectSqlClient` (sqlite-wasm in memory, `SqliteEngine` as in the worker), the real
+- *Device*: `NodeSqlClient` (`data/sqlite/node.ts`: Node's built-in `node:sqlite`, `SqliteEngine` as in the worker), the real
   `SyncEngine` with `memoryEnvironment({ keepFiles: false })` (settings in memory; file bytes dropped
   once uploaded, fetched from the server when asked), syncing over HTTP with `http://127.0.0.1:$PORT`
   and listening to `/api/events`. It starts with a first connection (everything but bytes). After a
@@ -391,18 +391,24 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   the server's: a device's cursor never exceeds the server's, so a higher one means the server's counter
   restarted (a wipe drops the sequences) and the device holds another database's data; it syncs, gets 409
   and starts over, so the API never answers with pre-wipe data even when the wipe signal was missed.
-- *Persistence* (`KUBUS_HEADLESS_DIR`, `headless/diskStore.ts`): unset, the database is in memory and every
-  server start downloads everything (`/api/v1` answers 503 until done; tests, development). Set to a
-  directory (the image: `/data/headless`, a volume in `docker-compose.yml`), the device saves its database
-  there as `headless.db` and resumes on the next start from its sync cursor: it logs `Resuming from …`
-  (or `Nothing saved in … yet` the first time), syncs only what came after, and `/api/v1` has the data at
-  once. sqlite-wasm under Node has no file system, so the database lives in memory and is saved as a
-  whole snapshot (`DirectSqlClient.export`) to a temporary file, fsynced and renamed over the old one, at
-  most every second (10 times as long as the last snapshot took, for big databases), after a write, and on
-  SIGTERM (`HeadlessHost.close`). The file is therefore always one complete database. The cursor
+- *Persistence* (`KUBUS_HEADLESS_DIR`, `headless/diskStore.ts`): unset, the database is `node:sqlite` in memory
+  (the same engine as with a directory, so tests and development run what production runs; sqlite-wasm would be a
+  second engine for nothing) and every server start downloads everything (`/api/v1` answers 503 until done). Set to a
+  directory (the image: `/data/headless`, a volume in `docker-compose.yml`), the device opens `headless.db` there
+  directly, a real SQLite file in WAL mode (`synchronous = NORMAL`, `busy_timeout` 5 s, foreign keys on): every
+  commit is in the file when it returns, `kill -9` or a crash leaves a consistent database with every commit up to
+  the last (only a power loss or kernel crash can lose the last few commits, which sync fetches again), and nothing
+  is saved "later". On start it logs `Resuming from …` (or `Nothing saved in … yet` the first time), syncs only what
+  came after its cursor, and `/api/v1` has the data at once. On SIGTERM (`HeadlessHost.close`) the log is folded into
+  the file. `headless.lock` keeps a second server process off the directory; a file that isn't a database is kept
+  aside as `headless.db.damaged-<time>` (with its `-wal` / `-shm` removed) and the device starts over. The cursor
   (`meta.sync_cursor`), the server's database id and the server address (`sync_server`) are rows of that same database,
-  written in the same transaction as the data they describe, so a snapshot is consistent by construction; after a crash
-  the device resumes from its last snapshot's cursor and fetches the rest (a sync is idempotent). Nothing
+  written in the same transaction as the data they describe, so after a crash the device resumes from its last
+  commit's cursor and fetches the rest (a sync is idempotent). *Backups*: the volume is a cache of Postgres (the
+  device rebuilds it with a first connection), so it needs none; to copy it anyway use `sqlite3 headless.db ".backup x.db"`
+  (safe while the server runs) or copy the three files `headless.db`, `-wal`, `-shm` together after stopping it; a
+  bare copy of `headless.db` alone while it runs may miss the log. Node's SQLite is flagged experimental, so the
+  start commands pass `--disable-warning=ExperimentalWarning` (Dockerfile, `npm start`, `npm run dev`).
   else needs to survive: the sync settings (`memoryEnvironment`) are set from the server's options at each
   start. The database is migrated like any device's (`SqliteRepository.open`; one from a newer version is
   left alone and the API says to update). If the server's database was replaced or wiped meanwhile (409, a
@@ -440,7 +446,7 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   run code on the server.
 - *Build*: `npm run build:headless` (`app/vite.headless.config.ts`, an SSR build) bundles
   `app/src/headless/index.ts` into `server/headless/index.js` (git-ignored; the Dockerfile's web stage
-  builds it); sqlite-wasm stays external. The server loads it with a dynamic import
+  builds it); `node:sqlite` stays external (built into Node). The server loads it with a dynamic import
   (`server/src/headless.ts`); without it `/api/v1` answers 503 saying to build it.
 - *Webhooks* (`headless/webhooks.ts`): `SyncEngine.onPulled` reports each sync's applied rows and
   the ones it sent (the API's own writes, which the server doesn't send back); the device turns them into events (item created / updated / deleted with the item as the API returns

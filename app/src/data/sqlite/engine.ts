@@ -1,6 +1,6 @@
 // The SQLite database itself, independent of where it lives: the schema (created, or migrated
 // from an older version's), reads, atomic writes and wiping. The browser runs it in a worker over OPFS
-// (worker.ts); the server's headless device runs it in-process, in memory (direct.ts).
+// (worker.ts); the server's headless device runs it in-process on node:sqlite, in a file (node.ts); tests also use sqlite-wasm in memory (direct.ts).
 
 import { MIGRATIONS, type Db, type Migration } from "../migrations";
 import { fileIds, linkTargetsFn, outboxTriggerSql, schema } from "../schema";

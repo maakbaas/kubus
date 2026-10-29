@@ -28,4 +28,4 @@ COPY --from=web /build/server/headless server/headless
 RUN mkdir -p /data/headless && chown node:node /data/headless
 ENV PORT=8080
 EXPOSE 8080
-CMD ["node", "server/src/index.ts"]
+CMD ["node", "--disable-warning=ExperimentalWarning", "server/src/index.ts"]

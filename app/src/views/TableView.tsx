@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@carbon/react";
-import { Add, ArrowRight, Close, Copy, DataTable as TableIcon, Edit, Save, TrashCan } from "@carbon/icons-react";
+import { Add, ArrowRight, Close, DataTable as TableIcon, Edit, Save, TrashCan } from "@carbon/icons-react";
 import { RowActions, ROW_BUTTON, RowIconButton } from "../ui/RowActions";
 import { useStore } from "../app/store";
 import { itemPath } from "../domain/backlinks";
@@ -508,11 +508,6 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
           <Edit />
         </RowIconButton>
       )}
-      {actions.duplicate && (
-        <RowIconButton {...ROW_BUTTON} label="Duplicate" onClick={() => actions.duplicate?.(item)}>
-          <Copy />
-        </RowIconButton>
-      )}
       {actions.remove && (
         <RowIconButton {...ROW_BUTTON} label="Delete" onClick={() => actions.remove?.(item)}>
           <TrashCan />
@@ -568,7 +563,7 @@ export function TableView(props: BlockProps<TableOptions>) {
           return (
             <TableHeader
               key={f.id}
-              className={`cell--${f.kind}`}
+              className={`cell--${f.kind}${props.layout.hiddenLabels.includes(f.id) ? " cell--name-hidden" : ""}`}
               isSortable={!!actions.sortBy}
               isSortHeader={active}
               sortDirection={active ? (actions.sort!.direction === "asc" ? "ASC" : "DESC") : "NONE"}
@@ -710,7 +705,7 @@ export const tableView = defineBlockType<TableOptions>({
     return { titleLink: o.titleLink !== false };
   },
   // Columns are its fields.
-  uses: () => ({ query: true, groups: true, fields: { labels: false, hideEmpty: false } }),
+  uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: false } }),
   View: TableView,
   OptionsEditor: TableOptionsEditor,
 });
