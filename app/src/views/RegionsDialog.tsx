@@ -88,7 +88,16 @@ export function RegionsDialog({
                 Not on the map: {notOnMap}
               </p>
             )}
-            <Search size="sm" id={`${uid}-search`} labelText="Search regions" placeholder="Search regions" value={query} onChange={(e) => setQuery(e.target.value)} />
+            {/* Carbon's Search stops every Escape (it clears its text): on an empty one, Escape closes the dialog. */}
+            <div
+              onKeyDownCapture={(e) => {
+                if (e.key !== "Escape" || query) return;
+                e.stopPropagation();
+                onClose();
+              }}
+            >
+              <Search size="sm" id={`${uid}-search`} labelText="Search regions" placeholder="Search regions" value={query} onChange={(e) => setQuery(e.target.value)} />
+            </div>
             {matched && <Checkbox id={`${uid}-empty`} labelText="Only regions without a value" checked={onlyEmpty} onChange={(_, { checked }) => setOnlyEmpty(checked)} />}
             <div className="regions-dialog__table">
               <Table size="sm">
