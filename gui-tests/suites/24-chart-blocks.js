@@ -1032,3 +1032,42 @@ test("on an item page: Of this item or these items", async (t) => {
   await drawn(t, "this item again", (f) => f.lines_.includes(String(WEIGH_INS[0].values.weight)));
   await t.audit("the item's settings");
 });
+
+test("on an item page: a stat's Last, First, Previous value and count follow a period counted from the page's item, up to its time", async (t) => {
+  // "Last 2 months" and "Last 60 days", each counted from the weigh-in's own moment (not from today, nor to the end of its month).
+  const periods = [
+    { value: "month-1..month+0", from: (m) => Date.UTC(m.getUTCFullYear(), m.getUTCMonth() - 1, 1) },
+    { value: "day-59..day+0", from: (m) => Date.UTC(m.getUTCFullYear(), m.getUTCMonth(), m.getUTCDate() - 59) },
+  ];
+  for (const period of periods) {
+    const stat = (id, value, extra = {}) => ({ kind: "chart", title: id, collection: "w", filters: [{ field: "moment", operator: "between", value: `${period.value}@$item.@moment` }], options: { chart: "stat", sparkline: "none", series: [S("a", value, "@weight")], ...extra } });
+    const spec = chartSpec([{ options: RICH }]);
+    spec.collections[0].itemViews = [{
+      name: "Main",
+      layout: { fields: null, blocks: [stat("Last", "last", { compare: "prev" }), stat("First", "first"), stat("Count", "count"), stat("Max", "max"), { kind: "table", title: "All", collection: "w", limit: 0, layout: { fields: ["name"] } }] },
+    }];
+    await t.boot();
+    const ids = await t.seed(spec);
+    let first = true;
+    for (const n of [20, 10, 30, 20]) {
+      const at = new Date(WEIGH_INS[n].values.moment);
+      const window = WEIGH_INS.filter((i) => Date.parse(i.values.moment) >= period.from(at) && Date.parse(i.values.moment) <= at.getTime());
+      const weights = window.filter((i) => i.values.weight !== undefined).map((i) => i.values.weight);
+      const num = (v) => String(Math.round(v * 100) / 100);
+      // The first by a load, then by the table's link (the page stays mounted: the stats must follow the new page item).
+      if (first) await t.open(t.itemPath(ids.collections.w, ids.items[`w/w${n}`]));
+      else {
+        await t.page.locator(`.ws-pane--active .block a[href$="/items/${ids.items[`w/w${n}`]}"]`).first().click();
+        await t.until(`the page of Weigh-in ${n + 1}`, async () => (await t.page.locator(".ws-pane--active .page-header").innerText()).includes(`Weigh-in ${n + 1}`));
+      }
+      first = false;
+      await waitDrawn(t, 3);
+      const expected = [num(weights[weights.length - 1]), num(weights[0]), String(window.length), num(Math.max(...weights))];
+      for (const [i, name] of ["Last", "First", "Count", "Max"].entries()) {
+        await drawn(t, `${period.value}, Weigh-in ${n + 1}: ${name} is ${expected[i]}`, (f) => f.kind === "stat" && f.lines_.includes(expected[i]), i);
+      }
+      await drawn(t, `${period.value}, Weigh-in ${n + 1}: the Last compared with the value before it`, (f) => f.lines_.some((l) => l.includes(`(${num(weights[weights.length - 2])}`)), 0);
+    }
+    await t.audit(`stats counted from the page's item (${period.value})`);
+  }
+});

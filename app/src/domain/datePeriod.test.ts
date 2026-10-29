@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultDateField, kindValue, latestValue, periodState, periodText, stepValue, windowValue, withPeriod, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveRange, rollingLabel, rollingRangeLabel, rollingRangeValue, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
+import { defaultDateField, kindValue, latestValue, periodState, periodText, stepValue, windowValue, withPeriod, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveAnchored, resolveRange, rollingLabel, rollingRangeLabel, rollingRangeValue, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
 
 describe("date periods", () => {
   it("finds the day, week (Sunday first), month and year around a day", () => {
@@ -47,6 +47,20 @@ describe("date periods", () => {
     expect(parseRange(rangeValue({ start: "2026-01-01", end: "2026-02-01" }))).toEqual({ start: "2026-01-01", end: "2026-02-01" });
     expect(parseRange("2026-02-01..2026-01-01")).toBeNull();
     expect(parseRange("2026-02-01")).toBeNull();
+  });
+});
+
+describe("periods counted from a page item's moment", () => {
+  it("end at the moment when they end now, else are the whole period", () => {
+    expect(resolveAnchored("month-1..month+0", "2026-03-10")).toEqual({ start: "2026-02-01", end: "2026-03-10" });
+    expect(resolveAnchored("year+0..day+0", "2026-03-10")).toEqual({ start: "2026-01-01", end: "2026-03-10" });
+    expect(resolveAnchored("month-1..month+0", "2026-03-10T07:45")).toEqual({ start: "2026-02-01T00:00", end: "2026-03-10T07:45" });
+    expect(resolveAnchored("hour-1..hour+0", "2026-03-10")).toEqual({ start: "2026-03-09T23:00", end: "2026-03-10T00:59" });
+    // A range ending later than the moment is the whole range; a single period is the whole period.
+    expect(resolveAnchored("month-1..month+1", "2026-03-10")).toEqual({ start: "2026-02-01", end: "2026-04-30" });
+    expect(resolveAnchored("month+0", "2026-03-10T07:45")).toEqual({ start: "2026-03-01", end: "2026-03-31" });
+    expect(resolveAnchored("2026-01-01..2026-01-31", "2026-03-10")).toEqual({ start: "2026-01-01", end: "2026-01-31" });
+    expect(resolveAnchored("nonsense", "2026-03-10")).toBeNull();
   });
 });
 

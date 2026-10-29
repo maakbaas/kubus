@@ -68,7 +68,7 @@ Extension points are registries, not special cases in pages:
   hour `…T14:00..…T14:59`, a date there by its day). On an item page a rolling period can be counted from the page's
   item's date instead ("Counted from": Today or "This measurement's Date"; stored as the value then
   `@$item.<field>`, `anchoredValue` in domain/datePeriod.ts, worked out for each page's item by `resolvePageValues`;
-  elsewhere, or for an item without that date, it matches nothing). `between` isn't in the operator menus
+  elsewhere, or for an item without that date, it matches nothing). A period that ends now ("Last 2 months", "Last 7 days", a year to date) then ends at that date or time (`resolveAnchored`: with a time, the period is in minutes), not at the end of its month, so a historical weigh-in's page counts only what came up to it; "This month" alone stays the whole month. `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.
 - **Filter bar** (View settings → "Show filter bar", `CollectionView.filterBar`, `views/FilterBar.tsx`): a bar just below the
   view tab strip with the view's Filter button (it leaves the toolbar for the bar while the bar is shown; same states:

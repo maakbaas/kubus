@@ -4,7 +4,7 @@
 
 import { dollarNames, ERROR_PREFIX, fieldLookup, render, splitWarnings, type RefLabel } from "./components";
 import { checklistItems } from "./checklist";
-import { formatMinute, inMinutes, momentOfValue, resolveRange, splitAnchor } from "./datePeriod";
+import { formatMinute, inMinutes, momentOfValue, resolveAnchored, resolveRange, splitAnchor } from "./datePeriod";
 import { formatDate, htmlPlainText } from "./fieldKinds";
 import { dateGroup, dateGroupValue, type GroupDate } from "./groupDate";
 import { filterTree, holds, requiredRules } from "./filterTree";
@@ -261,7 +261,7 @@ export function resolvePageValues(filters: FilterRule[], page: Item | null): Fil
     if (anchored(r)) {
       const { value, fieldId } = splitAnchor(r.value);
       const moment = page ? momentOfValue(page.values[fieldId!]) : null;
-      const period = moment ? resolveRange(value, moment) : null;
+      const period = moment ? resolveAnchored(value, moment) : null;
       if (period) return { ...r, value: `${period.start}..${period.end}` };
       return { ...r, value: `${ERROR_PREFIX}${page ? "This item has no date to count the period from" : "A period counted from the page's item: only on an item page"}` };
     }

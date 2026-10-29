@@ -434,6 +434,21 @@ export function splitAnchor(value: string): { value: string; fieldId: string | n
 /** A period value counted from the page item's date field (null: from today, as it is). */
 export const anchoredValue = (value: string, fieldId: string | null) => (fieldId ? `${value}${ANCHOR}${fieldId}` : value);
 
+/**
+ * A period counted from a page item's date or time (`moment`: a day or a minute), worked out. One that
+ * ends now ("last n" days, months, …, or so far) ends at the moment instead: the end of its month
+ * would hold the weigh-ins after it. With a time the period is in minutes. Null when it is none.
+ */
+export function resolveAnchored(value: string, moment: string): Period | null {
+  const period = resolveRange(value, moment);
+  if (!period || !(parseToDate(value) || parseRollingRange(value)?.to === 0)) return period;
+  if (moment.length <= 10 && !inMinutes(period)) return { start: period.start, end: period.end < moment ? period.end : moment };
+  const start = asMinute(period.start);
+  const end = period.end.length > 10 ? period.end : `${period.end}T23:59`;
+  const cap = asMinute(moment.length > 10 ? moment : `${moment}T23:59`);
+  return { start, end: end < cap ? end : cap };
+}
+
 /** The day (yyyy-mm-dd) of a date, or the minute (yyyy-mm-ddTHH:MM) a date & time is at here, or null. */
 export function momentOfValue(v: unknown): string | null {
   if (typeof v !== "string" || !v) return null;
