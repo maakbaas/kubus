@@ -2623,9 +2623,13 @@ img[data-lightbox] {
 .items-table :is(td, th).row-actions {
   text-align: end;
 }
-/* A field whose name is hidden in the block's layout: the name stays (screen readers, the sort button's
-   label) but takes no room, so the column sizes to its content (a checkbox) and not to its header. */
-.items-table th.cell--name-hidden .cds--table-header-label {
+/* Read by screen readers but drawn nowhere and taking no room:
+   - a field whose name is hidden in the block's layout: the name stays (the sort button's label), and
+     the column sizes to its content (a checkbox), not to its header;
+   - an invalid add-row input's message (also the cell's title; Carbon's red outline stays): below a
+     2rem laid-over cell it would push the input up over the row above and be clipped by the table. */
+.items-table th.cell--name-hidden .cds--table-header-label,
+.add-cell .cds--form-requirement {
   position: absolute;
   inline-size: 1px;
   block-size: 1px;
@@ -2652,17 +2656,6 @@ img[data-lightbox] {
   display: flex;
   flex-direction: column;
   justify-content: center;
-}
-/* An invalid input keeps Carbon's red outline, but its message (also the cell's title) isn't
-   drawn: below a 2rem laid-over cell it would push the input up over the row above and be
-   clipped by the table. It stays for screen readers. */
-.add-cell .cds--form-requirement {
-  position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 /* Right-aligned with the trash icons above (inside the cell's 1rem end padding). */
 .add-cell--actions {
