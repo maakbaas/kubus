@@ -2218,6 +2218,11 @@ img[data-lightbox] {
 .multi-select--keep-one .cds--tag__close-icon {
   display: none;
 }
+/* Without its × the count pill keeps the same room on both sides of the number (Carbon trims the end for the ×). */
+.multi-select--keep-one .cds--tag--filter {
+  justify-content: center;
+  padding-inline: var(--cds-spacing-03);
+}
 
 .view-settings {
   display: flex;
