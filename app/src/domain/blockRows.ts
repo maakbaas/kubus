@@ -1,5 +1,5 @@
 // Blocks side by side: a page's blocks are a flat list (its reading order), and a block marked `beside` joins the row
-// of the block before it. Where the page is wide enough (a container query on the row, styles.css `.block-row`) a row's
+// of the block before it. Where the row is wide enough (`sideBySide`: every block MIN_COLUMN_REM, measured on the row) a row's
 // blocks stand side by side, all as tall as the row: its tallest or its shortest block (`rowFit`), at most or at least
 // `rowHeight` (rem); what is taller scrolls inside, and a chart, map or HTML component fills it (its own Height and Aspect
 // ratio set aside). Narrower (a phone, a narrow pane) they stack as single blocks always did, their heights their own.
@@ -17,6 +17,43 @@ export const ROW_HEIGHT_DEFAULT = 24;
 /** A block's least share of its row (percent) and the step a divider moves by. */
 export const MIN_SHARE = 10;
 export const SHARE_STEP = 5;
+/** A block's least width side by side, in rem: a row whose blocks can't all have it stacks them (as a phone does). */
+export const MIN_COLUMN_REM = 15;
+/** The room between two blocks side by side (the divider), in rem (styles.css: spacing-07). */
+export const COLUMN_GAP_REM = 2;
+/** A row narrower than this (rem) stacks its blocks, a row of one too (its height limit applies only side by side). */
+export const ROW_MIN_REM = 40;
+
+/** Each block's width in rem: its share of the row as if unbroken (gaps left out), MIN_COLUMN_REM at least. */
+export function blockWidths(shares: number[], widthPx: number, rem: number): number[] {
+  const room = widthPx / rem - (shares.length - 1) * COLUMN_GAP_REM;
+  return shares.map((s) => Math.max(MIN_COLUMN_REM, (s / 100) * room));
+}
+
+/**
+ * A row's blocks on lines (their indices), by their widths: each block's width is its share of the row as if unbroken
+ * (`shares`, percent; less than MIN_COLUMN_REM counts as that), and a line takes blocks in order while they and the gaps
+ * between them fit; the next starts a new line. So a row breaks where its widths say a block wouldn't fit, a wide block
+ * sooner than narrow ones. null: stacked (narrower than ROW_MIN_REM, as on a phone).
+ */
+export function rowLines(shares: number[], widthPx: number, rem: number): number[][] | null {
+  if (widthPx < ROW_MIN_REM * rem) return null;
+  const width = widthPx / rem;
+  const needs = blockWidths(shares, widthPx, rem);
+  const lines: number[][] = [];
+  let used = 0;
+  for (const [i, need] of needs.entries()) {
+    const line = lines[lines.length - 1];
+    if (line && used + COLUMN_GAP_REM + need <= width + 0.01) {
+      line.push(i);
+      used += COLUMN_GAP_REM + need;
+    } else {
+      lines.push([i]);
+      used = need;
+    }
+  }
+  return lines;
+}
 
 /** A stored row height made valid: whole rem within ROW_HEIGHT. */
 export const normalizeRowHeight = (rem: number): number => Math.min(ROW_HEIGHT.max, Math.max(ROW_HEIGHT.min, Math.round(rem)));
@@ -235,12 +272,14 @@ export function setRowShares(blocks: ViewBlock[], row: string[], shares: number[
 }
 
 /**
- * The shares of a row with the divider before block `i` moved by `delta` percent: between blocks i-1 and i, each kept
- * at MIN_SHARE at least, snapped to SHARE_STEP.
+ * The shares of a row with the divider before block `i` moved by `delta` percent: between blocks i-1 and i, snapped to
+ * SHARE_STEP, each kept at `least` percent at least (MIN_SHARE, or what MIN_COLUMN_REM is of the row: the more).
  */
-export function moveDivider(shares: number[], i: number, delta: number): number[] {
+export function moveDivider(shares: number[], i: number, delta: number, least = MIN_SHARE): number[] {
+  const min = Math.max(MIN_SHARE, least);
   const pair = shares[i - 1] + shares[i];
-  const before = Math.min(pair - MIN_SHARE, Math.max(MIN_SHARE, Math.round((shares[i - 1] + delta) / SHARE_STEP) * SHARE_STEP));
+  if (pair < 2 * min) return shares;
+  const before = Math.min(pair - min, Math.max(min, Math.round((shares[i - 1] + delta) / SHARE_STEP) * SHARE_STEP));
   return shares.map((s, k) => (k === i - 1 ? before : k === i ? pair - before : s));
 }
 

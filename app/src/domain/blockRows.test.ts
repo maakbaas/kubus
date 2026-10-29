@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockRows, canBeside, moveDivider, placeBlock, reordered, rowShares, rowStart, setBeside, rowHeightPx, setRowSettings, setRowShares, withCopy, withoutBlock } from "./blockRows";
+import { rowLines, blockRows, canBeside, moveDivider, placeBlock, reordered, rowShares, rowStart, setBeside, rowHeightPx, setRowSettings, setRowShares, withCopy, withoutBlock } from "./blockRows";
 import { newBlock, parseBlock, type ViewBlock } from "./views";
 
 const block = (id: string, extra: Partial<ViewBlock> = {}): ViewBlock => ({ ...newBlock("table", null, id), ...extra });
@@ -87,6 +87,24 @@ describe("block rows", () => {
     expect([plain.rowHeight, plain.rowFit]).toEqual([undefined, undefined]);
     expect(setRowSettings(ids(blocks), blocks, "a", { fit: "tallest", height: 500 })[0].rowHeight).toBe(96);
     expect(setRowShares(blocks, ["a", "b"], [66.6, 33.4]).map((b) => b.width)).toEqual([67, 33]);
+  });
+
+  it("keeps each block at least 15rem wide when the divider moves (as a share of the row's width)", () => {
+    // A 40rem row: 15rem is 37.5%.
+    expect(moveDivider([50, 50], 1, -30, 37.5)).toEqual([37.5, 62.5]);
+    expect(moveDivider([50, 50], 1, 30, 37.5)).toEqual([62.5, 37.5]);
+  });
+
+  it("breaks a row into lines by its widths (shares of the row as if unbroken, 15rem at least), stacked below 40rem", () => {
+    // Equal shares: 4 in 66rem fit, in 50rem three, then one.
+    expect(rowLines([25, 25, 25, 25], 66 * 16, 16)).toEqual([[0, 1, 2, 3]]);
+    expect(rowLines([25, 25, 25, 25], 50 * 16, 16)).toEqual([[0, 1, 2], [3]]);
+    // A wide block: 20 / 20 / 60 in 50rem (10, 10, 30rem, the narrow ones counted 15) breaks before it.
+    expect(rowLines([20, 20, 60], 50 * 16, 16)).toEqual([[0, 1], [2]]);
+    // Its shares changed (60 / 20 / 20: 27.6, 15, 15rem): the wide one and one narrow one fit, then the other.
+    expect(rowLines([60, 20, 20], 50 * 16, 16)).toEqual([[0, 1], [2]]);
+    expect(rowLines([50, 50], 40 * 16, 16)).toEqual([[0, 1]]);
+    expect(rowLines([25, 25, 25, 25], 39 * 16, 16)).toBeNull();
   });
 
   it("moves a divider in steps, each side keeping its least share", () => {
