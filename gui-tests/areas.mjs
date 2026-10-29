@@ -35,6 +35,7 @@ export const AREAS = [
   // Collection views and their blocks.
   [/^app\/src\/views\/(TableView|cells)|^app\/src\/ui\/(RowActions|useTableSort)/, [5, 12]],
   [/^app\/src\/views\/CardsView/, [6, 19, 22]],
+  [/^app\/src\/(views\/(Chart|Stat|chartSpec|HeightSlider)|domain\/chart)/, [24]],
   [/^app\/src\/(views\/|pages\/CollectionPage|domain\/(views|query|filterTree|datePeriod))/, [5, 6, 10, 22]],
   [/^app\/src\/ui\/(ToolbarPopover|panelRoom|OverflowBar)|^app\/src\/platform\/keyboardInset/, [10, 14, 20]],
 

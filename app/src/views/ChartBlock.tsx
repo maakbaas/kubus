@@ -130,7 +130,8 @@ function kindHas(kind: ChartKind) {
     value: parts || kind === "gauge" || kind === "heatmap" || kind === "stat",
     /** A number or date field whose values are spread. */
     spread: kind === "histogram" || kind === "boxplot",
-    total: parts || kind === "gauge",
+    /** What the rest of a pie or meter and a gauge's % are measured against (a treemap's and word cloud's parts are not drawn against one). */
+    total: kind === "pie" || kind === "meter" || kind === "gauge",
     thresholds: xy || kind === "gauge" || kind === "meter",
     axes: xy || kind === "histogram" || kind === "boxplot" || kind === "scatter",
     legend: kind !== "gauge" && kind !== "stat",

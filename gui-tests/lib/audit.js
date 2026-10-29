@@ -251,6 +251,8 @@ function __audit(opts) {
   }
   for (const el of shown) {
     if (srOnly(el) || el.closest(".cds--assistive-text, .cds--visually-hidden, .cds--popover-content:not(.cds--popover--open > *)")) continue;
+    // Carbon Charts' svg is drawn wider than its holder (the axes' margins, empty); the holder itself is checked.
+    if (el.closest(".cds--chart-holder svg")) continue;
     const r = rect(el);
     if (r.width === 0 || r.height === 0) continue;
     const p = clipParent(el);
@@ -404,8 +406,9 @@ function __audit(opts) {
     // tiny-target: text links are exempt (they are as big as their words, like "Io" in a list of
     // references); icon links and buttons aren't.
     const inline = el.matches("a") && (cs(el).display === "inline" || (el.textContent.trim() !== "" && !el.querySelector("svg, img")));
-    // Carbon's slider thumb is 14px by design; its whole track takes clicks.
-    if (!inline && !el.matches("input[type=checkbox], input[type=radio], .cds--slider__thumb") && (r.width < 16 - 0.5 || r.height < 16 - 0.5)) {
+    // Carbon's slider thumb is 14px by design; its whole track takes clicks. So does a chart legend's
+    // swatch (13px, Carbon Charts' own: the legend item with its name is the target).
+    if (!inline && !el.matches("input[type=checkbox], input[type=radio], .cds--slider__thumb, .cds--chart-holder .legend-item .checkbox") && (r.width < 16 - 0.5 || r.height < 16 - 0.5)) {
       report("tiny-target", el, `control is ${Math.round(r.width)}x${Math.round(r.height)}px`);
     }
 
@@ -621,7 +624,8 @@ function __audit(opts) {
     const seenColors = new Set();
     for (const el of shown) {
       // Exempt: user content (images, code colouring) and image covers filled with their average colour.
-      if (el.closest("iframe, .item-view__image, img, .cm-editor, .token, .milkdown pre code, .lightbox, .item-card__cover") || srOnly(el)) continue;
+      // Charts draw their series in Carbon Charts' own palette (and its legend swatches).
+      if (el.closest("iframe, .item-view__image, img, .cm-editor, .token, .milkdown pre code, .lightbox, .item-card__cover, .cds--chart-holder") || srOnly(el)) continue;
       const s = cs(el);
       const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
       const props = [["background-color", s.backgroundColor]];

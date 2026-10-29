@@ -150,6 +150,7 @@ strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 | `21-baselines` | screenshot baselines of 9 key states (pages of typical content, a popover, a dialog) at desktop and phone, light and dark |
 | `22-components-filters-cards` | a field's settings under its name and type; local components (fields, blocks, Markdown code) and saved as shared from the Components page; AI prompt in the field dialog; strike through the item on tables and cards; `{{ }}` code in a filter value and an invalid value; cards with the cover beside the text, the same in narrow and wide panes |
 | `23-perf` | perf tests, run only with `--perf` (left out of other runs): the app's hot paths, each phase (a load, a click, a key, to the state it leads to) timed with main-thread busy time, long tasks, elements and heap; seeding, settling and audits reported apart |
+| `24-chart-blocks` | the Chart block: the Chart select through all 14 kinds (what is drawn, which sections and controls are offered, phone and desktop), then each kind's options (X axis, order, date steps, largest n, series, Draw as, axis, transform, stack, curve, missing values, parts of a whole and their total, spokes, gauge and stat's compare with, bins, scatter fields, heatmap, axes, thresholds, unit, decimals, legend, height, aspect ratio, width) with the result drawn and stored, kept after a reload; a chart that can't be drawn says why; Of this item on an item page |
 
 ## Adding to it
 

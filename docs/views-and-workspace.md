@@ -134,7 +134,7 @@ Extension points are registries, not special cases in pages:
     date field, Size makes bubbles and Split by colours the dots; clicking a dot opens its item.
   - **Parts of a whole** (pie or donut, meter, treemap, word cloud; `partsOf`): the X axis's categories (by the first
     series' value), number fields (each made into one by its aggregate: fat, muscle and bone mass) or one value, against
-    a Total: the sum of the parts, a number or a field (made into one like the value). A total larger than the parts
+    a Total (a pie or meter; a treemap and a word cloud draw their parts alone): the sum of the parts, a number or a field (made into one like the value). A total larger than the parts
     adds a "Remaining" slice; a meter shows it as its empty part (Carbon's proportional meter); one value on a meter is a
     bar of its share. A gauge measures its value against its total likewise (none: the value is a %), shows its % (Carbon's
     gauge: no unit, the decimals as set), and the increase or decrease from a comparison value (any value, and "Previous
