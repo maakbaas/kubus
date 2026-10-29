@@ -38,7 +38,7 @@ describe.skipIf(!ADMIN)("the server's side of sync", () => {
 
   /** A sync as a current device makes it; the answer when it was a normal one. */
   const sync = async (changes: Record<string, WireRow[]>, over: Partial<SyncRequest> = {}) => {
-    const result = await handleSync(pool, { since: 0, changes, version: SYNC_VERSION, compatible: SYNC_VERSION, ...over });
+    const result = await handleSync(pool, { since: 0, changes, version: SYNC_VERSION, ...over });
     if (!("cursor" in result)) throw new Error(`Not a normal answer: ${JSON.stringify(result)}`);
     return result;
   };
@@ -72,7 +72,7 @@ describe.skipIf(!ADMIN)("the server's side of sync", () => {
 
     it("reads a missing cursor as the start, and a missing list of changes as none", async () => {
       await sync({ spaces: [space("a", "A")] });
-      const answer = await handleSync(pool, { version: SYNC_VERSION, compatible: SYNC_VERSION } as unknown as SyncRequest);
+      const answer = await handleSync(pool, { version: SYNC_VERSION } as unknown as SyncRequest);
       expect(answer).toMatchObject({ cursor: 1, wrote: false });
       expect("changes" in answer && answer.changes.spaces).toHaveLength(1);
     });
@@ -207,10 +207,10 @@ describe.skipIf(!ADMIN)("the server's side of sync", () => {
     });
 
     it("turns away a device of another database, writing nothing, saying whether this one is empty", async () => {
-      const refused = await handleSync(pool, { since: 0, changes: { spaces: [space("a", "A")] }, version: SYNC_VERSION, compatible: SYNC_VERSION, database: "someone-else" });
+      const refused = await handleSync(pool, { since: 0, changes: { spaces: [space("a", "A")] }, version: SYNC_VERSION, database: "someone-else" });
       expect(refused).toMatchObject({ mismatch: { empty: true, error: expect.stringMatching(/wiped or replaced/) } });
       await sync({ spaces: [space("b", "B")] });
-      const again = await handleSync(pool, { since: 0, changes: { spaces: [space("a", "A")] }, version: SYNC_VERSION, compatible: SYNC_VERSION, database: "someone-else" });
+      const again = await handleSync(pool, { since: 0, changes: { spaces: [space("a", "A")] }, version: SYNC_VERSION, database: "someone-else" });
       expect(again).toMatchObject({ mismatch: { empty: false, database: { id: (await info()).database_id } } });
       expect(await names()).toEqual(["b=B"]);
     });
@@ -220,7 +220,7 @@ describe.skipIf(!ADMIN)("the server's side of sync", () => {
       await sync({ spaces: [space("a", "A")] });
       await wipe(pool, schemaSql);
       expect((await info()).database_id).not.toBe(before.database_id);
-      expect(await handleSync(pool, { since: 1, changes: {}, version: SYNC_VERSION, compatible: SYNC_VERSION, database: before.database_id })).toMatchObject({ mismatch: { empty: true } });
+      expect(await handleSync(pool, { since: 1, changes: {}, version: SYNC_VERSION, database: before.database_id })).toMatchObject({ mismatch: { empty: true } });
     });
   });
 
@@ -229,9 +229,6 @@ describe.skipIf(!ADMIN)("the server's side of sync", () => {
 
     it("syncs with devices of its own version only", () => {
       expect(refusal(request())).toBeNull();
-      // `compatible` is only for servers from before the strict gate: this one ignores it.
-      expect(refusal(request({ compatible: 0 }))).toBeNull();
-      expect(refusal(request({ compatible: SYNC_VERSION + 5 }))).toBeNull();
     });
 
     it("tells an older device to update the app, and writes nothing", async () => {
@@ -239,14 +236,14 @@ describe.skipIf(!ADMIN)("the server's side of sync", () => {
       // A device from before versions sends none.
       expect(refusal({ since: 0, changes: {} } as unknown as SyncRequest)).toMatchObject({ update: "app" });
       expect(refusal(request({ version: "abc" as unknown as number }))).toMatchObject({ update: "app" });
-      expect(await handleSync(pool, request({ version: 0, compatible: 0, changes: { spaces: [space("a", "A")] } }))).toMatchObject({ outdated: { update: "app" } });
+      expect(await handleSync(pool, request({ version: 0, changes: { spaces: [space("a", "A")] } }))).toMatchObject({ outdated: { update: "app" } });
       expect(await handleSync(pool, request({ version: SYNC_VERSION - 1, changes: { spaces: [space("a", "A")] } }))).toMatchObject({ outdated: { update: "app" } });
       expect(await names()).toEqual([]);
     });
 
     it("tells a newer device to update the server, and writes nothing", async () => {
       expect(refusal(request({ version: SYNC_VERSION + 1 }))).toMatchObject({ update: "server", version: SYNC_VERSION });
-      expect(await handleSync(pool, request({ version: SYNC_VERSION + 1, compatible: SYNC_VERSION, changes: { spaces: [space("a", "A")] } }))).toMatchObject({ outdated: { update: "server" } });
+      expect(await handleSync(pool, request({ version: SYNC_VERSION + 1, changes: { spaces: [space("a", "A")] } }))).toMatchObject({ outdated: { update: "server" } });
       expect(await names()).toEqual([]);
     });
 

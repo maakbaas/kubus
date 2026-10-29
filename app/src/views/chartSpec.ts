@@ -5,6 +5,7 @@
 import {
   baselineOf,
   statOf,
+  type Stat,
   chartTable,
   formatValue,
   heatmapCells,
@@ -307,9 +308,10 @@ function partsProblem(input: ChartInput, options: ChartOptions): string | null {
 
 /**
  * The chart for a block: its type's Carbon chart, data and options; or why there is nothing to draw
- * (a setting still to choose, no items).
+ * (a setting still to choose, no items). A stat's sparkline takes its colour from the block's `stat` (statOf,
+ * which the block works out for its figure; worked out here when not given).
  */
-export function chartSpec(input: ChartInput, options: ChartOptions, theme: string): ChartSpec | Problem {
+export function chartSpec(input: ChartInput, options: ChartOptions, theme: string, stat?: Stat): ChartSpec | Problem {
   const { collection, items } = input;
   const fields = new Map(pickableFields(collection).map((f) => [f.id, f]));
   const first = options.series[0];
@@ -440,7 +442,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       // As tall as its place in the stat (StatView, styles.css: a compact chart's 4rem).
       const sparkline = "problem" in drawn ? drawn : { ...drawn, options: { ...drawn.options, height: "100%" } };
       // In the colour of its change's tag (Carbon's color.scale for its one series): green good, red bad, grey neither.
-      const trend = statOf(input, options).trend;
+      const trend = (stat ?? statOf(input, options)).trend;
       const series = (sparkline as ChartSpec).data?.[0] as { group?: string } | undefined;
       if ("problem" in sparkline || !trend || !series?.group) return sparkline;
       const color = trend === "good" ? "var(--cds-support-success)" : trend === "bad" ? "var(--cds-support-error)" : "var(--cds-icon-secondary)";

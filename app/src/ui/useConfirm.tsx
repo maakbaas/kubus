@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { Modal } from "@carbon/react";
 import { returnFocus } from "./useMountedDialog";
+export { errorMessage } from "../domain/errors";
 
 interface ConfirmOptions {
   title: string;
@@ -48,5 +49,3 @@ export function useConfirm() {
 
   return { confirm, dialog };
 }
-
-export const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));

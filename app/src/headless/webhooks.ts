@@ -11,6 +11,7 @@ import type { Pulled } from "../data/sync/SyncEngine";
 import type { Collection, Item, ItemLabel } from "../domain/model";
 import { computeItems, loadWorld } from "../domain/world";
 import { itemOut, type ApiItem } from "./values";
+import { errorMessage } from "../domain/errors";
 
 export type WebhookEvent =
   | { type: "item.created" | "item.updated"; id: string; collection: string; collectionId: string; spaceId: string; item: ApiItem }
@@ -119,7 +120,7 @@ export class Webhooks {
         const events = await buildEvents(this.repo, merged(pulled.changes, pulled.pushed), this.known);
         if (events.length > 0) this.send({ database: pulled.database, cursor: pulled.cursor, events });
       } catch (e) {
-        this.log(`Webhook events failed: ${e instanceof Error ? e.message : String(e)}`);
+        this.log(`Webhook events failed: ${errorMessage(e)}`);
       }
     });
   }
@@ -149,7 +150,7 @@ export class Webhooks {
         if (response.ok) return;
         problem = `HTTP ${response.status}`;
       } catch (e) {
-        problem = e instanceof Error ? e.message : String(e);
+        problem = errorMessage(e);
       }
       if (attempt >= RETRY_MS.length) {
         this.log(`Webhook to ${url} dropped after ${attempt + 1} tries: ${problem}`);

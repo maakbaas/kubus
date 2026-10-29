@@ -8,6 +8,7 @@ import { isGroupable, sortComparator, type QueryContext, type ViewQuery } from "
 import { deviceTimeZone, isRemote } from "../domain/sources";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { EMPTY, LOADING_SHOWN_MS, useSettled, useThrottled, type RemoteResult } from "./useRemoteResult";
+import { errorMessage } from "../domain/errors";
 
 // A block of a merged collection: its query asked of every part (a native part answered from the items in memory, a remote one
 // by its source) and the answers merged a page at a time (domain/mergedRows.ts). What it gives the block type is the
@@ -146,7 +147,7 @@ export function useMergedResult(collection: Collection, query: ViewQuery, search
       .then(() => next.take(want))
       .then(
         (rows) => wanted() && (setAnswered(asked), setLoaded({ key, rows, total: next.total, groups: next.groups, more: !next.done })),
-        (e) => wanted() && (setAnswered(asked), setLoaded({ key, rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) })),
+        (e) => wanted() && (setAnswered(asked), setLoaded({ key, rows: [], total: 0, groups: [], more: false, error: errorMessage(e) })),
       );
     // Only what the key says: the rest is read from `inputs`.
   }, [mergedOn, nativeReady, key, refreshes, sources]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -159,7 +160,7 @@ export function useMergedResult(collection: Collection, query: ViewQuery, search
     c.take(pageSize)
       .then(
         (rows) => latest.current === asked && setLoaded((l) => l && { ...l, rows: [...l.rows, ...rows], total: c.total, more: !c.done }),
-        (e) => latest.current === asked && setLoaded((l) => l && { ...l, error: e instanceof Error ? e.message : String(e) }),
+        (e) => latest.current === asked && setLoaded((l) => l && { ...l, error: errorMessage(e) }),
       )
       .finally(() => setLoadingMore(false));
   }, [loaded, loadingMore, pageSize]);

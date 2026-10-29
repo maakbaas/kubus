@@ -133,7 +133,7 @@ describe.skipIf(!ADMIN)("the server's HTTP error paths", () => {
     });
 
     it("takes a sync request with no changes or cursor as an empty one", async () => {
-      const response = await sync({ version: SYNC_VERSION, compatible: SYNC_VERSION });
+      const response = await sync({ version: SYNC_VERSION });
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ changes: {} });
     });
@@ -142,7 +142,7 @@ describe.skipIf(!ADMIN)("the server's HTTP error paths", () => {
       const none = await sync({ since: 0, changes: {} });
       expect(none.status).toBe(426);
       expect(await none.json()).toMatchObject({ update: "app", version: SYNC_VERSION });
-      const newer = await sync({ since: 0, version: SYNC_VERSION + 1, compatible: SYNC_VERSION + 1, changes: {} });
+      const newer = await sync({ since: 0, version: SYNC_VERSION + 1, changes: {} });
       expect(newer.status).toBe(426);
       expect(await newer.json()).toMatchObject({ update: "server", version: SYNC_VERSION });
     });
@@ -156,7 +156,7 @@ describe.skipIf(!ADMIN)("the server's HTTP error paths", () => {
       expect((await request(server, "/api/wipe", { method: "POST", body: "{nope" })).status).toBe(400);
       expect((await request(server, "/api/wipe", { method: "POST", body: JSON.stringify({ confirm: "wipe", pad: "x".repeat(2000) }) })).status).toBe(413);
       // Nothing of that wiped it.
-      expect((await (await sync({ since: 0, changes: {}, version: SYNC_VERSION, compatible: SYNC_VERSION })).json()).database.id).toBeTruthy();
+      expect((await (await sync({ since: 0, changes: {}, version: SYNC_VERSION })).json()).database.id).toBeTruthy();
     });
 
     it("refuses settings that aren't the settings as a whole", async () => {

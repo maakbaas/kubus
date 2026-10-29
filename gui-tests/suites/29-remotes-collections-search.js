@@ -478,7 +478,7 @@ test("remote block: grouped by a month loads every row, groups them in the app, 
   await t.until("by year: one group of all 120", async () => JSON.stringify(await groupTitles(t)) === JSON.stringify(["2026"]) && JSON.stringify(await groupSizes(t)) === "[120]", JSON.stringify(await groupTitles(t)));
   await t.check("a year is grouped from the rows already in", fake.queries.length === asked, `${fake.queries.length} vs ${asked}`);
   await toolbarPanel(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Week" });
-  await t.until("by week: ISO weeks, the latest first (Week 13 to Week 1)", async () => { const l = await groupTitles(t); return (l[0] === "Week 13, 2026" && l.at(-1) === "Week 1, 2026") || JSON.stringify(l); });
+  await t.until("by week: Sunday-to-Saturday weeks (week 1 holds 1 January), the latest first (Week 13 to Week 1)", async () => { const l = await groupTitles(t); return (l[0] === "Week 13, 2026" && l.at(-1) === "Week 1, 2026") || JSON.stringify(l); });
   await toolbarPanel(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Month" });
   await toolbarPanel(t).getByLabel("Group order", { exact: true }).selectOption({ label: "Ascending" });
   await t.closeAll();

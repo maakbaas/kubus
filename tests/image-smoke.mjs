@@ -90,7 +90,7 @@ const waitHealthy = async () => {
 
 const T = "2026-10-01T00:00:00.000Z";
 const SPACE = { id: "11111111-1111-4111-8111-111111111111", name: "Image smoke", icon: null, position: 0, created_at: T, updated_at: T, deleted_at: null };
-const syncRequest = (over = {}) => ({ since: 0, changes: {}, version: SYNC_VERSION, compatible: SYNC_VERSION, ...over });
+const syncRequest = (over = {}) => ({ since: 0, changes: {}, version: SYNC_VERSION, ...over });
 
 let failed = false;
 try {

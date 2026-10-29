@@ -22,6 +22,7 @@ import { blockQuery, defaultViewState, parseBlock, type CollectionView, type Vie
 import { draftProblem } from "../domain/collectionDraft";
 import { computeItems, loadWorld, type World } from "../domain/world";
 import { fieldOf, itemOut, same, valuesIn, type ItemsExist } from "./values";
+import { errorMessage } from "../domain/errors";
 
 const MAX_JSON = 5 * 1024 * 1024;
 
@@ -54,7 +55,7 @@ async function rule<T>(work: Promise<T>): Promise<T> {
     return await work;
   } catch (e) {
     if (e instanceof HttpError) throw e;
-    throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    throw new HttpError(409, errorMessage(e));
   }
 }
 

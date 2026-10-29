@@ -158,11 +158,6 @@ export interface SyncRequest {
   database?: string;
   /** The device's SYNC_VERSION (missing: a device from before versions, 0). */
   version: number;
-  /**
-   * Sent equal to `version`, for servers from before the strict gate: they turn away a device whose
-   * `compatible` is newer than their own SYNC_VERSION. This server ignores it.
-   */
-  compatible?: number;
 }
 export interface SyncResponse {
   /** Pass as `since` next time. */
