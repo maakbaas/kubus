@@ -476,11 +476,13 @@ function CollectionContent({ collection }: { collection: Collection }) {
                   onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                 />
               )}
-              {active && <Checkbox id={`${uid}-view-filter-bar`} labelText="Show filter bar" checked={!!active.filterBar} onChange={(_, { checked }) => setFilterBar(checked).catch((e) => setError(errorMessage(e)))} />}
-              {active && <Checkbox id={`${uid}-view-full-width`} labelText="Full width" checked={isFullWidth("collection", active.fullWidth)} onChange={(_, { checked }) => setFullWidth(checked).catch((e) => setError(errorMessage(e)))} />}
-              {!readOnly && (
-                <Checkbox id={`${uid}-view-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
-              )}
+              <div className="view-options__checks">
+                {active && <Checkbox id={`${uid}-view-filter-bar`} labelText="Show filter bar" checked={!!active.filterBar} onChange={(_, { checked }) => setFilterBar(checked).catch((e) => setError(errorMessage(e)))} />}
+                {active && <Checkbox id={`${uid}-view-full-width`} labelText="Full width" checked={isFullWidth("collection", active.fullWidth)} onChange={(_, { checked }) => setFullWidth(checked).catch((e) => setError(errorMessage(e)))} />}
+                {!readOnly && (
+                  <Checkbox id={`${uid}-view-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
+                )}
+              </div>
               <BlockListEditor
                 blocks={view.blocks}
                 onMove={moveBlocks}

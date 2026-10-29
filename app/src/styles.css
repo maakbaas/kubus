@@ -2068,8 +2068,9 @@ img[data-lightbox] {
   border-block-end: 0;
   border-inline-end: 1px solid var(--cds-border-subtle);
 }
-/* In view settings the option checkboxes span the options grid, one per 2rem row like the rows
-   of the field list below them (.field-order__row), with no gap between them. */
+/* In view, tab, page layout and block settings the option checkboxes are one group, one per 2rem row like
+   the rows of the field list below them (.field-order__row), with no gap between them (in a block's
+   options grid they span it). */
 .view-options__checks {
   grid-column: 1 / -1;
   display: flex;

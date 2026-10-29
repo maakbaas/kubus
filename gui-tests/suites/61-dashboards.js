@@ -129,10 +129,10 @@ test("dashboards: made from the list page in the active space, named in Dashboar
   await t.boot();
   const ids = await t.seed(dashboardSpec());
   await t.open("/collections");
-  await t.check("the side nav has a Dashboards node, between Bookmarks and Collections", await t.page.evaluate(() => {
+  await t.check("the side nav has a Dashboards node, below Collections (and Remotes, when shown) and above Components", await t.page.evaluate(() => {
     const labels = [...document.querySelectorAll(".nav-tree[aria-label=Navigation] > li > .cds--tree-node__label .cds--tree-node__label__text, .nav-tree[aria-label=Navigation] > [role=treeitem] > div .cds--tree-node__label__text")].map((e) => e.textContent.trim());
     const at = (n) => labels.indexOf(n);
-    return at("Dashboards") > at("Bookmarks") && at("Dashboards") < at("Collections");
+    return at("Dashboards") > at("Collections") && at("Dashboards") > at("Remotes") && at("Dashboards") < at("Components");
   }));
   await dNav(t).getByText("Dashboards", { exact: true }).first().click();
   await t.until("the node opens the list page", async () => (await dTitle(t)) === "Dashboards");

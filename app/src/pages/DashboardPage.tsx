@@ -468,18 +468,20 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
                     onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                   />
                 )}
-                {active && (
-                  <Checkbox
-                    id={`${uid}-tab-filter-bar`}
-                    labelText="Show filter bar"
-                    checked={!!active.filterBar}
-                    onChange={(_, { checked }) => storeNow(checked ? { filterBar: true } : { filterBar: undefined }).catch(fail)}
-                  />
-                )}
-                {active && (
-                  <Checkbox id={`${uid}-tab-full-width`} labelText="Full width" checked={isFullWidth("dashboard", active.fullWidth)} onChange={(_, { checked }) => storeNow({ fullWidth: checked }).catch(fail)} />
-                )}
-                <Checkbox id={`${uid}-tab-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
+                <div className="view-options__checks">
+                  {active && (
+                    <Checkbox
+                      id={`${uid}-tab-filter-bar`}
+                      labelText="Show filter bar"
+                      checked={!!active.filterBar}
+                      onChange={(_, { checked }) => storeNow(checked ? { filterBar: true } : { filterBar: undefined }).catch(fail)}
+                    />
+                  )}
+                  {active && (
+                    <Checkbox id={`${uid}-tab-full-width`} labelText="Full width" checked={isFullWidth("dashboard", active.fullWidth)} onChange={(_, { checked }) => storeNow({ fullWidth: checked }).catch(fail)} />
+                  )}
+                  <Checkbox id={`${uid}-tab-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
+                </div>
                 <BlockListEditor
                   blocks={view.blocks}
                   keepOne={false}

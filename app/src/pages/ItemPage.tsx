@@ -983,11 +983,13 @@ function ItemLayoutSettings({
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
         />
       )}
-      {view && <Checkbox id={`${uid}-item-layout-full-width`} labelText="Full width" checked={fullWidth} onChange={(_, { checked }) => onFullWidth(checked)} />}
-      {!isRemote(collection) && (
-        <Checkbox id={`${uid}-item-layout-editable`} labelText="Fields are editable" checked={layout.editable} onChange={(_, { checked }) => onChange({ editable: checked })} />
-      )}
-      <Checkbox id={`${uid}-item-layout-hide-empty`} labelText="Hide empty fields" checked={layout.hideEmpty} onChange={(_, { checked }) => onChange({ hideEmpty: checked })} />
+      <div className="view-options__checks">
+        {view && <Checkbox id={`${uid}-item-layout-full-width`} labelText="Full width" checked={fullWidth} onChange={(_, { checked }) => onFullWidth(checked)} />}
+        {!isRemote(collection) && (
+          <Checkbox id={`${uid}-item-layout-editable`} labelText="Fields are editable" checked={layout.editable} onChange={(_, { checked }) => onChange({ editable: checked })} />
+        )}
+        <Checkbox id={`${uid}-item-layout-hide-empty`} labelText="Hide empty fields" checked={layout.hideEmpty} onChange={(_, { checked }) => onChange({ hideEmpty: checked })} />
+      </div>
       <FieldOrderEditor
         id={`${uid}-item-layout-fields`}
         label="Fields"

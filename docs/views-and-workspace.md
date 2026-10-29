@@ -336,11 +336,10 @@ Extension points are registries, not special cases in pages:
   `useOpenRelated(path, mode)` with `openModeOf(event)`: plain click = this tab; Ctrl/Cmd click =
   beside (the pane to the right, reused or split off; a new tab on windows < 72rem); middle click =
   new tab. Such links carry `data-own-click`.
-- The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Dashboards (`#/dashboards`, with the shown space's
-  dashboards below it, each with its icon), Collections (with the
-
+- The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Collections (with the
   shown space's native collections below it), Remotes (`#/remotes`, once the server has a remote
-  connection or remote collections exist: `useRemotesShown`; the space's remote collections below it)
+  connection or remote collections exist: `useRemotesShown`; the space's remote collections below it),
+  Dashboards (`#/dashboards`, with the shown space's dashboards below it, each with its icon)
   and Components; branches remember being open per
   device. The space switcher (`ui/SpaceSwitcher.tsx`, always shown) sits in the nav's top row beside the
   menu toggle; its last entry "Manage spaces" opens `#/spaces` (no nav entry).
