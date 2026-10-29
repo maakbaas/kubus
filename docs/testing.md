@@ -21,7 +21,7 @@ the imports).
 | Project | Covers | Files | Needs |
 |---|---|---|---|
 | `domain` | the storage-agnostic model: query, views, fields, components, AI prompts, links, tags | `app/src/domain/*.test.ts` | nothing |
-| `storage` | the device's database: schema and migrations (`fixture-v1.sql` migrated keeps every row), the engine, the Repository contract (`repository*.test.ts`: refusals, soft deletes, files and their clean-up), the worker (`worker.test.ts`, with the SAH-pool VFS faked: it is installed only once the lock is held and the files are free) and its lock rules (`dbLock.test.ts`), the main thread's side of the worker protocol (`client.test.ts`) | `app/src/data/*.test.ts`, `app/src/data/sqlite/*.test.ts` | nothing |
+| `storage` | the device's database: schema and migrations (`fixture-v1.sql` migrated keeps every row), the engine, backups (`backup.test.ts`: export, restore, every refusal, sync state), the Repository contract (`repository*.test.ts`: refusals, soft deletes, files and their clean-up), the worker (`worker.test.ts`, with the SAH-pool VFS faked: it is installed only once the lock is held and the files are free) and its lock rules (`dbLock.test.ts`), the main thread's side of the worker protocol (`client.test.ts`) | `app/src/data/*.test.ts`, `app/src/data/sqlite/*.test.ts` | nothing |
 | `sync` | the device's side of sync (outbox, merge of two devices' edits, files, first connection, versions, the engine's timing and error states, the server's change signal) against `FakeServer` (`app/src/test/fakeServer.ts`); the client of the server's remote sources; the router and helpers of `shared/` (their tests live in `app/src`: `shared/` is copied whole into the server's image and typechecked without vitest) | `app/src/data/sync/*.test.ts`, `app/src/data/remote/*.test.ts` | nothing |
 | `api` | the HTTP API (`/api/v1`, the headless device): every route and its errors (`apiRoutes.test.ts`, checked against `help/api.md`), values by kind, the component compiler, webhooks, the device's 503s and its data directory (`diskStore.test.ts`: resume, wipe, lock), against `FakeServer` | `app/src/headless/*.test.ts` | nothing |
 | `app` | the app's own logic outside the UI: the AI service and backfill, the item cache, the workspace layout, block registry and item actions, remote paging, platform adapters, and the hooks and browser-facing helpers (`ui/`), run without a DOM | `app/src/{app,platform,ui,views,pages,workspace,test}/*.test.ts(x)` | nothing |
@@ -94,7 +94,7 @@ can't drift apart unnoticed: a change to the sync protocol changes both and runs
 | `app/src/data/schema.sql`, `migrations.ts`, `sqlite/` | `storage`, `sync`, `api` | all (every page reads the database) |
 | `app/src/data/sync/`, `shared/sync.ts` | `sync`, `server` | 13, 18 |
 | `app/src/headless/`, `app/src/help/api.md` | `api`, `server` | none |
-| `app/src/pages/SettingsPage.tsx`, `ui/*Settings.tsx`, `ServerConnection`, `ApiTokens` | `sync` (`SyncEngine`) | 28 (and 13, 18 for sync) |
+| `app/src/pages/SettingsPage.tsx`, `ui/*Settings.tsx` (`BackupSettings`: `storage`), `ServerConnection`, `ApiTokens` | `sync` (`SyncEngine`) | 28 (and 13, 18 for sync) |
 | `server/src/connectors/`, `shared/sources.ts` | `connectors` | none |
 | `server/src/` | `server` (and `connectors` for `sources.ts`) | none |
 | `app/src/views/` | `domain` | 05, 06, 10, 12, 22 |

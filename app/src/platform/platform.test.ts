@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { suppressShellContextMenu } from "./contextMenu";
 import { trackKeyboardInset } from "./keyboardInset";
+import { downloadFile } from "./download";
 import { createLlmClient, DEFAULT_LLM_SETTINGS } from "./llm";
 import { openExternal } from "./openExternal";
 
@@ -228,5 +229,26 @@ describe("the service worker", () => {
     expect((await load({ prod: false, worker: true })).loads).toHaveLength(0);
     expect((await load({ prod: true, worker: false })).loads).toHaveLength(0);
     expect((await load({ prod: true, worker: true, tauri: true })).loads).toHaveLength(0);
+  });
+});
+
+describe("downloadFile", () => {
+  it("clicks a hidden blob link named after the file, then lets go of the blob", () => {
+    vi.useFakeTimers();
+    const clicks: { href: string; download: string }[] = [];
+    const link = { href: "", download: "", style: {} as Record<string, string>, click: () => clicks.push({ href: link.href, download: link.download }), remove: vi.fn() };
+    const append = vi.fn();
+    vi.stubGlobal("document", { createElement: () => link, body: { append } });
+    const revoked: string[] = [];
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:kubus/1");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation((u) => void revoked.push(u));
+    downloadFile("kubus-backup-2026-10-29.sqlite", new Uint8Array([1, 2, 3]), "application/vnd.sqlite3");
+    expect(clicks).toEqual([{ href: "blob:kubus/1", download: "kubus-backup-2026-10-29.sqlite" }]);
+    expect(append).toHaveBeenCalledWith(link);
+    expect(link.remove).toHaveBeenCalled();
+    expect(revoked).toEqual([]);
+    vi.advanceTimersByTime(60_000);
+    expect(revoked).toEqual(["blob:kubus/1"]);
+    vi.useRealTimers();
   });
 });

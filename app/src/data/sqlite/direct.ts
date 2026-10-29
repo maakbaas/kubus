@@ -1,6 +1,6 @@
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import type { Db } from "../migrations";
-import { SqliteEngine } from "./engine";
+import { loadBytes, SqliteEngine } from "./engine";
 import type { Bind, OpenResult, SqlClient, Statement } from "./protocol";
 
 /** What a database in this process can be given to live on (the server's headless device keeps it on disk). */
@@ -28,12 +28,7 @@ export class DirectSqlClient implements SqlClient {
   static async open(before?: (db: Db) => void, persistence: DirectPersistence = {}): Promise<DirectSqlClient> {
     const sqlite3 = await sqlite3InitModule();
     const db = new sqlite3.oo1.DB(":memory:", "c");
-    if (persistence.load) {
-      const bytes = persistence.load;
-      const pointer = sqlite3.wasm.allocFromTypedArray(bytes);
-      const flags = sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE;
-      db.checkRc(sqlite3.capi.sqlite3_deserialize(db.pointer!, "main", pointer, bytes.length, bytes.length, flags));
-    }
+    if (persistence.load) loadBytes(sqlite3, db, persistence.load);
     before?.(db);
     const engine = new SqliteEngine(sqlite3, db);
     return new DirectSqlClient(engine, db, sqlite3, { persistent: false, sqliteVersion: engine.version }, persistence.changed);
@@ -52,6 +47,15 @@ export class DirectSqlClient implements SqlClient {
     if (statements.length === 0) return;
     this.engine.write(statements);
     this.changed?.();
+  }
+
+  async exportDatabase(): Promise<Uint8Array> {
+    return this.engine.exportDatabase();
+  }
+
+  async importDatabase(bytes: Uint8Array, dryRun = false): Promise<void> {
+    this.engine.importDatabase(bytes, dryRun);
+    if (!dryRun) this.changed?.();
   }
 
   async wipe(): Promise<void> {

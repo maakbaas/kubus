@@ -51,10 +51,16 @@ describe("WorkerSqlClient", () => {
     expect(await client.select("SELECT ?1", ["a"])).toEqual([{ n: 1 }]);
     await client.write([{ sql: "DELETE FROM meta" }]);
     await client.wipe();
+    await client.exportDatabase();
+    await client.importDatabase(new Uint8Array([1]));
+    await client.importDatabase(new Uint8Array([2]), true);
     expect(FakeWorker.all[0].sent.slice(1)).toEqual([
       { op: "select", sql: "SELECT ?1", bind: ["a"], id: 2 },
       { op: "write", statements: [{ sql: "DELETE FROM meta" }], id: 3 },
       { op: "wipe", id: 4 },
+      { op: "export", id: 5 },
+      { op: "import", bytes: new Uint8Array([1]), dryRun: false, id: 6 },
+      { op: "import", bytes: new Uint8Array([2]), dryRun: true, id: 7 },
     ]);
   });
 

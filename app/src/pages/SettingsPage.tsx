@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { Tab, TabList, TabPanel, TabPanels, Tabs } from "@carbon/react";
 import { AiSettings } from "../ui/AiSettings";
 import { ApiTokens } from "../ui/ApiTokens";
+import { BackupSettings } from "../ui/BackupSettings";
 import { ConnectionSettings } from "../ui/ConnectionSettings";
 import { MapSettings } from "../ui/MapSettings";
 import { PageHeader } from "../ui/PageHeader";
@@ -11,12 +12,12 @@ import { SyncSettings } from "../ui/SyncSettings";
 import { TabMenu, useClippedTabs } from "../ui/TabMenu";
 
 /** The sections, in order; `?section=` opens one (the sync status's "Configure sync" leads to sync). */
-const SECTIONS = ["server", "sync", "connections", "ai", "maps", "tokens"] as const;
-const NAMES: Record<(typeof SECTIONS)[number], string> = { server: "Server", sync: "Sync", connections: "Connections", ai: "AI", maps: "Maps", tokens: "API tokens" };
+const SECTIONS = ["server", "sync", "backup", "connections", "ai", "maps", "tokens"] as const;
+const NAMES: Record<(typeof SECTIONS)[number], string> = { server: "Server", sync: "Sync", backup: "Backup", connections: "Connections", ai: "AI", maps: "Maps", tokens: "API tokens" };
 
 /**
  * Settings of this device and of the server it is connected to: the server (address, token), whether
- * this device syncs with it (and wiping data), the databases the server reads (connections), the
+ * this device syncs with it (and wiping data), a backup of this device's data and restoring one, the databases the server reads (connections), the
  * language model for AI (the server's or this device's own), how maps look (the server's, else this device's) and
  * the server's API tokens for other tools.
  */
@@ -49,6 +50,7 @@ export function SettingsPage() {
         <TabPanels>
           {panel(<ServerConnection />)}
           {panel(<SyncSettings />)}
+          {panel(<BackupSettings />)}
           {panel(<ConnectionSettings />)}
           {panel(<AiSettings />)}
           {panel(<MapSettings />)}

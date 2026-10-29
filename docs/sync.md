@@ -452,6 +452,35 @@ file release, AI fields, the "All" view, soft deletes, change sets).
   listed nor run. An API refusal is a tool result with `isError` (the model can act on
   it), an unknown tool or one the token may not use a JSON-RPC error.
 
+**Backup and restore** (Settings → Backup, `ui/BackupSettings.tsx`; roadmap #7, built). *Download backup* is the whole
+local database as a plain SQLite file, `kubus-backup-YYYY-MM-DD.sqlite`: `SqliteEngine.exportDatabase`
+(`sqlite3_js_db_export`) runs inside the worker that holds the database, one request at a time, so no write is in flight and the
+file is a consistent snapshot; file bytes (`files.data`) are rows, so the images held on this device are in it. Not in it: what
+lives outside the database (the device's AI key `kubus.ai`, `kubus.sync` with the server's address and token, tab and
+display preferences in `localStorage`). The download is `platform/download.ts` (a blob link with `download`; works in
+a browser and in the Tauri window, which needs no plugin for it: WebView2 saves it to Downloads; macOS / Linux unverified).
+*Restore from backup…* (a Carbon `FileUploaderButton`) goes through `Repository.checkBackup` first, then a danger dialog ("Replace
+all data on this device?"), then `restoreBackup`; the app reloads after it. In the worker (`SqliteEngine.importDatabase`):
+- The file is opened **apart, in memory** (`openBackup`): the header must be `SQLite format 3\0`, the Kubus tables must be there,
+  `PRAGMA user_version` must not be newer than this app's (refused: "made by a newer version of Kubus … update the app"; an
+  older one is migrated by `ensureSchema` like any older database; a pre-release hash is refused), `quick_check` must pass. A refused file
+  changes nothing, not even sync (`dryRun`).
+- Only then is the live database replaced, in **one transaction** (a failure rolls back): the file is loaded as an attached
+  in-memory database (`sqlite3_deserialize` into schema `backup`) and its tables, rows, indexes and triggers are copied over those of
+  the open database. The SAH-pool VFS is never installed or reopened and the pool's files are not touched: the worker keeps its
+  lock and its connection (`acquireDbLock` / `poolFilesFree` / `waitForPoolFiles` stay in front of the one install in `worker.ts`),
+  and a crash half-way leaves the old database, not a half-written file.
+- **Sync after a restore.** The backup is data, not a position in a server's history: its `sync_cursor`, `sync_database`,
+  `sync_server` and outbox (those of the device that made it) are dropped, this device keeps its own `replica_id`, and
+  `restoreBackup` first pauses sync (`SyncControl.pause`: URL and token kept, the server forgotten) as `wipeLocal` does. So the
+  restored device is a device with data of its own meeting a server, which is the first connection: switching sync on asks "Connect to this server?",
+  then a server that holds data replaces the restored data (nothing is sent), an empty one receives all of it. A restore never pushes
+  itself over the server's data unasked, and an old cursor never merges it wrongly. Restoring an old backup on a device that still
+  has the server's newer data therefore needs a choice: leave sync off and use the backup alone, or let the server win. Merging them
+  is roadmap #9.
+Tests: `data/sqlite/backup.test.ts` (round trip incl. the first release's fixture, migration, every refusal, sync state),
+`worker.test.ts`, `client.test.ts`, `platform/platform.test.ts`, and suite 28 (the Backup tab: a real download, restore, cancel, refusals).
+
 **iOS / home-screen app.** The same web build. Status bar: no style meta (`default`); iOS
 colours the bar from the top tab strip (sticky, solid, full width; see Conventions). `body` is
 fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position: fixed; inset: 0`.

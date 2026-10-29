@@ -103,8 +103,10 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 - **Single connection per origin:** the SAH-pool VFS locks the DB, so a second browser tab can't open
   it (shows an error). Fine for Tauri/PWA; several tabs are roadmap #8.
 - **Storage lives in the web view, not a visible file.** On desktop the DB is inside the WebView2
-  profile (`%LOCALAPPDATA%\com.kubus.app\EBWebView`). Without sync there is no backup yet
-  (export / import: roadmap #7). Changing the app identifier or `useHttpsScheme` changes the origin and orphans the data.
+  profile (`%LOCALAPPDATA%\com.kubus.app\EBWebView`). Without sync, a backup file is the only copy
+  off the device: Settings → Backup downloads the whole database as one SQLite file and restores from
+  one (docs/sync.md "Backup and restore"; the README's "Where your data lives" says what loses data on each client).
+  Changing the app identifier or `useHttpsScheme` changes the origin and orphans the data.
 - **iOS eviction:** Safari can evict storage under pressure; home-screen apps are exempt from the
   7-day rule and we request `navigator.storage.persist()`. With sync on, the server is the backup.
 - macOS/Linux Tauri builds use WKWebView/WebKitGTK; OPFS support there is not verified (roadmap #8).

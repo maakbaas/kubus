@@ -42,6 +42,13 @@ self.onmessage = async (event: MessageEvent<Request>) => {
     } else if (req.op === "wipe") {
       engine.wipe();
       res = { id: req.id, ok: true, result: null };
+    } else if (req.op === "export") {
+      const bytes = engine.exportDatabase();
+      self.postMessage({ id: req.id, ok: true, result: bytes } satisfies Response, [bytes.buffer]);
+      return;
+    } else if (req.op === "import") {
+      engine.importDatabase(req.bytes, req.dryRun);
+      res = { id: req.id, ok: true, result: null };
     } else if (req.op === "select") {
       res = { id: req.id, ok: true, result: engine.select(req.sql, req.bind) };
     } else {

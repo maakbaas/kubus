@@ -176,6 +176,9 @@ What the app does, feature by feature (read the part you work on).
   connection" (`SyncControl.testServer`: `/api/health`, then whether the token is accepted; nothing saved) and Disconnect;
   sync, the server's model, remote collections and API tokens all use it), Sync (`ui/SyncSettings.tsx`; `?section=sync`: the
   "Sync this device" switch and "Download images", both applied at once, the state, Wipe local / server database),
+  Backup (`ui/BackupSettings.tsx`; `?section=backup`: "Download backup" saves the local database as `kubus-backup-YYYY-MM-DD.sqlite`
+  and says what it holds; "Restore from backup…" picks a file, refuses one that is no Kubus database or is a newer app's with the reason,
+  asks "Replace all data on this device?", replaces everything, leaves sync off and reloads; docs/sync.md "Backup and restore"),
   Connections (`ui/ConnectionSettings.tsx`; `?section=connections`: the server's remote sources, each set up by its kind's own fields, Host / Port / Database / User for PostgreSQL and so on, as the server describes them; docs/sync.md "Remote sources"; listed as a table like the list pages, name, kind,
   edit and delete icons, each one's problem or warnings above it, and "Add connection": a connection's name or edit icon
   opens its settings in a dialog, `?source=<id>` (`new` for one being added), whose Save stores them on the server at once;

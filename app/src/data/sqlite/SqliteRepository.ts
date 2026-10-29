@@ -231,6 +231,20 @@ export class SqliteRepository implements Repository {
     await this.db.wipe();
   }
 
+  exportBackup(): Promise<Uint8Array> {
+    return this.db.exportDatabase();
+  }
+
+  checkBackup(bytes: Uint8Array): Promise<void> {
+    return this.db.importDatabase(bytes, true);
+  }
+
+  async restoreBackup(bytes: Uint8Array): Promise<void> {
+    await this.checkBackup(bytes); // a refused file changes nothing, not even sync
+    await this.sync.pause();
+    await this.db.importDatabase(bytes);
+  }
+
   async listSpaces(): Promise<Space[]> {
     const rows = await this.db.select<Space>(
       "SELECT id, name, icon, position FROM spaces WHERE deleted_at IS NULL ORDER BY position, created_at",
