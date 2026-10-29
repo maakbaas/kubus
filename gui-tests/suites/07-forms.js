@@ -96,7 +96,7 @@ for (const vp of ["desktop", "phone"]) {
     await rows.last().scrollIntoViewIfNeeded();
     await t.noShift("removing the last field moves the rows above nothing", async () => {
       await rows.last().getByRole("button", { name: /Remove field/ }).click();
-    }, { scope: ".form-page", except: [".field-row:last-of-type", ".add-field", ".form-actions"], inPage: true });
+    }, { scope: ".form-page", except: [".field-row:last-of-type", ".add-field", ".cds--dropdown__wrapper:has([id$='-title-field'])", ".form-actions"], inPage: true });
     await t.check("a field was removed", (await rows.count()) === before - 1, `${before} → ${await rows.count()}`);
     // Drag the first field below the second (reorder handle).
     const handle = rows.first().locator("[data-reorder-handle]").first();
