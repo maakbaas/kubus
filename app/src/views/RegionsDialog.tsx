@@ -1,11 +1,13 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Checkbox, InlineLoading, Modal, Search, Stack, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@carbon/react";
+import { Button, Checkbox, InlineLoading, Modal, Search, Stack, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@carbon/react";
+import { Download } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { regionValues, resultItems, type ChartOptions } from "../domain/chart";
 import type { Collection } from "../domain/model";
 import type { QueryResult } from "../domain/query";
-import { matchKey, type ChartRegions, type Region } from "../domain/regions";
+import { matchKey, toCsv, type ChartRegions, type Region } from "../domain/regions";
+import { downloadFile } from "../platform/download";
 import { errorMessage } from "../ui/useConfirm";
 import { useMountedDialog } from "../ui/useMountedDialog";
 import { refLabelOf, type RefOptions } from "../ui/useReferenceOptions";
@@ -13,7 +15,7 @@ import { loadRegionMap, mapLabel, type RegionMap } from "./regionMaps";
 
 // A choropleth's map's regions, from its Block settings ("Show regions"): every region's name (and
 // English name) and code, what a value has to be to be it (domain/regions.ts), and how many of the
-// block's items are in it; searchable, and narrowed to the regions with none.
+// block's items are in it; searchable, and narrowed to the regions with none. "Export to CSV" saves the rows shown.
 // The values that are no region are listed above, as under the chart.
 
 export function RegionsDialog({
@@ -67,6 +69,14 @@ export function RegionsDialog({
       .sort((a, b) => a.key.localeCompare(b.key));
   }, [map, query, onlyEmpty, byRegion]);
 
+  /** The rows shown as a CSV file ("Netherlands regions.csv"). */
+  const exportCsv = () => {
+    const header = ["Region", "English name", "Code", ...(matched ? ["Items"] : [])];
+    const lines = rows.map((r) => [r.key, r.english, r.id, ...(matched ? [byRegion.get(r)?.items ?? 0] : [])]);
+    const name = `${mapLabel(regions.map).replace(/[\\/:*?"<>|]/g, "-")} regions.csv`;
+    downloadFile(name, new TextEncoder().encode(toCsv([header, ...lines])), "text/csv;charset=utf-8");
+  };
+
   const notOnMap = matched && matched.unmatched.length > 0 ? matched.unmatched.map((u) => `${u.label} (${u.items})`).join(", ") : null;
 
   // At the window level (opened from the Block settings popover), inside the app root for the theme. Small, not
@@ -118,9 +128,14 @@ export function RegionsDialog({
                 </TableBody>
               </Table>
             </div>
-            <p className="helper">
-              {rows.length} of {map.regions.length} regions{matched ? `, ${matched.matches.length} with a value` : ""}
-            </p>
+            <div className="regions-dialog__footer">
+              <p className="helper">
+                {rows.length} of {map.regions.length} regions{matched ? `, ${matched.matches.length} with a value` : ""}
+              </p>
+              <Button kind="tertiary" size="sm" renderIcon={Download} disabled={rows.length === 0} onClick={exportCsv}>
+                Export to CSV
+              </Button>
+            </div>
           </>
         )}
       </Stack>

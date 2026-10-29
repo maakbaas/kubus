@@ -230,7 +230,8 @@ Extension points are registries, not special cases in pages:
     title). "Show regions" (Data, under Regions from) opens the map's regions (`views/RegionsDialog.tsx`, a small dialog:
     a name, its English name, a code and a number don't fit an xs one): every region's name (with its English name), its code and how many of the
     block's items are in it (`RegionValues.matches`; the Block settings get the block's result for it,
-    `BlockOptionsProps.result`), searchable, "Only regions without a value", and the values that are no region above. The whole map is shown, whichever regions have values: Carbon fits its projection to the regions with a value
+    `BlockOptionsProps.result`), searchable, "Only regions without a value", and the values that are no region above; "Export to CSV" saves the rows shown
+    (Region, English name, Code, Items; `toCsv`: RFC 4180, UTF-8 with a byte-order mark; `platform/download.ts`). The whole map is shown, whichever regions have values: Carbon fits its projection to the regions with a value
     only (and no data can change that: it reads 0 and empty alike as missing), so after every render the regions are drawn
     again fitted to the whole map (`frameWholeMap` in ChartCanvas: the size Carbon fitted to, `width.baseVal`, each path's
     bound feature), centred on its own longitudes (`centreOf`: opposite the widest gap, so a map across 180°, the Aleutians,

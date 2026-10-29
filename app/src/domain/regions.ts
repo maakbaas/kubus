@@ -128,3 +128,15 @@ export function centreOf(longitudes: number[]): number {
   const centre = after + gap / 2 + 180;
   return ((centre + 540) % 360) - 180;
 }
+
+/**
+ * Rows as CSV (RFC 4180: comma-separated, a field with a comma, quote or line break quoted, CRLF between
+ * rows), with a byte-order mark so a spreadsheet reads it as UTF-8 ("Fryslân").
+ */
+export function toCsv(rows: (string | number)[][]): string {
+  const field = (v: string | number) => {
+    const s = String(v);
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return "﻿" + rows.map((r) => r.map(field).join(",")).join("\r\n") + "\r\n";
+}

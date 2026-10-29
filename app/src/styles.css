@@ -3184,6 +3184,15 @@ img[data-lightbox] {
 .regions-dialog__unmatched {
   margin: 0;
 }
+.regions-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cds-spacing-05);
+}
+.regions-dialog__footer .helper {
+  margin: 0;
+}
 /* A choropleth's values that are no region of its map: one line, the whole list in its title. */
 .chart-block__unmatched {
   margin: var(--cds-spacing-03) 0 0;
