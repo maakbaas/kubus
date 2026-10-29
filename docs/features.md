@@ -343,10 +343,18 @@ What the app does, feature by feature (read the part you work on).
   **Link picker** (`ui/LinkPicker.tsx`, `domain/linkTargets.ts`, `app/useLinkTargets.ts`): typing `[text](` (text may
   be empty) or `#/` after a space in the Markdown editor opens a Carbon list at the caret of the shown space's
   collections, views and items (`item#field` lists that item's fields), filtered as typed (ranked: exact, prefix, word
-  start, inside, place; a typed or pasted address `#/collections/<id>/items…` finds the page it names). ↑/↓ move, Enter or
+  start, inside, place; a typed or pasted address `#/collections/<id>/items…` finds the page it names, also its `view=`
+  (an item view on an item) and `block=`). A link by name completes part by part (`nameLinkTargets`; the parts before the
+  last match exactly as slugs, the last as typed): `books/` the collection's views (and `book/` its items; `views/` /
+  `items/` force the kind), `book/dune/` the item's item views, after `#` the blocks of the collection's default view or
+  of the view named (`books/reading-list#`), or the fields and blocks of the item's page under its default or named
+  item view (`book/dune/compact#`). Every option shows its link by name (`describeLink`) beside its place, one line
+  per row. ↑/↓ move, Enter or
   Tab choose, Escape closes it (editor keeps focus), a click chooses; choosing writes an ordinary `[text](#/collections/…)`
   link by id (the text typed, else the option's name). No Markdown syntax is added (`linkTrigger` plugin only reports the
-  caret). Labels come from `Repository.listLabels`, per collection, read when first needed.
+  caret). Labels come from `Repository.listLabels`, per collection, read when first needed. The Edit link dialog's URL
+  field offers the same list under it while a page of the app is typed (`ui/LinkTargetInput.tsx`; Escape closes the list,
+  not the dialog); a choice writes the link by name, stored by id on Apply.
 - **Web addresses in plain values are links** (`Highlight`'s `links`, `splitUrls`): `http(s)://…` in text, list and
   checklist entries, AI and component text (cells, card fields, the item page) opens outside the app (`openExternal`;
   not the item, nor the value's editor). Never in titles (the title is the item's own link, or edited by a click), group
@@ -367,7 +375,8 @@ What the app does, feature by feature (read the part you work on).
   Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`); a result with no visible match is left out.
   An item opens at the first field that matched (`?field=`; at the top when its title matched), a Markdown block at the block.
   A text that looks like a link address (`/`, `?`, `=` or `a#b`: `isAddressQuery`) also lists the pages whose link it fits
-  (a link list: `LinkTargetList`, the picker's matching), leaving out the collections and items already listed above.
+  (a link list: `LinkTargetList`, the picker's matching: a whole link by name such as `book/dune/compact#author` or
+  `books/reading-list#table` finds that page, a part of one what it can still become), leaving out the collections and items already listed above.
 - **Remote collections** (`domain/sources.ts`, `collections.source`, `fields.source_column`; docs/sync.md
   "Remote sources"): a table (for InfluxDB a bucket's measurement) of one of the server's sources, shown like any collection
   but read-only. They have a page of their own, **Remotes** (`#/remotes`, `pages/RemotesPage.tsx`: the

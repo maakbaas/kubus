@@ -1708,9 +1708,47 @@ img[data-lightbox] {
 .link-target-list [data-active="true"] .cds--contained-list-item__content {
   background: var(--cds-layer-selected);
 }
-.link-target__name {
+.link-option__name {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* In a dropdown (the editor's link picker, the link dialog's): one line per option, name and place
+   side by side, a long name ellipsized (its place stays readable). */
+.link-target-list--compact .search-hit__title {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.link-target-list--compact .link-option__name {
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+/* The tag is never cut off (a cut-off Carbon tag turns into a tooltip button, which can't be in the option's button). */
+.link-target-list--compact .search-hit__title .cds--tag {
+  flex: none;
+}
+.link-target-list--compact .search-hit__title .cds--tag__label {
+  white-space: nowrap;
+}
+/* The link by name an option is (what is matched), after its place: code-01, secondary text (helper grey is too faint on the chosen row). */
+.link-option__link {
+  font-family: var(--cds-code-01-font-family, "IBM Plex Mono", monospace);
+  font-size: var(--cds-code-01-font-size, 0.75rem);
+  line-height: var(--cds-code-01-line-height, 1.33333);
+  letter-spacing: var(--cds-code-01-letter-spacing, 0.32px);
+  color: var(--cds-text-secondary);
+}
+.link-target-list--compact .link-option__link {
+  flex: 1 1 0;
+  min-inline-size: 3rem;
+  text-align: end;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The link dialog's list sits under its URL field, inside the dialog. */
+.link-target-input .link-target-list {
+  margin-block-start: var(--cds-spacing-03);
+  max-block-size: 12rem;
 }
 
 /* Code syntax coloring (prism/refractor tokens): Carbon's saturated steps, vivid on the code's
@@ -3074,8 +3112,11 @@ img[data-lightbox] {
 .item-fields > .block + .block {
   margin-block-start: 0;
 }
-.block-settings__remove {
-  align-self: flex-start;
+/* A settings panel's own actions (Save as shared component, Remove block) span the panel, as its
+   fields do; the pair in a component block's settings stays side by side. */
+.view-settings .cds--btn:not(.cds--btn--icon-only, .block-component__actions > .cds--btn) {
+  inline-size: 100%;
+  max-inline-size: none;
 }
 /* A component block's settings: Edit component and New component side by side, wrapping when narrow. */
 .block-component__actions {

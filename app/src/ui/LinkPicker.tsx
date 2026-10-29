@@ -113,7 +113,7 @@ export function LinkPicker({ box, trigger, onPick }: { box: RefObject<HTMLDivEle
       <Popover autoAlign open align="bottom-start" className="md-link-popover__popover">
         <span className="md-link-popover__anchor" />
         <PopoverContent>
-          <LinkTargetList targets={targets} active={Math.min(active, targets.length - 1)} label="Link to" onPick={(t) => onPick(t, trigger)} />
+          <LinkTargetList targets={targets} active={Math.min(active, targets.length - 1)} label="Link to" onPick={(t) => onPick(t, trigger)} compact />
         </PopoverContent>
       </Popover>
     </div>
