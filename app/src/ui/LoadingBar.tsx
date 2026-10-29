@@ -20,7 +20,7 @@ export function LoadingBar({
 }) {
   return (
     <div className="loading-bar">
-      <ProgressBar className="loading-bar__bar" size="small" label={label} value={value ?? 0} max={Math.max(max ?? 1, 1)} />
+      <ProgressBar className="loading-bar__bar" size="small" type="inline" label={label} value={value ?? 0} max={Math.max(max ?? 1, 1)} />
       {onStop && (
         <IconButton autoAlign kind="ghost" size="sm" align="top-end" label="Stop loading" onClick={onStop}>
           <Close />

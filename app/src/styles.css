@@ -2551,6 +2551,7 @@ img[data-lightbox] {
 }
 /* The app's loading bar (ui/LoadingBar.tsx): the bar takes the room beside its "×" stop button, a 32px icon
    button at the row's right edge, in line with the heading's buttons above. */
+/* The bar is Carbon's inline one (its label beside the track): one line, so the × centred beside it is level with the track. */
 .loading-bar {
   display: flex;
   align-items: center;
@@ -2723,16 +2724,11 @@ img[data-lightbox] {
   flex-direction: column;
   justify-content: center;
 }
-/* The last data column is often a sliver (its values are short or empty): its editors (cell
-   editor, add row) may reach over the actions column beside it, up to a usable width. */
+/* The last data column is often a sliver (its values are short or empty): its cell editor grows to a
+   usable width towards the cells before it, never over the row's buttons after it (they stay shown). */
 .items-table td.cell--editing:nth-last-child(2) .cell-overlay {
-  inset-inline-end: auto;
+  inset-inline-start: auto;
   inline-size: max(100%, 12rem);
-}
-/* …and where it does, the row's buttons under it are not drawn while it is open (they keep their
-   place, nothing moves): an editor never lies over a button you could still see, or tap by mistake. */
-.items-table tr:has(> td.cell--editing:nth-last-child(2)) > td.row-actions > * {
-  visibility: hidden;
 }
 .items-table .table-add-row:not(.table-add-row--bare) td:nth-last-child(2) .add-cell {
   inset-inline-end: auto;

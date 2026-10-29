@@ -363,6 +363,11 @@ for (const vp of ["phone", "phone-small", "desktop"]) {
         const s = await editorVsButtons(t);
         await t.check(`${col} (${kind}), row ${row}: the editor is open in a row with buttons`, !!s, JSON.stringify(s));
         if (s) await t.check(`${col} (${kind}), row ${row}: the editor covers none of the row's visible buttons`, s.overlapping.length === 0, `covers ${s.overlapping.join(", ")}: ${JSON.stringify(s)}`);
+        const hidden = await t.page.evaluate(() => {
+          const tr = document.querySelector(".items-table td.cell--editing")?.closest("tr");
+          return [...(tr?.querySelectorAll("td.row-actions button") ?? [])].filter((b) => getComputedStyle(b).visibility !== "visible").map((b) => b.getAttribute("aria-label") ?? b.textContent);
+        });
+        await t.check(`${col} (${kind}), row ${row}: the row's buttons stay shown while it is edited`, hidden.length === 0, `hidden: ${hidden.join(", ")}`);
         // (A calendar is taller than a 320x568 window's room: its own finding, not this test's.)
         await t.audit(`${col} (${kind}), row ${row}: editing`, { shotOnFail: true, skip: vp === "phone-small" ? ["popover-in-viewport"] : [] });
         await escapeEditor(t);

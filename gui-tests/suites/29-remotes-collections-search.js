@@ -124,12 +124,14 @@ const storedBy = async (t, plural) => (await storedCollections(t)).find((c) => c
 /** Scrolls everything back to the top (a sticky header over scrolled rows is not what the audit looks at). */
 /** The × of a loading bar. */
 const stopOf = (t) => pane(t).locator(".block-more .loading-bar").getByRole("button", { name: "Stop loading" });
-/** The × ends where the block's header buttons end (the same right edge), and is a 32px button. */
+/** The × ends where the block's header buttons end (the same right edge), is a 32px button, and sits level with the bar's track. */
 const alignedWithHeader = (t) =>
   pane(t).evaluate((el) => {
     const stop = el.querySelector(".loading-bar .cds--btn--icon-only")?.getBoundingClientRect();
+    const track = el.querySelector(".loading-bar .cds--progress-bar__track")?.getBoundingClientRect();
     const head = [...el.querySelectorAll(".block > .section-header .cds--btn--icon-only")].map((b) => b.getBoundingClientRect().right);
-    return !!stop && head.length > 0 && Math.abs(stop.right - Math.max(...head)) <= 1.5 && Math.round(stop.width) === 32;
+    const middle = (r) => r.top + r.height / 2;
+    return !!stop && !!track && head.length > 0 && Math.abs(stop.right - Math.max(...head)) <= 1.5 && Math.round(stop.width) === 32 && Math.abs(middle(stop) - middle(track)) <= 1;
   });
 const toTop =(t) => t.page.evaluate(() => document.querySelectorAll("*").forEach((el) => el.scrollTop > 0 && (el.scrollTop = 0)));
 
