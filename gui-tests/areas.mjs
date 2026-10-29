@@ -24,8 +24,8 @@ export const AREAS = [
   [/^gui-tests\/baselines\//, [21]],
 
   // The shell: workspace, tabs, side nav, spaces, search.
-  [/^app\/src\/(workspace\/|app\/(App|NavTree|routes|store)\.tsx|app\/useRemotes\.ts|ui\/(SpaceSwitcher|SearchBar|TabMenu|BookmarkButton|RelatedLink|ItemLink|useLinkTarget|NewButton))/, [2, 11, 12]],
-  [/^app\/src\/pages\/(SearchPage|BookmarksPage|SpacesPage)/, [2, 7, 19]],
+  [/^app\/src\/(workspace\/|app\/(App|NavTree|routes|store)\.tsx|app\/useRemotes\.ts|ui\/(SpaceSwitcher|SearchBar|TabMenu|BookmarkButton|RelatedLink|ItemLink|useLinkTarget|NewButton))/, [2, 11, 12, 30]],
+  [/^app\/src\/pages\/(SearchPage|BookmarksPage|SpacesPage)/, [2, 7, 19, 30]],
 
   // Item pages and editing values in place.
   [/^app\/src\/(pages\/(ItemPage|NewItemPage)|ui\/(FieldInput|ListField|ToggleInput|TagChip|RefCombo|editStart|useBuffered|useReferenceOptions|Highlight))/, [4, 12, 19, 27]],
@@ -53,7 +53,7 @@ export const AREAS = [
   [/^app\/src\/(app\/(useDataChanges|itemCache|useItems|useItemCounts|useLinks)|views\/useCollectionData)/, [12, 13]],
   [/^app\/src\/(pages\/SettingsPage|ui\/(ConnectionSettings|useServerSettings|SourceSettings|localPrefs))/, [7, 18]],
   [/^app\/src\/(pages\/SettingsPage|ui\/(AiSettings|MapSettings|ServerConnection|ConnectionSettings|ApiTokens|SyncSettings|SourceSettings|useServerSettings)|app\/mapStyle|data\/remote\/client|data\/sync\/SyncEngine)/, [28]],
-  [/^app\/src\/(pages\/HelpPage|help\/)/, [1]],
+  [/^app\/src\/(pages\/HelpPage|help\/)/, [1, 30]],
 ];
 
 /** The suite numbers (or "all") that cover these changed files; [] when none touches the app's GUI. */
