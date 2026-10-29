@@ -110,7 +110,7 @@ describe("migrations", () => {
   it("build the item links of the values already there (migration 2), queued for the server, and keep them as the app does after", async () => {
     // The first release's data plus a Markdown note linking to two items, one with a block anchor.
     const note = "See [Frank](#/collections/collection-person/items/item-herbert) and [a block](#/collections/collection-book/items/item-emma?block=b)";
-    const client = await DirectSqlClient.open((db) => {
+    const client = await openTestClient((db: Db) => {
       db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
       db.exec(firstRelease);
       db.exec(firstReleaseData);

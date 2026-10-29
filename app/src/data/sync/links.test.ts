@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { newId, now, type Collection, type FieldDef, type FieldKind } from "../../domain/model";
 import { SERVER_URL, TOKEN, FakeServer, settled } from "../../test/fakeServer";
-import { DirectSqlClient } from "../sqlite/direct";
+import { openTestClient } from "../../test/engine";
 import { SqliteRepository } from "../sqlite/SqliteRepository";
 import { memoryEnvironment } from "./environment";
 import type { DataChange } from "../repository";
@@ -17,7 +17,7 @@ let server: FakeServer;
 
 /** A device that keeps hold of its database, to look at the rows. */
 async function open(connect = true) {
-  const client = await DirectSqlClient.open();
+  const client = await openTestClient();
   const repo = await SqliteRepository.open(client, memoryEnvironment());
   if (connect) {
     await repo.sync.configure({ url: SERVER_URL, token: TOKEN, enabled: true, originals: "always" });

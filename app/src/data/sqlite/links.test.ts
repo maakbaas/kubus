@@ -6,14 +6,15 @@ import { healLinks } from "../schema";
 import { collectionDraft, newId, type Collection, type FieldDef, type FieldKind } from "../../domain/model";
 import { parseTargets } from "../../domain/backlinks";
 import { memoryEnvironment } from "../sync/environment";
-import { DirectSqlClient } from "./direct";
+import { openTestClient } from "../../test/engine";
+import type { SqlClient } from "./protocol";
 import { SqliteRepository } from "./SqliteRepository";
 
-let client: DirectSqlClient;
+let client: SqlClient;
 let repo: SqliteRepository;
 
 beforeEach(async () => {
-  client = await DirectSqlClient.open();
+  client = await openTestClient();
   repo = await SqliteRepository.open(client, memoryEnvironment());
 });
 
@@ -36,7 +37,7 @@ const queued = async () => (await client.select<{ pk: string }>("SELECT DISTINCT
 const stampOf = async (itemId: string, fieldId: string) =>
   (await client.select<{ updated_at: string }>("SELECT updated_at FROM field_values WHERE item_id = ?1 AND field_id = ?2", [itemId, fieldId]))[0].updated_at;
 const link = (c: string, i: string, anchor = "") => `[x](#/collections/${c}/items/${i}${anchor})`;
-const sync = (db: DirectSqlClient, on: boolean) =>
+const sync = (db: SqlClient, on: boolean) =>
   db.write([{ sql: on ? "INSERT OR REPLACE INTO meta (key, value) VALUES ('sync_applying', '1')" : "DELETE FROM meta WHERE key = 'sync_applying'" }]);
 
 /** People, and notes with a Markdown body, a reference, a list of references and an HTML field. */
