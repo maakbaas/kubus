@@ -5,6 +5,7 @@
 // (fieldLayout.ts): there a block may list another collection, filtered by the page's item.
 // The "current" view state is ephemeral; it becomes a CollectionView only when the user saves it.
 
+import { mergeCollections, type BlendProblem, type ColumnMerge } from "./blend";
 import { parseFieldLayout, type FieldLayout } from "./fieldLayout";
 import { newId, pickableFields, type Collection } from "./model";
 import { parseGroupDate, type GroupDate } from "./groupDate";
@@ -33,6 +34,13 @@ export interface ViewBlock {
   layout: FieldLayout;
   /** The collection it lists; null = the page's own (always so in a collection view). */
   collectionId: string | null;
+  /**
+   * Every collection it lists when that is several (native and remote ones mixed; `collectionId` or the page's own first):
+   * read as one, their fields merged by name (domain/blend.ts). Absent = the one collection.
+   */
+  collectionIds?: string[];
+  /** With several collections: columns merged by hand (Fields → Merge fields). */
+  merges?: ColumnMerge[];
   /** Block-type specific options, validated by that block type. */
   options: unknown;
   /** Shown without its header (name, collapse, menus on hover); only in collection views. Absent = shown. */
@@ -208,6 +216,11 @@ export function parseBlock(raw: unknown): ViewBlock | null {
   };
   if (o.hideHeader === true) block.hideHeader = true;
   if (typeof o.limit === "number" && Number.isInteger(o.limit) && o.limit >= 0) block.limit = o.limit;
+  if (Array.isArray(o.collectionIds) && o.collectionIds.length > 1 && o.collectionIds.every((id) => typeof id === "string")) block.collectionIds = o.collectionIds as string[];
+  const merges = array<unknown>(o.merges).filter(
+    (m): m is ColumnMerge => !!m && typeof m === "object" && typeof (m as ColumnMerge).id === "string" && typeof (m as ColumnMerge).name === "string" && Array.isArray((m as ColumnMerge).fields) && (m as ColumnMerge).fields.every((f) => typeof f === "string"),
+  );
+  if (block.collectionIds && merges.length > 0) block.merges = merges;
   const groupDate = parseGroupDate(o.groupDate);
   if (groupDate) block.groupDate = groupDate;
   return o.groupOrder === "desc" || o.groupOrder === "count" ? { ...block, groupOrder: o.groupOrder } : block;
@@ -266,4 +279,13 @@ export function normalizeBlockHeight(raw: unknown): number {
   if (typeof raw === "string" && raw in LEGACY_HEIGHTS) return LEGACY_HEIGHTS[raw];
   if (typeof raw !== "number" || !Number.isFinite(raw)) return BLOCK_HEIGHT.initial;
   return Math.min(BLOCK_HEIGHT.max, Math.max(BLOCK_HEIGHT.min, Math.round(raw)));
+}
+
+/**
+ * The collection a block lists: its own, or (several chosen: `collectionIds`) the one they are read as, with what is wrong with
+ * the choice (a collection that is gone, a merged column that lost a field).
+ */
+export function listedCollection(base: Collection, block: Pick<ViewBlock, "collectionIds" | "merges">, collections: Collection[]): { collection: Collection; problems: BlendProblem[] } {
+  if (!block.collectionIds || block.collectionIds.length < 2) return { collection: base, problems: [] };
+  return mergeCollections(block.collectionIds, collections, block.merges);
 }

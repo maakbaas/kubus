@@ -31,6 +31,9 @@ Extension points are registries, not special cases in pages:
   checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
   nothing, never the wrong items (so does a value from the page's item that it doesn't have: "Author is this Book's Mentor" on a Book without one). The value input is text for every kind (the braces must be typable);
   under it, what the code works out to ("= true").
+- **Several collections in one block**: the block's Collections picker (Block settings) reads them as one read-only collection, fields
+  merged by name, Collection / Title / Created / Updated always there, Fields → Merge fields by hand, the view's filter translated to its
+  columns, a page at a time from every part, a chart over all rows: docs/features.md "Several collections in one block".
 - **Virtual collections** (`domain/backlinks.ts` `VIRTUAL_COLLECTIONS`, `Collection.virtual`): a block on an item page may list a collection
   that stores nothing, **Backlinks** (docs/features.md): offered in that block's Collection picker only (`BlockMenus`, when it has a
   page), resolved by id next to the store's collections (`findCollection`, in `ItemPageBlock` and the page-wide filter's scope).
@@ -205,7 +208,9 @@ Extension points are registries, not special cases in pages:
     only its delta arrow with it: offered only while it compares with something) and a meter's status ranges (there a % of the total or values: `thresholdPercent`, `statusOf`, `statusRanges`).
   - **Values and legend**: a unit and decimals for axes and tooltips, decimals for a gauge (`formatValue`); the legend automatic (with
     more than one series or part), shown or hidden, and where.
-  - **Size**: Height (see below) and Width (a slider like the cards', 8 to 120rem (about 1920px) at most; a gauge as wide
+  - **Size**: Height (see below) and Width (a slider, 8 to 99rem, its last stop labelled "Full width": no maximum, the block fills its pane, wide or
+    narrow; stored as the number of rem or `"full"`, the default; the definition is `CHART_WIDTH` and `widthToStop` / `widthFromStop` /
+    `normalizeWidth` in `domain/chart.ts`, and a stored 100 or more, e.g. the former maximum 120, reads as Full width; a gauge as wide
     as a pane is mostly empty, so switching to one makes a full-width chart 24rem).
   A setting still to choose (a field, three spokes) or nothing to chart says so instead of an empty chart. The chart follows
   the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of `MAX_SOURCE_PAGE` (10,000) rows one after the other, a loading bar of the rows in against the source's total; its "×" stops it, the chart then shows the rows in and "Load all rows" goes on).

@@ -278,7 +278,7 @@ const OFFERS = {
   Heatmap: { sections: ["Data", "Value", LEGEND, "Size"], has: ["Columns", "Rows (Split by)", "Value", "Of", "Label", "Unit"], not: ["Logarithmic", "Draw as", "Bins", "Parts from", "Compare with"] },
 };
 
-for (const vp of ["desktop", "phone"]) {
+for (const vp of ["phone", "desktop", "wide"]) {
   test(`kinds: the Chart select through all 14 kinds, what is drawn and offered @ ${vp}`, async (t) => {
     const ids = await seeded(t, [{ title: "Weight", options: { ...RICH, chart: "bar" } }]);
     await t.audit("a bar chart");
@@ -310,7 +310,7 @@ for (const vp of ["desktop", "phone"]) {
         await t.check("Gauge: drawn no wider than that", (await facts(t)).rootBox.width <= 24 * 16 + 1, JSON.stringify((await facts(t)).rootBox));
       }
       if (kind.label === "Stat") {
-        await storedWhen(t, ids, "Stat: full width again", (o) => o.chart === "stat" && o.width === 120);
+        await storedWhen(t, ids, "Stat: full width again", (o) => o.chart === "stat" && o.width === "full");
         {
           // As wide as the block (a phone's is narrower than 24rem).
           const f = await facts(t);
@@ -982,12 +982,57 @@ test("size: height, aspect ratio and width", async (t) => {
   await choose(t, panel, null, "Aspect ratio", "None: the height");
   await drawn(t, "no aspect ratio: the height", (f) => near(f.holderBox.height, 768));
   await slide(t, panel, "Width", "max");
-  await drawn(t, "120rem: as wide as the pane", (f) => near(f.rootBox.width, width));
-  await storedWhen(t, ids, "the size is stored", (o) => o.height === 48 && o.aspect === "none" && o.width === 120);
+  await drawn(t, "Full width: as wide as the pane", (f) => near(f.rootBox.width, width));
+  await storedWhen(t, ids, "the size is stored", (o) => o.height === 48 && o.aspect === "none" && o.width === "full");
   await slide(t, panel, "Width", "min");
   await storedWhen(t, ids, "8rem wide is stored", (o) => o.width === 8);
   await t.open(t.listPath(ids.collections.w));
   await drawn(t, "after a reload: still 8rem wide and 48rem high", (f) => near(f.rootBox.width, 128) && near(f.holderBox.height, 768));
+});
+
+// The Width slider runs 8 to 99 rem and ends in Full width: no maximum, the block fills its pane, wide or narrow.
+for (const vp of ["phone", "desktop", "wide"]) {
+  test(`width: 99rem caps a chart, the last stop is Full width (${vp})`, async (t) => {
+    const ids = await seeded(t, [{ options: { chart: "bar", x: BY_PHASE, series: [S("a", "sum", "@weight")] } }]);
+    const panel = await openSettings(t);
+    const near = (a, b) => Math.abs(a - b) <= 4;
+    const pane = async () => (await t.page.locator(PANE).boundingBox()).width;
+    const item = () => panel.locator(".cds--form-item", { has: panel.page().locator('label:text-is("Width")') });
+    const thumb = () => item().locator(".cds--slider__thumb").first();
+    const now = async () => (await thumb().getAttribute("aria-valuenow")) + "/" + (await thumb().getAttribute("aria-valuemax"));
+    await section(panel, "Size");
+    await t.check("a new chart is at Full width: the slider's last stop", (await now()) === "100/100", await now());
+    const labels = await item().innerText();
+    await t.check("the slider labels its ends 8rem and Full width", /8rem/.test(labels) && /Full width/.test(labels), labels);
+    const full = (await facts(t)).rootBox.width;
+    await t.check("Full width fills the pane (less its padding)", full > (await pane()) - 80, JSON.stringify([full, await pane()]));
+    // One step back from the end: 99rem, the most a number can be.
+    await thumb().focus();
+    await t.page.keyboard.press("ArrowLeft");
+    await storedWhen(t, ids, "one step back is 99rem", (o) => o.width === 99);
+    await drawn(t, "99rem caps the chart (or it fills a pane narrower than that)", (f) => near(f.rootBox.width, Math.min(99 * 16, full)));
+    if (full > 99 * 16 + 8) await t.check("99rem is narrower than a wide pane", (await facts(t)).rootBox.width < full - 4, "");
+    await t.audit(`99rem wide (${vp})`);
+    await t.page.keyboard.press("ArrowRight");
+    await storedWhen(t, ids, "the last stop is stored as Full width", (o) => o.width === "full");
+    await drawn(t, "Full width again fills the pane", (f) => near(f.rootBox.width, full));
+    await t.open(t.listPath(ids.collections.w));
+    await drawn(t, "after a reload: still Full width", (f) => near(f.rootBox.width, full));
+    const again = await openSettings(t);
+    await section(again, "Size");
+    await t.check("after a reload the slider is at its last stop", (await again.locator(".cds--slider__thumb").last().getAttribute("aria-valuenow")) === "100");
+  }, { viewport: vp });
+}
+
+test("a stored width of 100rem or more (the old maximum was 120) is Full width", async (t) => {
+  const ids = await seeded(t, [{ options: { chart: "bar", x: BY_PHASE, series: [S("a", "sum", "@weight")], width: 120 } }]);
+  const wide = (await facts(t)).rootBox.width;
+  const paneW = (await t.page.locator(PANE).boundingBox()).width;
+  await t.check("a chart stored at 120 fills the pane", wide > paneW - 80, JSON.stringify([wide, paneW]));
+  const panel = await openSettings(t);
+  await section(panel, "Size");
+  const item = panel.locator(".cds--form-item", { has: panel.page().locator('label:text-is("Width")') });
+  await t.check("its slider is at Full width", (await item.locator(".cds--slider__thumb").first().getAttribute("aria-valuenow")) === "100");
 });
 
 test("a chart that can't be drawn says why, and is mended in the settings", async (t) => {
