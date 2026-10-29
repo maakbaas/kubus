@@ -536,8 +536,8 @@ function MapOptionsEditor({ collection, options, inRow, onChange }: BlockOptions
             ))}
         </Select>
       )}
-      <HeightSlider id={`${uid}-map-height`} value={height} disabled={inRow} onChange={setHeight} />
-      <AspectSelect id={`${uid}-map-aspect`} value={options.aspect} disabled={inRow} onChange={(aspect) => onChange({ ...options, aspect })} />
+      <HeightSlider id={`${uid}-map-height`} value={height} onChange={setHeight} />
+      <AspectSelect id={`${uid}-map-aspect`} value={options.aspect} onChange={(aspect) => onChange({ ...options, aspect })} />
       {inRow && <InRowNote />}
       <Checkbox
         id={`${uid}-map-route`}
@@ -566,7 +566,7 @@ export const mapView = defineBlockType<MapOptions>({
   label: "Map",
   icon: Earth,
   defaultOptions: (collection) => ({ ...guessLocation(collection), height: BLOCK_HEIGHT.initial, aspect: DEFAULT_ASPECT, route: false }),
-  uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true }, fillsRow: true }),
+  uses: (options) => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true }, ownHeight: { height: options.height, aspect: options.aspect } }),
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<MapOptions>;
     const fields = pickableFields(collection);

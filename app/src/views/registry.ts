@@ -14,6 +14,7 @@ import type { Component } from "../domain/components";
 import type { FieldLayout } from "../domain/fieldLayout";
 import type { FieldDef, FieldValue, Item, Collection } from "../domain/model";
 import type { QueryResult, SortRule } from "../domain/query";
+import type { AspectRatio } from "../domain/views";
 import type { RefLabel } from "../domain/components";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import type { OpenMode } from "../workspace/Workspace";
@@ -83,8 +84,14 @@ export interface BlockUses {
   groups: boolean;
   /** Fields can be chosen, with these of the layout's settings; null = no field choice. */
   fields: { labels: boolean; hideEmpty: boolean } | null;
-  /** It is drawn in a box of its own (Height and Aspect ratio): in a row of blocks side by side it fills the row's height instead. */
-  fillsRow?: boolean;
+  /**
+   * It is drawn in a box of its own: its Height and Aspect ratio (blockHeightCss), and `extra` around the box (CSS, e.g. a
+   * chart's space above it). In a row of blocks side by side that height counts toward the row's (as a table's own height
+   * does), and the box fills the row's height.
+   */
+  ownHeight?: { height: number; aspect: AspectRatio; extra?: string };
+  /** Drawn at a height of its own that it can't shrink from or scroll (a stat, a meter, a compact chart): a row is never less tall. */
+  fixedHeight?: boolean;
   /** It needs every item (a chart charts them all): its Limit is "all" unless set, a remote collection's rows all loaded. */
   all?: boolean;
 }
@@ -101,7 +108,7 @@ export interface BlockOptionsProps<O> {
   /** The block's items as it shows them (a choropleth's settings list which of them each region of its map has), and their references' labels. */
   result?: QueryResult;
   refs?: RefOptions;
-  /** It stands in a row of blocks side by side: its Height and Aspect ratio are the row's (Block settings: Row height). */
+  /** It stands in a row of blocks side by side: its Height counts toward the row's, and it fills the row (a note says so). */
   inRow?: boolean;
   onChange(options: O): void;
 }

@@ -12,7 +12,7 @@ import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
 import { applyQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type ItemGroup, type QueryResult } from "../domain/query";
 import { blockSort, isDefaultBlockSort } from "../domain/blockSort";
-import { BLOCK_HEIGHT, blockLimit, blockQuery, DEFAULT_ASPECT, listedCollection, NO_FILTERS, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
+import { BLOCK_HEIGHT, blockLimit, blockQuery, DEFAULT_ASPECT, ownBlockHeightCss, listedCollection, NO_FILTERS, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { LoadingBar } from "../ui/LoadingBar";
@@ -452,12 +452,21 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   const collapsed = !headless && (collapse ? collapse.collapsed : state.blocks.includes(block.id));
   const toggleCollapsed = collapse ? collapse.onToggle : () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
+  // Drawn in a box of its own (a chart, map, HTML component): in a row side by side it fills the row (styles.css .block--fills).
+  const own = uses.ownHeight && typeof uses.ownHeight.height === "number" ? uses.ownHeight : null;
   // Searching the view: a block listing items that has none matching is left out altogether.
   if (search.trim() && uses.query && items && result.total === 0) return null;
   // Not even its header until its items are in: a header alone would sit where the blocks above are about to push it away.
   if (!items && !error && !remote?.waiting && !remote?.stopped) return null;
   return (
-    <section className={uses.fillsRow ? "block block--fills" : "block"} data-block-id={block.id}>
+    <section className={own ? "block block--fills" : uses.fixedHeight ? "block block--fixed" : "block"} data-block-id={block.id}>
+      {/* Its own height (Height, Aspect ratio, what is around its box), measured for its row (views/BlockRows.tsx): a box of
+          no height of its own, as wide as the block. */}
+      {own && (
+        <div className="block__own" aria-hidden="true">
+          <div style={{ blockSize: own.extra ? `calc(${ownBlockHeightCss(own.height, own.aspect)} + ${own.extra})` : ownBlockHeightCss(own.height, own.aspect) }} />
+        </div>
+      )}
       <SectionHeader
         heading
         hidden={headless}

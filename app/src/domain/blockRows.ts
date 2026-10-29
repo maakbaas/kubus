@@ -30,15 +30,19 @@ const withoutRowSettings = (b: ViewBlock): ViewBlock => {
 };
 
 /**
- * The height of a row of blocks side by side, in px: its tallest or (`rowFit` "shortest") its shortest measured block
- * (`heights`: blocks with a height of their own, not those that fill the row), at most or at least its `rowHeight`; with
- * nothing measured, its `rowHeight`, else ROW_HEIGHT_DEFAULT. `rem` is the px of a rem.
+ * The height of a row of blocks side by side, in px: its tallest or (`rowFit` "shortest") its shortest block (`heights`:
+ * each block's own), at most or at least its `rowHeight`; with nothing measured, its `rowHeight`, else ROW_HEIGHT_DEFAULT.
+ * Never less than a block that can't scroll or shrink (`floors`: a stat, a meter, a compact chart). `rem` is the px of a rem.
  */
-export function rowHeightPx(settings: RowSettings, heights: number[], rem: number): number {
+export function rowHeightPx(settings: RowSettings, heights: number[], rem: number, floors: number[] = []): number {
   const limit = settings.rowHeight === undefined ? undefined : settings.rowHeight * rem;
-  if (heights.length === 0) return limit ?? ROW_HEIGHT_DEFAULT * rem;
-  if (settings.rowFit === "shortest") return Math.max(Math.min(...heights), limit ?? 0);
-  return Math.min(Math.max(...heights), limit ?? Infinity);
+  const fitted =
+    heights.length === 0
+      ? (limit ?? ROW_HEIGHT_DEFAULT * rem)
+      : settings.rowFit === "shortest"
+        ? Math.max(Math.min(...heights), limit ?? 0)
+        : Math.min(Math.max(...heights), limit ?? Infinity);
+  return Math.max(fitted, ...floors);
 }
 
 /**

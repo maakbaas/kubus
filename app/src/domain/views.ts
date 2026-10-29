@@ -308,9 +308,14 @@ export const normalizeAspect = (raw: unknown): AspectRatio => (ASPECT_RATIOS.inc
  * side it fills the row instead (`--row-fill-box`, set there: styles.css `.block-row--fit`; domain/blockRows.ts).
  */
 export function blockHeightCss(height: number, aspect: AspectRatio): string {
-  if (aspect === "none") return `var(--row-fill-box, ${height}rem)`;
+  return `var(--row-fill-box, ${ownBlockHeightCss(height, aspect)})`;
+}
+
+/** A block's own height as CSS (blockHeightCss without a row's): what it counts toward its row's height (views/BlockRows.tsx). */
+export function ownBlockHeightCss(height: number, aspect: AspectRatio): string {
+  if (aspect === "none") return `${height}rem`;
   const [w, h] = aspect.split(":").map(Number);
-  return `var(--row-fill-box, min(${height}rem, calc(100cqi * ${h} / ${w})))`;
+  return `min(${height}rem, calc(100cqi * ${h} / ${w}))`;
 }
 
 /** A stored block height made valid: rem within BLOCK_HEIGHT (an old size name as its rem). */

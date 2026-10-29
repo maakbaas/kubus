@@ -966,8 +966,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
     <Section key="size" title="Size">
       {has.height && (
         <>
-          {!compact && <HeightSlider id={`${uid}-height`} value={o.height} disabled={inRow} onChange={(height) => set({ height })} />}
-          {!compact && <AspectSelect id={`${uid}-aspect`} value={o.aspect} disabled={inRow} onChange={(aspect) => set({ aspect })} />}
+          {!compact && <HeightSlider id={`${uid}-height`} value={o.height} onChange={(height) => set({ height })} />}
+          {!compact && <AspectSelect id={`${uid}-aspect`} value={o.aspect} onChange={(aspect) => set({ aspect })} />}
           {!compact && inRow && <InRowNote />}
           {compact && <p className="helper chart-options__note">A compact chart has its own, low height.</p>}
         </>
@@ -1025,8 +1025,16 @@ export const chartBlock = defineBlockType<ChartOptions>({
   defaultOptions: (collection: Collection) => defaultChartOptions(collection),
   normalizeOptions: (raw, collection) => normalizeChartOptions(raw, collection),
   // Its X axis is its own setting (not the block's grouping); "This item" charts the page's item, not a query's.
-  // Drawn at its Height (a compact chart, a meter or a stat at their own): such a chart fills a row's height.
-  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null, fillsRow: kindHas(options.chart).height && !(isXY(options.chart) && options.compact) }),
+  // Drawn at its Height (a compact chart, a meter or a stat at their own): in a row, that and the space above it (.chart-block) count, and it fills the row.
+  uses: (options) => ({
+    query: options.scope !== "page",
+    all: true,
+    groups: false,
+    fields: null,
+    ...(kindHas(options.chart).height && !(isXY(options.chart) && options.compact)
+      ? { ownHeight: { height: options.height, aspect: options.aspect, extra: "var(--cds-spacing-05)" } }
+      : { fixedHeight: true }),
+  }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,
 });

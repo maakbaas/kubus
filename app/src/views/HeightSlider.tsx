@@ -20,9 +20,9 @@ export function HeightSlider({ id, value, disabled, onChange }: { id: string; va
   );
 }
 
-/** Under Height and Aspect ratio while the block is in a row side by side (they are set aside there). */
+/** Under Height and Aspect ratio while the block is in a row side by side. */
 export function InRowNote() {
-  return <p className="helper">In a row of blocks side by side it fills the row's height (Row height, above).</p>;
+  return <p className="helper">In a row of blocks side by side its height counts toward the row's (Row height, above), and it fills the row.</p>;
 }
 
 /** A block's Aspect ratio beside its Height: it takes the less of the two (blockHeightCss). */

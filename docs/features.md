@@ -340,10 +340,11 @@ What the app does, feature by feature (read the part you work on).
   most that tall with the tallest, at least with the shortest; `rowMaxHeight`, its name before the fit, is read as it). At
   most 4 to a row. Where the row is at least 40rem wide (a container query, so a narrow tiled pane counts like a phone)
   its blocks stand side by side, each its share, all exactly as tall as the row: the part of each below its name is the
-  height measured from the blocks with a height of their own (tables, cards, text; `rowHeightPx`), what is taller scrolls
-  inside, and a chart, map or HTML component (`BlockUses.fillsRow`) fills it, its own Height and Aspect ratio set aside
-  (greyed out in its settings while it is in a row; `blockHeightCss` reads `--row-fill-box`); with nothing measured, the
-  row's height, else 24rem. A row of one block keeps its own height, only limited (at most / at least). Narrower (a
+  row's tallest or shortest block's own height (`rowHeightPx`: what a table, cards or text take, overhang included; a
+  chart's, map's or HTML component's Height at its Aspect ratio, `BlockUses.ownHeight`, measured by an invisible
+  `.block__own`), limited by the row's height; what is taller scrolls inside, while a chart, map or HTML component fills
+  the row (`blockHeightCss` reads `--row-fill-box`) and never scrolls; a stat, meter or compact chart (`fixedHeight`) never
+  scrolls either: the row is at least as tall. With nothing measured (all collapsed), the row's height, else 24rem. A row of one block keeps its own height, only limited (at most / at least). Narrower (a
   phone), a row's blocks stack exactly as blocks always did, their heights their own, nothing limited or scrolling inside:
   a dashboard is a list there. A block is placed by dragging its name onto another block: its left or right quarter puts
   it beside that block (side by side only; that half of the block is highlighted), its top or bottom half in a row of its

@@ -235,7 +235,8 @@ function Row<T extends { id: string }>({
     e.preventDefault();
     onShares(ids, moveDivider(stored, i, e.key === "ArrowLeft" ? -SHARE_STEP : SHARE_STEP));
   };
-  // Several blocks: the row's height, measured from those with a height of their own (not those filling it), in px.
+  // Several blocks: the row's height, measured from each block's own (what a table, cards or text take, overhang too; a
+  // chart's, map's or HTML component's Height, `.block__own`, which then fills the row), in px.
   const several = entries.length > 1;
   const [bodyPx, setBodyPx] = useState<number | null>(null);
   const fit = settings.rowFit ?? "tallest";
@@ -245,15 +246,19 @@ function Row<T extends { id: string }>({
     if (!several || !box) return setBodyPx(null);
     const measure = () => {
       const contents = [...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block:not(.block--fills) > .block__body > .block__content")];
-      const heights = contents.map((c) => c.offsetHeight).filter((h) => h > 0);
+      // Collapsed blocks have no body: not counted.
+      const boxes = [...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block--fills:has(> .block__body) > .block__own > div")];
+      const heights = [...contents.map((c) => c.scrollHeight), ...boxes.map((b) => b.offsetHeight)].filter((h) => h > 0);
+      // A stat, a meter, a compact chart: never cut or scrolled, the row at least as tall.
+      const floors = [...box.querySelectorAll<HTMLElement>(":scope > .block-cell > .block--fixed > .block__body > .block__content")].map((c) => c.scrollHeight);
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-      const px = Math.round(rowHeightPx({ ...(fit === "shortest" && { rowFit: "shortest" }), ...(limit !== undefined && { rowHeight: limit }) }, heights, rem));
+      const px = Math.round(rowHeightPx({ ...(fit === "shortest" && { rowFit: "shortest" }), ...(limit !== undefined && { rowHeight: limit }) }, heights, rem, floors));
       setBodyPx((old) => (old === px ? old : px));
     };
     const sizes = new ResizeObserver(measure);
     const watch = () => {
       sizes.disconnect();
-      for (const c of box.querySelectorAll(":scope > .block-cell > .block > .block__body > .block__content")) sizes.observe(c);
+      for (const c of box.querySelectorAll(":scope > .block-cell > .block > .block__body > .block__content, :scope > .block-cell > .block > .block__own > div")) sizes.observe(c);
       measure();
     };
     // Blocks come and go (their items loading, collapsed, a search leaving one out): watched anew.
