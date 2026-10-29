@@ -971,27 +971,35 @@ for (const vp of ["desktop", "phone"]) {
   }, { viewport: vp });
 }
 
-test("search: the bar searches in the active pane only", async (t) => {
-  await t.boot();
-  await t.seed(searchSpec());
-  await t.seed({ prefs: { "kubus.workspace.default": wsLayout([["/collections"], ["/bookmarks"]], { active: 1 }) } });
-  await t.open("/search?q=zebra", { keepTabs: true });
-  await t.page.evaluate(() => 0);
-  await t.settle();
-  const panes = t.page.locator(".ws-pane");
-  await t.check("two panes", (await panes.count()) === 2);
-  await t.check("the active pane is the second one", await panes.nth(1).evaluate((e) => e.classList.contains("ws-pane--active")));
-  await searchButton(t).click();
-  await t.until("the bar opens", async () => (await bar(t).count()) === 1);
-  await t.page.keyboard.press("Control+A");
-  await t.page.keyboard.type("horse");
-  await t.until("the active pane shows the results", async () => (await paneText(t)).includes("Results for “horse”"));
-  const other = panes.nth(0);
-  await t.check("the other pane is untouched", !(await other.innerText()).includes("Results for") && (await other.innerText()).length > 0, (await other.innerText()).slice(0, 100));
-  await t.audit("search bar in a split");
-  await t.page.keyboard.press("Enter");
-  await t.until("closed", async () => (await bar(t).count()) === 0);
-  await t.check("after closing, the results stay in the active pane and the other still shows its page", (await paneText(t)).includes("Results for “horse”") && !(await other.innerText()).includes("Results for"));
+test("search: the bar searches in the pane that was active when Search was clicked", async (t) => {
+  // The button sits in the right-most pane's strip but must not make that pane active first.
+  for (const active of [0, 1]) {
+    await t.boot();
+    await t.seed(searchSpec());
+    await t.seed({ prefs: { "kubus.workspace.default": wsLayout([["/collections"], ["/bookmarks"]], { active }) } });
+    await t.open("/search?q=zebra", { keepTabs: true });
+    await t.page.evaluate(() => 0);
+    await t.settle();
+    const panes = t.page.locator(".ws-pane");
+    const label = active === 0 ? "left" : "right";
+    const other = panes.nth(1 - active);
+    const isActive = () => panes.nth(active).evaluate((e) => e.classList.contains("ws-pane--active"));
+    const otherBefore = (await other.innerText()).replace(/\s+/g, " ");
+    await t.check("two panes", (await panes.count()) === 2);
+    await t.check(`the ${label} pane is the active one`, await isActive());
+    await searchButton(t).click();
+    await t.until("the bar opens", async () => (await bar(t).count()) === 1);
+    await t.check(`clicking Search leaves the ${label} pane active`, await isActive());
+    await t.page.keyboard.press("Control+A");
+    await t.page.keyboard.type("horse");
+    await t.until(`the ${label} (previously active) pane shows the results`, async () => (await panes.nth(active).innerText()).includes("Results for “horse”"));
+    await t.check(`the ${label} pane is still the active one`, await isActive());
+    await t.check("the other pane is untouched", !(await other.innerText()).includes("Results for") && (await other.innerText()).replace(/\s+/g, " ") === otherBefore, (await other.innerText()).slice(0, 100));
+    await t.audit(`search bar in a split, ${label} pane active`);
+    await t.page.keyboard.press("Enter");
+    await t.until("closed", async () => (await bar(t).count()) === 0);
+    await t.check("after closing, the results stay in that pane and the other still shows its page", (await panes.nth(active).innerText()).includes("Results for “horse”") && !(await other.innerText()).includes("Results for"));
+  }
 }, { viewport: "desktop" });
 
 // A remote row has no stored item: its bookmark must still list, show in the side nav, open the row

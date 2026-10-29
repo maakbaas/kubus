@@ -374,11 +374,40 @@ takes the new one when its settings are opened. A source's name: letters, digits
 app's own `SqliteRepository` running inside the server process as one more synced device
 (`app/src/headless`), never by writing to Postgres: so it follows the GUI's rules (field diffing,
 file release, AI fields, the "All" view, soft deletes, change sets).
-- *Device*: `DirectSqlClient` (in-memory sqlite-wasm, `SqliteEngine` as in the worker), the real
+- *Device*: `DirectSqlClient` (sqlite-wasm in memory, `SqliteEngine` as in the worker), the real
   `SyncEngine` with `memoryEnvironment({ keepFiles: false })` (settings in memory; file bytes dropped
   once uploaded, fetched from the server when asked), syncing over HTTP with `http://127.0.0.1:$PORT`
   and listening to `/api/events`. It starts with a first connection (everything but bytes). After a
   wipe (409) it wipes itself and connects again: it is a cache, it never uploads stale data.
+  `catchUp` (and the `/api/events` signal, `heard`) skip a sync only when the device's cursor *equals*
+  the server's: a device's cursor never exceeds the server's, so a higher one means the server's counter
+  restarted (a wipe drops the sequences) and the device holds another database's data; it syncs, gets 409
+  and starts over, so the API never answers with pre-wipe data even when the wipe signal was missed.
+- *Persistence* (`KUBUS_HEADLESS_DIR`, `headless/diskStore.ts`): unset, the database is in memory and every
+  server start downloads everything (`/api/v1` answers 503 until done; tests, development). Set to a
+  directory (the image: `/data/headless`, a volume in `docker-compose.yml`), the device saves its database
+  there as `headless.db` and resumes on the next start from its sync cursor: it logs `Resuming from …`
+  (or `Nothing saved in … yet` the first time), syncs only what came after, and `/api/v1` has the data at
+  once. sqlite-wasm under Node has no file system, so the database lives in memory and is saved as a
+  whole snapshot (`DirectSqlClient.export`) to a temporary file, fsynced and renamed over the old one, at
+  most every second (10 times as long as the last snapshot took, for big databases), after a write, and on
+  SIGTERM (`HeadlessHost.close`). The file is therefore always one complete database. The cursor
+  (`meta.sync_cursor`), the server's database id and the server address (`sync_server`) are rows of that same database,
+  written in the same transaction as the data they describe, so a snapshot is consistent by construction; after a crash
+  the device resumes from its last snapshot's cursor and fetches the rest (a sync is idempotent). Nothing
+  else needs to survive: the sync settings (`memoryEnvironment`) are set from the server's options at each
+  start. The database is migrated like any device's (`SqliteRepository.open`; one from a newer version is
+  left alone and the API says to update). If the server's database was replaced or wiped meanwhile (409, a
+  different database id: also another server's), the existing replaced → `wipeLocal` → connect path starts
+  over before the first request. The device recognises the server by its loopback address
+  (`http://127.0.0.1:$PORT`): another `PORT` is a first connection and downloads again. A file that is no
+  database is kept as `headless.db.damaged-<time>` and the device starts over. It is only a cache: deleting
+  the directory loses nothing. File bytes stay on the server (`keepFiles: false`; the database holds rows
+  only), so the directory stays small. One server process per directory: `headless.lock` (pid and host,
+  touched every 5 s) is taken at start; a holder alive on this host (a dead one, or this pid again after
+  a container restart, is taken over) or another host's lock touched in the last 20 s makes the start fail
+  with `… is in use by another Kubus server process` (`/api/v1` answers 503 with that, the host retries every 30 s).
+  Tests: `app/src/headless/diskStore.test.ts`, `server/test/headlessDir.test.ts`, and `tests/image-smoke.mjs` (a restart of the image).
 - *Auth* (`server/src/tokens.ts`, types in `shared/tokens.ts`): the devices' `KUBUS_TOKEN` reaches everything, `/api/v1`
   too; other tools get an API token, made in Settings → API tokens (`ui/ApiTokens.tsx`, shown once in a dialog with a copy
   button): `kubus_` + 32 random bytes (base64url), with a name and an access, `read` or `write` (read & write). The server

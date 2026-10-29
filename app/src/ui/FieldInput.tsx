@@ -91,16 +91,16 @@ export function parseInputValue(kind: FieldKind, raw: InputValue): { value: Fiel
       return Number.isFinite(n) ? { value: n } : { error: "Not a valid number" };
     }
     case "date":
-      if (s === "") return { value: null };
-      return /^\d{4}-\d{2}-\d{2}$/.test(s) ? { value: s } : { error: "Use yyyy-mm-dd" };
+      // The picker only reports days it parsed, so the text is always yyyy-mm-dd (or empty).
+      return { value: s === "" ? null : s };
     case "datetime": {
       const [date = "", time = ""] = s.split("T");
       if (!date && !time) return { value: null };
       if (!date) return { error: "Pick a date" };
       const t = time || "00:00";
       if (!TIME_24H.test(t)) return { error: "Use hh:mm (24h)" };
-      const d = new Date(`${date}T${t}`); // no zone → local time
-      return Number.isNaN(d.getTime()) ? { error: "Not a valid date/time" } : { value: d.toISOString() };
+      // No zone → local time; the date is the picker's, so always valid.
+      return { value: new Date(`${date}T${t}`).toISOString() };
     }
   }
 }

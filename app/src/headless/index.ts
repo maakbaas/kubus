@@ -1,5 +1,6 @@
 // The headless device: the app's own repository and sync engine inside the server process, with
-// an in-memory database, so the HTTP API (/api/v1) follows exactly the rules the GUI does. It is
+// an in-memory database (saved to a directory when the server has one, KUBUS_HEADLESS_DIR: see
+// diskStore.ts), so the HTTP API (/api/v1) follows exactly the rules the GUI does. It is
 // one more synced device: it syncs with the server over HTTP like the others, hears their changes
 // through /api/events, and its own writes reach them through sync. Bundled for Node by
 // `npm run build:headless` (app/vite.headless.config.ts) into server/headless, which the server
@@ -14,6 +15,7 @@ import { memoryEnvironment } from "../data/sync/environment";
 import { setCompiler } from "../domain/components";
 import { createApi } from "./api";
 import { contextCompiler } from "./compiler";
+import { DiskStore } from "./diskStore";
 import { Webhooks } from "./webhooks";
 
 export class HeadlessDevice {
@@ -23,6 +25,7 @@ export class HeadlessDevice {
   private constructor(
     readonly repo: SqliteRepository,
     private options: HeadlessOptions,
+    private store: DiskStore | null,
   ) {
     this.webhooks = new Webhooks(repo, options.webhooks, options.log);
     this.webhooks.attach();
@@ -33,13 +36,56 @@ export class HeadlessDevice {
     });
   }
 
-  /** Opens an empty device and connects it: its first sync downloads everything (but file bytes). */
+  /**
+   * Opens the device and connects it. Without a data directory it is empty and its first sync
+   * downloads everything (but file bytes). With one it opens what that holds and resumes from its
+   * sync cursor; if the server's database is another one (wiped, replaced, a different server) it
+   * starts over, as a running device does.
+   */
   static async start(options: HeadlessOptions): Promise<HeadlessDevice> {
     setCompiler(contextCompiler);
-    const repo = await SqliteRepository.open(await DirectSqlClient.open(), memoryEnvironment({ keepFiles: false }));
-    const device = new HeadlessDevice(repo, options);
-    await device.serial(() => device.connect());
-    return device;
+    const store = options.dataDir ? await DiskStore.open(options.dataDir) : null;
+    try {
+      const client = await HeadlessDevice.openDatabase(store, options);
+      // File bytes stay on the server (fetched when asked): the database holds only rows.
+      const repo = await SqliteRepository.open(client, memoryEnvironment({ keepFiles: false }));
+      const device = new HeadlessDevice(repo, options, store);
+      if (store) {
+        store.attach(() => client.export());
+        const [saved] = await client.select<{ value: string }>("SELECT value FROM meta WHERE key = 'sync_cursor'");
+        options.log(
+          saved
+            ? `Resuming from ${store.dir}: the saved database holds the server's data up to write ${saved.value}`
+            : `Nothing saved in ${store.dir} yet: the first sync downloads everything`,
+        );
+      }
+      await device.serial(async () => {
+        await device.connect();
+        await device.reset(); // another server's database: starts over before the first request
+      });
+      return device;
+    } catch (e) {
+      await store?.close(); // keeps what was saved and frees the directory for the next try
+      throw e;
+    }
+  }
+
+  private static async openDatabase(store: DiskStore | null, options: HeadlessOptions): Promise<DirectSqlClient> {
+    if (!store) return DirectSqlClient.open();
+    try {
+      return await DirectSqlClient.open(undefined, { load: store.loaded, changed: store.changed });
+    } catch (e) {
+      // A newer version's database waits for its version (it is never touched); a file that isn't a database is put aside.
+      if (!store.loaded || /newer version of Kubus/.test(String(e))) throw e;
+      options.log(`The saved database can't be opened (${e instanceof Error ? e.message : String(e)}): kept as ${await store.setAside()}, starting over`);
+      return DirectSqlClient.open(undefined, { changed: store.changed });
+    }
+  }
+
+  /** Saves the database to disk and frees the data directory (the server is stopping). */
+  async close(): Promise<void> {
+    await this.queue.catch(() => {});
+    await this.store?.close();
   }
 
   private async connect() {
@@ -84,6 +130,7 @@ export const startHeadless: StartHeadless = async (options) => {
   const device = await HeadlessDevice.start(options);
   const api = createApi(device.repo);
   return {
+    close: () => device.close(),
     handle: (req: ApiRequest): Promise<ApiResponse> =>
       device.serial(async () => {
         try {
