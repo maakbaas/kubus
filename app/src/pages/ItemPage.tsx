@@ -727,8 +727,7 @@ function EditableTitle({ value, source, onSave }: { value: string; source: strin
     if (!editing || !el) return;
     el.textContent = source; // uncontrolled from here on: re-renders would move the caret
     el.focus();
-    const text = el.firstChild;
-    if (!text) return;
+    const text = el.firstChild!; // the source is never empty (editedTitleField needs a value)
     const length = text.textContent?.length ?? 0;
     const caret = document.createRange();
     caret.setStart(text, Math.min(editing.range?.start ?? length, length));

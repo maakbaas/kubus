@@ -240,3 +240,50 @@ for (const vp of ["desktop", "phone"]) {
     await t.audit("cards after options");
   }, { viewport: vp });
 }
+
+// Created and Updated can be picked like fields but are not shown by default: a layout that never
+// chose its fields (null) leaves them out of tables, cards and item pages; once ticked in the
+// field selection they show, and stay after reopening.
+test("Created and Updated: hidden by default, selectable, kept once chosen @ desktop", async (t) => {
+  await t.boot();
+  const ids = await t.seed(matrixSpec("typical", { items: 4 }));
+  const dateLine = /^(Created|Updated)$/m;
+  const body = () => t.page.locator(".ws-pane--active .ws-pane__body").first().innerText();
+  const headers = () => t.page.evaluate(() => [...document.querySelectorAll(".items-table thead th")].map((th) => (th.textContent || "").trim()));
+  // A header's text starts with its sort button's description.
+  const hasDates = (cols) => cols.some((c) => /(Created|Updated)$/.test(c));
+  const cardsPath = `${t.listPath(ids.collections.books)}?view=${ids.views["books/Cards"]}`;
+
+  await t.open(t.listPath(ids.collections.books));
+  await t.until("the table has columns", async () => (await headers()).length > 2);
+  const cols = await headers();
+  await t.check("the default table shows neither Created nor Updated", !hasDates(cols), JSON.stringify(cols));
+
+  await t.open(cardsPath);
+  await t.until("cards are shown", async () => (await t.page.locator(".item-card").count()) > 0);
+  await t.check("default cards show neither Created nor Updated", !dateLine.test(await body()), "a date line");
+
+  await t.open(t.itemPath(ids.collections.books, ids.items["books/i0"]));
+  await t.until("the item page is shown", async () => (await t.page.locator(".item-fields").count()) > 0);
+  await t.check("the default item page shows neither Created nor Updated", !dateLine.test(await body()), "a date line");
+
+  // Selectable in the table's field selection: unticked, and ticking shows the column.
+  await t.open(t.listPath(ids.collections.books));
+  const header = t.page.locator(".block .section-header").first();
+  await tool(t, header, "Fields");
+  const popover = t.page.locator(".cds--popover--open");
+  const row = (name) => popover.locator(".field-order__row").filter({ hasText: name });
+  const created = row("Created").locator("input[type=checkbox]");
+  const updated = row("Updated").locator("input[type=checkbox]");
+  await t.check("Created and Updated are offered, unticked", (await created.count()) === 1 && !(await created.isChecked()) && (await updated.count()) === 1 && !(await updated.isChecked()), JSON.stringify(await popover.locator(".field-order__row").allInnerTexts()));
+  await row("Created").locator(".cds--checkbox-label").click();
+  await t.closeAll();
+  await t.settle(500);
+  // A changed view is saved with "Save changes to view" (the layout is stored with the block).
+  await tool(t, t.page.locator(".views-bar").first(), "Save changes to view");
+  await t.until("the view is saved", async () => !(await t.page.locator(".views-bar").first().innerText()).includes("*"));
+  await t.check("ticking Created adds its column", (await headers()).some((h) => h.endsWith("Created")), JSON.stringify(await headers()));
+  await t.check("Updated stays hidden", !(await headers()).includes("Updated"), JSON.stringify(await headers()));
+  await t.open(t.listPath(ids.collections.books));
+  await t.until("a layout that chose Created keeps it after reopening", async () => (await headers()).some((h) => h.endsWith("Created")));
+}, { viewport: "desktop" });

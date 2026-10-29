@@ -205,6 +205,93 @@ test("markdown editing: link popover (open, edit, remove) and links by name", as
   await t.audit("saved note with links");
 });
 
+test("markdown editing: the link picker completes collections, views, items and fields", async (t) => {
+  await t.boot();
+  const spec = matrixSpec("typical", { items: 2 });
+  spec.collections[0].items.push({ key: "md", values: { title: "Editing", notes: "Start" } }, { key: "zz", values: { title: "Zanzibar Target", notes: "" } });
+  const ids = await t.seed(spec);
+  await t.open(t.itemPath(ids.collections.books, ids.items["books/md"]));
+  await openEditor(t);
+  const pm = t.page.locator(".ProseMirror").first();
+  const picker = t.page.locator(".link-picker");
+  const rows = picker.locator(".link-target");
+  const kindsOf = async () => rows.evaluateAll((els) => els.map((e) => `${e.dataset.kind}:${e.querySelector(".link-target__name").textContent}`));
+  const base = `#/collections/${ids.collections.books}/items`;
+  await pm.click({ position: { x: 4, y: 4 } });
+  await t.page.keyboard.press("Control+End");
+  const scrollBefore = await t.page.evaluate(() => document.scrollingElement.scrollTop);
+
+  // An item: `[](zanz` lists it; Enter writes a link by id whose text is the item's name.
+  await t.page.keyboard.type(" [](zanz");
+  await t.until("typing a link target lists the items that fit", async () => (await kindsOf()).includes("item:Zanzibar Target"), { timeout: 8000 });
+  await t.check("…as a Carbon list at the caret", (await picker.locator(".cds--contained-list").count()) === 1 && (await picker.locator(".cds--popover-content").count()) === 1);
+  await t.audit("link picker open", { skip: [] });
+  await t.check("the page did not scroll", (await t.page.evaluate(() => document.scrollingElement.scrollTop)) === scrollBefore);
+  await t.page.keyboard.press("Enter");
+  await t.until("Enter writes the link, the picker closes", async () => (await pm.locator("a", { hasText: "Zanzibar Target" }).count()) === 1 && (await picker.count()) === 0);
+  const itemHref = await pm.locator("a", { hasText: "Zanzibar Target" }).getAttribute("href");
+  await t.check("the link is the item's page by id", itemHref === `${base}/${ids.items["books/zz"]}`, itemHref);
+  await t.check("the editor kept its focus", await t.page.evaluate(() => document.activeElement?.classList.contains("ProseMirror")));
+
+  // Typed text is kept; Tab chooses; ↑/↓ move the choice. A view of a collection.
+  await t.page.keyboard.type(" [my text](grou");
+  await t.until("a view is offered", async () => (await kindsOf()).includes("view:Grouped"), { timeout: 8000 });
+  await t.page.keyboard.press("Tab");
+  await t.until("Tab chooses it, keeping the text typed", async () => (await pm.locator("a", { hasText: "my text" }).count()) === 1);
+  const viewId = (await t.page.evaluate(async (cid) => (await window.kubus.repo.listAllViews()).find((v) => v.collectionId === cid && v.name === "Grouped").id, ids.collections.books));
+  await t.check("…as the view's link by id", (await pm.locator("a", { hasText: "my text" }).getAttribute("href")) === `${base}?view=${viewId}`);
+
+  // ↓ ↑ and the pointer: a collection, the second option, the first again.
+  await t.page.keyboard.type(" [](author");
+  await t.until("collections are offered first", async () => (await kindsOf())[0] === "collection:Authors", { timeout: 8000 });
+  await t.page.keyboard.press("ArrowDown");
+  const activeName = () => picker.locator('[data-active="true"] .link-target__name').first().innerText({ timeout: 1000 }).catch(() => "");
+  await t.until("↓ moves the choice", async () => (await activeName()) !== "Authors" && (await activeName()) !== "");
+  await t.page.keyboard.press("ArrowUp");
+  await t.until("↑ moves it back", async () => (await activeName()) === "Authors");
+  await rows.first().click();
+  await t.until("a click chooses (the collection, by id)", async () => (await pm.locator(`a[href="#/collections/${ids.collections.authors}/items"]`).count()) === 1);
+  await t.check("…with the collection's name as text", (await pm.locator(`a[href="#/collections/${ids.collections.authors}/items"]`).innerText()) === "Authors");
+
+  // A field: `item#field` offers the fields of the items named.
+  await t.page.keyboard.type(" [](zanzibar#snip");
+  await t.until("item#field offers the field", async () => (await kindsOf()).join() === "field:Snippet", { timeout: 8000 });
+  await t.page.keyboard.press("Enter");
+  await t.until("…chosen as the item's page at that field", async () => (await pm.locator('a[href*="?field="]').count()) === 1);
+
+  // Escape closes the list and keeps the editor; typing on does not bring it back, and `)` still makes the link.
+  await t.page.keyboard.type(" [](zanz");
+  await t.until("the picker opens again", async () => (await rows.count()) > 0, { timeout: 8000 });
+  await t.page.keyboard.press("Escape");
+  await t.until("Escape closes it", async () => (await picker.count()) === 0);
+  await t.check("…and does not leave the editor", (await t.page.locator(".ProseMirror").count()) === 1 && (await t.page.evaluate(() => document.activeElement?.classList.contains("ProseMirror"))));
+  await t.page.keyboard.type("ibar)");
+  await t.wait(300);
+  await t.check("…typing on leaves the text as typed, the picker closed", (await picker.count()) === 0 && (await pm.innerText()).includes("[](zanzibar)"), await pm.innerText());
+
+  // `#/` after a space also begins one; a pasted address is found by the address.
+  await t.page.keyboard.type(` #/collections/${ids.collections.authors}/items`);
+  await t.until("an address is looked up", async () => (await kindsOf()).join() === "collection:Authors", { timeout: 8000 });
+  await t.page.keyboard.press("Enter");
+  await t.until("…and written with the name as text", async () => (await pm.locator(`a[href="#/collections/${ids.collections.authors}/items"]`).count()) === 2);
+
+  // Nothing fits: nothing shows, and typing is not disturbed.
+  await t.page.keyboard.type(" [](qqqqzzzz");
+  await t.wait(500);
+  await t.check("nothing that fits shows no list", (await picker.count()) === 0);
+  await saveEditor(t);
+  const notes = await storedNotes(t, ids);
+  await t.check(
+    "stored: plain GFM links by id",
+    notes.includes(`[Zanzibar Target](${base}/${ids.items["books/zz"]})`) &&
+      notes.includes(`[my text](${base}?view=${viewId})`) &&
+      notes.includes(`[Authors](#/collections/${ids.collections.authors}/items)`) &&
+      new RegExp(`\\[Snippet\\]\\(${base}/${ids.items["books/zz"]}\\?field=[^)]+\\)`).test(notes) &&
+      notes.includes("qqqqzzzz"),
+    notes,
+  );
+});
+
 test("markdown editing: code language picker and stored images", async (t) => {
   await t.boot();
   const spec = profileSpec("typical", { items: 2 });

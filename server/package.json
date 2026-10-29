@@ -4,13 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "start": "node src/index.ts",
-    "dev": "node --watch src/index.ts",
+    "start": "node --disable-warning=ExperimentalWarning src/index.ts",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/index.ts",
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@sqlite.org/sqlite-wasm": "^3.53.4-build2",
     "ical.js": "^2.2.1",
     "mysql2": "^3.24.6",
     "pg": "^8.13.0"

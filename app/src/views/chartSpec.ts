@@ -362,7 +362,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
           chart: "MeterChart",
           // The bar is in %; the label gives the value itself against its total.
           data: [{ group: label, value: clampPercent(percent) }],
-          options: base(options, theme, false, { height: "5rem", meter: { ...(ranges && { status: { ranges } }) } }),
+          options: base(options, theme, false, { height: "5rem", meter: { showLabels: options.showLabel, ...(ranges && { status: { ranges } }) } }),
           format,
         };
       }
@@ -379,6 +379,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
           height: "6rem",
           tooltip: tooltip(options, input),
           meter: {
+            showLabels: options.showLabel,
             proportional: {
               total: parts.total,
               totalFormatter: (total: number) => `${fmt(total)} total`,

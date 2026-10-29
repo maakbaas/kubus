@@ -1,6 +1,6 @@
 import { existsSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // The unit and integration tests (`npm test`), one project per part of the app, so a change runs
 // only the tests of what it touched: `npm test -- --project sync`, or `npm run test:changed` for the
@@ -14,8 +14,8 @@ import { defineConfig } from "vitest/config";
 // and migrations) takes seconds on a busy machine, and coverage slows the code further. The server's and
 // the connectors' tests start real servers and databases: more still.
 const coverage = process.argv.includes("--coverage");
-const project = (name: string, include: string[], timeout = 30_000) => ({
-  test: { name, include, environment: "node", testTimeout: coverage ? Math.max(timeout, 60_000) : timeout },
+const project = (name: string, include: string[], timeout = 30_000, env: Record<string, string> = {}, exclude: string[] = []) => ({
+  test: { name, include, exclude: [...configDefaults.exclude, ...exclude], env, environment: "node", testTimeout: coverage ? Math.max(timeout, 60_000) : timeout },
 });
 
 const serverInstalled = existsSync(new URL("server/node_modules/pg", import.meta.url));
@@ -43,6 +43,16 @@ export default defineConfig({
       project("storage", ["app/src/data/*.test.ts", "app/src/data/sqlite/**/*.test.ts"]),
       project("sync", ["app/src/data/sync/**/*.test.ts", "app/src/data/remote/**/*.test.ts"]),
       project("api", ["app/src/headless/**/*.test.ts"]),
+      // The storage contract again on the server's engine: the same tests of storage, sync and api, their
+      // databases on node:sqlite files (app/src/test/engine.ts) instead of sqlite-wasm in memory. Left out:
+      // what tests the browser's worker, which is wasm only.
+      project(
+        "nodesqlite",
+        ["app/src/data/*.test.ts", "app/src/data/sqlite/**/*.test.ts", "app/src/data/sync/**/*.test.ts", "app/src/data/remote/**/*.test.ts", "app/src/headless/**/*.test.ts"],
+        30_000,
+        { KUBUS_TEST_ENGINE: "node" },
+        ["app/src/data/sqlite/{worker,client,dbLock}.test.ts"],
+      ),
       project("app", ["app/src/{app,platform,ui,views,pages,workspace,test}/**/*.test.{ts,tsx}"]),
       ...(serverInstalled
         ? [project("connectors", ["server/test/connectors/**/*.test.ts"], 30_000), project("server", ["server/test/*.test.ts"], 30_000)]

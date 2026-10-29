@@ -217,6 +217,7 @@ What the app does, feature by feature (read the part you work on).
   `ViewBlock.hideHeader`, stored right away), on an item page with the layout's name toggle (a
   Markdown block too: unnamed, it is headed "Markdown" like any block): the header row goes with
   its menus (no buttons at all), so the content keeps the full width; the block can't collapse. A
+  table block's Fields popover has the same name toggle per field (hides that column's header label, `hiddenLabels`). A
   field shown without its name does the same with its label row's buttons ("Generate again"). The line between fields and
   blocks stays either way: a hidden header or name never joins two sections. What
   arranges a view is stored right away, applied to the shown and the saved view alike, so it never
@@ -274,7 +275,12 @@ What the app does, feature by feature (read the part you work on).
 - **Bookmarks** (`app/src/domain/bookmarks.ts`, table `bookmarks`): a bookmark icon on a view (tab strip,
   next to the star) and on an item (page header, next to (i)) toggles a link in the side nav's
   Bookmarks branch (of the shown space). A view bookmark opens `…/items?view=<id>`. Labels are snapshots, refreshed
-  while the bookmarked page is shown; bookmarks of deleted views / items aren't listed.
+  while the bookmarked page is shown; bookmarks of deleted views / items aren't listed (a remote collection's row has
+  no stored item: its bookmark, whose target is the row's id, lasts as long as the collection).
+- **Created and Updated** are pickable like fields (`META_FIELDS`, ids `$created` / `$updated`) but hidden by default: a
+  layout that never chose its fields (`fields: null`: item pages, table columns, card fields) leaves them out
+  (`orderFields`, `itemPageFields` in `domain/fieldLayout.ts`, the field selection's unticked rows); ticking them stores an explicit
+  list, which keeps them.
 - **Links open any scheme** (https, mailto, tel, spotify:, obsidian:, … open the app registered
   for it) except blocked ones (javascript:, data:, file:, …): `isOpenableUrl` / `safeUrl` in
   `platform/openExternal.ts`, used by Markdown (react-markdown's `urlTransform`), cells and the
@@ -289,6 +295,13 @@ What the app does, feature by feature (read the part you work on).
   href tried once per editor); one that names nothing stays as written and is resolved when clicked. `?block=` /
   `?field=` scroll to the target and flash it (`ui/useLinkTarget.ts`; blocks carry `data-block-id`, item page
   fields are found by their place among the page's entries).
+  **Link picker** (`ui/LinkPicker.tsx`, `domain/linkTargets.ts`, `app/useLinkTargets.ts`): typing `[text](` (text may
+  be empty) or `#/` after a space in the Markdown editor opens a Carbon list at the caret of the shown space's
+  collections, views and items (`item#field` lists that item's fields), filtered as typed (ranked: exact, prefix, word
+  start, inside, place; a typed or pasted address `#/collections/<id>/items…` finds the page it names). ↑/↓ move, Enter or
+  Tab choose, Escape closes it (editor keeps focus), a click chooses; choosing writes an ordinary `[text](#/collections/…)`
+  link by id (the text typed, else the option's name). No Markdown syntax is added (`linkTrigger` plugin only reports the
+  caret). Labels come from `Repository.listLabels`, per collection, read when first needed.
 - **Web addresses in plain values are links** (`Highlight`'s `links`, `splitUrls`): `http(s)://…` in text, list and
   checklist entries, AI and component text (cells, card fields, the item page) opens outside the app (`openExternal`;
   not the item, nor the value's editor). Never in titles (the title is the item's own link, or edited by a click), group
@@ -302,12 +315,14 @@ What the app does, feature by feature (read the part you work on).
   written, not what its scripts draw, and reports clicks). Inline, so view and editor have the same geometry.
   Clicking one opens `/search?q=%23name&tag=1` (Ctrl/Cmd beside, middle click a new tab): exactly that tag and the
   tags nested in it; the same text typed in the search box is a text search (`#books` also finds `#bookshelf`).
-- **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's collections
+- **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`; the icon sits in the right-most pane's strip but doesn't activate that pane, so the results open in the pane that was active when it was clicked): the shown space's collections
   (name, description), the Markdown blocks of its collection views (their text; an item view's is the same on every item, so not
   searched; a result opens the view at the block) and its items, substring match over string, markdown, HTML, AI,
   list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; a full-text index is roadmap #1).
   Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`); a result with no visible match is left out.
   An item opens at the first field that matched (`?field=`; at the top when its title matched), a Markdown block at the block.
+  A text that looks like a link address (`/`, `?`, `=` or `a#b`: `isAddressQuery`) also lists the pages whose link it fits
+  (a link list: `LinkTargetList`, the picker's matching), leaving out the collections and items already listed above.
 - **Remote collections** (`domain/sources.ts`, `collections.source`, `fields.source_column`; docs/sync.md
   "Remote sources"): a table (for InfluxDB a bucket's measurement) of one of the server's sources, shown like any collection
   but read-only. They have a page of their own, **Remotes** (`#/remotes`, `pages/RemotesPage.tsx`: the

@@ -4,7 +4,7 @@
 // Postgres (compose project `kubus-image-smoke`, container names and ports overridden, the image local), and
 // checks over HTTP what a user of the image relies on:
 //   health, the token refusal, a sync round trip (shared/sync.ts), /api/v1 (the bundled headless device, not 503),
-//   the web app's files, and a stop / start of the whole stack that keeps the data.
+//   the web app's files, and a stop / start of the whole stack that keeps the data (the headless device resuming from its volume).
 // Everything is torn down at the end, also on failure. `node tests/image-smoke.mjs [--keep] [--no-build]`.
 // Needs Docker (compose v2.24+); the first build downloads the base images (a few minutes), then it is cached.
 import { spawnSync } from "node:child_process";
@@ -192,6 +192,15 @@ try {
       const r = await call("GET", "/api/v1/spaces");
       return r.status === 200 && r.json.some((s) => s.id === SPACE.id);
     });
+  });
+  await check("the headless device resumed from its volume after the restart, instead of downloading everything again", async () => {
+    const logs = compose("logs", "server", "--no-color");
+    assert(/\[api\] Nothing saved in \/data\/headless yet/.test(logs), "the first start should find an empty /data/headless");
+    assert(/\[api\] Resuming from \/data\/headless: the saved database holds the server's data up to write \d+/.test(logs), "the second start should resume from /data/headless");
+    assert((logs.match(/downloads everything/g) ?? []).length === 1, "only the first start downloads everything");
+    // Answered at once from the saved data: the space the first run synced is there on the first request after it is ready.
+    const r = await call("GET", "/api/v1/spaces");
+    assert(r.status === 200 && r.json.some((s) => s.id === SPACE.id) && r.json.some((s) => s.name === "Via the API"), `spaces: ${r.status} ${r.text}`);
   });
   await check("the server's log shows both starts and no errors", async () => {
     const logs = compose("logs", "server", "--no-color");
