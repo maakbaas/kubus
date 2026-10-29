@@ -250,6 +250,10 @@ export interface ChartOptions {
   regions: ChartRegions;
   /** Choropleth: the hue its shades are of (Carbon's first five series colours; views/chartSpec.ts SCALE_SHADES). */
   scaleColor: ScaleColor;
+  /** Choropleth: the value its darkest shade stands for, anything above it too (the legend's "50+"); null = the largest value. */
+  scaleMax: number | null;
+  /** Choropleth: the values that are no region of its map listed under it ("Not on the map: …"). */
+  showUnmatched: boolean;
   /** Warning and danger levels: lines on a bar, line or area chart's left axis, a gauge's or meter's colour. */
   thresholds: Threshold[];
   /** Gauge and meter: thresholds as a % of the total, or values. */
@@ -375,6 +379,8 @@ export function defaultChartOptions(collection: Collection, components: Componen
     sizeField: null,
     regions: defaultRegions(),
     scaleColor: "purple",
+    scaleMax: null,
+    showUnmatched: true,
     thresholds: [],
     thresholdMode: "percent",
     xTitle: "",
@@ -469,6 +475,8 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     sizeField: field(o.sizeField),
     regions: normalizeRegions(o.regions),
     scaleColor: oneOf<ScaleColor>(values(SCALE_COLORS), o.scaleColor, d.scaleColor),
+    showUnmatched: flag(o.showUnmatched, d.showUnmatched),
+    scaleMax: (finite(o.scaleMax) ?? 0) > 0 ? finite(o.scaleMax) : null,
     thresholds: Array.isArray(o.thresholds)
       ? o.thresholds.flatMap((t) => {
           const r = record(t);

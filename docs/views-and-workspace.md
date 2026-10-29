@@ -248,12 +248,16 @@ Extension points are registries, not special cases in pages:
     offline it says so); Regions from, the field whose values are the regions (a category per value, as the X axis's); and
     Colour (`ChartOptions.scaleColor`: Carbon's first five series colours, purple by default), whose shades Carbon is given
     (`color.gradient.colors`, `scaleShades` in chartSpec.ts): its own scale without white and the palest step, so a region with
-    little is a light shade rather than white (on a dark theme from 90 to 10). A
-    value is a region when it is its code (`id`: "NL", "NL-DR") or its name (`name`), the two properties every amCharts map has
+    little is a light shade rather than white (on a dark theme from 90 to 10); Max (`scaleMax`, none by default): when a
+    value is above it, the values above are drawn as it (the darkest shade; Carbon fits its scale and legend to the values,
+    it takes no domain for a choropleth's fill) and the tooltip shows a region's own value, so one large value doesn't leave the rest of the map pale.
+    The Values section's Unit and Decimals apply to the tooltip and the legend's numbers (Carbon's `locale.number`). Not offered,
+    as Carbon's choropleth ignores them: a Label (its colour legend takes a title from a heatmap's options only) and the
+    legend's position (always below; Legend is Shown or Hidden). A value is a region when it is its code (`id`: "NL", "NL-DR") or its name (`name`), the two properties every amCharts map has
     (an English name is in a few maps only, under several keys: not used), ignoring case,
     accents and punctuation ("noord holland" is Noord-Holland, "Fryslan" Fryslân), a code first (`regionFinder`); two
     values of one region ("NL", "Netherlands") are one. A region without items is striped (Carbon's missing data); the
-    values that are no region are listed under the map ("Not on the map: Atlantis (1)", ellipsized, the whole list in its
+    values that are no region are listed under the map unless unticked (`showUnmatched`) ("Not on the map: Atlantis (1)", ellipsized, the whole list in its
     title). "Show regions" (Data, under Regions from) opens the map's regions (`views/RegionsDialog.tsx`, a small dialog:
     a long name, a code and a number don't fit an xs one): every region's name, its code and how many of the
     block's items are in it (`RegionValues.matches`; the Block settings get the block's result for it,
