@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultDateField, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveRange, rollingLabel, rollingRangeLabel, rollingRangeValue, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
+import { defaultDateField, kindValue, latestValue, periodState, periodText, stepValue, windowValue, withPeriod, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveRange, rollingLabel, rollingRangeLabel, rollingRangeValue, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
 
 describe("date periods", () => {
   it("finds the day, week (Sunday first), month and year around a day", () => {
@@ -105,6 +105,94 @@ describe("hours and minutes", () => {
     expect(rollingRangeValue({ from: -29, to: 0, unit: "minute" })).toBe("minute-29..minute+0");
     expect(rollingLabel({ kind: "hour", offset: -1 })).toBe("Last hour");
     expect(rangeOrRolling({ start: "2026-10-27T08:00", end: "2026-10-27T08:59" }, "2026-10-27")).toBe("2026-10-27T08:00..2026-10-27T08:59");
+  });
+});
+
+describe("the period as the filter bar and panel edit it", () => {
+  // Thursday 29 October 2026, 10:30 (a week runs Sunday 25 to Saturday 31).
+  const NOW = "2026-10-29T10:30";
+
+  it("tells which window of its kind a value is, and its words", () => {
+    expect(periodState("week-1", NOW)).toMatchObject({ kind: "week", window: "current", counted: true, counting: "Last week", period: { start: "2026-10-18", end: "2026-10-24" } });
+    expect(periodState("year+0..day+0", NOW)).toMatchObject({ kind: "year", window: "toDate", counting: "Year to date" });
+    expect(periodState("day-6..day+0", NOW)).toMatchObject({ kind: "day", window: "last", counting: "Last 7 days" });
+    expect(periodState("minute-29..minute+0", NOW)).toMatchObject({ kind: "hour", window: "lastMinutes" });
+    expect(periodState("2026-10-01..2026-10-31", NOW)).toMatchObject({ kind: "month", window: "fixed", counted: false, counting: "" });
+    expect(periodState("2026-10-01..2026-10-10", NOW)).toMatchObject({ kind: "range", window: null });
+    expect(periodState("day-10..day-3", NOW)).toMatchObject({ kind: "range", window: null, counted: true });
+    expect(periodState("nonsense", NOW)).toBeNull();
+    const words = (v: string) => periodText(periodState(v, NOW)!);
+    expect(words("2026-10-01..2026-10-31")).toBe(periodLabel({ start: "2026-10-01", end: "2026-10-31" }, "month"));
+    expect(words("month+0")).toBe(`This month · ${periodLabel({ start: "2026-10-01", end: "2026-10-31" }, "month")}`);
+    expect(words("day-6..day+0")).toBe(`Last 7 days · ${periodLabel({ start: "2026-10-23", end: "2026-10-29" }, "range")}`);
+  });
+
+  it("steps a rolling period as a rolling one and a chosen one by its kind", () => {
+    expect(stepValue("week+0", -1, NOW)).toBe("week-1");
+    expect(stepValue("week-1", -1, NOW)).toBe("week-2");
+    expect(stepValue("month-2", 1, NOW)).toBe("month-1");
+    expect(stepValue("hour+0", 1, NOW)).toBe("hour+1");
+    expect(stepValue("2026-10-01..2026-10-31", -1, NOW)).toBe("2026-09-01..2026-09-30");
+    expect(stepValue("2026-12-01..2026-12-31", 1, NOW)).toBe("2027-01-01..2027-01-31");
+    expect(stepValue("2026-10-29..2026-10-29", 1, NOW)).toBe("2026-10-30..2026-10-30");
+    expect(stepValue("2026-10-14T09:00..2026-10-14T09:59", 1, NOW)).toBe("2026-10-14T10:00..2026-10-14T10:59");
+    // A range moves by its length, as does a month stepped as a range.
+    expect(stepValue("2026-10-01..2026-10-10", 1, NOW)).toBe("2026-10-11..2026-10-20");
+    expect(stepValue("2026-10-01..2026-10-31", 1, NOW, "range")).toBe("2026-11-01..2026-12-01");
+    // Up to now there is nothing before or after.
+    expect(stepValue("day-6..day+0", -1, NOW)).toBeNull();
+    expect(stepValue("week+0..day+0", 1, NOW)).toBeNull();
+    expect(stepValue("nonsense", 1, NOW)).toBeNull();
+  });
+
+  it("changes the kind keeping the window and the moment", () => {
+    // Counted from now stays so, in the other kind (last week: this month).
+    expect(kindValue("week-1", "month", NOW)).toBe("month+0");
+    // A chosen one is the other kind around the period shown.
+    expect(kindValue("2026-10-01..2026-10-31", "year", NOW)).toBe("2026-01-01..2026-12-31");
+    expect(kindValue("2026-10-01..2026-10-31", "day", NOW)).toBe("2026-10-01..2026-10-01");
+    expect(kindValue("2026-10-14T09:00..2026-10-14T09:59", "day", NOW)).toBe("2026-10-14..2026-10-14");
+    expect(kindValue("2026-10-14..2026-10-14", "hour", NOW)).toBe("2026-10-14T00:00..2026-10-14T00:59");
+    // The last n starts as the other unit's own n; so far isn't of a day; n minutes are of an hour.
+    expect(kindValue("day-6..day+0", "month", NOW)).toBe("month-11..month+0");
+    expect(kindValue("year+0..day+0", "month", NOW)).toBe("month+0..day+0");
+    expect(kindValue("year+0..day+0", "day", NOW)).toBe("day+0");
+    expect(kindValue("minute-29..minute+0", "hour", NOW)).toBe("minute-29..minute+0");
+    expect(kindValue("minute-29..minute+0", "week", NOW)).toBe("week-3..week+0");
+    // No period yet (or a range): the current one of the kind.
+    expect(kindValue(null, "month", NOW)).toBe("month+0");
+    expect(kindValue("2026-10-01..2026-10-10", "week", NOW)).toBe("week+0");
+    expect(windowValue("week", "fixed", "2026-10-29")).toBe("2026-10-25..2026-10-31");
+    expect(windowValue("day", "last", NOW, 3)).toBe("day-2..day+0");
+  });
+
+  it("jumps to the most recent period of the kind, rolling", () => {
+    expect(latestValue("2026-09-01..2026-09-30", NOW)).toBe("month+0");
+    expect(latestValue("week-3", NOW)).toBe("week+0");
+    expect(latestValue("2026-03-02T14:00..2026-03-02T14:59", NOW)).toBe("hour+0");
+    expect(latestValue("2026-03-02..2026-03-02", NOW)).toBe("day+0");
+    expect(latestValue("day-6..day+0", NOW)).toBe("day+0");
+    expect(latestValue("2026-10-01..2026-10-10", NOW)).toBeNull();
+    expect(latestValue("nonsense", NOW)).toBeNull();
+    // The jump is itself a value that resolves to the period of now.
+    expect(resolveRange(latestValue("2026-03-02..2026-03-02", NOW)!, NOW)).toEqual({ start: "2026-10-29", end: "2026-10-29" });
+  });
+
+  it("writes the period into the filters: the rule it has, else a new first one", () => {
+    const other = { id: "o", fieldId: "x", operator: "is" as const, value: "1" };
+    const made = withPeriod([other], "d", "month+0");
+    expect(made).toHaveLength(2);
+    expect(made[0]).toMatchObject({ fieldId: "d", operator: "between", value: "month+0" });
+    expect(made[1]).toBe(other);
+    // The existing rule keeps its id and field (the one picked in the panel), others stay where they are.
+    const changed = withPeriod(made, "ignored", "week-1");
+    expect(changed[0]).toEqual({ ...made[0], value: "week-1" });
+    expect(changed[1]).toBe(other);
+    // Counted from a page item's date stays so while the new period is counted from a day, and goes with a chosen one.
+    const anchored = [{ id: "r", fieldId: "d", operator: "between" as const, value: "day-6..day+0@$item.f1" }];
+    expect(withPeriod(anchored, "d", "day-13..day+0")[0].value).toBe("day-13..day+0@$item.f1");
+    expect(withPeriod(anchored, "d", "2026-10-01..2026-10-07")[0].value).toBe("2026-10-01..2026-10-07");
+    expect(withPeriod(anchored, "d", "day+0", null)[0].value).toBe("day+0");
   });
 });
 

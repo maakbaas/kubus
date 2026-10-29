@@ -10,7 +10,7 @@
 // holding 1 January. Storage-free and UI-free.
 
 import { formatDate, formatTime } from "./fieldKinds";
-import { pickableFields, type Collection, type FieldDef } from "./model";
+import { newId, pickableFields, type Collection, type FieldDef } from "./model";
 import type { FilterRule } from "./query";
 
 export type PeriodKind = "hour" | "day" | "week" | "month" | "year" | "range";
@@ -294,6 +294,105 @@ export function periodLabel(period: Period, kind: PeriodKind, locale?: string): 
   }
 }
 
+/** An hour, day, week, month or year (not a range). */
+export type Unit = Exclude<PeriodKind, "range">;
+
+/**
+ * Which one of its kind a period is: counted from now (this week, last week: it moves on with
+ * time), this week, month or year so far, the last n of them up to now (n minutes for an hour), or
+ * a chosen one (fixed days).
+ */
+export type Window = "current" | "toDate" | "last" | "lastMinutes" | "fixed";
+/** The n a "Last n" starts with. */
+export const LAST: Record<RangeUnit, number> = { minute: 30, hour: 24, day: 7, week: 4, month: 12, year: 3 };
+
+/** What a between rule's value (without its anchor) stands for: its days, kind and window. */
+export interface PeriodState {
+  /** Its first and last day or minute as of now. */
+  period: Period;
+  kind: PeriodKind;
+  /** Null for a range. */
+  window: Window | null;
+  rolling: Rolling | null;
+  rollingRange: RollingRange | null;
+  toDate: ToDate | null;
+  /** The last n up to now (another rolling range, not up to today, is a range). */
+  last: RollingRange | null;
+  /** Counted from now (it moves on with time). */
+  counted: boolean;
+  /** "Last week", "Year to date", "Last 7 days": the words for a counted period, else "". */
+  counting: string;
+}
+
+/** What a between rule's value is as of now, or null when it is no period. */
+export function periodState(value: string, now = nowMinute()): PeriodState | null {
+  const period = resolveRange(value, now);
+  if (!period) return null;
+  const rolling = parseRolling(value);
+  const rollingRange = parseRollingRange(value);
+  const toDate = parseToDate(value);
+  const last = rollingRange && rollingRange.to === 0 ? rollingRange : null;
+  const lastKind: PeriodKind | null = last ? (last.unit === "minute" ? "hour" : (last.unit ?? "day")) : null;
+  const kind: PeriodKind = lastKind ?? (toDate || (rolling ? rolling.kind : rollingRange ? "range" : periodKind(period)));
+  const window: Window | null =
+    kind === "range" ? null : last ? (last.unit === "minute" ? "lastMinutes" : "last") : toDate ? "toDate" : rolling ? "current" : "fixed";
+  const counting = toDate ? toDateLabel(toDate) : rolling ? rollingLabel(rolling) : rollingRange ? rollingRangeLabel(rollingRange) : "";
+  return { period, kind, window, rolling, rollingRange, toDate, last, counted: !!(rolling || rollingRange || toDate), counting };
+}
+
+/** A period's words in two parts: how it is counted ("Last week", "" for a chosen one) and its days ("Week 43 · 18 Oct – 24 Oct 2026"). */
+export function periodParts(state: PeriodState, kind: PeriodKind = state.kind): { counting: string; days: string } {
+  const { period, counting, toDate, rollingRange } = state;
+  return { counting, days: periodLabel(period, counting && (toDate || rollingRange) ? "range" : kind) };
+}
+
+/** A period in words as the date filter's line shows it: "October 2026", "Last week · Week 43 · …", "Last 7 days · 23 Oct – 29 Oct 2026". */
+export function periodText(state: PeriodState, kind: PeriodKind = state.kind): string {
+  const { counting, days } = periodParts(state, kind);
+  return counting ? `${counting} · ${days}` : days;
+}
+
+/** A window of a unit: the current one, so far, the last n (`n`, else the unit's own), or the chosen one around `at`. */
+export function windowValue(unit: Unit, window: Window, at: string, n?: number): string {
+  if (window === "current") return rollingValue({ kind: unit, offset: 0 });
+  if (window === "toDate" && unit !== "hour" && unit !== "day") return toDateValue(unit);
+  if (window === "last" || window === "lastMinutes") {
+    const rangeUnit: RangeUnit = window === "lastMinutes" ? "minute" : unit;
+    return rollingRangeValue({ unit: rangeUnit, from: 1 - (n ?? LAST[rangeUnit]), to: 0 });
+  }
+  return rangeValue(periodAround(unit, at));
+}
+
+/**
+ * The period of another unit: the same window in it (a chosen one around the period shown; the
+ * current one when there is none yet). So far isn't of an hour or a day, n minutes are of an hour,
+ * and the last n of another unit starts as its own n (the last 7 days: the last 12 months).
+ */
+export function kindValue(value: string | null, unit: Unit, now = nowMinute()): string {
+  const state = value ? periodState(value, now) : null;
+  const window = state?.window ?? null;
+  const next: Window = window === "toDate" && (unit === "hour" || unit === "day") ? "current" : window === "lastMinutes" && unit !== "hour" ? "last" : (window ?? "current");
+  return windowValue(unit, next, state?.period.start ?? now);
+}
+
+/**
+ * The period before (-1) or after (1): a rolling one stays rolling (this week, last week), a chosen
+ * one moves by its kind (a range by its length; `kind` given, else the one it is). Null for one up
+ * to now (so far, the last n), which has nothing before or after it, and for a value that is no period.
+ */
+export function stepValue(value: string, direction: 1 | -1, now = nowMinute(), kind?: PeriodKind): string | null {
+  const state = periodState(value, now);
+  if (!state || state.toDate || state.last) return null;
+  if (state.rolling) return rollingValue({ kind: state.rolling.kind, offset: state.rolling.offset + direction });
+  return rangeValue(shiftPeriod(state.period, kind ?? state.kind, direction));
+}
+
+/** The most recent period of the value's kind, rolling: this hour, today, this week, month or year. Null for a range or no period. */
+export function latestValue(value: string, now = nowMinute()): string | null {
+  const state = periodState(value, now);
+  return state && state.kind !== "range" ? rollingValue({ kind: state.kind, offset: 0 }) : null;
+}
+
 /** The fields a date filter can go by: date and date & time fields in field order, then Created and Updated. */
 export const dateFields = (collection: Collection): FieldDef[] =>
   pickableFields(collection).filter((f) => f.kind === "date" || f.kind === "datetime");
@@ -312,6 +411,19 @@ export const periodRule = (filters: FilterRule[]) => filters.find((r) => r.opera
  * filter works it out from that item's value (query.ts resolvePageValues); elsewhere it matches nothing.
  */
 const ANCHOR = "@$item.";
+
+/**
+ * The filters with the period set to `value`: the existing rule's (keeping its field, and its
+ * counted-from date when `from` is not given and the new period is counted from a day), else a new
+ * "between" rule on `fieldId`, first.
+ */
+export function withPeriod(filters: FilterRule[], fieldId: string, value: string, from?: string | null): FilterRule[] {
+  const rule = periodRule(filters);
+  const anchor = from === undefined ? (rule ? splitAnchor(rule.value).fieldId : null) : from;
+  const fromDay = parseRolling(value) || parseRollingRange(value) || parseToDate(value);
+  const written: FilterRule = { id: rule?.id ?? newId(), fieldId: rule?.fieldId ?? fieldId, operator: "between", value: anchoredValue(value, fromDay ? anchor : null) };
+  return rule ? filters.map((r) => (r === rule ? written : r)) : [written, ...filters];
+}
 
 /** A period value and the page item's date field it is counted from (null: today). */
 export function splitAnchor(value: string): { value: string; fieldId: string | null } {

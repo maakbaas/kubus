@@ -14,6 +14,8 @@ function matrixPages(ids) {
     ["collection cards", `/collections/${books}/items?view=${ids.views["books/Cards"]}`],
     ["collection grouped", `/collections/${books}/items?view=${ids.views["books/Grouped"]}`],
     ["collection blocks", `/collections/${books}/items?view=${ids.views["books/Blocks"]}`],
+    // The filter bar (Show filter bar) with a date period: its Filter button, ‹ label ›, "this one" and the kind.
+    ["collection filter bar", `/collections/${books}/items?view=${ids.views["books/Filter bar"]}`],
     ["item page", `/collections/${books}/items/${ids.items["books/i0"]}`],
     ["item page (other item)", `/collections/${books}/items/${ids.items["books/i1"]}`],
     ["author page", `/collections/${authors}/items/${ids.items["authors/t0"]}`],
@@ -43,7 +45,7 @@ function matrixTests(style, viewports = MATRIX_VIEWPORTS) {
     test(`${style} content @ ${vp}`, async (t) => {
       await t.boot();
       // Long content has long field names too (table headers, card labels, item pages, editors).
-      const ids = await t.seed(matrixSpec(style, { items: style === "short" ? 3 : 14, longNames: style === "long" }));
+      const ids = await t.seed(matrixSpec(style, { items: style === "short" ? 3 : 14, longNames: style === "long", filterBar: true }));
       for (const [label, path] of matrixPages(ids)) {
         await t.open(path);
         await t.audit(label);

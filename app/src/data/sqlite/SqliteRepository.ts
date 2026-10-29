@@ -124,7 +124,7 @@ const toField = (r: FieldRow): FieldDef => ({
 
 /** A stored view as a CollectionView (its config parsed and normalized). */
 function toView(r: ViewRow): CollectionView {
-  const { filters, blocks, editable, collapsed } = parseViewConfig(r.config);
+  const { filters, blocks, editable, collapsed, filterBar } = parseViewConfig(r.config);
   return {
     id: r.id,
     collectionId: r.collection_id,
@@ -134,6 +134,7 @@ function toView(r: ViewRow): CollectionView {
     blocks,
     editable,
     collapsed,
+    ...(filterBar && { filterBar }),
     position: r.position,
     isDefault: r.is_default === 1,
     createdAt: r.created_at,
@@ -578,7 +579,7 @@ export class SqliteRepository implements Repository {
 
   async saveView(view: CollectionView): Promise<void> {
     const ts = now();
-    const config = JSON.stringify({ filters: view.filters, blocks: view.blocks, editable: view.editable, collapsed: view.collapsed });
+    const config = JSON.stringify({ filters: view.filters, blocks: view.blocks, editable: view.editable, collapsed: view.collapsed, filterBar: view.filterBar });
     await this.db.write([
       {
         sql: `INSERT INTO views (id, collection_id, space_id, name, config, position, created_at, updated_at)

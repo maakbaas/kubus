@@ -49,6 +49,25 @@ Extension points are registries, not special cases in pages:
   `@$item.<field>`, `anchoredValue` in domain/datePeriod.ts, worked out for each page's item by `resolvePageValues`;
   elsewhere, or for an item without that date, it matches nothing). `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.
+- **Filter bar** (View settings → "Show filter bar", `CollectionView.filterBar`, `views/FilterBar.tsx`): a bar just below the
+  view tab strip with the view's Filter button (it leaves the toolbar for the bar while the bar is shown; same states:
+  grey while open, blue while rules are in effect, same panel) and the view filter's date period without opening the
+  panel: ‹ label › (the label is the panel's period line, "This month · October 2026", "Last 7 days · …", "Any date"
+  while there is none; ‹ › step as the panel's do, a rolling one stays rolling, a chosen one by its kind, a range by its
+  length, off for a period up to now), the "most recent" button (the calendar: this hour / today / this week / month /
+  year as a rolling `kind+0`, whatever the period was; off for a range or no period) and the kind switch (a dropdown:
+  Hour, Day, Week, Month, Year, no Range; it keeps the Which as the panel's switcher does, `kindValue`; with no period
+  it creates one on the default field, the first date or date & time field, else Updated). The "by <field>", Which, ×
+  and Range stay in the panel. The pure steps are `periodState`, `stepValue`, `kindValue`, `latestValue`,
+  `withPeriod` (domain/datePeriod.ts), shared with `DatePeriodFilter`. Every change is an edit of the view's filter
+  (`view.filters`): the tab gets its * and Save appears, which is how the view shows it deviates from its saved period;
+  all blocks follow. The setting itself is stored with the view right away (like arranging blocks; no *), as
+  `filterBar: true` in the view's config JSON (absent = off; an optional key, so `SYNC_COMPATIBLE` is unchanged:
+  an older device ignores it, and saves the view without it if it edits it). One row down to 320 px: icon buttons for
+  ‹ › and the calendar (tooltips), the label takes the room that is left between ‹ and › (ellipsized, whole in its
+  tooltip), so the buttons never move while stepping. Switching the setting while a panel (View settings) is open moves
+  the Filter button only when it closes (`panels.hold`), so the buttons after it don't jump under the open panel; the
+  bar itself shows at once.
 - **Limit** (a block's Filter panel, beside Add filter: "Show [100] items at a time"; `ViewBlock.limit`, saved with the
   view): how many items it shows at first and each "Show more" adds; empty is all. Unset it is 100, or all for a block
   that needs every item (a chart: `BlockUses.all`; `blockLimit`). A remote collection is asked that many rows a page
@@ -178,7 +197,7 @@ Extension points are registries, not special cases in pages:
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
 - **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + JSON config
-  `{ filters, blocks, editable, collapsed }` (`parseViewConfig`).
+  `{ filters, blocks, editable, collapsed, filterBar? }` (`parseViewConfig`).
   Every new collection gets an ordinary "All" view (table, all items, sorted by title) in the space it is made in, created
   with the collection in `saveCollection`; it can be renamed (view settings), edited, starred or deleted like
   any other; "+" adds one ("New", then "New 2", …) as a copy of what is shown, unsaved changes
@@ -186,7 +205,7 @@ Extension points are registries, not special cases in pages:
   "+" sits after the last tab. The tab bar's right end holds the view's tools after Discard /
   Save, delete, star and bookmark: Search (opens a search bar below the tabs; closes when emptied
   or with Escape on an empty box; the blocks filter once typing pauses 150 ms, an emptied box at once; while it has text, a block listing items with none matching is
-  left out, `BlockView`), Filter (the view's) and View settings (name, blocks);
+  left out, `BlockView`), Filter (the view's; on the filter bar instead while "Show filter bar" is on) and View settings (name, Show filter bar, Fields are editable, blocks);
   each block's own menus (Filter, Sort and group, Fields, Block settings: name, show as, type options) are in its header. The collection page opens the starred view (`views.is_default`, at most one per collection and space,
   set via `setDefaultView`), else the first; a space without stored views shows a virtual "All" table (id `default`; stored when
   changed, renamed or joined by another view), so a collection always has a view and the last can't be

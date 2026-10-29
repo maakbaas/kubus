@@ -81,7 +81,9 @@ a device that hasn't reloaded yet can be older or newer.
 3. A synced table or column: change `SYNC_TABLES` in `shared/sync.ts` too, raise `SYNC_VERSION` and
    record the new fingerprint in `spec.test.ts`. A NOT NULL column gets `defaults`.
 4. Decide `SYNC_COMPATIBLE`. **Unchanged** for an added table or column (and a new optional value):
-   older devices leave it alone. **Raised to `SYNC_VERSION`** when older devices would get the data
+   older devices leave it alone. (A new optional key in a JSON column, like a view's `filterBar` in its
+   config, is such a value: an older device ignores it, and drops it only if it saves that view itself; a
+   display preference lost that way is not worth locking older devices out.) **Raised to `SYNC_VERSION`** when older devices would get the data
    wrong: a value's meaning or format changes (a view's config JSON, say), a value an older device's
    CHECK refuses (a new field kind), a renamed or dropped column. The server then turns older devices
    away until they are updated, so update the server first.

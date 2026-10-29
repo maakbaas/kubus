@@ -13,7 +13,7 @@
 //                              choiceFilter?: [{ field: targetFieldKey, operator, value }] }],
 //                   items: [{ key?, space?: spaceKey, values: { fieldKey: value } }],
 //                   views?: [{ name, blocks: [partial ViewBlock with kind/options/layout/groupBy/sort;
-//                              componentKey (a shared component) or local: code (its own)], filters?, isDefault? }],
+//                              componentKey (a shared component) or local: code (its own)], filters?, isDefault?, filterBar? (Show filter bar) }],
 //                   (a block filter value "$item.@key": the page item's field by key)
 //                   itemViews?: [{ name, layout }] }],
 //   bookmarks: [{ kind: "item"|"view", collection, item?, view?, label }],
@@ -123,7 +123,7 @@ async function __seedInPage(spec) {
     for (const [i, v] of (c.views || []).entries()) {
       const id = i === 0 && existing[0] && v.replaceAll !== false ? existing[0].id : uid();
       ids.views[`${c.key}/${v.name}`] = id;
-      await repo.saveView({ id, collectionId: ids.collections[c.key], spaceId: ids.spaces[c.space || "default"], name: v.name, position: i, isDefault: !!v.isDefault, filters: v.filters || [], blocks: v.blocks.map(mapBlock), collapsed: { blocks: [], groups: {} }, createdAt: stamp(), updatedAt: stamp() });
+      await repo.saveView({ id, collectionId: ids.collections[c.key], spaceId: ids.spaces[c.space || "default"], name: v.name, position: i, isDefault: !!v.isDefault, filters: v.filters || [], blocks: v.blocks.map(mapBlock), collapsed: { blocks: [], groups: {} }, ...(v.filterBar ? { filterBar: true } : {}), createdAt: stamp(), updatedAt: stamp() });
     }
     if (c.itemViews) {
       await repo.saveItemViews(ids.collections[c.key], c.itemViews.map((v, i) => ({ id: uid(), name: v.name, isDefault: i === 0, collapsed: { blocks: [], groups: {} }, layout: { ...mapLayout(v.layout), blocks: (v.layout && v.layout.blocks || []).map(mapBlock) } })));
@@ -291,6 +291,8 @@ function profileSpec(style, { items = 12, authors = 6, fieldsExtra = 0, longName
 function matrixSpec(style, opts = {}) {
   const spec = profileSpec(style, opts);
   const books = spec.collections[0];
+  // `opts.filterBar`: one more view with the filter bar shown and a date period (this month, by Updated: everything seeded now).
+  const filterBarView = opts.filterBar ? [{ name: "Filter bar", filterBar: true, filters: [{ id: "fb-period", fieldId: "$updated", operator: "between", value: "month+0" }], blocks: [{ kind: "table" }] }] : [];
   books.views = [
     { name: "All", blocks: [{ kind: "table" }] },
     { name: "Cards", blocks: [{ kind: "cards", options: { coverFieldId: "@cover", cardWidth: 14, coverRatio: "auto", showTitle: true, coverBeside: false } }] },
@@ -304,6 +306,7 @@ function matrixSpec(style, opts = {}) {
         { kind: "component", local: "{{ 21 * 2 }}" },
       ],
     },
+    ...filterBarView,
   ];
   spec.bookmarks = [
     { kind: "item", collection: "books", item: "books/i0", label: style === "long" ? TEXT.long[1] : "First book" },
