@@ -1,16 +1,16 @@
 # Testing
 
-Three kinds of tests, each split by the part of the app it covers, so that a change runs the
-tests of what it touched and CI stays a few minutes.
+**The catalog of every suite (what it covers, needs, its time budget, how to run it, which CI job runs it) is
+`tests/README.md`**; `npm run suite -- list` shows the names and `npm run suite -- <name…>` runs any of them
+(`tests/run.mjs`, which times each and fails one over its budget). This file is about the conventions: what the
+projects cover, what to run for a change, coverage and how to write tests.
 
-| Kind | Where | Run | CI (`.github/workflows/`) |
-|---|---|---|---|
-| Unit and integration (vitest, seconds) | next to the code in `app/src`; the server's in `server/test` | `npm test` (all), `npm test -- --project <name>`, `npm run test:changed` | `test.yml` (unit job, Linux, with Postgres) and `build.yml` (Windows: the app's projects) |
-| GUI (playwright-cli, minutes to an hour) | `gui-tests/suites/NN-*.js` | `npm run test:gui:smoke`, `npm run test:gui -- --changed [--smoke]`, `--suite NN` | `test.yml` (gui job): the smoke tests of the suites the branch's changes reach; all smoke tests on main |
-| Rust | `desktop/` | `cargo test` (with clippy, fmt) | `build.yml` |
-
-The full GUI suite (~275 tests, about an hour) is not in CI: run it before larger changes and
-before calling the GUI stable (`gui-tests/README.md`).
+Three kinds of tests, each split by the part of the app it covers, so that a change runs the tests of what it
+touched: vitest (next to the code in `app/src`, the server's in `server/test`; seconds), the GUI suites
+(`gui-tests/suites/NN-*.js`, playwright-cli; minutes each, about an hour in all) and Rust (`desktop/`, `cargo test`
+in `build.yml`). CI: `test.yml` runs the critical ones on every push in parallel jobs (typecheck, unit, server, GUI
+smoke of the changed areas); `nightly.yml` the slow ones (the connectors' real services, the full GUI suite sharded
+over jobs, merged coverage).
 
 ## The vitest projects
 
@@ -37,7 +37,7 @@ database and drops it again (`server/test/postgres.ts`):
 docker run -d --name kubus-test-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16
 export KUBUS_TEST_POSTGRES=postgres://postgres:postgres@localhost:5432/postgres
 npm ci --prefix server && npm run build:headless
-npm test -- --project server --project connectors
+npm run suite -- server connectors
 ```
 
 The MySQL / MariaDB connector's tests (`mysql.test.ts`) get their servers likewise from `KUBUS_TEST_MYSQL`
@@ -57,11 +57,11 @@ for one); `tests/env.sh` sets a variable for each that answers, and a test file 
 
 | Service (pinned image) | Variable | Files | Seeded through | Start / test time (4 busy CPUs) | CI |
 |---|---|---|---|---|---|
-| InfluxDB 2.7.12 | `KUBUS_TEST_INFLUX` (`_ORG`, `_TOKEN`: the image's setup) | `influx.real.test.ts` | its HTTP API: a bucket, line protocol, a read-only token (`influxSeed.ts`) | 4 s / 35 s | yes |
-| n8n 2.45.5 | `KUBUS_TEST_N8N` | `n8n.real.test.ts` | owner setup and API keys (`/rest`), data tables (`/api/v1/data-tables`) (`n8nSeed.ts`) | 1 to 2 min / 17 s | yes |
-| Actual Budget server 26.10.0 + actual-http-api 26.10.1 | `KUBUS_TEST_ACTUAL` (`_KEY`) | `actual.real.test.ts` | actual-http-api's write routes; the empty budget is made by `actualSeed.cjs` when the `actual-api` service starts | 45 s / 25 s | no: two services and a mounted script (a job's service containers can have neither) |
+| InfluxDB 2.7.12 | `KUBUS_TEST_INFLUX` (`_ORG`, `_TOKEN`: the image's setup) | `influx.real.test.ts` | its HTTP API: a bucket, line protocol, a read-only token (`influxSeed.ts`) | 4 s / 35 s | nightly |
+| n8n 2.45.5 | `KUBUS_TEST_N8N` | `n8n.real.test.ts` | owner setup and API keys (`/rest`), data tables (`/api/v1/data-tables`) (`n8nSeed.ts`) | 1 to 2 min / 17 s | nightly |
+| Actual Budget server 26.10.0 + actual-http-api 26.10.1 | `KUBUS_TEST_ACTUAL` (`_KEY`) | `actual.real.test.ts` | actual-http-api's write routes; the empty budget is made by `actualSeed.cjs` when the `actual-api` service starts | 45 s / 25 s | nightly (compose: two services and a mounted script, which a job's service containers can't have) |
 
-A CI job that has the service sets the variable and a missing one is an error there. Docker Hub rate-limits
+Where `CI` is set a missing variable is an error (the `connectors` suite leaves these files out; `connectors-real` is the suite that runs them). Docker Hub rate-limits
 anonymous pulls: `mirror.gcr.io/<image>` has the same images (`docker tag` them to the pinned names).
 
 What the connector tests ask, for every connector that can answer it:
@@ -99,6 +99,7 @@ can't drift apart unnoticed: a change to the sync protocol changes both and runs
 | `server/src/` | `server` (and `connectors` for `sources.ts`) | none |
 | `app/src/views/` | `domain` | 05, 06, 10, 12, 22 |
 | `app/src/pages/ItemPage.tsx`, `ui/FieldInput.tsx` and the editors | – | 04, 12, 19, 27 (Markdown 08) |
+| `pages/CollectionsPage.tsx`, `RemotesPage.tsx`, `CollectionEditorPage.tsx`, `SearchPage.tsx`, `ui/SearchBar.tsx`, `app/NavTree.tsx` | – | 29 (editor also 07, 17, 27) |
 | `app/src/styles.css`, `ui/PageHeader.tsx`, anything every page uses | – | all |
 
 Before pushing: `npm run typecheck` (and `npm run typecheck --prefix server`, `npm run typecheck:test --prefix server` for server code),
@@ -139,4 +140,5 @@ npm run coverage:report                       # merges what exists: coverage/ind
 - `fixture-v1.sql` (with `schema-v1.sql`) is frozen: a migration must keep its rows, and the app
   must read them as they were. A later release whose data takes new shapes gets a fixture of
   its own version, made with that release's app.
-- A GUI suite's new area goes in `gui-tests/areas.mjs`, so `--changed` finds it.
+- A GUI suite's new area goes in `gui-tests/areas.mjs`, so `--changed` finds it. A new suite file needs nothing else: `npm run suite` and the nightly shards derive from `gui-tests/suites/` (a shard group in `tests/run.mjs` only balances the time).
+- A suite stays within 10 minutes (`tests/run.mjs` fails it otherwise); a new kind of suite gets an entry in `tests/run.mjs` and a row in `tests/README.md`.

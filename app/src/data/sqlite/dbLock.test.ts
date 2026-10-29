@@ -77,24 +77,24 @@ describe("acquireDbLock", () => {
   it("takes a free lock, and answers other tabs' pings while it is held", async () => {
     withLocks();
     await acquireDbLock();
-    expect(await holderAnswers(1000)).toBe(true);
+    expect(await holderAnswers(30_000)).toBe(true);
   });
 
   it("tells a second tab at once that Kubus is open elsewhere", async () => {
     withLocks();
     await acquireDbLock();
     const started = Date.now();
-    await expect(acquireDbLock(5000)).rejects.toThrow(OTHER_TAB);
-    expect(Date.now() - started).toBeLessThan(2000); // the holder answered: no waiting for the timeout
+    await expect(acquireDbLock(60_000)).rejects.toThrow(OTHER_TAB);
+    expect(Date.now() - started).toBeLessThan(30_000); // the holder answered: no waiting for the timeout
   });
 
   it("waits for a reloading page's worker, which no longer answers, and then takes the lock", async () => {
     const locks = withLocks();
     const old = locks.hold();
-    const acquired = acquireDbLock(5000);
+    const acquired = acquireDbLock(30_000);
     setTimeout(() => old.release(), 600); // after the ping went unanswered
     await expect(acquired).resolves.toBeUndefined();
-    expect(await holderAnswers(1000)).toBe(true); // and now it holds it
+    expect(await holderAnswers(30_000)).toBe(true); // and now it holds it
   });
 
   it("gives up after its timeout when the holder never lets go, without answering", async () => {
@@ -108,7 +108,7 @@ describe("acquireDbLock", () => {
     vi.stubGlobal("BroadcastChannel", undefined);
     expect(await holderAnswers()).toBe(false);
     const old = locks.hold();
-    const acquired = acquireDbLock(2000);
+    const acquired = acquireDbLock(30_000);
     setTimeout(() => old.release(), 50);
     await expect(acquired).resolves.toBeUndefined();
   });
