@@ -51,7 +51,7 @@ export default defineConfig({
         ["app/src/data/*.test.ts", "app/src/data/sqlite/**/*.test.ts", "app/src/data/sync/**/*.test.ts", "app/src/data/remote/**/*.test.ts", "app/src/headless/**/*.test.ts"],
         30_000,
         { KUBUS_TEST_ENGINE: "node" },
-        ["app/src/data/sqlite/{worker,client,dbLock}.test.ts"],
+        ["app/src/data/sqlite/{worker,client,dbLock,backup}.test.ts"],
       ),
       project("app", ["app/src/{app,platform,ui,views,pages,workspace,test}/**/*.test.{ts,tsx}"]),
       ...(serverInstalled

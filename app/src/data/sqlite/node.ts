@@ -159,6 +159,15 @@ export class NodeSqlClient implements SqlClient {
     this.engine.wipe();
   }
 
+  /** Backups are a device's (Settings → Backup, on sqlite-wasm); the headless device's file is only a cache of the server's data. */
+  async exportDatabase(): Promise<Uint8Array> {
+    throw new Error("The headless device makes no backups: its database is a cache of the server's.");
+  }
+
+  async importDatabase(): Promise<void> {
+    throw new Error("The headless device restores no backups: its database is a cache of the server's.");
+  }
+
   /** Folds the write-ahead log into the file (so it is one file again) and closes the database. */
   async close(): Promise<void> {
     if (this.closed) return;

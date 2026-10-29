@@ -89,3 +89,32 @@ a volume in `docker-compose.yml`), so after a restart the API answers at once in
 it is only a cache, and one server may use the directory. Unset, it is kept in memory.
 Running the server from the repository instead of the image: `npm run build:headless` first, or the
 API answers 503.
+
+## Where your data lives
+
+Kubus is local first: your data is a SQLite database inside the app, on the device you use it on. It
+leaves that device only when you connect a server. What the database sits in, and so what can make it
+disappear, depends on how you run Kubus:
+
+| You run Kubus as | Where the data is | What loses it |
+|---|---|---|
+| **A website in a PC browser** | The site's private storage (OPFS) in your browser profile, one database per site address: `http://localhost:1420` and `https://kubus.example.com` are two apps. Kubus asks the browser to keep it (`navigator.storage.persist()`); without that the browser may delete it when the disk runs low. | Clearing the site's data or cookies; a private window (when it closes; some browsers don't offer storage there at all, and Kubus then warns that changes are lost on reload); the browser dropping it when the disk is low and it didn't grant to keep it. Another browser, profile or address shows an empty app. Kubus opens in one tab at a time. |
+| **The desktop app** (Tauri) | The app's own web view profile: on Windows `%LOCALAPPDATA%\com.kubus.app\EBWebView`. Clearing your browser's data doesn't touch it. | Deleting that folder; uninstalling can remove it, depending on the installer. On macOS and Linux (WKWebView, WebKitGTK) the location is the system web view's and not verified yet. |
+| **Safari on iPhone / iPad, in a tab** | Safari's storage for the site. | Safari deletes a site's data after 7 days without a visit, and may evict it when storage runs low. Don't keep data only here. |
+| **Chrome on Android, in a tab** | Chrome's storage for the site. | Clearing the site's data; Chrome evicting it under storage pressure unless it granted persistent storage (it decides itself). |
+| **The iOS home-screen app** | Its own storage, separate from the Safari tab's: what you entered in Safari is not in it, and the other way round. Exempt from the 7-day rule, and Kubus asks to keep it. | Deleting the icon deletes its data. Storage pressure can still evict it. |
+| **The installed app on Android** (Chrome's "Install app") | Chrome's storage for the site, the same as the browser tab's. Chrome usually keeps installed apps' data. | Clearing Chrome's site data; uninstalling the app. |
+
+What protects it:
+
+- **A sync server** (see above): the server holds a copy and every other device that syncs holds one
+  too. A device that lost its data connects again and downloads everything.
+- **A backup file**: Settings → Backup → *Download backup* saves the whole database as one SQLite file
+  (`kubus-backup-2026-10-29.sqlite`): your collections, items, views, components and the images stored on
+  that device. Not in it: the device's own AI key and the other preferences that live in the browser, such
+  as the server's address and token. Download one regularly and keep it somewhere else (on a PC, in the
+  browser's or the desktop app's download folder). *Restore from backup…* replaces everything on the
+  device with such a file after asking, and brings a file of an older Kubus up to date; a file of a newer
+  Kubus is refused. Sync is switched off after a restore: switching it on again is a first connection
+  to the server, which then either replaces the restored data (when it holds data) or receives it (when it
+  is empty).

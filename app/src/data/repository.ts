@@ -87,6 +87,20 @@ export interface Repository {
    * database. Whatever shows data must start over: the app reloads after it.
    */
   wipeLocal(): Promise<void>;
+  /**
+   * The whole local database as a SQLite file (a backup): every collection, item, view, component,
+   * setting kept in the database and the bytes of the images held on this device.
+   */
+  exportBackup(): Promise<Uint8Array>;
+  /** Throws why `bytes` is not a backup this app can restore (not SQLite, not Kubus's, damaged, newer); changes nothing. */
+  checkBackup(bytes: Uint8Array): Promise<void>;
+  /**
+   * Replaces all data on this device with a backup file's. Throws why a file is refused (not SQLite,
+   * not Kubus's, damaged, made by a newer app) before anything changes; an older one is migrated.
+   * Sync is paused first and forgets the server (as `SyncControl.pause`): the restored data meets
+   * the server like a device with data of its own meets one for the first time. The app reloads after it.
+   */
+  restoreBackup(bytes: Uint8Array): Promise<void>;
   /** Syncing with the Kubus server. */
   readonly sync: SyncControl;
 

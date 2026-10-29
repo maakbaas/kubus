@@ -27,6 +27,14 @@ export class DirectSqlClient implements SqlClient {
     if (statements.length > 0) this.engine.write(statements);
   }
 
+  async exportDatabase(): Promise<Uint8Array> {
+    return this.engine.exportDatabase();
+  }
+
+  async importDatabase(bytes: Uint8Array, dryRun = false): Promise<void> {
+    this.engine.importDatabase(bytes, dryRun);
+  }
+
   async wipe(): Promise<void> {
     this.engine.wipe();
   }

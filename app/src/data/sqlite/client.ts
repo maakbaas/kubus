@@ -63,6 +63,14 @@ export class WorkerSqlClient implements SqlClient {
     await this.channel.send({ op: "wipe" });
   }
 
+  async exportDatabase(): Promise<Uint8Array> {
+    return (await this.channel.send({ op: "export" })) as Uint8Array;
+  }
+
+  async importDatabase(bytes: Uint8Array, dryRun = false): Promise<void> {
+    await this.channel.send({ op: "import", bytes, dryRun });
+  }
+
   /** Executes all statements in a single transaction. */
   async write(statements: Statement[]): Promise<void> {
     if (statements.length > 0) await this.channel.send({ op: "write", statements });

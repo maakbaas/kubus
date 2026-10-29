@@ -22,6 +22,14 @@ const engines = [
   ["sqlite-wasm", () => DirectSqlClient.open()],
 ] as const;
 
+describe("backups on node:sqlite", () => {
+  it("are refused: the headless device's database is a cache of the server's", async () => {
+    const client = await NodeSqlClient.open();
+    await expect(client.exportDatabase()).rejects.toThrow(/no backups/);
+    await expect(client.importDatabase()).rejects.toThrow(/no backups/);
+  });
+});
+
 describe.each(engines)("values on %s", (_name, open) => {
   const roundTrip = async (...bind: (string | number | Uint8Array | null)[]) => {
     const client = await open();
