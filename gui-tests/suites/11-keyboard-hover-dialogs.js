@@ -180,6 +180,14 @@ async function hoverNoShift(t, label, max = 30) {
       const r = el.getBoundingClientRect();
       const p = pane.getBoundingClientRect();
       if (r.width < 4 || r.height < 4 || r.top < p.top || r.bottom > p.bottom) continue;
+      // Not one scrolled out of sight sideways (a table's far columns): hovering it would scroll it into view, and that moves things.
+      let hidden = false;
+      for (let a = el.parentElement; a && !hidden; a = a.parentElement) {
+        if (getComputedStyle(a).overflowX === "visible") continue;
+        const ar = a.getBoundingClientRect();
+        hidden = r.left < ar.left - 1 || r.right > ar.right + 1;
+      }
+      if (hidden) continue;
       el.setAttribute("data-hover", String(i++));
     }
     return i;

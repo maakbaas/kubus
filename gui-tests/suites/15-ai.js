@@ -182,7 +182,7 @@ test("no model set up: the AI icon says so and leads to the settings", async (t)
   await t.audit("AI not set up popover");
   await panel.getByRole("button", { name: "Open settings" }).click();
   await t.settle();
-  await t.until("Open settings shows the AI settings", async () => /Language model[\s\S]*No model from the server/.test(await t.page.locator(".ws-pane--active").innerText()), { timeout: 5000 });
+  await t.until("Open settings shows the AI settings", async () => /Language model[\s\S]*No server[\s\S]*Connect this device to a Kubus server/.test(await t.page.locator(".ws-pane--active").innerText()), { timeout: 5000 });
   await t.audit("AI settings from the AI icon");
 });
 

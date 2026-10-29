@@ -601,6 +601,7 @@ test("deleting a field: asked first, its values go from view, the others stay", 
   await t.boot();
   const ids = await t.seed(profileSpec("typical", { items: 3 }));
   await t.open(`/collections/${ids.collections.books}/edit`);
+  await t.until("the editor lists the fields", async () => (await rows(t).count()) > 1);
   const n = await rows(t).count();
   const notes = rows(t).filter({ has: t.page.locator('input[value="Count"]') });
   await notes.getByRole("button", { name: "Remove field" }).click();
@@ -625,6 +626,7 @@ test("deleting a field: asked first, its values go from view, the others stay", 
   await t.audit("item page without the removed field");
   // Two at once, then the last one can't go.
   await t.open(`/collections/${ids.collections.authors}/edit`);
+  await t.until("the editor lists the fields", async () => (await rows(t).count()) > 1);
   const all = await rows(t).count();
   for (let i = 0; i < all - 1; i++) await rows(t).last().getByRole("button", { name: "Remove field" }).click();
   await t.check("one field is left", (await rows(t).count()) === 1);
