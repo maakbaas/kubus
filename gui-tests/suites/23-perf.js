@@ -278,3 +278,20 @@ test("perf: search across collections", async (t) => {
   }, hits, { arg: "ipsum" });
   await t.audit("search results: notes");
 }, { perf: true });
+
+test("perf: a 30-section note renders and opens in the editor", async (t) => {
+  await t.boot();
+  const spec = profileSpec("long", { items: 2 });
+  spec.collections[0].items.push({ key: "huge", values: { title: "Huge note", notes: Array.from({ length: 30 }, (_, i) => `## Section ${i}\n\n${MARKDOWN.long}`).join("\n\n") } });
+  const ids = await t.seed(spec);
+  const note = t.itemPath(ids.collections.books, ids.items["books/huge"]);
+  await t.open("/collections");
+  await t.measure("open a 30-section note", () => t.go(note, { settle: false }), () => document.querySelectorAll(".ws-pane--active .item-fields .md-view h2").length >= 30);
+  await t.audit("huge note");
+  await t.measure("open the editor on it", async () => {
+    const edit = t.page.getByRole("button", { name: "Edit Notes", exact: true }).first();
+    await edit.scrollIntoViewIfNeeded();
+    await edit.click({ position: await t.visiblePoint(edit) });
+  }, () => !!document.querySelector(".ProseMirror"));
+  await t.audit("editing a huge note", { shotOnFail: true });
+}, { perf: true });

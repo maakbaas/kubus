@@ -55,13 +55,13 @@ for (const vp of ["desktop", "phone"]) {
     const spec = profileSpec("long", { items: 2 });
     spec.collections[0].items.push({ key: "huge", values: { title: "Huge note", notes: Array.from({ length: 30 }, (_, i) => `## Section ${i}\n\n${MARKDOWN.long}`).join("\n\n") } });
     const ids = await t.seed(spec);
-    const started = Date.now();
+    // How long it takes is the perf suite's (23: "a 30-section note"); here it must show all of it.
     await t.open(t.itemPath(ids.collections.books, ids.items["books/huge"]));
-    await t.check(`a 30-section note renders within 6s (${((Date.now() - started) / 1000).toFixed(1)}s)`, Date.now() - started < 6000, `${Date.now() - started}ms`);
+    const sections = await t.page.locator(".item-fields .md-view h2").count();
+    await t.check("a 30-section note renders in full (all its h2 headings)", sections >= 30, `${sections} h2 sections`);
     await t.audit("huge note");
-    const t0 = Date.now();
     await openNotesEditor(t);
-    await t.check(`the editor opens on a huge note within 4s (${((Date.now() - t0) / 1000).toFixed(1)}s)`, Date.now() - t0 < 4000, `${Date.now() - t0}ms`);
+    await t.check("the editor opens on a huge note", (await t.count(".ProseMirror")) === 1);
     await t.audit("editing a huge note", { shotOnFail: true });
     await t.page.keyboard.press("Escape");
     await t.page.keyboard.press("Escape");

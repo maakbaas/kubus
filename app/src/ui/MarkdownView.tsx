@@ -251,6 +251,7 @@ function PageLink({ href, children }: { href: string | undefined; children?: Rea
   return (
     <Link
       href={href}
+      data-own-click
       onClick={(e: React.MouseEvent) => {
         e.preventDefault();
         if (href) links.open(href, openModeOf(e.nativeEvent)).catch(() => {});

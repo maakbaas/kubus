@@ -647,6 +647,8 @@ function EditorChrome(props: Props) {
       <div
         ref={editorBox}
         className="md-editor"
+        // Its links open through linkClick (the same Ctrl = beside rule), not the workspace's link handler.
+        data-own-click
         onMouseLeave={() => !menu && setCell(null)}
         onMouseMove={(e) => trackPointer(e.clientX, e.clientY)}
         onMouseOver={(e) => {
