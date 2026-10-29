@@ -341,7 +341,7 @@ async function runTest(session, t, n) {
     result = { name: t.name, status: "error", error: msg, checkpoints: [] };
   }
   // The test's V8 coverage goes to its own file (a retry replaces the attempt before it), not into the report.
-  if (result.coverage) writeFileSync(join(coverageDir, `t${n}.json.gz`), gzipSync(JSON.stringify(result.coverage)));
+  if (coverage && result.coverage) writeFileSync(join(coverageDir, `t${n}.json.gz`), gzipSync(JSON.stringify(result.coverage)));
   delete result.coverage;
   for (const c of result.checkpoints || []) if (c.kind === "baseline") compareBaseline(c);
   if (result.status === "pass" && (result.checkpoints || []).some((c) => !c.pass)) result.status = "fail";
