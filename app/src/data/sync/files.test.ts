@@ -1,12 +1,16 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { bytes, device, FakeServer, settled } from "../../test/fakeServer";
 import { newId, type Collection } from "../../domain/model";
 
 let server: FakeServer;
 beforeEach(() => {
+  // The engine's 2 s debounce must not fire by itself: on a loaded machine a test outlasts it and a
+  // sync starts between two steps. The tests sync explicitly (`settled`).
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   server = new FakeServer().install();
 });
+afterEach(() => vi.useRealTimers());
 
 const fieldsOf = (name: string): Collection["fields"] => [
   { id: newId(), collectionId: "", name: "Title", kind: "string", targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position: 0 },

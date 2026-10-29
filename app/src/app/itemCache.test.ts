@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { device } from "../test/fakeServer";
 import { newId, type FieldDef } from "../domain/model";
 import { ItemCache } from "./itemCache";
@@ -11,8 +11,7 @@ const field = (name: string): FieldDef => ({
 
 /** Waits until `check` holds (the cache reloads after the repository's change events). */
 async function until(check: () => boolean) {
-  for (let i = 0; i < 100 && !check(); i++) await new Promise((r) => setTimeout(r, 10));
-  expect(check()).toBe(true);
+  await vi.waitFor(() => expect(check()).toBe(true), { timeout: 20_000 });
 }
 
 describe("the labels cache", () => {

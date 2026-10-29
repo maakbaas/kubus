@@ -452,6 +452,10 @@ async function main() {
   if (perfMode) perfSummary(results);
   console.log("");
   for (const [rule, list] of Object.entries(byRule).sort((a, b) => b[1].length - a[1].length)) console.log(`  ${rule.padEnd(22)} ${list.length}`);
+  // What failed, readable from a CI log without the report: the first failed checkpoints with their detail.
+  const failedChecks = results.flatMap((r) => r.checkpoints.filter((c) => !c.pass).map((c) => `${r.suite} › ${r.name} › ${c.label}${c.detail ? `: ${c.detail}` : ""}`));
+  for (const line of failedChecks.slice(0, 20)) console.log(`  ✗ ${line.length > 400 ? `${line.slice(0, 400)}…` : line}`);
+  if (failedChecks.length > 20) console.log(`  … and ${failedChecks.length - 20} more (the report has them all)`);
   for (const f of summary.flakyTests) console.log(`  flaky: ${f}`);
   console.log(`\n${summary.passed} passed, ${summary.failed} failed, ${summary.flaky} flaky, ${summary.errored} errored of ${summary.tests} tests; ${summary.failedCheckpoints} of ${summary.checkpoints} checkpoints failed (${summary.seconds}s)`);
   console.log(`Report: ${join(reportDir, "index.html")}`);

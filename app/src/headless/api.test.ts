@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { createHash } from "node:crypto";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Headless, HeadlessOptions } from "../../../shared/api";
 import type { ApiResponse } from "../../../shared/router";
 import { bytes, device, FakeServer, SERVER_URL, settled, TOKEN } from "../test/fakeServer";
@@ -218,10 +218,15 @@ describe("the HTTP API", () => {
     await call("GET", "/collections/Book/items");
     expect(syncs()).toBe(0); // the server's latest write is this device's own
 
-    await call("POST", "/collections/Book/items", { values: { Title: "Dune" } });
-    expect(syncs()).toBe(1); // sending the write
-    await new Promise((resolve) => setTimeout(resolve, 2200)); // the debounce of the local change
-    expect(syncs()).toBe(1); // that sync sent it already
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); // the debounce of the local change runs on the clock below
+    try {
+      await call("POST", "/collections/Book/items", { values: { Title: "Dune" } });
+      expect(syncs()).toBe(1); // sending the write
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(syncs()).toBe(1); // that sync sent it already
+    } finally {
+      vi.useRealTimers();
+    }
 
     const phone = await device();
     const [collection] = await phone.listCollections();
