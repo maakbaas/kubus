@@ -57,6 +57,7 @@ import { refLabelOf } from "../ui/useReferenceOptions";
 import { openModeOf } from "../workspace/Workspace";
 import { chartSpec } from "./chartSpec";
 import { COUNTRY_MAPS, downloadRegionMap, loadRegionMap, type RegionMap } from "./regionMaps";
+import { ChoroplethMap } from "./ChoroplethMap";
 import { errorMessage } from "../ui/useConfirm";
 import { StatView } from "./StatView";
 import { AspectSelect, HeightSlider } from "./HeightSlider";
@@ -69,6 +70,18 @@ import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./regi
 // Carbon's data and options of them. Carbon Charts (and d3) load the first time a chart is shown.
 
 const ChartCanvas = lazy(() => import("./ChartCanvas"));
+
+/**
+ * TEMPORARY (A/B of the choropleth's drawing, to be decided): a dev build draws choropleths with MapLibre
+ * (ChoroplethMap) when localStorage "kubus.dev.choropleth" is "maplibre", else with Carbon Charts.
+ */
+const maplibreChoropleth = () => {
+  try {
+    return import.meta.env.DEV && localStorage.getItem("kubus.dev.choropleth") === "maplibre";
+  } catch {
+    return false;
+  }
+};
 
 /** A choropleth's map (null for another chart, or while it loads), or why it can't be shown. */
 function useRegionMap(repo: Repository, options: ChartOptions): { map: RegionMap | null; error: string | null } {
@@ -134,6 +147,19 @@ function ChartView({ collection, result, options, refs, actions, page }: BlockPr
       />
     );
   }
+  if (spec.chart === "ChoroplethChart" && regionMap.map && maplibreChoropleth())
+    return (
+      <div className="chart-block" style={{ maxInlineSize: widthCss(options.width) }}>
+        <ChoroplethMap
+          map={regionMap.map}
+          values={new Map(spec.data.map((d) => [String(d.name), Number(d.value)]))}
+          options={options}
+          label={String((spec.options.choropleth as { colorLegend?: { title?: string } } | undefined)?.colorLegend?.title ?? "")}
+          dark={dark}
+        />
+        {notOnMap}
+      </div>
+    );
   return (
     <div className="chart-block" style={{ maxInlineSize: widthCss(options.width) }}>
       <Suspense fallback={<div className="chart-block__loading" style={{ blockSize: String(spec.options.height) }} />}>

@@ -1,8 +1,9 @@
+import { feature } from "topojson-client";
 import { topology } from "topojson-server";
-import type { Topology } from "topojson-specification";
+import type { GeometryCollection, Topology } from "topojson-specification";
 import type { Repository } from "../data";
 import { fileIdFromSrc, fileSrc } from "../domain/files";
-import { BUNDLED_MAPS, regionsOf, type ChartRegions, type Region } from "../domain/regions";
+import { BUNDLED_MAPS, centreOf, regionsOf, type ChartRegions, type Region } from "../domain/regions";
 import { MAX_FILE_BYTES } from "../../../shared/sync";
 import maps from "../geodata/maps.json";
 
@@ -94,4 +95,28 @@ export async function downloadRegionMap(repo: Repository, map: string): Promise<
   asFeatures(JSON.parse(new TextDecoder().decode(data)));
   const fileId = await repo.putFile(data, "application/geo+json");
   return { map, file: fileSrc(fileId) };
+}
+
+/** A map's regions as GeoJSON and the longitude it is centred on (`centreOf`), worked out once per map. */
+const wholeMaps = new WeakMap<Topology, { regions: ReturnType<typeof feature>; centre: number }>();
+
+function longitudesOf(value: unknown, into: number[]): number[] {
+  if (Array.isArray(value)) {
+    if (typeof value[0] === "number") into.push(value[0]);
+    else for (const v of value) longitudesOf(v, into);
+  }
+  return into;
+}
+
+/** A map's regions as GeoJSON (each named by `properties.NAME`, its region's key) and the longitude it is centred on. */
+export function wholeMap(map: Topology) {
+  let whole = wholeMaps.get(map);
+  if (!whole) {
+    const regions = feature(map, map.objects.countries as GeometryCollection);
+    const longitudes: number[] = [];
+    for (const f of "features" in regions ? regions.features : [regions]) longitudesOf((f.geometry as { coordinates?: unknown } | null)?.coordinates, longitudes);
+    whole = { regions, centre: centreOf(longitudes) };
+    wholeMaps.set(map, whole);
+  }
+  return whole;
 }

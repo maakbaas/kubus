@@ -24,10 +24,9 @@ import {
 } from "@carbon/charts-react";
 import "@carbon/charts-react/styles.css";
 import { geoMercator, geoNaturalEarth1, geoPath, type GeoPermissibleObjects } from "d3-geo";
-import { feature } from "topojson-client";
 import type { GeometryCollection, Topology } from "topojson-specification";
-import { centreOf } from "../domain/regions";
 import type { CarbonChart, ChartSpec } from "./chartSpec";
+import { wholeMap } from "./regionMaps";
 
 // The Carbon Charts part of a chart block, in its own chunk: loaded (with d3) the first time a
 // chart is shown, not with the app.
@@ -127,29 +126,6 @@ function copyOfMap(map: Topology): Topology {
 
 /** The projections a choropleth uses (chartSpec's `thematic.projection`). */
 const PROJECTIONS: Record<string, () => ReturnType<typeof geoMercator>> = { geoNaturalEarth1, geoMercator };
-
-/** A map's regions as GeoJSON and the longitude it is centred on (`centreOf`), worked out once per map. */
-const wholeMaps = new WeakMap<Topology, { regions: ReturnType<typeof feature>; centre: number }>();
-
-function longitudesOf(value: unknown, into: number[]): number[] {
-  if (Array.isArray(value)) {
-    if (typeof value[0] === "number") into.push(value[0]);
-    else for (const v of value) longitudesOf(v, into);
-  }
-  return into;
-}
-
-function wholeMap(map: Topology) {
-  let whole = wholeMaps.get(map);
-  if (!whole) {
-    const regions = feature(map, map.objects.countries as GeometryCollection);
-    const longitudes: number[] = [];
-    for (const f of "features" in regions ? regions.features : [regions]) longitudesOf((f.geometry as { coordinates?: unknown } | null)?.coordinates, longitudes);
-    whole = { regions, centre: centreOf(longitudes) };
-    wholeMaps.set(map, whole);
-  }
-  return whole;
-}
 
 /**
  * Frames a drawn choropleth on its whole map. Carbon fits the projection to the regions with a value

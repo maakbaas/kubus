@@ -3170,6 +3170,28 @@ img[data-lightbox] {
 .chart-block__problem {
   margin: 0;
 }
+/* A choropleth drawn with MapLibre (ChoroplethMap): Carbon's linear colour legend under the map, as its chart has it. */
+.choropleth-map .map-block__map {
+  border: 0;
+  background: none;
+}
+.choropleth-map__legend {
+  inline-size: 18.75rem;
+  max-inline-size: 100%;
+  margin-block-start: var(--cds-spacing-03);
+}
+.choropleth-map__gradient {
+  block-size: var(--cds-spacing-03);
+}
+.choropleth-map__ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-block-start: var(--cds-spacing-02);
+  font-size: var(--cds-label-01-font-size, 0.75rem);
+  line-height: var(--cds-label-01-line-height, 1.33333);
+  letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
+  color: var(--cds-text-primary);
+}
 /* A choropleth's values that are no region of its map: one line, the whole list in its title. */
 .chart-block__unmatched {
   margin: var(--cds-spacing-03) 0 0;
