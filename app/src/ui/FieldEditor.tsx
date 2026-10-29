@@ -137,8 +137,10 @@ export function FieldEditor({ field: fieldDef, value, refs, start, compact, idPr
       if (e.key === "Escape") {
         // An open menu or calendar takes the Escape. Not the label's collapse caret: it is
         // "expanded" whenever the field is shown, and would keep Escape from ever cancelling.
+        // (The Markdown editor's link picker, open while `data-link-picker` is set, takes it too.)
         const popupOpen =
-          !!document.querySelector(".flatpickr-calendar.open") || !!box.current?.querySelector("[aria-expanded=true]:not(.collapse-caret *)");
+          !!document.querySelector(".flatpickr-calendar.open") ||
+          !!box.current?.querySelector("[aria-expanded=true]:not(.collapse-caret *), [data-link-picker]");
         if (popupOpen) return;
         e.preventDefault();
         cancelRef.current();

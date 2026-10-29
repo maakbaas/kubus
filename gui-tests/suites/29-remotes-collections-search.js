@@ -917,6 +917,51 @@ test("search: nothing typed, nothing found, a tag, a count that stops at 50", as
   await t.audit("search, a tag");
 }, { viewport: "desktop" });
 
+test("search: a link address finds the page it names, once", async (t) => {
+  await t.boot();
+  const ids = await t.seed({
+    collections: [
+      {
+        key: "notes", name: "Note", plural: "Notes",
+        fields: [{ key: "title", name: "Title", kind: "string" }, { key: "body", name: "Body", kind: "string" }],
+        views: [{ name: "Archive", blocks: [{ kind: "table", title: "All" }] }],
+        items: [{ key: "a", values: { title: "Alpha", body: "" } }, { key: "b", values: { title: "Beta", body: "" } }],
+      },
+    ],
+  });
+  const cid = ids.collections.notes;
+  const alpha = ids.items["notes/a"];
+  const beta = ids.items["notes/b"];
+  const viewId = await t.page.evaluate(async (c) => (await window.kubus.repo.listAllViews()).find((v) => v.collectionId === c && v.name === "Archive").id, cid);
+  // Beta's body holds Alpha's address as plain text: Alpha is found by that text too.
+  await t.page.evaluate(async ([c, id, text]) => {
+    const col = (await window.kubus.repo.listCollections()).find((x) => x.id === c);
+    await window.kubus.repo.updateItem(col, id, { [col.fields[0].id]: "Beta", [col.fields[1].id]: text });
+  }, [cid, beta, `see #/collections/${cid}/items/${alpha}`]);
+  const links = async () => (await searchLists(t))[Object.keys(await searchLists(t)).find((k) => /links?$/.test(k)) ?? ""] ?? [];
+  const go = async (q) => {
+    await t.open(`/search?q=${encodeURIComponent(q)}`);
+    await t.until(`the search for ${q} is answered`, async () => (await paneText(t)).includes(`Results for “${q}”`) && (await pane(t).locator(".cds--contained-list, .helper").count()) > 0, q);
+  };
+  // A view's address, an item's, a field's: each is listed as a link to that page.
+  await go(`#/collections/${cid}/items?view=${viewId}`);
+  await t.until("a view's address lists the view", async () => (await links()).some((x) => x.includes("Archive")), JSON.stringify(await searchLists(t)));
+  await hitOf(t, "Archive").click();
+  await t.until("choosing the link opens the page", async () => (await tabPath(t)).includes(`view=${viewId}`), await tabPath(t));
+  await go(`items/${alpha}`);
+  await t.until("an item's address lists the item once", async () => (await links()).filter((x) => x.includes("Alpha")).length === 1, JSON.stringify(await searchLists(t)));
+  await go("alpha#tit");
+  await t.until("item#field lists the field", async () => (await links()).some((x) => x.includes("Title")), JSON.stringify(await searchLists(t)));
+  // Alpha also matches as text (Beta's body names its address): it is shown once, in the items.
+  await go(`collections/${cid}/items/${alpha}`);
+  await t.until("the page is answered", async () => (await paneText(t)).includes("Results for"));
+  const all = Object.values(await searchLists(t)).flat();
+  await t.check("an item that matches twice is listed once", all.filter((x) => x.includes("Alpha")).length <= 1, JSON.stringify(await searchLists(t)));
+  await go("qqq/zzz");
+  await t.until("an address naming nothing says so", async () => (await paneText(t)).includes("Nothing found."));
+  await t.audit("search, link hits");
+}, { viewport: "desktop" });
+
 for (const vp of ["desktop", "phone"]) {
   test(`search: the search bar — opens focused, searches as you type, closes @ ${vp}`, async (t) => {
     await t.boot();

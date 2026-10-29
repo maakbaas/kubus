@@ -4,6 +4,9 @@ import { htmlPlainText } from "../domain/fieldKinds";
 import { useNavigate, useSearchParams } from "react-router";
 import { ContainedList, ContainedListItem, InlineNotification, Tag } from "@carbon/react";
 import { useStore } from "../app/store";
+import { useLinkTargets } from "../app/useLinkTargets";
+import { isAddressQuery, withoutShown, type LinkTarget } from "../domain/linkTargets";
+import { LinkTargetList } from "../ui/LinkTargetList";
 import type { Repository } from "../data/repository";
 import { markdownExcerpt, type MarkdownExcerpt } from "../domain/markdownExcerpt";
 import { editableField, isReferenceKind, itemLabel, labelField, type FieldDef, type Item, type Collection } from "../domain/model";
@@ -180,7 +183,30 @@ export function SearchPage() {
       }),
     [results, spaceCollections, query, exactTag],
   );
-  const nothingFound = query && results !== null && hits.length === 0 && collectionHits.length === 0 && blockHits.length === 0;
+  // Pages whose link address fits what was typed (`#/collections/…`, `book#field`; the Markdown editor's
+  // link picker finds the same): the ones not already listed above, each once.
+  const { search: searchLinks, reset: resetLinks } = useLinkTargets();
+  const [linkFound, setLinkFound] = useState<{ query: string; targets: LinkTarget[] }>({ query: "", targets: [] });
+  useEffect(() => {
+    if (!results || !isAddressQuery(results.query) || results.exactTag) return;
+    let cancelled = false;
+    resetLinks();
+    searchLinks(results.query, { items: true, limit: 30 }).then(
+      (targets) => !cancelled && setLinkFound({ query: results.query, targets }),
+      () => !cancelled && setLinkFound({ query: results.query, targets: [] }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [results, searchLinks, resetLinks]);
+  const linkHits = useMemo(
+    () =>
+      linkFound.query === query && !exactTag
+        ? withoutShown(linkFound.targets, [...collectionHits.map((t) => `collection:${t.id}`), ...hits.map((h) => `item:${h.item.id}`)])
+        : [],
+    [linkFound, query, exactTag, collectionHits, hits],
+  );
+  const nothingFound = query && results !== null && hits.length === 0 && collectionHits.length === 0 && blockHits.length === 0 && linkHits.length === 0;
 
   return (
     <>
@@ -212,6 +238,14 @@ export function SearchPage() {
             </ContainedListItem>
           ))}
         </ContainedList>
+      )}
+      {linkHits.length > 0 && (
+        <LinkTargetList
+          targets={linkHits}
+          label={`${linkHits.length} ${linkHits.length === 1 ? "link" : "links"}`}
+          query={query}
+          onPick={(t) => navigate(t.href.slice(1))}
+        />
       )}
       {blockHits.length > 0 && (
         <ContainedList label={`${blockHits.length} Markdown ${blockHits.length === 1 ? "block" : "blocks"}`} kind="on-page">
