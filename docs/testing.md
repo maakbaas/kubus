@@ -123,10 +123,18 @@ npm run coverage:report                       # merges what exists: coverage/ind
   (V8 writes it when the process exits: `stop()` sends SIGTERM, on which the server shuts down). `coverage/server-v8/` holds the dumps.
 - **GUI**: `--coverage` makes `run.mjs` build with source maps and each test collect V8 precise coverage over CDP (Chromium; the app's main
   thread, not its workers), into `coverage/gui-v8/`, one file per test (`gui-tests/README.md`).
-- **The merge** (`tests/coverage.mjs`) converts the V8 data with `ast-v8-to-istanbul` (the GUI's through the build's source maps, the server's
-  through node's type stripping, which keeps offsets) and joins the three maps per file by the place of each statement, function and branch
-  in the source, since the transforms behind them number those differently. The table lists per directory the merged percentages and the
-  statements each kind reached alone. A kind with no data is left out, so the report is always of what was run.
+- **The merge** (`tests/coverage.mjs`). The transforms behind the three kinds cut a file's statements differently (vitest's, the bundler's,
+  node's), so the kinds cannot be added by statement number, and adding every entry no other kind has would put the merged percentage
+  *below* a kind's own. So: (1) the GUI's statements and functions are not those of the converted bundle (`ast-v8-to-istanbul` loses
+  what the source map cannot place) but the unit run's map of the same file (it includes every file), counted from the V8 ranges: where the
+  source map puts a statement's start in the bundle, the count of the innermost range there; the conversion's branches, and any statement
+  it has that the unit map has no place for, are merged in; (2) a file's richest map is the base and the others are folded into it by place
+  (line:column, else the nearest on the line, counts added), an entry no place matches only when it ran. So what any kind executed
+  counts, and the merged figure is never below one kind's. The server's V8 data goes through node's type stripping (offsets kept). The
+  table lists per directory the merged percentages and the statements each kind reached alone, all against the same statement map.
+  A kind with no data is left out. `KUBUS_COVERAGE_DIR` / `KUBUS_ROOT` point the script at another folder / checkout.
+  Limits: a function's or statement's count is that of the V8 block range at its start (V8 has no per-statement counters); branches of
+  the GUI come from the conversion and so only partly match the unit map's.
 
 ## Writing tests
 
