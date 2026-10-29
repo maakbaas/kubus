@@ -621,11 +621,11 @@ for (const vp of ["desktop", "phone"]) {
     await t.check("the Title menu offers the first text field, text / number / date fields, and no title", JSON.stringify(titles) === JSON.stringify(["The first text field with a value", "Name", "Hours", "Since", "No title"]), titles.join(" | "));
     await t.audit("title menu open");
     await t.page.getByRole("option", { name: "Since", exact: true }).click();
-    await t.check("Since is the title", (await dropdown(t, pane(t).locator("form"), "Title").innerText()).includes("Since"));
+    await t.until("Since is the title", async () => (await dropdown(t, pane(t).locator("form"), "Title").innerText()).includes("Since"));
     // Remove the third row and add it again to check Remove works before saving, without a dialog.
     await rows(t).nth(2).getByRole("button", { name: "Remove field" }).click();
     await t.until("a field not yet saved is removed at once", async () => (await rows(t).count()) === 2);
-    await t.check("the title falls back to the first text field", (await dropdown(t, pane(t).locator("form"), "Title").innerText()).includes("The first text field with a value"));
+    await t.until("the title falls back to the first text field", async () => (await dropdown(t, pane(t).locator("form"), "Title").innerText()).includes("The first text field with a value"));
     await t.page.getByRole("button", { name: "Add field" }).click();
     await rows(t).nth(2).getByRole("textbox", { name: "Field name" }).fill("Since");
     await choose(t, rows(t).nth(2), "Field type", "Date");
