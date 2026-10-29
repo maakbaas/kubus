@@ -21,7 +21,7 @@ import { blockType, normalizeBlock, normalizeView } from "../views";
 import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
 import type { NewBlockSpec } from "../views/AddBlockButton";
 import { BlockView } from "../views/BlockView";
-import { BlockRows, listRowActions, rowCollapse } from "../views/BlockRows";
+import { BlockRows, besideOf, listRowActions, rowCollapse } from "../views/BlockRows";
 import { reordered, withCopy, withoutBlock } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
@@ -215,9 +215,11 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // closes (View settings is where the bar is switched on): leaving the toolbar, it would move the
   // buttons after it, and their open panels with them. The bar itself shows at once, and stays until then when switched off.
   const filterInBar = panels.hold("filterInBar", !!active?.filterBar);
-  // "Full width" (View settings): off, the view is the narrow column of an item page. It changes as it is clicked, the
-  // panel open (the page is seen changing; the toolbar and the open panel move with it).
-  const fullWidth = isFullWidth("collection", active?.fullWidth);
+  // "Full width" (View settings): off, the view is the narrow column of an item page. Held while a panel is
+  // open, like the filter bar: the width moves the toolbar's buttons, and the open panel with them.
+  const fullWidth = panels.hold("fullWidth", isFullWidth("collection", active?.fullWidth));
+  // Which blocks are beside another, held likewise: a block put in a row (Block settings) would move its open panel.
+  const beside = panels.hold("beside", besideOf(view.blocks));
 
   async function updateActive() {
     if (!active) return;
@@ -541,6 +543,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
         (data.items !== null || data.error) && (
           <BlockRows
             entries={view.blocks}
+            beside={beside}
             blockOf={(b) => b}
             onPlace={rowActions.place}
             onShares={rowActions.shares}

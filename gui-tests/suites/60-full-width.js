@@ -1,7 +1,7 @@
 // "Full width" on collection views (View settings) and item views (the item page's Page layout): the
 // defaults unchanged (a collection view at the pane's width, an item page in its 700px column), the
 // checkbox stored with the view at once (no * on the tab, nothing to save), read back after a reload,
-// the page's width changing as it is clicked (the panel open: the page is seen changing),
+// the page's width changing only once the panel is closed (nothing moves under it while it is open),
 // a virtual view (the collection's "All", the "Default" item view) stored by it; the narrow and the
 // wide page audited on phones (390 px, 320 px), on the desktop and in the dark theme.
 
@@ -101,20 +101,22 @@ test("defaults: a collection view at the pane's width, an item page in its 700px
 
 // --- a collection view ---------------------------------------------------------------------------
 
-test("Full width in View settings: stored at once without a *, the width changing as it is clicked, kept after a reload @ desktop", async (t) => {
+test("Full width in View settings: stored at once without a *, the width changing once the panel closes, kept after a reload @ desktop", async (t) => {
   await t.boot();
   const ids = await t.seed(widthSpec());
   await t.open(t.listPath(ids.collections.books));
   await t.openPanel(viewsBarOf(t), "View settings");
   const box = () => toolbarPanel(t).getByRole("checkbox", { name: "Full width" });
-  // Unticked: the page takes the column at once, the panel open.
-  await box().click({ force: true });
+  // Unticked: nothing on the page moves while the panel is open (the width is held).
+  await t.popoverStep("untick Full width", () => box().click({ force: true }), { target: box(), scope: PANE });
   await t.until("stored with the view: fullWidth false", async () => (await storedView(t, ids.collections.books, "All")).fullWidth === false);
   await t.check("the box shows it unticked", !(await box().isChecked()));
   await t.check("no change to save: no * on the tab, no Save", (await activeTabText(t)) === "All" && (await viewsBarOf(t).getByRole("button", { name: "Save changes to view" }).count()) === 0);
-  await t.until("at once, the panel open: the view keeps to the 700px column, centred", async () => isNarrow(await boxIn(t, COLLECTION_PAGE)) || boxText(await boxIn(t, COLLECTION_PAGE)));
+  let page = await boxIn(t, COLLECTION_PAGE);
+  await t.check("while View settings is open the page keeps its width", isWide(page), boxText(page));
   await t.escapeCloses("Escape closes View settings");
-  const page = await boxIn(t, COLLECTION_PAGE);
+  await t.until("closed: the view keeps to the 700px column, centred", async () => isNarrow(await boxIn(t, COLLECTION_PAGE)) || boxText(await boxIn(t, COLLECTION_PAGE)));
+  page = await boxIn(t, COLLECTION_PAGE);
   await t.check("the header, the tabs and the block are all inside the column", await t.page.evaluate(([pane, l, r]) => {
     const parts = [".page-header", ".views-bar", ".block"].map((s) => document.querySelector(`${pane} ${s}`));
     return parts.every((p) => p && p.getBoundingClientRect().left >= l - 1 && p.getBoundingClientRect().right <= r + 1);
@@ -125,10 +127,11 @@ test("Full width in View settings: stored at once without a *, the width changin
   // And on again.
   await t.openPanel(viewsBarOf(t), "View settings");
   await t.check("the box is unticked after the reload", !(await box().isChecked()));
-  await box().click({ force: true });
+  await t.popoverStep("tick Full width", () => box().click({ force: true }), { target: box(), scope: PANE });
   await t.until("stored: fullWidth true", async () => (await storedView(t, ids.collections.books, "All")).fullWidth === true);
-  await t.until("at once: the pane's width again", async () => isWide(await boxIn(t, COLLECTION_PAGE)) || boxText(await boxIn(t, COLLECTION_PAGE)));
+  await t.check("still narrow while the panel is open", isNarrow(await boxIn(t, COLLECTION_PAGE)));
   await t.escapeCloses("Escape closes View settings");
+  await t.until("closed: the pane's width again", async () => isWide(await boxIn(t, COLLECTION_PAGE)) || boxText(await boxIn(t, COLLECTION_PAGE)));
   await t.check("still no change to save", (await activeTabText(t)) === "All");
 }, { viewport: "desktop", smoke: true });
 
@@ -148,8 +151,8 @@ test("Full width keeps a view's unsaved changes and is per view: a view stored n
   await t.until("Full width stored off", async () => (await storedView(t, ids.collections.books, "All")).fullWidth === false);
   const stored = await storedView(t, ids.collections.books, "All");
   await t.check("the unsaved change wasn't stored with it", stored.editable === true && (await activeTabText(t)) === "All *");
-  await t.until("narrow at once", async () => isNarrow(await boxIn(t, COLLECTION_PAGE)) || boxText(await boxIn(t, COLLECTION_PAGE)));
   await t.escapeCloses("Escape closes View settings");
+  await t.until("narrow once closed", async () => isNarrow(await boxIn(t, COLLECTION_PAGE)) || boxText(await boxIn(t, COLLECTION_PAGE)));
   await t.page.getByRole("tab", { name: "Narrow" }).click();
   await t.until("the Narrow view stays narrow", async () => isNarrow(await boxIn(t, COLLECTION_PAGE)) || boxText(await boxIn(t, COLLECTION_PAGE)));
   await t.check("and its stored setting is untouched", (await storedView(t, ids.collections.books, "Narrow")).fullWidth === false);
@@ -157,22 +160,23 @@ test("Full width keeps a view's unsaved changes and is per view: a view stored n
 
 // --- an item view ----------------------------------------------------------------------------------
 
-test("Full width in Page layout: the virtual Default item view stored by it, no *, wide as it is clicked, kept after a reload @ desktop", async (t) => {
+test("Full width in Page layout: the virtual Default item view stored by it, no *, wide once the panel closes, kept after a reload @ desktop", async (t) => {
   await t.boot();
   const ids = await t.seed(widthSpec());
   const path = t.itemPath(ids.collections.books, ids.items["books/dune"]);
   await t.open(path);
   await t.openPanel(pageHeaderOf(t), "Page layout");
   const box = () => toolbarPanel(t).getByRole("checkbox", { name: "Full width" });
-  await box().click({ force: true });
+  await t.popoverStep("tick Full width", () => box().click({ force: true }), { target: box(), scope: PANE });
   await t.until("the Default item view is stored with fullWidth true", async () => {
     const views = await storedItemViews(t, ids.collections.books);
     return (views.length === 1 && views[0].name === "Default" && views[0].fullWidth === true) || JSON.stringify(views.map((v) => [v.id, v.fullWidth]));
   });
   await t.check("the box shows it ticked", await box().isChecked());
   await t.check("no change to save: no * on the tab, no Save", (await activeTabText(t)) === "Default" && (await viewsBarOf(t).getByRole("button", { name: "Save changes to view" }).count()) === 0);
-  await t.until("at once: the item page at the pane's width", async () => isWide(await boxIn(t, ITEM_PAGE)) || boxText(await boxIn(t, ITEM_PAGE)));
+  await t.check("while Page layout is open the page keeps its column", isNarrow(await boxIn(t, ITEM_PAGE)), boxText(await boxIn(t, ITEM_PAGE)));
   await t.escapeCloses("Escape closes Page layout");
+  await t.until("closed: the item page at the pane's width", async () => isWide(await boxIn(t, ITEM_PAGE)) || boxText(await boxIn(t, ITEM_PAGE)));
   await t.audit("item page, full width", { shotOnFail: true });
   await t.open(path);
   await t.check("after a reload it is still wide", isWide(await boxIn(t, ITEM_PAGE)), boxText(await boxIn(t, ITEM_PAGE)));
@@ -180,10 +184,11 @@ test("Full width in Page layout: the virtual Default item view stored by it, no 
   await t.check("and so is another item's page (same item view)", isWide(await boxIn(t, ITEM_PAGE)), boxText(await boxIn(t, ITEM_PAGE)));
   // And off again.
   await t.openPanel(pageHeaderOf(t), "Page layout");
-  await box().click({ force: true });
+  await t.popoverStep("untick Full width", () => box().click({ force: true }), { target: box(), scope: PANE });
   await t.until("stored: fullWidth false", async () => (await storedItemViews(t, ids.collections.books))[0].fullWidth === false);
-  await t.until("at once: back in the column", async () => isNarrow(await boxIn(t, ITEM_PAGE)) || boxText(await boxIn(t, ITEM_PAGE)));
+  await t.check("still wide while the panel is open", isWide(await boxIn(t, ITEM_PAGE)));
   await t.escapeCloses("Escape closes Page layout");
+  await t.until("closed: back in the column", async () => isNarrow(await boxIn(t, ITEM_PAGE)) || boxText(await boxIn(t, ITEM_PAGE)));
   await t.open(`/collections/${ids.collections.books}/items/new`);
   await t.check("a new item's page is always in the column", isNarrow(await boxIn(t, ".form-page")), boxText(await boxIn(t, ".form-page")));
 }, { viewport: "desktop", smoke: true });

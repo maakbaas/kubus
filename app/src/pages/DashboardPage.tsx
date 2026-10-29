@@ -30,7 +30,7 @@ import type { NewBlockSpec } from "../views/AddBlockButton";
 import { AddBlockButton } from "../views/AddBlockButton";
 import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
 import { BlockView } from "../views/BlockView";
-import { BlockRows, listRowActions, rowCollapse, type RowControls } from "../views/BlockRows";
+import { BlockRows, besideOf, listRowActions, rowCollapse, type RowControls } from "../views/BlockRows";
 import { reordered, withCopy, withoutBlock } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
@@ -254,9 +254,10 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
     </IconButton>
   );
   const panels = usePanelsOpen();
-  // As a collection view's: the Filter button moves to the filter bar once the panels close; the width changes at once.
+  // As a collection view's: the Filter button moves to the filter bar, the width and a block put in a row change, once the panels close.
   const filterInBar = panels.hold("filterInBar", !!active?.filterBar);
-  const fullWidth = isFullWidth("dashboard", active?.fullWidth);
+  const fullWidth = panels.hold("fullWidth", isFullWidth("dashboard", active?.fullWidth));
+  const beside = panels.hold("beside", besideOf(view.blocks));
 
   async function updateActive() {
     const tab = await stored();
@@ -553,6 +554,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
       {savedViews !== null && viewChosen && (
         <BlockRows
           entries={view.blocks}
+          beside={beside}
           blockOf={(b) => b}
           onPlace={rowActions.place}
           onShares={rowActions.shares}

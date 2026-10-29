@@ -351,7 +351,8 @@ What the app does, feature by feature (read the part you work on).
   steps (drag it, or focus it and use the arrow keys; at least 10% each). In a row of several, what is wider than its
   share scrolls sideways inside the block, never the page. Block settings has "Beside the block above" (only where a block
   is right above it with room in its row), Row height (As its tallest / shortest block) and Max / Min height (rem; empty:
-  none). All of it is arranging: stored and shown at once, no " *". A row stays sound when it changes (`Arrangement` in
+  none). All of it is arranging: stored at once, no " *"; a block put beside another in Block settings moves once the panel
+  closes (held with `usePanelsOpen().hold`: it would move its open panel). A row stays sound when it changes (`Arrangement` in
   `blockRows.ts`): the next block takes over a removed or moved first block's settings, a changed row gets equal shares
   again, and a block reordered in the block list (or a Fields list) away from the block it was beside starts a row of its
   own (`reordered`). On an item page fields are dragged by their name too (above or below a field or a row of blocks,
@@ -365,8 +366,8 @@ What the app does, feature by feature (read the part you work on).
   700px column of an item page, centred. Defaults (absent): collection views and dashboard tabs on, item views off, so
   every view made before it looks as it did (`isFullWidth`, `FULL_WIDTH_DEFAULT` in `domain/views.ts`). Stored with the
   view as soon as it is set (`fullWidth` in the view's config JSON, on the `ItemView` in `collections.item_views`), like
-  "Show filter bar": no " *", nothing to save. The page changes width as it is clicked, the panel open (the page is seen
-  changing; the toolbar and the open panel move with it). The standard page (edit icon) keeps the item view's width; a new
+  "Show filter bar": no " *", nothing to save. The page changes width once the panel closes (`usePanelsOpen().hold`):
+  the toolbar's buttons would move under the open panel. The standard page (edit icon) keeps the item view's width; a new
   item's page is always narrow.
 - **Spaces** (`app/src/domain/spaces.ts`, table `spaces`, `#/spaces`): separate environments (e.g.
   Work / Private) in one database. Every item belongs to one space (`items.space_id`) and shows only

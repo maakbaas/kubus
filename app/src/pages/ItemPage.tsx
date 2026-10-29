@@ -6,7 +6,7 @@ import { Add, Checkmark, Code, Edit, Filter, Information, Pin, PinFilled, Renew,
 import { isFullWidth, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
-import { BlockRows, draggedEntry, dragStart, isEntryDrag, rowCollapse, rowControls, shownRows, zoneAt, type RowControls } from "../views/BlockRows";
+import { BlockRows, besideOf, draggedEntry, dragStart, isEntryDrag, rowCollapse, rowControls, shownRows, zoneAt, type RowControls } from "../views/BlockRows";
 import { placeBlock, reordered, setRowShares, withoutBlock, type RowZone } from "../domain/blockRows";
 import { QueryEditor } from "../views/QueryEditor";
 import { useBlockName } from "../views/BlockListEditor";
@@ -294,8 +294,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const collapsed = activeView ? (local[activeView.id]?.collapsed ?? activeView.collapsed) : NOTHING_COLLAPSED;
   /** The shown view's "Full width" as stored (absent: off). */
   const storedFullWidth = activeView ? (local[activeView.id]?.fullWidth ?? activeView.fullWidth) : undefined;
-  // The page's width follows it as it is clicked (the panel open: the page is seen changing).
-  const fullWidth = isFullWidth("item", storedFullWidth);
+  // The page's width follows it once the panels are closed: the header's buttons would move under the open popover.
+  const fullWidth = panels.hold("fullWidth", isFullWidth("item", storedFullWidth));
   /** Stores the shown item view with these (the virtual "Default" view is stored then), shown at once. */
   const storeNow = (patch: { collapsed?: Collapsed; layout?: ItemLayout; fullWidth?: boolean }) => {
     if (!activeView) return;
@@ -365,8 +365,10 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const entries = itemPageFields<FieldDef | ViewBlock>([...pickableFields(collection), ...layout.blocks], layout, titleField?.id).filter(
     (f) => blocksById.has(f.id) || !layout.hideEmpty || editing?.fieldId === f.id || !isEmpty(shown ? fieldValue(shown, f as FieldDef) : null),
   );
-  // Blocks side by side (rows: views/BlockRows.tsx): blocks next to each other on the page.
-  fieldIndex.current = shownRows(entries, (e) => blocksById.get(e.id)).map((r) => r[0].id);
+  // Blocks side by side (rows: views/BlockRows.tsx): which are beside another held while a panel is open (a block put in a
+  // row in its Block settings would move its open panel).
+  const beside = panels.hold("beside", besideOf(layout.blocks));
+  fieldIndex.current = shownRows(entries, (e) => blocksById.get(e.id), beside).map((r) => r[0].id);
   /** The page's order of fields and blocks, empty ones too (what "Beside the block above" looks at). */
   const orderOf = (l: ItemLayout) => itemPageFields<{ id: string }>([...pickableFields(collection), ...l.blocks], l, titleField?.id).map((e) => e.id);
   /**
@@ -666,6 +668,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
         <Stack ref={fieldList} gap={7} className="item-fields" {...fieldDrops}>
           <BlockRows
             entries={entries}
+            beside={beside}
             blockOf={(e) => blocksById.get(e.id)}
             onPlace={canPlace ? placeOnPage : undefined}
             onShares={(row, shares) => arrange((l) => ({ ...l, blocks: setRowShares(l.blocks, row, shares) }))}

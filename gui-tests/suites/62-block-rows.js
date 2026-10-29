@@ -1,7 +1,8 @@
 // Blocks side by side (views/BlockRows.tsx, domain/blockRows.ts): a dashboard tab's blocks in rows, as tall as each other
 // on the desktop, a row's max height making a taller block scroll inside; on a phone the same tab stacked as before rows,
 // each block its own height, nothing scrolling inside; a dashboard row collapsing as one; Block settings' "Beside the block
-// above" and the row's height (as its tallest or shortest block, a max or min height), stored and shown at once; a block dragged onto another's
+// above" (the block moving once the panel closes) and the row's height (as its tallest or shortest block, a max or min
+// height), stored at once; a block dragged onto another's
 // side; the divider resizing with its arrow keys; a collection view with "Full width" on and off (its 700px column wide
 // enough) and an item page in rows, a block and a field dragged there.
 
@@ -113,7 +114,7 @@ test("dashboard rows: a row collapses as one, stored on its first block @ deskto
   await t.until("Shelf's caret expands the row again", async () => (await rBlock(t, "r-books").locator("table").count()) === 1 && (await rBlock(t, "r-note").innerText()).includes("Short."));
 }, { viewport: "desktop" });
 
-test("dashboard rows: Beside the block above and the row's height in Block settings, stored and shown at once @ desktop", async (t) => {
+test("dashboard rows: Beside the block above and the row's height in Block settings, stored at once; the block moving once the panel closes @ desktop", async (t) => {
   await t.boot();
   const ids = await t.seed(rowsSpec());
   await t.open(`/dashboards/${ids.dashboards.home}`);
@@ -121,10 +122,11 @@ test("dashboard rows: Beside the block above and the row's height in Block setti
   await blockSettings(t, "r-last");
   const box = () => toolbarPanel(t).getByRole("checkbox", { name: "Beside the block above" });
   await t.check("Block settings offers it, unticked", (await box().count()) === 1 && !(await box().isChecked()));
-  await box().click({ force: true });
+  await t.popoverStep("tick Beside the block above", () => box().click({ force: true }), { target: box(), scope: R_SHOWN });
   await t.until("stored: Last beside More", async () => (await rStoredBlock(t, ids, "r-last"))?.beside === true);
-  await t.until("at once: Last stands beside More", async () => sideBySide(await rRect(t, "r-more"), await rRect(t, "r-last")));
+  await t.check("while the panel is open Last stays where it was", below(await rRect(t, "r-more"), await rRect(t, "r-last")));
   await t.escapeCloses("Escape closes Block settings");
+  await t.until("closed: Last stands beside More", async () => sideBySide(await rRect(t, "r-more"), await rRect(t, "r-last")));
 
   await blockSettings(t, "r-last");
   await toolbarPanel(t).getByRole("combobox", { name: "Row height" }).selectOption("shortest");
@@ -136,13 +138,13 @@ test("dashboard rows: Beside the block above and the row's height in Block setti
   await t.escapeCloses("Escape closes Block settings");
 
   await blockSettings(t, "r-last");
-  await box().click({ force: true });
+  await t.popoverStep("untick it", () => box().click({ force: true }), { target: box(), scope: R_SHOWN });
   await t.until("stored: Last on a row of its own again, taking the row's settings with it", async () => {
     const b = await rStoredBlock(t, ids, "r-last");
     return b && !b.beside && b.rowHeight === 12 && b.rowFit === "shortest";
   });
-  await t.until("Last is below More again", async () => below(await rRect(t, "r-more"), await rRect(t, "r-last")));
   await t.escapeCloses("Escape closes Block settings");
+  await t.until("closed: Last is below More again", async () => below(await rRect(t, "r-more"), await rRect(t, "r-last")));
   await blockSettings(t, "r-books");
   await t.check("the first block of the tab isn't offered it (nothing above it)", (await box().count()) === 0);
   await t.escapeCloses("Escape closes Block settings");

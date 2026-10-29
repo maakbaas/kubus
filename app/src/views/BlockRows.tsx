@@ -91,6 +91,11 @@ interface Props<T extends { id: string }> {
   entries: T[];
   /** The block an entry is (absent: a field of an item page, a row of its own). */
   blockOf(entry: T): ViewBlock | undefined;
+  /**
+   * Which blocks are beside the block above them, as shown: held while a toolbar panel is open (`heldBeside`), so a block
+   * put beside another in its Block settings doesn't jump away with its open panel; absent: the blocks' own.
+   */
+  beside?: Record<string, boolean>;
   render(entry: T, placed: PlacedBlock): ReactNode;
   /** A block dropped on another (absent: blocks aren't dragged here). */
   onPlace?(dragId: string, targetId: string, zone: RowZone): void;
@@ -98,9 +103,15 @@ interface Props<T extends { id: string }> {
   onShares?(row: string[], shares: number[]): void;
 }
 
-/** The rows shown: entries grouped by their blocks' `beside`. */
-export function shownRows<T extends { id: string }>(entries: T[], blockOf: (entry: T) => ViewBlock | undefined): T[][] {
-  return blockRows(entries, blockOf);
+/** Each block's `beside`, to hold while a panel is open (`usePanelsOpen().hold`). */
+export const besideOf = (blocks: ViewBlock[]): Record<string, boolean> => Object.fromEntries(blocks.map((b) => [b.id, !!b.beside]));
+
+/** The rows shown: entries grouped by their blocks' `beside` (or the held ones). */
+export function shownRows<T extends { id: string }>(entries: T[], blockOf: (entry: T) => ViewBlock | undefined, beside?: Record<string, boolean>): T[][] {
+  return blockRows(entries, (e) => {
+    const block = blockOf(e);
+    return block && { beside: (beside?.[block.id] ?? block.beside) ? true : undefined };
+  });
 }
 
 /**
@@ -119,9 +130,9 @@ export function zoneAt(e: DragEvent, cell: HTMLElement): RowZone {
   return e.clientY - r.top < r.height / 2 ? "top" : "bottom";
 }
 
-export function BlockRows<T extends { id: string }>({ entries, blockOf, render, onPlace, onShares }: Props<T>) {
+export function BlockRows<T extends { id: string }>({ entries, blockOf, beside, render, onPlace, onShares }: Props<T>) {
   const [drop, setDrop] = useState<{ id: string; zone: RowZone } | null>(null);
-  const rows = shownRows(entries, blockOf);
+  const rows = shownRows(entries, blockOf, beside);
   return (
     <>
       {rows.map((row) => {
