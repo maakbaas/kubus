@@ -545,7 +545,7 @@ export function createApi(repo: Repository): Router {
         const space = spaceOf(w, text(o, "space"));
         const values = await valuesIn(collection, o.values ?? {}, exist(w));
         if (collection.fields.some((f) => f.kind === "ai" && f.id in values)) throw new HttpError(400, "AI fields are generated: set them with PUT /api/v1/items/{id}/ai/{field}");
-        const id = await repo.createItem(collection, values, space.id);
+        const id = await rule(repo.createItem(collection, values, space.id));
         return itemAnswer(id, 201);
       })
       .add("GET", "/api/v1/items/{id}", async (_req, { id }) => {

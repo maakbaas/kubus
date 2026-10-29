@@ -54,6 +54,15 @@ export async function readJson(req: ApiRequest, limit: number): Promise<unknown>
   }
 }
 
+/** A path segment decoded; 400 when its percent escapes are malformed. */
+function decodePart(part: string): string {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    throw new HttpError(400, "Malformed address");
+  }
+}
+
 export class Router {
   private routes: Route[] = [];
 
@@ -84,8 +93,8 @@ export class Router {
       if (!m) continue;
       pathMatched = true;
       if (route.method !== req.method && !(req.method === "HEAD" && route.method === "GET")) continue;
-      const params = Object.fromEntries(route.names.map((name, i) => [name, decodeURIComponent(m[i + 1])]));
       try {
+        const params = Object.fromEntries(route.names.map((name, i) => [name, decodePart(m[i + 1])]));
         return await route.handler(req, params);
       } catch (e) {
         if (e instanceof HttpError) return json(e.status, { error: e.message });

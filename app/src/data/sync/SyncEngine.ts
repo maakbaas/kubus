@@ -330,6 +330,11 @@ export class SyncEngine implements SyncControl {
         this.setStatus({ state: "syncing" });
         try {
           await this.syncOnce();
+          // Switched off while it ran: it stays off (not "up to date").
+          if (!this.active) {
+            this.setStatus({ state: "off", error: null });
+            break;
+          }
           this.setStatus({ state: "idle", lastSync: new Date().toISOString(), error: null });
           // With what other devices did applied: files unused long enough go (here and on the server).
           await this.files.sweep().catch((e) => console.warn("File clean-up failed", e));

@@ -59,6 +59,15 @@ describe("the item itself", () => {
     // A new item isn't given an id by it.
     expect(filterPreset(collection, [{ ...rule("is"), value: "3" }])).toEqual({});
   });
+
+  it("matches nothing for a value the page's item doesn't have, not everything", () => {
+    const withAuthor: Collection = { ...collection, fields: [...collection.fields, field("author", "Author", "string", 2), field("mentor", "Mentor", "string", 3)] };
+    const page = { collection: withAuthor, item: { ...books[2], values: { ...books[2].values, mentor: null } }, refLabel: () => "" };
+    const run = (operator: "is" | "isNot") => ids(applyQuery(withAuthor, books, { ...defaultQuery(), filters: resolveFilterValues([{ id: "f", fieldId: "title", operator, value: `${PAGE_ITEM}.mentor` }], page) }, ctx));
+    expect(run("is")).toEqual([]);
+    // "Is not" nothing holds for every item.
+    expect(run("isNot")).toEqual(["2", "3", "1"]);
+  });
 });
 
 describe("And and Or", () => {

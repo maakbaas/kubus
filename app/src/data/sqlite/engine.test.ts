@@ -2,6 +2,7 @@
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "../migrations";
+import { DirectSqlClient } from "./direct";
 import { ensureSchema, type SchemaPlan } from "./engine";
 
 let sqlite3: Db;
@@ -97,3 +98,71 @@ describe("the schema", () => {
     expect(version(db)).toBe(3);
   });
 });
+
+describe("migrations that break references", () => {
+  const V1_REFS = `${V1} CREATE TABLE tag (id TEXT PRIMARY KEY, note TEXT REFERENCES notes (id));`;
+  const refs = (up: string): SchemaPlan => ({
+    schema: V1_REFS,
+    triggers: trigger("name"),
+    migrations: [{ version: 2, description: "tag a note", up }],
+  });
+  const old = (): Db => {
+    const db = open();
+    db.exec(`${V1_REFS} PRAGMA user_version = 1; INSERT INTO notes VALUES ('n1', 'Milk', NULL); INSERT INTO tag VALUES ('t1', 'n1');`);
+    return db;
+  };
+
+  it("are refused, and leave the database as it was", () => {
+    const db = old();
+    expect(() => ensureSchema(db, refs("INSERT INTO tag VALUES ('t2', 'missing')"))).toThrow(/broke references between rows/);
+    expect(version(db)).toBe(1);
+    expect(rows(db, "SELECT id FROM tag")).toEqual([{ id: "t1" }]);
+  });
+
+  it("pass when they only keep the references they found", () => {
+    const db = old();
+    ensureSchema(db, refs("INSERT INTO tag VALUES ('t2', 'n1')"));
+    expect(version(db)).toBe(2);
+    expect(rows(db, "SELECT id FROM tag ORDER BY id")).toEqual([{ id: "t1" }, { id: "t2" }]);
+  });
+});
+
+describe("the engine", () => {
+  it("commits a change set whole or not at all, and answers reads as objects", async () => {
+    const client = await DirectSqlClient.open();
+    await expect(
+      client.write([
+        { sql: "INSERT INTO meta (key, value) VALUES (?1, ?2)", bind: ["a", "1"] },
+        { sql: "INSERT INTO meta (key, value) VALUES (?1, ?2)", bind: ["a", "2"] }, // the key is taken
+      ]),
+    ).rejects.toThrow();
+    expect(await client.select("SELECT * FROM meta WHERE key = 'a'")).toEqual([]);
+    await client.write([{ sql: "INSERT INTO meta (key, value) VALUES (?1, ?2)", bind: ["a", "1"] }]);
+    expect(await client.select("SELECT key, value FROM meta WHERE key = ?1", ["a"])).toEqual([{ key: "a", value: "1" }]);
+  });
+
+  it("enforces foreign keys once its schema is in place", async () => {
+    const client = await DirectSqlClient.open();
+    await expect(client.write([{ sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES ('i', 'nowhere', 'default', 't', 't')" }])).rejects.toThrow(/FOREIGN KEY/);
+  });
+
+  it("wipes to a new database: every table empty, the schema in place, foreign keys back on", async () => {
+    const client = await DirectSqlClient.open();
+    await client.write([
+      { sql: "INSERT INTO collections (id, name, plural_name, created_at, updated_at) VALUES ('c', 'C', 'Cs', 't', 't')" },
+      { sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES ('i', 'c', 'default', 't', 't')" },
+    ]);
+    expect(await client.select("SELECT count(*) AS n FROM sync_outbox")).not.toEqual([{ n: 0 }]);
+    await client.wipe();
+    for (const table of ["collections", "items", "sync_outbox", "meta"]) expect(await client.select(`SELECT * FROM ${table}`), table).toEqual([]);
+    await client.write([{ sql: "INSERT INTO collections (id, name, plural_name, created_at, updated_at) VALUES ('c2', 'C', 'Cs', 't', 't')" }]);
+    expect(await client.select("SELECT sql FROM sqlite_master WHERE name = 'sync_collections_insert'")).toHaveLength(1);
+    await expect(client.write([{ sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES ('i2', 'nowhere', 'default', 't', 't')" }])).rejects.toThrow(/FOREIGN KEY/);
+  });
+
+  it("reports SQLite's version", async () => {
+    const client = await DirectSqlClient.open();
+    expect(client.info).toEqual({ persistent: false, sqliteVersion: expect.stringMatching(/^3\.\d+/) });
+  });
+});
+

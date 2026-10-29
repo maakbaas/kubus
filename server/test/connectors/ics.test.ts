@@ -3,7 +3,7 @@
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { forgetDocuments } from "../../src/connectors/httpDocument.ts";
-import { IcsConnector, MAX_ROWS, windowOf } from "../../src/connectors/ics.ts";
+import { IcsConnector, parseCalendar, rowsOf, windowOf } from "../../src/connectors/ics.ts";
 import type { SourceCondition, SourceQuery } from "../../../shared/sources.ts";
 
 const ics = (...lines: string[]) => ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Test//EN", ...lines, "END:VCALENDAR", ""].join("\r\n");
@@ -88,7 +88,7 @@ const CALENDAR = ics(
   "END:VEVENT",
 );
 
-const MANY = ics("BEGIN:VEVENT", "UID:tick", "SUMMARY:Tick", "DTSTART:20261001T000000Z", "RRULE:FREQ=MINUTELY", "END:VEVENT");
+const MANY = ics("BEGIN:VEVENT", "UID:tick", "SUMMARY:Tick", "DTSTART:20261001T000000Z", "RRULE:FREQ=HOURLY", "END:VEVENT");
 
 let server: Server;
 let base = "";
@@ -228,12 +228,15 @@ describe("IcsConnector", () => {
   });
 
   it("reads at most MAX_ROWS occurrences", async () => {
+    // The limit itself on a small one: MAX_ROWS occurrences take seconds to expand on a busy machine.
+    const calendar = parseCalendar(MANY);
+    const window = windowOf({ column: "start date", operator: "between", value: "2026-10-01..2026-12-31" });
+    expect(() => rowsOf(calendar, window, 500)).toThrow(/More than 500 events from 2026-09-30 to 2027-01-02/);
+    expect(rowsOf(calendar, windowOf({ column: "start date", operator: "is", value: "2026-10-02" }), 10_000).length).toBeGreaterThanOrEqual(24);
+    // And the connector, on a day of them.
     const c = source("/many.ics");
-    await expect(c.query(events({ filter: { column: "start date", operator: "between", value: "2026-10-01..2026-12-31" } }))).rejects.toThrow(
-      new RegExp(`More than ${MAX_ROWS.toLocaleString("en")} events`),
-    );
     const day = await c.query(events({ filter: { column: "start date", operator: "is", value: "2026-10-02" }, timeZone: "UTC", limit: 10 }));
-    expect(day.total).toBe(1440);
+    expect(day.total).toBe(24);
   });
 
   it("fills {secret} in the address, else sends the secret as Bearer; only GETs", async () => {

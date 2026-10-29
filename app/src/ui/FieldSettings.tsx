@@ -27,6 +27,8 @@ export const newKindPatch = (kind: FieldDraft["kind"]): Partial<FieldDraft> => (
   code: kind === "component" || kind === "ai" ? "" : null,
   output: kind === "component" ? "markdown" : kind === "ai" ? "string" : null,
   frameRatio: null,
+  toggleIcon: null,
+  strikeThrough: false,
 });
 
 /** A component or AI field's component as ComponentChoice edits it. */

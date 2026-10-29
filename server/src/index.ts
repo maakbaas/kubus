@@ -202,7 +202,13 @@ const MIME: Record<string, string> = {
 };
 
 async function serveStatic(url: string, res: ServerResponse) {
-  const path = normalize(decodeURIComponent(url.split("?")[0])).replace(/^([/\\])+/, "");
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(url.split("?")[0]);
+  } catch {
+    return send(res, 400, "Bad request", "text/plain");
+  }
+  const path = normalize(decoded).replace(/^([/\\])+/, "");
   if (path.includes("..")) return send(res, 400, "Bad request", "text/plain");
   // Not the app's: an MCP client looks for OAuth metadata there, which this server has none of.
   if (path.startsWith(".well-known/")) return send(res, 404, "Not found", "text/plain");
