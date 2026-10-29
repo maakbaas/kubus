@@ -22,9 +22,9 @@ import { dateFields, periodRule } from "../domain/datePeriod";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { DatePeriodFilter } from "./DatePeriodFilter";
 
-/** The ways to group by a date field (none for another kind, and for a remote collection: its source groups by the value). An hour is of a date & time only. */
-function dateParts(collection: Collection, field: FieldDef | undefined) {
-  if (collection.source || (field?.kind !== "date" && field?.kind !== "datetime")) return [];
+/** The ways to group by a date field (none for another kind). An hour is of a date & time only. A remote collection's rows are grouped by a part other than the day in the app (groupsInApp). */
+function dateParts(field: FieldDef | undefined) {
+  if ((field?.kind !== "date" && field?.kind !== "datetime")) return [];
   return GROUP_DATES.filter((p) => p.value !== "hour" || field.kind === "datetime");
 }
 
@@ -173,7 +173,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
   const sort = query.sort[0];
   const groupable = pickableFields(collection).filter((f) => canGroup(collection, f));
   const dated = dateFields(collection).length > 0;
-  const groupDates = dateParts(collection, query.groupBy ? fieldsById.get(query.groupBy) : undefined);
+  const groupDates = dateParts(query.groupBy ? fieldsById.get(query.groupBy) : undefined);
 
   return (
     <div className="query-editor">
@@ -313,7 +313,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
               // A date grouping goes with a date field (an hour only with a date & time one).
               const next = groupBy ? fieldsById.get(groupBy) : undefined;
               const { groupDate: _old, ...rest } = query;
-              const keep = query.groupDate && dateParts(collection, next).some((p) => p.value === query.groupDate);
+              const keep = query.groupDate && dateParts(next).some((p) => p.value === query.groupDate);
               onChange({ ...rest, groupBy, ...(keep && { groupDate: query.groupDate }) });
             }}
           >

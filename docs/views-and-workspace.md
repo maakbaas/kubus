@@ -15,9 +15,15 @@ Extension points are registries, not special cases in pages:
   hour (date & time only; a date falls back to day), chosen in "Group dates by" beside Group by. A group's key sorts as time
   does (`2026`, `2026-10`, `2026-W44`, `2026-10-28`, `2026-10-28T14`) and Group order sorts by keys, so groups run
   chronologically; its label reads out ("October 2026", "Week 44, 2026", "28 Oct 2026, 14:00"). A date & time is grouped in
-  the device's time zone. Items without a date form the "(empty)" group, always last. Local collections only: a remote
-  collection's source still groups by the column's value (the contract `shared/sources.ts` and the connectors have no
-  date parts), so "Group dates by" isn't offered there (its day keys do read out as dates).
+  the device's time zone. Items without a date form the "(empty)" group, always last. A remote collection's date column
+  groups too: its source groups by the value itself (a day, as before; its keys read out as dates), so by year, month,
+  week or hour the app does it (`groupsInApp` in `domain/sources.ts`, no connector change): `sourceQuery` then leaves
+  the grouping out (and the group order, which is the app's), the block loads every row as a chart does (`useRemoteResult`
+  `everything`: pages of `MAX_SOURCE_PAGE` rows one after the other, the loading bar with its Cancel) and `groupItems`
+  (the part of `applyQuery` that groups, so labels, order and the "(empty)" group are the local ones) groups the rows
+  in so far, shown at most once a second while loading. Filters and sorting still go to the source (rows keep its sort
+  within a group). Stopped, the groups stay, the block says "Groups of the rows loaded so far: n of N" and "Load all rows"
+  goes on. A block that shows no groups (a chart) loads nothing extra for it.
   A filter value may hold `{{ }}` code, typed and shown as raw text (the one place besides
   components where code runs): `resolveFilterValues` / `filterCodeValue` work it out when the filter
   runs, as if its result had been typed (`{{ 1 == 1 }}` is "true"), reading `$now` and, on an item
