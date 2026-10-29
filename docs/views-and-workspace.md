@@ -184,8 +184,8 @@ Extension points are registries, not special cases in pages:
   Charts' component, data and options for them; `views/ChartCanvas.tsx`: Carbon Charts itself, a lazily loaded chunk with
   d3, so the app doesn't load it until a chart is shown). The block's filter and sort pick its items; everything else is the
   chart's own (`ChartOptions`, all in Block settings, stored right away), so its grouping (Sort and group) isn't used. The
-  settings are a Chart select (13 types in sections: Compare and over time: Bar, Line, Area, Radar; Parts of a whole: Pie,
-  Meter, Treemap, Word cloud; One value: Gauge, Stat; Spread: Histogram, Box plot, Scatter, Heatmap) and an accordion whose
+  settings are a Chart select (15 types in sections: Compare and over time: Bar, Line, Area, Radar; Parts of a whole: Pie,
+  Meter, Treemap, Word cloud; One value: Gauge, Stat; Spread: Histogram, Box plot, Scatter, Heatmap; Regions: Choropleth) and an accordion whose
   sections are fixed per type (Data, Series, Value, Total, Display, Axes, Thresholds, Values and legend, Size), all closed
   when the settings open; a setting
   that doesn't apply because of another one is disabled with the reason under it, never hidden, and a setting depends only
@@ -232,6 +232,29 @@ Extension points are registries, not special cases in pages:
   - **Spread**: a histogram's field (a number or a date: dates on a time axis), bins and Split by; a box plot's field (a
     box per X category); a heatmap's columns (the X axis) × rows (Split by), or with a date X axis and not split a
     calendar (weeks × weekdays; empty cells left undrawn).
+  - **Regions** (choropleth: Carbon's `ChoroplethChart`; `domain/regions.ts`, `regionValues` in domain/chart.ts,
+    `views/regionMaps.ts`): a map's regions coloured by the value (the first series, Value section). Data: Regions, the map
+    (`ChartOptions.regions`: an amCharts geodata map by name, @amcharts/amcharts5-geodata, its LICENSE in `app/src/geodata`):
+    the countries of the world, a continent or an area (World, Africa, Asia, Europe, North and South America, Oceania, Central
+    America, Caribbean, Latin America, Middle East: `BUNDLED_MAPS`, bundled in `app/src/geodata`, each a chunk loaded when shown) or a country's regions
+    (244 maps of 213 countries and territories, `app/src/geodata/maps.json`, grouped by continent: "Netherlands" its provinces, "France ·
+    Departments"), downloaded from jsDelivr at a pinned version (`GEODATA_VERSION`) when chosen and stored as a file
+    (`regions.file`, `files/<id>`: the same bytes on every device, so one file; synced like an image, kept while a block
+    names it: docs/data-model.md, block_file_uses; "Downloading the map…" under the select meanwhile, the map shown until it's done;
+    offline it says so); and Regions from, the field whose values are the regions (a category per value, as the X axis's). A
+    value is a region when it is its code ("NL", "NL-DR") or one of its names (`name`, English `NAME_ENG`), ignoring case,
+    accents and punctuation ("noord holland" is Noord-Holland, "Fryslan" Fryslân), a code first (`regionFinder`); two
+    values of one region ("NL", "Netherlands") are one. A region without items is striped (Carbon's missing data); the
+    values that are no region are listed under the map ("Not on the map: Atlantis (1)", ellipsized, the whole list in its
+    title). The whole map is shown, whichever regions have values: Carbon fits its projection to the regions with a value
+    only (and no data can change that: it reads 0 and empty alike as missing), so after every render the regions are drawn
+    again fitted to the whole map (`frameWholeMap` in ChartCanvas: the size Carbon fitted to, `width.baseVal`, each path's
+    bound feature), centred on its own longitudes (`centreOf`: opposite the widest gap, so a map across 180°, the Aleutians,
+    Fiji, is drawn whole; a world on 0°); the world as Natural Earth, the rest Mercator. Its tooltip is a region's name and value. Carbon's quirks it works round
+    (ChartCanvas): the map must be TopoJSON with the regions in `objects.countries` named by `properties.NAME` (made of the
+    GeoJSON, `topojson-server`, named by the regions' unique keys: `prepare`), and it works the values out once and writes them
+    onto the map's geometries, so new data is a new chart, each on its own copy of the geometries (`copyOfMap`); the
+    TopoJSON stays out of the spec (`ChartCanvas`'s `geoData`; `ChartSpec.map` and `format` name the map).
   - **Axes**: the X axis's title; the left and (while a series uses it) right axis' title, min, max and logarithmic scale.
     Without a min, bars and stacked areas start at 0 and lines, areas and dots fit their values (`includeZero: false`, `FIT`
     in chartSpec.ts), so a weight from 80 to 70 shows its trend.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CHART_KINDS, defaultChartOptions, newSeries, type ChartInput, type ChartOptions, type ChartX } from "../domain/chart";
 import { blankField, type Collection, type Item } from "../domain/model";
 import type { QueryContext } from "../domain/query";
+import { regionsOf } from "../domain/regions";
 import { chartSpec, meterHeight, METER_LABEL_ROW_REM, type ChartSpec } from "./chartSpec";
 
 const collection: Collection = {
@@ -39,10 +40,31 @@ const axes = (s: ChartSpec) => s.options.axes as Record<"left" | "right" | "bott
 describe("chartSpec", () => {
   it("draws every chart type once its settings are chosen", () => {
     const settings: Partial<ChartOptions> = { series: [sum("pages"), sum("rating")], fields: ["pages", "rating", "year"], spreadField: "pages", total: { from: "number", number: 1000, field: null } };
+    // A choropleth of genres: a map whose regions are named like them.
+    const genres = regionsOf([{ properties: { name: "Novel", id: "NO" } }, { properties: { name: "Poetry", id: "PO" } }]);
     for (const { kind } of CHART_KINDS) {
       const x = kind === "scatter" ? { ...byGenre, by: "item" as const, field: "year" } : byGenre;
-      expect(spec({ ...settings, x, chart: kind }).data.length, kind).toBeGreaterThan(0);
+      const s = chartSpec(input(), options({ ...settings, x, chart: kind }), "white", undefined, genres);
+      if ("problem" in s) throw new Error(`${kind}: ${s.problem}`);
+      expect(s.data.length, kind).toBeGreaterThan(0);
     }
+  });
+
+  it("colours a choropleth's regions by the value, named by their keys, its map in the format", () => {
+    const regions = regionsOf([{ properties: { name: "Novel", id: "NV" } }, { properties: { name: "Poetry", id: "PO" } }, { properties: { name: "Essay", id: "ES" } }]);
+    const o = options({ chart: "choropleth", series: [sum("pages")] });
+    expect(chartSpec(input(), o, "white")).toEqual({ problem: "Loading the map…" });
+    const s = chartSpec(input(), o, "white", undefined, regions) as ChartSpec;
+    expect(s.chart).toBe("ChoroplethChart");
+    expect(s.data).toEqual([{ name: "Novel", value: 500 }, { name: "Poetry", value: 80 }]);
+    expect(s.map).toBe("worldLow");
+    expect(s.format).toMatchObject({ map: "worldLow" });
+    expect(s.options).toMatchObject({ thematic: { projection: "geoNaturalEarth1" }, choropleth: { colorLegend: { title: "Sum of Pages" } } });
+    const country = chartSpec(input(), { ...o, regions: { map: "netherlandsLow", file: `files/${"a".repeat(64)}` } }, "white", undefined, regions) as ChartSpec;
+    expect(country.map).toBe(`files/${"a".repeat(64)}`);
+    expect(country.options).toMatchObject({ thematic: { projection: "geoMercator" } });
+    expect(chartSpec(input(), o, "white", undefined, regionsOf([{ properties: { name: "Essay" } }]))).toEqual({ problem: "No value of the field is a region of this map." });
+    expect(chartSpec(input(), { ...o, x: { ...byGenre, field: null } }, "white", undefined, regions)).toEqual({ problem: "Choose the field whose values are the regions." });
   });
 
   it("makes a bar per group, grouped or stacked when split", () => {

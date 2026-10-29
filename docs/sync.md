@@ -133,11 +133,14 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
   nothing about files: it stores, serves and deletes when a device says so.
 - *Clean-up*, by the devices only. A value uses the files it names (an image value, `files/<id>` in
   its text, any field: `filesUsedBy` in `shared/files.ts`); triggers on `field_values` keep that in
-  the local `file_uses` table (through the `file_ids()` function the engine defines). A file is in
-  use when a live item, through a live field, uses it, a thumbnail through its original (`fileInUse`
-  in `SqliteRepository.ts`). When an edit or a sync drops a file's last use, it is marked
+  the local `file_uses` table (through the `file_ids()` function the engine defines); a block uses the files
+  its view's config or its collection's item views name (`files/<id>`: a Markdown block's images, a choropleth's
+  map), kept in `block_file_uses` by triggers on `views` and `collections`. A file is in
+  use when a live item, through a live field, uses it, or a live view's or collection's blocks do, a thumbnail
+  through its original (`fileInUse` in `SqliteRepository.ts`). A file need not be an image: a choropleth's map is
+  GeoJSON (`application/geo+json`), stored, synced and swept the same way. When an edit or a sync drops a file's last use, it is marked
   (`files.unused_since`, local only; `releaseFile`, same transaction; for a sync `filesUsedBefore`,
-  read before the apply). `sweepFiles`, when the app opens and after each sync, unmarks the marked
+  read before the apply: the values, items and fields it replaces or deletes, and the views and collections it replaces). `sweepFiles`, when the app opens and after each sync, unmarks the marked
   files used again and deletes those marked more than a week ago (`FILE_GRACE_MS`), with their
   thumbnail: first on the server (`SyncEngine.deleteFromServer`; one that fails stays for the next
   sweep), then here. A device that doesn't sync deletes only its own; the server's headless device

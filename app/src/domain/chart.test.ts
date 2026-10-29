@@ -39,8 +39,10 @@ import {
   widthFromStop,
   widthLabel,
   widthToStop,
+  regionValues,
 } from "./chart";
 import { blankField, fieldValue, type Collection, type Item } from "./model";
+import { regionsOf } from "./regions";
 import { applyQuery, defaultQuery, type QueryContext } from "./query";
 
 const collection: Collection = {
@@ -816,5 +818,26 @@ describe("chartItems", () => {
     expect(chartItems(result, "page", page)).toEqual([page]);
     expect(chartItems(result, "page", null).map((i) => i.id)).toEqual(["1", "2", "3", "4"]);
     expect(fieldValue(chartItems(result, "page", page)[0], field(collection, "pages"))).toBe(1);
+  });
+});
+
+describe("regionValues", () => {
+  const countries = regionsOf([
+    { properties: { name: "Netherlands", id: "NL" } },
+    { properties: { name: "Denmark", id: "DK" } },
+    { properties: { name: "Belgium", id: "BE" } },
+  ]);
+  const visits = [book("1", "Netherlands", 300, null), book("2", "NL", 200, null), book("3", "Denmark", 80, null), book("4", "Atlantis", 10, null), book("5", null, 5, null)];
+  const values = (o: ChartOptions) => {
+    const r = regionValues(input(visits), o, countries);
+    return { values: r.values.map((v) => [v.region.key, v.value]), unmatched: r.unmatched };
+  };
+
+  it("are the first series' value of each region's items, a region's code and name one region", () => {
+    expect(values(options({ chart: "choropleth", series: [count] }, byGenre))).toEqual({
+      values: [["Denmark", 1], ["Netherlands", 2]],
+      unmatched: [{ label: "Atlantis", items: 1 }],
+    });
+    expect(values(options({ chart: "choropleth", series: [sumPages] }, byGenre)).values).toEqual([["Denmark", 80], ["Netherlands", 500]]);
   });
 });

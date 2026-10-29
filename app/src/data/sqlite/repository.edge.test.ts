@@ -592,6 +592,72 @@ describe("files", () => {
     await repo.deleteCollection(photo.id);
     expect(await unusedSince(file)).not.toBeNull();
   });
+
+  it("are kept while a view's or an item view's blocks use them, and marked once none does", async () => {
+    const photo = await photoCollection();
+    const [all] = await repo.listViews(photo.id, "default");
+    const inView = await repo.putFile(bytes("in a Markdown block"), "image/png");
+    const inItemView = await repo.putFile(bytes("a choropleth's map"), "application/json");
+    const block = (text: string) => ({ ...all.blocks[0], id: newId(), kind: "markdown", options: { text } });
+    await repo.saveView({ ...all, blocks: [...all.blocks, block(`![](files/${inView})`)] });
+    const itemView = photo.itemViews[0];
+    await repo.saveItemViews(photo.id, [{ ...itemView, layout: { ...itemView.layout, blocks: [block(`files/${inItemView}`)] } }]);
+    // An edit's uploads are released when it ends: a block's file stays in use.
+    await repo.releaseFiles([inView, inItemView]);
+    await repo.sweepFiles(later());
+    expect(await unusedSince(inView)).toBeNull();
+    expect(await unusedSince(inItemView)).toBeNull();
+    await repo.saveView({ ...all, blocks: all.blocks });
+    expect(await unusedSince(inView)).not.toBeNull();
+    await repo.saveItemViews(photo.id, [itemView]);
+    expect(await unusedSince(inItemView)).not.toBeNull();
+  });
+
+  it("used by a view's blocks are marked when the view, its collection or its space is deleted", async () => {
+    const photo = await photoCollection();
+    const [all] = await repo.listViews(photo.id, "default");
+    const withFile = async (name: string) => {
+      const file = await repo.putFile(bytes(name), "image/png");
+      const ts = new Date().toISOString();
+      const id = newId();
+      await repo.saveView({ ...all, id, name, createdAt: ts, updatedAt: ts, blocks: [{ ...all.blocks[0], id: newId(), kind: "markdown", options: { text: `![](files/${file})` } }] });
+      return { file, id };
+    };
+    const a = await withFile("a");
+    await repo.deleteView(a.id);
+    expect(await unusedSince(a.file)).not.toBeNull();
+    const b = await withFile("b");
+    await repo.deleteCollection(photo.id);
+    expect(await unusedSince(b.file)).not.toBeNull();
+  });
+
+  it("used by a dashboard tab's blocks are kept, and marked when the tab, its dashboard or its space goes", async () => {
+    await repo.saveSpace({ id: "work", name: "Work", icon: null });
+    const withFile = async (name: string, spaceId = "default") => {
+      const id = newId();
+      await repo.saveDashboard({ id, name, icon: null, description: "", spaceIds: [spaceId] }, spaceId);
+      const [tab] = await repo.listDashboardViews(id, spaceId);
+      const file = await repo.putFile(bytes(name), "image/png");
+      await repo.saveDashboardView({ ...tab, blocks: [{ id: newId(), kind: "markdown", collectionId: null, title: "", filters: [], sorts: [], options: { text: `![](files/${file})` } } as unknown as (typeof tab.blocks)[number]] });
+      await repo.releaseFiles([file]);
+      await repo.sweepFiles(later());
+      expect(await unusedSince(file)).toBeNull();
+      return { file, id, tab: tab.id };
+    };
+    const a = await withFile("a");
+    await repo.deleteDashboardView(a.tab);
+    expect(await unusedSince(a.file)).not.toBeNull();
+    const b = await withFile("b");
+    await repo.deleteDashboard(b.id);
+    expect(await unusedSince(b.file)).not.toBeNull();
+    const c = await withFile("c", "work");
+    await repo.deleteSpace("work");
+    expect(await unusedSince(c.file)).not.toBeNull();
+    const d = await withFile("d");
+    const [tab] = await repo.listDashboardViews(d.id, "default");
+    await repo.saveDashboardView({ ...tab, blocks: [] });
+    expect(await unusedSince(d.file)).not.toBeNull();
+  });
 });
 
 describe("search", () => {

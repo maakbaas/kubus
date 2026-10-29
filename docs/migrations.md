@@ -41,7 +41,9 @@ append-only migrations in one transaction, the version stored in the database.
 |---|---|---|
 | 2 | `item_links` (which items each value links to, for backlinks; docs/data-model.md "Item links"): the table, its index and the two triggers on `field_values`, the rows of the values already there (`link_targets`, defined by the engine before it migrates), queued for the server as a migration queues nothing by itself | `SYNC_VERSION` 2. The server makes the table by itself. |
 | 3 | `dashboards` and `dashboard_views` (a dashboard's tabs, per space) with its index; `bookmarks` rebuilt (a CHECK and a NOT NULL change): `kind` may be `dashboard`, `collection_id` nullable, `dashboard_id` added last. Its rows are copied as they are; nothing is queued | `SYNC_VERSION` 3. The server makes the tables and the column by itself (its tables have no CHECKs, and no NOT NULL but keys). |
+| 4 | `block_file_uses` (the files blocks use: a Markdown block's images, a choropleth's map; docs/data-model.md): the table, its index, the insert / update / delete triggers on `views` (`config`), `collections` (`item_views`) and `dashboard_views` (`config`), and the rows of the live views, collections and dashboard tabs already there (`file_ids`). Before it a Markdown block's pasted image was released when its editor closed and swept a week later. | None: local only and derived, nothing synced changes. |
 
+A chart's `regions` (a choropleth's map) is a key in its block's options, like the next: no sync version; an older device shows the chart as its default kind.
 A block listing several collections keeps `collectionIds` and `merges` in its JSON (a view's config, an item view's layout): no schema change, no
 migration, no sync version. An older device parses blocks leniently (`parseBlock`, `parseLayout` leave what they don't know) and shows such a block
 as its first collection only; saving a view there drops the two keys.

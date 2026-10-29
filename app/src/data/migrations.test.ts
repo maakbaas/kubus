@@ -159,4 +159,28 @@ describe("migrations", () => {
     const after = await client.select<{ tbl: string }>("SELECT DISTINCT tbl FROM sync_outbox WHERE id > ?1 AND tbl <> 'item_links' ORDER BY tbl", [Math.max(0, ...queued)]);
     expect(after.map((r) => r.tbl)).toEqual(["bookmarks", "dashboard_views", "dashboards"]);
   });
+
+  it("record the files the blocks already there use (migration 4), of live views and collections only", async () => {
+    const [a, b, c] = ["a", "b", "c"].map((x) => x.repeat(64));
+    const client = await openTestClient((db: Db) => {
+      db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
+      db.exec(firstRelease);
+      db.exec(firstReleaseData);
+      const config = (file: string) => JSON.stringify({ filters: [], blocks: [{ id: "m", kind: "markdown", options: { text: `![](files/${file})` } }] });
+      db.exec(`INSERT INTO views (id, collection_id, space_id, name, config, created_at, updated_at) VALUES ('view-images', 'collection-book', 'default', 'Images', '${config(a)}', '2026-10-28T10:00:00.000Z', '2026-10-28T10:00:00.000Z')`);
+      db.exec(`INSERT INTO views (id, collection_id, space_id, name, config, created_at, updated_at, deleted_at) VALUES ('view-gone', 'collection-book', 'default', 'Gone', '${config(b)}', '2026-10-28T10:00:00.000Z', '2026-10-28T10:00:00.000Z', '2026-10-28T10:00:00.000Z')`);
+      db.exec(`UPDATE collections SET item_views = '${JSON.stringify([{ id: "v", name: "Default", isDefault: true, layout: { blocks: [{ id: "m", kind: "chart", options: { regions: { file: `files/${c}` } } }] } }])}' WHERE id = 'collection-book'`);
+      db.exec("PRAGMA user_version = 1");
+    });
+    expect(await client.select("SELECT file_id, owner_id FROM block_file_uses ORDER BY file_id")).toEqual([
+      { file_id: a, owner_id: "view-images" },
+      { file_id: c, owner_id: "collection-book" },
+    ]);
+    // A dashboard tab's blocks count too (its triggers came with the migration).
+    const repo = await SqliteRepository.open(client, memoryEnvironment());
+    await repo.saveDashboard({ id: "dash", name: "Home", icon: null, description: "", spaceIds: ["default"] }, "default");
+    const [tab] = await repo.listDashboardViews("dash", "default");
+    await repo.saveDashboardView({ ...tab, blocks: [{ id: "m", kind: "markdown", options: { text: `![](files/${b})` } }] } as typeof tab);
+    expect(await client.select("SELECT file_id FROM block_file_uses WHERE owner_id = ?1", [tab.id])).toEqual([{ file_id: b }]);
+  });
 });

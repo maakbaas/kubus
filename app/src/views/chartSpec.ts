@@ -14,6 +14,7 @@ import {
   partsOf,
   percentOf,
   radarValues,
+  regionValues,
   scatterPoints,
   seriesLabel,
   singleValue,
@@ -36,6 +37,7 @@ import {
   type ThresholdStatus,
 } from "../domain/chart";
 import { pickableFields, type FieldDef } from "../domain/model";
+import { WORLD_MAP, type Region } from "../domain/regions";
 import { blockHeightCss } from "../domain/views";
 
 /** The Carbon Charts components a chart block uses (named as @carbon/charts-react exports them). */
@@ -59,10 +61,13 @@ export type CarbonChart =
   | "BubbleChart"
   | "HeatmapChart"
   | "GaugeChart"
-  | "MeterChart";
+  | "MeterChart"
+  | "ChoroplethChart";
 
 export interface ChartSpec {
   chart: CarbonChart;
+  /** A choropleth's map: which (its `format` names it too), drawn with its TopoJSON (ChartCanvas's `geoData`). */
+  map?: string;
   data: Record<string, unknown>[];
   options: Record<string, unknown>;
   /**
@@ -338,9 +343,10 @@ function partsProblem(input: ChartInput, options: ChartOptions): string | null {
 /**
  * The chart for a block: its type's Carbon chart, data and options; or why there is nothing to draw
  * (a setting still to choose, no items). A stat's sparkline takes its colour from the block's `stat` (statOf,
- * which the block works out for its figure; worked out here when not given).
+ * which the block works out for its figure; worked out here when not given). A choropleth needs its map's
+ * `regions` (views/regionMaps.ts loads them).
  */
-export function chartSpec(input: ChartInput, options: ChartOptions, theme: string, stat?: Stat): ChartSpec | Problem {
+export function chartSpec(input: ChartInput, options: ChartOptions, theme: string, stat?: Stat, regions?: Region[]): ChartSpec | Problem {
   const { collection, items } = input;
   const fields = new Map(pickableFields(collection).map((f) => [f.id, f]));
   const first = options.series[0];
@@ -626,6 +632,27 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
           heatmap: { colorLegend: { title: seriesLabel(first, collection) }, colorDomain: { min: Math.min(0, ...values), max: Math.max(...values) } },
         }),
         format,
+      };
+    }
+    case "choropleth": {
+      if (!xField(collection, { ...options.x, by: "field" })) return { problem: "Choose the field whose values are the regions." };
+      if (needsField(first, collection)) return valueMissing;
+      if (!regions) return { problem: "Loading the map…" };
+      if (items.length === 0) return noItems;
+      const { values } = regionValues(input, options, regions);
+      if (values.length === 0) return { problem: "No value of the field is a region of this map." };
+      const map = options.regions.file ?? options.regions.map;
+      return {
+        chart: "ChoroplethChart",
+        map,
+        data: values.map((v) => ({ name: v.region.key, value: v.value })),
+        options: base(options, theme, true, {
+          // The world as an equal-area map; a country or Europe as the familiar Mercator.
+          thematic: { projection: options.regions.map === WORLD_MAP ? "geoNaturalEarth1" : "geoMercator" },
+          choropleth: { colorLegend: { title: seriesLabel(first, collection), type: "linear" } },
+          tooltip: tooltip(options, input),
+        }),
+        format: formatOf(options, { map }),
       };
     }
   }

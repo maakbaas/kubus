@@ -3229,6 +3229,13 @@ img[data-lightbox] {
 .chart-block__problem {
   margin: 0;
 }
+/* A choropleth's values that are no region of its map: one line, the whole list in its title. */
+.chart-block__unmatched {
+  margin: var(--cds-spacing-03) 0 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 /* A chart's settings: notes span the options grid. */
 .chart-options__note {
   grid-column: 1 / -1;

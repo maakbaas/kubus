@@ -122,4 +122,42 @@ ALTER TABLE bookmarks_new RENAME TO bookmarks;
 CREATE INDEX idx_bookmarks_target ON bookmarks(target_id);
 `,
   },
+  {
+    version: 4,
+    description: "block_file_uses: the files blocks use (a Markdown block's images, a choropleth's map; of collection views, item views and dashboard tabs), so clean-up keeps them",
+    up(db) {
+      // Local only and derived: made from the views and collections already there, nothing to sync.
+      db.exec(`
+CREATE TABLE block_file_uses (
+  file_id  TEXT NOT NULL,
+  owner_id TEXT NOT NULL,
+  PRIMARY KEY (file_id, owner_id)
+);
+CREATE INDEX idx_block_file_uses_owner ON block_file_uses(owner_id);
+${blockFileUsesTriggers("view", "views", "config")}
+${blockFileUsesTriggers("collection", "collections", "item_views")}
+${blockFileUsesTriggers("dashboard_view", "dashboard_views", "config")}
+INSERT OR IGNORE INTO block_file_uses (file_id, owner_id)
+  SELECT j.value, v.id FROM views v, json_each(file_ids(NULL, v.config)) j WHERE v.deleted_at IS NULL AND instr(v.config, 'files/') > 0;
+INSERT OR IGNORE INTO block_file_uses (file_id, owner_id)
+  SELECT j.value, c.id FROM collections c, json_each(file_ids(NULL, c.item_views)) j WHERE c.deleted_at IS NULL AND instr(c.item_views, 'files/') > 0;
+INSERT OR IGNORE INTO block_file_uses (file_id, owner_id)
+  SELECT j.value, d.id FROM dashboard_views d, json_each(file_ids(NULL, d.config)) j WHERE d.deleted_at IS NULL AND instr(d.config, 'files/') > 0;
+`);
+    },
+  },
 ];
+
+/** block_file_uses' triggers on one owner table (schema.sql): its blocks' JSON column. Frozen with migration 4. */
+function blockFileUsesTriggers(name: string, table: string, column: string): string {
+  const write = (op: "insert" | "update") => `CREATE TRIGGER block_file_uses_${name}_${op} AFTER ${op.toUpperCase()} ON ${table} BEGIN
+  DELETE FROM block_file_uses WHERE owner_id = NEW.id;
+  INSERT OR IGNORE INTO block_file_uses (file_id, owner_id)
+    SELECT value, NEW.id FROM json_each(CASE WHEN NEW.deleted_at IS NULL AND instr(NEW.${column}, 'files/') > 0 THEN file_ids(NULL, NEW.${column}) ELSE '[]' END);
+END;`;
+  return `${write("insert")}
+${write("update")}
+CREATE TRIGGER block_file_uses_${name}_delete AFTER DELETE ON ${table} BEGIN
+  DELETE FROM block_file_uses WHERE owner_id = OLD.id;
+END;`;
+}

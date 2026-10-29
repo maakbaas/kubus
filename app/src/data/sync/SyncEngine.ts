@@ -451,18 +451,21 @@ export class SyncEngine implements SyncControl {
 
   /**
    * The files this device's rows use that incoming rows may stop using: the uses of the values they
-   * replace, and of the items and fields they delete. Read before they are applied.
+   * replace, of the items and fields they delete, and of the blocks of the views and collections they
+   * replace. Read before they are applied.
    */
   private async filesUsedBefore(changes: WireChanges): Promise<string[]> {
     const values = (changes.field_values ?? []).map((r) => [r.item_id, r.field_id]);
     const items = (changes.items ?? []).filter((r) => r.deleted_at !== null).map((r) => r.id);
     const fields = (changes.fields ?? []).filter((r) => r.deleted_at !== null).map((r) => r.id);
-    if (values.length + items.length + fields.length === 0) return [];
+    const owners = [...(changes.views ?? []), ...(changes.collections ?? [])].map((r) => r.id);
+    if (values.length + items.length + fields.length + owners.length === 0) return [];
     const rows = await this.db.select<{ file_id: string }>(
-      `SELECT DISTINCT file_id FROM file_uses
+      `SELECT file_id FROM file_uses
         WHERE (item_id, field_id) IN (SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?1))
-           OR item_id IN (SELECT value FROM json_each(?2)) OR field_id IN (SELECT value FROM json_each(?3))`,
-      [JSON.stringify(values), JSON.stringify(items), JSON.stringify(fields)],
+           OR item_id IN (SELECT value FROM json_each(?2)) OR field_id IN (SELECT value FROM json_each(?3))
+       UNION SELECT file_id FROM block_file_uses WHERE owner_id IN (SELECT value FROM json_each(?4))`,
+      [JSON.stringify(values), JSON.stringify(items), JSON.stringify(fields), JSON.stringify(owners)],
     );
     return rows.map((r) => r.file_id);
   }

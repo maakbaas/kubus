@@ -3,6 +3,7 @@ import {
   AreaChart,
   BoxplotChart,
   BubbleChart,
+  ChoroplethChart,
   ComboChart,
   DonutChart,
   GaugeChart,
@@ -22,7 +23,10 @@ import {
   WordCloudChart,
 } from "@carbon/charts-react";
 import "@carbon/charts-react/styles.css";
+import { geoMercator, geoNaturalEarth1, geoPath, type GeoPermissibleObjects } from "d3-geo";
+import type { GeometryCollection, Topology } from "topojson-specification";
 import type { CarbonChart, ChartSpec } from "./chartSpec";
+import { wholeMap } from "./regionMaps";
 
 // The Carbon Charts part of a chart block, in its own chunk: loaded (with d3) the first time a
 // chart is shown, not with the app.
@@ -48,6 +52,7 @@ const CHARTS: Record<CarbonChart, unknown> = {
   HeatmapChart,
   GaugeChart,
   MeterChart,
+  ChoroplethChart,
 };
 
 /** The chart instance a Carbon Charts component holds, as far as it is used here: its events. */
@@ -103,16 +108,64 @@ function useStableSpec(spec: ChartSpec): { spec: ChartSpec; drawing: string } {
   const key = JSON.stringify(spec);
   if (last.current?.key !== key) {
     const series = [...new Set(spec.data.map((d) => (d as { group?: unknown }).group))];
-    last.current = { key, spec, drawing: `${spec.chart}:${JSON.stringify([spec.options, spec.format, series])}` };
+    // A choropleth works its regions' values out once (Carbon's ChoroplethModel keeps them): new data is a new chart.
+    const data = spec.chart === "ChoroplethChart" ? spec.data : null;
+    last.current = { key, spec, drawing: `${spec.chart}:${JSON.stringify([spec.options, spec.format, series, data])}` };
   }
   return last.current;
 }
 
 /**
+ * A choropleth's map for one drawing: Carbon writes the regions' values onto the map's geometries
+ * (ChoroplethModel.getCombinedData), so each chart gets its own copy of them (the shapes are shared).
+ */
+function copyOfMap(map: Topology): Topology {
+  const countries = map.objects.countries as GeometryCollection;
+  return { ...map, objects: { ...map.objects, countries: { ...countries, geometries: countries.geometries.map((g) => ({ ...g })) } } };
+}
+
+/** The projections a choropleth uses (chartSpec's `thematic.projection`). */
+const PROJECTIONS: Record<string, () => ReturnType<typeof geoMercator>> = { geoNaturalEarth1, geoMercator };
+
+/**
+ * Frames a drawn choropleth on its whole map. Carbon fits the projection to the regions with a value
+ * only (GeoProjection.render), so a world of values in the Americas showed the Americas alone; here
+ * it is fitted to every region, centred on the map (`centreOf`), and the regions are drawn again with
+ * it (each path keeps the feature d3 bound to it, `__data__`, and its event handlers). Runs on every
+ * render-finished (a resize too).
+ */
+function frameWholeMap(holder: HTMLElement, map: Topology, projection: string) {
+  const geo = holder.querySelector("g.geo");
+  const svg = geo?.parentElement;
+  const make = PROJECTIONS[projection];
+  if (!geo || !(svg instanceof SVGSVGElement) || !make) return;
+  // The size Carbon fitted to: its container's resolved width and height ("100%" of its frame; DOMUtils.getSVGElementSize).
+  // Not its bounding box: that is the drawing's, which overflows the frame.
+  const width = svg.width.baseVal.value;
+  const height = svg.height.baseVal.value;
+  if (width < 1 || height < 1) return;
+  const { regions, centre } = wholeMap(map);
+  const path = geoPath(make().rotate([-centre, 0]).fitSize([width, height], regions));
+  for (const el of holder.querySelectorAll<SVGPathElement & { __data__?: GeoPermissibleObjects }>("g.geo path, g.missing-data path")) {
+    if (el.__data__) el.setAttribute("d", path(el.__data__) ?? "");
+  }
+}
+
+/**
  * A Carbon chart; clicking a dot of a scatter opens its item (`onItem`, by the item's id). Its
  * height (the spec's) is the most it takes: a round chart narrower than that is fitted to its drawing.
+ * A choropleth is drawn on `geoData`, its map's TopoJSON (views/regionMaps.ts), kept out of the spec,
+ * which is compared as JSON.
  */
-export default function ChartCanvas({ spec: latest, onItem }: { spec: ChartSpec; onItem?(itemId: string, event: MouseEvent | undefined): void }) {
+export default function ChartCanvas({
+  spec: latest,
+  geoData,
+  onItem,
+}: {
+  spec: ChartSpec;
+  geoData?: Topology;
+  onItem?(itemId: string, event: MouseEvent | undefined): void;
+}) {
   const { spec, drawing } = useStableSpec(latest);
   const Chart = CHARTS[spec.chart] as React.ComponentType<{ data: unknown; options: unknown; ref: React.Ref<Instance> }>;
   const ref = useRef<Instance>(null);
@@ -147,6 +200,8 @@ export default function ChartCanvas({ spec: latest, onItem }: { spec: ChartSpec;
     let frame = 0;
     const rendered = () => {
       const el = box.current;
+      // Before the browser paints Carbon's framing.
+      if (el && geoRef.current && spec.chart === "ChoroplethChart") frameWholeMap(el, geoRef.current, String((spec.options.thematic as { projection?: string })?.projection));
       if (!part || !el) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
@@ -165,7 +220,13 @@ export default function ChartCanvas({ spec: latest, onItem }: { spec: ChartSpec;
       events.removeEventListener("render-finished", rendered);
     };
   }, [drawing, part]);
-  const options = useMemo(() => (fitted === null ? spec.options : { ...spec.options, height: `${fitted}px` }), [spec, fitted]);
+  const map = useMemo(() => (geoData ? copyOfMap(geoData) : null), [geoData, drawing]); // eslint-disable-line react-hooks/exhaustive-deps
+  const geoRef = useRef(geoData);
+  geoRef.current = geoData;
+  const options = useMemo(() => {
+    const sized = fitted === null ? spec.options : { ...spec.options, height: `${fitted}px` };
+    return map ? { ...sized, geoData: map } : sized;
+  }, [spec, fitted, map]);
   // New options (or a new chart type) are a new chart: Carbon merges new options into its old ones,
   // so whatever was taken out (a threshold, an axis's min, a title) would stay drawn. New data alone
   // is drawn in place.

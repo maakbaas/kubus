@@ -32,6 +32,7 @@
     "@sqlite.org/sqlite-wasm": "^3.53.4-build2",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-opener": "^2.7.2",
+    "d3-geo": "^3.1.1",
     "maplibre-gl": "^6.13.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -40,11 +41,14 @@
     "refractor": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
+    "topojson-client": "^3.1.0",
+    "topojson-server": "^3.0.1",
     "unified": "^11.0.5"
   },
   "devDependencies": {
     "@bcoe/v8-coverage": "^1.0.2",
     "@tauri-apps/cli": "^2.12.3",
+    "@types/d3-geo": "^3.1.1",
     "@types/hast": "^3.0.5",
     "@types/mdast": "^4.0.4",
     "@types/node": "^24.19.2",
