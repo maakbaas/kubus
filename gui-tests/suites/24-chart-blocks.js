@@ -1116,3 +1116,37 @@ test("on an item page: a stat's Last, First, Previous value and count follow a p
     await t.audit(`stats counted from the page's item (${period.value})`);
   }
 });
+
+test("default sort: a chart without a sort of its own is in time order (a stat's Last is the latest by date), its Sort button unmarked until a sort is set", async (t) => {
+  // Titles that do not sort chronologically: by title the last is Delta (11), by date it is Alpha (5).
+  const rows = [["Alpha", "2025-05-01", 5], ["Bravo", "2025-01-01", 7], ["Charlie", "2025-03-01", 9], ["Delta", "2025-02-01", 11]];
+  const stat = (title, value) => ({ kind: "chart", title, options: { chart: "stat", sparkline: "none", series: [S("a", value, "@weight")] } });
+  await t.boot();
+  const ids = await t.seed({
+    collections: [{
+      key: "w", name: "Reading", plural: "Readings", icon: "Cube",
+      fields: [{ key: "name", name: "Name", kind: "string" }, { key: "date", name: "Day", kind: "date" }, { key: "weight", name: "Weight", kind: "number" }],
+      items: rows.map(([name, date, weight]) => ({ key: name, values: { name, date, weight } })),
+      views: [{ name: "Stats", blocks: [stat("Last", "last"), stat("First", "first"), { kind: "table", title: "All", limit: 0, layout: { fields: ["name"] } }] }],
+    }],
+  });
+  await t.open(t.listPath(ids.collections.w));
+  await waitDrawn(t, 0);
+  await waitDrawn(t, 1);
+  await drawn(t, "Last is the latest by date (Alpha, 5), not the last by title (11)", (f) => f.kind === "stat" && f.lines_.includes("5") && !f.lines_.includes("11"), 0);
+  await drawn(t, "First is the earliest by date (Bravo, 7)", (f) => f.kind === "stat" && f.lines_.includes("7"), 1);
+  const sortButton = (i) => blockAt(t, i).getByRole("button", { name: i === 2 ? "Sort and group" : "Sort", exact: true });
+  await t.check("the chart's Sort button is not marked by default", (await sortButton(0).getAttribute("data-active")) === null);
+  await t.check("the table keeps the title default: its Sort button is not marked either", (await sortButton(2).getAttribute("data-active")) === null);
+  await t.audit("stats in time order");
+  // The Sort panel shows what is in effect: by Day, ascending.
+  await t.openPanel(blockAt(t, 0).locator(".section-header").first(), "Sort");
+  const panel = t.page.locator(PANEL).first();
+  await t.check("Sort by shows a field, not No sorting", (await panel.getByLabel("Sort by", { exact: true }).inputValue()) !== "");
+  await t.check("ascending", (await panel.getByLabel("Direction", { exact: true }).inputValue()) === "asc");
+  // Descending: the Last becomes the earliest, and the button is marked.
+  await choose(t, panel, null, "Direction", "Descending");
+  await drawn(t, "descending by date: Last is Bravo's 7", (f) => f.kind === "stat" && f.lines_.includes("7") && !f.lines_.includes("5"), 0);
+  await t.until("the Sort button is marked while a sort other than the default is in effect", async () => (await sortButton(0).getAttribute("data-active")) !== null);
+  await t.closeAll();
+});

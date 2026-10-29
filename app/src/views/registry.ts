@@ -105,6 +105,11 @@ export interface BlockTypeDefinition<O = unknown> {
   defaultOptions(collection: Collection): O;
   /** Turns stored (possibly outdated) options into valid ones, e.g. dropping removed fields. */
   normalizeOptions(raw: unknown, collection: Collection): O;
+  /**
+   * The sort of a block of this type that has none set (nor the title one every block starts with); absent or null:
+   * by title. A chart or a map is in time order (its Last value, its route), see `timeSort`.
+   */
+  defaultSort?(collection: Collection): SortRule[] | null;
   /** Which common settings apply (a component's depend on what its code uses). */
   uses(options: O, components: Component[]): BlockUses;
   View: ComponentType<BlockProps<O>>;

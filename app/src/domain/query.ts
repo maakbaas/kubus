@@ -372,6 +372,12 @@ export function defaultQuery(): ViewQuery {
   return { filters: [], sort: [{ fieldId: TITLE, direction: "asc" }], groupBy: null };
 }
 
+/** Time order: the collection's first date or date & time field, ascending (the last row is the latest); null without one. */
+export function timeSort(collection: Collection): SortRule[] | null {
+  const field = collection.fields.find((f) => f.kind === "date" || f.kind === "datetime");
+  return field ? [{ fieldId: field.id, direction: "asc" }] : null;
+}
+
 // --- Evaluation -----------------------------------------------------------------------
 
 /** No value: null, empty text or an empty list (an unchecked box is a value). */

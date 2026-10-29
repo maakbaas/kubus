@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FieldDef, Item, Collection } from "./model";
-import { applyQuery, defaultQuery, filterCodeValue, filterPreset, filterValueProblem, naturalCompare, PAGE_ITEM, resolveFilterValues, type FilterRule, type QueryContext } from "./query";
+import { applyQuery, defaultQuery, filterCodeValue, filterPreset, filterValueProblem, naturalCompare, PAGE_ITEM, resolveFilterValues, timeSort, type FilterRule, type QueryContext } from "./query";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], position: number): FieldDef => ({
   id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position,
@@ -172,5 +172,16 @@ describe("naturalCompare", () => {
     const byLocale = [...texts].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     expect([...texts].sort(naturalCompare)).toEqual(byLocale);
     for (const a of texts) for (const b of texts) expect(Math.sign(naturalCompare(a, b))).toBe(Math.sign(a.localeCompare(b, undefined, { numeric: true })));
+  });
+});
+
+describe("timeSort", () => {
+  it("is ascending by the first date or date & time field", () => {
+    const dated = { ...collection, fields: [...collection.fields, field("at", "At", "datetime", 2), field("day", "Day", "date", 3)] };
+    expect(timeSort(dated)).toEqual([{ fieldId: "at", direction: "asc" }]);
+  });
+
+  it("is null without one", () => {
+    expect(timeSort(collection)).toBeNull();
   });
 });

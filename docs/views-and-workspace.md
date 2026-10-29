@@ -10,6 +10,15 @@ Extension points are registries, not special cases in pages:
   `applyQuery()`. Everything field-kind specific (filter operators, sort key, group keys, text for
   search) is in one `KIND_RULES` table: a new field kind or operator is added there. Pseudo fields
   `$title`, `$updated`, `$created` can be sorted on; the default query sorts by `$title`.
+  A block type can have a default sort of its own (`BlockTypeDefinition.defaultSort`, resolved by `blockSort` in
+  `views/index.ts`): a chart block (every chart kind, a stat's Last / First / Previous value too) and a map block, with no
+  sort set (an empty one, or the title sort every new block starts with), run in time order, ascending by the
+  collection's first date or date & time field (`timeSort`; for blocks of several collections, the merged first one),
+  so "Last" is the latest and a route follows time. Without a date field, and for every other block type, the default
+  stays the title. Blocks keep following their sort otherwise. The Sort button is marked (blue) only for a sort other than
+  the block type's default, and the Sort panel shows the sort in effect. Change: stored chart and map blocks that had
+  only the title sort now run by date; picking Title explicitly on those types means the default, so sort by another field.
+  A remote collection gets the default like any sort (it goes to the source when the date column can be sorted).
   **Group by a date or date & time field** (`domain/groupDate.ts`, `ViewQuery.groupDate`, stored on the block as
   `groupDate`, absent = day): by year, month, week (ISO: Monday to Sunday, week 1 holds the year's first Thursday), day or
   hour (date & time only; a date falls back to day), chosen in "Group dates by" beside Group by. A group's key sorts as time

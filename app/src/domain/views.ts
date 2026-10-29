@@ -180,8 +180,8 @@ export function pageFilterScope(collections: Collection[]): Collection {
 export const NO_FILTERS = Object.freeze([]) as unknown as FilterRule[];
 
 /** The query a block runs: its own filter on top of the one it inherits (its view's or item page's). */
-export function blockQuery(inherited: FilterRule[] | null, block: ViewBlock): ViewQuery {
-  const query: ViewQuery = { filters: block.filters ?? NO_FILTERS, inherited: inherited ?? NO_FILTERS, sort: block.sort, groupBy: block.groupBy };
+export function blockQuery(inherited: FilterRule[] | null, block: ViewBlock, sort: SortRule[] = block.sort): ViewQuery {
+  const query: ViewQuery = { filters: block.filters ?? NO_FILTERS, inherited: inherited ?? NO_FILTERS, sort, groupBy: block.groupBy };
   return { ...query, ...(block.groupOrder && { groupOrder: block.groupOrder }), ...(block.groupDate && { groupDate: block.groupDate }) };
 }
 

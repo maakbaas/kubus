@@ -45,7 +45,7 @@ import {
   type XBy,
 } from "../domain/chart";
 import type { Collection, FieldDef } from "../domain/model";
-import type { GroupOrder } from "../domain/query";
+import { timeSort, type GroupOrder } from "../domain/query";
 import { useMediaQuery } from "../ui/useMediaQuery";
 import { useBuffered } from "../ui/useBuffered";
 import { usePanelOpenings } from "../ui/ToolbarPopover";
@@ -877,6 +877,7 @@ export const chartBlock = defineBlockType<ChartOptions>({
   defaultOptions: (collection: Collection) => defaultChartOptions(collection),
   normalizeOptions: (raw, collection) => normalizeChartOptions(raw, collection),
   // Its X axis is its own setting (not the block's grouping); "This item" charts the page's item, not a query's.
+  defaultSort: timeSort,
   uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,

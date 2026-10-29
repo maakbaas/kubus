@@ -12,7 +12,7 @@ import { groupsInApp } from "../domain/sources";
 import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
-import { applyQuery, defaultQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type ItemGroup, type QueryResult } from "../domain/query";
+import { applyQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type ItemGroup, type QueryResult } from "../domain/query";
 import { blockLimit, blockQuery, NO_FILTERS, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
@@ -20,7 +20,7 @@ import { ToolbarPopover } from "../ui/ToolbarPopover";
 import { SectionHeader } from "../ui/SectionHeader";
 import { useConfirm } from "../ui/useConfirm";
 import type { RefOptions } from "../ui/useReferenceOptions";
-import { BLOCK_TYPES, blockType, normalizeBlock, type BlockPlace, type BlockTypeDefinition, type PageItem } from ".";
+import { BLOCK_TYPES, blockSort, blockType, isDefaultBlockSort, normalizeBlock, type BlockPlace, type BlockTypeDefinition, type PageItem } from ".";
 import { QueryEditor } from "./QueryEditor";
 import type { CollectionData } from "./useCollectionData";
 import { useItemActions } from "./useItemActions";
@@ -63,9 +63,9 @@ export function newPageBlock(target: Collection, page: Collection, spec?: { kind
   return normalizeBlock(target, target.virtual === "backlinks" ? { ...block, layout: { ...block.layout, fields: BACKLINKS_FIELDS } } : block);
 }
 
-/** Sorted by title (ascending), not grouped (where grouping applies): what every block starts with. */
-const isDefaultSort = (block: ViewBlock, grouped: boolean) =>
-  (!grouped || block.groupBy === null) && JSON.stringify(block.sort) === JSON.stringify(defaultQuery().sort);
+/** In its type's default order (by title; a chart or map: by time), not grouped (where grouping applies): what every block starts with. */
+const isDefaultSort = (block: ViewBlock, collection: Collection, grouped: boolean) =>
+  (!grouped || block.groupBy === null) && isDefaultBlockSort(block, collection);
 
 interface MenusProps {
   /** The collection the block reads: its own, or the one several chosen are read as (domain/blend.ts). */
@@ -106,7 +106,7 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
   const blockName = useBlockName();
   const type = blockType(block.kind);
   const uses = type.uses(block.options, components);
-  const query = blockQuery(viewFilters, block);
+  const query = blockQuery(viewFilters, block, blockSort(block, collection));
   // A block always builds on its view's (or item page's) filter; its own rules are marked blue.
   const filterCount = query.filters.length;
   const inherits = place === "item" ? "the page's" : "the view's";
@@ -160,7 +160,7 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
         </ToolbarPopover>
       )}
       {uses.query && (
-        <ToolbarPopover label={uses.groups ? "Sort and group" : "Sort"} icon={ArrowsVertical} active={!isDefaultSort(block, uses.groups)} onOpenChange={onOpenChange}>
+        <ToolbarPopover label={uses.groups ? "Sort and group" : "Sort"} icon={ArrowsVertical} active={!isDefaultSort(block, collection, uses.groups)} onOpenChange={onOpenChange}>
           <QueryEditor collection={collection} query={query} refs={refs} part="sortGroup" noGroup={!uses.groups} onChange={(q) => onChange(withQuery(block, q))} />
         </ToolbarPopover>
       )}
@@ -342,7 +342,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   const type = blockType(block.kind);
   const uses = type.uses(block.options, components);
   // Page-item values ("this item") filled in from the page's item; {{ }} code worked out.
-  const base = blockQuery(viewFilters, block);
+  const base = blockQuery(viewFilters, block, blockSort(block, collection));
   const filters = useMemo(() => resolveFilterValues(base.filters, page ?? null), [base.filters, page]);
   const inherited = useMemo(() => resolveFilterValues(viewFilters ?? NO_FILTERS, page ?? null), [viewFilters, page]);
   const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder, base.groupDate]); // eslint-disable-line react-hooks/exhaustive-deps

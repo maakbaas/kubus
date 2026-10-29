@@ -854,4 +854,37 @@ test("item page block: Collection picker and Name", async (t) => {
   await t.check("after a reload it is still named", (await t.page.locator(".ws-pane--active .block").first().locator(".section-header").first().innerText()).includes("Who wrote it"));
 });
 
+test("map: without a sort of its own the route follows time (the first date field), and a sort by another field redraws it", async (t) => {
+  // Four corners of a square. By date they are walked round its edges; by their Seq the route cuts across (two diagonals).
+  const stops = [["A", 50, 0, "2025-01-01", 0], ["B", 50, 6, "2025-04-01", 2], ["C", 56, 0, "2025-02-01", 3], ["D", 56, 6, "2025-03-01", 1]];
+  await t.boot();
+  await stubMap(t);
+  const ids = await t.seed({
+    collections: [{
+      key: "trip", name: "Stop", plural: "Stops", icon: "Location",
+      fields: [{ key: "name", name: "Name", kind: "string" }, { key: "where", name: "Position", kind: "string" }, { key: "day", name: "Day", kind: "date" }, { key: "seq", name: "Seq", kind: "number" }],
+      items: stops.map(([name, lat, lng, day, seq]) => ({ key: name, values: { name, where: `${lat}, ${lng}`, day, seq } })),
+      views: [{ name: "Map", blocks: [mapBlock({ locationFieldId: "@where", route: true })] }],
+    }],
+  });
+  const coll = ids.collections.trip;
+  const view = ids.views["trip/Map"];
+  await t.open(`${t.listPath(coll)}?view=${view}`);
+  let timed = 0;
+  await t.until("the route is drawn", async () => ((timed = (await mapDots(t)).ink) > 300) || `${timed} ink`, { timeout: 15000, interval: 300 });
+  const button = t.page.locator(".ws-pane--active .block").first().getByRole("button", { name: "Sort and group", exact: true });
+  await t.check("the Sort and group button is not marked by default", (await button.getAttribute("data-active")) === null);
+  await t.audit("a map with a route in time order");
+  await openPopover(t, "Sort and group");
+  const sortBy = popover(t).getByLabel("Sort by", { exact: true });
+  await t.check("Sort by shows the date field", (await sortBy.locator("option:checked").innerText()) === "Day");
+  await sortBy.selectOption({ label: "Seq" });
+  await t.closeAll();
+  await t.until("by Seq the route doubles back: more ink", async () => {
+    const r = (await mapDots(t)).ink;
+    return r > timed + 100 || `${r} vs ${timed} ink`;
+  }, { timeout: 15000, interval: 300 });
+  await t.check("the button is marked once the sort is not the default", (await button.getAttribute("data-active")) !== null);
+});
+
 // @@END@@
