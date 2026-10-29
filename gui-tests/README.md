@@ -36,8 +36,8 @@ paths again at several times the cost. A test that fails and then
 passes on its retry (`--retries`, default 1) is reported as **flaky** and fails the run; so does a
 test whose `--repeat` runs disagree.
 
-A hung test cannot stall the run: one that takes longer than `--test-timeout <s>` (wall clock, default 300; `heavy`
-tests get three times that) is recorded as errored ("Timed out"), not retried, and its browser session is killed and
+A hung test cannot stall the run: one that takes longer than `--test-timeout <s>` (wall clock, default 600; `heavy`
+tests get three times that, `--coverage` doubles it) is recorded as errored ("Timed out"), not retried, and its browser session is killed and
 reopened; the run goes on.
 
 Every test also fails when the app loads a font, script, style or image from another host: the
