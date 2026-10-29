@@ -1,27 +1,27 @@
-// Reading a blend a page at a time: each part answers the blend's query in its own way (a native part from the
+// Reading a merged collection a page at a time: each part answers the merged collection's query in its own way (a native part from the
 // items in memory, a remote part from its source, asked with the query rewritten to its columns), and the
 // answers are merged: in sort order (a k-way merge: each part is asked for more rows only when its rows are used
 // up), group by group (group sizes and the total are summed over the parts). Pure apart from the call that asks a
-// source; the hook that holds a block's pages is views/useBlendResult.ts.
+// source; the hook that holds a block's pages is views/useMergedResult.ts.
 //
 // Caveat: a remote part comes in its source's order, so where text is sorted the merge relies on the source
 // ordering it as the app does ("Customer 9" before "Customer 10", case-insensitive); a source with another
-// collation can leave rows slightly out of order in the merged list (docs/features.md "Blends").
+// collation can leave rows slightly out of order in the merged list (docs/features.md "Several collections in one block").
 
 import type { SourceQuery, SourceResult } from "../../../shared/sources";
-import { blendItem, blendRowItem, partConstants, partProjection, type ResolvedPart } from "./blend";
+import { mergedItem, mergedRowItem, partConstants, partProjection, type ResolvedPart } from "./mergedCollection";
 import type { Collection, FieldDef, Item } from "./model";
 import { applyQuery, compareGroups, groupKeysOf, type ItemGroup, type QueryContext, type QueryResult, type ViewQuery } from "./query";
 import { canGroup, groupLabel, sourceQuery, sourceShape } from "./sources";
 
-/** A row of a part: its blend item, and the group it is listed in ("" when not grouped, or in the empty group). */
-export interface BlendRow {
+/** A row of a part: its merged item, and the group it is listed in ("" when not grouped, or in the empty group). */
+export interface MergedRow {
   item: Item;
   group: string;
 }
 
 /** A group of the merged answer: its size over all the parts. */
-export interface BlendGroup {
+export interface MergedGroup {
   key: string;
   label: string;
   count: number;
@@ -31,24 +31,24 @@ export interface BlendGroup {
 export interface PartOpening {
   total: number;
   groups: { key: string; label?: string; count: number }[];
-  rows: BlendRow[];
+  rows: MergedRow[];
   more: boolean;
 }
 
-/** One part answering the blend's query: rows in the query's order (grouped: group by group, in the part's own group order). */
+/** One part answering the merged collection's query: rows in the query's order (grouped: group by group, in the part's own group order). */
 export interface PartStream {
   /** The first page (with the counts). */
   open(limit: number): Promise<PartOpening>;
   /** The following rows, from the `offset`th. */
-  next(offset: number, limit: number): Promise<{ rows: BlendRow[]; more: boolean }>;
+  next(offset: number, limit: number): Promise<{ rows: MergedRow[]; more: boolean }>;
 }
 
 // --- The parts --------------------------------------------------------------------------------------
 
-/** A native part: its items made blend items, the query run over them in memory (so it answers at once, whatever the page). */
-export function nativeStream(blend: Collection, items: Item[], query: ViewQuery, search: string, ctx: QueryContext): PartStream {
-  const result = applyQuery(blend, items, query, ctx, search);
-  const rows: BlendRow[] = result.groups.flatMap((g) => g.items.map((item) => ({ item, group: g.key })));
+/** A native part: its items made merged items, the query run over them in memory (so it answers at once, whatever the page). */
+export function nativeStream(merged: Collection, items: Item[], query: ViewQuery, search: string, ctx: QueryContext): PartStream {
+  const result = applyQuery(merged, items, query, ctx, search);
+  const rows: MergedRow[] = result.groups.flatMap((g) => g.items.map((item) => ({ item, group: g.key })));
   const slice = (offset: number, limit: number) => ({ rows: rows.slice(offset, offset + limit), more: offset + limit < rows.length });
   return {
     open: async (limit) => ({
@@ -60,11 +60,11 @@ export function nativeStream(blend: Collection, items: Item[], query: ViewQuery,
   };
 }
 
-/** The blend items of a native part, each made once while the item and the mapping stay (items keep their identity, which memoized rows rely on). */
-export function nativeItems(blend: Collection, part: ResolvedPart, items: Item[], memo: WeakMap<Item, Item>): Item[] {
+/** The merged items of a native part, each made once while the item and the mapping stay (items keep their identity, which memoized rows rely on). */
+export function nativeItems(merged: Collection, part: ResolvedPart, items: Item[], memo: WeakMap<Item, Item>): Item[] {
   return items.map((item) => {
     let made = memo.get(item);
-    if (!made) memo.set(item, (made = blendItem(blend, part, item)));
+    if (!made) memo.set(item, (made = mergedItem(merged, part, item)));
     return made;
   });
 }
@@ -73,24 +73,24 @@ export function nativeItems(blend: Collection, part: ResolvedPart, items: Item[]
 export type AskSource = (source: string, query: SourceQuery) => Promise<SourceResult>;
 
 /**
- * A remote part: the blend's query rewritten to the part's columns (`partProjection`) and asked of its source, which
- * filters, sorts and groups. A blend field the part doesn't map has no value there, the Source field is the part's name:
+ * A remote part: the merged collection's query rewritten to the part's columns (`partProjection`) and asked of its source, which
+ * filters, sorts and groups. A merged column the part doesn't map has no value there, the Collection column is the part's name:
  * rules on them are settled here (`partConstants`), a group by one is one group.
  */
-export function remoteStream(blend: Collection, part: ResolvedPart, query: ViewQuery, search: string, timeZone: string, ask: AskSource): PartStream {
-  const projection = partProjection(blend, part);
+export function remoteStream(merged: Collection, part: ResolvedPart, query: ViewQuery, search: string, timeZone: string, ask: AskSource): PartStream {
+  const projection = partProjection(merged, part);
   const shape = sourceShape(projection);
-  const groupField = query.groupBy ? blend.fields.find((f) => f.id === query.groupBy) : undefined;
+  const groupField = query.groupBy ? merged.fields.find((f) => f.id === query.groupBy) : undefined;
   const shown = groupField ? projection.fields.find((f) => f.id === groupField.id) : undefined;
   // Grouped by a column of the source (it counts and orders the groups), or by something every row has alike (a single group).
   const bySource = !!shown && canGroup(projection, shown);
   const needle = search.trim().toLowerCase();
-  // The Source field is searched like the others: a search that matches the part's name matches all its rows.
+  // The Collection column is searched like the others: a search that matches the part's name matches all its rows.
   const asked = needle && part.label.toLowerCase().includes(needle) ? "" : search;
-  const request = sourceQuery(projection, { ...query, groupBy: bySource ? query.groupBy : null }, asked, timeZone, partConstants(blend, part));
-  const constant = groupField && !bySource ? constantGroup(blend, part, groupField) : undefined;
-  const ofRow = (row: SourceResult["rows"][number]): BlendRow => ({
-    item: blendRowItem(blend, part, projection, shape, row),
+  const request = sourceQuery(projection, { ...query, groupBy: bySource ? query.groupBy : null }, asked, timeZone, partConstants(merged, part));
+  const constant = groupField && !bySource ? constantGroup(merged, part, groupField) : undefined;
+  const ofRow = (row: SourceResult["rows"][number]): MergedRow => ({
+    item: mergedRowItem(merged, part, projection, shape, row),
     group: bySource ? (row.group ?? "") : (constant?.key ?? ""),
   });
   const page = (offset: number, limit: number, counts: boolean) => ask(part.collection.source!.name, { ...request, offset, limit, counts });
@@ -112,9 +112,9 @@ export function remoteStream(blend: Collection, part: ResolvedPart, query: ViewQ
  * The one group a remote part's rows fall in when grouped by a field it has no column for: where a native item with the same
  * (no) value would (its Source: the part's name; the others: no value, "(empty)" or "Not checked" for a checkbox).
  */
-function constantGroup(blend: Collection, part: ResolvedPart, field: FieldDef): { key: string; label: string } {
-  const values = field.id === blend.blend?.sourceField ? { [field.id]: part.label } : {};
-  const item: Item = { id: "", collectionId: blend.id, spaceId: "", values, createdAt: "", updatedAt: "" };
+function constantGroup(merged: Collection, part: ResolvedPart, field: FieldDef): { key: string; label: string } {
+  const values = field.id === merged.mergedFrom?.collectionField ? { [field.id]: part.label } : {};
+  const item: Item = { id: "", collectionId: merged.id, spaceId: "", values, createdAt: "", updatedAt: "" };
   return groupKeysOf(field, item, { refLabel: () => "" })[0] ?? { key: "", label: "(empty)" };
 }
 
@@ -128,7 +128,7 @@ interface PartState {
   /** Its rows of each group, how many there are (from its first page). */
   counts: Map<string, number>;
   /** Rows fetched and not yet used, by group, in order. */
-  queues: Map<string, BlendRow[]>;
+  queues: Map<string, MergedRow[]>;
   /** Rows fetched, by group. */
   arrived: Map<string, number>;
 }
@@ -138,9 +138,9 @@ interface PartState {
  * parts), within a group in the query's sort order. `take(n)` gives the next n rows; a part is asked for more only when the
  * rows it gave are used up, so a few rows of a huge part cost a page.
  */
-export class BlendCursor {
+export class MergedCursor {
   total = 0;
-  groups: BlendGroup[] = [];
+  groups: MergedGroup[] = [];
   private states: PartState[];
   private at = 0;
   private opened = false;
@@ -160,7 +160,7 @@ export class BlendCursor {
     return this.opened && this.at >= this.groups.length;
   }
 
-  private add(p: PartState, rows: BlendRow[]) {
+  private add(p: PartState, rows: MergedRow[]) {
     p.offset += rows.length;
     for (const row of rows) {
       const queue = p.queues.get(row.group);
@@ -173,7 +173,7 @@ export class BlendCursor {
   /** Asks every part for its first page (together): the total, the groups and their order are known after it. */
   async open(): Promise<void> {
     const openings = await Promise.all(this.states.map((p) => p.stream.open(this.pageSize)));
-    const groups = new Map<string, BlendGroup>();
+    const groups = new Map<string, MergedGroup>();
     openings.forEach((o, i) => {
       const p = this.states[i];
       this.total += o.total;
@@ -213,9 +213,9 @@ export class BlendCursor {
   }
 
   /** The next `n` rows (fewer at the end). */
-  async take(n: number): Promise<BlendRow[]> {
+  async take(n: number): Promise<MergedRow[]> {
     if (!this.opened) await this.open();
-    const out: BlendRow[] = [];
+    const out: MergedRow[] = [];
     while (out.length < n && this.at < this.groups.length) {
       const key = this.groups[this.at].key;
       // Each part with rows of the group has its next one at hand (asked for only now that it is needed).
@@ -243,7 +243,7 @@ export class BlendCursor {
  * The rows given so far as a block's result: grouped in the groups' order (a group shows once rows of it are in; its
  * items are copies, what the block got before stays as it was), else one group; `total` is the matching rows over all the parts.
  */
-export function blendQueryResult(rows: BlendRow[], groups: BlendGroup[], total: number, grouped: boolean): { result: QueryResult; items: Item[] } {
+export function mergedQueryResult(rows: MergedRow[], groups: MergedGroup[], total: number, grouped: boolean): { result: QueryResult; items: Item[] } {
   const seen = new Set<Item>();
   const items: Item[] = [];
   for (const { item } of rows) {

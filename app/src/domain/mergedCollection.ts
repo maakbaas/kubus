@@ -3,38 +3,40 @@
 // came from), Title, Created and Updated. Its rows are the parts' rows seen through that mapping, so one chart can total two
 // sources, one table list both. Nothing is stored: the block keeps the collections it lists and the columns merged by hand
 // (ViewBlock.collectionIds, .merges); the merged collection is made when the block is shown, and the block fans each query out
-// to the parts (views/useBlendResult.ts, domain/blendMerge.ts for the merging). Pure, storage-free.
+// to the parts (views/useMergedResult.ts, domain/mergedRows.ts for the merging). Pure, storage-free.
 //
 // How the pieces fit:
 //  * a column's type is that of the fields merged into it; a part field can be shown by it if `canShow` (the matrix);
-//  * a native part's items become merged items in memory (`blendItem`) and the query runs over them as over any
+//  * a native part's items become merged items in memory (`mergedItem`) and the query runs over them as over any
 //    collection's; a remote part is asked with the query rewritten to its columns (`partProjection`: the remote collection as
 //    the merged columns, `sourceQuery` does the rest);
 //  * a column a part has no field for is empty there (its rows match a rule on it only if the rule matches empty),
 //    the Collection column has the part's name (a constant per part: `partConstants`).
 
 import { formatDate } from "./fieldKinds";
-import { blankField, fieldValue, META_FIELDS, NO_TITLE, pickableFields, type BlendPart, type Collection, type CollectionBlend, type FieldDef, type FieldKind, type FieldValue, type Item } from "./model";
+import { blankField, fieldValue, META_FIELDS, NO_TITLE, type Collection, type FieldDef, type FieldKind, type FieldValue, type Item, type MergedPart, type MergeProblem } from "./model";
 import { rowItem, rowItemId, sourceColumn, type ConstantFields } from "./sources";
 import type { SourceShape, SourceRow } from "../../../shared/sources";
 
-/** The types a blend's own fields can have: the ones whose values read the same wherever they come from. */
-export const BLEND_KINDS: readonly FieldKind[] = ["string", "markdown", "html", "number", "date", "datetime", "checkbox", "string_list"];
+export type { MergeProblem };
+
+/** The types a merged collection's own fields can have: the ones whose values read the same wherever they come from. */
+export const MERGED_KINDS: readonly FieldKind[] = ["string", "markdown", "html", "number", "date", "datetime", "checkbox", "string_list"];
 
 const TEXT: readonly FieldKind[] = ["string", "markdown", "html"];
 
 /**
- * The type a part's field's values read as in a blend, null when they can't be shown in one (references point at the
+ * The type a part's field's values read as in a merged collection, null when they can't be shown in one (references point at the
  * part's own items, images are files, a checklist and a component field have no plain value). An AI field reads as the
  * text, number or Markdown it holds.
  */
 export function readKind(field: Pick<FieldDef, "kind" | "output">): FieldKind | null {
   const kind = field.kind === "ai" ? (field.output === "number" ? "number" : field.output === "markdown" ? "markdown" : "string") : field.kind;
-  return BLEND_KINDS.includes(kind) ? kind : null;
+  return MERGED_KINDS.includes(kind) ? kind : null;
 }
 
 /**
- * Whether a blend field of type `to` can show a part field that reads as `from`: text, Markdown and HTML show each other
+ * Whether a merged column of type `to` can show a part field that reads as `from`: text, Markdown and HTML show each other
  * (the value as it is stored), a date also shows a date & time (its day, in the device's time zone), a date & time only
  * a date & time (a date has no time), the rest only their own type.
  */
@@ -45,8 +47,8 @@ export function canShow(to: FieldKind, from: FieldKind | null): boolean {
   return to === from;
 }
 
-/** A part field's value as the blend's field of type `to` shows it (a date & time becomes its day). */
-export function blendValue(from: FieldKind, to: FieldKind, value: FieldValue): FieldValue {
+/** A part field's value as the merged column of type `to` shows it (a date & time becomes its day). */
+export function mergedValue(from: FieldKind, to: FieldKind, value: FieldValue): FieldValue {
   if (to === "date" && from === "datetime" && typeof value === "string" && value) {
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? value.slice(0, 10) : formatDate(d);
@@ -54,157 +56,114 @@ export function blendValue(from: FieldKind, to: FieldKind, value: FieldValue): F
   return value;
 }
 
-/** A part field's name for pickers: with its type. */
-const describe = (f: FieldDef) => `“${f.name}”`;
-
-/** The fields of a part a column could show (those that read as a type of `BLEND_KINDS`; Created and Updated are the merged collection's own): a native part's, a remote part's columns. */
+/** The fields of a part a column could show (those that read as a type of `MERGED_KINDS`; Created and Updated are the merged collection's own): a native part's, a remote part's columns. */
 export function partFields(part: Collection): FieldDef[] {
   return part.fields.filter((f) => (part.source ? !!f.column && !!sourceColumn(part, f) : true) && readKind(f) !== null);
 }
 
-// --- Resolving a blend ------------------------------------------------------------------------------
+// --- Its parts --------------------------------------------------------------------------------------
 
-/** Something wrong with a blend: its part is gone, a field it maps is gone or can't show it. */
-export interface BlendProblem {
-  /** The part's collection id (a collection that is gone: its id as stored). */
-  part: string;
-  /** The blend's field, when the problem is one mapping. */
-  field?: string;
-  message: string;
-}
-
-/** A part with its collection found and its mappings checked. */
+/** A part with its collection found and the field each column shows. */
 export interface ResolvedPart {
-  part: BlendPart;
+  part: MergedPart;
   collection: Collection;
-  /** What the Source field says of its rows: the collection's name. */
+  /** What the Collection column says of its rows: the collection's name. */
   label: string;
-  /** By the blend's field id: the part's field it shows (only mappings that hold). */
+  /** By the column's id: the part's field it shows. */
   fields: Map<string, FieldDef>;
 }
 
-/** What a blend's fields and mappings look like to the checks (a collection, or a draft of one). */
-export interface BlendLike {
-  name?: string;
-  pluralName?: string;
-  fields: Pick<FieldDef, "id" | "name" | "kind">[];
-  blend?: CollectionBlend | null;
-}
-
 /**
- * The parts of a blend that can be read, and what is wrong with the rest: a part whose collection is gone (or is a blend:
- * a blend is never made of blends), a mapping to a field that was removed or can't show the blend field's type. A part with a
- * wrong mapping still counts, that field read as none.
+ * The parts of a merged collection with their collections and fields. `mergeCollections` made the mapping from these
+ * collections (what is gone or can't be shown is its problems), so a part or field not found here (the collections changed
+ * since) is left out.
  */
-export function resolveBlend(blend: BlendLike, collections: Collection[]): { parts: ResolvedPart[]; problems: BlendProblem[] } {
-  const parts: ResolvedPart[] = [];
-  const problems: BlendProblem[] = [];
-  const fields = blend.fields.filter((f) => f.id !== blend.blend?.sourceField);
-  for (const part of blend.blend?.parts ?? []) {
+export function resolveParts(merged: Pick<Collection, "mergedFrom">, collections: Collection[]): ResolvedPart[] {
+  return (merged.mergedFrom?.parts ?? []).flatMap((part) => {
     const collection = collections.find((c) => c.id === part.collectionId);
-    if (!collection) {
-      problems.push({ part: part.collectionId, message: "A collection this blend is made of was deleted." });
-      continue;
-    }
-    if (collection.blend) {
-      problems.push({ part: part.collectionId, message: `${collection.pluralName} is a blend: a blend is made of collections, not of blends.` });
-      continue;
-    }
+    if (!collection) return [];
     const readable = new Map(partFields(collection).map((f) => [f.id, f]));
-    const all = new Map(pickableFields(collection).map((f) => [f.id, f]));
-    const mapped = new Map<string, FieldDef>();
-    for (const f of fields) {
-      const id = part.map[f.id];
-      if (!id) continue;
-      const theirs = readable.get(id);
-      if (!theirs) {
-        const there = all.get(id);
-        problems.push({
-          part: collection.id,
-          field: f.id,
-          message: there
-            ? `“${f.name}” can't show ${describe(there)} of ${collection.pluralName}: fields of that type can't be in a blend.`
-            : `“${f.name}” showed a field of ${collection.pluralName} that was removed.`,
-        });
-      } else if (!canShow(f.kind, readKind(theirs))) {
-        problems.push({ part: collection.id, field: f.id, message: `“${f.name}” (${f.kind}) can't show ${describe(theirs)} of ${collection.pluralName} (${readKind(theirs)}).` });
-      } else {
-        mapped.set(f.id, theirs);
-      }
+    const fields = new Map<string, FieldDef>();
+    for (const [column, id] of Object.entries(part.map)) {
+      const theirs = id ? readable.get(id) : undefined;
+      if (theirs) fields.set(column, theirs);
     }
-    parts.push({ part, collection, label: collection.pluralName, fields: mapped });
-  }
-  return { parts, problems };
+    return [{ part, collection, label: collection.pluralName, fields }];
+  });
 }
 
-/** Whether a blend has a remote part: its rows are then asked of the server a page at a time, and a date can't be grouped by month. */
-export const hasRemotePart = (blend: Pick<Collection, "blend">, collections: Collection[]): boolean =>
-  !!blend.blend?.parts.some((p) => !!collections.find((c) => c.id === p.collectionId)?.source);
+/** Whether a merged collection has a remote part: its rows are then asked of the server a page at a time, and a date can't be grouped by month. */
+export const hasRemotePart = (merged: Pick<Collection, "mergedFrom">, collections: Collection[]): boolean =>
+  !!merged.mergedFrom?.parts.some((p) => !!collections.find((c) => c.id === p.collectionId)?.source);
 
 // --- Rows ------------------------------------------------------------------------------------------
 
-/** A blend row's id: the part's collection and the part's item (a remote part's row item id, domain/sources.ts rowItemId). */
-export const blendItemId = (collectionId: string, itemId: string) => `${collectionId}:${itemId}`;
+/** A merged collection's row's id: the part's collection and the part's item (a remote part's row item id, domain/sources.ts rowItemId). */
+export const mergedItemId = (collectionId: string, itemId: string) => `${collectionId}:${itemId}`;
 
-export { blendPath } from "./backlinks";
+/** The route of the item or remote row a merged collection's row stands for (its id: `mergedItemId`). */
+export function mergedPath(id: string): string {
+  const at = id.indexOf(":");
+  return `/collections/${id.slice(0, at)}/items/${id.slice(at + 1)}`;
+}
 
-/** The values of a part's item or row as the blend's fields show them, plus the Source. */
-function mappedValues(blend: Collection, part: ResolvedPart, read: (field: FieldDef) => FieldValue): Record<string, FieldValue> {
+/** The values of a part's item or row as the merged columns show them, plus the Collection column. */
+function mappedValues(merged: Collection, part: ResolvedPart, read: (field: FieldDef) => FieldValue): Record<string, FieldValue> {
   const values: Record<string, FieldValue> = {};
-  for (const f of blend.fields) {
-    if (f.id === blend.blend?.sourceField) {
+  for (const f of merged.fields) {
+    if (f.id === merged.mergedFrom?.collectionField) {
       values[f.id] = part.label;
       continue;
     }
     const theirs = part.fields.get(f.id);
     if (!theirs) continue;
-    const v = blendValue(readKind(theirs)!, f.kind, read(theirs));
+    const v = mergedValue(readKind(theirs)!, f.kind, read(theirs));
     if (v !== null && v !== undefined) values[f.id] = v;
   }
   return values;
 }
 
-/** A native part's item as a blend item. */
-export function blendItem(blend: Collection, part: ResolvedPart, item: Item): Item {
+/** A native part's item as a merged item. */
+export function mergedItem(merged: Collection, part: ResolvedPart, item: Item): Item {
   return {
-    id: blendItemId(part.collection.id, item.id),
-    collectionId: blend.id,
+    id: mergedItemId(part.collection.id, item.id),
+    collectionId: merged.id,
     spaceId: item.spaceId,
-    values: mappedValues(blend, part, (f) => fieldValue(item, f)),
+    values: mappedValues(merged, part, (f) => fieldValue(item, f)),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
 }
 
 /**
- * A remote part as a collection of the blend's fields: each blend field it maps is a field showing the column of the
- * part's field (so `sourceQuery` and `rowItem` work in the blend's terms), the rest are left out. Titles follow the blend's.
+ * A remote part as a collection of the merged columns: each merged column it maps is a field showing the column of the
+ * part's field (so `sourceQuery` and `rowItem` work in the merged collection's terms), the rest are left out. Titles follow the merged collection's.
  */
-export function partProjection(blend: Collection, part: ResolvedPart): Collection {
-  const fields = blend.fields.flatMap((f, position) => {
+export function partProjection(merged: Collection, part: ResolvedPart): Collection {
+  const fields = merged.fields.flatMap((f, position) => {
     const theirs = part.fields.get(f.id);
-    return theirs?.column ? [blankField(f.id, f.name, f.kind, { collectionId: blend.id, column: theirs.column, position })] : [];
+    return theirs?.column ? [blankField(f.id, f.name, f.kind, { collectionId: merged.id, column: theirs.column, position })] : [];
   });
-  const title = blend.titleField;
+  const title = merged.titleField;
   return {
     ...part.collection,
-    id: blend.id,
-    name: blend.name,
-    pluralName: blend.pluralName,
+    id: merged.id,
+    name: merged.name,
+    pluralName: merged.pluralName,
     fields,
-    blend: null,
+    mergedFrom: null,
     titleField: title === NO_TITLE || !title || fields.some((f) => f.id === title) ? (title ?? null) : NO_TITLE,
   };
 }
 
 /**
- * The fields a remote part's rows have the same value of: the Source (the part's name) and the blend's fields it doesn't map
+ * The fields a remote part's rows have the same value of: the Collection column (the part's name) and the merged columns it doesn't map
  * (no value). Rules, grouping and sorting on them are settled without asking the source.
  */
-export function partConstants(blend: Collection, part: ResolvedPart): ConstantFields {
+export function partConstants(merged: Collection, part: ResolvedPart): ConstantFields {
   const constants: ConstantFields = new Map();
-  for (const f of blend.fields) {
-    if (f.id === blend.blend?.sourceField) constants.set(f.id, { field: f, value: part.label });
+  for (const f of merged.fields) {
+    if (f.id === merged.mergedFrom?.collectionField) constants.set(f.id, { field: f, value: part.label });
     else if (!part.fields.get(f.id)?.column) constants.set(f.id, { field: f, value: null });
   }
   // Rows of a source have no Created or Updated.
@@ -212,26 +171,26 @@ export function partConstants(blend: Collection, part: ResolvedPart): ConstantFi
   return constants;
 }
 
-/** A remote part's row as a blend item (`projection` is `partProjection`, `shape` its `sourceShape`). */
-export function blendRowItem(blend: Collection, part: ResolvedPart, projection: Collection, shape: SourceShape, row: SourceRow): Item {
+/** A remote part's row as a merged item (`projection` is `partProjection`, `shape` its `sourceShape`). */
+export function mergedRowItem(merged: Collection, part: ResolvedPart, projection: Collection, shape: SourceShape, row: SourceRow): Item {
   const item = rowItem(projection, shape, row);
   const values: Record<string, FieldValue> = {};
-  for (const f of blend.fields) {
-    if (f.id === blend.blend?.sourceField) {
+  for (const f of merged.fields) {
+    if (f.id === merged.mergedFrom?.collectionField) {
       values[f.id] = part.label;
       continue;
     }
     const theirs = part.fields.get(f.id);
-    const v = theirs && item.values[f.id] !== undefined ? blendValue(readKind(theirs)!, f.kind, item.values[f.id]) : null;
+    const v = theirs && item.values[f.id] !== undefined ? mergedValue(readKind(theirs)!, f.kind, item.values[f.id]) : null;
     if (v !== null) values[f.id] = v;
   }
-  return { id: blendItemId(part.collection.id, rowItemId(row.key)), collectionId: blend.id, spaceId: "", values, createdAt: "", updatedAt: "" };
+  return { id: mergedItemId(part.collection.id, rowItemId(row.key)), collectionId: merged.id, spaceId: "", values, createdAt: "", updatedAt: "" };
 }
 
 // --- Merging collections ----------------------------------------------------------------------------
 
 /** The id of the Collection column, and the start of every merged column's id (stable: blocks keep them in their layout, filters and sort). */
-export const SOURCE_COLUMN = "merged:collection";
+export const COLLECTION_COLUMN = "merged:collection";
 const COLUMN = "merged:";
 
 /** Whether a field id is a merged column's. */
@@ -264,12 +223,12 @@ function columnKind(kinds: FieldKind[]): FieldKind | null {
  * are left out. Always there: Collection (the part a row is from), Title, Created and Updated. A collection that is gone, or a
  * merge that lost a field, is a problem; the rest is merged.
  */
-export function mergeCollections(ids: string[], collections: Collection[], merges: ColumnMerge[] = []): { collection: Collection; problems: BlendProblem[] } {
-  const problems: BlendProblem[] = [];
+export function mergeCollections(ids: string[], collections: Collection[], merges: ColumnMerge[] = []): { collection: Collection; problems: MergeProblem[] } {
+  const problems: MergeProblem[] = [];
   const parts: Collection[] = [];
   for (const id of [...new Set(ids)]) {
     const found = collections.find((c) => c.id === id);
-    if (found && !found.blend) parts.push(found);
+    if (found && !found.mergedFrom) parts.push(found);
     else problems.push({ part: id, message: "A collection this block listed was deleted." });
   }
   const mergedId = `merged-${parts.map((c) => c.id).join("+")}`;
@@ -323,7 +282,7 @@ export function mergeCollections(ids: string[], collections: Collection[], merge
   columns.push(...byHand);
   const fields: FieldDef[] = [
     ...columns.map((c) => blankField(c.id, c.name, columnKind([...c.kinds.values()].map((x) => x.kind))!, { collectionId: mergedId })),
-    blankField(SOURCE_COLUMN, "Collection", "string", { collectionId: mergedId }),
+    blankField(COLLECTION_COLUMN, "Collection", "string", { collectionId: mergedId }),
   ].map((f, position) => ({ ...f, position }));
   const collection: Collection = {
     id: mergedId,
@@ -335,8 +294,8 @@ export function mergeCollections(ids: string[], collections: Collection[], merge
     itemViews: [],
     spaceIds: null,
     titleField: null,
-    blend: {
-      sourceField: SOURCE_COLUMN,
+    mergedFrom: {
+      collectionField: COLLECTION_COLUMN,
       parts: parts.map((c) => ({ collectionId: c.id, map: Object.fromEntries(columns.flatMap((col) => (col.kinds.has(c.id) ? [[col.id, col.kinds.get(c.id)!.field.id]] : []))) })),
       problems,
     },
@@ -358,7 +317,7 @@ export function mergeCandidates(field: FieldDef, owner: string, collections: Col
  * shows is left out. So the view's filter, its date period included, reaches a block that lists several collections.
  */
 export function translateRules<R extends { fieldId: string }>(rules: R[], merged: Collection, home: Collection): R[] {
-  const own = merged.blend?.parts.find((p) => p.collectionId === home.id);
+  const own = merged.mergedFrom?.parts.find((p) => p.collectionId === home.id);
   return rules.flatMap((rule) => {
     if (rule.fieldId.startsWith("$") || isMergedColumn(rule.fieldId)) return [rule];
     const column = own && Object.entries(own.map).find(([, field]) => field === rule.fieldId)?.[0];

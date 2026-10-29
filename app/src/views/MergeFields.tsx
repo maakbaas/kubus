@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from "react";
 import { Button, Dropdown, IconButton, TextInput } from "@carbon/react";
 import { Merge, TrashCan } from "@carbon/icons-react";
-import { canShow, mergeRef, partFields, readKind } from "../domain/blend";
+import { canShow, mergeRef, partFields, readKind } from "../domain/mergedCollection";
 import { newId, type Collection, type FieldDef } from "../domain/model";
 import type { ViewBlock } from "../domain/views";
 

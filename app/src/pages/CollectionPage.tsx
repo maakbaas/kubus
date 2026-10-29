@@ -53,7 +53,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const uid = useId();
   const { repo, space, sources, collections } = useStore();
   const navigate = useNavigate();
-  // A remote collection's rows are read from its source, read-only (domain/sources.ts); a block's several collections are read-only too (domain/blend.ts).
+  // A remote collection's rows are read from its source, read-only (domain/sources.ts); a block's several collections are read-only too (domain/mergedCollection.ts).
   const remote = isRemote(collection);
   const readOnly = isReadOnly(collection);
   const { confirm, dialog } = useConfirm();

@@ -245,8 +245,8 @@ What the app does, feature by feature (read the part you work on).
   filter's references (`filterPreset`). On item pages the same split holds: arranging the page
   (its layout: fields and blocks and their order, names shown, editable, hide empty) is stored
   right away too; only what a block shows waits for Save changes.
-- **Several collections in one block** (merged collections: `domain/blend.ts` `mergeCollections`, `domain/blendMerge.ts`,
-  `views/useBlendResult.ts`, `views/MergeFields.tsx`): a block's Collections picker (Block settings, on collection views and item pages)
+- **Several collections in one block** (merged collections: `domain/mergedCollection.ts` `mergeCollections`, `domain/mergedRows.ts`,
+  `views/useMergedResult.ts`, `views/MergeFields.tsx`): a block's Collections picker (Block settings, on collection views and item pages)
   takes more than one collection, native and remote mixed (Backlinks can't be merged). The block then reads them as one
   read-only collection made when it is shown (never stored: the block keeps `ViewBlock.collectionIds` and `merges`, JSON in the view's
   config or the item view's layout, no schema or sync change; older devices ignore both and show the first collection). Columns: fields of one
@@ -263,7 +263,7 @@ What the app does, feature by feature (read the part you work on).
   them (`applyQuery`); a remote part is asked by its source with the query rewritten to its columns (`partProjection` + `sourceQuery`:
   no connector changes); a rule on a column a part has no field for (or on Collection) holds for all of that part's rows or none, by whether
   the rule matches an empty value (`ConstantFields`); a sort on such a column is dropped for that part. Paging is a k-way merge
-  (`BlendCursor`): each part's page comes in its own order, the merged list takes the next row in the query's sort order, a part is asked for
+  (`MergedCursor`): each part's page comes in its own order, the merged list takes the next row in the query's sort order, a part is asked for
   its next page only when its rows are used up (Show more across parts); grouped, the groups' sizes and the total are summed over the
   parts, groups are listed in the query's order (by value or summed size) and a group's rows come from every part before the next group's.
   A chart or stat loads every part's rows (a remote part's pages one after the other, with the loading bar and its ×). Text sorts in the app's

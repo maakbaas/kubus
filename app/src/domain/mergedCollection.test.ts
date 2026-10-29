@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  BLEND_KINDS,
-  blendItem,
-  blendItemId,
-  blendPath,
-  blendRowItem,
-  blendValue,
+  MERGED_KINDS,
+  mergedItem,
+  mergedItemId,
+  mergedPath,
+  mergedRowItem,
+  mergedValue,
   canShow,
   hasRemotePart,
   mergeCandidates,
@@ -14,13 +14,13 @@ import {
   partFields,
   partProjection,
   readKind,
-  resolveBlend,
-  SOURCE_COLUMN,
-} from "./blend";
+  resolveParts,
+  COLLECTION_COLUMN,
+} from "./mergedCollection";
 import { itemPath } from "./backlinks";
 import { blankField, itemLabel, titleFields, type Collection, type FieldKind } from "./model";
 import { isReadOnly, rowItemId, sourceShape } from "./sources";
-import { COL, invoice, invoices, MERGES, revenue, shopSales, world } from "../test/blendWorld";
+import { COL, invoice, invoices, MERGES, revenue, shopSales, world } from "../test/mergedWorld";
 
 const ALL_KINDS: FieldKind[] = ["string", "markdown", "html", "number", "date", "datetime", "checkbox", "image", "item", "string_list", "checklist", "item_list", "component", "ai"];
 
@@ -38,7 +38,7 @@ describe("which part fields a column can show (the type matrix)", () => {
   };
 
   it("is exactly this, for every pair of types", () => {
-    for (const to of BLEND_KINDS) {
+    for (const to of MERGED_KINDS) {
       for (const from of ALL_KINDS.filter((k) => k !== "ai")) {
         expect(canShow(to, readKind({ kind: from, output: null })), `${to} ← ${from}`).toBe(SHOWS[to].includes(from));
       }
@@ -46,13 +46,13 @@ describe("which part fields a column can show (the type matrix)", () => {
   });
 
   it("covers every type a column can have", () => {
-    expect([...BLEND_KINDS].sort()).toEqual(Object.keys(SHOWS).sort());
+    expect([...MERGED_KINDS].sort()).toEqual(Object.keys(SHOWS).sort());
   });
 
   it("never shows what has no plain value (references, images, checklists, component fields) or nothing", () => {
     for (const from of ["image", "item", "item_list", "checklist", "component"] as FieldKind[]) {
       expect(readKind({ kind: from, output: null })).toBeNull();
-      for (const to of BLEND_KINDS) expect(canShow(to, readKind({ kind: from, output: null }))).toBe(false);
+      for (const to of MERGED_KINDS) expect(canShow(to, readKind({ kind: from, output: null }))).toBe(false);
     }
     expect(canShow("string", null)).toBe(false);
   });
@@ -67,14 +67,14 @@ describe("which part fields a column can show (the type matrix)", () => {
 
   it("turns a date & time into its day (the device's) for a date column, and leaves every other value as it is", () => {
     const noon = new Date(2026, 9, 5, 12, 0).toISOString();
-    expect(blendValue("datetime", "date", noon)).toBe("2026-10-05");
-    expect(blendValue("datetime", "date", new Date(2026, 9, 5, 23, 59).toISOString())).toBe("2026-10-05");
-    expect(blendValue("datetime", "date", null)).toBeNull();
-    expect(blendValue("datetime", "date", "")).toBe("");
-    expect(blendValue("date", "date", "2026-10-05")).toBe("2026-10-05");
-    expect(blendValue("datetime", "datetime", noon)).toBe(noon);
-    expect(blendValue("string", "markdown", "# x")).toBe("# x");
-    expect(blendValue("number", "number", 3)).toBe(3);
+    expect(mergedValue("datetime", "date", noon)).toBe("2026-10-05");
+    expect(mergedValue("datetime", "date", new Date(2026, 9, 5, 23, 59).toISOString())).toBe("2026-10-05");
+    expect(mergedValue("datetime", "date", null)).toBeNull();
+    expect(mergedValue("datetime", "date", "")).toBe("");
+    expect(mergedValue("date", "date", "2026-10-05")).toBe("2026-10-05");
+    expect(mergedValue("datetime", "datetime", noon)).toBe(noon);
+    expect(mergedValue("string", "markdown", "# x")).toBe("# x");
+    expect(mergedValue("number", "number", 3)).toBe(3);
   });
 });
 
@@ -94,10 +94,10 @@ describe("merging collections into the one a block reads", () => {
       ["merged:name:note", "Note", "markdown"],
       // The columns merged by hand after the others, Collection last.
       [COL.amount, "Amount", "number"],
-      [SOURCE_COLUMN, "Collection", "string"],
+      [COLLECTION_COLUMN, "Collection", "string"],
     ]);
     // Which field of each part every column shows: a field only one has is empty for the other.
-    expect(collection.blend!.parts).toEqual([
+    expect(collection.mergedFrom!.parts).toEqual([
       { collectionId: "sales", map: { [COL.amount]: "s-total", [COL.date]: "s-at", [COL.client]: "s-customer", [COL.paid]: "s-paid", "merged:name:meta": "s-meta" } },
       { collectionId: "invoices", map: { [COL.amount]: "i-price", [COL.date]: "i-date", [COL.client]: "i-client", "merged:name:note": "i-note" } },
     ]);
@@ -132,13 +132,13 @@ describe("merging collections into the one a block reads", () => {
   it("names a collection that is gone and a merged column that lost a field, and merges the rest", () => {
     const gone = merged(["sales", "invoices"], [invoices]);
     expect(gone.problems).toEqual([{ part: "sales", message: "A collection this block listed was deleted." }]);
-    expect(gone.collection.blend!.parts.map((p) => p.collectionId)).toEqual(["invoices"]);
-    expect(gone.collection.blend!.problems).toEqual(gone.problems);
+    expect(gone.collection.mergedFrom!.parts.map((p) => p.collectionId)).toEqual(["invoices"]);
+    expect(gone.collection.mergedFrom!.problems).toEqual(gone.problems);
     const lost = merged(["sales", "invoices"], [shopSales, { ...invoices, fields: invoices.fields.filter((f) => f.id !== "i-price") }]);
     expect(lost.problems.map((p) => p.message)).toEqual(["The merged column “Amount” lost a field of Invoices."]);
     // The column stays with the field that is left.
-    expect(lost.collection.blend!.parts[0].map[COL.amount]).toBe("s-total");
-    expect(lost.collection.blend!.parts[1].map[COL.amount]).toBeUndefined();
+    expect(lost.collection.mergedFrom!.parts[0].map[COL.amount]).toBe("s-total");
+    expect(lost.collection.mergedFrom!.parts[1].map[COL.amount]).toBeUndefined();
   });
 
   it("refuses to merge by hand fields that can't be shown alike", () => {
@@ -164,38 +164,41 @@ describe("a merged collection's parts", () => {
   it("knows whether it has a remote part", () => {
     expect(hasRemotePart(revenue, world)).toBe(true);
     expect(hasRemotePart(revenue, [invoices])).toBe(false);
-    expect(hasRemotePart({ blend: null }, world)).toBe(false);
+    expect(hasRemotePart({ mergedFrom: null }, world)).toBe(false);
   });
 
   it("resolves its parts with the fields they show", () => {
-    const { parts, problems } = resolveBlend(revenue, world);
-    expect(problems).toEqual([]);
+    const parts = resolveParts(revenue, world);
     expect(parts.map((p) => [p.collection.id, p.label])).toEqual([["sales", "Shop sales"], ["invoices", "Invoices"]]);
     expect([...parts[1].fields.keys()]).toEqual([COL.date, COL.client, "merged:name:note", COL.amount]);
+    // Collections changed since it was made: a part that is gone, a field that was removed, are left out.
+    const fewer = resolveParts(revenue, [{ ...invoices, fields: invoices.fields.filter((f) => f.id !== "i-note") }]);
+    expect(fewer.map((p) => p.collection.id)).toEqual(["invoices"]);
+    expect([...fewer[0].fields.keys()]).toEqual([COL.date, COL.client, COL.amount]);
   });
 
   it("opens a row's own item or remote row", () => {
-    expect(itemPath(revenue, { id: blendItemId("invoices", "inv1") })).toBe("/collections/invoices/items/inv1");
-    expect(itemPath(revenue, { id: blendItemId("sales", rowItemId("7")) })).toBe(`/collections/sales/items/${rowItemId("7")}`);
-    expect(blendPath("a:b:c")).toBe("/collections/a/items/b:c");
+    expect(itemPath(revenue, { id: mergedItemId("invoices", "inv1") })).toBe("/collections/invoices/items/inv1");
+    expect(itemPath(revenue, { id: mergedItemId("sales", rowItemId("7")) })).toBe(`/collections/sales/items/${rowItemId("7")}`);
+    expect(mergedPath("a:b:c")).toBe("/collections/a/items/b:c");
   });
 });
 
 describe("a merged collection's rows", () => {
-  const [sales, inv] = resolveBlend(revenue, world).parts;
+  const [sales, inv] = resolveParts(revenue, world);
 
   it("are a native part's items through the mapping, with the part's name in Collection", () => {
-    const item = blendItem(revenue, inv, invoice(1, "Ada", 120, "2026-02-03"));
+    const item = mergedItem(revenue, inv, invoice(1, "Ada", 120, "2026-02-03"));
     expect(item).toEqual({
       id: "invoices:inv1",
       collectionId: revenue.id,
       spaceId: "default",
-      values: { [COL.amount]: 120, [COL.date]: "2026-02-03", [COL.client]: "Ada", [COL.source]: "Invoices" },
+      values: { [COL.amount]: 120, [COL.date]: "2026-02-03", [COL.client]: "Ada", [COL.collection]: "Invoices" },
       createdAt: "2026-02-01T00:00:00.000Z",
       updatedAt: "2026-02-01T00:00:00.000Z",
     });
     expect(item.values).not.toHaveProperty(COL.paid);
-    expect(blendItem(revenue, inv, { ...invoice(2, "Bo", 1, "2026-02-04"), values: {} }).values).toEqual({ [COL.source]: "Invoices" });
+    expect(mergedItem(revenue, inv, { ...invoice(2, "Bo", 1, "2026-02-04"), values: {} }).values).toEqual({ [COL.collection]: "Invoices" });
   });
 
   it("are a remote part's rows through the same mapping, a date & time shown as a date", () => {
@@ -203,21 +206,21 @@ describe("a merged collection's rows", () => {
     const shape = sourceShape(projection);
     expect(shape.columns).toEqual(["ordered_at", "customer", "paid", "meta", "total"]);
     const at = new Date(2026, 9, 5, 12, 0).toISOString();
-    const item = blendRowItem(revenue, sales, projection, shape, { key: "42", values: [at, "Bo", true, null, 99.5] });
-    expect(item).toMatchObject({ id: `sales:${rowItemId("42")}`, values: { [COL.amount]: 99.5, [COL.date]: "2026-10-05", [COL.client]: "Bo", [COL.paid]: true, [COL.source]: "Shop sales" } });
+    const item = mergedRowItem(revenue, sales, projection, shape, { key: "42", values: [at, "Bo", true, null, 99.5] });
+    expect(item).toMatchObject({ id: `sales:${rowItemId("42")}`, values: { [COL.amount]: 99.5, [COL.date]: "2026-10-05", [COL.client]: "Bo", [COL.paid]: true, [COL.collection]: "Shop sales" } });
   });
 
   it("are called by the first text field with a value, never Collection unless it is chosen; Created and Updated are there", () => {
     expect(titleFields(revenue).map((f) => f.id)).toEqual([COL.client, "merged:name:meta"]);
-    const item = blendItem(revenue, inv, invoice(1, "Ada", 120, "2026-02-03"));
+    const item = mergedItem(revenue, inv, invoice(1, "Ada", 120, "2026-02-03"));
     expect(itemLabel(revenue, item)).toBe("Ada");
     expect(itemLabel(revenue, { ...item, values: { ...item.values, [COL.client]: "" } })).toBe("Item");
-    expect(itemLabel({ ...revenue, titleField: COL.source }, item)).toBe("Invoices");
+    expect(itemLabel({ ...revenue, titleField: COL.collection }, item)).toBe("Invoices");
   });
 });
 
 describe("a remote part as a collection of the merged columns", () => {
-  const [sales] = resolveBlend(revenue, world).parts;
+  const [sales] = resolveParts(revenue, world);
 
   it("has the columns it shows, each on the part's source column", () => {
     const projection = partProjection(revenue, sales);
@@ -234,11 +237,11 @@ describe("a remote part as a collection of the merged columns", () => {
   it("has no title where the chosen title field isn't one of its columns", () => {
     expect(partProjection(revenue, sales).titleField).toBeNull();
     expect(partProjection({ ...revenue, titleField: COL.client }, sales).titleField).toBe(COL.client);
-    expect(partProjection({ ...revenue, titleField: COL.source }, sales).titleField).toBe("none");
+    expect(partProjection({ ...revenue, titleField: COL.collection }, sales).titleField).toBe("none");
   });
 
   it("has the same value on every row for Collection (the part's name), for the columns it has no field for and for Created and Updated (none)", () => {
     const constants = partConstants(revenue, sales);
-    expect([...constants].map(([id, c]) => [id, c.value])).toEqual([["merged:name:note", null], [COL.source, "Shop sales"], ["$created", null], ["$updated", null]]);
+    expect([...constants].map(([id, c]) => [id, c.value])).toEqual([["merged:name:note", null], [COL.collection, "Shop sales"], ["$created", null], ["$updated", null]]);
   });
 });

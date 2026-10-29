@@ -1,8 +1,8 @@
-// A small world for the blend's tests: a native collection (Invoices), a remote one (Shop sales) behind a stand-in source that
-// filters, sorts, groups and pages as the server's connectors do, and the Revenue blend over both.
+// A small world for the merged collection's tests: a native collection (Invoices), a remote one (Shop sales) behind a stand-in source that
+// filters, sorts, groups and pages as the server's connectors do, and Revenue, the two read as one.
 
 import { betweenBounds, TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceQuery, type SourceResult, type SourceValue } from "../../../shared/sources";
-import { mergeCollections } from "../domain/blend";
+import { mergeCollections } from "../domain/mergedCollection";
 import { blankField, type Collection, type Item } from "../domain/model";
 import { naturalCompare } from "../domain/query";
 
@@ -61,7 +61,7 @@ export const invoice = (n: number, client: string, price: number, date: string):
 export const MERGES = [{ id: "m1", name: "Amount", fields: ["sales/s-total", "invoices/i-price"] }];
 export const revenue: Collection = mergeCollections(["sales", "invoices"], [shopSales, invoices], MERGES).collection;
 /** The merged columns' ids. */
-export const COL = { amount: "merged:m1", date: "merged:name:date", client: "merged:name:client", paid: "merged:name:paid", source: "merged:collection" };
+export const COL = { amount: "merged:m1", date: "merged:name:date", client: "merged:name:client", paid: "merged:name:paid", collection: "merged:collection" };
 
 export const world = [shopSales, invoices];
 

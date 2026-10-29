@@ -1,35 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { MAX_SOURCE_PAGE } from "../../../shared/sources";
 import { useStore } from "../app/store";
-import { hasRemotePart, resolveBlend, type BlendProblem } from "../domain/blend";
-import { blendQueryResult, BlendCursor, nativeItems, nativeStream, remoteStream, type BlendGroup, type BlendRow, type PartStream } from "../domain/blendMerge";
+import { resolveParts, type MergeProblem } from "../domain/mergedCollection";
+import { mergedQueryResult, MergedCursor, nativeItems, nativeStream, remoteStream, type MergedGroup, type MergedRow, type PartStream } from "../domain/mergedRows";
 import type { Collection, Item } from "../domain/model";
 import { isGroupable, sortComparator, type QueryContext, type ViewQuery } from "../domain/query";
 import { deviceTimeZone, isRemote } from "../domain/sources";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { EMPTY, LOADING_SHOWN_MS, useSettled, useThrottled, type RemoteResult } from "./useRemoteResult";
 
-// A block of a blend: its query asked of every part (a native part answered from the items in memory, a remote one
-// by its source) and the answers merged a page at a time (domain/blendMerge.ts). What it gives the block type is the
-// same as useRemoteResult's, so every block type shows a blend's rows as it shows a remote collection's.
+// A block of a merged collection: its query asked of every part (a native part answered from the items in memory, a remote one
+// by its source) and the answers merged a page at a time (domain/mergedRows.ts). What it gives the block type is the
+// same as useRemoteResult's, so every block type shows a merged collection's rows as it shows a remote collection's.
 
 /** Rows per page ("Show more" asks for the next). */
 const PAGE = 100;
 /** Typing in the search box asks the remote parts again once it pauses this long. */
 const SEARCH_DELAY_MS = 300;
 
-export interface BlendResult extends RemoteResult {
-  /** What is wrong with the blend (a part deleted, a mapped field removed): the block says so, the rest is shown. */
-  problems: BlendProblem[];
+export interface MergedResult extends RemoteResult {
+  /** What is wrong with the merged collection (a collection deleted, a hand-merged column that lost a field): the block says so, the rest is shown. */
+  problems: MergeProblem[];
 }
 
 const NO_REFS: QueryContext = { refLabel: refLabelOf({}, "(deleted)") };
 
 interface Loaded {
   key: string;
-  rows: BlendRow[];
+  rows: MergedRow[];
   total: number;
-  groups: BlendGroup[];
+  groups: MergedGroup[];
   more: boolean;
   error?: string;
 }
@@ -62,32 +62,32 @@ function useLists(ids: string[]): (Item[] | null)[] {
   });
 }
 
-/** The block's rows when its collection is a blend (null otherwise: the block filters its items itself). */
-export function useBlendResult(collection: Collection, query: ViewQuery, search: string, enabled: boolean, all = false, page?: number): BlendResult | null {
+/** The block's rows when its collection is a merged collection (null otherwise: the block filters its items itself). */
+export function useMergedResult(collection: Collection, query: ViewQuery, search: string, enabled: boolean, all = false, page?: number): MergedResult | null {
   const { sources, collections } = useStore();
-  const blendOn = enabled && !!collection.blend;
-  // The blend and its parts as rows are made from them (names, fields, columns, sources): a change to another collection
+  const mergedOn = enabled && !!collection.mergedFrom;
+  // The merged collection and its parts as rows are made from them (names, fields, columns, sources): a change to another collection
   // makes every collection a new object, and that mustn't ask the parts again.
-  const resolvedNow = resolveBlend(collection, collections);
-  const madeFrom = collection.blend
+  const partsNow = resolveParts(collection, collections);
+  const madeFrom = collection.mergedFrom
     ? JSON.stringify([
-        collection.id, collection.name, collection.titleField, collection.fields.map((f) => [f.id, f.name, f.kind]), collection.blend,
-        resolvedNow.parts.map((p) => [p.collection.id, p.label, p.collection.source ?? null, [...p.fields].map(([id, f]) => [id, f.id, f.kind, f.column ?? null])]),
-        resolvedNow.problems.map((p) => p.message),
+        collection.id, collection.name, collection.titleField, collection.fields.map((f) => [f.id, f.name, f.kind]), collection.mergedFrom,
+        partsNow.map((p) => [p.collection.id, p.label, p.collection.source ?? null, [...p.fields].map(([id, f]) => [id, f.id, f.kind, f.column ?? null])]),
       ])
     : "";
-  const resolved = useMemo(() => resolvedNow, [madeFrom]); // eslint-disable-line react-hooks/exhaustive-deps
-  const blend = useMemo(() => collection, [madeFrom]); // eslint-disable-line react-hooks/exhaustive-deps
-  const remoteParts = resolved.parts.filter((p) => isRemote(p.collection));
-  const nativeParts = resolved.parts.filter((p) => !isRemote(p.collection));
-  const lists = useLists(blendOn ? nativeParts.map((p) => p.collection.id) : []);
+  const parts = useMemo(() => partsNow, [madeFrom]); // eslint-disable-line react-hooks/exhaustive-deps
+  const merged = useMemo(() => collection, [madeFrom]); // eslint-disable-line react-hooks/exhaustive-deps
+  const remoteParts = parts.filter((p) => isRemote(p.collection));
+  const nativeParts = parts.filter((p) => !isRemote(p.collection));
+  const hasRemote = remoteParts.length > 0;
+  const lists = useLists(mergedOn ? nativeParts.map((p) => p.collection.id) : []);
   const nativeReady = lists.every((l) => l !== null);
-  // The native lists and the memo of the blend items made from them (an item that didn't change keeps its blend item).
+  // The native lists and the memo of the merged items made from them (an item that didn't change keeps its merged item).
   const memos = useMemo(() => new Map<string, WeakMap<Item, Item>>(), [madeFrom]); // eslint-disable-line react-hooks/exhaustive-deps
-  const typed = useSettled(search, remoteParts.length > 0 ? SEARCH_DELAY_MS : 0);
+  const typed = useSettled(search, hasRemote ? SEARCH_DELAY_MS : 0);
   const pageSize = all ? MAX_SOURCE_PAGE : Math.min(page ?? PAGE, MAX_SOURCE_PAGE);
   // Group dates by month and the like are the app's: a remote part's source groups a date by its day.
-  const q = useMemo<ViewQuery>(() => (hasRemotePart(blend, collections) && query.groupDate ? { ...query, groupDate: undefined } : query), [query, blend, collections]);
+  const q = useMemo<ViewQuery>(() => (hasRemote && query.groupDate ? { ...query, groupDate: undefined } : query), [query, hasRemote]);
   const queryKey = JSON.stringify(q);
   // The lists by what they hold: asking again only when a list's items changed.
   const listsKey = useRef(0);
@@ -96,7 +96,7 @@ export function useBlendResult(collection: Collection, query: ViewQuery, search:
     heldLists.current = lists;
     listsKey.current++;
   }
-  const key = blendOn ? `${hash(madeFrom)}:${queryKey}|${typed}|${pageSize}|${listsKey.current}|${nativeReady}` : "";
+  const key = mergedOn ? `${hash(madeFrom)}:${queryKey}|${typed}|${pageSize}|${listsKey.current}|${nativeReady}` : "";
   const [refreshes, setRefreshes] = useState(0);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -107,7 +107,7 @@ export function useBlendResult(collection: Collection, query: ViewQuery, search:
   // The request now, so a late answer to an older one is dropped.
   const latest = useRef("");
   latest.current = `${key}#${refreshes}`;
-  const cursor = useRef<BlendCursor | null>(null);
+  const cursor = useRef<MergedCursor | null>(null);
   // The rows shown when the cursor is made anew (a native item changed): as many are taken again.
   const shownRows = useRef(0);
 
@@ -120,24 +120,24 @@ export function useBlendResult(collection: Collection, query: ViewQuery, search:
   );
 
   // The latest inputs for the request, read when it is made (the key says when to).
-  const inputs = useRef({ blend, resolved, q, typed, lists, pageSize, remoteParts, nativeParts, memos });
-  inputs.current = { blend, resolved, q, typed, lists, pageSize, remoteParts, nativeParts, memos };
+  const inputs = useRef({ merged, parts, q, typed, lists, pageSize, remoteParts, nativeParts, memos });
+  inputs.current = { merged, parts, q, typed, lists, pageSize, remoteParts, nativeParts, memos };
 
   useEffect(() => {
-    if (!blendOn || !nativeReady) return;
+    if (!mergedOn || !nativeReady) return;
     const asked = `${key}#${refreshes}`;
-    const { blend, resolved, q, typed, lists, pageSize, nativeParts, memos } = inputs.current;
-    const groupField = q.groupBy ? blend.fields.find((f) => f.id === q.groupBy) : undefined;
+    const { merged, parts, q, typed, lists, pageSize, nativeParts, memos } = inputs.current;
+    const groupField = q.groupBy ? merged.fields.find((f) => f.id === q.groupBy) : undefined;
     const tz = deviceTimeZone();
-    const streams: PartStream[] = resolved.parts.map((part) => {
-      if (isRemote(part.collection)) return remoteStream(blend, part, q, typed, tz, (name, request) => sources.query(name, request));
+    const streams: PartStream[] = parts.map((part) => {
+      if (isRemote(part.collection)) return remoteStream(merged, part, q, typed, tz, (name, request) => sources.query(name, request));
       const at = nativeParts.indexOf(part);
       let memo = memos.get(part.collection.id);
       if (!memo) memos.set(part.collection.id, (memo = new WeakMap()));
-      return nativeStream(blend, nativeItems(blend, part, lists[at] ?? [], memo), q, typed, NO_REFS);
+      return nativeStream(merged, nativeItems(merged, part, lists[at] ?? [], memo), q, typed, NO_REFS);
     });
-    const comparator = sortComparator(blend, q.sort, NO_REFS);
-    const next = new BlendCursor(streams, comparator, q, groupField, pageSize);
+    const comparator = sortComparator(merged, q.sort, NO_REFS);
+    const next = new MergedCursor(streams, comparator, q, groupField, pageSize);
     cursor.current = next;
     const wanted = () => latest.current === asked && cancelledRef.current !== asked;
     const want = Math.max(pageSize, Math.min(shownRows.current, 5 * MAX_SOURCE_PAGE));
@@ -149,7 +149,7 @@ export function useBlendResult(collection: Collection, query: ViewQuery, search:
         (e) => wanted() && (setAnswered(asked), setLoaded({ key, rows: [], total: 0, groups: [], more: false, error: e instanceof Error ? e.message : String(e) })),
       );
     // Only what the key says: the rest is read from `inputs`.
-  }, [blendOn, nativeReady, key, refreshes, sources]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mergedOn, nativeReady, key, refreshes, sources]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const more = useCallback(() => {
     const c = cursor.current;
@@ -173,7 +173,7 @@ export function useBlendResult(collection: Collection, query: ViewQuery, search:
   }, [loadingAll, loadingMore, more]);
   shownRows.current = loaded?.rows.length ?? 0;
 
-  const groupField = q.groupBy ? blend.fields.find((f) => f.id === q.groupBy) : undefined;
+  const groupField = q.groupBy ? merged.fields.find((f) => f.id === q.groupBy) : undefined;
   const grouped = !!groupField && isGroupable(groupField.kind);
   // Rows that didn't change keep their item (memoized rows rely on it): a new first page reuses the items of the one before.
   const known = useRef(new Map<string, { json: string; item: Item }>());
@@ -188,12 +188,12 @@ export function useBlendResult(collection: Collection, query: ViewQuery, search:
       return entry.item === r.item ? r : { ...r, item: entry.item };
     });
     known.current = seen;
-    return blendQueryResult(rows, loaded.groups, loaded.total, grouped);
+    return mergedQueryResult(rows, loaded.groups, loaded.total, grouped);
   }, [loaded, grouped]);
   const shown = useThrottled(result, loadingAll ? LOADING_SHOWN_MS : 0);
 
-  if (!blendOn) return null;
-  const nothing = resolved.parts.length === 0;
+  if (!mergedOn) return null;
+  const nothing = parts.length === 0;
   return {
     result: nothing ? EMPTY : (shown?.result ?? EMPTY),
     items: nothing ? [] : (shown?.items ?? null),
@@ -213,6 +213,6 @@ export function useBlendResult(collection: Collection, query: ViewQuery, search:
     },
     stopped: cancelled === latest.current && answered !== latest.current,
     resume: () => setRefreshes((n) => n + 1),
-    problems: [...resolved.problems, ...(blend.blend?.problems ?? [])],
+    problems: merged.mergedFrom?.problems ?? [],
   };
 }
