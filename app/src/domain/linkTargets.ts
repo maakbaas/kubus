@@ -1,37 +1,41 @@
 // What a link to a page of the app can point at, as options to pick from (the Markdown editor's
-// link picker, the search page's link hits): collections, views, items, item views, an item's fields
-// and the blocks of a page. Choosing one gives the stored form of the link (by id,
-// `#/collections/<id>/items…`, the same as domain/links.ts writes), so a rename breaks nothing.
+// link picker, the search page's link hits): collections, views, items, item views, an item's fields,
+// dashboards and their tabs, and the blocks of a page. Choosing one gives the stored form of the link (by id,
+// `#/collections/<id>/items…`, `#/dashboards/<id>…`, the same as domain/links.ts writes), so a rename breaks nothing.
 // Matching works on the name, on a link's address (`#/collections/<id>/items?view=<id>`, typed or
 // pasted), on a link written by name part by part (`books/reading-list#table`, `book/dune/compact#author`),
 // and `item#field` lists the fields of the items named (the item page is what a field link opens).
 
 import type { ItemView } from "./fieldLayout";
-import { blockName, describeLink, slug, slugs, type LinkData } from "./links";
+import { blockName, DASHBOARDS, describeLink, slug, slugs, type LinkData } from "./links";
 import type { Collection, ItemLabel } from "./model";
 import { isRemote } from "./sources";
 import type { CollectionView } from "./views";
+import { findTab, tabLinkId, type Dashboard, type DashboardView } from "./dashboards";
 
-export type LinkTargetKind = "collection" | "view" | "item" | "field" | "block";
+export type LinkTargetKind = "collection" | "view" | "item" | "field" | "dashboard" | "tab" | "block";
 
 export interface LinkTarget {
   /** Unique, and the same for the same page whichever way it was found (to leave out repeats). */
   key: string;
   kind: LinkTargetKind;
-  /** What it is called: a collection's plural name, a view's, an item's label, a field's, a block's. */
+  /** What it is called: a collection's plural name, a view's, an item's label, a field's, a dashboard's, a tab's, a block's. */
   name: string;
-  /** Where it is: "Books" for a view, "Book" for an item, "Book › Dune" for a field or an item view, "Books › Reading list" for a block. */
+  /** Where it is: "Books" for a view, "Book" for an item, "Book › Dune" for a field or an item view, "Books › Reading list" for a block, "Health" for a tab. */
   context: string;
   /** The stored link. */
   href: string;
   /** The link by name (`book/dune#author`, domain/links.ts), shown with the option; set by searchLinkTargets. */
   link?: string;
-  collectionId: string;
+  /** Its collection; none for a dashboard's page. */
+  collectionId?: string;
+  /** For a dashboard, its tab and their blocks: the dashboard. */
+  dashboardId?: string;
   /** For an item and a field: the item. */
   itemId?: string;
 }
 
-const KIND_ORDER: Record<LinkTargetKind, number> = { collection: 0, view: 1, item: 2, field: 3, block: 4 };
+const KIND_ORDER: Record<LinkTargetKind, number> = { collection: 0, view: 1, item: 2, field: 3, dashboard: 4, tab: 5, block: 6 };
 const LIST = (c: Pick<Collection, "id">) => `#/collections/${c.id}/items`;
 /** A link's query, of the parameters set, in this order (as domain/links.ts writes them). */
 const search = (params: Record<string, string | undefined>) => {
@@ -116,6 +120,61 @@ export const itemBlockTargets = (c: Collection, item: ItemLabel, v: ItemView, na
     itemId: item.id,
   }));
 
+const DASHBOARD = (d: Pick<Dashboard, "id">) => `#/dashboards/${d.id}`;
+
+export const dashboardTarget = (d: Dashboard): LinkTarget => ({
+  key: `dashboard:${d.id}`,
+  kind: "dashboard",
+  name: d.name,
+  context: "Dashboard",
+  href: DASHBOARD(d),
+  dashboardId: d.id,
+});
+
+/** A tab of a dashboard (a copy of another space's goes by the id of the tab it copies: tabLinkId). */
+export const tabTarget = (d: Dashboard, v: DashboardView): LinkTarget => ({
+  key: `tab:${tabLinkId(v)}`,
+  kind: "tab",
+  name: v.name,
+  context: d.name,
+  href: `${DASHBOARD(d)}${search({ view: tabLinkId(v) })}`,
+  dashboardId: d.id,
+});
+
+/** The blocks of a dashboard's tab (`named`: the tab is named in the link, else it is the dashboard's default one). */
+export const tabBlockTargets = (d: Dashboard, v: DashboardView, named: boolean): LinkTarget[] =>
+  v.blocks.map((b) => ({
+    key: `block:${tabLinkId(v)}:${b.id}`,
+    kind: "block",
+    name: blockName(b),
+    context: `${d.name} › ${v.name}`,
+    href: `${DASHBOARD(d)}${search({ view: named ? tabLinkId(v) : undefined, block: b.id })}`,
+    dashboardId: d.id,
+  }));
+
+/** A stored link to a dashboard taken apart: the dashboard, its tab and a block. */
+export interface StoredDashboardLink {
+  dashboardId: string;
+  viewId?: string;
+  blockId?: string;
+}
+
+/** The parts of a link to a dashboard as typed or pasted (`#/dashboards/<id>?view=<id>&block=<id>`, with or without the address before its `#`); null for anything else. */
+export function parseStoredDashboardLink(text: string): StoredDashboardLink | null {
+  const t = text.trim();
+  const hash = t.indexOf("#/");
+  const route = hash >= 0 ? t.slice(hash + 1) : t.startsWith("/dashboards/") ? t : null;
+  const m = route && /^\/dashboards\/([^/?#]+)(?:\?([^#]*))?(?:#.*)?$/.exec(route);
+  if (!m) return null;
+  const params = new URLSearchParams(m[2] ?? "");
+  const link: StoredDashboardLink = { dashboardId: m[1] };
+  const view = params.get("view");
+  const block = params.get("block");
+  if (view) link.viewId = view;
+  if (block) link.blockId = block;
+  return link;
+}
+
 /** A stored link taken apart: which collection, item, view (with an item: item view), field and block it names. */
 export interface StoredLink {
   collectionId: string;
@@ -159,6 +218,25 @@ export interface LinkTargetData {
   /** The labels of a collection's items (every space; `spaceId` tells), or just these. */
   labels(collection: Collection, ids?: string[]): Promise<ItemLabel[]>;
   spaceId: string;
+  /** The shown space's dashboards, and the tabs they show there (domain/dashboards.ts dashboardViewsIn: copies of another space's included). */
+  dashboards?: Dashboard[];
+  tabs?: DashboardView[];
+}
+
+const tabsOf = (data: LinkTargetData, d: Pick<Dashboard, "id">) => (data.tabs ?? []).filter((v) => v.dashboardId === d.id);
+
+/** The option for a pasted or typed link to a dashboard, its tab or a block; null when it points at nothing there. */
+export function storedDashboardTarget(link: StoredDashboardLink, data: LinkTargetData): LinkTarget | null {
+  const d = data.dashboards?.find((x) => x.id === link.dashboardId);
+  if (!d) return null;
+  const tabs = tabsOf(data, d);
+  const v = link.viewId ? findTab(tabs, link.viewId) : undefined;
+  if (link.viewId && !v) return null;
+  if (link.blockId) {
+    const shown = v ?? defaultOf(tabs);
+    return (shown && tabBlockTargets(d, shown, !!v).find((t) => t.key === `block:${tabLinkId(shown)}:${link.blockId}`)) || null;
+  }
+  return v ? tabTarget(d, v) : dashboardTarget(d);
 }
 
 /** The option for a pasted or typed link, built from the names it points at; null when it points at nothing there. */
@@ -256,10 +334,51 @@ function rankBySlug(options: { t: LinkTarget; slug: string }[], typed: string, l
  * `books/` lists the views of Books (by the plural name) and the items (by the singular name; `views/` or
  * `items/` after it only those), `book/dune/` the item views of Dune, and after a `#` the blocks of the
  * collection's default view or the view named, or the fields and blocks of the item's page. The parts
- * before the last are matched exactly (as slugs), the last as typed. Null when it is a single word
+ * before the last are matched exactly (as slugs), the last as typed. `dashboards/` lists the dashboards,
+ * `dashboards/health/` the tabs of Health, and after a `#` the blocks of its default tab or the tab named
+ * (with those of a collection called Dashboards, if there is one). Null when it is a single word
  * (no `/` or `#`) or its first part names no collection (or two).
  */
 async function nameLinkTargets(query: string, data: LinkTargetData, limit: number): Promise<LinkTarget[] | null> {
+  const dashboards = dashboardNameTargets(query, data, limit);
+  const collections = await collectionNameTargets(query, data, limit);
+  if (!dashboards) return collections;
+  return [...dashboards, ...(collections ?? [])].slice(0, limit);
+}
+
+/** The parts of a link by name as typed (a leading `#/` skipped): the path's parts and the fragment, as slugs. */
+function nameLinkParts(query: string): { parts: string[]; fragment: string | null } {
+  const text = query.trim().replace(/^#?\//, "");
+  const hash = text.indexOf("#");
+  const decode = (s: string) => {
+    try {
+      return slug(decodeURIComponent(s));
+    } catch {
+      return slug(s);
+    }
+  };
+  return { parts: (hash < 0 ? text : text.slice(0, hash)).split("/").map(decode), fragment: hash < 0 ? null : decode(text.slice(hash + 1)) };
+}
+
+/** `dashboards/…` part by part (nameLinkTargets); null when it doesn't start so. */
+function dashboardNameTargets(query: string, data: LinkTargetData, limit: number): LinkTarget[] | null {
+  const { parts, fragment } = nameLinkParts(query);
+  if (parts[0] !== DASHBOARDS || !data.dashboards || (parts.length < 2 && fragment === null)) return null;
+  const rest = parts.slice(1);
+  if (fragment === null && rest.length === 1) {
+    return rankBySlug(data.dashboards.map((d) => ({ t: dashboardTarget(d), slug: slug(d.name) })), rest[0], limit);
+  }
+  const found = data.dashboards.filter((d) => slug(d.name) === rest[0]);
+  if (found.length !== 1 || rest.length > 2) return [];
+  const d = found[0];
+  const tabs = tabsOf(data, d);
+  if (fragment === null) return rankBySlug(withSlugs(tabs.map((v) => tabTarget(d, v)), tabs.map((v) => v.name)), rest[1], limit);
+  const tab = rest.length === 2 ? tabs[slugs(tabs.map((v) => v.name)).indexOf(rest[1])] : defaultOf(tabs);
+  return tab ? rankBySlug(withSlugs(tabBlockTargets(d, tab, rest.length === 2), tab.blocks.map(blockName)), fragment, limit) : [];
+}
+
+/** A link by name to a collection's page part by part (nameLinkTargets). */
+async function collectionNameTargets(query: string, data: LinkTargetData, limit: number): Promise<LinkTarget[] | null> {
   const text = query.trim().replace(/^#?\//, "");
   const hash = text.indexOf("#");
   const decode = (s: string) => {
@@ -349,12 +468,19 @@ async function withNameLinks(targets: LinkTarget[], data: LinkTargetData): Promi
     collections: data.collections,
     views: async (c) => data.views.filter((v) => v.collectionId === c.id),
     items: (c) => (isRemote(c) ? Promise.resolve([]) : data.labels(c)),
+    dashboards: data.dashboards,
+    tabs: async (d) => tabsOf(data, d),
   };
   return Promise.all(targets.map(async (t) => ({ ...t, link: (await describeLink(t.href, linkData).catch(() => null)) ?? undefined })));
 }
 
 async function findLinkTargets(query: string, data: LinkTargetData, opts: { items: boolean; limit?: number }): Promise<LinkTarget[]> {
   const limit = opts.limit ?? 50;
+  const dashboardLink = parseStoredDashboardLink(query);
+  if (dashboardLink) {
+    const target = storedDashboardTarget(dashboardLink, data);
+    return target ? [target] : [];
+  }
   const stored = parseStoredLink(query);
   if (stored) {
     const target = await storedLinkTarget(stored, data);
@@ -385,7 +511,9 @@ async function findLinkTargets(query: string, data: LinkTargetData, opts: { item
       const c = data.collections.find((x) => x.id === v.collectionId);
       return c ? [viewTarget(c, v)] : [];
     }),
+    ...(data.dashboards ?? []).flatMap((d) => [dashboardTarget(d), ...tabsOf(data, d).map((v) => tabTarget(d, v))]),
     ...(opts.items ? await nativeItems() : []),
   ];
   return rankTargets(targets, query, limit);
+
 }

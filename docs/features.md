@@ -46,7 +46,7 @@ What the app does, feature by feature (read the part you work on).
   items are called by the collection's name, tables get no title link), or by default the first text
   field with a value. The full form
   (`…/items/new`) is only for creating. Narrow screens show the items list as cards.
-- **List pages' tables on a phone** (Collections, Components, Spaces, Bookmarks; not a view's tables): below
+- **List pages' tables on a phone** (Collections, Components, Spaces, Bookmarks, Dashboards; not a view's tables): below
   42rem only the name (still its link; Spaces also its icon) and the row's icon buttons show, one line per row;
   every other column is hidden (`ui/listTable.ts`: `LIST_TABLE` on the table, `LIST_MAIN` on the kept column).
 - **Markdown editor has no toolbar**: formatting is typed, images pasted/dropped, links edited from
@@ -247,7 +247,8 @@ What the app does, feature by feature (read the part you work on).
   right away too; only what a block shows waits for Save changes.
 - **Several collections in one block** (merged collections: `domain/mergedCollection.ts` `mergeCollections`, `domain/mergedRows.ts`,
   `views/useMergedResult.ts`, `views/MergeFields.tsx`): a block's Collections picker (Block settings, on collection views and item pages)
-  takes more than one collection, native and remote mixed (Backlinks can't be merged). The block then reads them as one
+  takes more than one collection, native and remote mixed (Backlinks can't be merged); on a dashboard (see Dashboards) none of
+  them is forced in, as a dashboard has no collection of its own. The block then reads them as one
   read-only collection made when it is shown (never stored: the block keeps `ViewBlock.collectionIds` and `merges`, JSON in the view's
   config or the item view's layout, no schema or sync change; older devices ignore both and show the first collection). Columns: fields of one
   name (case aside) whose types fit are one column (the matrix, `canShow`: text, Markdown and HTML show each other; a date also a
@@ -272,6 +273,32 @@ What the app does, feature by feature (read the part you work on).
   Rows are read-only (`isReadOnly`: no edit, add or delete, no "Fields are editable") and open their own item or remote row (`itemPath`;
   the row id is `<collection id>:<item id>`). A collection that is deleted, or a merged column that lost a field, is a warning on the block
   (the rest is shown), never a crash. Component blocks see the merged items as `$items`. Terms: "merged collection" is runtime only; the UI says "Collections".
+- **Dashboards** (`#/dashboards`, `#/dashboards/<id>`, `domain/dashboards.ts`, `pages/DashboardsPage.tsx`, `pages/DashboardPage.tsx`;
+  tables `dashboards`, `dashboard_views`, docs/data-model.md): pages of blocks of any collections, belonging to none. The side
+  nav's **Dashboards** branch (Carbon's Dashboard icon, between Bookmarks and Collections) opens the list page and lists the shown
+  space's dashboards below it; the list page (name with icon, description, spaces; delete) has **New dashboard**, which makes
+  "Dashboard" ("Dashboard 2", …) at once, shown only in the active space (`spaceIds: [space]`), with a first empty tab, and opens
+  it with Dashboard settings open and the name selected. The page's header shows its icon (default Carbon's Dashboard,
+  `dashboardIcon`) and name; Dashboard settings (gear) edits the icon and name, the description (the header's subtitle) and its
+  Spaces (none chosen = every space), each stored at once; the trash icon deletes it (asks; its tabs in every space and their
+  bookmarks go too). Its tabs work like a collection's views: per space (a space it is shown in without tabs of its own shows
+  copies of the tabs of the space it was first given tabs in, stored there all at once, `storeDashboardViews`, before one is changed,
+  starred or bookmarked), " *" for unsaved changes, "+" (a copy of what is shown, named "New", opened with Tab settings and its name
+  selected), Save changes (held while a panel is open), delete (not the last), star, bookmark, search in its blocks, Filter and
+  **Tab settings**: Tab name, Show filter bar (default off), Full width (default on), Fields are editable and the block list
+  (reorder, header, remove: a tab may have no blocks; Add block). What changes the shown items (the tab's filter, a block's filter,
+  sort, grouping, fields, Fields are editable) waits for Save changes; arranging (blocks, their type, options, name and collections),
+  the tab's name, Show filter bar, Full width and collapsing are stored at once. A tab without blocks shows an empty state with
+  Add block (disabled while there is no collection). A new block lists the collection of the tab's last block (else the space's
+  first) and is changed in Block settings → Collections: one, or several read as one ("Several collections in one block"; Backlinks
+  isn't offered). The tab's filter is edited over the fields of all its blocks' collections (`dashboardScope`, `pageFilterScope`
+  with "Date" first): a rule on a field narrows the blocks listing that field's collection (a merged block: the column showing it), a
+  rule on **Date** (`DASHBOARD_DATE`, `$date`) each block's own first date or date & time field (a block without one is left alone),
+  so the filter bar's period (on Date unless another field is picked) steps every dated block at once (`dashboardFiltersFor`, applied
+  by `BlockView` for `place="dashboard"`); a block's own filter builds on it ("the dashboard's filter"). A block whose collections
+  were all deleted shows a warning (closing it removes the block). Remote collections' blocks read their source a page at a time, with
+  "Read the remote collections again" in the tab bar. Blocks stack one under another, as on a collection view (side by side is
+  roadmap). Component blocks see their block's items as `$items`; there is no `$item` on a dashboard.
 - **Backlinks** (`domain/backlinks.ts`, `views/useBacklinks.ts`, docs/data-model.md "Item links"): the items that link to an item. A link is a
   reference field's item(s) (Item, List of items) or a link to an item in a Markdown, HTML or AI text
   (`#/collections/<c>/items/<id>`, whatever of its page the link names: a field, view or block counts as the item; the new item
@@ -316,6 +343,8 @@ What the app does, feature by feature (read the part you work on).
   Work / Private) in one database. Every item belongs to one space (`items.space_id`) and shows only
   there; collections (fields, item views) and components are shared. A collection can be
   limited to some spaces (`collections.space_ids`, JSON; null = all; picked in the collection editor: a new native collection starts in all, a new remote one in the space it is added in).
+  So can a dashboard (`dashboards.space_ids`, Dashboard settings; a new one starts in the space it is made in); its tabs are per
+  space like collection views, and its blocks show the shown space's items.
   Collection views (`views.space_id`; starred per space; a new collection's "All" view goes into
   the space it was made in, other spaces show a virtual "All" view until one is stored), bookmarks
   (`bookmarks.space_id`) and the open tabs (`kubus.workspace.<spaceId>`) are per space;
@@ -325,9 +354,11 @@ What the app does, feature by feature (read the part you work on).
   `createItem`, `search`, `countItemsByCollection`, views, bookmarks); `getItem` and `listLabels` read every
   space (a reference may point into another space: labelled, but pickers offer only the shown
   space's items, `RefOption.elsewhere`). An item moves on its page's (i) panel (`moveItem`).
-- **Bookmarks** (`app/src/domain/bookmarks.ts`, table `bookmarks`): a bookmark icon on a view (tab strip,
+- **Bookmarks** (`app/src/domain/bookmarks.ts`, table `bookmarks`): a bookmark icon on a view or a dashboard's tab (tab strip,
   next to the star) and on an item (page header, next to (i)) toggles a link in the side nav's
-  Bookmarks branch (of the shown space). A view bookmark opens `…/items?view=<id>`. Labels are snapshots, refreshed
+  Bookmarks branch (of the shown space). A view bookmark opens `…/items?view=<id>`, a tab's `#/dashboards/<id>?view=<tab>`
+  (kind `dashboard`, labelled "Dashboard / Tab", with the dashboard's icon; a copied tab is stored first). The Bookmarks page's
+  New bookmark picks a collection or a dashboard, then a view, item or tab. Labels are snapshots, refreshed
   while the bookmarked page is shown; bookmarks of deleted views / items aren't listed (a remote collection's row has
   no stored item: its bookmark, whose target is the row's id, lasts as long as the collection).
 - **Created and Updated** are pickable like fields (`META_FIELDS`, ids `$created` / `$updated`) but hidden by default: a
@@ -347,7 +378,12 @@ What the app does, feature by feature (read the part you work on).
   again. A name link typed or pasted into the Markdown editor is converted as soon as it names a page (each
   href tried once per editor); one that names nothing stays as written and is resolved when clicked. `?block=` /
   `?field=` scroll to the target and flash it (`ui/useLinkTarget.ts`; blocks carry `data-block-id`, item page
-  fields are found by their place among the page's entries).
+  fields are found by their place among the page's entries). Dashboards the same way, under `dashboards/`:
+  `dashboards` (the Dashboards page), `dashboards/health` (a dashboard, its default tab), `dashboards/health/daily` (a tab of
+  the shown space), `dashboards/health/daily#chart` (a block of it; `dashboards/health#chart` of the default tab); stored as
+  `#/dashboards/<id>?view=<tab>&block=<id>`. A tab that is a copy of another space's (domain/dashboards.ts) is stored by the
+  id of the tab it copies (`tabLinkId`; `findTab` finds the copy by it). Dashboard names match like collection names (one must
+  fit). A collection called "Dashboards" keeps `dashboards` and the links under it that name no dashboard.
   **Link picker** (`ui/LinkPicker.tsx`, `domain/linkTargets.ts`, `app/useLinkTargets.ts`): typing `[text](` (text may
   be empty) or `#/` after a space in the Markdown editor opens a Carbon list at the caret of the shown space's
   collections, views and items (`item#field` lists that item's fields), filtered as typed (ranked: exact, prefix, word
@@ -356,7 +392,9 @@ What the app does, feature by feature (read the part you work on).
   last match exactly as slugs, the last as typed): `books/` the collection's views (and `book/` its items; `views/` /
   `items/` force the kind), `book/dune/` the item's item views, after `#` the blocks of the collection's default view or
   of the view named (`books/reading-list#`), or the fields and blocks of the item's page under its default or named
-  item view (`book/dune/compact#`). Every option shows its link by name (`describeLink`) beside its place, one line
+  item view (`book/dune/compact#`); `dashboards/` the shown space's dashboards, `dashboards/health/` its tabs and
+  `dashboards/health/daily#` (or `dashboards/health#`: the default tab) a tab's blocks; dashboards and tabs are also
+  found by name, and `#/dashboards/<id>…` by address. Every option shows its link by name (`describeLink`) beside its place, one line
   per row. ↑/↓ move, Enter or
   Tab choose, Escape closes it (editor keeps focus), a click chooses; choosing writes an ordinary `[text](#/collections/…)`
   link by id (the text typed, else the option's name). No Markdown syntax is added (`linkTrigger` plugin only reports the
@@ -377,7 +415,9 @@ What the app does, feature by feature (read the part you work on).
   Clicking one opens `/search?q=%23name&tag=1` (Ctrl/Cmd beside, middle click a new tab): exactly that tag and the
   tags nested in it; the same text typed in the search box is a text search (`#books` also finds `#bookshelf`).
 - **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`; the icon sits in the right-most pane's strip but doesn't activate that pane, so the results open in the pane that was active when it was clicked): the shown space's collections
-  (name, description), the Markdown blocks of its collection views (their text; an item view's is the same on every item, so not
+  (name, description), its dashboards (name, description), the Markdown blocks of its collection views and of the tabs its
+  dashboards show (their text; an item view's is the same on every item, so not
+
   searched; a result opens the view at the block) and its items, substring match over string, markdown, HTML, AI,
   list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; a full-text index is roadmap #1).
   Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`); a result with no visible match is left out.

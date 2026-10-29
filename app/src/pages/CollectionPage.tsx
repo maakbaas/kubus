@@ -420,7 +420,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
           {active && (
             <BookmarkButton
               kind="view"
-              collectionId={collection.id}
+              ownerId={collection.id}
               targetId={active.id}
               // The virtual "All" view is stored first: a bookmark needs a real view.
               prepare={active.id === VIRTUAL_VIEW ? storeVirtual : undefined}

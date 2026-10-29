@@ -341,7 +341,67 @@ test("markdown editing: the link picker completes collections, views, items and 
   );
 });
 
+test("markdown editing: links to dashboards, their tabs and blocks (picker, by name, opened)", async (t) => {
+  await t.boot();
+  const spec = matrixSpec("typical", { items: 2, dashboard: true });
+  spec.collections[0].items.push({ key: "md", values: { title: "Editing", notes: "Start" } });
+  const ids = await t.seed(spec);
+  const dash = `#/dashboards/${ids.dashboards.overview}`;
+  const main = ids.dashboardViews["overview/Main"];
+  const month = ids.dashboardViews["overview/This month"];
+  await t.open(t.itemPath(ids.collections.books, ids.items["books/md"]));
+  await openEditor(t);
+  const pm = t.page.locator(".ProseMirror").first();
+  const picker = t.page.locator(".link-picker");
+  const rows = picker.locator(".link-option");
+  const kindsOf = async () => rows.evaluateAll((els) => els.map((e) => `${e.dataset.kind}:${e.querySelector(".link-option__name").textContent}`));
+  await pm.click({ position: { x: 4, y: 4 } });
+  await t.page.keyboard.press("Control+End");
+
+  // By its name: the dashboard (and its tabs, by where they are).
+  await t.page.keyboard.type(" [](overv");
+  await t.until("a dashboard is offered by its name", async () => (await kindsOf())[0] === "dashboard:Overview", { timeout: 8000 });
+  await t.check("…showing its link by name", (await picker.locator(".link-option__link").first().innerText()) === "dashboards/overview", await picker.locator(".link-option__link").first().innerText());
+  await t.audit("link picker with a dashboard");
+  await t.page.keyboard.press("Enter");
+  await t.until("…written as the dashboard's link by id, its name as text", async () => (await pm.locator(`a[href="${dash}"]`).innerText().catch(() => "")) === "Overview");
+
+  // Part by part: dashboards/ the dashboards, dashboards/overview/ its tabs, a tab's # its blocks.
+  await t.page.keyboard.type(" [](dashboards/");
+  await t.until("dashboards/ lists the dashboards", async () => (await kindsOf()).join() === "dashboard:Overview", { timeout: 8000 });
+  await t.page.keyboard.type("overview/");
+  await t.until("dashboards/overview/ lists its tabs", async () => (await kindsOf()).join() === "tab:Main,tab:This month", { timeout: 8000 });
+  await t.page.keyboard.type("this");
+  await t.until("…filtered as typed", async () => (await kindsOf()).join() === "tab:This month", { timeout: 8000 });
+  await t.page.keyboard.press("Enter");
+  await t.until("…chosen as the tab by id", async () => (await pm.locator(`a[href="${dash}?view=${month}"]`).count()) === 1);
+  await t.page.keyboard.type(" [](dashboards/overview/main#bo");
+  await t.until("a tab's # lists its blocks", async () => (await kindsOf()).join() === "block:Books", { timeout: 8000 });
+  await t.page.keyboard.press("Enter");
+  await t.until("…chosen as the block by id", async () => (await pm.locator(`a[href^="${dash}?view=${main}&block="]`).count()) === 1);
+
+  // Typed by name: stored by id once it names a page; shown by name in the popover.
+  await t.page.keyboard.type(" [typed](dashboards/overview#notes");
+  await t.page.keyboard.press("Escape");
+  await t.page.keyboard.type(")");
+  await t.until("a link typed by name is stored by id (the default tab's block)", async () => ((await pm.locator("a", { hasText: "typed" }).getAttribute("href").catch(() => "")) || "").startsWith(`${dash}?block=`));
+  await pm.getByRole("link", { name: "typed" }).hover();
+  const popover = t.page.locator(".md-link-popover");
+  await popover.waitFor({ timeout: 3000 });
+  await t.check("the popover shows it by name", (await popover.locator(".md-link-popover__href").innerText()) === "dashboards/overview#notes", await popover.locator(".md-link-popover__href").innerText());
+  await saveEditor(t);
+  const notes = await storedNotes(t, ids);
+  await t.check("stored: plain GFM links by id", notes.includes(`[Overview](${dash})`) && notes.includes(`(${dash}?view=${month})`) && new RegExp(`\\[typed\\]\\(${dash.replace(/[/#?]/g, "\\$&")}\\?block=[^)]+\\)`).test(notes), notes);
+
+  // Opened: the dashboard at that tab.
+  await t.page.locator(".item-fields").getByRole("link", { name: "This month" }).first().click();
+  await t.until("a click opens the dashboard at the tab", async () => (await t.page.locator(".ws-pane--active .views-bar [role=tab][aria-selected=true]").innerText().catch(() => "")).trim() === "This month");
+  await t.check("…with its name in the header", (await t.page.locator(".ws-pane--active .page-header").innerText()).includes("Overview"));
+  await t.audit("dashboard opened from a link");
+});
+
 test("markdown editing: code language picker and stored images", async (t) => {
+
   await t.boot();
   const spec = profileSpec("typical", { items: 2 });
   spec.images = [{ key: "pic", w: 80, h: 50 }];

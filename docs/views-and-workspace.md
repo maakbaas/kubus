@@ -45,7 +45,7 @@ Extension points are registries, not special cases in pages:
   under it, what the code works out to ("= true").
 - **Several collections in one block**: the block's Collections picker (Block settings) reads them as one read-only collection, fields
   merged by name, Collection / Title / Created / Updated always there, Fields → Merge fields by hand, the view's filter translated to its
-  columns, a page at a time from every part, a chart over all rows: docs/features.md "Several collections in one block". Choosing other collections (more, fewer, another one) keeps the block's type and its type's options (field ids found again by name: `carryOptions`); filter, sort and fields start afresh.
+  columns, a page at a time from every part, a chart over all rows: docs/features.md "Several collections in one block". Choosing other collections (more, fewer, another one) keeps the block's type and its type's options (field ids found again by name: `carryOptions`); filter, sort and fields start afresh. On a dashboard (`BlockPlace` "dashboard") the picker forces no home collection in and offers no Backlinks; the block always stores `collectionId` (its first), plus `collectionIds` when there are several.
 - **Virtual collections** (`domain/backlinks.ts` `VIRTUAL_COLLECTIONS`, `Collection.virtual`): a block on an item page may list a collection
   that stores nothing, **Backlinks** (docs/features.md): offered in that block's Collection picker only (`BlockMenus`, when it has a
   page), resolved by id next to the store's collections (`findCollection`, in `ItemPageBlock` and the page-wide filter's scope).
@@ -121,6 +121,13 @@ Extension points are registries, not special cases in pages:
   of the bar, on the right edge of the block's header buttons (design rule `progress-stop`). Stopping while every row loads
   keeps the pages in ("Load all rows" resumes); stopping the first page (which the source can't be told to abandon: no
   abort in the sources client) drops its answer, and "Load rows" asks again. A new progress bar must use `LoadingBar` with `onStop`.
+- **Dashboard filter** (a dashboard tab's Filter, `pages/DashboardPage.tsx`): like a collection view's (the same panel, the filter bar
+  with "Show filter bar", default off; unsaved until Save changes), edited over the fields of all the tab's blocks' collections
+  (`dashboardScope` in `domain/dashboards.ts`: `pageFilterScope` with the filter-only field "Date", `$date`, first, so the bar's period
+  goes by it). Every block gets it whole and takes what applies (`dashboardFiltersFor`, in `BlockView` for `place="dashboard"`): a rule on
+  Date as the same rule on its own first date or date & time field (none: dropped), a rule on a field only where that field's collection
+  is listed (a block of several: on the column showing it), Created / Updated on native ones. Unlike the page-wide filter it applies with
+  any number of blocks; a block's own filter builds on it like on a view's.
 - **Page-wide filter** (item pages): with more than one block listing items (`uses.query`), the page toolbar gets "Filter all blocks", the collection views' filter panel (`QueryEditor`, date period included) over the fields of all those collections (`pageFilterScope`; a name several share gets its collection behind it; remote collections included: a remote block hands the rules to its source like its own filter, `sourceQuery`, connector-neutral, so a block of a remote table can show this month's rows). It is `ItemLayout.filters`, unsaved until Save changes like a block's filter. Like a view's filter, each block builds on it (And / Or above): a block takes the rules on its collection's fields and, if native, the pseudo fields (`pageFiltersFor`) and ignores the rest. With one block, or none, it doesn't apply.
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,
@@ -290,7 +297,9 @@ Extension points are registries, not special cases in pages:
   `useOpenRelated(path, mode)` with `openModeOf(event)`: plain click = this tab; Ctrl/Cmd click =
   beside (the pane to the right, reused or split off; a new tab on windows < 72rem); middle click =
   new tab. Such links carry `data-own-click`.
-- The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Collections (with the
+- The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Dashboards (`#/dashboards`, with the shown space's
+  dashboards below it, each with its icon), Collections (with the
+
   shown space's native collections below it), Remotes (`#/remotes`, once the server has a remote
   connection or remote collections exist: `useRemotesShown`; the space's remote collections below it)
   and Components; branches remember being open per

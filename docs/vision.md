@@ -67,7 +67,8 @@ The stages, in order:
 - **Chart / dashboard block types** (Metabase side). The chart block is built (docs/views-and-workspace.md
   "Block types"), and so is reading several collections as one in a block (native and remote mixed, fields merged by name or by hand,
   paging, groups, totals and charts over all of them: docs/features.md "Several collections in one block"), so one chart can total two
-  sources. What is left is dashboards (a page of such blocks side by side, shared filters).
+  sources. Dashboards are built too (docs/features.md "Dashboards": pages of blocks of any collections, in tabs per space, with one
+  filter whose Date steps every dated block). What is left is laying their blocks out side by side (roadmap #17).
 
 ## Open items
 
@@ -139,3 +140,7 @@ Charts:
     behaviour: the value axes left out of that filter, and the plot clipped by hand (Carbon draws
     this chart without a clip, and dots never clipped), so a bar below the min doesn't cover the axis.
     Parked: not worth patching Carbon's internals for now.
+17. Dashboard blocks side by side: a grid (or rows of columns) on a dashboard's tab, so charts, stats and tables
+    sit next to each other instead of one under another (today a chart's own Width setting is the only way to narrow
+    one). Stored with the tab's blocks (a block's place in the grid), reflowing to one column on a phone.
+

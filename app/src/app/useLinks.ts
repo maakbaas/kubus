@@ -5,17 +5,19 @@ import { useOpenRelated, type OpenMode } from "../workspace/Workspace";
 import { useStore } from "./store";
 
 /**
- * Markdown links to pages of the app. They are written by name (`book/dune#author`, domain/links.ts)
- * and stored by id (`#/collections/…`), so a rename breaks none; the editor shows the name again.
+ * Markdown links to pages of the app. They are written by name (`book/dune#author`, `dashboards/health/daily#chart`: domain/links.ts)
+ * and stored by id (`#/collections/…`, `#/dashboards/…`), so a rename breaks none; the editor shows the name again.
  */
 export function useLinks() {
-  const { repo, space, collections } = useStore();
+  const { repo, space, collections, dashboards } = useStore();
   const openRelated = useOpenRelated();
   return useMemo(() => {
     const data: LinkData = {
       collections,
       views: (c) => repo.listViews(c.id, space.id),
       items: (c) => repo.listLabels(c),
+      dashboards,
+      tabs: (d) => repo.listDashboardViews(d.id, space.id),
     };
     /** What to store for a link as typed: its id form when it names a page, else as it is. */
     const toStored = async (href: string) => (await resolveNameLink(href, data).catch(() => null)) ?? href;
@@ -28,5 +30,5 @@ export function useLinks() {
       else await openExternal(stored);
     };
     return { toStored, toShown, open };
-  }, [repo, space.id, collections, openRelated]);
+  }, [repo, space.id, collections, dashboards, openRelated]);
 }

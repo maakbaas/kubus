@@ -86,7 +86,7 @@ What the code reads decides what kind of component it is, and so where it can go
 | Kind | Reads | Can be |
 |---|---|---|
 | Field | `$item` | a Component field: one value per item |
-| Block | `$items`, `$groups`, `$fields` or `$all` | a block on a collection view or on an item's page |
+| Block | `$items`, `$groups`, `$fields` or `$all` | a block on a collection view, on an item's page or on a dashboard |
 | Static | none of these | a block, or the text of a Markdown block: the same everywhere |
 
 A static component can't be a field, as it would be the same for every item. A Markdown block's text may only hold static code: `$now`, but not `$item` or a block's names.
@@ -94,6 +94,9 @@ A static component can't be a field, as it would be the same for every item. A M
 Never use `$item` together with a block's names: such a component fits nowhere.
 
 A block on an item's page doesn't see that page's item as `$item`. Its filter picks the items that belong to it instead, for example "Author is this Author".
+
+A block on a dashboard sees its own block's items as `$items` (the rows of all its collections when it lists several), after the dashboard's filter; there is no `$item` on a dashboard.
+
 
 ### Several collections in one block
 

@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import { ContainedList, ContainedListItem, Tag } from "@carbon/react";
-import { Catalog, Document, Grid, ListBulleted, View } from "@carbon/icons-react";
+import { Catalog, Dashboard, Document, Grid, ListBulleted, View } from "@carbon/icons-react";
 import type { LinkTarget, LinkTargetKind } from "../domain/linkTargets";
 import { Highlight } from "./Highlight";
 
-const ICONS: Record<LinkTargetKind, typeof View> = { collection: Catalog, view: View, item: Document, field: ListBulleted, block: Grid };
-const KIND_LABEL: Record<LinkTargetKind, string> = { collection: "Collection", view: "View", item: "Item", field: "Field", block: "Block" };
+const ICONS: Record<LinkTargetKind, typeof View> = { collection: Catalog, view: View, item: Document, field: ListBulleted, dashboard: Dashboard, tab: View, block: Grid };
+const KIND_LABEL: Record<LinkTargetKind, string> = { collection: "Collection", view: "View", item: "Item", field: "Field", dashboard: "Dashboard", tab: "Tab", block: "Block" };
 
 /** One option: its kind's icon, its name (`query` marked) and where it is. */
 export function LinkTargetRow({ target, query }: { target: LinkTarget; query?: string }) {

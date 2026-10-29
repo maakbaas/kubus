@@ -11,6 +11,8 @@ import { HelpPage } from "../pages/HelpPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { CollectionEditorPage } from "../pages/CollectionEditorPage";
 import { CollectionsPage } from "../pages/CollectionsPage";
+import { DashboardPage } from "../pages/DashboardPage";
+import { DashboardsPage } from "../pages/DashboardsPage";
 import { RemotesPage } from "../pages/RemotesPage";
 import { NotFound } from "../ui/NotFound";
 
@@ -22,6 +24,8 @@ export function AppRoutes() {
       <Route path="/search" element={<SearchPage />} />
       <Route path="/collections" element={<CollectionsPage />} />
       <Route path="/bookmarks" element={<BookmarksPage />} />
+      <Route path="/dashboards" element={<DashboardsPage />} />
+      <Route path="/dashboards/:dashboardId" element={<DashboardPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/help" element={<HelpPage />} />
       <Route path="/spaces" element={<SpacesPage />} />

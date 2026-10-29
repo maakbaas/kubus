@@ -18,9 +18,11 @@ export interface NewBlockSpec {
  */
 export function AddBlockButton({
   className,
+  disabled,
   onAdd,
 }: {
   className?: string;
+  disabled?: boolean;
   onAdd(spec: NewBlockSpec): void;
 }) {
   const { components } = useStore();
@@ -29,7 +31,8 @@ export function AddBlockButton({
   const showing = (componentId: string): NewBlockSpec => ({ kind: "component", options: { componentId, height: BLOCK_HEIGHT.initial, aspect: DEFAULT_ASPECT, local: null } satisfies ComponentBlockOptions });
   return (
     <>
-      <MenuButton label="Add block" kind="tertiary" size="sm" menuAlignment="bottom-start" className={className}>
+      <MenuButton label="Add block" kind="tertiary" size="sm" menuAlignment="bottom-start" className={className} disabled={disabled}>
+
         {BLOCK_TYPES.map((t) =>
           t.kind === "component" ? (
             <MenuItem key={t.kind} label="New component…" renderIcon={t.icon} onClick={() => setCreating(true)} />

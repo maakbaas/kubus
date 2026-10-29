@@ -20,17 +20,23 @@ export function useBlockName() {
 }
 
 /**
- * A view's blocks: reorder (drag, or arrows on a handle), show or hide their header, remove (a view keeps one), add.
- * `onRemove` asks first unless `asked` (the list's own Delete key confirmation asked already).
+ * A view's blocks: reorder (drag, or arrows on a handle), show or hide their header, remove (a view keeps one; a
+ * dashboard's tab may have none: `keepOne` false), add. `onRemove` asks first unless `asked` (the list's own Delete key
+ * confirmation asked already).
  */
 export function BlockListEditor({
   blocks,
+  keepOne = true,
+  addDisabled,
   onMove,
   onRemove,
   onAdd,
   onHeader,
 }: {
   blocks: ViewBlock[];
+  keepOne?: boolean;
+  /** Nothing to add a block of (a dashboard while there are no collections). */
+  addDisabled?: boolean;
   onMove(blocks: ViewBlock[]): void;
   /** Shows or hides a block's header (a block without one can't be collapsed). */
   onHeader(id: string, shown: boolean): void;
@@ -42,7 +48,7 @@ export function BlockListEditor({
     count: blocks.length,
     onMove: (start, end, to) => onMove(moveBlock(blocks, start, end, to)),
     onDelete: (indices) => onRemove(blocks.filter((_, i) => indices.includes(i)).map((b) => b.id), true),
-    canDelete: (indices) => indices.length < blocks.length,
+    canDelete: (indices) => !keepOne || indices.length < blocks.length,
     noun: ["block", "blocks"],
   });
   return (
@@ -66,7 +72,7 @@ export function BlockListEditor({
               >
                 {b.hideHeader ? <TagNone /> : <Tag />}
               </IconButton>
-              {blocks.length > 1 && (
+              {(!keepOne || blocks.length > 1) && (
                 <IconButton autoAlign kind="ghost" size="sm" label="Remove block" onClick={() => onRemove([b.id], false)}>
                   <TrashCan />
                 </IconButton>
@@ -76,7 +82,8 @@ export function BlockListEditor({
           </div>
         );
       })}
-      <AddBlockButton className="field-order__add" onAdd={onAdd} />
+      <AddBlockButton className="field-order__add" disabled={addDisabled} onAdd={onAdd} />
+
       {reorder.dialog}
     </FormGroup>
   );

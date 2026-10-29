@@ -29,7 +29,7 @@ async function __seedInPage(spec) {
   const repo = window.kubus.repo;
   const uid = () => crypto.randomUUID();
   const stamp = () => new Date().toISOString();
-  const ids = { spaces: { default: "default" }, collections: {}, fields: {}, items: {}, components: {}, images: {}, views: {} };
+  const ids = { spaces: { default: "default" }, collections: {}, fields: {}, items: {}, components: {}, images: {}, views: {}, dashboards: {}, dashboardViews: {} };
 
   for (const s of spec.spaces || []) {
     ids.spaces[s.key] = s.key === "default" ? "default" : uid();
@@ -108,8 +108,9 @@ async function __seedInPage(spec) {
     }
   }
   if (entries.length) await repo.createItems(entries.map(([c, key, it]) => ({ collection: byKey(c.key), id: ids.items[key], values: convert(c, it.values), spaceId: ids.spaces[it.space || "default"] })));
-  for (const c of spec.collections || []) {
-    const fieldId = (k) => (k && k.startsWith("$") ? k : ids.fields[`${c.key}.${k}`] || k);
+  // A block's fields, filters, sort and options name fields by key, of collection `cKey` (or "other.key" for another's).
+  const mappers = (cKey) => {
+    const fieldId = (k) => (k && k.startsWith("$") ? k : ids.fields[k && k.includes(".") ? k : `${cKey}.${k}`] || k);
     const mapLayout = (l) => (l ? { fields: l.fields ? l.fields.map(fieldId) : null, editable: l.editable !== false, hiddenLabels: (l.hiddenLabels || []).map(fieldId), hideEmpty: !!l.hideEmpty } : { fields: null, editable: true, hiddenLabels: [], hideEmpty: false });
     const mapBlock = (b) => ({
       id: b.id || uid(), title: b.title || "", kind: b.kind || "table", filters: b.filters ? b.filters.map((r) => ({ id: uid(), fieldId: fieldId(r.field), operator: r.operator, value: String(r.value).replace(/@([a-z0-9_]+)/gi, (_, k) => fieldId(k)) })) : null,
@@ -119,7 +120,12 @@ async function __seedInPage(spec) {
       ...(b.hideHeader ? { hideHeader: true } : {}),
       ...(b.componentKey ? { kind: "component", options: { componentId: ids.components[b.componentKey], local: null } } : {}),
       ...(b.local != null ? { kind: "component", options: { componentId: null, local: { code: b.local, output: b.output || "markdown", frameRatio: null, ai: false } } } : {}),
+      ...(b.collections ? { collectionIds: b.collections.map((k) => ids.collections[k] ?? k) } : {}),
     });
+    return { fieldId, mapLayout, mapBlock };
+  };
+  for (const c of spec.collections || []) {
+    const { mapBlock, mapLayout } = mappers(c.key);
     const existing = c.views ? await repo.listViews(ids.collections[c.key], ids.spaces[c.space || "default"]) : [];
     for (const [i, v] of (c.views || []).entries()) {
       const id = i === 0 && existing[0] && v.replaceAll !== false ? existing[0].id : uid();
@@ -130,7 +136,32 @@ async function __seedInPage(spec) {
       await repo.saveItemViews(ids.collections[c.key], c.itemViews.map((v, i) => ({ id: uid(), name: v.name, isDefault: i === 0, collapsed: { blocks: [], groups: {} }, ...(typeof v.fullWidth === "boolean" ? { fullWidth: v.fullWidth } : {}), layout: { ...mapLayout(v.layout), blocks: (v.layout && v.layout.blocks || []).map(mapBlock) } })));
     }
   }
+  // Dashboards: { key, name, icon, description, spaces, space (made in), tabs: [{ name, filters, blocks (each with `collection` or
+  // `collections`, field keys of its collection), filterBar, fullWidth, isDefault, space }] }. The first tab takes the place of the
+  // one a new dashboard gets.
+  for (const d of spec.dashboards || []) {
+    const id = (ids.dashboards[d.key] = uid());
+    const made = ids.spaces[d.space || "default"];
+    await repo.saveDashboard({ id, name: d.name, icon: d.icon ?? null, description: d.description || "", spaceIds: d.spaces ? d.spaces.map((s) => ids.spaces[s]) : null }, made);
+    const first = (await repo.listDashboardViews(id, made))[0];
+    for (const [i, v] of (d.tabs || []).entries()) {
+      const spaceId = ids.spaces[v.space || d.space || "default"];
+      const tabId = i === 0 && first && spaceId === made ? first.id : uid();
+      ids.dashboardViews[`${d.key}/${v.name}`] = tabId;
+      const blocks = (v.blocks || []).map((b) => {
+        const block = mappers(b.collection || (b.collections || [])[0]).mapBlock(b);
+        return { ...block, collectionId: ids.collections[b.collection || b.collections[0]] };
+      });
+      const filters = (v.filters || []).map((r) => ({ id: r.id || uid(), fieldId: r.field && r.field.startsWith("$") ? r.field : ids.fields[r.field] || r.fieldId, operator: r.operator, value: r.value, ...(r.join ? { join: r.join } : {}) }));
+      await repo.saveDashboardView({ id: tabId, dashboardId: id, spaceId, name: v.name, position: i, isDefault: false, filters, blocks, editable: v.editable !== false, collapsed: { blocks: [], groups: {} }, ...(v.filterBar ? { filterBar: true } : {}), ...(typeof v.fullWidth === "boolean" ? { fullWidth: v.fullWidth } : {}), createdAt: stamp(), updatedAt: stamp() });
+      if (v.isDefault) await repo.setDefaultDashboardView(id, spaceId, tabId);
+    }
+  }
   for (const b of spec.bookmarks || []) {
+    if (b.kind === "dashboard") {
+      await repo.addBookmark("dashboard", ids.dashboards[b.dashboard], ids.dashboardViews[b.tab], b.label, "default");
+      continue;
+    }
     const target = b.kind === "item" ? ids.items[b.item] : ids.views[b.view];
     await repo.addBookmark(b.kind, ids.collections[b.collection], target, b.label, "default");
   }
@@ -333,7 +364,38 @@ function matrixSpec(style, opts = {}) {
     { kind: "item", collection: "books", item: "books/i0", label: style === "long" ? TEXT.long[1] : "First book" },
     { kind: "view", collection: "books", view: "books/Cards", label: "Books / Cards" },
   ];
+  // `opts.dashboard`: a dashboard of Books and Authors (a Markdown block, a table of each, a chart of Books; a second tab with
+  // the filter bar and a block reading both collections as one), and a bookmark of its first tab.
+  if (opts.dashboard) {
+    const name = style === "typical" ? "Overview" : (TEXT[style] || TEXT.typical)[1] || (TEXT[style] || TEXT.typical)[0];
+    spec.dashboards = [{
+      key: "overview",
+      name,
+      icon: "Dashboard",
+      description: style === "long" ? TEXT.long[0] : "Books and authors at a glance",
+      tabs: [
+        {
+          name: "Main",
+          isDefault: true,
+          blocks: [
+            { kind: "markdown", title: "Notes", collection: "books", options: { text: MARKDOWN[style] || MARKDOWN.typical } },
+            { kind: "table", title: "Books", collection: "books", layout: { fields: ["title", "count", "date", "done"] } },
+            { kind: "cards", title: "Authors", collection: "authors", options: { coverFieldId: null, cardWidth: 10, coverRatio: "auto", showTitle: true, coverBeside: false } },
+            ...(opts.drawn ? [{ ...MATRIX_CHART, collection: "books" }] : []),
+          ],
+        },
+        {
+          name: "This month",
+          filterBar: true,
+          filters: [{ id: "db-period", field: "$date", operator: "between", value: "month+0" }],
+          blocks: [{ kind: "table", title: "Both", collections: ["books", "authors"] }],
+        },
+      ],
+    }];
+    spec.bookmarks.push({ kind: "dashboard", dashboard: "overview", tab: "overview/Main", label: `${name} / Main` });
+  }
   return spec;
+
 }
 
 /** A workspace layout for localStorage: panes of tabs (paths), side by side or stacked. */

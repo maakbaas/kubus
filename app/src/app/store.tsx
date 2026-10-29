@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { openRepository, type Repository } from "../data";
 import type { Bookmark } from "../domain/bookmarks";
 import type { Component } from "../domain/components";
+import type { Dashboard } from "../domain/dashboards";
 import type { Collection } from "../domain/model";
 import { DEFAULT_SPACE_ID, inSpace, withDefaultSpace, type Space } from "../domain/spaces";
 import { readPref, writePref } from "../ui/localPrefs";
@@ -24,6 +25,12 @@ interface Store {
   reloadCollections(): Promise<void>;
   /** All components (kept up to date like the collections). */
   components: Component[];
+  /** All dashboards, of every space (kept up to date like the collections). */
+  dashboards: Dashboard[];
+  /** The dashboards shown in the current space (side nav, Dashboards page, search). */
+  spaceDashboards: Dashboard[];
+  /** Reloads them now: for a page that opens a just-made dashboard right away. */
+  reloadDashboards(): Promise<void>;
   /** The current space's side-nav bookmarks (kept up to date like the collections). */
   bookmarks: Bookmark[];
   /** The items (and labels) of the collections being shown, loaded once and shared (see useItems). */
@@ -57,6 +64,7 @@ export function StoreProvider({
   const [spaceId, setSpaceId] = useState(() => readPref<string>(SPACE_KEY, DEFAULT_SPACE_ID));
   const [collections, setCollections] = useState<Collection[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
+  const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   // A remembered space that is gone (deleted, here or elsewhere) falls back to the first.
   const space = spaces.find((s) => s.id === spaceId) ?? spaces[0];
@@ -75,17 +83,19 @@ export function StoreProvider({
     let stopped = false;
     openRepository()
       .then(async (repo) => {
-        const [spaces, collections, components] = await Promise.all([repo.listSpaces(), repo.listCollections(), repo.listComponents()]);
+        const [spaces, collections, components, dashboards] = await Promise.all([repo.listSpaces(), repo.listCollections(), repo.listComponents(), repo.listDashboards()]);
         if (stopped) return;
         const cache = new ItemCache(repo, (collectionId) => collectionsRef.current.find((t) => t.id === collectionId), () => spaceRef.current);
         setSpaces(spaces);
         applyCollections(collections);
         setComponents(components);
+        setDashboards(dashboards);
         const unsubscribe = repo.subscribe((change) => {
           if (change.scope === "spaces") repo.listSpaces().then(setSpaces, (e) => console.error("Reloading spaces failed", e));
           // Collection definitions changed anywhere: refresh them for every view (side nav, pages).
           if (change.scope === "collections") repo.listCollections().then((list) => applyCollections(list, cache), (e) => console.error("Reloading collections failed", e));
           if (change.scope === "components") repo.listComponents().then(setComponents, (e) => console.error("Reloading components failed", e));
+          if (change.scope === "dashboards") repo.listDashboards().then(setDashboards, (e) => console.error("Reloading dashboards failed", e));
         });
         cleanup = () => {
           unsubscribe();
@@ -144,15 +154,20 @@ export function StoreProvider({
     setSpaceId(id);
   }, []);
   const spaceCollections = useMemo(() => collections.filter((c) => inSpace(c, space.id)), [collections, space.id]);
+  const spaceDashboards = useMemo(() => dashboards.filter((d) => inSpace(d, space.id)), [dashboards, space.id]);
+  const reloadDashboards = useCallback(async () => {
+    if (repo) setDashboards(await repo.listDashboards());
+  }, [repo]);
   const reloadCollections = useCallback(async () => {
     if (repo) applyCollections(await repo.listCollections(), cache ?? undefined);
   }, [repo, cache, applyCollections]);
   const value = useMemo(
     () =>
       repo && cache && ai && sources
-        ? { repo, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks, cache, ai, sources }
+        ? { repo, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, dashboards, spaceDashboards, reloadDashboards, bookmarks, cache, ai, sources }
         : null,
-    [repo, cache, ai, sources, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, bookmarks],
+    [repo, cache, ai, sources, spaces, space, setSpace, collections, spaceCollections, reloadCollections, components, dashboards, spaceDashboards, reloadDashboards, bookmarks],
+
   );
   if (!value) {
     return <>{fallback({ loading: state.status === "loading", error: state.status === "error" ? state.error : undefined })}</>;
@@ -177,4 +192,9 @@ export function useStore(): Store {
 
 export function useCollection(collectionId: string | undefined): Collection | undefined {
   return useStore().collections.find((t) => t.id === collectionId);
+}
+
+/** A dashboard by id, whichever spaces it is shown in (like useCollection). */
+export function useDashboard(dashboardId: string | undefined): Dashboard | undefined {
+  return useStore().dashboards.find((d) => d.id === dashboardId);
 }

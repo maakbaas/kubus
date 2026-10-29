@@ -96,13 +96,26 @@ export function dashboardScope(collections: Collection[]): Collection {
 /**
  * What a dashboard's filter does to one block's collection: a "Date" rule becomes the same rule on its first date field
  * (dropped when it has none: the block isn't dated), the others as an item page's filter does (`pageFiltersFor`: rules
- * on fields it has). For a block of several collections, pass the merged collection (its columns).
+ * on fields it has). For a block of several collections, pass the merged collection: a rule on a field of one of its
+ * collections becomes the rule on the column showing that field.
  */
 export function dashboardFiltersFor(collection: Collection, filters: FilterRule[]): FilterRule[] {
   const date = blockDateField(collection);
-  const kept = new Set(pageFiltersFor(collection, filters));
-  return filters.flatMap((r) => (r.fieldId === DASHBOARD_DATE ? (date ? [{ ...r, fieldId: date.id }] : []) : kept.has(r) ? [r] : []));
+  const rules = collection.mergedFrom ? filters.map((r) => onColumn(collection, r)) : filters;
+  const kept = new Set(pageFiltersFor(collection, rules));
+  return rules.flatMap((r) => (r.fieldId === DASHBOARD_DATE ? (date ? [{ ...r, fieldId: date.id }] : []) : kept.has(r) ? [r] : []));
 }
+
+/** A rule on a field of one of a merged collection's parts, as the rule on the column showing it (as it is otherwise). */
+function onColumn(merged: Collection, rule: FilterRule): FilterRule {
+  if (rule.fieldId.startsWith("$")) return rule;
+  for (const part of merged.mergedFrom?.parts ?? []) {
+    const column = Object.entries(part.map).find(([, field]) => field === rule.fieldId)?.[0];
+    if (column) return { ...rule, fieldId: column };
+  }
+  return rule;
+}
+
 
 /** The collection a dashboard block starts from: its own, or the first of several. */
 export const dashboardBlockCollection = (block: Pick<ViewBlock, "collectionId" | "collectionIds">): string | null =>
@@ -112,3 +125,17 @@ export const dashboardBlockCollection = (block: Pick<ViewBlock, "collectionId" |
 export function newDashboardBlock(kind: BlockKind, options: unknown, collection: Pick<Collection, "id">): ViewBlock {
   return { ...newBlock(kind, options), collectionId: collection.id };
 }
+
+/** The icon a dashboard without one of its own shows (Carbon's Dashboard). */
+export const DASHBOARD_ICON = "Dashboard";
+export const dashboardIcon = (dashboard: Pick<Dashboard, "icon">): string => dashboard.icon ?? DASHBOARD_ICON;
+
+/**
+ * The id a link stores for a tab: its own, or for a virtual one the id of the tab it copies (stable in that space; in a
+ * space showing the copies, `findTab` finds the copy by it).
+ */
+export const tabLinkId = (tab: Pick<DashboardView, "id">): string => (isVirtualTab(tab.id) ? tab.id.slice(VIRTUAL_TAB.length) : tab.id);
+
+/** The tab a link's (or bookmark's) tab id names among the tabs shown: by its id, or the copy of it. */
+export const findTab = <T extends Pick<DashboardView, "id">>(tabs: T[], id: string): T | undefined =>
+  tabs.find((v) => v.id === id) ?? tabs.find((v) => v.id === VIRTUAL_TAB + id);

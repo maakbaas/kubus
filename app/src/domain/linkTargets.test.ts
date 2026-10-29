@@ -14,6 +14,7 @@ import {
 } from "./linkTargets";
 import type { Collection, ItemLabel } from "./model";
 import type { CollectionView } from "./views";
+import type { Dashboard, DashboardView } from "./dashboards";
 
 const field = (id: string, name: string) => ({ id, name }) as Collection["fields"][number];
 const block = (id: string, title: string, kind = "table") => ({ id, title, kind });
@@ -175,7 +176,38 @@ describe("searchLinkTargets by name, part by part", () => {
   });
 });
 
+describe("dashboards as link targets", () => {
+  const health = { id: "d1", name: "Health" } as Dashboard;
+  const tabs = [
+    { id: "t1", dashboardId: "d1", name: "Daily", isDefault: false, blocks: [block("db1", "Chart", "chart")] },
+    { id: "virtual:t2", dashboardId: "d1", name: "Weekly", isDefault: false, blocks: [block("db2", "Notes", "markdown")] },
+  ] as unknown as DashboardView[];
+  const withDashboards: LinkTargetData = { ...data, dashboards: [health, { id: "d2", name: "Money" } as Dashboard], tabs };
+  const search = (q: string) => searchLinkTargets(q, withDashboards, { items: false });
+
+  it("are found by name, dashboards and their tabs", async () => {
+    // Its tabs too, by where they are.
+    expect(names(await search("heal"))).toEqual(["Health", "Daily", "Weekly"]);
+    expect((await search("week")).map((t) => [t.name, t.context, t.href, t.link])).toEqual([["Weekly", "Health", "#/dashboards/d1?view=t2", "dashboards/health/weekly"]]);
+  });
+
+  it("are listed part by part: dashboards/, a dashboard's tabs, a tab's blocks", async () => {
+    expect(names(await search("dashboards/"))).toEqual(["Health", "Money"]);
+    expect(names(await search("dashboards/health/"))).toEqual(["Daily", "Weekly"]);
+    expect((await search("dashboards/health/weekly#")).map((t) => [t.name, t.href])).toEqual([["Notes", "#/dashboards/d1?view=t2&block=db2"]]);
+    expect((await search("dashboards/health#ch")).map((t) => t.link)).toEqual(["dashboards/health#chart"]);
+  });
+
+  it("are found by a stored link", async () => {
+    expect((await search("#/dashboards/d1?view=t2&block=db2")).map((t) => t.key)).toEqual(["block:t2:db2"]);
+    expect((await search("#/dashboards/d1?view=t1")).map((t) => t.kind)).toEqual(["tab"]);
+    expect((await search("#/dashboards/d2")).map((t) => t.kind)).toEqual(["dashboard"]);
+    expect(await search("#/dashboards/zz")).toEqual([]);
+  });
+});
+
 describe("isAddressQuery", () => {
+
   it("is true for text that looks like (part of) a link address, false for words and tags", () => {
     for (const t of ["#/collections/c1/items", "collections/c1", "items?view=v1", "view=v1", "dune#auth", " a/b "]) expect(isAddressQuery(t)).toBe(true);
     for (const t of ["", "dune", "reading list", "#tag", "  #tag"]) expect(isAddressQuery(t)).toBe(false);

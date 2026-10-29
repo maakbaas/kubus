@@ -423,7 +423,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   {standard ? <Checkmark /> : <Edit />}
                 </IconButton>
               )}
-              <BookmarkButton kind="item" collectionId={collection.id} targetId={item.id} label={title} onError={(e) => setError(errorMessage(e))} />
+              <BookmarkButton kind="item" ownerId={collection.id} targetId={item.id} label={title} onError={(e) => setError(errorMessage(e))} />
               {/* Metadata lives in a popover; more facts about the item can be added to its list. */}
               <ToolbarPopover label="Details" icon={Information} fit onOpenChange={panels.onOpenChange}>
                 <dl className="item-info">

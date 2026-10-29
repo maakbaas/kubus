@@ -30,10 +30,11 @@ import { useBlockName } from "./BlockListEditor";
 import { useShownOnce } from "../ui/useShownOnce";
 import { MergeFields } from "./MergeFields";
 import { translateRules } from "../domain/mergedCollection";
+import { dashboardFiltersFor } from "../domain/dashboards";
 
 // One block: a collection's items shown one way (its block type), with its own sort, grouping,
-// and fields, and the view's filter unless it has its own. Collection views and item pages
-// both render their blocks with BlockView; BlockMenus in each block's header edits it (also when
+// and fields, and the view's filter unless it has its own. Collection views, item pages and
+// dashboards render their blocks with BlockView; BlockMenus in each block's header edits it (also when
 // a view has a single block: the toolbar holds only the view's own controls).
 
 const NO_RESULT: QueryResult = { groups: [], total: 0 };
@@ -108,7 +109,8 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
   const query = blockQuery(viewFilters, block, blockSort(block, collection));
   // A block always builds on its view's (or item page's) filter; its own rules are marked blue.
   const filterCount = query.filters.length;
-  const inherits = place === "item" ? "the page's" : "the view's";
+  const inherits = place === "item" ? "the page's" : place === "dashboard" ? "the dashboard's" : "the view's";
+  const dashboard = place === "dashboard";
   const limit = blockLimit(block, !!uses.all);
   // Its type's own Limit is kept as none (it follows the type), any other as itself.
   const setLimit = (n: number) => {
@@ -218,8 +220,8 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
               let list = selectedItems ?? [];
               // Escape clears a Carbon multi-select: a block always lists at least one collection.
               if (list.length === 0) return;
-              // A collection view's block always lists the view's collection.
-              if (!page && !list.some((c) => c.id === home.id)) list = [home, ...list];
+              // A collection view's block always lists the view's collection (a dashboard has none of its own).
+              if (!page && !dashboard && !list.some((c) => c.id === home.id)) list = [home, ...list];
               // The virtual Backlinks collection stands alone: picking it leaves the others, picking another leaves it.
               const picked = list.find((c) => c.virtual && !chosen.some((x) => x.id === c.id));
               if (picked) list = [picked];
@@ -228,14 +230,18 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
               const ids = list.map((c) => c.id);
               // The block keeps its type and the options that still apply (fields found again by name).
               const keep = (to: Collection) => ({ kind: type.kind, options: carryOptions(block.options, collection, to) });
+              // On a dashboard there is no page's item to link to: a plain block of the collection.
+              const start = (to: Collection) => (dashboard ? normalizeBlock(to, newBlock(type.kind, keep(to).options)) : newPageBlock(to, page ?? to, keep(to)));
+              // An item page's and a dashboard's block names its (first) collection; a collection view's lists the view's.
+              const named = !!page || dashboard;
               if (list.length === 1) {
-                const { id: _id, title: _title, ...fresh } = newPageBlock(list[0], page ?? list[0], keep(list[0]));
-                onSet({ ...fresh, collectionId: page ? list[0].id : null, collectionIds: undefined, merges: undefined, groupOrder: undefined, groupDate: undefined });
+                const { id: _id, title: _title, ...fresh } = start(list[0]);
+                onSet({ ...fresh, collectionId: named ? list[0].id : null, collectionIds: undefined, merges: undefined, groupOrder: undefined, groupDate: undefined });
                 return;
               }
               const { collection: read } = listedCollection(home, { collectionIds: ids }, collections);
-              const { id: _id, title: _title, ...fresh } = newPageBlock(read, page ?? read, keep(read));
-              onSet({ ...fresh, collectionId: page ? ids[0] : null, collectionIds: ids, merges: undefined, groupOrder: undefined, groupDate: undefined });
+              const { id: _id, title: _title, ...fresh } = start(read);
+              onSet({ ...fresh, collectionId: named ? ids[0] : null, collectionIds: ids, merges: undefined, groupOrder: undefined, groupDate: undefined });
             }}
           />
           {/* A dropdown, not a switch: it lists every registered block type, however many there are. */}
@@ -314,7 +320,7 @@ interface Props {
   collection: Collection;
   data: CollectionData;
   block: ViewBlock;
-  /** The view's filter; null on item pages. */
+  /** The view's filter, an item page's for this block's collection, or a dashboard's (whole: made the block's here); null for none. */
   viewFilters: FilterRule[] | null;
   search: string;
   place: BlockPlace;
@@ -344,7 +350,12 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   const collection = listed.collection;
   const data = useMemo(() => (collection === home ? given : { items: [], stored: [], refs: {}, ctx: given.ctx, error: given.error }), [collection, home, given]);
   // The view's (or page's) filter is written over the view's collection: for several collections, over their columns.
-  const viewFilters = useMemo(() => (givenFilters && collection !== home ? translateRules(givenFilters, collection, home) : givenFilters), [givenFilters, collection, home]);
+  // A dashboard's is over all its blocks' collections: each block takes its rules ("Date" on its own first date field).
+  const viewFilters = useMemo(
+    () => (givenFilters && place === "dashboard" ? dashboardFiltersFor(collection, givenFilters) : givenFilters && collection !== home ? translateRules(givenFilters, collection, home) : givenFilters),
+    [givenFilters, collection, home, place],
+  );
+
   const type = blockType(block.kind);
   const uses = type.uses(block.options, components);
   // Page-item values ("this item") filled in from the page's item; {{ }} code worked out.

@@ -13,6 +13,7 @@ import { editableField, isReferenceKind, itemLabel, labelField, type FieldDef, t
 import { containsQuery } from "../domain/tags";
 import { Highlight, matcher } from "../ui/Highlight";
 import type { CollectionView, ViewBlock } from "../domain/views";
+import { dashboardIcon, dashboardViewsIn, type DashboardView } from "../domain/dashboards";
 import type { MarkdownBlockOptions } from "../views/MarkdownBlock";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { MarkdownView } from "../ui/MarkdownView";
@@ -95,10 +96,10 @@ async function referencedLabels(repo: Repository, collections: Collection[], ite
 }
 
 /**
- * The Markdown blocks of these views (a collection view's: one place each; an item view's text
+ * The Markdown blocks of these views (a collection view's or a dashboard's tab: one place each; an item view's text
  * is the same on all its items, so it is left out) whose text visibly contains the query.
  */
-function blockExcerpts(views: CollectionView[], query: string, exactTag: boolean): { view: CollectionView; block: ViewBlock; markdown: MarkdownExcerpt }[] {
+function blockExcerpts<V extends { blocks: ViewBlock[] }>(views: V[], query: string, exactTag: boolean): { view: V; block: ViewBlock; markdown: MarkdownExcerpt }[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   return views.flatMap((view) =>
@@ -113,7 +114,7 @@ function blockExcerpts(views: CollectionView[], query: string, exactTag: boolean
 }
 
 export function SearchPage() {
-  const { repo, collections, spaceCollections, space } = useStore();
+  const { repo, collections, spaceCollections, spaceDashboards, space } = useStore();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const typed = params.get("q") ?? "";
@@ -122,8 +123,8 @@ export function SearchPage() {
   // The results with the query they are for: shown until the next ones are in, so the list
   // doesn't empty (and a spinner flash) on every keystroke.
   // With the labels of the items they point to (for their item and list-of-items fields' excerpts).
-  // And the collection views of this space, for their Markdown blocks.
-  const [results, setResults] = useState<{ query: string; exactTag: boolean; items: Item[]; labels: Map<string, string>; views: CollectionView[] } | null>(null);
+  // And the collection views and dashboard tabs of this space, for their Markdown blocks.
+  const [results, setResults] = useState<{ query: string; exactTag: boolean; items: Item[]; labels: Map<string, string>; views: CollectionView[]; tabs: DashboardView[] } | null>(null);
   const query = results?.query ?? "";
   const exactTag = results?.exactTag ?? false;
   const [error, setError] = useState<string>();
@@ -141,9 +142,10 @@ export function SearchPage() {
             .search(typed, collectionsRef.current, space.id)
             .then(async (items) => ({ items, labels: await referencedLabels(repo, collectionsRef.current, items) })),
           repo.listAllViews(),
+          repo.listAllDashboardViews(),
         ]).then(
-          ([{ items, labels }, views]) =>
-            !cancelled && setResults({ query: typed, exactTag: typedTag, items, labels, views: views.filter((v) => v.spaceId === space.id) }),
+          ([{ items, labels }, views, tabs]) =>
+            !cancelled && setResults({ query: typed, exactTag: typedTag, items, labels, views: views.filter((v) => v.spaceId === space.id), tabs }),
           (e) => !cancelled && setError(errorMessage(e)),
         ),
       150,
@@ -183,6 +185,16 @@ export function SearchPage() {
       }),
     [results, spaceCollections, query, exactTag],
   );
+  // Dashboards (of this space) match on their names and description, like collections.
+  const dashboardHits = q ? spaceDashboards.filter((d) => [d.name, d.description].some((text) => containsQuery(text, q, exactTag))) : [];
+  // Markdown blocks of the tabs this space's dashboards show (its own, or copies of another space's).
+  const tabBlockHits = useMemo(
+    () =>
+      spaceDashboards.flatMap((dashboard) =>
+        blockExcerpts(dashboardViewsIn(results?.tabs ?? [], dashboard.id, space.id), query, exactTag).map((hit) => ({ ...hit, dashboard })),
+      ),
+    [results, spaceDashboards, space.id, query, exactTag],
+  );
   // Pages whose link address fits what was typed (`#/collections/…`, `book#field`; the Markdown editor's
   // link picker finds the same): the ones not already listed above, each once.
   const { search: searchLinks, reset: resetLinks } = useLinkTargets();
@@ -202,15 +214,16 @@ export function SearchPage() {
   const linkHits = useMemo(
     () =>
       linkFound.query === query && !exactTag
-        ? withoutShown(linkFound.targets, [...collectionHits.map((t) => `collection:${t.id}`), ...hits.map((h) => `item:${h.item.id}`)])
+        ? withoutShown(linkFound.targets, [...collectionHits.map((t) => `collection:${t.id}`), ...dashboardHits.map((d) => `dashboard:${d.id}`), ...hits.map((h) => `item:${h.item.id}`)])
         : [],
-    [linkFound, query, exactTag, collectionHits, hits],
+    [linkFound, query, exactTag, collectionHits, dashboardHits, hits],
   );
-  const nothingFound = query && results !== null && hits.length === 0 && collectionHits.length === 0 && blockHits.length === 0 && linkHits.length === 0;
+  const markdownHits = blockHits.length + tabBlockHits.length;
+  const nothingFound = query && results !== null && hits.length === 0 && collectionHits.length === 0 && dashboardHits.length === 0 && markdownHits === 0 && linkHits.length === 0;
 
   return (
     <>
-      <PageHeader title="Search" subtitle={typed ? (typedTag ? `Tagged “${typed}”` : `Results for “${typed}”`) : "Type in the search box to find collections, Markdown blocks and items."} />
+      <PageHeader title="Search" subtitle={typed ? (typedTag ? `Tagged “${typed}”` : `Results for “${typed}”`) : "Type in the search box to find collections, dashboards, Markdown blocks and items."} />
       {error && <InlineNotification kind="error" title="Search failed" subtitle={error} onClose={() => setError(undefined)} />}
       {nothingFound && <p className="helper">Nothing found.</p>}
       {collectionHits.length > 0 && (
@@ -239,6 +252,27 @@ export function SearchPage() {
           ))}
         </ContainedList>
       )}
+      {dashboardHits.length > 0 && (
+        <ContainedList label={`${dashboardHits.length} ${dashboardHits.length === 1 ? "dashboard" : "dashboards"}`} kind="on-page">
+          {dashboardHits.map((d) => (
+            <ContainedListItem key={d.id} onClick={() => navigate(`/dashboards/${d.id}`)}>
+              <div className="search-hit">
+                <div className="search-hit__title">
+                  <CollectionIcon name={dashboardIcon(d)} />
+                  <span>
+                    <Highlight text={d.name} query={query} exactTag={exactTag} />
+                  </span>
+                </div>
+                {d.description && (
+                  <div className="search-hit__snippet">
+                    <Highlight text={d.description} query={query} exactTag={exactTag} />
+                  </div>
+                )}
+              </div>
+            </ContainedListItem>
+          ))}
+        </ContainedList>
+      )}
       {linkHits.length > 0 && (
         <LinkTargetList
           targets={linkHits}
@@ -247,8 +281,32 @@ export function SearchPage() {
           onPick={(t) => navigate(t.href.slice(1))}
         />
       )}
-      {blockHits.length > 0 && (
-        <ContainedList label={`${blockHits.length} Markdown ${blockHits.length === 1 ? "block" : "blocks"}`} kind="on-page">
+      {markdownHits > 0 && (
+        <ContainedList label={`${markdownHits} Markdown ${markdownHits === 1 ? "block" : "blocks"}`} kind="on-page">
+          {tabBlockHits.map(({ view, block, dashboard, markdown }) => (
+            <ContainedListItem key={`${view.id}/${block.id}`} onClick={() => navigate(`/dashboards/${dashboard.id}?view=${view.id}&block=${block.id}`)}>
+              <div className="search-hit">
+                <div className="search-hit__title">
+                  <CollectionIcon name={dashboardIcon(dashboard)} />
+                  <span>
+                    <Highlight text={block.title || "Markdown"} query={query} exactTag={exactTag} />
+                  </span>
+                  <Tag size="sm" type="cool-gray">
+                    {dashboard.name} › {view.name}
+                  </Tag>
+                </div>
+                <div className="search-hit__excerpt">
+                  <MarkdownView source={markdown.markdown} highlight={query} exactTag={exactTag} variant="excerpt" />
+                  {markdown.more > 0 && (
+                    <div className="search-hit__more">
+                      +{markdown.more} more {markdown.more === 1 ? "match" : "matches"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </ContainedListItem>
+          ))}
+
           {blockHits.map(({ view, block, collection, markdown }) => (
             <ContainedListItem
               key={`${view.id}/${block.id}`}

@@ -5,22 +5,23 @@ import { useStore } from "../app/store";
 import type { BookmarkKind } from "../domain/bookmarks";
 
 /**
- * Bookmark toggle for a view or an item: outlined = not bookmarked, filled = in the side nav.
+ * Bookmark toggle for a view, an item or a dashboard's tab: outlined = not bookmarked, filled = in the side nav.
  * While shown it also keeps the bookmark's label in step with the current name.
  */
 export function BookmarkButton({
   kind,
-  collectionId,
+  ownerId,
   targetId,
   label,
   prepare,
   onError,
 }: {
   kind: BookmarkKind;
-  collectionId: string;
+  /** The view's or item's collection, or the tab's dashboard. */
+  ownerId: string;
   targetId: string;
   label: string;
-  /** Makes the target real before it is bookmarked (a virtual view is stored); returns its id. */
+  /** Makes the target real before it is bookmarked (a virtual view or tab is stored); returns its id. */
   prepare?(): Promise<string | undefined>;
   onError(e: unknown): void;
 }) {
@@ -40,7 +41,7 @@ export function BookmarkButton({
       onClick={() =>
         (marked
           ? repo.removeBookmark(targetId, space.id)
-          : (prepare?.() ?? Promise.resolve(undefined)).then((id) => repo.addBookmark(kind, collectionId, id ?? targetId, label, space.id))
+          : (prepare?.() ?? Promise.resolve(undefined)).then((id) => repo.addBookmark(kind, ownerId, id ?? targetId, label, space.id))
         ).catch(onError)
       }
     >

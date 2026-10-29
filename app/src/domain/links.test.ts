@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { describeLink, parseNameLink, resolveNameLink, slug, slugs, type LinkData } from "./links";
 import type { Collection, ItemLabel } from "./model";
 import type { CollectionView, ViewBlock } from "./views";
+import type { Dashboard, DashboardView } from "./dashboards";
 
 const block = (id: string, title: string, kind = "table") => ({ id, title, kind }) as ViewBlock;
 const field = (id: string, name: string) => ({ id, name }) as Collection["fields"][number];
@@ -89,3 +90,40 @@ describe("describeLink", () => {
     expect(await describeLink("https://example.org", data)).toBeNull();
   });
 });
+
+describe("links to dashboards", () => {
+  const tab = (id: string, name: string, blocks: ViewBlock[], isDefault = false) => ({ id, dashboardId: "d1", name, isDefault, blocks }) as unknown as DashboardView;
+  const health = { id: "d1", name: "Health" } as Dashboard;
+  const tabs = [tab("t1", "Daily", [block("db1", "Chart", "chart")], true), tab("virtual:t2", "Weekly", [block("db2", "Notes", "markdown")])];
+  const withDashboards: LinkData = { ...data, dashboards: [health, { id: "d2", name: "Money" } as Dashboard], tabs: async (d) => (d.id === "d1" ? tabs : []) };
+
+  it("are written dashboards/<dashboard>/<tab>#<block>, stored by id (a copied tab by the id of the tab it copies)", async () => {
+    expect(await resolveNameLink("dashboards", withDashboards)).toBe("#/dashboards");
+    expect(await resolveNameLink("dashboards/health", withDashboards)).toBe("#/dashboards/d1");
+    expect(await resolveNameLink("dashboards/health/daily", withDashboards)).toBe("#/dashboards/d1?view=t1");
+    expect(await resolveNameLink("dashboards/health/weekly#notes", withDashboards)).toBe("#/dashboards/d1?view=t2&block=db2");
+    expect(await resolveNameLink("dashboards/health#chart", withDashboards)).toBe("#/dashboards/d1?block=db1");
+    for (const gone of ["dashboards/nothing", "dashboards/health/monthly", "dashboards/health#notes", "dashboards/health/daily/x"]) {
+      expect(await resolveNameLink(gone, withDashboards)).toBeNull();
+    }
+  });
+
+  it("give the name form back", async () => {
+    for (const name of ["dashboards", "dashboards/health", "dashboards/health/daily", "dashboards/health/weekly#notes", "dashboards/health#chart"]) {
+      const stored = await resolveNameLink(name, withDashboards);
+      expect(await describeLink(stored!, withDashboards)).toBe(name);
+    }
+    expect(await describeLink("#/dashboards/zz", withDashboards)).toBeNull();
+    expect(await describeLink("#/dashboards/d1?view=gone", withDashboards)).toBeNull();
+  });
+
+  it("leave a collection called Dashboards its links when no dashboard fits", async () => {
+    const called = { id: "c9", name: "Dashboard", pluralName: "Dashboards", fields: [], itemViews: [] } as unknown as Collection;
+    const old = [{ id: "v9", name: "Old", isDefault: true, blocks: [] }] as unknown as CollectionView[];
+    const both: LinkData = { ...withDashboards, collections: [...data.collections, called], views: async (c) => (c.id === "c9" ? old : data.views(c)) };
+    expect(await resolveNameLink("dashboards", both)).toBe("#/collections/c9/items");
+    expect(await resolveNameLink("dashboards/health", both)).toBe("#/dashboards/d1");
+    expect(await resolveNameLink("dashboards/old", both)).toBe("#/collections/c9/items?view=v9");
+  });
+});
+

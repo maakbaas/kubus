@@ -87,8 +87,8 @@ export interface BlockUses {
   all?: boolean;
 }
 
-/** Where a block is: in a collection view, or on an item page (which can give it an item). */
-export type BlockPlace = "collection" | "item";
+/** Where a block is: in a collection view, on an item page (which can give it an item), or on a dashboard (no collection of its own; a block may list several). */
+export type BlockPlace = "collection" | "item" | "dashboard";
 
 export interface BlockOptionsProps<O> {
   collection: Collection;

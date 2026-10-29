@@ -2274,6 +2274,17 @@ img[data-lightbox] {
   flex-direction: column;
   gap: var(--cds-spacing-05);
 }
+/* Dashboard settings: the icon picker's button left of the name's input, on its line (below the label). */
+.dashboard-settings__name {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--cds-spacing-03);
+}
+.dashboard-settings__name > .cds--form-item {
+  flex: 1;
+  min-inline-size: 0;
+}
+
 .query-editor {
   display: flex;
   flex-direction: column;

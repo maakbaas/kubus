@@ -102,7 +102,10 @@ can't drift apart unnoticed: a change to the sync protocol changes both and runs
 | `app/src/views/` | `domain` | 05, 06, 10, 12, 22 |
 | `app/src/pages/ItemPage.tsx`, `ui/FieldInput.tsx` and the editors | – | 04, 12, 19, 27 (Markdown 08) |
 | `pages/CollectionsPage.tsx`, `RemotesPage.tsx`, `CollectionEditorPage.tsx`, `SearchPage.tsx`, `ui/SearchBar.tsx`, `app/NavTree.tsx` | – | 29 (editor also 07, 17, 27) |
+| `domain/dashboards.ts`, `pages/DashboardPage.tsx`, `DashboardsPage.tsx` (and the side nav's branch, bookmarks and search of them) | `domain` (`dashboards.test.ts`), `storage` (`repository.test.ts`) | 61 (and 60 for Full width) |
+| `domain/links.ts`, `domain/linkTargets.ts`, `app/useLinks.ts`, `app/useLinkTargets.ts` | `domain` (`links.test.ts`, `linkTargets.test.ts`) | 08, 29, 34, 61 |
 | `app/src/styles.css`, `ui/PageHeader.tsx`, anything every page uses | – | all |
+
 
 Before pushing: `npm run typecheck` (and `npm run typecheck --prefix server`, `npm run typecheck:test --prefix server` for server code),
 the vitest projects above, and `npm run test:gui -- --changed --smoke` for a change the GUI shows.

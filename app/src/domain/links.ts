@@ -5,20 +5,32 @@
 //   book/dune                an item (the singular name)
 //   book/dune#author         a field (or block) of its page
 //   book/dune/compact#author ... shown under an item view
+//   dashboards               the Dashboards page
+//   dashboards/health        a dashboard (its default tab)
+//   dashboards/health/daily  a tab of it
+//   dashboards/health/daily#chart  a block of a tab (dashboards/health#chart: of its default tab)
 //
-// Stored by id (`#/collections/<id>/items?view=<id>&block=<id>`, the app's own routes), so a rename
-// breaks nothing; the editor shows the name form again (describeLink). Names are matched as slugs
-// (lower case, spaces as hyphens, as GFM heading anchors); the same slug twice gets -1, -2 ….
+// Stored by id (`#/collections/<id>/items?view=<id>&block=<id>`, `#/dashboards/<id>?view=<id>&block=<id>`, the app's
+// own routes), so a rename breaks nothing; the editor shows the name form again (describeLink). Names are matched as
+// slugs (lower case, spaces as hyphens, as GFM heading anchors); the same slug twice gets -1, -2 …. "dashboards"
+// names a collection called so when there is one and no dashboard fits the rest.
 
 import type { Collection, ItemLabel } from "./model";
 import type { CollectionView, ViewBlock } from "./views";
+import { findTab, tabLinkId, type Dashboard, type DashboardView } from "./dashboards";
 
 /** What a link may point at, loaded as needed (views and items are not kept in memory). */
 export interface LinkData {
   collections: Collection[];
   views(collection: Collection): Promise<CollectionView[]>;
   items(collection: Collection): Promise<ItemLabel[]>;
+  /** The dashboards, and the tabs a dashboard shows in the shown space (copies of another space's included). */
+  dashboards?: Dashboard[];
+  tabs?(dashboard: Dashboard): Promise<DashboardView[]>;
 }
+
+/** The first part of a link by name to a dashboard (or the Dashboards page). */
+export const DASHBOARDS = "dashboards";
 
 /** A name as it is written in a link: lower case, no punctuation, hyphens for spaces. */
 export const slug = (name: string): string =>
@@ -86,6 +98,11 @@ export async function resolveNameLink(href: string, data: LinkData): Promise<str
   const plural = data.collections.filter((c) => slug(c.pluralName) === head);
   const singular = data.collections.filter((c) => slug(c.name) === head);
   const all = [...new Set([...plural, ...singular])];
+  if (head === DASHBOARDS && (segments.length > 1 || all.length === 0)) {
+    const link = await dashboardNameLink(segments.slice(1), fragment, data);
+    // Else a collection called "Dashboards" (when there is one).
+    if (link || all.length === 0) return link;
+  }
   if (all.length !== 1) return null;
   const collection = all[0];
   // "views/" and "items/" name the kind of the next segment, for when the name could be either.
@@ -140,6 +157,53 @@ async function viewLink(collection: Collection, view: CollectionView | undefined
   return b >= 0 ? listPath(collection) + query({ view: view?.id, block: blocks[b].id }) : null;
 }
 
+/** The stored form of `dashboards/<dashboard>[/<tab>][#<block>]` (the parts after "dashboards"), or null. */
+async function dashboardNameLink(rest: string[], fragment: string | null, data: LinkData): Promise<string | null> {
+  if (rest.length === 0) return fragment ? null : "#/dashboards";
+  if (rest.length > 2) return null;
+  const found = (data.dashboards ?? []).filter((d) => slug(d.name) === rest[0]);
+  if (found.length !== 1) return null;
+  const d = found[0];
+  const path = `#/dashboards/${d.id}`;
+  if (rest.length === 1 && !fragment) return path;
+  const tabs = (await data.tabs?.(d)) ?? [];
+  let tab: DashboardView | undefined;
+  if (rest.length === 2) {
+    tab = tabs[indexOfSlug(tabs.map((v) => v.name), rest[1])];
+    if (!tab) return null;
+  }
+  const view = tab && tabLinkId(tab);
+  if (!fragment) return path + query({ view });
+  const blocks = (tab ?? defaultOf(tabs))?.blocks ?? [];
+  const b = indexOfSlug(blocks.map(blockName), fragment);
+  return b >= 0 ? path + query({ view, block: blocks[b].id }) : null;
+}
+
+const DASHBOARD_ROUTE = /^#\/dashboards(?:\/([^/?#]+))?(?:\?([^#]*))?$/;
+
+/** The name form of a stored link to the Dashboards page, a dashboard, its tab or a block of one; null when it is gone. */
+async function describeDashboardLink(m: RegExpExecArray, data: LinkData): Promise<string | null> {
+  const [, dashboardId, search] = m;
+  if (!dashboardId) return DASHBOARDS;
+  const d = data.dashboards?.find((x) => x.id === dashboardId);
+  if (!d) return null;
+  const params = new URLSearchParams(search ?? "");
+  const view = params.get("view");
+  const block = params.get("block");
+  const tabs = view || block ? ((await data.tabs?.(d)) ?? []) : [];
+  const shown = view ? findTab(tabs, view) : undefined;
+  if (view && !shown) return null;
+  const tabSlug = shown ? slugs(tabs.map((v) => v.name))[tabs.indexOf(shown)] : undefined;
+  let name: string | undefined;
+  if (block) {
+    const blocks = (shown ?? defaultOf(tabs))?.blocks ?? [];
+    const i = blocks.findIndex((b) => b.id === block);
+    if (i < 0) return null;
+    name = slugs(blocks.map(blockName))[i];
+  }
+  return [DASHBOARDS, slug(d.name), tabSlug].filter(Boolean).join("/") + (name === undefined ? "" : `#${name}`);
+}
+
 const ROUTE = /^#\/collections\/([^/?#]+)\/items(?:\/([^/?#]+))?(?:\?([^#]*))?$/;
 
 /**
@@ -147,7 +211,10 @@ const ROUTE = /^#\/collections\/([^/?#]+)\/items(?:\/([^/?#]+))?(?:\?([^#]*))?$/
  * collection, view, item, field or block, or what it points at is gone (then the stored form is shown as it is).
  */
 export async function describeLink(href: string, data: LinkData): Promise<string | null> {
+  const dashboard = DASHBOARD_ROUTE.exec(href.trim());
+  if (dashboard) return describeDashboardLink(dashboard, data);
   const m = ROUTE.exec(href.trim());
+
   if (!m) return null;
   const [, collectionId, itemId, search] = m;
   const collection = data.collections.find((c) => c.id === collectionId);

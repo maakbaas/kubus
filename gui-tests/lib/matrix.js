@@ -28,6 +28,14 @@ function matrixPages(ids) {
     ["new component", "/components/new"],
     ["spaces", "/spaces"],
     ["bookmarks", "/bookmarks"],
+    // Dashboards (seeded with `dashboard`): the list, a tab of blocks of two collections, a tab with the filter bar and a merged block.
+    ...(ids.dashboards && ids.dashboards.overview
+      ? [
+          ["dashboards", "/dashboards"],
+          ["dashboard", `/dashboards/${ids.dashboards.overview}`],
+          ["dashboard filter bar", `/dashboards/${ids.dashboards.overview}?view=${ids.dashboardViews["overview/This month"]}`],
+        ]
+      : []),
     ["search", "/search?q=e"],
     ["settings: server", "/settings?section=server"],
     ["settings: sync", "/settings?section=sync"],
@@ -52,7 +60,8 @@ function matrixTests(style, viewports = MATRIX_VIEWPORTS) {
         return route.fulfill({ status: 404, headers: CORS, body: "" });
       });
       // Long content has long field names too (table headers, card labels, item pages, editors).
-      const ids = await t.seed(matrixSpec(style, { drawn: true, items: style === "short" ? 3 : 14, longNames: style === "long", filterBar: true }));
+      const ids = await t.seed(matrixSpec(style, { drawn: true, items: style === "short" ? 3 : 14, longNames: style === "long", filterBar: true, dashboard: true }));
+
       for (const [label, path] of matrixPages(ids)) {
         await t.open(path);
         await t.audit(label);

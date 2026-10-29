@@ -40,6 +40,14 @@ describe("a dashboard's filter", () => {
     const dates = merged.fields.filter((f) => f.kind === "date" || f.kind === "datetime");
     expect(dashboardFiltersFor(merged, [rule(DASHBOARD_DATE)])).toEqual([{ ...rule(DASHBOARD_DATE), fieldId: dates[0].id }]);
   });
+
+  it("gives a block of several collections a rule on one of their fields on the column showing it; others' fields leave it alone", () => {
+    const { collection: merged } = mergeCollections([books.id, people.id], [books, people]);
+    const columnOf = (collectionId: string, fieldId: string) => Object.entries(merged.mergedFrom!.parts.find((p) => p.collectionId === collectionId)!.map).find(([, f]) => f === fieldId)![0];
+    const born = rule("born", { operator: "isNotEmpty", value: "" });
+    expect(dashboardFiltersFor(merged, [born, rule("text", { operator: "contains", value: "x" })])).toEqual([{ ...born, fieldId: columnOf("Person", "born") }]);
+  });
+
 });
 
 describe("a dashboard's blocks", () => {

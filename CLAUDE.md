@@ -11,7 +11,7 @@ These are plain paths, not `@` imports on purpose: imports are inlined into ever
 is what this split avoids. Keep them current when behaviour changes.
 
 - `docs/features.md`: every feature in detail: field types, toggle icons, GFM-only Markdown editor,
-  in-place item editing, collection icons and app icon, components, blocks, field order and item
+  in-place item editing, collection icons and app icon, components, blocks, dashboards, field order and item
   views, spaces, bookmarks, link schemes, global search, schema-change policy.
 - `docs/views-and-workspace.md`: query (`applyQuery`, `KIND_RULES`), block types (table, cards,
   chart, map, component, markdown), saved views; workspace tabs, tiling, side nav, tab history, tab width.
@@ -76,11 +76,11 @@ is what this split avoids. Keep them current when behaviour changes.
 | Item       | `Item` / `items`                            |
 | Field      | `FieldDef` / `fields`                       |
 | View       | collection view: `CollectionView` / `views`; item view: `ItemView` / `collections.item_views` |
-| Block      | `ViewBlock` (in a view's config, an item view's layout); its kind: "Show as" / `BlockTypeDefinition` |
+| Block      | `ViewBlock` (in a view's config, an item view's layout, a dashboard tab's config); its kind: "Show as" / `BlockTypeDefinition` |
 | Layout     | `FieldLayout` (a block's fields), `ItemLayout` (the fields and blocks of an item view) |
 | Component  | `Component` / `components`                  |
 | Space      | `Space` / `spaces`                          |
-| Dashboard  | `Dashboard` / `dashboards`; its tabs `DashboardView` / `dashboard_views` |
+| Dashboard  | `Dashboard` / `dashboards`; its tabs (UI "Tab") `DashboardView` / `dashboard_views` |
 
 A Collection defines fields and holds its items (Books); an Item is one of them (a particular
 book). "View" is both how a collection's items are listed (collection view: its blocks) and how

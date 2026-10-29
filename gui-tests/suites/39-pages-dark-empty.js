@@ -7,7 +7,7 @@ matrixTests("long", ["wide"]);
 for (const vp of ["desktop", "phone"]) {
   test(`typical content, dark theme @ ${vp}`, async (t) => {
     await t.boot();
-    const ids = await t.seed(matrixSpec("typical", { filterBar: true }));
+    const ids = await t.seed(matrixSpec("typical", { filterBar: true, dashboard: true }));
     for (const [label, path] of matrixPages(ids)) {
       await t.open(path);
       await t.audit(label);
@@ -19,7 +19,7 @@ for (const vp of ["desktop", "phone"]) {
 for (const vp of ["desktop", "phone"]) {
   test(`empty database @ ${vp}`, async (t) => {
     await t.boot();
-    for (const [label, path] of [["collections", "/collections"], ["components", "/components"], ["spaces", "/spaces"], ["bookmarks", "/bookmarks"], ["search", "/search"], ["search, no hits", "/search?q=zzzz"], ["new collection", "/collections/new"], ["new component", "/components/new"], ["settings", "/settings"], ["help", "/help"], ["missing collection", "/collections/nope/items"], ["missing item", "/collections/nope/items/nope"]]) {
+    for (const [label, path] of [["collections", "/collections"], ["components", "/components"], ["spaces", "/spaces"], ["bookmarks", "/bookmarks"], ["dashboards", "/dashboards"], ["missing dashboard", "/dashboards/nope"], ["search", "/search"], ["search, no hits", "/search?q=zzzz"], ["new collection", "/collections/new"], ["new component", "/components/new"], ["settings", "/settings"], ["help", "/help"], ["missing collection", "/collections/nope/items"], ["missing item", "/collections/nope/items/nope"]]) {
       await t.open(path);
       await t.audit(label);
     }

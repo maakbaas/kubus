@@ -1,7 +1,8 @@
 import { useState, type ElementType, type MouseEvent } from "react";
 import { TreeNode, TreeView } from "@carbon/react";
-import { Bookmark as BookmarkIcon, Cube, Code as ComponentIcon, DataBase, Help as HelpIcon, Settings as SettingsIcon } from "@carbon/icons-react";
+import { Bookmark as BookmarkIcon, Cube, Code as ComponentIcon, Dashboard as DashboardIcon, DataBase, Help as HelpIcon, Settings as SettingsIcon } from "@carbon/icons-react";
 import { bookmarkPath } from "../domain/bookmarks";
+import { dashboardIcon } from "../domain/dashboards";
 import { readPref, writePref } from "../ui/localPrefs";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { isRemote } from "../domain/sources";
@@ -31,7 +32,8 @@ function collectionIcon(name: string | null): ElementType {
 }
 
 /**
- * The side nav as a Carbon tree: Bookmarks (the space's bookmarked views and items), Collections
+ * The side nav as a Carbon tree: Bookmarks (the space's bookmarked views, items and dashboard tabs), Dashboards (its
+ * page, with the space's dashboards below it), Collections
  * (its page, with the space's native collections below it), Remotes (while the server has a remote
  * connection or remote collections exist: its page, with the space's remote collections below it)
  * and Components. Choosing a node opens its page in the active tab
@@ -40,7 +42,7 @@ function collectionIcon(name: string | null): ElementType {
  * node's page in a new tab.
  */
 export function NavTree({ activePath, navigate, openTab }: { activePath: string; navigate(path: string): void; openTab(path: string): void }) {
-  const { collections, spaceCollections, bookmarks } = useStore();
+  const { collections, spaceCollections, dashboards, spaceDashboards, bookmarks } = useStore();
   const remotesShown = useRemotesShown();
   // Which sections are open, remembered per device.
   const [expanded, setExpanded] = useState(() => readPref<Record<string, boolean>>(EXPANDED_KEY, {}));
@@ -58,10 +60,15 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
   const [pathname] = activePath.split("?");
   const bookmark = bookmarks.find((b) => activePath === bookmarkPath(b));
   const collection = collections.find((t) => pathname.startsWith(`/collections/${t.id}/items`));
+  const dashboard = dashboards.find((d) => pathname === `/dashboards/${d.id}`);
   const selected = bookmark
     ? `bookmark-${bookmark.id}`
     : collection
       ? `collection-${collection.id}`
+      : dashboard
+        ? `dashboard-${dashboard.id}`
+      : pathname === "/dashboards"
+        ? "dashboards"
       : pathname === "/collections"
         ? "collections"
         : pathname === "/remotes" || pathname.startsWith("/remotes/")
@@ -75,11 +82,13 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
   // Every node's page, by node id (Carbon renders the id on the node's <li>), for middle clicks.
   const paths: Record<string, string> = {
     bookmarks: "/bookmarks",
+    dashboards: "/dashboards",
     collections: "/collections",
     remotes: "/remotes",
     components: "/components",
     ...Object.fromEntries(bookmarks.map((b) => [`bookmark-${b.id}`, bookmarkPath(b)])),
     ...Object.fromEntries(collections.map((t) => [`collection-${t.id}`, `/collections/${t.id}/items`])),
+    ...Object.fromEntries(dashboards.map((d) => [`dashboard-${d.id}`, `/dashboards/${d.id}`])),
   };
   const nodePath = (e: MouseEvent) => paths[(e.target as HTMLElement).closest("li[id]")?.id ?? ""];
 
@@ -119,10 +128,23 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
                 id={`bookmark-${b.id}`}
                 label={b.label}
                 onSelect={() => navigate(bookmarkPath(b))}
-                renderIcon={collectionIcon(collections.find((t) => t.id === b.collectionId)?.icon ?? null)}
+                renderIcon={collectionIcon(b.kind === "dashboard" ? dashboardIcon(dashboards.find((d) => d.id === b.dashboardId) ?? { icon: null }) : (collections.find((t) => t.id === b.collectionId)?.icon ?? null))}
               />
             ))}
           </TreeNode>
+        <TreeNode autoAlign
+          id="dashboards"
+          label="Dashboards"
+          onSelect={() => navigate("/dashboards")}
+          renderIcon={DashboardIcon}
+          isExpanded={isOpen("dashboards")}
+          onToggle={onToggle("dashboards")}
+        >
+          {spaceDashboards.map((d) => (
+            <TreeNode autoAlign key={d.id} id={`dashboard-${d.id}`} label={d.name} onSelect={() => navigate(`/dashboards/${d.id}`)} renderIcon={collectionIcon(dashboardIcon(d))} />
+          ))}
+        </TreeNode>
+
         <TreeNode autoAlign
           id="collections"
           label="Collections"
