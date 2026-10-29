@@ -24,15 +24,15 @@ const suites = new Map();
 const add = (name, about, rest) => suites.set(name, { about, budget: DEFAULT_BUDGET, ...rest });
 
 const vitest = (...projects) => ["npx", "vitest", "run", ...projects.flatMap((p) => ["--project", p])];
-// A `*.real.test.ts` needs its service and, in CI, fails without it: they run in connectors-real only.
-const noReal = ["--exclude", "**/node_modules/**", "--exclude", "**/*.real.test.ts"];
+// A `*.real.test.ts` needs its service and, in CI, fails without it: they run in connectors-real only
+// (vitest.config.ts leaves them out of the connectors project unless "real.test" is on the command line).
 
 add("typecheck", "tsc of the app, the server and the server's tests", {
   steps: [["npm", "run", "typecheck"], ["npm", "run", "typecheck", "--prefix", "server"], ["npm", "run", "typecheck:test", "--prefix", "server"]],
 });
 add("unit", "vitest: domain, storage, sync, api, app (no services)", { steps: [vitest("domain", "storage", "sync", "api", "app")] });
 add("nodesqlite", "vitest: the storage contract (storage, sync, api) again on node:sqlite files, the server's engine", { steps: [vitest("nodesqlite")] });
-add("connectors", "vitest: the connectors, real services excluded (Postgres, MySQL, MariaDB; build:headless first)", { steps: [[...vitest("connectors"), ...noReal]], needs: ["KUBUS_TEST_POSTGRES", "KUBUS_TEST_MYSQL", "KUBUS_TEST_MARIADB"] });
+add("connectors", "vitest: the connectors, real services excluded (Postgres, MySQL, MariaDB; build:headless first)", { steps: [vitest("connectors")], needs: ["KUBUS_TEST_POSTGRES", "KUBUS_TEST_MYSQL", "KUBUS_TEST_MARIADB"] });
 add("server", "vitest: the sync server and its HTTP API (Postgres; build:headless first)", { steps: [vitest("server")], needs: ["KUBUS_TEST_POSTGRES"] });
 add("connectors-real", "vitest: the connectors against InfluxDB, n8n and Actual (tests/setup-env.sh --connectors)", {
   steps: [[...vitest("connectors"), "real.test"]],
@@ -43,7 +43,7 @@ add("image", "the server image end to end: docker build of server/Dockerfile, do
 });
 add("coverage", "vitest with V8 coverage, then the merged report (add the GUI's: gui-NN -- --coverage first)", {
   budget: 20,
-  steps: [["npx", "vitest", "run", "--coverage", ...noReal], ["npm", "run", "coverage:report"]],
+  steps: [["npx", "vitest", "run", "--coverage"], ["npm", "run", "coverage:report"]],
   needs: ["KUBUS_TEST_POSTGRES", "KUBUS_TEST_MYSQL", "KUBUS_TEST_MARIADB"],
 });
 
