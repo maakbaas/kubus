@@ -11,6 +11,8 @@
 //   edge-align        a pane's content starts on one left edge
 //   rhythm            equal gaps between the fields of an item page / the blocks of a view
 //   toolbar-pitch     icon buttons in a row at a 32px pitch: no gaps, no overlaps
+//   progress-stop     a progress bar sits in a LoadingBar with a "×" stop button, on the right edge of its
+//                     block's header buttons (or the block's own)
 //   type-style        text set in one of the Carbon type styles the app uses
 //   baseline          text side by side shares a baseline
 //   radius            square corners, but for Carbon's own round parts
@@ -144,6 +146,26 @@ function __design(opts) {
         const gap = Math.round(line[i].left - line[i - 1].right);
         judge("toolbar-pitch", Math.abs(gap) <= 1, row, `gap ${gap}`, `icon buttons ${gap > 0 ? `${gap}px apart` : `overlap by ${-gap}px`} in one row`);
       }
+    }
+  }
+
+  // ---- progress-stop -----------------------------------------------------------------------------
+  // Every progress bar is a LoadingBar (ui/LoadingBar.tsx): a 32px "×" icon button at its right, on
+  // the right edge of the block's header buttons (the block's own edge when its header is hidden).
+  {
+    for (const bar of shown) {
+      if (!bar.matches(".cds--progress-bar")) continue;
+      const box = bar.closest(".loading-bar");
+      const stop = box && [...box.querySelectorAll(".cds--btn--icon-only")].find((b) => shown.includes(b));
+      if (!stop) {
+        judge("progress-stop", false, bar, "no stop", "a progress bar has no \"×\" stop button (LoadingBar with onStop)");
+        continue;
+      }
+      const section = bar.closest("section, .view-field");
+      const buttons = section ? [...section.querySelectorAll(":scope > .section-header .cds--btn--icon-only")].filter((b) => shown.includes(b)) : [];
+      const edge = buttons.length ? Math.max(...buttons.map((b) => b.getBoundingClientRect().right)) : section ? section.getBoundingClientRect().right : 0;
+      const right = stop.getBoundingClientRect().right;
+      judge("progress-stop", !edge || Math.abs(right - edge) <= T, stop, `${Math.round(right)} vs ${Math.round(edge)}`, "the stop button's right edge differs from the block's header buttons'");
     }
   }
 

@@ -114,7 +114,16 @@ const storedCollections = (t) => t.page.evaluate(async () => JSON.parse(JSON.str
 const storedBy = async (t, plural) => (await storedCollections(t)).find((c) => c.pluralName === plural) ?? null;
 
 /** Scrolls everything back to the top (a sticky header over scrolled rows is not what the audit looks at). */
-const toTop = (t) => t.page.evaluate(() => document.querySelectorAll("*").forEach((el) => el.scrollTop > 0 && (el.scrollTop = 0)));
+/** The × of a loading bar. */
+const stopOf = (t) => pane(t).locator(".block-more .loading-bar").getByRole("button", { name: "Stop loading" });
+/** The × ends where the block's header buttons end (the same right edge), and is a 32px button. */
+const alignedWithHeader = (t) =>
+  pane(t).evaluate((el) => {
+    const stop = el.querySelector(".loading-bar .cds--btn--icon-only")?.getBoundingClientRect();
+    const head = [...el.querySelectorAll(".block > .section-header .cds--btn--icon-only")].map((b) => b.getBoundingClientRect().right);
+    return !!stop && head.length > 0 && Math.abs(stop.right - Math.max(...head)) <= 1.5 && Math.round(stop.width) === 32;
+  });
+const toTop =(t) => t.page.evaluate(() => document.querySelectorAll("*").forEach((el) => el.scrollTop > 0 && (el.scrollTop = 0)));
 
 /** The rows of the first table block on the page. */
 const tableRows = (t) => pane(t).locator(".block table tbody tr");
@@ -312,7 +321,7 @@ test("remotes: row actions — duplicate, delete asks first and leaves the sourc
   void id;
 }, { viewport: "desktop" });
 
-// A remote block reads a page at a time, from the source: Show more, the progress of loading every row and its Cancel.
+// A remote block reads a page at a time, from the source: Show more, the loading bar and its ×.
 test("remote block: pages, Show more, errors", async (t) => {
   await t.boot();
   const fake = await fakeRemotes(t);
@@ -323,8 +332,20 @@ test("remote block: pages, Show more, errors", async (t) => {
   fake.holdFrom = 0;
   await t.open(t.listPath(id), { settle: false });
   await t.until("while the first page is on its way, a bar says rows are loading", async () => (await pane(t).locator(".block-more .cds--progress-bar").count()) === 1 && fake.queries.length === 1);
-  await t.check("the bar has no Cancel for a block with a Limit", (await pane(t).locator(".block-more").getByRole("button", { name: "Cancel" }).count()) === 0);
+  await t.check("the bar has a × to stop, also for a block with a Limit", (await stopOf(t).count()) === 1);
+  await t.check("the × lines up with the block's header buttons", await alignedWithHeader(t));
+  await t.audit("remote block, first page on its way");
+  // Stopping drops the answer: no rows, and "Load rows" asks again.
+  await stopOf(t).click();
   release();
+  await t.until("stopping the first page leaves no bar and offers Load rows", async () => (await pane(t).locator(".block-more .cds--progress-bar").count()) === 0 && (await pane(t).getByRole("button", { name: "Load rows" }).count()) === 1);
+  await t.settle(300);
+  await t.check("the late answer showed no rows", (await tableRows(t).count()) === 0);
+  fake.hold = null;
+  await pane(t).getByRole("button", { name: "Load rows" }).click();
+  await t.until("Load rows brings the first page", async () => (await tableRows(t).count()) === 100 && (await pane(t).getByRole("button", { name: "Load rows" }).count()) === 0);
+  fake.queries.length = 0;
+  await t.open(t.listPath(id));
   await t.until("the first hundred rows are in", async () => (await tableRows(t).count()) === 100);
   await t.until("the bar is gone", async () => (await pane(t).locator(".block-more .cds--progress-bar").count()) === 0);
   await t.check("the block says 100 of 250", (await pane(t).locator(".block-more").innerText()).replace(/\s+/g, " ").includes("100 of 250"));
@@ -364,9 +385,11 @@ test("remote block: loading every row shows its progress, can be cancelled and g
   const bar = pane(t).locator(".block-more");
   await t.until("the bar counts the rows in, of the total", async () => (await bar.innerText().catch(() => "")).includes("Loading rows") && (await bar.locator("[aria-valuenow]").first().getAttribute("aria-valuenow").catch(() => null)) === "40", await bar.innerText().catch(() => ""));
   await t.check("the bar's label is Loading rows: 40 of 120", (await bar.innerText()).replace(/\s+/g, " ").includes("Loading rows: 40 of 120"), await bar.innerText());
-  await t.check("it can be cancelled", (await bar.getByRole("button", { name: "Cancel" }).count()) === 1);
+  await t.check("it can be stopped with a ×", (await stopOf(t).count()) === 1);
+  await t.check("the × lines up with the block's header buttons", await alignedWithHeader(t));
+  await stopOf(t).focus();
   await t.audit("loading every row, progress");
-  await bar.getByRole("button", { name: "Cancel" }).click();
+  await t.page.keyboard.press("Enter");
   release();
   await t.until("after Cancel the rows in stay and Load all rows is offered", async () => (await pane(t).getByRole("button", { name: "Load all rows" }).count()) === 1);
   await t.settle(400);

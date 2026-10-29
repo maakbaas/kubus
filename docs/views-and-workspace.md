@@ -61,6 +61,11 @@ Extension points are registries, not special cases in pages:
   view): how many items it shows at first and each "Show more" adds; empty is all. Unset it is 100, or all for a block
   that needs every item (a chart: `BlockUses.all`; `blockLimit`). A remote collection is asked that many rows a page
   (all: every page, one after the other). The Filter button is blue while a Limit is set.
+  **Loading bars**: the only progress bar in the app is `ui/LoadingBar.tsx` (a remote block's rows), shown from the request on
+  (table, cards, chart, map alike). Its stop control is always a small "×" ghost icon button ("Stop loading", 32px) at the right
+  of the bar, on the right edge of the block's header buttons (design rule `progress-stop`). Stopping while every row loads
+  keeps the pages in ("Load all rows" resumes); stopping the first page (which the source can't be told to abandon: no
+  abort in the sources client) drops its answer, and "Load rows" asks again. A new progress bar must use `LoadingBar` with `onStop`.
 - **Page-wide filter** (item pages): with more than one block listing items (`uses.query`), the page toolbar gets "Filter all blocks", the collection views' filter panel (`QueryEditor`, date period included) over the fields of all those collections (`pageFilterScope`; a name several share gets its collection behind it; remote collections included: a remote block hands the rules to its source like its own filter, `sourceQuery`, connector-neutral, so a block of a remote table can show this month's rows). It is `ItemLayout.filters`, unsaved until Save changes like a block's filter. Like a view's filter, each block builds on it (And / Or above): a block takes the rules on its collection's fields and, if native, the pseudo fields (`pageFiltersFor`) and ignores the rest. With one block, or none, it doesn't apply.
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,
@@ -172,7 +177,7 @@ Extension points are registries, not special cases in pages:
   - **Size**: Height (see below) and Width (a slider like the cards', 8 to 120rem (about 1920px) at most; a gauge as wide
     as a pane is mostly empty, so switching to one makes a full-width chart 24rem).
   A setting still to choose (a field, three spokes) or nothing to chart says so instead of an empty chart. The chart follows
-  the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of `MAX_SOURCE_PAGE` (10,000) rows one after the other, a progress bar of the rows in against the source's total and Cancel under it; after Cancel the chart shows the rows in and "Load all rows" goes on).
+  the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of `MAX_SOURCE_PAGE` (10,000) rows one after the other, a loading bar of the rows in against the source's total; its "×" stops it, the chart then shows the rows in and "Load all rows" goes on).
   A chart, a map and a component block showing HTML have the same Height setting (`BLOCK_HEIGHT` and
   `normalizeBlockHeight` in `domain/views.ts`, the slider `views/HeightSlider.tsx`: 8 to 48rem, 24 for a new block;
   a chart's old Small / Medium / Large reads as 16 / 24 / 32) and Aspect ratio beside it (`ASPECT_RATIOS`: none, 2:1,

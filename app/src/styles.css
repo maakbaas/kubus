@@ -2463,8 +2463,16 @@ img[data-lightbox] {
 .block-more .helper {
   margin-bottom: 0;
 }
-/* A chart loading all rows: the bar takes the room beside Cancel. */
-.block-more__bar {
+/* The app's loading bar (ui/LoadingBar.tsx): the bar takes the room beside its "×" stop button, a 32px icon
+   button at the row's right edge, in line with the heading's buttons above. */
+.loading-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-05);
+  flex: 1;
+  min-inline-size: 0;
+}
+.loading-bar__bar {
   flex: 1;
   min-inline-size: 0;
 }

@@ -258,6 +258,27 @@ function paged(total: number, perPage: number) {
   };
 }
 
+describe("stopping the first page", () => {
+  it("drops its late answer, says it stopped, and resume asks again", async () => {
+    let release!: (r: SourceResult) => void;
+    const client = sources((_q, call) => (call === 0 ? new Promise<SourceResult>((r) => (release = r)) : { rows: rows(1, 3), more: false, total: 3 }));
+    const h = hook(client);
+    await settle(h);
+    expect(h.result.current!.waiting).toBe(true);
+    h.result.current!.stop();
+    await h.settle();
+    expect(h.result.current).toMatchObject({ waiting: false, stopped: true });
+    release({ rows: rows(1, 3), more: false, total: 3 });
+    await settle(h, 1100);
+    expect(h.result.current).toMatchObject({ items: null, stopped: true });
+    h.result.current!.resume();
+    await settle(h);
+    expect(client.calls).toHaveLength(2);
+    expect(h.result.current).toMatchObject({ stopped: false, waiting: false });
+    expect(h.result.current!.items).toHaveLength(3);
+  });
+});
+
 describe("every row", () => {
   it("loads the pages one after the other in big pages, shows how far it is, and ends with all rows", async () => {
     const p = paged(6, 2);

@@ -71,6 +71,7 @@ const CRITERIA = {
   "spacing-scale": "The app's margins, paddings and gaps are on Carbon's spacing scale (2, 4, 8, 12, 16, 24, 32, 40, 48, 64, 80, 96, 160px); derived values excepted (centring a line in a 2rem row, centred columns, the docked nav's width).",
   "edge-align": "A page's title, description, views bar and blocks start on its breadcrumb's left edge (the first view tab's label 16px in, Carbon's tab inset); page header buttons, views bar and block headers end on one right edge.",
   rhythm: "The gaps between an item page's fields and between a view's blocks are all equal.",
+  "progress-stop": "A progress bar is a LoadingBar with a \"×\" stop button on the right edge of its block's header buttons.",
   "toolbar-pitch": "Icon buttons side by side in a row touch: a 32px pitch, no gaps, no overlaps.",
   "type-style": "Text is set in one of the type styles the app uses (Carbon's label-01, body-compact-01, body-01, code-02, heading-compact-02, heading-04 …, and the item fields' one step up); weights only 300, 400, 600.",
   baseline: "A checkbox's label is centred on its box.",
