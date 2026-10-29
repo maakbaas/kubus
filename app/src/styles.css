@@ -2506,6 +2506,16 @@ img[data-lightbox] {
 .items-table :is(td, th).row-actions {
   text-align: end;
 }
+/* A field whose name is hidden in the block's layout: the name stays (screen readers, the sort button's
+   label) but takes no room, so the column sizes to its content (a checkbox) and not to its header. */
+.items-table th.cell--name-hidden .cds--table-header-label {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 /* Small (2rem) controls fill a small row exactly: no vertical cell padding around them. */
 .items-table td.row-actions,
 .items-table .table-add-row td {
