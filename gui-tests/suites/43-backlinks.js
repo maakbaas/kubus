@@ -177,10 +177,10 @@ test("backlinks: the Collections picker of an item page's block offers Backlinks
   await t.open(adaPath(t, ids));
   await t.until("the block lists the four notes", async () => ((await rowsOf(t)) || []).filter((r) => r[0]).length === 4);
   await t.openPanel(header(t), "Block settings");
-  await dropdownOf(t, shownPopover(t), "Collections").locator(".cds--list-box__field").first().click();
+  await collectionsPicker(shownPopover(t)).locator(".cds--list-box__field").first().click();
   const offered = (await t.page.getByRole("option").filter({ visible: true }).allInnerTexts()).map((s) => s.trim());
   await t.check("the picker lists the collections and Backlinks", ["Books", "Notes", "People", "Backlinks"].every((o) => offered.includes(o)), offered.join(", "));
-  await t.check("Backlinks comes after the collections", offered.indexOf("Backlinks") === offered.length - 1, offered.join(", "));
+  await t.check("Backlinks is listed once (the multi-select puts the chosen collection first, the rest by name)", offered.filter((o) => o === "Backlinks").length === 1 && offered[0] === "Notes", offered.join(", "));
   await t.audit("the Collections picker with Backlinks");
   await t.page.getByRole("option", { name: "Backlinks", exact: true }).click();
   await t.until("the block stores the Backlinks collection with the fields a new block shows", async () => {
@@ -193,7 +193,10 @@ test("backlinks: the Collections picker of an item page's block offers Backlinks
   await expectRows(t, "after a reload the block still lists them", ADA_ROWS);
   // To a collection and back: each starts afresh.
   await t.openPanel(header(t), "Block settings");
-  await pickOption(t, shownPopover(t), "Collections", "Books");
+  await collectionsPicker(shownPopover(t)).locator(".cds--list-box__field").first().click();
+  await t.settle(80);
+  await t.page.getByRole("option", { name: "Books", exact: true }).filter({ visible: true }).first().click();
+  await t.settle(80);
   await t.until("another collection: the block lists its items", async () => (await storedBlock(t, ids)).collectionId === ids.collections.books);
   await t.closeAll();
   // (Books refer to People, so the new block is filtered to the books by this person: Ada has none.)
@@ -204,7 +207,7 @@ test("backlinks: the Collections picker of an item page's block offers Backlinks
   await t.check("the Collections page and the side nav don't list it", !text.includes("Backlink"), text.slice(0, 300));
   await t.open(t.listPath(ids.collections.books));
   await t.openPanel(header(t), "Block settings");
-  await dropdownOf(t, shownPopover(t), "Collections").locator(".cds--list-box__field").first().click();
+  await collectionsPicker(shownPopover(t)).locator(".cds--list-box__field").first().click();
   const viewOffered = await menuOptions(t);
   await t.check("a collection view's block lists the collections but not Backlinks", viewOffered.includes("Books") && !viewOffered.includes("Backlinks"), viewOffered.join(", "));
   await t.closeAll();
@@ -641,7 +644,7 @@ for (const [label, opts] of [["phone", { viewport: "phone" }], ["dark theme", { 
     await t.until("cards", async () => (await cardTitles(t)).length === 5);
     await t.audit(`backlinks as cards, ${label}`);
     await t.openPanel(header(t), "Block settings");
-    await dropdownOf(t, shownPopover(t), "Collections").locator(".cds--list-box__field").first().click();
+    await collectionsPicker(shownPopover(t)).locator(".cds--list-box__field").first().click();
     await t.audit(`the Collections picker with Backlinks, ${label}`);
     await t.closeAll();
   }, opts);
