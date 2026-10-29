@@ -3180,32 +3180,32 @@ img[data-lightbox] {
   inset-inline: 0;
   border-block-start: 1px solid var(--cds-border-subtle);
 }
-/* Side by side (the row at least 40rem wide; "Full width" on): each block its share of the row, all as tall as the
-   tallest (the cells stretch; the line between them spans the row), the divider between them a vertical line that
-   resizes them. With a max height a block's part below its name scrolls beyond it. Narrower, nothing of this applies:
+/* Side by side (the row at least 40rem wide: also the narrow column of a page without "Full width"): each block its share
+   of the row, all as tall as the tallest (the cells stretch; the line between them spans the row), the divider between
+   them a vertical line that resizes them. With a max height a block's part below its name scrolls beyond it. Narrower, nothing of this applies:
    stacked as above, each block its own height (a phone shows a dashboard as a list). */
 @container block-row (min-width: 40rem) {
-  .block-row--wide > .block-row__cells {
+  .block-row__cells {
     flex-direction: row;
     align-items: stretch;
   }
-  .block-row--wide .block-cell {
+  .block-row .block-cell {
     flex: var(--share) 1 0%;
   }
-  .block-row--wide .block-row__divider::before {
+  .block-row .block-row__divider::before {
     inset-block: 0;
     inset-inline: 50% auto;
     border-block-start: 0;
     border-inline-start: 1px solid var(--cds-border-subtle);
   }
-  .block-row--wide.block-row--resizable .block-row__divider {
+  .block-row--resizable .block-row__divider {
     cursor: col-resize;
     touch-action: none;
   }
-  .block-row--wide.block-row--resizable .block-row__divider:is(:hover, :focus-visible)::before {
+  .block-row--resizable .block-row__divider:is(:hover, :focus-visible)::before {
     border-inline-start: 2px solid var(--cds-border-interactive);
   }
-  .block-row--wide .block-row__divider:focus-visible {
+  .block-row__divider:focus-visible {
     outline: none;
   }
   /* Its scroll box reaches 1rem into the room left of it, so what a block hangs there (a Markdown block's box, as on

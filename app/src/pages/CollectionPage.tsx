@@ -540,7 +540,6 @@ function CollectionContent({ collection }: { collection: Collection }) {
           <BlockRows
             entries={view.blocks}
             blockOf={(b) => b}
-            wide={fullWidth}
             shape={shape}
             onPlace={rowActions.place}
             onShares={rowActions.shares}
@@ -565,7 +564,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
                 onError={setError}
                 onOpenChange={panels.onOpenChange}
                 onDragStart={placed.onDragStart}
-                row={fullWidth ? rowActions.controls(block) : undefined}
+                row={rowActions.controls(block)}
               />
             )}
           />

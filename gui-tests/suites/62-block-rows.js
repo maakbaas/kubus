@@ -2,7 +2,8 @@
 // on the desktop, a row's max height making a taller block scroll inside; on a phone the same tab stacked as before rows,
 // each block its own height, nothing scrolling inside; a dashboard row collapsing as one; Block settings' "Beside the block
 // above" (stored at once, the block moving once the panel closes) and the row's max height; a block dragged onto another's
-// side; the divider resizing with its arrow keys; a collection view and an item page with "Full width" off stacked, on in rows.
+// side; the divider resizing with its arrow keys; a collection view with "Full width" on and off (its 700px column wide
+// enough) and an item page in rows, a block dragged there.
 
 const R_SHOWN = ".ws-pane--active .ws-tab-slot:not([hidden])";
 const MANY = 30;
@@ -181,7 +182,7 @@ test("dashboard rows: a block dragged by its name onto another's right side join
 
 // --- a collection view, an item page -----------------------------------------------------------------
 
-test("rows follow Full width: a collection view's blocks beside each other only with it on; an item page's likewise @ desktop", async (t) => {
+test("rows with and without Full width: a collection view's blocks beside each other either way; an item page's, a block dragged there @ desktop", async (t) => {
   await t.boot();
   const ids = await t.seed(rowsSpec());
   await t.open(`${t.listPath(ids.collections.books)}?view=${ids.views["books/All"]}`);
@@ -190,11 +191,22 @@ test("rows follow Full width: a collection view's blocks beside each other only 
   await t.audit("collection view with a row", { shotOnFail: true });
   await t.open(`${t.listPath(ids.collections.books)}?view=${ids.views["books/Narrow"]}`);
   await t.until("Narrow's blocks are in", async () => (await rBlock(t, "n-text").count()) === 1);
-  await t.check("Narrow (full width off): About below List", below(await rRect(t, "n-table"), await rRect(t, "n-text")));
-  await t.audit("narrow collection view, stacked", { shotOnFail: true });
+  await t.check("Narrow (full width off, its 700px column): About beside List", sideBySide(await rRect(t, "n-table"), await rRect(t, "n-text")));
+  await t.audit("narrow collection view with a row", { shotOnFail: true });
 
   await t.open(t.itemPath(ids.collections.books, ids.items["books/b0"]));
   await t.until("the item page's blocks are in", async () => (await rBlock(t, "i-two").count()) === 1);
   await t.check("the Wide item view: Two beside One", sideBySide(await rRect(t, "i-one"), await rRect(t, "i-two")));
   await t.audit("item page with a row", { shotOnFail: true });
+  // Two dragged onto One's left side: first in the row, the item view still listing its fields as stored.
+  const one = await rRect(t, "i-one");
+  await rBlock(t, "i-two").locator(".section-header__title").dragTo(rBlock(t, "i-one"), { targetPosition: { x: 10, y: one.height / 2 } });
+  await t.until("stored: Two first in the row, One beside it", async () => {
+    const view = (await t.page.evaluate(async (cid) => (await window.kubus.repo.listCollections()).find((c) => c.id === cid).itemViews, ids.collections.books))[0];
+    const two = view.layout.blocks.find((b) => b.id === "i-two");
+    const oneB = view.layout.blocks.find((b) => b.id === "i-one");
+    const f = view.layout.fields;
+    return !two.beside && oneB.beside === true && f.indexOf("i-two") === f.indexOf("i-one") - 1;
+  });
+  await t.until("shown: Two left of One", async () => sideBySide(await rRect(t, "i-two"), await rRect(t, "i-one")));
 }, { viewport: "desktop" });

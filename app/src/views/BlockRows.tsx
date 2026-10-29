@@ -3,8 +3,9 @@ import { blockRows, canBeside, moveDivider, placeBlock, rowShares, rowStart, set
 import type { ViewBlock } from "../domain/views";
 
 // A page's blocks in rows (domain/blockRows.ts): a row's blocks side by side, where the row is wide enough (a container
-// query, styles.css .block-row), as tall as each other, each at most the row's max height (then scrolling inside); where it
-// isn't (a phone, a narrow pane) or "Full width" is off, stacked as they always were, their heights their own. A block is
+// query, styles.css .block-row: so the narrow column of a page without "Full width" too), as tall as each other, each at
+// most the row's max height (then scrolling inside); where it isn't (a phone, a narrow pane), stacked as they always were,
+// their heights their own. A block is
 // dragged by its name onto another: beside it (its left or right quarter, side by side only) or in a row of its own above or
 // below that block's row. The divider between two blocks in a row changes their shares (drag it, or its arrow keys).
 
@@ -60,8 +61,6 @@ interface Props<T extends { id: string }> {
   entries: T[];
   /** The block an entry is (absent: a field of an item page, a row of its own). */
   blockOf(entry: T): ViewBlock | undefined;
-  /** Rows at all ("Full width" on); off, every block stands alone, as before rows. */
-  wide: boolean;
   /** Rows as shown (held while a panel is open); a block not in it, its own. */
   shape?: Record<string, RowShape>;
   render(entry: T, placed: PlacedBlock): ReactNode;
@@ -71,9 +70,9 @@ interface Props<T extends { id: string }> {
   onShares?(row: string[], shares: number[]): void;
 }
 
-/** The rows shown: entries grouped by their (held) shape where "Full width" is on, else each alone. */
-export function shownRows<T extends { id: string }>(entries: T[], blockOf: (entry: T) => ViewBlock | undefined, wide: boolean, shape?: Record<string, RowShape>): T[][] {
-  return wide ? blockRows(entries, (e) => shapeOf(blockOf(e), shape)) : entries.map((e) => [e]);
+/** The rows shown: entries grouped by their (held) shape. */
+export function shownRows<T extends { id: string }>(entries: T[], blockOf: (entry: T) => ViewBlock | undefined, shape?: Record<string, RowShape>): T[][] {
+  return blockRows(entries, (e) => shapeOf(blockOf(e), shape));
 }
 const shapeOf = (block: ViewBlock | undefined, shape?: Record<string, RowShape>): RowShape | undefined => block && (shape?.[block.id] ?? block);
 
@@ -90,10 +89,10 @@ function zoneAt(e: DragEvent, cell: HTMLElement): RowZone {
   return e.clientY - r.top < r.height / 2 ? "top" : "bottom";
 }
 
-export function BlockRows<T extends { id: string }>({ entries, blockOf, wide, shape, render, onPlace, onShares }: Props<T>) {
+export function BlockRows<T extends { id: string }>({ entries, blockOf, shape, render, onPlace, onShares }: Props<T>) {
   const [drop, setDrop] = useState<{ id: string; zone: RowZone } | null>(null);
   const shaped = (e: T) => shapeOf(blockOf(e), shape);
-  const rows = shownRows(entries, blockOf, wide, shape);
+  const rows = shownRows(entries, blockOf, shape);
   const dragStart = (id: string) => (e: DragEvent) => {
     e.dataTransfer.setData(BLOCK_MIME, id);
     e.dataTransfer.effectAllowed = "move";
@@ -104,13 +103,12 @@ export function BlockRows<T extends { id: string }>({ entries, blockOf, wide, sh
       {rows.map((row) => {
         const first = row[0];
         if (!blockOf(first)) return <Fragment key={first.id}>{render(first, {})}</Fragment>;
-        const max = wide ? shaped(first)?.rowMaxHeight : undefined;
+        const max = shaped(first)?.rowMaxHeight;
         return (
           <Row
             key={first.id}
             ids={row.map((e) => e.id)}
             shares={rowShares(row.map((e) => shaped(e) ?? {}))}
-            wide={wide}
             maxHeight={max}
             onShares={onShares}
             cell={(e: T, share: number) => (
@@ -151,7 +149,6 @@ function Row<T extends { id: string }>({
   ids,
   entries,
   shares: stored,
-  wide,
   maxHeight,
   onShares,
   cell,
@@ -160,7 +157,6 @@ function Row<T extends { id: string }>({
   ids: string[];
   entries: T[];
   shares: number[];
-  wide: boolean;
   maxHeight: number | undefined;
   onShares?(row: string[], shares: number[]): void;
   cell(entry: T, share: number): ReactNode;
@@ -199,7 +195,7 @@ function Row<T extends { id: string }>({
     e.preventDefault();
     onShares(ids, moveDivider(stored, i, e.key === "ArrowLeft" ? -SHARE_STEP : SHARE_STEP));
   };
-  const className = ["block-row", wide && "block-row--wide", wide && maxHeight !== undefined && "block-row--capped", onShares && "block-row--resizable"].filter(Boolean).join(" ");
+  const className = ["block-row", maxHeight !== undefined && "block-row--capped", onShares && "block-row--resizable"].filter(Boolean).join(" ");
   return (
     <div className={className} style={maxHeight !== undefined ? ({ "--row-max": `${maxHeight}rem` } as CSSProperties) : undefined} onDragEnd={onDragEnd}>
       <div className="block-row__cells" ref={cells}>
@@ -209,13 +205,13 @@ function Row<T extends { id: string }>({
               // Side by side it is a handle (role separator, its value the share before it); stacked, only the line between.
               <div
                 className="block-row__divider"
-                role={onShares && wide ? "separator" : undefined}
-                aria-orientation={onShares && wide ? "vertical" : undefined}
-                aria-label={onShares && wide ? "Resize blocks" : undefined}
-                aria-valuenow={onShares && wide ? Math.round(shares[i - 1]) : undefined}
-                aria-valuemin={onShares && wide ? 0 : undefined}
-                aria-valuemax={onShares && wide ? 100 : undefined}
-                tabIndex={onShares && wide ? 0 : undefined}
+                role={onShares ? "separator" : undefined}
+                aria-orientation={onShares ? "vertical" : undefined}
+                aria-label={onShares ? "Resize blocks" : undefined}
+                aria-valuenow={onShares ? Math.round(shares[i - 1]) : undefined}
+                aria-valuemin={onShares ? 0 : undefined}
+                aria-valuemax={onShares ? 100 : undefined}
+                tabIndex={onShares ? 0 : undefined}
                 onPointerDown={startResize(i)}
                 onKeyDown={keyResize(i)}
               />

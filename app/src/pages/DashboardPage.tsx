@@ -552,7 +552,6 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
         <BlockRows
           entries={view.blocks}
           blockOf={(b) => b}
-          wide={fullWidth}
           shape={shape}
           onPlace={rowActions.place}
           onShares={rowActions.shares}
@@ -572,7 +571,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
               onError={setError}
               onOpenChange={panels.onOpenChange}
               onDragStart={placed.onDragStart}
-              row={fullWidth ? rowActions.controls(block) : undefined}
+              row={rowActions.controls(block)}
             />
           )}
         />

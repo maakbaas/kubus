@@ -142,7 +142,6 @@ Charts:
     this chart without a clip, and dots never clipped), so a bar below the min doesn't cover the axis.
     Parked: not worth patching Carbon's internals for now.
 17. Blocks side by side, what is left (docs/features.md "Blocks side by side"): a chart, map or component block filling
-    the height of its row (its box keeps its own Height now, the row's other cells being as tall as the tallest), and
-    dragging blocks on an item page (there only "Beside the block above" in Block settings: its order is the Fields list,
-    whose "all fields" null a drop would have to turn into a list).
+    the height of its row (its box keeps its own Height now, shrinking with its width at its aspect ratio, the row's
+    other cells being as tall as the tallest).
 

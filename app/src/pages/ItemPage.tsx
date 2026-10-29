@@ -7,7 +7,7 @@ import { isFullWidth, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBl
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
 import { BlockRows, rowShape, shownRows, type RowControls } from "../views/BlockRows";
-import { canBeside, reordered, rowStart, setBeside, setRowMaxHeight, setRowShares, withoutBlock } from "../domain/blockRows";
+import { canBeside, placeBlock, reordered, rowStart, setBeside, setRowMaxHeight, setRowShares, withoutBlock, type RowZone } from "../domain/blockRows";
 import { QueryEditor } from "../views/QueryEditor";
 import { useBlockName } from "../views/BlockListEditor";
 import { AddBlockButton, type NewBlockSpec } from "../views/AddBlockButton";
@@ -311,11 +311,12 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
    * changes which items a block shows (filter, sort, grouping, fields) waits for Save changes, as on
    * collection pages.
    */
-  const arrange = (change: (layout: ItemLayout) => ItemLayout) => {
-    // A block no longer right under the one it was beside (the Fields list reordered) leaves its row.
+  const arrange = (change: (layout: ItemLayout) => ItemLayout, placed = false) => {
+    // A block no longer right under the one it was beside (the Fields list reordered) leaves its row; one placed by a drop
+    // is where the drop put it.
     const applied = (l: ItemLayout) => {
       const next = change(l);
-      return { ...next, blocks: reordered(orderOf(l), orderOf(next), next.blocks) };
+      return placed ? next : { ...next, blocks: reordered(orderOf(l), orderOf(next), next.blocks) };
     };
     if (draft) setDraft(applied(draft));
     storeNow({ layout: applied(saved) });
@@ -366,9 +367,19 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   );
   // Blocks side by side (rows: views/BlockRows.tsx): blocks next to each other on the page, held while a panel is open.
   const shape = panels.hold("rows", rowShape(layout.blocks));
-  fieldIndex.current = shownRows(entries, (e) => blocksById.get(e.id), fullWidth, shape).map((r) => r[0].id);
+  fieldIndex.current = shownRows(entries, (e) => blocksById.get(e.id), shape).map((r) => r[0].id);
   /** The page's order of fields and blocks, empty ones too (what "Beside the block above" looks at). */
   const orderOf = (l: ItemLayout) => itemPageFields<{ id: string }>([...pickableFields(collection), ...l.blocks], l, titleField?.id).map((e) => e.id);
+  /**
+   * A block dropped on another (dragged by its name). Only blocks move, next to blocks: with "all fields" (no list) the
+   * blocks follow the fields, so the drop only reorders the blocks and the layout keeps following the collection's fields.
+   */
+  const placeBlockOnPage = (dragId: string, targetId: string, zone: RowZone) =>
+    arrange((l) => {
+      const r = placeBlock(orderOf(l), l.blocks, dragId, targetId, zone);
+      const at = (id: string) => r.order.indexOf(id);
+      return { ...l, blocks: [...r.blocks].sort((a, b) => at(a.id) - at(b.id)), fields: l.fields && r.order };
+    }, true);
   const rowControls = (block: ViewBlock): RowControls => ({
     beside: !!block.beside,
     canBeside: canBeside(orderOf(layout), layout.blocks, block.id),
@@ -624,8 +635,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
           <BlockRows
             entries={entries}
             blockOf={(e) => blocksById.get(e.id)}
-            wide={fullWidth}
             shape={shape}
+            onPlace={activeView ? placeBlockOnPage : undefined}
             onShares={(row, shares) => arrange((l) => ({ ...l, blocks: setRowShares(l.blocks, row, shares) }))}
             render={(entry) => {
               const block = blocksById.get(entry.id);
@@ -645,7 +656,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                     onRemove={() => removeBlock(block)}
                     onError={setError}
                     onOpenChange={panels.onOpenChange}
-                    row={fullWidth && activeView ? rowControls(block) : undefined}
+                    row={activeView ? rowControls(block) : undefined}
                   />
                 );
               }
