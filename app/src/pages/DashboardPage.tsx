@@ -4,6 +4,7 @@ import { Checkbox, Heading, IconButton, InlineNotification, MultiSelect, Search,
 import { Add, Filter, Renew, Save, Search as SearchIcon, Settings, SettingsAdjust, Star, StarFilled, TrashCan } from "@carbon/icons-react";
 import { useDashboard, useStore } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
+import { useFreshLoads } from "../app/useFreshLoads";
 import { findCollection } from "../domain/backlinks";
 import { DASHBOARD_ICON, findTab, dashboardBlockCollection,
  dashboardIcon, dashboardScope, FIRST_TAB_NAME, newDashboardBlock, type Dashboard, type DashboardView } from "../domain/dashboards";
@@ -118,18 +119,20 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   }, [settingsRequest]);
 
   const shown = useRef<{ activeId: string | null; view: ViewState; reference: ViewState } | undefined>(undefined);
-  const loadViews = useCallback(
-    () =>
-      repo.listDashboardViews(dashboard.id, space.id).then((list) => {
-        setSavedViews(list);
-        // A shown tab without unsaved changes follows its stored settings when they change elsewhere.
-        const cur = shown.current;
-        const next = cur?.activeId ? list.find((v) => v.id === cur.activeId) : undefined;
-        if (cur && next && sameView(cur.view, cur.reference)) setView(stateOf(next));
-      }, fail),
+  // As a collection page's: a reload asked before the latest change shown here (or before a later reload) is dropped.
+  const fresh = useFreshLoads();
+  const loadViews = useCallback(() => {
+    const isFresh = fresh.ticket();
+    return repo.listDashboardViews(dashboard.id, space.id).then((list) => {
+      if (!isFresh()) return;
+      setSavedViews(list);
+      // A shown tab without unsaved changes follows its stored settings when they change elsewhere.
+      const cur = shown.current;
+      const next = cur?.activeId ? list.find((v) => v.id === cur.activeId) : undefined;
+      if (cur && next && sameView(cur.view, cur.reference)) setView(stateOf(next));
+    }, fail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [repo, dashboard.id, space.id],
-  );
+  }, [repo, dashboard.id, space.id, fresh]);
   useEffect(() => {
     loadViews();
   }, [loadViews]);
@@ -207,10 +210,14 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
     if (!active) return;
     const shownWith = (id: string) => (list: DashboardView[] | null) => list && list.map((v) => (v.id === id ? { ...v, ...patch } : v));
     setSavedViews(shownWith(active.id));
-    const tab = await stored();
+    const tab = await fresh.storing(async () => {
+      const tab = await stored();
+      if (!tab) return null;
+      if (tab.id !== active.id) setSavedViews(shownWith(tab.id));
+      await repo.saveDashboardView({ ...tab, ...patch });
+      return tab;
+    });
     if (!tab) return;
-    if (tab.id !== active.id) setSavedViews(shownWith(tab.id));
-    await repo.saveDashboardView({ ...tab, ...patch });
     await loadViews();
   }
 

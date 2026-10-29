@@ -4,6 +4,7 @@ import { Checkbox, Heading, IconButton, InlineNotification, Search, Tab, TabList
 import { Add, Filter, Renew, Save, Search as SearchIcon, SettingsAdjust, Star, StarFilled, TrashCan } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
+import { useFreshLoads } from "../app/useFreshLoads";
 import { newName, now, newId, type Collection } from "../domain/model";
 import { firstShownFields, isReadOnly, isRemote, sourcePeriod } from "../domain/sources";
 import { defaultViewState, isFullWidth, newBlock, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
@@ -106,18 +107,20 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // The latest shown state, so a reload of the views (sync, another pane) can tell whether the
   // shown view has unsaved changes of its own.
   const shown = useRef<{ activeId: string | null; view: ViewState; reference: ViewState } | undefined>(undefined);
-  const loadViews = useCallback(
-    () =>
-      repo.listViews(collection.id, space.id).then((list) => {
-        setSavedViews(list);
-        // A shown view without unsaved changes follows its stored settings when they change
-        // elsewhere, instead of turning into "changed".
-        const cur = shown.current;
-        const next = cur?.activeId ? list.find((v) => v.id === cur.activeId) : undefined;
-        if (cur && next && sameView(cur.view, cur.reference)) setView(normalized(collection, next));
-      }, (e) => setError(errorMessage(e))),
-    [repo, collection, space.id],
-  );
+  // A reload asked before the latest change shown here (or before a later reload) is dropped: it would undo that change for a moment.
+  const fresh = useFreshLoads();
+  const loadViews = useCallback(() => {
+    const isFresh = fresh.ticket();
+    return repo.listViews(collection.id, space.id).then((list) => {
+      if (!isFresh()) return;
+      setSavedViews(list);
+      // A shown view without unsaved changes follows its stored settings when they change
+      // elsewhere, instead of turning into "changed".
+      const cur = shown.current;
+      const next = cur?.activeId ? list.find((v) => v.id === cur.activeId) : undefined;
+      if (cur && next && sameView(cur.view, cur.reference)) setView(normalized(collection, next));
+    }, (e) => setError(errorMessage(e)));
+  }, [repo, collection, space.id, fresh]);
   useEffect(() => {
     loadViews();
   }, [loadViews]);
@@ -228,8 +231,10 @@ function CollectionContent({ collection }: { collection: Collection }) {
   async function setFilterBar(on: boolean) {
     if (!active) return;
     setSavedViews((list) => list && list.map((v) => (v.id === active.id ? withFilterBar(v, on) : v)));
-    const id = (await storeVirtual()) ?? active.id;
-    await repo.saveView({ ...withFilterBar(active, on), id, createdAt: active.createdAt || now() });
+    await fresh.storing(async () => {
+      const id = (await storeVirtual()) ?? active.id;
+      await repo.saveView({ ...withFilterBar(active, on), id, createdAt: active.createdAt || now() });
+    });
     await loadViews();
   }
 
@@ -237,8 +242,10 @@ function CollectionContent({ collection }: { collection: Collection }) {
   async function setFullWidth(on: boolean) {
     if (!active) return;
     setSavedViews((list) => list && list.map((v) => (v.id === active.id ? withFullWidth(v, on) : v)));
-    const id = (await storeVirtual()) ?? active.id;
-    await repo.saveView({ ...withFullWidth(active, on), id, createdAt: active.createdAt || now() });
+    await fresh.storing(async () => {
+      const id = (await storeVirtual()) ?? active.id;
+      await repo.saveView({ ...withFullWidth(active, on), id, createdAt: active.createdAt || now() });
+    });
     await loadViews();
   }
 
@@ -249,8 +256,10 @@ function CollectionContent({ collection }: { collection: Collection }) {
   async function setCollapsed(next: Collapsed) {
     if (!active) return;
     setSavedViews((list) => list && list.map((v) => (v.id === active.id ? { ...v, collapsed: next } : v)));
-    const id = (await storeVirtual()) ?? active.id;
-    await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), collapsed: next });
+    await fresh.storing(async () => {
+      const id = (await storeVirtual()) ?? active.id;
+      await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), collapsed: next });
+    });
     await loadViews();
   }
 
@@ -265,8 +274,10 @@ function CollectionContent({ collection }: { collection: Collection }) {
     const blocks = stored(active.blocks);
     if (JSON.stringify(blocks) === JSON.stringify(active.blocks)) return;
     setSavedViews((list) => list && list.map((v) => (v.id === active.id ? { ...v, blocks } : v)));
-    const id = (await storeVirtual()) ?? active.id;
-    await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), blocks });
+    await fresh.storing(async () => {
+      const id = (await storeVirtual()) ?? active.id;
+      await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), blocks });
+    });
     await loadViews();
   }
   const arrangeNow = (change: (blocks: ViewBlock[]) => ViewBlock[], stored?: (blocks: ViewBlock[]) => ViewBlock[]) =>
