@@ -1,4 +1,4 @@
-import { createContext, type ReactNode } from "react";
+import { createContext, type DragEvent, type ReactNode } from "react";
 import { IconButton } from "@carbon/react";
 import { ChevronDown } from "@carbon/icons-react";
 import { OverflowBar } from "./OverflowBar";
@@ -6,6 +6,8 @@ import { OverflowBar } from "./OverflowBar";
 interface Collapse {
   collapsed: boolean;
   onToggle(): void;
+  /** Its name can be dragged (an item page's field, to another place on the page: views/BlockRows.tsx). */
+  onDragStart?(e: DragEvent): void;
 }
 
 /**
@@ -19,7 +21,7 @@ export const FieldCollapse = createContext<Collapse | null>(null);
  * The collapse caret before a label's icon. It takes a label's height (the 2rem button overhangs)
  * and is pulled left by the button's inset, so its chevron starts where the label's text would.
  */
-export function CollapseCaret({ collapsed, onToggle }: Collapse) {
+export function CollapseCaret({ collapsed, onToggle }: Pick<Collapse, "collapsed" | "onToggle">) {
   return (
     <span className="collapse-caret">
       <IconButton autoAlign kind="ghost" size="sm" align="top-start" label={collapsed ? "Expand" : "Collapse"} aria-expanded={!collapsed} onClick={onToggle}>
@@ -43,6 +45,7 @@ export function SectionHeader({
   onToggle,
   hidden,
   overlay,
+  onDragStart,
   children,
 }: {
   /** The name, typically an icon label (`FieldLabel`, or an icon with a block's name). */
@@ -54,6 +57,8 @@ export function SectionHeader({
   onToggle?(): void;
   hidden?: boolean;
   overlay?: boolean;
+  /** Its name can be dragged (a block, to another place on the page: views/BlockRows.tsx). */
+  onDragStart?(e: DragEvent): void;
   /** Buttons at the right. */
   children?: ReactNode;
 }) {
@@ -70,7 +75,7 @@ export function SectionHeader({
   }
   return (
     <div className="section-header">
-      <Title className="section-header__title cds--label">
+      <Title className={onDragStart ? "section-header__title section-header__title--drag cds--label" : "section-header__title cds--label"} draggable={!!onDragStart || undefined} onDragStart={onDragStart}>
         {onToggle && <CollapseCaret collapsed={!!collapsed} onToggle={onToggle} />}
         {/* The name toggles too, like an accordion heading (the caret is its keyboard control). */}
         <span className={onToggle ? "section-header__toggle" : undefined} onClick={onToggle}>

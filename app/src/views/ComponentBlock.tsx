@@ -20,7 +20,7 @@ import { refLabelOf } from "../ui/useReferenceOptions";
 import { BLOCK_HEIGHT, DEFAULT_ASPECT, normalizeAspect, normalizeBlockHeight, type AspectRatio } from "../domain/views";
 import { useOpenRelated } from "../workspace/Workspace";
 import { useBuffered } from "../ui/useBuffered";
-import { AspectSelect, HeightSlider } from "./HeightSlider";
+import { AspectSelect, HeightSlider, InRowNote } from "./HeightSlider";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
 // A block that shows a component: a block component, which lists the block's items ($items,
@@ -102,7 +102,7 @@ export function NewBlockComponentModal({
   );
 }
 
-function ComponentBlockOptionsEditor({ collection, options, onChange }: BlockOptionsProps<ComponentBlockOptions>) {
+function ComponentBlockOptionsEditor({ collection, options, inRow, onChange }: BlockOptionsProps<ComponentBlockOptions>) {
   const uid = useId();
   // Stored after a pause, not at every step of a drag: each store is a write, a sync change and a redraw (a map's
   // canvas resized each time, which could crash the page).
@@ -156,8 +156,9 @@ function ComponentBlockOptionsEditor({ collection, options, onChange }: BlockOpt
           </>
         )}
         {/* What it shows in a box of its own (HTML) is as tall as a chart or a map, at most. */}
-        {html && <HeightSlider id={`${uid}-height`} value={height} onChange={setHeight} />}
-        {html && <AspectSelect id={`${uid}-aspect`} value={options.aspect} onChange={(aspect) => onChange({ ...options, aspect })} />}
+        {html && <HeightSlider id={`${uid}-height`} value={height} disabled={inRow} onChange={setHeight} />}
+        {html && <AspectSelect id={`${uid}-aspect`} value={options.aspect} disabled={inRow} onChange={(aspect) => onChange({ ...options, aspect })} />}
+        {html && inRow && <InRowNote />}
       </Stack>
       {dialog === "new" && (
         <NewBlockComponentModal
@@ -207,7 +208,7 @@ export const componentBlock = defineBlockType<ComponentBlockOptions>({
   uses(options, components) {
     const component = blockComponent(options, components);
     const uses = component ? componentUses(component.code) : null;
-    return { query: !!uses?.items, groups: !!uses?.groups, fields: uses?.fields ? { labels: false, hideEmpty: false } : null };
+    return { query: !!uses?.items, groups: !!uses?.groups, fields: uses?.fields ? { labels: false, hideEmpty: false } : null, fillsRow: component?.output === "html" };
   },
   View: ComponentBlockView,
   OptionsEditor: ComponentBlockOptionsEditor,

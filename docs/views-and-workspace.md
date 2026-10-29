@@ -242,15 +242,22 @@ Extension points are registries, not special cases in pages:
     the countries of the world, a continent or an area (World, Africa, Asia, Europe, North and South America, Oceania, Central
     America, Caribbean, Latin America, Middle East: `BUNDLED_MAPS`, bundled in `app/src/geodata`, each a chunk loaded when shown) or a country's regions
     (244 maps of 213 countries and territories, `app/src/geodata/maps.json`, grouped by continent: "Netherlands" its provinces, "France ·
-    Departments"), downloaded from jsDelivr at a pinned version (`GEODATA_VERSION`) when chosen and stored as a file
+    Departments"), downloaded from unpkg (jsDelivr refuses a package this large) at a pinned version (`GEODATA_VERSION`) when chosen and stored as a file
     (`regions.file`, `files/<id>`: the same bytes on every device, so one file; synced like an image, kept while a block
     names it: docs/data-model.md, block_file_uses; "Downloading the map…" under the select meanwhile, the map shown until it's done;
-    offline it says so); and Regions from, the field whose values are the regions (a category per value, as the X axis's). A
-    value is a region when it is its code (`id`: "NL", "NL-DR") or its name (`name`), the two properties every amCharts map has
+    offline it says so); and Regions from, the field whose values are the regions (a category per value, as the X axis's).
+    Display: Colour (`ChartOptions.scaleColor`: Carbon's first five series colours, purple by default), whose shades Carbon is given
+    (`color.gradient.colors`, `scaleShades` in chartSpec.ts): its own scale without white (from 10 to 100), so a region with
+    little is its palest shade rather than white (on a dark theme from 100 to 20); Max (`scaleMax`, none by default): when a
+    value is above it, the values above are drawn as it (the darkest shade; Carbon fits its scale and legend to the values,
+    it takes no domain for a choropleth's fill) and the tooltip shows a region's own value, so one large value doesn't leave the rest of the map pale.
+    The Values section's Unit and Decimals apply to the tooltip and the legend's numbers (Carbon's `locale.number`). Not offered,
+    as Carbon's choropleth ignores them: a Label (its colour legend takes a title from a heatmap's options only) and the
+    legend's position (always below; Legend is Shown or Hidden). A value is a region when it is its code (`id`: "NL", "NL-DR") or its name (`name`), the two properties every amCharts map has
     (an English name is in a few maps only, under several keys: not used), ignoring case,
     accents and punctuation ("noord holland" is Noord-Holland, "Fryslan" Fryslân), a code first (`regionFinder`); two
     values of one region ("NL", "Netherlands") are one. A region without items is striped (Carbon's missing data); the
-    values that are no region are listed under the map ("Not on the map: Atlantis (1)", ellipsized, the whole list in its
+    values that are no region are listed under the map unless "Show values not on the map" (Display, `showUnmatched`) is unticked ("Not on the map: Atlantis (1)", ellipsized, the whole list in its
     title). "Show regions" (Data, under Regions from) opens the map's regions (`views/RegionsDialog.tsx`, a small dialog:
     a long name, a code and a number don't fit an xs one): every region's name, its code and how many of the
     block's items are in it (`RegionValues.matches`; the Block settings get the block's result for it,
@@ -296,7 +303,8 @@ Extension points are registries, not special cases in pages:
   renders a `QueryResult` (and the resolved fields); it never filters or sorts itself. Shared
   cell rendering: `views/cells.tsx`; data for blocks: `useCollectionData`, actions: `useItemActions`.
 - **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + JSON config
-  `{ filters, blocks, editable, collapsed, filterBar?, fullWidth? }` (`parseViewConfig`; `fullWidth`: "Full width", absent =
+  `{ filters, blocks, editable, collapsed, filterBar?, fullWidth? }` (a block's `beside`, `width`, `rowFit`, `rowHeight`: its row,
+  docs/features.md "Blocks side by side"; `parseViewConfig`; `fullWidth`: "Full width", absent =
   on for a collection view and a dashboard tab, `isFullWidth`; off, the page is wrapped in `.view-page--narrow`, the item
   page's 700px column; an item view's own is on the `ItemView`, absent = off, on = `.item-view--full`; docs/features.md "Full width").
   Every new collection gets an ordinary "All" view (table, all items, sorted by title) in the space it is made in, created
@@ -329,11 +337,10 @@ Extension points are registries, not special cases in pages:
   `useOpenRelated(path, mode)` with `openModeOf(event)`: plain click = this tab; Ctrl/Cmd click =
   beside (the pane to the right, reused or split off; a new tab on windows < 72rem); middle click =
   new tab. Such links carry `data-own-click`.
-- The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Dashboards (`#/dashboards`, with the shown space's
-  dashboards below it, each with its icon), Collections (with the
-
+- The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Collections (with the
   shown space's native collections below it), Remotes (`#/remotes`, once the server has a remote
-  connection or remote collections exist: `useRemotesShown`; the space's remote collections below it)
+  connection or remote collections exist: `useRemotesShown`; the space's remote collections below it),
+  Dashboards (`#/dashboards`, with the shown space's dashboards below it, each with its icon)
   and Components; branches remember being open per
   device. The space switcher (`ui/SpaceSwitcher.tsx`, always shown) sits in the nav's top row beside the
   menu toggle; its last entry "Manage spaces" opens `#/spaces` (no nav entry).

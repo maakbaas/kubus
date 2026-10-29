@@ -324,8 +324,15 @@ function __design(opts) {
       ];
       // Blocks of a collection view and of an item page (inside .item-fields): the outermost ones.
       const blocks = [...content.querySelectorAll(".block")].filter((b) => visible(b) && !b.closest(".cds--popover-content, .cds--modal") && !b.parentElement.closest(".block"));
+      // Blocks side by side in a row (views/BlockRows.tsx): only the row's first starts on the left edge, only its last's header ends on the right one.
+      const rowCells = (b) => {
+        const cells = b.closest(".block-row__cells");
+        return cells && cs(cells).flexDirection === "row" ? [...cells.querySelectorAll(":scope > .block-cell")].filter(visible) : null;
+      };
+      const atStart = (b) => !rowCells(b) || rowCells(b)[0] === b.closest(".block-cell");
+      const atEnd = (b) => !rowCells(b) || rowCells(b).at(-1) === b.closest(".block-cell");
       for (const [name, sel, inset, text] of LEFT) {
-        for (const el of (sel === "@blocks" ? blocks : own(sel)).slice(0, 4)) {
+        for (const el of (sel === "@blocks" ? blocks.filter(atStart) : own(sel)).slice(0, 4)) {
           // A tab list scrolled sideways (the selected tab brought into view) moves its labels with it.
         const scrolled = text ? el.closest(".cds--tab--list")?.scrollLeft ?? 0 : 0;
         const left = text ? textLeft(el) + scrolled : el.getBoundingClientRect().left;
@@ -334,7 +341,7 @@ function __design(opts) {
           judge("edge-align", Math.abs(d) <= 1, el, `${name} ${d}`, `${name} starts ${d}px off the page's left edge${inset ? ` (+${inset}px)` : ""}`);
         }
       }
-      const rights = [...own(".page-header__actions"), ...own(".views-bar"), ...blocks.map((b) => b.querySelector(":scope > .section-header")).filter((h) => h && visible(h))].map((el) => [el, el.getBoundingClientRect().right]);
+      const rights = [...own(".page-header__actions"), ...own(".views-bar"), ...blocks.filter(atEnd).map((b) => b.querySelector(":scope > .section-header")).filter((h) => h && visible(h))].map((el) => [el, el.getBoundingClientRect().right]);
       if (rights.length > 1) {
         const ref = rights[0][1];
         for (const [el, right] of rights.slice(1)) {
@@ -377,7 +384,9 @@ function __design(opts) {
   // Equal gaps between siblings: an item page's fields and blocks, a collection view's blocks.
   // On a collection page only the blocks count (the header and views bar above them have their own gaps).
   const lists = new Map([...document.querySelectorAll(".item-fields")].map((l) => [l, null]));
-  for (const b of document.querySelectorAll(".ws-tab-content .block")) if (!b.closest(".item-fields")) lists.set(b.parentElement, ".block");
+  // Blocks are in rows (views/BlockRows.tsx): the gaps between rows, and between the blocks of a row stacked (a phone).
+  for (const r of document.querySelectorAll(".ws-tab-content .block-row")) if (!r.closest(".item-fields")) lists.set(r.parentElement, ".block-row");
+  for (const c of document.querySelectorAll(".ws-tab-content .block-row__cells")) if (cs(c).flexDirection === "column") lists.set(c, ".block-cell");
   for (const [list, only] of lists) {
     if (!visible(list)) continue;
     // Through display: contents wrappers (a field shown without its label); not screen-reader-only bits.

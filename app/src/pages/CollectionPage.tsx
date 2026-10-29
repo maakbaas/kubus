@@ -21,6 +21,8 @@ import { blockType, normalizeBlock, normalizeView } from "../views";
 import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
 import type { NewBlockSpec } from "../views/AddBlockButton";
 import { BlockView } from "../views/BlockView";
+import { BlockRows, besideOf, listRowActions, rowCollapse } from "../views/BlockRows";
+import { reordered, withCopy, withoutBlock } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
 import { useCollectionData } from "../views/useCollectionData";
@@ -216,6 +218,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // "Full width" (View settings): off, the view is the narrow column of an item page. Held while a panel is
   // open, like the filter bar: the width moves the toolbar's buttons, and the open panel with them.
   const fullWidth = panels.hold("fullWidth", isFullWidth("collection", active?.fullWidth));
+  // Which blocks are beside another, held likewise: a block put in a row (Block settings) would move its open panel.
+  const beside = panels.hold("beside", besideOf(view.blocks));
 
   async function updateActive() {
     if (!active) return;
@@ -289,11 +293,18 @@ function CollectionContent({ collection }: { collection: Collection }) {
     const block = normalizeBlock(collection, newBlock(spec.kind, spec.options ?? blockType(spec.kind).defaultOptions(collection)));
     arrangeNow((blocks) => [...blocks, block]);
   };
-  /** Reordered blocks; the saved view's blocks follow the same order. */
+  /** Reordered blocks; the saved view's blocks follow the same order (a block no longer under the one it was beside leaves its row). */
   const moveBlocks = (order: ViewBlock[]) => {
     const at = (b: ViewBlock) => order.findIndex((o) => o.id === b.id) >>> 0; // not shown: last
-    arrangeNow(() => order, (blocks) => [...blocks].sort((a, b) => at(a) - at(b)));
+    const ids = (blocks: ViewBlock[]) => blocks.map((b) => b.id);
+    const sorted = (blocks: ViewBlock[]) => [...blocks].sort((a, b) => at(a) - at(b));
+    arrangeNow(
+      (blocks) => reordered(ids(blocks), ids(order), order),
+      (blocks) => reordered(ids(blocks), ids(sorted(blocks)), sorted(blocks)),
+    );
   };
+  // Blocks side by side (rows: views/BlockRows.tsx), arranged like the rest: stored right away.
+  const rowActions = listRowActions(view.blocks, (change) => arrangeNow(change));
   const blockName = useBlockName();
   /** Removing blocks (a view keeps one): asked first, unless asked already. */
   async function removeBlocks(ids: string[], asked = false) {
@@ -301,7 +312,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
     if (gone.length === 0 || gone.length >= view.blocks.length) return;
     const title = gone.length === 1 ? `Remove block “${blockName(gone[0])}”?` : `Remove ${gone.length} blocks?`;
     if (!asked && !(await confirm({ title, body: "Items are not affected." }))) return;
-    await arrange((blocks) => blocks.filter((b) => !ids.includes(b.id)));
+    await arrange((blocks) => ids.reduce((list, id) => withoutBlock(list.map((b) => b.id), list, id), blocks));
   }
 
   /** Star the active view as the default, or unstar it (then the first view opens by default). */
@@ -476,17 +487,23 @@ function CollectionContent({ collection }: { collection: Collection }) {
                   onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                 />
               )}
-              {active && <Checkbox id={`${uid}-view-filter-bar`} labelText="Show filter bar" checked={!!active.filterBar} onChange={(_, { checked }) => setFilterBar(checked).catch((e) => setError(errorMessage(e)))} />}
-              {active && <Checkbox id={`${uid}-view-full-width`} labelText="Full width" checked={isFullWidth("collection", active.fullWidth)} onChange={(_, { checked }) => setFullWidth(checked).catch((e) => setError(errorMessage(e)))} />}
-              {!readOnly && (
-                <Checkbox id={`${uid}-view-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
-              )}
+              <div className="view-options__checks">
+                {active && <Checkbox id={`${uid}-view-filter-bar`} labelText="Show filter bar" checked={!!active.filterBar} onChange={(_, { checked }) => setFilterBar(checked).catch((e) => setError(errorMessage(e)))} />}
+                {active && <Checkbox id={`${uid}-view-full-width`} labelText="Full width" checked={isFullWidth("collection", active.fullWidth)} onChange={(_, { checked }) => setFullWidth(checked).catch((e) => setError(errorMessage(e)))} />}
+                {!readOnly && (
+                  <Checkbox id={`${uid}-view-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
+                )}
+              </div>
               <BlockListEditor
                 blocks={view.blocks}
                 onMove={moveBlocks}
                 onRemove={(ids, asked) => removeBlocks(ids, asked).catch((e) => setError(errorMessage(e)))}
                 onAdd={addBlock}
                 onHeader={(id, shown) => setBlockNow(id, { hideHeader: shown ? undefined : true })}
+                onDuplicate={(id) => {
+                  const copy = newId();
+                  arrangeNow((blocks) => withCopy(blocks, id, copy));
+                }}
               />
             </div>
           </ToolbarPopover>
@@ -523,29 +540,47 @@ function CollectionContent({ collection }: { collection: Collection }) {
           block's header would stand alone and be pushed down as the blocks above it fill. */}
       {savedViews !== null &&
         viewChosen &&
-        (data.items !== null || data.error) &&
-        view.blocks.map((block) => (
-          <BlockView
-            // Keyed by the shown view too, so group collapse state isn't carried over to another view.
-            key={`${activeId ?? ""}-${block.id}`}
-            collection={collection}
-            data={data}
-            block={block}
-            viewFilters={view.filters}
-            search={searched}
-            place="collection"
-            page={null}
-            editable={view.editable && !readOnly}
-            collapsed={active?.collapsed ?? NOTHING_COLLAPSED}
-            onCollapse={(next) => setCollapsed(next).catch((e) => setError(errorMessage(e)))}
-            onChange={setBlock}
-            onSet={(patch) => setBlockNow(block.id, patch)}
-            // A view keeps at least one block.
-            onRemove={view.blocks.length > 1 ? () => removeBlocks([block.id]).catch((e) => setError(errorMessage(e))) : undefined}
-            onError={setError}
-            onOpenChange={panels.onOpenChange}
+        (data.items !== null || data.error) && (
+          <BlockRows
+            entries={view.blocks}
+            beside={beside}
+            blockOf={(b) => b}
+            onPlace={rowActions.place}
+            onShares={rowActions.shares}
+            render={(block, placed) => (
+              <BlockView
+                // Keyed by the shown view too, so group collapse state isn't carried over to another view.
+                key={`${activeId ?? ""}-${block.id}`}
+                collection={collection}
+                data={data}
+                block={block}
+                viewFilters={view.filters}
+                search={searched}
+                place="collection"
+                page={null}
+                editable={view.editable && !readOnly}
+                collapsed={active?.collapsed ?? NOTHING_COLLAPSED}
+                onCollapse={(next) => setCollapsed(next).catch((e) => setError(errorMessage(e)))}
+                onChange={setBlock}
+                onSet={(patch) => setBlockNow(block.id, patch)}
+                // A view keeps at least one block.
+                onRemove={view.blocks.length > 1 ? () => removeBlocks([block.id]).catch((e) => setError(errorMessage(e))) : undefined}
+                onError={setError}
+                onOpenChange={panels.onOpenChange}
+                // A row collapses as one (views/BlockRows.tsx rowCollapse).
+                collapse={rowCollapse(
+                  view.blocks.map((b) => b.id),
+                  view.blocks,
+                  active?.collapsed ?? NOTHING_COLLAPSED,
+                  block,
+                  (next) => setCollapsed(next).catch((e) => setError(errorMessage(e))),
+                )}
+                onDragStart={placed.onDragStart}
+                row={rowActions.controls(block)}
+              />
+            )}
           />
-        ))}
+        )}
 
       {dialog}
     </div>

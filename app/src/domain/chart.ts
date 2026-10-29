@@ -248,6 +248,12 @@ export interface ChartOptions {
   sizeField: string | null;
   /** Choropleth: the map whose regions the X axis's categories are. */
   regions: ChartRegions;
+  /** Choropleth: the hue its shades are of (Carbon's first five series colours; views/chartSpec.ts SCALE_SHADES). */
+  scaleColor: ScaleColor;
+  /** Choropleth: the value its darkest shade stands for, anything above it too (the legend's "50+"); null = the largest value. */
+  scaleMax: number | null;
+  /** Choropleth: the values that are no region of its map listed under it ("Not on the map: …"). */
+  showUnmatched: boolean;
   /** Warning and danger levels: lines on a bar, line or area chart's left axis, a gauge's or meter's colour. */
   thresholds: Threshold[];
   /** Gauge and meter: thresholds as a % of the total, or values. */
@@ -270,6 +276,16 @@ export interface ChartOptions {
   /** At most this wide, in rem (CHART_WIDTH), or "full": as wide as its pane, whatever that is (FULL_WIDTH). */
   width: ChartWidth;
 }
+
+/** A choropleth's hues: Carbon's first five series colours, in its order. */
+export const SCALE_COLORS = [
+  { value: "purple", text: "Purple" },
+  { value: "cyan", text: "Cyan" },
+  { value: "teal", text: "Teal" },
+  { value: "magenta", text: "Magenta" },
+  { value: "red", text: "Red" },
+] as const;
+export type ScaleColor = (typeof SCALE_COLORS)[number]["value"];
 
 /** A chart's Width: at most this many rem, or "full" (the pane's whole width, no maximum). */
 export type ChartWidth = number | "full";
@@ -362,6 +378,9 @@ export function defaultChartOptions(collection: Collection, components: Componen
     bins: 0,
     sizeField: null,
     regions: defaultRegions(),
+    scaleColor: "purple",
+    scaleMax: null,
+    showUnmatched: true,
     thresholds: [],
     thresholdMode: "percent",
     xTitle: "",
@@ -455,6 +474,9 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     bins: count(o.bins, 100),
     sizeField: field(o.sizeField),
     regions: normalizeRegions(o.regions),
+    scaleColor: oneOf<ScaleColor>(values(SCALE_COLORS), o.scaleColor, d.scaleColor),
+    showUnmatched: flag(o.showUnmatched, d.showUnmatched),
+    scaleMax: (finite(o.scaleMax) ?? 0) > 0 ? finite(o.scaleMax) : null,
     thresholds: Array.isArray(o.thresholds)
       ? o.thresholds.flatMap((t) => {
           const r = record(t);

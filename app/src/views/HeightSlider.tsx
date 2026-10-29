@@ -1,10 +1,11 @@
-import { Select, SelectItem, Slider } from "@carbon/react";
+import { Select, SelectItem } from "@carbon/react";
+import { SettledSlider } from "./SettledSlider";
 import { ASPECT_RATIOS, BLOCK_HEIGHT, type AspectRatio } from "../domain/views";
 
 /** A block's Height setting (chart, map, component): the most it takes, in rem (domain/views.ts). */
 export function HeightSlider({ id, value, disabled, onChange }: { id: string; value: number; disabled?: boolean; onChange(height: number): void }) {
   return (
-    <Slider
+    <SettledSlider
       id={id}
       labelText="Height"
       min={BLOCK_HEIGHT.min}
@@ -14,9 +15,14 @@ export function HeightSlider({ id, value, disabled, onChange }: { id: string; va
       disabled={disabled}
       formatLabel={(v) => `${v}rem`}
       hideTextInput
-      onChange={({ value }) => onChange(value)}
+      onChange={onChange}
     />
   );
+}
+
+/** Under Height and Aspect ratio while the block is in a row side by side (they are set aside there). */
+export function InRowNote() {
+  return <p className="helper">In a row of blocks side by side it fills the row's height (Row height, above).</p>;
 }
 
 /** A block's Aspect ratio beside its Height: it takes the less of the two (blockHeightCss). */

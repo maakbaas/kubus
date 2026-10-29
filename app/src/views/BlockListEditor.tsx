@@ -1,5 +1,5 @@
 import { FormGroup, IconButton } from "@carbon/react";
-import { Tag, TagNone, TrashCan } from "@carbon/icons-react";
+import { Copy, Tag, TagNone, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import type { ViewBlock } from "../domain/views";
 import { moveBlock, useReorder } from "../ui/useReorder";
@@ -32,6 +32,7 @@ export function BlockListEditor({
   onRemove,
   onAdd,
   onHeader,
+  onDuplicate,
 }: {
   blocks: ViewBlock[];
   keepOne?: boolean;
@@ -42,6 +43,8 @@ export function BlockListEditor({
   onHeader(id: string, shown: boolean): void;
   onRemove(ids: string[], asked: boolean): void;
   onAdd(spec: NewBlockSpec): void;
+  /** A copy of a block, with all its settings, below it (Duplicate block). */
+  onDuplicate?(id: string): void;
 }) {
   const name = useBlockName();
   const reorder = useReorder({
@@ -72,6 +75,11 @@ export function BlockListEditor({
               >
                 {b.hideHeader ? <TagNone /> : <Tag />}
               </IconButton>
+              {onDuplicate && (
+                <IconButton autoAlign kind="ghost" size="sm" label="Duplicate block" onClick={() => onDuplicate(b.id)}>
+                  <Copy />
+                </IconButton>
+              )}
               {(!keepOne || blocks.length > 1) && (
                 <IconButton autoAlign kind="ghost" size="sm" label="Remove block" onClick={() => onRemove([b.id], false)}>
                   <TrashCan />

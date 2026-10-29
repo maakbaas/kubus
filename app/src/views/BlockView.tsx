@@ -1,5 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Button, Checkbox, Dropdown, InlineNotification, MultiSelect, NumberInput, TextInput } from "@carbon/react";
+import { useEffect, useId, useMemo, useRef, useState, type DragEvent } from "react";
+import { Button, Checkbox, Dropdown, InlineNotification, MultiSelect, NumberInput, Select, SelectItem, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { groupsInApp, isReadOnly } from "../domain/sources";
@@ -30,6 +30,8 @@ import { useBlockName } from "./BlockListEditor";
 import { useShownOnce } from "../ui/useShownOnce";
 import { MergeFields } from "./MergeFields";
 import { dashboardFiltersFor } from "../domain/dashboards";
+import { ROW_HEIGHT } from "../domain/blockRows";
+import type { RowControls } from "./BlockRows";
 
 // One block: a collection's items shown one way (its block type), with its own sort, grouping,
 // and fields, and the view's filter unless it has its own. Collection views, item pages and
@@ -97,10 +99,12 @@ interface MenusProps {
   onRemove?(): void;
   onError?(message: string): void;
   onOpenChange?(open: boolean): void;
+  /** Its place in a row (Block settings: beside the block above, the row's max height); absent where blocks have no rows. */
+  row?: RowControls;
 }
 
 /** A block's menus: Filter, Sort and group, Fields (each where its block type uses it), and its type's settings. */
-export function BlockMenus({ collection, home, block, refs, result, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange }: MenusProps) {
+export function BlockMenus({ collection, home, block, refs, result, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange, row }: MenusProps) {
   const uid = useId();
   const { components, collections } = useStore();
   // The virtual collections (Backlinks) are listed only here, among the page's block collections.
@@ -309,7 +313,8 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
             onBlur={(e) => e.target.value.trim() !== block.title && onSet({ title: e.target.value.trim() })}
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           />
-          {type.OptionsEditor && <type.OptionsEditor collection={collection} options={block.options} place={place} pageCollectionId={page?.id} result={result} refs={refs} onChange={(options) => onSet({ options })} />}
+          {row && <RowSettings id={`${uid}-row`} row={row} />}
+          {type.OptionsEditor && <type.OptionsEditor collection={collection} options={block.options} place={place} pageCollectionId={page?.id} result={result} refs={refs} inRow={row?.inRow} onChange={(options) => onSet({ options })} />}
           {/* Offered while the text can be one (not empty, nothing a static component can't read). */}
           {markdownLocal && markdownLocal.code.trim() && !placeProblem(markdownLocal, "static") && (
             <Button kind="tertiary" size="sm" renderIcon={Save} onClick={() => setPromoting(true)}>
@@ -362,9 +367,15 @@ interface Props {
   onRemove?(): void;
   onError(message: string): void;
   onOpenChange?(open: boolean): void;
+  /** Collapsed with its row instead of on its own (a dashboard's blocks: a row collapses as one). */
+  collapse?: { collapsed: boolean; onToggle(): void };
+  /** Its header's name drags it to another place on the page (views/BlockRows.tsx). */
+  onDragStart?(e: DragEvent): void;
+  /** Its place in a row, set in Block settings. */
+  row?: RowControls;
 }
 
-export function BlockView({ collection: home, data: given, block, viewFilters: givenFilters, search, place, page, editable, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange }: Props) {
+export function BlockView({ collection: home, data: given, block, viewFilters: givenFilters, search, place, page, editable, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange, collapse, onDragStart, row }: Props) {
   const { components, collections } = useStore();
   const { confirm, dialog } = useConfirm();
   // Several collections chosen (only on a dashboard): the block reads them as one (its columns merged by name), from the
@@ -438,8 +449,8 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   // (View settings; Page layout on item pages) goes with its menus; such a block
   // can't collapse.
   const headless = page ? !!headerHidden : !!block.hideHeader;
-  const collapsed = !headless && state.blocks.includes(block.id);
-  const toggleCollapsed = () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
+  const collapsed = !headless && (collapse ? collapse.collapsed : state.blocks.includes(block.id));
+  const toggleCollapsed = collapse ? collapse.onToggle : () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
   // Once shown, a block stays while its rows are read again (its collections changed): unmounted, it would close the
   // Block settings being used.
@@ -452,12 +463,13 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   // Not even its header until its items are in: a header alone would sit where the blocks above are about to push it away.
   if (!items && !error && !remote?.waiting && !remote?.stopped && !shownOnce.current) return null;
   return (
-    <section className="block" data-block-id={block.id}>
+    <section className={uses.fillsRow ? "block block--fills" : "block"} data-block-id={block.id}>
       <SectionHeader
         heading
         hidden={headless}
         collapsed={collapsed}
         onToggle={toggleCollapsed}
+        onDragStart={onDragStart}
         label={
           <span className="icon-label">
             <type.icon size={16} aria-hidden="true" />
@@ -479,74 +491,131 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
           onRemove={onRemove}
           onError={onError}
           onOpenChange={onOpenChange}
+          row={row}
         />
       </SectionHeader>
-      {!collapsed && showError && <InlineNotification kind="error" title="Error" subtitle={error} hideCloseButton />}
-      {/* A block whose collection is gone (or a merged column that lost a field) says so (the rest of it is shown). */}
-      {!collapsed && mergedRows && mergedRows.problems.length > 0 && (
-        <InlineNotification kind="warning" title="Collections problem" subtitle={mergedRows.problems.map((p) => p.message).join(" ")} hideCloseButton />
-      )}
-      {/* Nothing until everything is in (a fraction of a second): a placeholder table would only
-          flash, shaped unlike the real one. */}
-      {!collapsed && items && (
-        <type.View
-          collection={collection}
-          result={result}
-          fields={fields}
-          layout={block.layout}
-          options={block.options}
-          editable={editable && !isReadOnly(collection)}
-          onOptions={(options) => onSet({ options })}
-          refs={data.refs}
-          search={search}
-          actions={actions}
-          all={items}
-          page={page}
-          collapsedGroups={groups}
-          onGroupCollapse={(key, on) => block.groupBy && onCollapse(withGroupCollapsed(state, block.id, block.groupBy, key, on))}
-        />
-      )}
-      {/* A remote collection's rows come a page at a time, or (a chart, no Limit) all of them, which can be
-          stopped. One bar from the request on: empty until the first page brings the total (rows yet to come, not
-          none), then filling as the rows come in; it doesn't change shape when the total arrives. */}
-      {!collapsed && remote && (remote.waiting || remote.progress) && (
-        <div className="block-more">
-          <LoadingBar
-            label={remote.progress ? `Loading rows: ${remote.progress.loaded} of ${remote.progress.total}` : "Loading rows"}
-            value={remote.progress?.loaded}
-            max={remote.progress?.total}
-            onStop={remote.progress?.cancel ?? remote.stop}
-          />
-        </div>
-      )}
-      {!collapsed && remote?.stopped && (
-        <div className="block-more">
-          <Button kind="tertiary" size="sm" onClick={remote.resume}>
-            Load rows
-          </Button>
-        </div>
-      )}
-      {!collapsed && items && stepped && (
-        <div className="block-more">
-          <Button kind="tertiary" size="sm" onClick={() => setShown((n) => n + limit)}>
-            Show more
-          </Button>
-          <span className="helper">
-            {cut.groups.reduce((n, g) => n + g.items.length, 0)} of {local.groups.reduce((n, g) => n + g.items.length, 0)}
-          </span>
-        </div>
-      )}
-      {!collapsed && items && remote?.more && (
-        <div className="block-more">
-          <Button kind="tertiary" size="sm" disabled={remote.loadingMore} onClick={remote.more}>
-            {remote.everything ? "Load all rows" : "Show more"}
-          </Button>
-          <span className="helper">
-            {groupedHere ? `Groups of the rows loaded so far: ${items.length} of ${result.total}` : `${items.length} of ${result.total}`}
-          </span>
+      {/* Below its header (none while collapsed): in a row side by side as tall as the row, scrolling inside past it; its
+          content is measured there (views/BlockRows.tsx). */}
+      {!collapsed && (
+        <div className="block__body">
+          <div className="block__content">
+            {showError && <InlineNotification kind="error" title="Error" subtitle={error} hideCloseButton />}
+            {/* A block whose collection is gone (or a merged column that lost a field) says so (the rest of it is shown). */}
+            {mergedRows && mergedRows.problems.length > 0 && (
+              <InlineNotification kind="warning" title="Collections problem" subtitle={mergedRows.problems.map((p) => p.message).join(" ")} hideCloseButton />
+            )}
+            {/* Nothing until everything is in (a fraction of a second): a placeholder table would only
+                flash, shaped unlike the real one. */}
+            {items && (
+              <type.View
+                collection={collection}
+                result={result}
+                fields={fields}
+                layout={block.layout}
+                options={block.options}
+                editable={editable && !isReadOnly(collection)}
+                onOptions={(options) => onSet({ options })}
+                refs={data.refs}
+                search={search}
+                actions={actions}
+                all={items}
+                page={page}
+                collapsedGroups={groups}
+                onGroupCollapse={(key, on) => block.groupBy && onCollapse(withGroupCollapsed(state, block.id, block.groupBy, key, on))}
+              />
+            )}
+            {/* A remote collection's rows come a page at a time, or (a chart, no Limit) all of them, which can be
+                stopped. One bar from the request on: empty until the first page brings the total (rows yet to come, not
+                none), then filling as the rows come in; it doesn't change shape when the total arrives. */}
+            {remote && (remote.waiting || remote.progress) && (
+              <div className="block-more">
+                <LoadingBar
+                  label={remote.progress ? `Loading rows: ${remote.progress.loaded} of ${remote.progress.total}` : "Loading rows"}
+                  value={remote.progress?.loaded}
+                  max={remote.progress?.total}
+                  onStop={remote.progress?.cancel ?? remote.stop}
+                />
+              </div>
+            )}
+            {remote?.stopped && (
+              <div className="block-more">
+                <Button kind="tertiary" size="sm" onClick={remote.resume}>
+                  Load rows
+                </Button>
+              </div>
+            )}
+            {items && stepped && (
+              <div className="block-more">
+                <Button kind="tertiary" size="sm" onClick={() => setShown((n) => n + limit)}>
+                  Show more
+                </Button>
+                <span className="helper">
+                  {cut.groups.reduce((n, g) => n + g.items.length, 0)} of {local.groups.reduce((n, g) => n + g.items.length, 0)}
+                </span>
+              </div>
+            )}
+            {items && remote?.more && (
+              <div className="block-more">
+                <Button kind="tertiary" size="sm" disabled={remote.loadingMore} onClick={remote.more}>
+                  {remote.everything ? "Load all rows" : "Show more"}
+                </Button>
+                <span className="helper">
+                  {groupedHere ? `Groups of the rows loaded so far: ${items.length} of ${result.total}` : `${items.length} of ${result.total}`}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       )}
       {dialog}
     </section>
+  );
+}
+
+/**
+ * A block's place in its row (Block settings): beside the block above (in that block's row), and the row's height: as its
+ * tallest block, at most a max height, or as its shortest, at least a min height; what is taller scrolls inside (where the
+ * row's blocks stand side by side; stacked on a phone, never). Stored on the row's first block.
+ */
+function RowSettings({ id, row }: { id: string; row: RowControls }) {
+  return (
+    <>
+      {/* Only where it can be: a block right above it, with room in its row. */}
+      {(row.beside || row.canBeside) && (
+        <div className="view-options__checks">
+          <Checkbox id={`${id}-beside`} labelText="Beside the block above" checked={row.beside} onChange={(_, { checked }) => row.onBeside(checked)} />
+        </div>
+      )}
+      <Select
+        size="sm"
+        id={`${id}-fit`}
+        labelText="Row height"
+        helperText={row.fit === "shortest" ? "Taller blocks scroll inside." : "The others are as tall."}
+        value={row.fit}
+        onChange={(e) => row.onRowSettings({ fit: e.target.value as RowControls["fit"], height: row.height })}
+      >
+        <SelectItem value="tallest" text="As its tallest block" />
+        <SelectItem value="shortest" text="As its shortest block" />
+      </Select>
+      <NumberInput
+        size="sm"
+        key={`${row.fit}-${row.height ?? "none"}`}
+        id={`${id}-height`}
+        label={row.fit === "shortest" ? "Min height (rem)" : "Max height (rem)"}
+        helperText={`${row.fit === "shortest" ? "At least this tall" : "At most this tall: taller blocks scroll inside"}. Empty: none. Not where the blocks stack (a phone).`}
+        placeholder="none"
+        allowEmpty
+        hideSteppers
+        min={ROW_HEIGHT.min}
+        max={ROW_HEIGHT.max}
+        defaultValue={row.height ?? ""}
+        onBlur={(e) => {
+          const raw = e.target.value.trim();
+          const n = raw === "" ? undefined : Number(raw);
+          if ((n === undefined || Number.isFinite(n)) && n !== row.height) row.onRowSettings({ fit: row.fit, height: n });
+        }}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+      />
+    </>
   );
 }

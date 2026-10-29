@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { Accordion, AccordionItem, Button, Checkbox, IconButton, MultiSelect, NumberInput, Select, SelectItem, SelectItemGroup, Slider, TextInput } from "@carbon/react";
+import { Accordion, AccordionItem, Button, Checkbox, IconButton, MultiSelect, NumberInput, Select, SelectItem, SelectItemGroup, TextInput } from "@carbon/react";
 import type { Repository } from "../data";
 import { Add, ChartColumn, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
@@ -32,6 +32,7 @@ import {
   statOf,
   styleOf,
   drawsTimeline,
+  SCALE_COLORS,
   THRESHOLD_STATUSES,
   TRANSFORMS,
   type Aggregate,
@@ -41,6 +42,7 @@ import {
   type ChartX,
   type Compare,
   type DateStep,
+  type ScaleColor,
   type SeriesStyle,
   type ThresholdStatus,
   type Transform,
@@ -60,7 +62,8 @@ import { COUNTRY_MAPS, downloadRegionMap, loadRegionMap, type RegionMap } from "
 import { errorMessage } from "../ui/useConfirm";
 import { RegionsDialog } from "./RegionsDialog";
 import { StatView } from "./StatView";
-import { AspectSelect, HeightSlider } from "./HeightSlider";
+import { AspectSelect, HeightSlider, InRowNote } from "./HeightSlider";
+import { SettledSlider } from "./SettledSlider";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
 // A chart of the block's items (Carbon Charts). Its filter and sort pick the items (on an item
@@ -110,7 +113,7 @@ function ChartView({ collection, result, options, refs, actions, page }: BlockPr
   if (wrongPage) return <p className="helper chart-block__problem">“Of this item” charts the page's item: the block lists {collection.pluralName}, not the page's collection.</p>;
   if (regionMap.error) return <p className="helper chart-block__problem">{regionMap.error}</p>;
   // Values that are no region of the map, with their items' number: what to correct in the data.
-  const notOnMap = unmatched.length > 0 && <Unmatched unmatched={unmatched} />;
+  const notOnMap = options.showUnmatched && unmatched.length > 0 && <Unmatched unmatched={unmatched} />;
   if ("problem" in spec)
     return (
       <>
@@ -192,7 +195,7 @@ function kindHas(kind: ChartKind) {
     axes: xy || kind === "histogram" || kind === "boxplot" || kind === "scatter",
     legend: kind !== "gauge" && kind !== "stat",
     height: kind !== "meter" && kind !== "stat",
-    display: xy || kind === "pie" || kind === "gauge" || kind === "histogram" || kind === "stat",
+    display: xy || kind === "pie" || kind === "gauge" || kind === "histogram" || kind === "stat" || kind === "choropleth",
   };
 }
 
@@ -448,7 +451,7 @@ function RegionsSelect({ id, value, onChange }: { id: string; value: ChartRegion
   );
 }
 
-function ChartOptionsEditor({ collection, options, place, pageCollectionId, result, refs, onChange }: BlockOptionsProps<ChartOptions>) {
+function ChartOptionsEditor({ collection, options, place, pageCollectionId, result, refs, inRow, onChange }: BlockOptionsProps<ChartOptions>) {
   const uid = useId();
   const openings = usePanelOpenings();
   const [showRegions, setShowRegions] = useState(false);
@@ -481,7 +484,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
   const offerScope = place === "item" && (pageCollectionId === collection.id || o.scope === "page");
 
   // A setting that does nothing with the others as they are (downstream of one of them) isn't shown.
-  const check = (key: "points" | "compact" | "donut" | "fullCircle" | "horizontal" | "showLabel", label: string, shown = true) =>
+  const check = (key: "points" | "compact" | "donut" | "fullCircle" | "horizontal" | "showLabel" | "showUnmatched", label: string, shown = true) =>
     shown && <Checkbox id={`${uid}-${key}`} labelText={label} checked={o[key]} onChange={(_, { checked }) => set({ [key]: checked })} />;
   const aggregateSelect = (id: string, label: string, value: Aggregate, onAggregate: (a: Aggregate) => void, noCount = false, hideLabel = false) => (
     <Select size="sm" id={id} labelText={label} hideLabel={hideLabel} value={value} onChange={(e) => onAggregate(e.target.value as Aggregate)}>
@@ -687,11 +690,11 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
   // --- One value (the first series): parts, gauge, heatmap; radar's spokes
   const setFirst = (patch: Partial<ChartSeries>) => set({ series: o.series.length ? o.series.map((s, i) => (i === 0 ? { ...s, ...patch } : s)) : [{ ...first, ...patch }] });
   const fieldsParts = has.parts && o.parts === "fields";
-  // The value's name where it is shown: a heatmap's colour legend, a pie's donut middle (Donut, below, is never
+  // The value's name where it is shown: a heatmap's colour legend (not a choropleth's: Carbon has no title there), a pie's donut middle (Donut, below, is never
   // what takes it away: nothing above the pointer moves), one value's part, a word cloud's words
   // (number fields as parts are named by their aggregate; a gauge shows only its number).
   const labelShown =
-    o.chart === "heatmap" || o.chart === "choropleth" || o.chart === "stat" || (!fieldsParts && ((has.parts && o.parts === "one" && o.chart !== "treemap") || o.chart === "pie" || o.chart === "wordcloud"));
+    o.chart === "heatmap" || o.chart === "stat" || (!fieldsParts && ((has.parts && o.parts === "one" && o.chart !== "treemap") || o.chart === "pie" || o.chart === "wordcloud"));
   const valueSection = has.value && (
     <Section key="value" title="Value">
       {aggregateSelect(`${uid}-value`, "Value", first.value, (value) =>
@@ -784,6 +787,17 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
               <SelectItem value="gap" text="Leave a gap (the line breaks)" />
             </Select>
           )}
+        </>
+      )}
+      {o.chart === "choropleth" && (
+        <>
+          <Select size="sm" id={`${uid}-scale-color`} labelText="Colour" value={o.scaleColor} onChange={(e) => set({ scaleColor: e.target.value as ScaleColor })}>
+            {SCALE_COLORS.map((c) => (
+              <SelectItem key={c.value} value={c.value} text={c.text} />
+            ))}
+          </Select>
+          <NumberField id={`${uid}-scale-max`} label="Max" value={o.scaleMax} helper="Higher values get the darkest shade too" onChange={(scaleMax) => set({ scaleMax })} />
+          {check("showUnmatched", "Show values not on the map")}
         </>
       )}
       {o.chart === "pie" && check("donut", "Donut (the total in the middle)")}
@@ -928,12 +942,13 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
       {/* A compact chart has no legend. */}
       {has.legend && !compact && (
         <>
-          <Select size="sm" id={`${uid}-legend`} labelText="Legend" value={o.legend} onChange={(e) => set({ legend: e.target.value as ChartOptions["legend"] })}>
-            <SelectItem value="auto" text="With more than one series or part" />
+          {/* A choropleth's legend is its colour scale, below the map (Carbon's, wherever Position says): shown or hidden. */}
+          <Select size="sm" id={`${uid}-legend`} labelText="Legend" value={o.chart === "choropleth" && o.legend === "auto" ? "show" : o.legend} onChange={(e) => set({ legend: e.target.value as ChartOptions["legend"] })}>
+            {o.chart !== "choropleth" && <SelectItem value="auto" text="With more than one series or part" />}
             <SelectItem value="show" text="Shown" />
             <SelectItem value="hide" text="Hidden" />
           </Select>
-          {(o.legend === "show" || (o.legend === "auto" && maySeveral)) && (
+          {o.chart !== "choropleth" && (o.legend === "show" || (o.legend === "auto" && maySeveral)) && (
             <Select size="sm" id={`${uid}-legend-position`} labelText="Legend position" value={o.legendPosition} onChange={(e) => set({ legendPosition: e.target.value as ChartOptions["legendPosition"] })}>
               <SelectItem value="bottom" text="Bottom" />
               <SelectItem value="top" text="Top" />
@@ -951,12 +966,13 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
     <Section key="size" title="Size">
       {has.height && (
         <>
-          {!compact && <HeightSlider id={`${uid}-height`} value={o.height} onChange={(height) => set({ height })} />}
-          {!compact && <AspectSelect id={`${uid}-aspect`} value={o.aspect} onChange={(aspect) => set({ aspect })} />}
+          {!compact && <HeightSlider id={`${uid}-height`} value={o.height} disabled={inRow} onChange={(height) => set({ height })} />}
+          {!compact && <AspectSelect id={`${uid}-aspect`} value={o.aspect} disabled={inRow} onChange={(aspect) => set({ aspect })} />}
+          {!compact && inRow && <InRowNote />}
           {compact && <p className="helper chart-options__note">A compact chart has its own, low height.</p>}
         </>
       )}
-      <Slider
+      <SettledSlider
         id={`${uid}-width`}
         labelText="Width"
         min={CHART_WIDTH.min}
@@ -965,7 +981,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
         value={widthToStop(o.width)}
         formatLabel={(v) => widthLabel(widthFromStop(v))}
         hideTextInput
-        onChange={({ value }) => set({ width: widthFromStop(value) })}
+        onChange={(value) => set({ width: widthFromStop(value) })}
       />
     </Section>
   );
@@ -1009,7 +1025,8 @@ export const chartBlock = defineBlockType<ChartOptions>({
   defaultOptions: (collection: Collection) => defaultChartOptions(collection),
   normalizeOptions: (raw, collection) => normalizeChartOptions(raw, collection),
   // Its X axis is its own setting (not the block's grouping); "This item" charts the page's item, not a query's.
-  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null }),
+  // Drawn at its Height (a compact chart, a meter or a stat at their own): such a chart fills a row's height.
+  uses: (options) => ({ query: options.scope !== "page", all: true, groups: false, fields: null, fillsRow: kindHas(options.chart).height && !(isXY(options.chart) && options.compact) }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,
 });

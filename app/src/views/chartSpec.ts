@@ -32,12 +32,14 @@ import {
   type ChartAxis,
   type ChartInput,
   type ChartOptions,
+  type ScaleColor,
   type DrawnSeries,
   type SeriesStyle,
   type ThresholdStatus,
 } from "../domain/chart";
 import { pickableFields, type FieldDef } from "../domain/model";
 import { WORLD_MAP, type Region } from "../domain/regions";
+import * as carbonColors from "@carbon/colors";
 import { blockHeightCss } from "../domain/views";
 
 /** The Carbon Charts components a chart block uses (named as @carbon/charts-react exports them). */
@@ -642,18 +644,46 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       const { values } = regionValues(input, options, regions);
       if (values.length === 0) return { problem: "No value of the field is a region of this map." };
       const map = options.regions.file ?? options.regions.map;
+      // A Max (when a value is above it): those values drawn as it, in the darkest shade (Carbon fits its scale and
+      // legend to the values), the tooltip their own.
+      const max = options.scaleMax !== null && options.scaleMax > 0 && values.some((v) => v.value > options.scaleMax!) ? options.scaleMax : null;
+      const real = new Map(values.map((v) => [v.region.key, v.value]));
+      const tip = tooltip(options, input);
       return {
         chart: "ChoroplethChart",
         map,
-        data: values.map((v) => ({ name: v.region.key, value: v.value })),
+        data: values.map((v) => ({ name: v.region.key, value: max === null ? v.value : Math.min(v.value, max) })),
         options: base(options, theme, true, {
           // The world as an equal-area map; a country or Europe as the familiar Mercator.
           thematic: { projection: options.regions.map === WORLD_MAP ? "geoNaturalEarth1" : "geoMercator" },
-          choropleth: { colorLegend: { title: seriesLabel(first, collection), type: "linear" } },
-          tooltip: tooltip(options, input),
+          // No legend title: Carbon's colour legend reads one from a heatmap's options only (so no Label is offered).
+          choropleth: { colorLegend: { type: "linear" } },
+          color: { gradient: { colors: scaleShades(options.scaleColor, theme) } },
+          // The legend's numbers (Carbon formats them with its locale's `number`): with the decimals and unit.
+          locale: { number: (n: number) => legendNumber(n, options, input.locale) },
+          tooltip: { valueFormatter: (v: unknown, label: string) => tip.valueFormatter(real.get(label) ?? v, label) },
         }),
-        format: formatOf(options, { map }),
+        // With a Max the values its tooltip shows (data has them capped).
+        format: formatOf(options, { map, ...(max !== null && { max, values: [...real] }) }),
       };
     }
   }
+}
+
+/**
+ * A choropleth's shades of its hue, lowest value first: Carbon's own scale (white, 10 … 100) without white, so a region
+ * with a little is its palest shade (10) rather than white; on a dark theme the other way round, from 100 to 20 (not the
+ * near-white 10).
+ */
+export function scaleShades(color: ScaleColor, theme: string): string[] {
+  const grades = theme === "g100" ? [100, 90, 80, 70, 60, 50, 40, 30, 20] : [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  const hue = carbonColors[color] as Record<number, string>;
+  return grades.map((g) => hue[g]);
+}
+
+/** A choropleth legend's number: as Carbon shows it (with the locale's separators) unless decimals are set, then the unit. */
+function legendNumber(n: number, options: ChartOptions, locale: string | undefined): string {
+  const text = options.decimals === null ? n.toLocaleString(locale) : n.toFixed(options.decimals);
+  const unit = options.unit.trim();
+  return unit ? `${text} ${unit}` : text;
 }

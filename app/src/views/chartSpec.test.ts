@@ -3,7 +3,7 @@ import { CHART_KINDS, defaultChartOptions, newSeries, type ChartInput, type Char
 import { blankField, type Collection, type Item } from "../domain/model";
 import type { QueryContext } from "../domain/query";
 import { regionsOf } from "../domain/regions";
-import { chartSpec, type ChartSpec } from "./chartSpec";
+import { chartSpec, scaleShades, type ChartSpec } from "./chartSpec";
 
 const collection: Collection = {
   id: "books", name: "Book", pluralName: "Books", icon: null, description: "", itemViews: [], spaceIds: null, createdAt: "", updatedAt: "",
@@ -59,7 +59,23 @@ describe("chartSpec", () => {
     expect(s.data).toEqual([{ name: "Novel", value: 500 }, { name: "Poetry", value: 80 }]);
     expect(s.map).toBe("worldLow");
     expect(s.format).toMatchObject({ map: "worldLow" });
-    expect(s.options).toMatchObject({ thematic: { projection: "geoNaturalEarth1" }, choropleth: { colorLegend: { title: "Sum of Pages" } } });
+    expect(s.options).toMatchObject({ thematic: { projection: "geoNaturalEarth1" }, choropleth: { colorLegend: { type: "linear" } } });
+    // Its shades start light, not white (dark from 90, not near-black), in the hue chosen.
+    expect(s.options).toMatchObject({ color: { gradient: { colors: expect.arrayContaining(["#e8daff", "#1c0f30"]) } } });
+    expect((s.options.color as { gradient: { colors: string[] } }).gradient.colors).not.toContain("#ffffff");
+    const dark = chartSpec(input(), { ...o, scaleColor: "teal" }, "g100", undefined, regions) as ChartSpec;
+    expect((dark.options.color as { gradient: { colors: string[] } }).gradient.colors).toEqual(scaleShades("teal", "g100"));
+    expect(scaleShades("teal", "g100")[0]).toBe("#081a1c");
+    // A Max: values above it drawn as it, the tooltip the region's own value; the legend with the unit and decimals.
+    const capped = chartSpec(input(), { ...o, scaleMax: 100 }, "white", undefined, regions) as ChartSpec;
+    expect(capped.data).toEqual([{ name: "Novel", value: 100 }, { name: "Poetry", value: 80 }]);
+    const opts = capped.options as { locale: { number(n: number): string }; tooltip: { valueFormatter(v: unknown, label: string): string } };
+    expect([opts.locale.number(50), opts.locale.number(100)]).toEqual(["50", "100"]);
+    const kg = (chartSpec(input(), { ...o, scaleMax: 100, unit: "kg", decimals: 1 }, "white", undefined, regions) as ChartSpec).options as typeof opts;
+    expect(kg.locale.number(100)).toBe("100.0 kg");
+    expect(opts.tooltip.valueFormatter(100, "Novel")).toBe("500");
+    // A Max above every value changes nothing.
+    expect((chartSpec(input(), { ...o, scaleMax: 1000 }, "white", undefined, regions) as ChartSpec).data).toEqual(s.data);
     const country = chartSpec(input(), { ...o, regions: { map: "netherlandsLow", file: `files/${"a".repeat(64)}` } }, "white", undefined, regions) as ChartSpec;
     expect(country.map).toBe(`files/${"a".repeat(64)}`);
     expect(country.options).toMatchObject({ thematic: { projection: "geoMercator" } });

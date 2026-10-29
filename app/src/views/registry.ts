@@ -83,6 +83,8 @@ export interface BlockUses {
   groups: boolean;
   /** Fields can be chosen, with these of the layout's settings; null = no field choice. */
   fields: { labels: boolean; hideEmpty: boolean } | null;
+  /** It is drawn in a box of its own (Height and Aspect ratio): in a row of blocks side by side it fills the row's height instead. */
+  fillsRow?: boolean;
   /** It needs every item (a chart charts them all): its Limit is "all" unless set, a remote collection's rows all loaded. */
   all?: boolean;
 }
@@ -99,6 +101,8 @@ export interface BlockOptionsProps<O> {
   /** The block's items as it shows them (a choropleth's settings list which of them each region of its map has), and their references' labels. */
   result?: QueryResult;
   refs?: RefOptions;
+  /** It stands in a row of blocks side by side: its Height and Aspect ratio are the row's (Block settings: Row height). */
+  inRow?: boolean;
   onChange(options: O): void;
 }
 

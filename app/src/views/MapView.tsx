@@ -13,7 +13,7 @@ import { openModeOf } from "../workspace/Workspace";
 import { itemLinkProps } from "./cells";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { useBuffered } from "../ui/useBuffered";
-import { AspectSelect, HeightSlider } from "./HeightSlider";
+import { AspectSelect, HeightSlider, InRowNote } from "./HeightSlider";
 import { useMapStyle } from "../app/mapStyle";
 import { loadMapLibre, styleUrl } from "./mapLibre";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
@@ -497,7 +497,7 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
   );
 }
 
-function MapOptionsEditor({ collection, options, onChange }: BlockOptionsProps<MapOptions>) {
+function MapOptionsEditor({ collection, options, inRow, onChange }: BlockOptionsProps<MapOptions>) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
   // Stored after a pause, not at every step of a drag: each store is a write, a sync change and a redraw (a map's
@@ -536,8 +536,9 @@ function MapOptionsEditor({ collection, options, onChange }: BlockOptionsProps<M
             ))}
         </Select>
       )}
-      <HeightSlider id={`${uid}-map-height`} value={height} onChange={setHeight} />
-      <AspectSelect id={`${uid}-map-aspect`} value={options.aspect} onChange={(aspect) => onChange({ ...options, aspect })} />
+      <HeightSlider id={`${uid}-map-height`} value={height} disabled={inRow} onChange={setHeight} />
+      <AspectSelect id={`${uid}-map-aspect`} value={options.aspect} disabled={inRow} onChange={(aspect) => onChange({ ...options, aspect })} />
+      {inRow && <InRowNote />}
       <Checkbox
         id={`${uid}-map-route`}
         labelText="Show as route"
@@ -565,7 +566,7 @@ export const mapView = defineBlockType<MapOptions>({
   label: "Map",
   icon: Earth,
   defaultOptions: (collection) => ({ ...guessLocation(collection), height: BLOCK_HEIGHT.initial, aspect: DEFAULT_ASPECT, route: false }),
-  uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true } }),
+  uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true }, fillsRow: true }),
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<MapOptions>;
     const fields = pickableFields(collection);

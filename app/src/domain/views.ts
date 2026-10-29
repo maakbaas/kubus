@@ -5,6 +5,7 @@
 // (fieldLayout.ts): there a block may list another collection, filtered by the page's item.
 // The "current" view state is ephemeral; it becomes a CollectionView only when the user saves it.
 
+import { normalizeRowHeight } from "./blockRows";
 import { mergeCollections, type MergeProblem, type ColumnMerge } from "./mergedCollection";
 import { parseFieldLayout, type FieldLayout } from "./fieldLayout";
 import { newId, pickableFields, type Collection } from "./model";
@@ -50,6 +51,16 @@ export interface ViewBlock {
   hideHeader?: true;
   /** Items shown at first and added by each "Show more" (Filter → Limit); 0 = all. Absent = its type's default (`blockLimit`). */
   limit?: number;
+  /** Shown beside the block before it, in its row (domain/blockRows.ts), where the page is wide enough. Absent = a row of its own. */
+  beside?: true;
+  /** Its share of its row's width, in percent (set by dragging the divider). Absent = an equal share. */
+  width?: number;
+  /**
+   * The first block of a row: how tall its blocks side by side are, as its tallest block (absent) or its shortest
+   * ("shortest"), at most (tallest) or at least (shortest) `rowHeight` rem (absent: no limit). What is taller scrolls inside.
+   */
+  rowFit?: "shortest";
+  rowHeight?: number;
 }
 
 /** Items a block shows at first and adds by each "Show more" unless its Limit says otherwise. */
@@ -236,6 +247,12 @@ export function parseBlock(raw: unknown): ViewBlock | null {
   if (o.sortChosen === true) block.sortChosen = true;
   if (o.hideHeader === true) block.hideHeader = true;
   if (typeof o.limit === "number" && Number.isInteger(o.limit) && o.limit >= 0) block.limit = o.limit;
+  if (o.beside === true) block.beside = true;
+  if (typeof o.width === "number" && Number.isFinite(o.width) && o.width > 0 && o.width <= 100) block.width = Math.round(o.width);
+  if (o.rowFit === "shortest") block.rowFit = "shortest";
+  // `rowMaxHeight`: its name before the row's fit (a max height, as `rowHeight` of the default fit).
+  const rowHeight = typeof o.rowHeight === "number" ? o.rowHeight : (o as { rowMaxHeight?: unknown }).rowMaxHeight;
+  if (typeof rowHeight === "number" && Number.isFinite(rowHeight)) block.rowHeight = normalizeRowHeight(rowHeight);
   if (Array.isArray(o.collectionIds) && o.collectionIds.length > 1 && o.collectionIds.every((id) => typeof id === "string")) block.collectionIds = o.collectionIds as string[];
   const merges = array<unknown>(o.merges).filter(
     (m): m is ColumnMerge => !!m && typeof m === "object" && typeof (m as ColumnMerge).id === "string" && typeof (m as ColumnMerge).name === "string" && Array.isArray((m as ColumnMerge).fields) && (m as ColumnMerge).fields.every((f) => typeof f === "string"),
@@ -287,12 +304,13 @@ export const normalizeAspect = (raw: unknown): AspectRatio => (ASPECT_RATIOS.inc
 
 /**
  * A block's height as CSS: its Height, or less where its width at its aspect ratio is less. The width is its
- * container's (`cqi`): the box it is drawn in has `container-type: inline-size` (styles.css).
+ * container's (`cqi`): the box it is drawn in has `container-type: inline-size` (styles.css). In a row of blocks side by
+ * side it fills the row instead (`--row-fill-box`, set there: styles.css `.block-row--fit`; domain/blockRows.ts).
  */
 export function blockHeightCss(height: number, aspect: AspectRatio): string {
-  if (aspect === "none") return `${height}rem`;
+  if (aspect === "none") return `var(--row-fill-box, ${height}rem)`;
   const [w, h] = aspect.split(":").map(Number);
-  return `min(${height}rem, calc(100cqi * ${h} / ${w}))`;
+  return `var(--row-fill-box, min(${height}rem, calc(100cqi * ${h} / ${w})))`;
 }
 
 /** A stored block height made valid: rem within BLOCK_HEIGHT (an old size name as its rem). */

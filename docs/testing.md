@@ -114,6 +114,6 @@ Notes:
   (09), popovers in use (10), keyboard and dialogs (11), dark layers (14) and the on-screen keyboard (20), each a CI shard
   of its own (`GUI_SWEEPS` in `tests/run.mjs`). New UI is covered by them without new tests. A deliberate exception to
   a rule is exempted in the rule, with its reason.
-- **Flows**: one or two main-path tests per area (04–06, 12–18, 22–34, 43–45, 61), each step followed by what was
+- **Flows**: one or two main-path tests per area (04–06, 12–18, 22–34, 43–45, 61, 62), each step followed by what was
   stored and shown, all in one CI shard (about 10 minutes). Only these know how a feature is used, so they are the ones
   a UI change may break.

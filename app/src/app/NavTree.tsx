@@ -32,11 +32,10 @@ function collectionIcon(name: string | null): ElementType {
 }
 
 /**
- * The side nav as a Carbon tree: Bookmarks (the space's bookmarked views, items and dashboard tabs), Dashboards (its
- * page, with the space's dashboards below it), Collections
+ * The side nav as a Carbon tree: Bookmarks (the space's bookmarked views, items and dashboard tabs), Collections
  * (its page, with the space's native collections below it), Remotes (while the server has a remote
- * connection or remote collections exist: its page, with the space's remote collections below it)
- * and Components. Choosing a node opens its page in the active tab
+ * connection or remote collections exist: its page, with the space's remote collections below it),
+ * Dashboards (its page, with the space's dashboards below it) and Components. Choosing a node opens its page in the active tab
  * (through `navigate`: Carbon's tree stops clicks, so plain links wouldn't reach the workspace).
  * The selected node follows the active tab's page (a bookmark of it wins). Middle click opens a
  * node's page in a new tab.
@@ -133,19 +132,6 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
             ))}
           </TreeNode>
         <TreeNode autoAlign
-          id="dashboards"
-          label="Dashboards"
-          onSelect={() => navigate("/dashboards")}
-          renderIcon={DashboardIcon}
-          isExpanded={isOpen("dashboards")}
-          onToggle={onToggle("dashboards")}
-        >
-          {spaceDashboards.map((d) => (
-            <TreeNode autoAlign key={d.id} id={`dashboard-${d.id}`} label={d.name} onSelect={() => navigate(`/dashboards/${d.id}`)} renderIcon={collectionIcon(dashboardIcon(d))} />
-          ))}
-        </TreeNode>
-
-        <TreeNode autoAlign
           id="collections"
           label="Collections"
           onSelect={() => navigate("/collections")}
@@ -167,6 +153,18 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
             {spaceCollections.filter(isRemote).map(collectionNode)}
           </TreeNode>
         )}
+        <TreeNode autoAlign
+          id="dashboards"
+          label="Dashboards"
+          onSelect={() => navigate("/dashboards")}
+          renderIcon={DashboardIcon}
+          isExpanded={isOpen("dashboards")}
+          onToggle={onToggle("dashboards")}
+        >
+          {spaceDashboards.map((d) => (
+            <TreeNode autoAlign key={d.id} id={`dashboard-${d.id}`} label={d.name} onSelect={() => navigate(`/dashboards/${d.id}`)} renderIcon={collectionIcon(dashboardIcon(d))} />
+          ))}
+        </TreeNode>
         <TreeNode autoAlign id="components" label="Components" onSelect={() => navigate("/components")} renderIcon={ComponentIcon} />
       </TreeView>
     </div>

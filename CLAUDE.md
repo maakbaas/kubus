@@ -36,7 +36,7 @@ is what this split avoids. Keep them current when behaviour changes.
   listener plugin.
 - **Local first, one codebase**: all logic and storage in the web frontend (SQLite WASM in a worker,
   OPFS). Every asset is bundled, nothing from a CDN (IBM Plex: `app/src/fonts.css`, Carbon's CDN
-  `@font-face` rules are dropped in `vite.config.ts`): the app looks the same offline. The exceptions: a Map block's map (style, tiles, label fonts) comes from OpenFreeMap (MapLibre itself and its worker are bundled); a choropleth's map of a country is downloaded once from jsDelivr when chosen and then stored (`views/regionMaps.ts`; the world's and Europe's are bundled). Tauri is only a window (only plugin: `opener`); native capabilities go behind an interface
+  `@font-face` rules are dropped in `vite.config.ts`): the app looks the same offline. The exceptions: a Map block's map (style, tiles, label fonts) comes from OpenFreeMap (MapLibre itself and its worker are bundled); a choropleth's map of a country is downloaded once from unpkg when chosen and then stored (`views/regionMaps.ts`; the world's and Europe's are bundled). Tauri is only a window (only plugin: `opener`); native capabilities go behind an interface
   in `app/src/platform/` with a web fallback.
 - **Every schema change is a migration; no data is ever lost** (`docs/migrations.md`, read it first).
   `app/src/data/schema.sql` is the newest schema; with it goes the next migration in
