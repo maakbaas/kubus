@@ -595,6 +595,15 @@ body {
 .cds--popover--drop-shadow > .cds--popover > .cds--popover-content {
   box-shadow: 0 0.125rem 0.125rem rgb(0 0 0 / 0.2);
 }
+/* A popover being typed in stays shown while its button is out of sight. autoAlign (Floating UI's
+   `hide`) sets `visibility: hidden` on a popover whose button leaves the visual viewport, and on
+   iOS that is what the keyboard does to it: it covers a button near the bottom, or iOS pans the
+   visual viewport down to show a field low in the panel and the button (higher up) goes off its
+   top. A hidden field loses focus, and iOS closed the keyboard the moment it came up. Kept for a
+   button scrolled away while nothing in the panel is being typed in (keyboardInset.ts TEXT_FIELD). */
+.cds--popover-content:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=color]):not([type=image]):not([type=hidden]), textarea, select, [contenteditable]:not([contenteditable=false])):focus) {
+  visibility: visible !important;
+}
 .icon-picker.cds--popover-container {
   display: block;
 }

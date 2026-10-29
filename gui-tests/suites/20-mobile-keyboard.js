@@ -212,3 +212,234 @@ for (const vp of ["phone", "phone-small"]) {
     }, { viewport: vp, smoke: vp === "phone" && !style });
   }
 }
+
+// The whole iOS sequence for a field near the bottom of the screen in a popover. iOS doesn't shrink
+// the window for its keyboard: on focus it pans the visual viewport down (offsetTop, pageTop; the
+// pan is reported before the smaller height) by as much as the field needs to be above the
+// keyboard, and the fixed layers, the popover with them, move up off its top. Whatever then hides
+// the field (visibility on an ancestor: Carbon's autoAlign hides a popover whose button is out of
+// the visual viewport), blurs it, re-creates it, or scrolls the window (undoing the pan) makes iOS
+// dismiss the keyboard at once. Emulated here: the visual viewport's offsets and height are set and
+// their events fired in iOS's order; window.scrollTo / scroll / scrollBy and the root's scrollTop
+// are recorded and, as on iOS, end the pan. After it: the same field node is connected, focused
+// and visible, never blurred, the popover open, the field within the visual viewport, and nothing
+// scrolled the window. Then "Done": the field blurs, the keyboard goes, the pan is left, and the
+// window is put back at 0,0 (keyboardInset.ts) so touch lands where things are drawn.
+
+/** Installs the emulated iOS viewport and the probes on the focused field; returns the pan iOS would use. */
+async function iosFocus(t, field, fraction = 0.45) {
+  await field.tap();
+  await t.settle(100);
+  return t.page.evaluate((fraction) => {
+    const vv = window.visualViewport;
+    const inner = window.innerHeight;
+    const S = { height: inner, offsetTop: 0, scrollY: 0 };
+    const node = document.activeElement;
+    const probe = { node, S, scrolls: [], blurs: 0, focusouts: 0, inner, keyboard: Math.round(inner * fraction) };
+    window.__ios = probe;
+    Object.defineProperty(vv, "height", { configurable: true, get: () => S.height });
+    Object.defineProperty(vv, "offsetTop", { configurable: true, get: () => S.offsetTop });
+    Object.defineProperty(vv, "pageTop", { configurable: true, get: () => S.offsetTop + S.scrollY });
+    Object.defineProperty(window, "scrollY", { configurable: true, get: () => S.scrollY });
+    Object.defineProperty(window, "pageYOffset", { configurable: true, get: () => S.scrollY });
+    // A programmatic scroll of the window ends iOS's reveal-pan (and the keyboard with it).
+    const unpan = () => {
+      S.offsetTop = 0;
+      S.scrollY = 0;
+      queueMicrotask(() => vv.dispatchEvent(new Event("scroll")));
+    };
+    for (const name of ["scrollTo", "scroll", "scrollBy"]) {
+      window[name] = (...a) => {
+        probe.scrolls.push(`${name}(${a.map((x) => JSON.stringify(x)).join(", ")})`);
+        unpan();
+      };
+    }
+    for (const el of [document.documentElement, document.body]) {
+      Object.defineProperty(el, "scrollTop", { configurable: true, get: () => 0, set: (v) => { probe.scrolls.push(`${el.tagName.toLowerCase()}.scrollTop = ${v}`); unpan(); } });
+    }
+    if (node) {
+      node.addEventListener("blur", () => probe.blurs++);
+      node.addEventListener("focusout", () => probe.focusouts++);
+    }
+    const r = node ? node.getBoundingClientRect() : { bottom: 0 };
+    // iOS reveals the field just above the keyboard, panning at most the keyboard's height.
+    return { tag: node ? node.tagName.toLowerCase() : "none", number: !!node && node.type === "number", pan: Math.max(0, Math.min(probe.keyboard, Math.ceil(r.bottom + 12 - (inner - probe.keyboard)))), fieldBottom: r.bottom, inner };
+  }, fraction);
+}
+
+/** One iOS step: the given viewport values, then its events, then two frames. */
+async function iosStep(t, values, events) {
+  await t.page.evaluate(async ({ values, events }) => {
+    Object.assign(window.__ios.S, values);
+    for (const e of events) (e === "window-scroll" ? window : window.visualViewport).dispatchEvent(new Event(e === "window-scroll" ? "scroll" : e));
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  }, { values, events });
+}
+
+/** What the probes saw, and the field and the popover now. */
+async function iosState(t, contentSel) {
+  return t.page.evaluate((contentSel) => {
+    const p = window.__ios;
+    const node = p.node;
+    const content = node && node.closest(contentSel);
+    const vv = window.visualViewport;
+    const r = node ? node.getBoundingClientRect() : null;
+    return {
+      connected: !!node && node.isConnected,
+      focused: !!node && document.activeElement === node,
+      focusTag: document.activeElement ? document.activeElement.tagName.toLowerCase() : "none",
+      open: !!content && !!content.closest(".cds--popover--open"),
+      contentVisibility: content ? getComputedStyle(content).visibility : "none",
+      visible: !!node && node.checkVisibility({ visibilityProperty: true, opacityProperty: true }),
+      field: r && { top: Math.round(r.top), bottom: Math.round(r.bottom) },
+      area: { top: vv.offsetTop, bottom: vv.offsetTop + vv.height },
+      scrolls: [...p.scrolls], blurs: p.blurs, focusouts: p.focusouts,
+      inset: document.documentElement.style.getPropertyValue("--keyboard-inset"),
+    };
+  }, contentSel);
+}
+
+/** Puts the iOS viewport back as it was (the probes stay, unused). */
+async function iosReset(t) {
+  await t.page.evaluate(() => {
+    for (const k of ["height", "offsetTop", "pageTop"]) delete window.visualViewport[k];
+    delete window.scrollY;
+    delete window.pageYOffset;
+    for (const name of ["scrollTo", "scroll", "scrollBy"]) delete window[name];
+    for (const el of [document.documentElement, document.body]) delete el.scrollTop;
+    window.visualViewport.dispatchEvent(new Event("resize"));
+  });
+  await t.settle(100);
+}
+
+/**
+ * Taps `field` (in an open popover whose content matches `contentSel`), runs iOS's keyboard
+ * sequence, checks the rules above, types, then "Done" and the window put back.
+ */
+async function iosKeyboard(t, label, field, contentSel) {
+  const f = await iosFocus(t, field);
+  await t.require(`${label}: the tapped field has focus`, /^(input|textarea)$/.test(f.tag), `focus on ${f.tag}`);
+  const inner = f.inner;
+  const height = inner - Math.round(inner * 0.45);
+  // (1) focus (done); (2) iOS pans first, the height still the old one; (3) the keyboard's height
+  // arrives (an animation step, then the end); (4) a last scroll as the pan settles.
+  await iosStep(t, { offsetTop: f.pan }, ["scroll", "window-scroll"]);
+  await iosStep(t, { height: Math.round((inner + height) / 2) }, ["resize"]);
+  await iosStep(t, { height }, ["resize", "scroll"]);
+  await t.settle(400); // past keyboardInset's settle time
+  const s = await iosState(t, contentSel);
+  const problems = [];
+  if (!s.connected) problems.push("the field was removed (re-created)");
+  if (!s.focused) problems.push(`focus left the field (now on ${s.focusTag})`);
+  if (s.blurs || s.focusouts) problems.push(`the field blurred ${s.blurs}× (focusout ${s.focusouts}×)`);
+  if (!s.open) problems.push("the popover closed");
+  if (!s.visible || s.contentVisibility !== "visible") problems.push(`the field is hidden (popover visibility: ${s.contentVisibility})`);
+  if (s.scrolls.length) problems.push(`the window was scrolled while iOS panned it: ${s.scrolls.join("; ")}`);
+  if (s.field && (s.field.top < s.area.top - 1 || s.field.bottom > s.area.bottom + 1)) problems.push(`the field (${s.field.top}–${s.field.bottom}) is outside the visual viewport (${s.area.top}–${s.area.bottom})`);
+  await t.check(`${label}: iOS keyboard up (pan ${f.pan}px, field bottom ${Math.round(f.fieldBottom)} of ${inner}): the keyboard stays`, problems.length === 0, problems.join("; "));
+  const keys = f.number ? "7" : "Ki";
+  await t.page.keyboard.type(keys);
+  await t.settle(100);
+  const typed = await t.page.evaluate(() => { const n = window.__ios.node; return { focused: document.activeElement === n, value: n && "value" in n ? n.value : "" }; });
+  await t.check(`${label}: typing reaches the field`, typed.focused && typed.value.endsWith(keys), `value "${typed.value}", focused ${typed.focused}`);
+  // "Done": the field blurs, the keyboard goes down, the pan is left behind.
+  await t.page.evaluate(() => window.__ios.node.blur());
+  await iosStep(t, { height: inner }, ["resize"]);
+  await t.settle(400);
+  const down = await iosState(t, contentSel);
+  await t.check(`${label}: after "Done" the window is put back at 0,0`, down.area.top === 0 && down.inset === "0px", `visual viewport top ${down.area.top}, inset ${down.inset}, scrolls: ${down.scrolls.join("; ") || "none"}`);
+  await iosReset(t);
+}
+
+/** The lowest text field in sight in the open toolbar panel, after scrolling the panel to its end. */
+async function lowestField(t) {
+  const index = await t.page.evaluate(({ sel, fieldsSel }) => {
+    const panel = [...document.querySelectorAll(sel)].filter((p) => p.getClientRects().length).pop();
+    if (!panel) return -1;
+    const fields = [...panel.querySelectorAll(fieldsSel)];
+    const usable = (f) => f.getBoundingClientRect().height > 0 && f.checkVisibility() && !f.disabled && !f.readOnly;
+    // The last one (the lowest), scrolled within the panel to its bottom edge.
+    const best = fields.findLastIndex(usable);
+    if (best < 0) return -1;
+    panel.scrollTop += fields[best].getBoundingClientRect().bottom - panel.getBoundingClientRect().bottom + 8;
+    return best;
+  }, { sel: KB_PANEL, fieldsSel: TEXT_FIELDS });
+  return index < 0 ? null : t.page.locator(KB_PANEL).last().locator(TEXT_FIELDS).nth(index);
+}
+
+/** Scrolls the pane so the `n`th block's header sits at `at` of the window's height (as far as it scrolls). */
+async function headerAt(t, n, at) {
+  await t.page.evaluate(({ n, at }) => {
+    const body = document.querySelector(".ws-pane--active .ws-pane__body");
+    const header = document.querySelectorAll(".ws-pane--active .block")[n]?.querySelector(".section-header");
+    if (!body || !header) return;
+    body.scrollTop += header.getBoundingClientRect().top - innerHeight * at;
+  }, { n, at });
+  await t.settle(150);
+}
+
+const TEXT_FIELDS = "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]), textarea";
+const POPOVER_CONTENT = ".toolbar-popover > .cds--popover > .cds--popover-content";
+
+for (const vp of ["phone", "phone-small"]) {
+  test(`iOS keyboard sequence: the lowest field of panels below their button @ ${vp}`, async (t) => {
+    await t.boot();
+    const ids = await t.seed(kbSpec());
+    await t.open(`${t.listPath(ids.collections.books)}?view=${ids.views["books/Cards"]}`);
+    const header = () => t.page.locator(".ws-pane--active .block").first().locator(".section-header").first();
+    for (const [label, open] of [
+      ["cards block settings", () => t.openPanel(header(), "Block settings")],
+      ["block filter value", async () => {
+        await t.openPanel(header(), "Filter");
+        await t.page.locator(KB_PANEL).last().getByRole("button", { name: "Add filter" }).click();
+        await t.settle(150);
+      }],
+      ["view settings", () => t.openPanel(t.page.locator(".ws-pane--active .views-bar").first(), "View settings")],
+    ]) {
+      await open();
+      const field = await lowestField(t);
+      await t.require(`${label}: a text field in the panel`, !!field);
+      await iosKeyboard(t, label, field, POPOVER_CONTENT);
+      await closePanels(t);
+    }
+  }, { viewport: vp, smoke: vp === "phone" });
+
+  test(`iOS keyboard sequence: panels above a button near the bottom @ ${vp}`, async (t) => {
+    await t.boot();
+    const ids = await t.seed(kbSpec());
+    await t.open(`${t.listPath(ids.collections.books)}?view=${ids.views["books/Blocks"]}`);
+    // The table block (the second): its header near the bottom of the screen, its panels above it (or beside).
+    for (const [label, button] of [["block settings", "Block settings"], ["block filter value", "Filter"]]) {
+      await headerAt(t, 1, 0.8);
+      const header = t.page.locator(".ws-pane--active .block").nth(1).locator(".section-header").first();
+      await t.openPanel(header, button);
+      if (button === "Filter") {
+        await t.page.locator(KB_PANEL).last().getByRole("button", { name: "Add filter" }).click();
+        await t.settle(150);
+      }
+      const { b, p } = await kbState(t, KB_PANEL).then((s) => ({ b: s.button && { y: s.button.top }, p: s.panel && { y: s.panel.top, bottom: s.panel.bottom } }));
+      await t.require(`${label}: the button is near the bottom, the panel beside or above it`, !!b && !!p && b.y > t.vp.height * 0.6 && p.y < b.y, `panel ${JSON.stringify(p)}, button ${JSON.stringify(b)}`);
+      const field = await lowestField(t);
+      await t.require(`${label}: a text field in the panel`, !!field);
+      await iosKeyboard(t, label, field, POPOVER_CONTENT);
+      await closePanels(t);
+    }
+  }, { viewport: vp });
+
+  test(`iOS keyboard sequence: icon picker search @ ${vp}`, async (t) => {
+    await t.boot();
+    const ids = await t.seed(kbSpec());
+    await t.open(`/collections/${ids.collections.books}/edit`);
+    await t.page.locator(".title-edit").getByRole("button").first().click();
+    await t.settle();
+    await iosKeyboard(t, "icon search", t.page.locator(".icon-picker .cds--search-input").first(), ".icon-picker > .cds--popover > .cds--popover-content");
+  }, { viewport: vp });
+}
+
+/** Escape until no toolbar panel is open (a dropdown's menu first, then the panel). */
+async function closePanels(t) {
+  for (let i = 0; i < 3 && (await t.page.locator(KB_PANEL).count()); i++) {
+    await t.page.keyboard.press("Escape");
+    await t.settle(150);
+  }
+}

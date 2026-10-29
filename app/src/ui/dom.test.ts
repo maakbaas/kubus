@@ -63,6 +63,7 @@ describe("panel room", () => {
   });
 
   it("scrolls only the panel to keep the focused field in sight", () => {
+    viewport(1000);
     const field = { getBoundingClientRect: () => rect(0, 0), matches: () => true };
     const scroller = (s: DOMRect) => ({ scrollTop: 100, getBoundingClientRect: () => s, contains: () => true });
     vi.stubGlobal("document", { activeElement: field });
@@ -80,6 +81,21 @@ describe("panel room", () => {
     expect(fine.scrollTop).toBe(100);
     keepFocusInView(null);
     keepFocusInView(undefined);
+  });
+
+  it("keeps the field within what can be seen of the panel, not under the keyboard", () => {
+    // iOS: panned by 160, 300 seen; the panel (hung above a button the keyboard covers) runs on to 480.
+    viewport(800, { offsetTop: 160, height: 300 });
+    const field = { getBoundingClientRect: () => rect(440, 472), matches: () => true };
+    vi.stubGlobal("document", { activeElement: field });
+    const scroller = { scrollTop: 50, getBoundingClientRect: () => rect(166, 480), contains: () => true };
+    keepFocusInView(scroller as never);
+    expect(scroller.scrollTop).toBe(50 + 12); // its bottom at 460, the end of what is seen
+    // A field taller than what is seen: its top stays in sight (where the caret starts).
+    field.getBoundingClientRect = () => rect(200, 500);
+    scroller.scrollTop = 0;
+    keepFocusInView(scroller as never);
+    expect(scroller.scrollTop).toBe(200 - 166);
   });
 
   it("does not scroll when nothing is being typed in", () => {

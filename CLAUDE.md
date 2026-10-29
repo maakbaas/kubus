@@ -185,6 +185,12 @@ stale peer range.
     sits above it: iOS takes the status bar colour from it (and blurs the bar otherwise).
   - No `apple-mobile-web-app-status-bar-style: black-translucent` (an unremovable fade on iOS 26.1+).
   - No `-webkit-overflow-scrolling: touch` (a stacking context on iOS: dialogs fell under the strip).
+  - While a field has focus nothing scrolls the window, hides, blurs or re-creates it: iOS shows a field
+    near the bottom by panning the visual viewport (by up to the keyboard's height, the pan reported
+    before the smaller height) and closes the keyboard at once if that is undone or the field hidden.
+    So `keyboardInset.ts` puts a panned window back only with no field focused and the viewport settled,
+    and a popover being typed in stays shown while its button is out of sight (autoAlign's `hide` set
+    `visibility: hidden` once the keyboard covered the button or the pan moved it off the top; styles.css).
 - **Popovers, tooltips and dropdown menus use `autoAlign`** (Carbon's floating placement): they
   flip to the side with room and aren't clipped by pane edges. Add it to every new `Popover`,
   `IconButton`, `Dropdown`, `ComboBox`, `FilterableMultiSelect`.

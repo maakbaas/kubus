@@ -4,6 +4,7 @@
  * doesn't: only the visual viewport shrinks (and may pan), so a panel sized to the window would
  * run on under the keyboard, and the field being typed in sit behind it.
  */
+import { isTextField } from "../platform/keyboardInset";
 
 /** The part of the window that can be seen (not under an on-screen keyboard), in layout coordinates. */
 export function visibleArea(): { top: number; bottom: number } {
@@ -39,20 +40,25 @@ export function panelRoom(button: DOMRect, keep: PanelSide | null, margin = 16):
 /** Whether a text field inside `el` has focus (an on-screen keyboard may be up for it). */
 export function typingIn(el: Element | null | undefined): boolean {
   const focus = document.activeElement;
-  return !!el && !!focus && el.contains(focus) && focus.matches("input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea, [contenteditable]:not([contenteditable=false])");
+  return !!el && !!focus && el.contains(focus) && isTextField(focus);
 }
 
 /**
- * Keeps the focused field of a scrolling panel in sight within it after the panel shrank (the
- * keyboard came up): scrolls the panel only, never the page behind it.
+ * Keeps the focused field of a scrolling panel in sight after the panel shrank (the keyboard came
+ * up): within the panel and within what can be seen of it (a panel above a button the keyboard
+ * covers runs on under the keyboard: Floating UI hangs it from the button). Scrolls the panel
+ * only, never the page behind it: on iOS a scrolled window undoes the pan that shows the field.
  */
 export function keepFocusInView(scroller: HTMLElement | null | undefined) {
   if (!scroller || !typingIn(scroller)) return;
   const field = document.activeElement as HTMLElement;
   const s = scroller.getBoundingClientRect();
+  const seen = visibleArea();
+  const top = Math.max(s.top, seen.top);
+  const bottom = Math.min(s.bottom, seen.bottom);
   const f = field.getBoundingClientRect();
-  if (f.bottom > s.bottom) scroller.scrollTop += f.bottom - s.bottom;
-  else if (f.top < s.top) scroller.scrollTop -= s.top - f.top;
+  if (f.bottom > bottom) scroller.scrollTop += Math.min(f.bottom - bottom, f.top - top);
+  else if (f.top < top) scroller.scrollTop -= top - f.top;
 }
 
 /**

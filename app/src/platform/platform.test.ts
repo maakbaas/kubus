@@ -2,7 +2,7 @@
 // The platform adapters: language model client, opening links, shell integration. Browser APIs are stand-ins.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { suppressShellContextMenu } from "./contextMenu";
-import { trackKeyboardInset } from "./keyboardInset";
+import { isTextField, TEXT_FIELD, trackKeyboardInset } from "./keyboardInset";
 import { downloadFile } from "./download";
 import { createLlmClient, DEFAULT_LLM_SETTINGS } from "./llm";
 import { openExternal } from "./openExternal";
@@ -166,8 +166,9 @@ describe("the keyboard inset", () => {
     const visualViewport = viewport && { pageTop: 0, ...viewport, addEventListener: (type: string, h: () => void) => handlers.set(type, h) };
     const win = { innerHeight, visualViewport, scrollX: 0, scrollY: 0, scrollTo: vi.fn(), addEventListener: (type: string, h: () => void) => windowHandlers.set(type, h) };
     vi.stubGlobal("window", win);
-    vi.stubGlobal("document", { documentElement: { style } });
-    return { style, handlers, windowHandlers, win, viewport: visualViewport };
+    const doc = { documentElement: { style }, activeElement: null as unknown, addEventListener: (type: string, h: () => void) => windowHandlers.set(`document:${type}`, h) };
+    vi.stubGlobal("document", doc);
+    return { style, handlers, windowHandlers, win, viewport: visualViewport, doc };
   }
 
   it("is the height the keyboard covers, set now and whenever the viewport changes", () => {
@@ -205,18 +206,82 @@ describe("the keyboard inset", () => {
     }
   });
 
-  it("puts a panned window back at 0,0 once no keyboard covers it, and leaves it while one does", () => {
-    const t = setup({ height: 500, offsetTop: 0 });
-    t.win.scrollY = 120;
-    trackKeyboardInset();
-    expect(t.win.scrollTo).not.toHaveBeenCalled(); // iOS panned it to show the focused field
-    t.viewport!.height = 800;
-    t.handlers.get("resize")!();
-    expect(t.win.scrollTo).toHaveBeenCalledWith(0, 0);
-    t.win.scrollTo.mockClear();
-    t.win.scrollY = 0;
-    t.handlers.get("resize")!();
-    expect(t.win.scrollTo).not.toHaveBeenCalled();
+  it("puts a panned window back at 0,0 once no keyboard covers it and the viewport settled, and leaves it while one does", () => {
+    vi.useFakeTimers();
+    try {
+      const t = setup({ height: 500, offsetTop: 0 });
+      t.win.scrollY = 120;
+      trackKeyboardInset();
+      vi.advanceTimersByTime(1000);
+      expect(t.win.scrollTo).not.toHaveBeenCalled(); // iOS panned it to show the focused field
+      t.viewport!.height = 800;
+      t.handlers.get("resize")!();
+      expect(t.win.scrollTo).not.toHaveBeenCalled(); // not while iOS may still be moving it
+      vi.advanceTimersByTime(300);
+      expect(t.win.scrollTo).toHaveBeenCalledWith(0, 0);
+      t.win.scrollTo.mockClear();
+      t.win.scrollY = 0;
+      t.handlers.get("resize")!();
+      vi.advanceTimersByTime(300);
+      expect(t.win.scrollTo).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // iOS, a field near the bottom tapped: focus, then the pan (reported before the smaller height,
+  // so for a moment nothing seems covered), then the keyboard's height (panned by all of it:
+  // again nothing of the window covered). A scroll then undid the pan and iOS closed the keyboard.
+  it("never scrolls the window while a field has focus, however the pan and the height arrive", () => {
+    vi.useFakeTimers();
+    try {
+      const t = setup({ height: 800, offsetTop: 0 });
+      trackKeyboardInset();
+      t.doc.activeElement = { matches: (s: string) => s.includes("textarea") };
+      t.viewport!.offsetTop = 340;
+      t.viewport!.pageTop = 340;
+      t.handlers.get("scroll")!();
+      t.win.scrollY = 20; // a window scroll among them
+      t.windowHandlers.get("resize")!();
+      t.viewport!.height = 460;
+      t.handlers.get("resize")!();
+      expect(t.style.setProperty).toHaveBeenLastCalledWith("--keyboard-inset", "0px");
+      t.handlers.get("scroll")!();
+      vi.advanceTimersByTime(2000);
+      expect(t.win.scrollTo).not.toHaveBeenCalled();
+      // "Done": the field blurs, the keyboard goes, the pan is left: put back once settled.
+      t.doc.activeElement = null;
+      t.windowHandlers.get("document:focusout")!();
+      t.viewport!.height = 800;
+      t.handlers.get("resize")!();
+      vi.advanceTimersByTime(299);
+      expect(t.win.scrollTo).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(t.win.scrollTo).toHaveBeenCalledWith(0, 0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves a pinch-zoomed viewport where the user panned it", () => {
+    vi.useFakeTimers();
+    try {
+      const t = setup({ height: 400, offsetTop: 400, pageTop: 400 }); // zoomed in 2x, panned to the bottom
+      trackKeyboardInset();
+      vi.advanceTimersByTime(1000);
+      expect(t.win.scrollTo).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("knows the fields a keyboard comes up for", () => {
+    const el = (selectorMatch: boolean) => ({ matches: vi.fn(() => selectorMatch) });
+    expect(isTextField(el(true) as never)).toBe(true);
+    expect(isTextField(el(false) as never)).toBe(false);
+    expect(isTextField(null)).toBe(false);
+    expect(isTextField({} as never)).toBe(false);
+    for (const s of ["textarea", "select", "[contenteditable]", "input:not([type=checkbox])"]) expect(TEXT_FIELD).toContain(s);
   });
 
   it("is never negative", () => {
