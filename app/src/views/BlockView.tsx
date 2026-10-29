@@ -224,7 +224,7 @@ export function BlockMenus({ collection, block, refs, place, viewFilters, page, 
               const options = next.defaultOptions(collection);
               const showsTitle = (o: unknown) => !!(o as { showTitle?: boolean } | null)?.showTitle;
               const title = titleFields(collection)[0];
-              const shown = block.layout.fields ?? pickableFields(collection).map((f) => f.id);
+              const shown = block.layout.fields ?? orderFields(pickableFields(collection), null).map((f) => f.id);
               const fields =
                 title && showsTitle(options) && shown.includes(title.id)
                   ? shown.filter((id) => id !== title.id)
@@ -365,6 +365,8 @@ export function BlockView({ collection, data, block, viewFilters, search, place,
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
   // Searching the view: a block listing items that has none matching is left out altogether.
   if (search.trim() && uses.query && items && result.total === 0) return null;
+  // Not even its header until its items are in: a header alone would sit where the blocks above are about to push it away.
+  if (!items && !error) return null;
   return (
     <section className="block" data-block-id={block.id}>
       <SectionHeader

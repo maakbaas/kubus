@@ -275,7 +275,12 @@ What the app does, feature by feature (read the part you work on).
 - **Bookmarks** (`app/src/domain/bookmarks.ts`, table `bookmarks`): a bookmark icon on a view (tab strip,
   next to the star) and on an item (page header, next to (i)) toggles a link in the side nav's
   Bookmarks branch (of the shown space). A view bookmark opens `…/items?view=<id>`. Labels are snapshots, refreshed
-  while the bookmarked page is shown; bookmarks of deleted views / items aren't listed.
+  while the bookmarked page is shown; bookmarks of deleted views / items aren't listed (a remote collection's row has
+  no stored item: its bookmark, whose target is the row's id, lasts as long as the collection).
+- **Created and Updated** are pickable like fields (`META_FIELDS`, ids `$created` / `$updated`) but hidden by default: a
+  layout that never chose its fields (`fields: null`: item pages, table columns, card fields) leaves them out
+  (`orderFields`, `itemPageFields` in `domain/fieldLayout.ts`, the field selection's unticked rows); ticking them stores an explicit
+  list, which keeps them.
 - **Links open any scheme** (https, mailto, tel, spotify:, obsidian:, … open the app registered
   for it) except blocked ones (javascript:, data:, file:, …): `isOpenableUrl` / `safeUrl` in
   `platform/openExternal.ts`, used by Markdown (react-markdown's `urlTransform`), cells and the
