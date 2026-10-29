@@ -1681,6 +1681,29 @@ img[data-lightbox] {
   background: var(--cds-background-inverse-hover);
 }
 
+/* The link picker (LinkPicker): a Carbon contained list hanging from the caret. It scrolls inside,
+   within the room beside the caret (--popover-room), never making the page scroll. */
+.link-picker .cds--popover .cds--popover-content {
+  inline-size: min(26rem, 90vw);
+}
+.link-target-list {
+  max-block-size: min(16rem, var(--popover-room, 16rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.link-target-list .cds--contained-list__header {
+  position: static;
+}
+/* The option Enter takes. */
+.link-target-list [data-active="true"],
+.link-target-list [data-active="true"] .cds--contained-list-item__content {
+  background: var(--cds-layer-selected);
+}
+.link-target__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Code syntax coloring (prism/refractor tokens): Carbon's saturated steps, vivid on the code's
    subtle background (still AA on it: the 60s in light, the 30/40s in dark). */
 .cds--white {

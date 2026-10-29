@@ -290,6 +290,13 @@ What the app does, feature by feature (read the part you work on).
   href tried once per editor); one that names nothing stays as written and is resolved when clicked. `?block=` /
   `?field=` scroll to the target and flash it (`ui/useLinkTarget.ts`; blocks carry `data-block-id`, item page
   fields are found by their place among the page's entries).
+  **Link picker** (`ui/LinkPicker.tsx`, `domain/linkTargets.ts`, `app/useLinkTargets.ts`): typing `[text](` (text may
+  be empty) or `#/` after a space in the Markdown editor opens a Carbon list at the caret of the shown space's
+  collections, views and items (`item#field` lists that item's fields), filtered as typed (ranked: exact, prefix, word
+  start, inside, place; a typed or pasted address `#/collections/<id>/items…` finds the page it names). ↑/↓ move, Enter or
+  Tab choose, Escape closes it (editor keeps focus), a click chooses; choosing writes an ordinary `[text](#/collections/…)`
+  link by id (the text typed, else the option's name). No Markdown syntax is added (`linkTrigger` plugin only reports the
+  caret). Labels come from `Repository.listLabels`, per collection, read when first needed.
 - **Web addresses in plain values are links** (`Highlight`'s `links`, `splitUrls`): `http(s)://…` in text, list and
   checklist entries, AI and component text (cells, card fields, the item page) opens outside the app (`openExternal`;
   not the item, nor the value's editor). Never in titles (the title is the item's own link, or edited by a click), group
@@ -309,6 +316,8 @@ What the app does, feature by feature (read the part you work on).
   list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; a full-text index is roadmap #1).
   Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`); a result with no visible match is left out.
   An item opens at the first field that matched (`?field=`; at the top when its title matched), a Markdown block at the block.
+  A text that looks like a link address (`/`, `?`, `=` or `a#b`: `isAddressQuery`) also lists the pages whose link it fits
+  (a link list: `LinkTargetList`, the picker's matching), leaving out the collections and items already listed above.
 - **Remote collections** (`domain/sources.ts`, `collections.source`, `fields.source_column`; docs/sync.md
   "Remote sources"): a table (for InfluxDB a bucket's measurement) of one of the server's sources, shown like any collection
   but read-only. They have a page of their own, **Remotes** (`#/remotes`, `pages/RemotesPage.tsx`: the
