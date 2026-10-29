@@ -9,7 +9,7 @@ import { BlockView, newPageBlock } from "../views/BlockView";
 import { QueryEditor } from "../views/QueryEditor";
 import { useBlockName } from "../views/BlockListEditor";
 import { AddBlockButton, type NewBlockSpec } from "../views/AddBlockButton";
-import { useCollectionData } from "../views/useCollectionData";
+import { useCollectionData, type CollectionData } from "../views/useCollectionData";
 import { useBacklinkData } from "../views/useBacklinks";
 import { findCollection } from "../domain/backlinks";
 import { useStore, useCollection } from "../app/store";
@@ -844,27 +844,26 @@ function ItemPageBlock({
   );
 }
 
-function ItemPageBlockContent({
-  collection,
-  block,
-  pageFilters,
-  ...rest
-}: Parameters<typeof ItemPageBlock>[0] & { collection: Collection }) {
+type ContentProps = Parameters<typeof ItemPageBlock>[0] & { collection: Collection };
+
+function ItemPageBlockContent(props: ContentProps) {
   // Its items, shared with every pane showing that collection.
-  const data = useCollectionData(collection);
-  const { collections } = useStore();
-  const normalized = useMemo(() => normalizeBlock(collection, block, collections), [collection, block, collections]);
-  const applying = useMemo(() => pageFiltersFor(collection, pageFilters), [collection, pageFilters]);
-  return <BlockView collection={collection} data={data} block={normalized} viewFilters={applying} search="" place="item" {...rest} />;
+  const data = useCollectionData(props.collection);
+  return <PageBlockView {...props} data={data} />;
 }
 
 /** A block of the Backlinks collection: the items linking to the page's item (not in the shared item cache: they depend on the page's item). */
-function BacklinksBlockContent({ collection, block, pageFilters, ...rest }: Parameters<typeof ItemPageBlock>[0] & { collection: Collection }) {
-  const data = useBacklinkData(rest.page);
+function BacklinksBlockContent(props: ContentProps) {
+  const data = useBacklinkData(props.page);
+  return <PageBlockView {...props} data={data} />;
+}
+
+/** The block with its collection's data: normalized for it, under the page-wide filter's rules for its fields. */
+function PageBlockView({ collection, block, pageFilters, ...rest }: ContentProps & { data: CollectionData }) {
   const { collections } = useStore();
   const normalized = useMemo(() => normalizeBlock(collection, block, collections), [collection, block, collections]);
   const applying = useMemo(() => pageFiltersFor(collection, pageFilters), [collection, pageFilters]);
-  return <BlockView collection={collection} data={data} block={normalized} viewFilters={applying} search="" place="item" {...rest} />;
+  return <BlockView collection={collection} block={normalized} viewFilters={applying} search="" place="item" {...rest} />;
 }
 
 /**
