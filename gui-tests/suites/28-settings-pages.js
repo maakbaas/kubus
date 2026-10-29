@@ -230,9 +230,8 @@ async function connected(t, { enabled = false, originals = "always" } = {}) {
 const pref = (t, key) => t.page.evaluate((k) => JSON.parse(localStorage.getItem(k) || "null"), key);
 const rawPref = (t, key) => t.page.evaluate((k) => localStorage.getItem(k), key);
 const panel = (t) => t.page.locator(".ws-pane--active .settings-panel:visible");
-const modal = (t) => t.page.locator(".cds--modal.is-visible");
 const panelText = async (t) => (await panel(t).innerText().catch(() => "")) || "";
-const modalText = async (t) => (await modal(t).innerText().catch(() => "")) || "";
+const modalText = async (t) => (await shownModal(t).innerText().catch(() => "")) || "";
 const selectedTab = async (t) => (await t.page.locator(".ws-pane--active .settings-page [role=tab][aria-selected=true]").first().innerText().catch(() => "")).trim();
 /** A form field by its label, in the visible section. */
 const field = (t, label) => panel(t).getByLabel(label, { exact: true });
@@ -356,12 +355,12 @@ test("server: Test connection (ok, wrong token, unreachable, not Kubus), Save on
   await button(t, "Disconnect").click();
   await t.until("Disconnect asks first", async () => (await modalText(t)).includes("Disconnect from the server?"));
   await t.audit("disconnect dialog");
-  await button(t, "Cancel", modal(t)).click();
+  await button(t, "Cancel", shownModal(t)).click();
   await t.until("Cancel closes the dialog", async () => (await t.count(".cds--modal.is-visible")) === 0);
   await t.check("Cancel keeps the connection", (await pref(t, "kubus.sync")).token === TOKEN && (await button(t, "Disconnect").count()) === 1);
   await button(t, "Disconnect").click();
   await t.until("asked again", async () => (await modalText(t)).includes("Disconnect from the server?"));
-  await button(t, "Disconnect", modal(t)).click();
+  await button(t, "Disconnect", shownModal(t)).click();
   await t.until("Disconnect forgets the token and empties the form", async () => (await token.inputValue()) === "" && (await pref(t, "kubus.sync")).token === "");
   await t.check("no Disconnect button any more", (await button(t, "Disconnect").count()) === 0);
   await t.audit("server, disconnected");
@@ -393,7 +392,7 @@ test("server: saving with sync on asks before connecting to a new server", async
   await t.check("cancelled: nothing stored, nothing sent", (await pref(t, "kubus.sync"))?.token === "" && f.syncs.length === 0, `${JSON.stringify(await pref(t, "kubus.sync"))} ${f.syncs.length}`);
   await button(t, "Save").click();
   await t.until("asked again", async () => (await modalText(t)).includes("Connect to this server?"));
-  await button(t, "Connect", modal(t)).click();
+  await button(t, "Connect", shownModal(t)).click();
   await t.until("an empty server receives this device's data", () => f.syncs.some((s) => (s.tables.items || 0) >= 3) || JSON.stringify(f.syncs), { timeout: 10000 });
   await t.check("the server is stored with sync on", (await pref(t, "kubus.sync"))?.enabled === true);
 });
@@ -420,12 +419,12 @@ for (const vp of ["desktop", "phone"]) {
     await track().click();
     await t.until("switching sync on asks first", async () => (await modalText(t)).includes("Connect to this server?"));
     await t.audit("connect to this server? (sync tab)");
-    await button(t, "Cancel", modal(t)).click();
+    await button(t, "Cancel", shownModal(t)).click();
     await t.until("Cancel closes it", async () => (await t.count(".cds--modal.is-visible")) === 0);
     await t.check("Cancel: still off, nothing stored, nothing synced", !(await isOn()) && (await pref(t, "kubus.sync")).enabled === false && f.syncs.length === 0);
     await track().click();
     await t.until("asked again", async () => (await modalText(t)).includes("Connect to this server?"));
-    await button(t, "Connect", modal(t)).click();
+    await button(t, "Connect", shownModal(t)).click();
     await t.until("the switch is on and the empty server receives this device's data", () => f.syncs.some((s) => (s.tables.items || 0) >= 3) || JSON.stringify(f.syncs), { timeout: 10000 });
     await t.until("the state reads Up to date", async () => (await state()).startsWith("Up to date"), { timeout: 8000 });
     await t.check("stored: sync on", (await pref(t, "kubus.sync")).enabled === true && (await isOn()));
@@ -452,7 +451,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.until("Wipe local database asks first", async () => (await modalText(t)).includes("Wipe this device's data?"));
     await t.check("it says the server keeps its data", (await modalText(t)).includes("the server keeps its data"));
     await t.audit("wipe local dialog");
-    await button(t, "Cancel", modal(t)).click();
+    await button(t, "Cancel", shownModal(t)).click();
     await t.until("Cancel closes it", async () => (await t.count(".cds--modal.is-visible")) === 0);
     await t.check("Cancel keeps the data", (await countItems()) === before, `${await countItems()} of ${before}`);
     // Wipe server database: asks naming the server; Cancel sends nothing; a failure is shown.
@@ -466,7 +465,7 @@ for (const vp of ["desktop", "phone"]) {
     f.failWipe = true;
     await button(t, "Wipe server database").click();
     await t.until("asked again", async () => (await modalText(t)).includes("Wipe the server's database?"));
-    await button(t, "Wipe server database", modal(t)).click();
+    await button(t, "Wipe server database", shownModal(t)).click();
     await t.until("a failed wipe says so", async () => (await panelText(t)).includes("Wiping the server failed") && (await panelText(t)).includes("Server error 500"));
     await t.audit("wiping the server failed");
     await t.check("the failed wipe left this device's data alone", (await countItems()) === before);
@@ -475,14 +474,14 @@ for (const vp of ["desktop", "phone"]) {
     f.failWipe = false;
     await button(t, "Wipe server database").click();
     await t.until("asked once more", async () => (await modalText(t)).includes("Wipe the server's database?"));
-    await button(t, "Wipe server database", modal(t)).click();
+    await button(t, "Wipe server database", shownModal(t)).click();
     await t.until("the wipe reaches the server with its confirmation", () => f.wipes.length === 2 && f.wipes[1]?.confirm === "wipe");
     await t.check("no error is shown once it worked", !(await panelText(t)).includes("Wiping the server failed"));
     await t.check("after the wipe sync on this device is paused, its data kept", !(await isOn()) && (await countItems()) === before);
     // Wipe local database for real: the app reloads and the data is gone.
     await button(t, "Wipe local database").click();
     await t.until("asked", async () => (await modalText(t)).includes("Wipe this device's data?"));
-    await button(t, "Wipe", modal(t)).click();
+    await button(t, "Wipe", shownModal(t)).click();
     await t.until("the page reloaded without the data", async () => {
       const n = await t.page.evaluate(async () => (window.kubus ? (await window.kubus.repo.listCollections()).length : -1));
       return n === 0 || `${n} collections`;
@@ -511,7 +510,7 @@ test("sync: without a server it says so; wiping then has no server option", asyn
 // ---------------------------------------------------------------------------------------------
 
 /** The labels of the fields a connection's dialog shows, in order. */
-const dialogLabels = (t) => modal(t).locator("label.cds--label, .cds--label").evaluateAll((els) => els.filter((e) => e.checkVisibility()).map((e) => e.textContent.trim()));
+const dialogLabels = (t) => shownModal(t).locator("label.cds--label, .cds--label").evaluateAll((els) => els.filter((e) => e.checkVisibility()).map((e) => e.textContent.trim()));
 const expectedLabels = (kind) => ["Name", "Kind", ...kind.fields.map((f) => f.label), kind.password.label, ...(kind.schemas ? [kind.schemas.label] : []), "Time limit (seconds)"];
 
 for (const vp of ["desktop", "phone"]) {
@@ -526,7 +525,7 @@ for (const vp of ["desktop", "phone"]) {
     await button(t, "Add connection").click();
     await t.until("Add connection opens a dialog", async () => (await modalText(t)).includes("Name"));
     await t.audit("add connection");
-    const kindSelect = modal(t).getByLabel("Kind", { exact: true });
+    const kindSelect = shownModal(t).getByLabel("Kind", { exact: true });
     for (const kind of KINDS) {
       await t.dialogStep(`Kind ${kind.label}`, () => kindSelect.selectOption(kind.id), { target: kindSelect });
       const labels = await dialogLabels(t);
@@ -535,30 +534,30 @@ for (const vp of ["desktop", "phone"]) {
     await t.audit("add connection, the last kind (JSON)");
     // A secret field and a choice field.
     await kindSelect.selectOption("actual");
-    await t.check("a secret field is a password box", (await modal(t).getByLabel("Encryption password", { exact: true }).getAttribute("type")) === "password");
+    await t.check("a secret field is a password box", (await shownModal(t).getByLabel("Encryption password", { exact: true }).getAttribute("type")) === "password");
     await kindSelect.selectOption("postgres");
-    await t.check("TLS offers its three choices", JSON.stringify(await modal(t).getByLabel("TLS", { exact: true }).locator("option").allInnerTexts()) === JSON.stringify(["Off", "On, any certificate", "On, a trusted certificate"]));
+    await t.check("TLS offers its three choices", JSON.stringify(await shownModal(t).getByLabel("TLS", { exact: true }).locator("option").allInnerTexts()) === JSON.stringify(["Off", "On, any certificate", "On, a trusted certificate"]));
     // Fill and add a Postgres connection.
-    await modal(t).getByLabel("Name", { exact: true }).fill("CRM");
-    await modal(t).getByLabel("Host", { exact: true }).fill("db.test");
-    await modal(t).getByLabel("Port", { exact: true }).fill("5432");
-    await modal(t).getByLabel("Database", { exact: true }).fill("crm");
-    await modal(t).getByLabel("User", { exact: true }).fill("reader");
-    await modal(t).getByLabel("TLS", { exact: true }).selectOption("require");
-    await modal(t).getByLabel("Password", { exact: true }).fill("hunter2");
-    await modal(t).getByLabel("Schemas", { exact: true }).fill("public, sales ,");
-    const limit = modal(t).getByRole("spinbutton");
+    await shownModal(t).getByLabel("Name", { exact: true }).fill("CRM");
+    await shownModal(t).getByLabel("Host", { exact: true }).fill("db.test");
+    await shownModal(t).getByLabel("Port", { exact: true }).fill("5432");
+    await shownModal(t).getByLabel("Database", { exact: true }).fill("crm");
+    await shownModal(t).getByLabel("User", { exact: true }).fill("reader");
+    await shownModal(t).getByLabel("TLS", { exact: true }).selectOption("require");
+    await shownModal(t).getByLabel("Password", { exact: true }).fill("hunter2");
+    await shownModal(t).getByLabel("Schemas", { exact: true }).fill("public, sales ,");
+    const limit = shownModal(t).getByRole("spinbutton");
     await t.check("the time limit starts at 30", (await limit.inputValue()) === "30");
     await limit.fill("45");
     await t.audit("add connection, filled");
     // A server that refuses: the dialog stays and says why.
     f.failPut = { status: 400, error: "A connection named CRM exists already" };
-    await button(t, "Add", modal(t)).click();
+    await button(t, "Add", shownModal(t)).click();
     await t.until("a refused save shows why, in the dialog", async () => (await modalText(t)).includes("Not saved") && (await modalText(t)).includes("A connection named CRM exists already"));
     await t.audit("add connection, refused");
-    await t.check("the dialog kept what was typed", (await modal(t).getByLabel("Host", { exact: true }).inputValue()) === "db.test");
+    await t.check("the dialog kept what was typed", (await shownModal(t).getByLabel("Host", { exact: true }).inputValue()) === "db.test");
     f.failPut = null;
-    await button(t, "Add", modal(t)).click();
+    await button(t, "Add", shownModal(t)).click();
     await t.until("Add closes the dialog", async () => (await t.count(".cds--modal.is-visible")) === 0);
     const put = f.puts[f.puts.length - 1];
     const sent = put.sources[0];
@@ -574,41 +573,41 @@ for (const vp of ["desktop", "phone"]) {
     // The name links to the connection's address (?source=<id>).
     const id = decodeURIComponent(((await row.locator("a").first().getAttribute("href")) || "").match(/source=([^&]+)/)?.[1] || "");
     await t.check("its name links to its dialog's address", !!id && id !== "new", id);
-    await t.check("its fields are filled in", (await modal(t).getByLabel("Host", { exact: true }).inputValue()) === "db.test" && (await modal(t).getByLabel("TLS", { exact: true }).inputValue()) === "require" && (await modal(t).getByLabel("Schemas", { exact: true }).inputValue()) === "public, sales" && (await limit.inputValue()) === "45");
-    const password = modal(t).getByLabel("Password", { exact: true });
+    await t.check("its fields are filled in", (await shownModal(t).getByLabel("Host", { exact: true }).inputValue()) === "db.test" && (await shownModal(t).getByLabel("TLS", { exact: true }).inputValue()) === "require" && (await shownModal(t).getByLabel("Schemas", { exact: true }).inputValue()) === "public, sales" && (await limit.inputValue()) === "45");
+    const password = shownModal(t).getByLabel("Password", { exact: true });
     await t.check("the password is not shown, only that it is set", (await password.inputValue()) === "" && (await password.getAttribute("placeholder")) === "Set: type to replace it");
     await t.audit("edit connection");
     // Cancel changes nothing.
-    await modal(t).getByLabel("Name", { exact: true }).fill("Renamed but cancelled");
+    await shownModal(t).getByLabel("Name", { exact: true }).fill("Renamed but cancelled");
     const putsBefore = f.puts.length;
-    await button(t, "Cancel", modal(t)).click();
+    await button(t, "Cancel", shownModal(t)).click();
     await t.until("Cancel closes it", async () => (await t.count(".cds--modal.is-visible")) === 0);
     await t.check("Cancel sent nothing and the name is as it was", f.puts.length === putsBefore && (await row.count()) === 1);
     // Rename keeps the password (not sent), changes the limit.
     await button(t, "Edit CRM", row).click();
     await t.until("dialog open", async () => (await t.count(".cds--modal.is-visible")) === 1);
-    await modal(t).getByLabel("Name", { exact: true }).fill("Sales CRM");
+    await shownModal(t).getByLabel("Name", { exact: true }).fill("Sales CRM");
     await limit.fill("60");
-    await button(t, "Save", modal(t)).click();
+    await button(t, "Save", shownModal(t)).click();
     await t.until("Save closes the dialog and renames it", async () => (await t.count(".cds--modal.is-visible")) === 0 && (await panelText(t)).includes("Sales CRM"));
     const renamed = f.puts[f.puts.length - 1].sources[0];
     await t.check("renamed on the server, the password left alone, the same id", renamed.name === "Sales CRM" && renamed.password === undefined && renamed.id === id && renamed.timeoutSeconds === 60, JSON.stringify(renamed));
     // A second one with a secret field (Actual) and a calendar.
     await button(t, "Add connection").click();
     await t.until("dialog open", async () => (await t.count(".cds--modal.is-visible")) === 1);
-    await modal(t).getByLabel("Kind", { exact: true }).selectOption("actual");
-    await modal(t).getByLabel("Name", { exact: true }).fill("Budget");
-    await modal(t).getByLabel("Address", { exact: true }).fill("https://actual.test");
-    await modal(t).getByLabel("Budget sync ID", { exact: true }).fill("b-1");
-    await modal(t).getByLabel("Encryption password", { exact: true }).fill("enc-pass");
-    await modal(t).getByLabel("API key", { exact: true }).fill("k");
-    await button(t, "Add", modal(t)).click();
+    await shownModal(t).getByLabel("Kind", { exact: true }).selectOption("actual");
+    await shownModal(t).getByLabel("Name", { exact: true }).fill("Budget");
+    await shownModal(t).getByLabel("Address", { exact: true }).fill("https://actual.test");
+    await shownModal(t).getByLabel("Budget sync ID", { exact: true }).fill("b-1");
+    await shownModal(t).getByLabel("Encryption password", { exact: true }).fill("enc-pass");
+    await shownModal(t).getByLabel("API key", { exact: true }).fill("k");
+    await button(t, "Add", shownModal(t)).click();
     await t.until("both are listed", async () => (await panel(t).locator("tbody tr").count()) === 2);
     const budget = f.puts[f.puts.length - 1].sources.find((s) => s.name === "Budget");
     await t.check("the secret field is sent as a secret, not among the fields", budget.secrets?.encryption === "enc-pass" && budget.fields.encryption === undefined && budget.fields.budget === "b-1", JSON.stringify(budget));
     await button(t, "Edit Budget").click();
     await t.until("dialog open", async () => (await t.count(".cds--modal.is-visible")) === 1);
-    const enc = modal(t).getByLabel("Encryption password", { exact: true });
+    const enc = shownModal(t).getByLabel("Encryption password", { exact: true });
     await t.check("the secret field shows only that it is set", (await enc.inputValue()) === "" && (await enc.getAttribute("placeholder")) === "Set: type to replace it");
     await t.page.keyboard.press("Escape");
     await t.until("Escape closes the dialog", async () => (await t.count(".cds--modal.is-visible")) === 0);
@@ -629,11 +628,11 @@ for (const vp of ["desktop", "phone"]) {
     // Deep links: ?source=<id> opens it, ?source=new the empty one, an unknown id nothing.
     await t.open(settingsPath("connections") + `&source=${id}`);
     await t.until("?source=<id> opens that connection after loading", async () => (await modalText(t)).includes("Edit Sales CRM"));
-    await t.check("with its values", (await modal(t).getByLabel("Database", { exact: true }).inputValue()) === "crm");
+    await t.check("with its values", (await shownModal(t).getByLabel("Database", { exact: true }).inputValue()) === "crm");
     await t.audit("connection opened by its address");
     await t.page.keyboard.press("Escape");
     await t.open(settingsPath("connections") + "&source=new");
-    await t.until("?source=new opens an empty Add", async () => (await modalText(t)).includes("Name") && (await modal(t).getByLabel("Name", { exact: true }).inputValue()) === "");
+    await t.until("?source=new opens an empty Add", async () => (await modalText(t)).includes("Name") && (await shownModal(t).getByLabel("Name", { exact: true }).inputValue()) === "");
     await t.page.keyboard.press("Escape");
     await t.open(settingsPath("connections") + "&source=nope");
     await t.check("an unknown ?source= opens nothing", (await t.count(".cds--modal.is-visible")) === 0);
@@ -641,18 +640,18 @@ for (const vp of ["desktop", "phone"]) {
     await button(t, "Delete Budget").click();
     await t.until("Delete asks first", async () => (await modalText(t)).includes("Delete “Budget”?"));
     await t.audit("delete connection dialog");
-    await button(t, "Cancel", modal(t)).click();
+    await button(t, "Cancel", shownModal(t)).click();
     await t.until("closed", async () => (await t.count(".cds--modal.is-visible")) === 0);
     await t.check("Cancel keeps both", (await panel(t).locator("tbody tr").count()) === 2 && f.settings.sources.length === 2);
     await button(t, "Delete Budget").click();
     await t.until("asked again", async () => (await modalText(t)).includes("Delete “Budget”?"));
-    await button(t, "Delete", modal(t)).click();
+    await button(t, "Delete", shownModal(t)).click();
     await t.until("the connection is gone from the table and the server", async () => (await panel(t).locator("tbody tr").count()) === 1 && f.settings.sources.length === 1);
     // A failing delete says so.
     f.failPut = { status: 500, error: "the database is read-only" };
     await button(t, "Delete Sales CRM").click();
     await t.until("asked", async () => (await modalText(t)).includes("Delete “Sales CRM”?"));
-    await button(t, "Delete", modal(t)).click();
+    await button(t, "Delete", shownModal(t)).click();
     await t.until("a refused delete is explained and the connection stays", async () => (await panelText(t)).includes("the database is read-only") && (await panel(t).locator("tbody tr").count()) === 1);
     await t.audit("delete refused");
     f.failPut = null;
@@ -678,7 +677,7 @@ test("connections: a connection that can't be read shows its problem and warning
   await t.audit("connections with a problem and a warning");
   await button(t, "Edit Legacy").click();
   await t.until("an unknown kind still opens", async () => (await modalText(t)).includes("Edit Legacy"));
-  await t.check("the kind select offers its unknown kind", (await modal(t).getByLabel("Kind", { exact: true }).inputValue()) === "oracle");
+  await t.check("the kind select offers its unknown kind", (await shownModal(t).getByLabel("Kind", { exact: true }).inputValue()) === "oracle");
   await t.audit("edit a connection of an unknown kind");
   await t.page.keyboard.press("Escape");
   // The server's settings can't be read.
@@ -938,7 +937,7 @@ for (const vp of ["desktop"]) {
     await field(t, "Name").fill("Backup script");
     await make.click();
     await t.until("the new token is shown in a dialog", async () => (await modalText(t)).includes("API token Backup script"));
-    const shown = (await modal(t).locator(".cds--snippet").innerText()).trim();
+    const shown = (await shownModal(t).locator(".cds--snippet").innerText()).trim();
     await t.check("the token itself is in the dialog, and says it can only read", shown === f.madeTokens[0].token && (await modalText(t)).includes("It can only read.") && (await modalText(t)).includes("only this once"), shown);
     await t.audit("token made");
     // A stray click doesn't lose it.
@@ -946,11 +945,11 @@ for (const vp of ["desktop"]) {
     await t.settle(150);
     await t.check("a click outside doesn't close it", (await t.count(".cds--modal.is-visible")) === 1);
     // Copy.
-    await modal(t).getByRole("button", { name: "Copy the token" }).click();
+    await shownModal(t).getByRole("button", { name: "Copy the token" }).click();
     await t.until("Copied is shown", async () => (await t.page.getByText("Copied", { exact: true }).count()) > 0 || (await modalText(t)).includes("Copied"), { timeout: 3000 });
     const clip = await t.page.evaluate(() => navigator.clipboard.readText().catch(() => null));
     await t.check("the clipboard holds the token", clip === null || clip === shown, String(clip));
-    await button(t, "Done", modal(t)).click();
+    await button(t, "Done", shownModal(t)).click();
     await t.until("Done closes it", async () => (await t.count(".cds--modal.is-visible")) === 0);
     const rows = panel(t).locator("tbody tr");
     await t.until("the token is listed by name and access, never used", async () => (await rows.count()) === 1 && /Backup script\s+Read\s+.*Never/s.test(await rows.first().innerText()));
@@ -962,7 +961,7 @@ for (const vp of ["desktop"]) {
     await make.click();
     await t.until("the second token is shown", async () => (await modalText(t)).includes("API token Importer") && (await modalText(t)).includes("It can read and write."));
     await t.check("the server received its access", f.tokens[1].access === "write");
-    await button(t, "Done", modal(t)).click();
+    await button(t, "Done", shownModal(t)).click();
     await t.until("both are listed", async () => (await rows.count()) === 2 && (await panelText(t)).includes("Read & write"));
     await t.audit("tokens, two");
     // Still there after a reload, and the token is never shown again.
@@ -973,16 +972,16 @@ for (const vp of ["desktop"]) {
     await button(t, "Revoke Backup script").click();
     await t.until("Revoke asks first", async () => (await modalText(t)).includes("Revoke Backup script?"));
     await t.audit("revoke token dialog");
-    await button(t, "Cancel", modal(t)).click();
+    await button(t, "Cancel", shownModal(t)).click();
     await t.until("closed", async () => (await t.count(".cds--modal.is-visible")) === 0);
     await t.check("Cancel keeps it", (await rows.count()) === 2 && f.tokens.length === 2);
     await button(t, "Revoke Backup script").click();
     await t.until("asked again", async () => (await modalText(t)).includes("Revoke Backup script?"));
-    await button(t, "Revoke", modal(t)).click();
+    await button(t, "Revoke", shownModal(t)).click();
     await t.until("revoked on the server and gone from the list", async () => (await rows.count()) === 1 && f.tokens.length === 1 && f.tokens[0].name === "Importer");
     await button(t, "Revoke Importer").click();
     await t.until("asked", async () => (await modalText(t)).includes("Revoke Importer?"));
-    await button(t, "Revoke", modal(t)).click();
+    await button(t, "Revoke", shownModal(t)).click();
     await t.until("no tokens left", async () => (await panelText(t)).includes("No API tokens yet."));
     // A server that refuses.
     f.failTokens = { status: 403, error: "tokens are switched off" };
@@ -1315,9 +1314,9 @@ for (const vp of ["desktop", "phone"]) {
     await t.until("restoring asks Replace all data on this device?", async () => (await modalText(t)).includes("Replace all data on this device?"));
     const asked = await modalText(t);
     await t.check("it names the file and says it can't be undone", asked.includes("kubus-backup.sqlite") && asked.includes("can't be undone"), asked);
-    await t.check("it is a danger dialog with Replace all data and Cancel", (await modal(t).locator(".cds--btn--danger").count()) === 1 && (await button(t, "Replace all data", modal(t)).count()) === 1 && (await button(t, "Cancel", modal(t)).count()) === 1);
+    await t.check("it is a danger dialog with Replace all data and Cancel", (await shownModal(t).locator(".cds--btn--danger").count()) === 1 && (await button(t, "Replace all data", shownModal(t)).count()) === 1 && (await button(t, "Cancel", shownModal(t)).count()) === 1);
     await t.audit("restore: replace all data?");
-    await button(t, "Cancel", modal(t)).click();
+    await button(t, "Cancel", shownModal(t)).click();
     await t.until("Cancel closes it", async () => (await t.count(".cds--modal.is-visible")) === 0);
     await t.check("Cancel: nothing restored, the page not reloaded", JSON.parse(await fingerprint(t)).collections.length === 0 && (await t.page.evaluate(() => window.__marker)) === "same page");
     await t.check("Cancel: sync still on", (await pref(t, "kubus.sync")).enabled === true);
@@ -1330,7 +1329,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.check("Escape: nothing restored", JSON.parse(await fingerprint(t)).collections.length === 0);
     await pickBackup(t, b64, "same");
     await t.until("asked once more", async () => (await modalText(t)).includes("Replace all data on this device?"));
-    await button(t, "Replace all data", modal(t)).click();
+    await button(t, "Replace all data", shownModal(t)).click();
     await t.until("the app reloaded with the data back, exactly as it was", async () => {
       if ((await t.page.evaluate(() => window.__marker).catch(() => "gone")) === "same page") return "not reloaded yet";
       const now = await fingerprint(t).catch(() => "");
@@ -1346,7 +1345,7 @@ for (const vp of ["desktop", "phone"]) {
     // Switching it on is a first connection: it asks, and an empty server receives the restored data.
     await switchOf(t, "Sync this device").locator(".cds--toggle__appearance").first().click();
     await t.until("switching sync on asks first", async () => (await modalText(t)).includes("Connect to this server?"));
-    await button(t, "Connect", modal(t)).click();
+    await button(t, "Connect", shownModal(t)).click();
     await t.until("the empty server receives the restored items", () => f.syncs.some((s) => (s.tables.items || 0) >= 3) || JSON.stringify(f.syncs.slice(synced)), { timeout: 10000 });
     await t.check("what the device holds is still the backup", (await fingerprint(t)) === original);
   }, { viewport: vp });

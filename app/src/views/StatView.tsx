@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Tag } from "@carbon/react";
 import { ArrowDown, ArrowUp } from "@carbon/icons-react";
-import { AGGREGATES, A_NUMBER, formatValue, PREVIOUS, type ChartOptions, type Stat } from "../domain/chart";
+import { AGGREGATES, A_NUMBER, formatValue, PREVIOUS, widthCss, type ChartOptions, type Stat } from "../domain/chart";
 
 /** "+2.1 kg", "−3%": a change with its sign (a minus sign, not a hyphen). */
 function signed(n: number, text: string): string {
@@ -33,7 +33,7 @@ export function StatView({ stat, options, sparkline }: { stat: Stat; options: Ch
         : signed(stat.change, formatValue(Math.abs(stat.change), options));
   const from = stat.baseline === null ? "" : baselineText(options, stat.baseline);
   return (
-    <div className="stat-block" style={{ maxInlineSize: `${options.width}rem` }}>
+    <div className="stat-block" style={{ maxInlineSize: widthCss(options.width) }}>
       <div className="stat-block__body">
         <div className="stat-block__text">
           {options.showLabel && <span className="stat-block__label">{stat.label}</span>}

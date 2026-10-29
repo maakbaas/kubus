@@ -484,7 +484,7 @@ function compareSortKeys(desc: boolean[], a: (string | number | null)[], b: (str
 
 /**
  * Two items compared as a query's sort orders them (applyQuery's order): for merging lists that are each in that order
- * (a blend's parts, domain/blend.ts). Keys are worked out once per item.
+ * (a merged collection's parts, domain/mergedCollection.ts). Keys are worked out once per item.
  */
 export function sortComparator(collection: Collection, sort: SortRule[], ctx: QueryContext): (a: Item, b: Item) => number {
   const fieldsById = new Map(pickableFields(collection).map((f) => [f.id, f]));

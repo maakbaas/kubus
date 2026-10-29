@@ -102,26 +102,15 @@ async function expectRows(t, label, expected, { block = 0, pane = null, cells = 
 
 const paneOf = (t, i = null) => (i === null ? t.page.locator(".ws-pane--active") : t.page.locator(".ws-pane").nth(i));
 const header = (t, block = 0) => paneOf(t).locator(".block").nth(block).locator(".section-header").first();
-const popover = (t) => t.page.locator(".cds--popover--open").last();
-const panelOf = (t) => t.page.locator(".toolbar-popover__panel:visible").last();
-const rulesOf = (t) => panelOf(t).locator(".query-editor__rule");
+const rulesOf = (t) => toolbarPanel(t).locator(".query-editor__rule");
 
 /** The first block of the page as stored in the People's item view. */
 const storedBlock = (t, ids) => t.page.evaluate(async (c) => (await window.kubus.repo.listCollections()).find((x) => x.id === c).itemViews[0].layout.blocks[0], ids.collections.people);
 
-/** A Carbon dropdown inside `scope`, by its title. */
-const dropdown = (t, scope, title) =>
-  scope.locator(".cds--dropdown__wrapper, .cds--combo-box, .cds--list-box__wrapper").filter({ has: t.page.locator(".cds--label", { hasText: new RegExp(`^${title}$`) }) }).first();
-async function choose(t, scope, title, option) {
-  await dropdown(t, scope, title).locator(".cds--list-box__field").first().click();
-  await t.settle(80);
-  await t.page.getByRole("option", { name: option, exact: true }).filter({ visible: true }).first().click();
-  await t.settle(80);
-}
 /** Block settings of the block, "Show as" set to `kind`. */
 async function showAs(t, kind, block = 0) {
   await t.openPanel(header(t, block), "Block settings");
-  await choose(t, popover(t), "Show as", kind);
+  await pickOption(t, shownPopover(t), "Show as", kind);
   await t.closeAll();
 }
 
@@ -188,7 +177,7 @@ test("backlinks: the Collection picker of an item page's block offers Backlinks,
   await t.open(adaPath(t, ids));
   await t.until("the block lists the four notes", async () => ((await rowsOf(t)) || []).filter((r) => r[0]).length === 4);
   await t.openPanel(header(t), "Block settings");
-  await dropdown(t, popover(t), "Collection").locator(".cds--list-box__field").first().click();
+  await dropdownOf(t, shownPopover(t), "Collection").locator(".cds--list-box__field").first().click();
   const offered = (await t.page.getByRole("option").filter({ visible: true }).allInnerTexts()).map((s) => s.trim());
   await t.check("the picker lists the collections and Backlinks", ["Books", "Notes", "People", "Backlinks"].every((o) => offered.includes(o)), offered.join(", "));
   await t.check("Backlinks comes after the collections", offered.indexOf("Backlinks") === offered.length - 1, offered.join(", "));
@@ -204,7 +193,7 @@ test("backlinks: the Collection picker of an item page's block offers Backlinks,
   await expectRows(t, "after a reload the block still lists them", ADA_ROWS);
   // To a collection and back: each starts afresh.
   await t.openPanel(header(t), "Block settings");
-  await choose(t, popover(t), "Collection", "Books");
+  await pickOption(t, shownPopover(t), "Collection", "Books");
   await t.until("another collection: the block lists its items", async () => (await storedBlock(t, ids)).collectionId === ids.collections.books);
   await t.closeAll();
   // (Books refer to People, so the new block is filtered to the books by this person: Ada has none.)
@@ -215,7 +204,7 @@ test("backlinks: the Collection picker of an item page's block offers Backlinks,
   await t.check("the Collections page and the side nav don't list it", !text.includes("Backlink"), text.slice(0, 300));
   await t.open(t.listPath(ids.collections.books));
   await t.openPanel(header(t), "Block settings");
-  await t.check("a collection view's block has no Collection picker", (await dropdown(t, popover(t), "Collection").count()) === 0 || !(await dropdown(t, popover(t), "Collection").isVisible()));
+  await t.check("a collection view's block has no Collection picker", (await dropdownOf(t, shownPopover(t), "Collection").count()) === 0 || !(await dropdownOf(t, shownPopover(t), "Collection").isVisible()));
   await t.closeAll();
 });
 
@@ -327,7 +316,7 @@ test("backlinks: group by Collection, the groups' order, kept with the page", as
   await t.open(adaPath(t, ids));
   await expectRows(t, "ungrouped", ADA_ROWS);
   await t.openPanel(header(t), "Sort and group");
-  const panel = panelOf(t);
+  const panel = toolbarPanel(t);
   const groupBy = panel.getByLabel("Group by", { exact: true });
   const options = await groupBy.locator("option").allInnerTexts();
   await t.check("Group by offers the Backlinks' fields that can be grouped", ["No grouping", "Title", "Collection", "Field"].every((o) => options.includes(o)) && !options.includes("Item"), options.join(", "));
@@ -373,7 +362,7 @@ test("backlinks: filter and sort the rows", async (t) => {
   await t.open(adaPath(t, ids));
   await expectRows(t, "unfiltered", ADA_ROWS);
   await t.openPanel(header(t), "Filter");
-  await panelOf(t).getByRole("button", { name: "Add filter" }).click();
+  await toolbarPanel(t).getByRole("button", { name: "Add filter" }).click();
   await t.settle(100);
   const rule = rulesOf(t).last();
   const fields = await rule.getByLabel("Field", { exact: true }).locator("option").allInnerTexts();
@@ -400,12 +389,12 @@ test("backlinks: filter and sort the rows", async (t) => {
   await t.closeAll();
   // Sort by Field, descending, then ascending, then by Title.
   await t.openPanel(header(t), "Sort and group");
-  const sort = panelOf(t).getByLabel("Sort by", { exact: true });
+  const sort = toolbarPanel(t).getByLabel("Sort by", { exact: true });
   const column = async (i) => ((await rowsOf(t)) || []).map((r) => r[i]).join();
   await sort.selectOption({ label: "Field" });
-  await panelOf(t).getByLabel("Direction", { exact: true }).selectOption({ label: "Descending" });
+  await toolbarPanel(t).getByLabel("Direction", { exact: true }).selectOption({ label: "Descending" });
   await t.until("sorted by Field, descending", async () => (await column(2)) === "Review,Others,Body,Body,About" || (await column(2)));
-  await panelOf(t).getByLabel("Direction", { exact: true }).selectOption({ label: "Ascending" });
+  await toolbarPanel(t).getByLabel("Direction", { exact: true }).selectOption({ label: "Ascending" });
   await t.until("and ascending", async () => (await column(2)) === "About,Body,Body,Others,Review" || (await column(2)));
   await sort.selectOption({ label: "Title" });
   await t.until("by Title", async () => (await column(0)) === "Dune,Meeting,Plan,Plan,Reading list" || (await column(0)));
@@ -459,7 +448,7 @@ test("backlinks: a Component block reads them as $items, $groups and $fields", a
   await t.audit("a component over backlinks");
   // The block's Filter narrows $items, as for any collection.
   await t.openPanel(header(t), "Filter");
-  await panelOf(t).getByRole("button", { name: "Add filter" }).click();
+  await toolbarPanel(t).getByRole("button", { name: "Add filter" }).click();
   const rule = rulesOf(t).last();
   await rule.getByLabel("Field", { exact: true }).selectOption({ label: "Collection" });
   await rule.getByLabel("Condition", { exact: true }).selectOption({ label: "is" });
@@ -468,7 +457,7 @@ test("backlinks: a Component block reads them as $items, $groups and $fields", a
   await t.closeAll();
   // $item.Item is a link to the linking item.
   await t.openPanel(header(t), "Block settings");
-  await choose(t, popover(t), "Component", "Backlink links");
+  await pickOption(t, shownPopover(t), "Component", "Backlink links");
   await t.closeAll();
   await t.until("the other component lists links", async () => (await paneOf(t).locator(".component-block a").count()) >= 1);
   await paneOf(t).locator(".component-block a").first().click();
@@ -641,7 +630,7 @@ for (const [label, opts] of [["phone", { viewport: "phone" }], ["dark theme", { 
     await expectRows(t, "the rows", ADA_ROWS);
     await t.audit(`backlinks table, ${label}`);
     await t.openPanel(header(t), "Sort and group");
-    await panelOf(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Collection" });
+    await toolbarPanel(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Collection" });
     await t.until("grouped", async () => (await groupsOf(t)).length === 2);
     await t.audit(`backlinks grouped, ${label} (sort and group open)`);
     await t.closeAll();
@@ -650,7 +639,7 @@ for (const [label, opts] of [["phone", { viewport: "phone" }], ["dark theme", { 
     await t.until("cards", async () => (await cardTitles(t)).length === 5);
     await t.audit(`backlinks as cards, ${label}`);
     await t.openPanel(header(t), "Block settings");
-    await dropdown(t, popover(t), "Collection").locator(".cds--list-box__field").first().click();
+    await dropdownOf(t, shownPopover(t), "Collection").locator(".cds--list-box__field").first().click();
     await t.audit(`the Collection picker with Backlinks, ${label}`);
     await t.closeAll();
   }, opts);

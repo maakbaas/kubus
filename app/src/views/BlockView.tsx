@@ -25,11 +25,11 @@ import { QueryEditor } from "./QueryEditor";
 import type { CollectionData } from "./useCollectionData";
 import { useItemActions } from "./useItemActions";
 import { useRemoteResult } from "./useRemoteResult";
-import { useBlendResult } from "./useBlendResult";
+import { useMergedResult } from "./useMergedResult";
 import { useBlockName } from "./BlockListEditor";
 import { useShownOnce } from "../ui/useShownOnce";
 import { MergeFields } from "./MergeFields";
-import { translateRules } from "../domain/blend";
+import { translateRules } from "../domain/mergedCollection";
 
 // One block: a collection's items shown one way (its block type), with its own sort, grouping,
 // and fields, and the view's filter unless it has its own. Collection views and item pages
@@ -67,7 +67,7 @@ const isDefaultSort = (block: ViewBlock, collection: Collection, grouped: boolea
   (!grouped || block.groupBy === null) && isDefaultBlockSort(block, collection);
 
 interface MenusProps {
-  /** The collection the block reads: its own, or the one several chosen are read as (domain/blend.ts). */
+  /** The collection the block reads: its own, or the one several chosen are read as (domain/mergedCollection.ts). */
   collection: Collection;
   /** The collection the block starts from: the view's, or the page's (the first of several chosen on an item page is the block's own). */
   home: Collection;
@@ -347,14 +347,14 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   const filters = useMemo(() => resolveFilterValues(base.filters, page ?? null), [base.filters, page]);
   const inherited = useMemo(() => resolveFilterValues(viewFilters ?? NO_FILTERS, page ?? null), [viewFilters, page]);
   const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder, base.groupDate]); // eslint-disable-line react-hooks/exhaustive-deps
-  // A remote collection's rows come from its source a page at a time, filtered and sorted there; a blend's from its parts, merged.
+  // A remote collection's rows come from its source a page at a time, filtered and sorted there; several collections' from their parts, merged.
   // Its Limit: items shown at first and added by each "Show more" (0: all, a remote collection's loaded page by page).
   const limit = blockLimit(block, !!uses.all);
   // A block that doesn't show groups (a chart: its X axis is its own) doesn't make a remote collection load every row to group by a date part.
   const remoteQuery = useMemo(() => (uses.groups || !query.groupDate ? query : { ...query, groupDate: undefined }), [uses.groups, query]);
   const remoteRows = useRemoteResult(collection, remoteQuery, search, uses.query, limit === 0, limit || undefined);
-  const blended = useBlendResult(collection, query, search, uses.query, limit === 0, limit || undefined);
-  const remote = remoteRows ?? blended;
+  const mergedRows = useMergedResult(collection, query, search, uses.query, limit === 0, limit || undefined);
+  const remote = remoteRows ?? mergedRows;
   const local = useMemo(
     () => (!remote && data.items && uses.query ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),
     [remote, collection, data.items, data.ctx, uses.query, query, search],
@@ -436,8 +436,8 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
       </SectionHeader>
       {!collapsed && showError && <InlineNotification kind="error" title="Error" subtitle={error} hideCloseButton />}
       {/* A block whose collection is gone (or a merged column that lost a field) says so (the rest of it is shown). */}
-      {!collapsed && blended && blended.problems.length > 0 && (
-        <InlineNotification kind="warning" title="Collections problem" subtitle={blended.problems.map((p) => p.message).join(" ")} hideCloseButton />
+      {!collapsed && mergedRows && mergedRows.problems.length > 0 && (
+        <InlineNotification kind="warning" title="Collections problem" subtitle={mergedRows.problems.map((p) => p.message).join(" ")} hideCloseButton />
       )}
       {/* Nothing until everything is in (a fraction of a second): a placeholder table would only
           flash, shaped unlike the real one. */}

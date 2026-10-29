@@ -114,7 +114,7 @@ export const SYNC_TABLES: SyncTable[] = [
   },
   {
     // Derived from field_values (the links in a value), with the value's own id and updated_at so it merges to the
-    // same version as the value: an older device doesn't know the table (nor write it), and heals it in the others.
+    // same version as the value: every device writes it with its values (a first download heals a server filled before it existed).
     name: "item_links",
     key: ["id"],
     version: "updated_at",

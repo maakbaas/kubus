@@ -5,7 +5,8 @@
 // registry. A block type gets the already filtered / sorted / grouped items (QueryResult) and the
 // fields its layout shows, and only decides how to present them, plus its own options. What is
 // the same for every type (filter, sort and group, fields) is the block's, not in options,
-// so it carries over when the type is switched.
+// so it carries over when the type is switched. A type whose default sort isn't by title (a chart, a map: time
+// order) says so in DEFAULT_SORTS (domain/blockSort.ts), which the headless API reads without loading block types.
 
 import type { ComponentType } from "react";
 import type { CarbonIconType } from "@carbon/icons-react";

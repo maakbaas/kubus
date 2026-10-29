@@ -110,10 +110,10 @@ export interface Collection {
    */
   virtual?: "backlinks" | null;
   /**
-   * A merged collection: what a block listing several collections reads (domain/blend.ts `mergeCollections`), made when the
+   * A merged collection: what a block listing several collections reads (domain/mergedCollection.ts `mergeCollections`), made when the
    * block is shown, never stored. Its fields (columns) are mapped to a field of each part. null (or absent) = an ordinary one.
    */
-  blend?: CollectionBlend | null;
+  mergedFrom?: MergedFrom | null;
   /** The field its items' titles are (a field id: text, a number or a date, TITLE_KINDS), NO_TITLE for none; null (or absent) = the first text field with a value. */
   titleField?: string | null;
   createdAt: string;
@@ -156,20 +156,27 @@ export interface CollectionSource {
 }
 
 /** One part of a merged collection: a collection, and the field of it each column shows. */
-export interface BlendPart {
+export interface MergedPart {
   /** The collection (native or remote) whose items (rows) are the part's. A collection is a part once. */
   collectionId: string;
-  /** By the blend's field id: the id of the part's field it shows; null (or absent) = none (the part's rows have no value there). */
+  /** By the column's id: the id of the part's field it shows; null (or absent) = none (the part's rows have no value there). */
   map: Record<string, string | null>;
 }
 
-/** What makes a collection a merge of others. */
-export interface CollectionBlend {
-  parts: BlendPart[];
-  /** The id of its built-in Source field: a text field that names the part a row came from. */
-  sourceField: string;
+/** Something wrong with the collections a block lists: one is gone, a column merged by hand lost a field or can't show its fields alike. */
+export interface MergeProblem {
+  /** The collection's id ("" for a problem of a hand-merged column as a whole). */
+  part: string;
+  message: string;
+}
+
+/** What a merged collection is made of. */
+export interface MergedFrom {
+  parts: MergedPart[];
+  /** The id of its built-in Collection column: a text field that names the part a row came from. */
+  collectionField: string;
   /** What was wrong when it was made (a collection that is gone): shown by the block. */
-  problems?: { part: string; message: string }[];
+  problems?: MergeProblem[];
 }
 
 /** A field as edited and saved: the field without what the repository fills in (its collection, its place). */
@@ -303,11 +310,11 @@ export const canBeTitle = (f: Pick<FieldDef, "kind">) => TITLE_KINDS.includes(f.
  * The fields an item's title can come from, in order: the collection's title field, none (NO_TITLE),
  * else (not set, or its field gone) every text field: the first with a value is the title.
  */
-export function titleFields<F extends Pick<FieldDef, "id" | "kind">>(collection: { titleField?: string | null; fields: F[]; blend?: Pick<CollectionBlend, "sourceField"> | null }): F[] {
+export function titleFields<F extends Pick<FieldDef, "id" | "kind">>(collection: { titleField?: string | null; fields: F[]; mergedFrom?: Pick<MergedFrom, "collectionField"> | null }): F[] {
   if (collection.titleField === NO_TITLE) return [];
   const chosen = collection.fields.find((f) => f.id === collection.titleField && canBeTitle(f));
-  // A blend's Source field names the part a row came from, it doesn't call the row (unless chosen as the title).
-  return chosen ? [chosen] : collection.fields.filter((f) => f.kind === "string" && f.id !== collection.blend?.sourceField);
+  // A merged collection's Collection column names the part a row came from, it doesn't call the row (unless chosen as the title).
+  return chosen ? [chosen] : collection.fields.filter((f) => f.kind === "string" && f.id !== collection.mergedFrom?.collectionField);
 }
 
 /** A title field's value as the title ("" for none): text as it is, a number, a date as shown. */

@@ -5,7 +5,7 @@
 // (fieldLayout.ts): there a block may list another collection, filtered by the page's item.
 // The "current" view state is ephemeral; it becomes a CollectionView only when the user saves it.
 
-import { mergeCollections, type BlendProblem, type ColumnMerge } from "./blend";
+import { mergeCollections, type MergeProblem, type ColumnMerge } from "./mergedCollection";
 import { parseFieldLayout, type FieldLayout } from "./fieldLayout";
 import { newId, pickableFields, type Collection } from "./model";
 import { parseGroupDate, type GroupDate } from "./groupDate";
@@ -38,7 +38,7 @@ export interface ViewBlock {
   collectionId: string | null;
   /**
    * Every collection it lists when that is several (native and remote ones mixed; `collectionId` or the page's own first):
-   * read as one, their fields merged by name (domain/blend.ts). Absent = the one collection.
+   * read as one, their fields merged by name (domain/mergedCollection.ts). Absent = the one collection.
    */
   collectionIds?: string[];
   /** With several collections: columns merged by hand (Fields → Merge fields). */
@@ -290,7 +290,7 @@ export function normalizeBlockHeight(raw: unknown): number {
  * The collection a block lists: its own, or (several chosen: `collectionIds`) the one they are read as, with what is wrong with
  * the choice (a collection that is gone, a merged column that lost a field).
  */
-export function listedCollection(base: Collection, block: Pick<ViewBlock, "collectionIds" | "merges">, collections: Collection[]): { collection: Collection; problems: BlendProblem[] } {
+export function listedCollection(base: Collection, block: Pick<ViewBlock, "collectionIds" | "merges">, collections: Collection[]): { collection: Collection; problems: MergeProblem[] } {
   if (!block.collectionIds || block.collectionIds.length < 2) return { collection: base, problems: [] };
   return mergeCollections(block.collectionIds, collections, block.merges);
 }

@@ -515,7 +515,7 @@ export class SqliteRepository implements Repository {
   }
 
   async rebuildLinks(): Promise<void> {
-    await this.db.write([healLinks(null, true)]);
+    await this.db.write([healLinks(true)]);
   }
 
   async createItem(collection: Collection, values: Record<string, FieldValue>, spaceId: string): Promise<string> {

@@ -70,6 +70,8 @@ export default defineConfig({
     },
   ],
   css: { postcss: { plugins: [hoverOnlyWhenHovering, bundledFonts] } },
+  // micromark's entity decoder, browser build, touches `document` when it loads: the database worker can't load it.
+  resolve: { alias: { "decode-named-character-reference": fileURLToPath(new URL("src/decodeNamedCharacterReference.ts", import.meta.url)) } },
   clearScreen: false,
   // sqlite-wasm locates its .wasm via import.meta.url; pre-bundling breaks that.
   optimizeDeps: { exclude: ["@sqlite.org/sqlite-wasm"] },

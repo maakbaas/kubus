@@ -14,8 +14,8 @@ import { filterValueProblem, isGroupable, ruleMatches, waitsForValue, operatorsF
 
 export const isRemote = (collection: Pick<Collection, "source">): boolean => !!collection.source;
 
-/** Whether a collection's items can't be changed here: a remote one's rows, a virtual one's (the backlinks), a blend's. */
-export const isReadOnly = (collection: Pick<Collection, "source" | "virtual" | "blend">): boolean => isRemote(collection) || !!collection.virtual || !!collection.blend;
+/** Whether a collection's items can't be changed here: a remote one's rows, a virtual one's (the backlinks), a merged collection's. */
+export const isReadOnly = (collection: Pick<Collection, "source" | "virtual" | "mergedFrom">): boolean => isRemote(collection) || !!collection.virtual || !!collection.mergedFrom;
 
 /** Field types a column's field can be shown as (they read the same values): text also as Markdown or HTML. */
 export const columnKinds = (kind: FieldKind): FieldKind[] => (kind === "string" || kind === "markdown" || kind === "html" ? ["string", "markdown", "html"] : [kind]);
@@ -154,8 +154,8 @@ export function groupLabel(field: FieldDef | undefined, key: string): string {
 type Paired = FilterRule & { field: FieldDef; column: string; always?: boolean };
 
 /**
- * Fields the source has no column for but whose value is the same on every row (a blend's part: a field of the blend it
- * doesn't map has no value, its Source field is the part's name): by field id, the field and that value. A rule on one
+ * Fields the source has no column for but whose value is the same on every row (a merged collection's part: a field of the merged collection it
+ * doesn't map has no value, its Collection column is the part's name): by field id, the field and that value. A rule on one
  * holds for all the rows or for none of them, which `sourceQuery` settles itself.
  */
 export type ConstantFields = Map<string, { field: FieldDef; value: FieldValue }>;

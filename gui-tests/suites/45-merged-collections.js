@@ -187,20 +187,10 @@ async function expectSet(t, label, expected, i = 0) {
   }, { timeout: 10000 });
 }
 
-const panel = (t) => t.page.locator(".toolbar-popover__panel:visible").last();
-const popover = (t) => t.page.locator(".cds--popover--open").last();
-const dropdown = (t, scope, title) =>
-  scope.locator(".cds--dropdown__wrapper, .cds--combo-box, .cds--list-box__wrapper, .cds--multi-select__wrapper").filter({ has: t.page.locator(".cds--label", { hasText: new RegExp(`^${title}$`) }) }).first();
-async function choose(t, scope, title, option) {
-  await dropdown(t, scope, title).locator(".cds--list-box__field").first().click();
-  await t.settle(80);
-  await t.page.getByRole("option", { name: option, exact: true }).filter({ visible: true }).first().click();
-  await t.settle(80);
-}
 /** Block settings of block i: toggles the collection `name` in the Collections picker. */
 async function toggleCollection(t, name, i = 0) {
-  if (!(await popover(t).locator(".cds--multi-select").count())) await t.openPanel(header(t, i), "Block settings");
-  await popover(t).locator(".cds--multi-select .cds--list-box__field").first().click();
+  if (!(await shownPopover(t).locator(".cds--multi-select").count())) await t.openPanel(header(t, i), "Block settings");
+  await shownPopover(t).locator(".cds--multi-select .cds--list-box__field").first().click();
   await t.settle(80);
   await t.page.getByRole("option", { name, exact: true }).filter({ visible: true }).first().click();
   await t.settle(300);
@@ -320,10 +310,10 @@ test("merged collections: the view's filter reaches both, its date period steppe
   await t.open(t.listPath(ids.collections.inv));
   await expectTitles(t, "October: both collections' rows of the month", OCTOBER);
   await t.openPanel(t.page.locator(`${PANE} .views-bar`), "Filter (1)");
-  await panel(t).getByRole("button", { name: "Previous" }).click();
+  await toolbarPanel(t).getByRole("button", { name: "Previous" }).click();
   await expectTitles(t, "the month before", SEPTEMBER);
-  await panel(t).getByRole("button", { name: "Next" }).click();
-  await panel(t).getByRole("button", { name: "Next" }).click();
+  await toolbarPanel(t).getByRole("button", { name: "Next" }).click();
+  await toolbarPanel(t).getByRole("button", { name: "Next" }).click();
   await expectTitles(t, "two months on", NOVEMBER);
   await t.closeAll();
   await t.audit("the view filtered to a month");
@@ -335,14 +325,14 @@ test("merged collections: Merge fields joins two differently named fields into o
   let h = await headers(t);
   await t.check("Total and Price are two columns", h.includes("Total") && h.includes("Price") && !h.includes("Amount"), JSON.stringify(h));
   await t.openPanel(header(t), "Fields");
-  await choose(t, popover(t), "Merge this field", "Total (Shop sales)");
-  await dropdown(t, popover(t), "With this field").locator(".cds--list-box__field").first().click();
+  await pickOption(t, shownPopover(t), "Merge this field", "Total (Shop sales)");
+  await dropdownOf(t, shownPopover(t), "With this field").locator(".cds--list-box__field").first().click();
   await t.settle(80);
   const options = (await t.page.getByRole("option").filter({ visible: true }).allInnerTexts()).map((s) => s.trim());
   await t.check("only number fields of the other collection can be merged with a number", JSON.stringify(options) === JSON.stringify(["Price (Invoices)"]), JSON.stringify(options));
   await t.page.getByRole("option", { name: "Price (Invoices)", exact: true }).filter({ visible: true }).first().click();
-  await popover(t).getByLabel("Column name").fill("Amount");
-  await popover(t).getByRole("button", { name: "Merge", exact: true }).click();
+  await shownPopover(t).getByLabel("Column name").fill("Amount");
+  await shownPopover(t).getByRole("button", { name: "Merge", exact: true }).click();
   await t.closeAll();
   await t.until("one Amount column replaces Total and Price", async () => {
     h = await headers(t);
@@ -357,7 +347,7 @@ test("merged collections: Merge fields joins two differently named fields into o
   await t.open(t.listPath(ids.collections.inv));
   await t.until("after a reload", async () => (await headers(t)).includes("Amount"), { timeout: 10000 });
   await t.openPanel(header(t), "Fields");
-  await popover(t).getByRole("button", { name: "Unmerge Amount" }).click();
+  await shownPopover(t).getByRole("button", { name: "Unmerge Amount" }).click();
   await t.closeAll();
   await t.until("taking it apart: Total and Price again", async () => {
     h = await headers(t);

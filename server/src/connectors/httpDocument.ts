@@ -144,6 +144,9 @@ async function get(url: URL, headers: Record<string, string>, signal: AbortSigna
   }
 }
 
+/** A redirect not followed (too many, or to another scheme): said as it is, not as "can't reach". */
+class RedirectRefused extends Error {}
+
 async function readDocument(address: string, request: DocumentRequest, have: Kept | undefined): Promise<HttpDocument> {
   const maxBytes = request.maxBytes ?? MAX_DOCUMENT_BYTES;
   const headers: Record<string, string> = { "User-Agent": "Kubus", ...request.headers };
@@ -161,15 +164,15 @@ async function readDocument(address: string, request: DocumentRequest, have: Kep
       const location = [301, 302, 303, 307, 308].includes(res.status) ? res.headers.get("location") : null;
       if (!location) break;
       await res.body?.cancel();
-      if (hops === MAX_REDIRECTS) throw new Error(`The address redirects more than ${MAX_REDIRECTS} times`);
+      if (hops === MAX_REDIRECTS) throw new RedirectRefused(`The address redirects more than ${MAX_REDIRECTS} times`);
       const next = new URL(location, at);
-      if (next.protocol !== "https:" && next.protocol !== "http:") throw new Error(`The address redirects to ${next.protocol}//, which isn't read`);
+      if (next.protocol !== "https:" && next.protocol !== "http:") throw new RedirectRefused(`The address redirects to ${next.protocol}//, which isn't read`);
       if (next.origin !== at.origin) for (const name of Object.keys(headers)) if (name !== "User-Agent") delete headers[name];
       at = next;
     }
     finalUrl = at.toString();
   } catch (e) {
-    if (e instanceof Error && /^The address redirects/.test(e.message)) throw e;
+    if (e instanceof RedirectRefused) throw e;
     if (signal.aborted) throw new Error(`The address didn't answer within ${Math.round(request.timeoutMs / 1000)} s`, { cause: e });
     const cause = (e as { cause?: { code?: string; message?: string } }).cause;
     throw new Error(`Can't reach the address${cause?.code ? ` (${cause.code})` : cause?.message ? `: ${cause.message}` : ""}`, { cause: e });

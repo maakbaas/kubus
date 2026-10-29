@@ -87,6 +87,8 @@ those): on a big page that is the difference between a minute and a second per c
 - Every test gets a fresh browser context: its own OPFS database, localStorage and viewport. It
   seeds what it needs (`lib/data.js`: `t.seed(spec)`, content generators, `profileSpec`,
   `matrixSpec`, `wsLayout` for tab and split layouts) and opens pages with `t.open(path)`.
+  What suites share besides the data lives in `lib/`: `lib/locators.js` (the open panel, popover and dialog, Carbon dropdowns and picking an option), the
+  suite's own calendar in `lib/data.js`; suites are plain scripts in one scope with `lib/`, so a suite can't declare a name `lib/` already has.
 - Checkpoints are the pass/fail criteria, each recorded with a screenshot:
   - `t.audit(label)`: the layout audit (`lib/audit.js`, `CRITERIA` lists every rule): no page or
     pane overflow, nothing sticking out or cut off, no overlapping text or controls, every control

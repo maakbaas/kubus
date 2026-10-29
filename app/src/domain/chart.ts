@@ -274,7 +274,7 @@ export const CHART_WIDTH = { min: 8, max: 99, step: 1, stop: 100 };
 /** The Width slider's position for a width (Full width is its last stop). */
 export const widthToStop = (w: ChartWidth): number => (w === FULL_WIDTH ? CHART_WIDTH.stop : w);
 /** The width a slider position stands for (its last stop is Full width). */
-export const widthFromStop = (stop: number): ChartWidth => (stop >= CHART_WIDTH.stop ? FULL_WIDTH : Math.max(CHART_WIDTH.min, Math.round(stop)));
+export const widthFromStop = (stop: number): ChartWidth => normalizeWidth(stop);
 /** A width as the slider labels it. */
 export const widthLabel = (w: ChartWidth): string => (w === FULL_WIDTH ? "Full width" : `${w}rem`);
 /** The block's maximum width in CSS: none for Full width. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeBlock } from "../views";
-import { COL, invoices, MERGES, shopSales, world } from "../test/blendWorld";
+import { COL, invoices, MERGES, shopSales, world } from "../test/mergedWorld";
 import { compareGroups } from "./query";
 import { listedCollection, newBlock, parseBlock, parseViewConfig } from "./views";
 
@@ -23,8 +23,8 @@ describe("a block listing several collections", () => {
   });
 
   it("keeps the merged columns in its layout when it is normalized, and drops those that are gone", () => {
-    const shown = { ...block, layout: { ...block.layout, fields: [COL.source, COL.amount, "merged:name:gone", COL.date] } };
-    expect(normalizeBlock(shopSales, shown, world).layout.fields).toEqual([COL.source, COL.amount, COL.date]);
+    const shown = { ...block, layout: { ...block.layout, fields: [COL.collection, COL.amount, "merged:name:gone", COL.date] } };
+    expect(normalizeBlock(shopSales, shown, world).layout.fields).toEqual([COL.collection, COL.amount, COL.date]);
     // Without the collections to read it by, only the one collection's own fields are known.
     expect(normalizeBlock(shopSales, shown).layout.fields).toEqual([]);
     expect(normalizeBlock(shopSales, shown, world)).toMatchObject({ collectionIds: ["sales", "invoices"], merges: MERGES });

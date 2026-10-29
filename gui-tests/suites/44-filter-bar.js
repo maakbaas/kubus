@@ -6,36 +6,6 @@
 // block follows, and the bar in one row on every window size with nothing moving while it is
 // stepped. Every step is followed by the rows shown, the label and what was stored.
 
-const pad2 = (n) => String(n).padStart(2, "0");
-const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-/** Noon, `n` days from today (local): its day is the same whatever the time of the run. */
-const dayAt = (n) => {
-  const d = new Date();
-  d.setHours(12, 0, 0, 0);
-  d.setDate(d.getDate() + n);
-  return d;
-};
-const dayStr = (n) => ymd(dayAt(n));
-const sundayOf = (d) => {
-  const s = new Date(d);
-  s.setDate(s.getDate() - s.getDay());
-  return s;
-};
-
-/** [first, last] day ("yyyy-mm-dd") of the day / week / month / year `offset` units from today's (the suite's own calendar, not the app's). */
-function periodDays(kind, offset = 0) {
-  const t = dayAt(0);
-  if (kind === "day") return [dayStr(offset), dayStr(offset)];
-  if (kind === "week") {
-    const s = sundayOf(t);
-    s.setDate(s.getDate() + 7 * offset);
-    const e = new Date(s);
-    e.setDate(e.getDate() + 6);
-    return [ymd(s), ymd(e)];
-  }
-  if (kind === "month") return [ymd(new Date(t.getFullYear(), t.getMonth() + offset, 1)), ymd(new Date(t.getFullYear(), t.getMonth() + offset + 1, 0))];
-  return [`${t.getFullYear() + offset}-01-01`, `${t.getFullYear() + offset}-12-31`];
-}
 const monthName = (day) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
 // --- data -------------------------------------------------------------------------------------
@@ -96,7 +66,6 @@ const FILTER = /^Filter( \(\d+\))?$/;
 const barOf = (t) => t.page.locator(".ws-pane--active .filter-bar");
 const toolbarOf = (t) => t.page.locator(".ws-pane--active .views-bar").first();
 const labelOf = async (t) => (await barOf(t).locator(".filter-bar__label").evaluate((e) => e.textContent)).trim();
-const panelOf = (t) => t.page.locator(".toolbar-popover__panel:visible").last();
 const kindBox = (t) => barOf(t).locator(".filter-bar__kind");
 const kindShown = async (t) => (await kindBox(t).locator(".cds--list-box__label").innerText()).trim();
 const barButton = (t, name) => barOf(t).getByRole("button", { name, exact: true });
@@ -168,7 +137,7 @@ test("Show filter bar: stored with the view, kept after a reload, the Filter but
   await t.open(bookPath(t, ids));
   await t.check("no bar by default, the Filter button is in the views bar", (await barOf(t).count()) === 0 && (await toolbarOf(t).getByRole("button", { name: FILTER }).count()) === 1);
   await t.openPanel(toolbarOf(t), "View settings");
-  const box = panelOf(t).getByRole("checkbox", { name: "Show filter bar" });
+  const box = toolbarPanel(t).getByRole("checkbox", { name: "Show filter bar" });
   await t.check("View settings offers Show filter bar, off", (await box.count()) === 1 && !(await box.isChecked()));
   await t.popoverStep("tick Show filter bar", () => box.click({ force: true }), { target: box, scope: ".views-bar" });
   await t.until("the bar shows at once", async () => (await barOf(t).count()) === 1);
@@ -192,7 +161,7 @@ test("Show filter bar: stored with the view, kept after a reload, the Filter but
   await t.page.getByRole("tab", { name: "All" }).click();
   // Off again: stays while the panel is open, goes (the Filter button back) when it closes.
   await t.openPanel(toolbarOf(t), "View settings");
-  const off = panelOf(t).getByRole("checkbox", { name: "Show filter bar" });
+  const off = toolbarPanel(t).getByRole("checkbox", { name: "Show filter bar" });
   await t.check("the box is ticked", await off.isChecked());
   await t.popoverStep("untick Show filter bar", () => off.click({ force: true }), { target: off, scope: ".views-bar" });
   await t.until("stored off (the key is gone)", async () => (await storedView(t, ids.collections.books)).filterBar === undefined);
@@ -213,12 +182,12 @@ test("the Filter button on the bar: grey while open, blue with rules, the same p
   await button().click();
   await t.settle(150);
   let s = await state();
-  await t.check("open: grey (selected), expanded, the filter panel is shown", s.selected && s.open && !s.active && (await panelOf(t).getByRole("button", { name: "Add filter" }).count()) === 1);
+  await t.check("open: grey (selected), expanded, the filter panel is shown", s.selected && s.open && !s.active && (await toolbarPanel(t).getByRole("button", { name: "Add filter" }).count()) === 1);
   await t.audit("Filter panel open from the bar", { shotOnFail: true });
   // A rule: Title contains "a".
-  await panelOf(t).getByRole("button", { name: "Add filter" }).click();
+  await toolbarPanel(t).getByRole("button", { name: "Add filter" }).click();
   await t.settle(100);
-  const rule = panelOf(t).locator(".query-editor__rule").last();
+  const rule = toolbarPanel(t).locator(".query-editor__rule").last();
   await rule.getByLabel("Field", { exact: true }).selectOption({ label: "Title" });
   await rule.getByLabel("Condition", { exact: true }).selectOption({ label: "contains" });
   await rule.getByLabel("Value", { exact: true }).fill("lie");
@@ -259,7 +228,7 @@ test("no period yet: Any date, the buttons off; a kind creates the period on the
   await t.check("the view is changed (*), nothing stored yet", (await activeTab(t)) === "Both *" && (await storedView(t, ids.collections.books, "Both")).filters.length === 0);
   const barText = await labelOf(t);
   await t.openPanel(barOf(t), "Filter (1)");
-  const panel = panelOf(t).locator(".date-period");
+  const panel = toolbarPanel(t).locator(".date-period");
   await t.check("the filter panel shows the same period line, by Published", (await panel.locator(".date-period__label").innerText()).trim() === barText && (await panel.getByLabel("by", { exact: true }).locator("option:checked").innerText()) === "Published" && (await panel.getByRole("tab", { name: "Month" }).getAttribute("aria-selected")) === "true");
   await t.escapeCloses("Escape closes the filter panel");
   await saveView(t);
@@ -337,7 +306,7 @@ test("‹ › step a chosen period by its kind, a range by its length @ desktop"
     await expectRows(t, `${kind} -1`, inPeriod(kind, -1));
     const panelLine = async () => {
       await t.openPanel(barOf(t), FILTER);
-      const text = (await panelOf(t).locator(".date-period__label").innerText()).trim();
+      const text = (await toolbarPanel(t).locator(".date-period__label").innerText()).trim();
       await t.escapeCloses("closes");
       return text;
     };
@@ -476,9 +445,9 @@ test("every change from the bar is an edit of the view's filter: * on the tab, S
   await t.check("changed: * and Save", (await activeTab(t)) === "Both *" && (await toolbarOf(t).getByRole("button", { name: "Save changes to view" }).count()) === 1);
   await t.check("nothing is stored before Save", (await storedView(t, ids.collections.books, "Both")).filters[1].value === "month+0");
   await t.openPanel(barOf(t), "Filter (2)");
-  await t.check("the filter panel lists the other rule only, the period in its date line (the same text)", (await panelOf(t).locator(".query-editor__rule").count()) === 1 && (await panelOf(t).locator(".date-period__label").innerText()).trim() === (await labelOf(t)));
+  await t.check("the filter panel lists the other rule only, the period in its date line (the same text)", (await toolbarPanel(t).locator(".query-editor__rule").count()) === 1 && (await toolbarPanel(t).locator(".date-period__label").innerText()).trim() === (await labelOf(t)));
   // Edited in the panel: the bar follows.
-  await panelOf(t).locator(".date-period").getByRole("button", { name: "Previous", exact: true }).click();
+  await toolbarPanel(t).locator(".date-period").getByRole("button", { name: "Previous", exact: true }).click();
   await t.settle(100);
   await t.check("a step in the panel shows on the bar", (await labelOf(t)).startsWith("2 months ago"), await labelOf(t));
   await t.escapeCloses("closes");

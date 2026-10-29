@@ -5,7 +5,6 @@
 // stored images inside an HTML field, the table's add row (errors, leaving it, a failed save), and
 // a delete or save that fails.
 
-const modalOf = (t) => t.page.locator(".cds--modal.is-visible");
 const barOf = (t) => t.page.locator(".ws-pane--active .views-bar").first();
 const panelOf = (t) => t.page.locator(".toolbar-popover.cds--popover--open");
 const blocksOf = (t) => t.page.locator(".ws-pane--active .block");
@@ -151,24 +150,24 @@ test("blocks removed (asked first, from the block and from View settings); a vie
   const second = () => blocksOf(t).nth(1);
   await t.openPanel(second(), "Block settings");
   await panelOf(t).getByRole("button", { name: "Remove block" }).click();
-  await t.until("asked first", async () => /Remove block/.test(await modalOf(t).innerText().catch(() => "")) && /Items are not affected/.test(await modalOf(t).innerText()));
+  await t.until("asked first", async () => /Remove block/.test(await shownModal(t).innerText().catch(() => "")) && /Items are not affected/.test(await shownModal(t).innerText()));
   await t.audit("Remove block dialog");
-  await modalOf(t).getByRole("button", { name: "Cancel" }).click();
+  await shownModal(t).getByRole("button", { name: "Cancel" }).click();
   await t.until("Cancel closes the dialog", async () => (await t.count(".cds--modal.is-visible")) === 0);
   await t.check("…and keeps all three blocks, shown and stored", (await blocksOf(t).count()) === 3 && (await stored()).blocks.length === 3);
   await t.closeAll();
   await t.openPanel(second(), "Block settings");
   await panelOf(t).getByRole("button", { name: "Remove block" }).click();
-  await t.until("asked again", async () => (await modalOf(t).count()) === 1);
-  await modalOf(t).getByRole("button", { name: /^(Delete|Remove)/ }).click();
+  await t.until("asked again", async () => (await shownModal(t).count()) === 1);
+  await shownModal(t).getByRole("button", { name: /^(Delete|Remove)/ }).click();
   await t.until("the block is gone from the page and the stored view", async () => (await blocksOf(t).count()) === 2 && (await stored()).blocks.map((b) => b.title).join("|") === "First|Third");
   await t.closeAll();
 
   // From View settings' block list.
   await t.openPanel(barOf(t), "View settings");
   await panelOf(t).getByRole("button", { name: "Remove block" }).first().click();
-  await t.until("asked first", async () => (await modalOf(t).count()) === 1);
-  await modalOf(t).getByRole("button", { name: /^(Delete|Remove)/ }).click();
+  await t.until("asked first", async () => (await shownModal(t).count()) === 1);
+  await shownModal(t).getByRole("button", { name: /^(Delete|Remove)/ }).click();
   await t.until("the first block is removed", async () => (await blocksOf(t).count()) === 1 && (await stored()).blocks.map((b) => b.title).join("|") === "Third");
   await t.check("the last block cannot be removed any more", (await panelOf(t).getByRole("button", { name: "Remove block" }).count()) === 0);
   await t.closeAll();
@@ -180,13 +179,13 @@ test("blocks removed (asked first, from the block and from View settings); a vie
 
   // Deleting a view asks first.
   await clickBar(t, "Delete view");
-  await t.until("deleting asks first", async () => /Delete view “Main”\?/.test(await modalOf(t).innerText().catch(() => "")));
-  await modalOf(t).getByRole("button", { name: "Cancel" }).click();
+  await t.until("deleting asks first", async () => /Delete view “Main”\?/.test(await shownModal(t).innerText().catch(() => "")));
+  await shownModal(t).getByRole("button", { name: "Cancel" }).click();
   await t.until("Cancel closes it", async () => (await t.count(".cds--modal.is-visible")) === 0);
   await t.check("…and keeps both views", (await storedViewsIn(t, coll)).length === 2 && (await barOf(t).getByRole("tab").count()) === 2);
   await clickBar(t, "Delete view");
-  await t.until("asked again", async () => (await modalOf(t).count()) === 1);
-  await modalOf(t).getByRole("button", { name: "Delete", exact: true }).click();
+  await t.until("asked again", async () => (await shownModal(t).count()) === 1);
+  await shownModal(t).getByRole("button", { name: "Delete", exact: true }).click();
   await t.until("the view is deleted and the other shown", async () => (await storedViewsIn(t, coll)).map((v) => v.name).join("|") === "Other" && (await barOf(t).getByRole("tab").count()) === 1);
   await t.audit("after deleting the view");
 });
@@ -205,9 +204,9 @@ test("an item is deleted from its page: asked first, a failed delete says so", a
   await t.open(t.itemPath(coll, keep));
   await t.until("the item page", async () => /Book one/.test(await page.innerText().catch(() => "")));
   await page.getByRole("button", { name: "Delete Book", exact: true }).first().click();
-  await t.until("deleting asks first, naming the item", async () => /Delete Book\?/.test(await modalOf(t).innerText().catch(() => "")) && /“Book one” will be removed/.test(await modalOf(t).innerText()));
+  await t.until("deleting asks first, naming the item", async () => /Delete Book\?/.test(await shownModal(t).innerText().catch(() => "")) && /“Book one” will be removed/.test(await shownModal(t).innerText()));
   await t.audit("Delete item dialog");
-  await modalOf(t).getByRole("button", { name: "Cancel" }).click();
+  await shownModal(t).getByRole("button", { name: "Cancel" }).click();
   await t.until("Cancel closes the dialog", async () => (await t.count(".cds--modal.is-visible")) === 0);
   await t.check("…and keeps the item", (await storedItems(t, coll)).length === 2);
 
@@ -220,8 +219,8 @@ test("an item is deleted from its page: asked first, a failed delete says so", a
     };
   });
   await page.getByRole("button", { name: "Delete Book", exact: true }).first().click();
-  await t.until("asked again", async () => (await modalOf(t).count()) === 1);
-  await modalOf(t).getByRole("button", { name: "Delete", exact: true }).click();
+  await t.until("asked again", async () => (await shownModal(t).count()) === 1);
+  await shownModal(t).getByRole("button", { name: "Delete", exact: true }).click();
   await t.until("the error is shown on the page", async () => /The disk is full/.test(await page.innerText()));
   await t.check("the item is still there, and so is the page", (await storedItems(t, coll)).length === 2 && /Book one/.test(await page.innerText()));
   await t.audit("a failed delete");
@@ -231,8 +230,8 @@ test("an item is deleted from its page: asked first, a failed delete says so", a
 
   // The real thing: it goes, and the page gives way to the list.
   await page.getByRole("button", { name: "Delete Book", exact: true }).first().click();
-  await t.until("asked once more", async () => (await modalOf(t).count()) === 1);
-  await modalOf(t).getByRole("button", { name: "Delete", exact: true }).click();
+  await t.until("asked once more", async () => (await shownModal(t).count()) === 1);
+  await shownModal(t).getByRole("button", { name: "Delete", exact: true }).click();
   await t.until("the item is deleted", async () => (await storedItems(t, coll)).length === 1 && !(await storedItems(t, coll)).some((i) => i.id === keep));
   await t.until("the tab is back on the list, without it", async () => (await page.locator(".item-title").count()) === 0 && /Book two/.test(await page.innerText()));
   await t.check("the list no longer shows it", !/Book one/.test(await page.innerText()));

@@ -111,8 +111,6 @@ async function saveView(t) {
 }
 /** The title of the item page in the active tab ("" on any other page). */
 const itemTitle = (t) => t.page.locator(".ws-pane--active .item-title").first().innerText().then((s) => s.trim(), () => "");
-const popover = (t) => t.page.locator(".cds--popover--open").last();
-
 // ---- data -----------------------------------------------------------------------------------
 
 /** Places with text locations in every notation, numbers for latitude and longitude, and some without. */
@@ -159,12 +157,12 @@ for (const vp of ["desktop", "phone"]) {
     await t.audit("map without a location field");
     // Block settings: Location lists the text fields and the number fields, and None.
     await openPopover(t, "Block settings");
-    const location = popover(t).getByLabel("Location", { exact: true });
+    const location = shownPopover(t).getByLabel("Location", { exact: true });
     const offered = await location.locator("option").allInnerTexts();
     await t.check("Location offers None and every text and number field", ["None", "Name", "Position", "Latitude", "Longitude", "Country", "Note"].every((n) => offered.includes(n)), offered.join(", "));
     await location.selectOption({ label: "Position" });
     await t.until("choosing Position stores it", async () => (await storedView(t, ids.collections.places, ids.views["places/Map"])).blocks[0].options.locationFieldId === ids.fields["places.where"]);
-    await t.check("a text location has no Longitude select", (await popover(t).getByLabel("Longitude", { exact: true }).count()) === 0);
+    await t.check("a text location has no Longitude select", (await shownPopover(t).getByLabel("Longitude", { exact: true }).count()) === 0);
     await t.audit("map block settings: Location");
     await t.closeAll();
     await t.until("the message goes", async () => (await t.count(".map-block__message")) === 0);
@@ -174,7 +172,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.audit("map with four dots");
     // Back to None: the dots and the legend go, the message is back.
     await openPopover(t, "Block settings");
-    await popover(t).getByLabel("Location", { exact: true }).selectOption({ label: "None" });
+    await shownPopover(t).getByLabel("Location", { exact: true }).selectOption({ label: "None" });
     await t.closeAll();
     await t.until("None brings the message back", async () => (await t.page.locator(".map-block__message").innerText().catch(() => "")).includes("Choose the field"));
     await dotsShown(t, "no dots without a field", 0);
@@ -192,16 +190,16 @@ for (const vp of ["desktop", "phone"]) {
     const path = `${t.listPath(coll)}?view=${view}`;
     await t.open(path);
     await openPopover(t, "Block settings");
-    await t.check("a map starts with the label Location", (await popover(t).getByLabel("Location", { exact: true }).count()) === 1);
-    await popover(t).getByLabel("Location", { exact: true }).selectOption({ label: "Latitude" });
-    await t.until("a number field turns Location into Latitude and offers a Longitude", async () => (await popover(t).getByLabel("Longitude", { exact: true }).count()) === 1 && (await popover(t).getByLabel("Latitude", { exact: true }).count()) === 1);
-    const lngOptions = await popover(t).getByLabel("Longitude", { exact: true }).locator("option").allInnerTexts();
+    await t.check("a map starts with the label Location", (await shownPopover(t).getByLabel("Location", { exact: true }).count()) === 1);
+    await shownPopover(t).getByLabel("Location", { exact: true }).selectOption({ label: "Latitude" });
+    await t.until("a number field turns Location into Latitude and offers a Longitude", async () => (await shownPopover(t).getByLabel("Longitude", { exact: true }).count()) === 1 && (await shownPopover(t).getByLabel("Latitude", { exact: true }).count()) === 1);
+    const lngOptions = await shownPopover(t).getByLabel("Longitude", { exact: true }).locator("option").allInnerTexts();
     await t.check("Longitude offers the other number fields but not the latitude", lngOptions.includes("Longitude") && !lngOptions.includes("Latitude") && !lngOptions.includes("Name"), lngOptions.join(", "));
     await t.audit("map block settings: Latitude and Longitude");
     await t.closeAll();
     await t.check("with only a latitude the map asks for the rest", (await t.page.locator(".map-block__message").innerText().catch(() => "")).includes("Choose the field"));
     await openPopover(t, "Block settings");
-    await popover(t).getByLabel("Longitude", { exact: true }).selectOption({ label: "Longitude" });
+    await shownPopover(t).getByLabel("Longitude", { exact: true }).selectOption({ label: "Longitude" });
     await t.until("the pair is stored", async () => {
       const o = (await storedView(t, coll, view)).blocks[0].options;
       return (o.locationFieldId === ids.fields["places.lat"] && o.longitudeFieldId === ids.fields["places.lng"]) || JSON.stringify(o);
@@ -218,8 +216,8 @@ for (const vp of ["desktop", "phone"]) {
     await t.audit("map from latitude and longitude");
     // Back to a text field: the Longitude select goes, the position text is read again.
     await openPopover(t, "Block settings");
-    await popover(t).getByLabel("Latitude", { exact: true }).selectOption({ label: "Position" });
-    await t.until("a text field has no Longitude select again", async () => (await popover(t).getByLabel("Longitude", { exact: true }).count()) === 0 && (await popover(t).getByLabel("Location", { exact: true }).count()) === 1);
+    await shownPopover(t).getByLabel("Latitude", { exact: true }).selectOption({ label: "Position" });
+    await t.until("a text field has no Longitude select again", async () => (await shownPopover(t).getByLabel("Longitude", { exact: true }).count()) === 0 && (await shownPopover(t).getByLabel("Location", { exact: true }).count()) === 1);
     await t.closeAll();
     await dotsShown(t, "the text positions give four dots", 4);
   }, { viewport: vp });
@@ -282,10 +280,10 @@ test("map: Show as route joins the dots, a group has its own colour and line", a
   await t.open(path);
   const plain = await dotsShown(t, "four separate dots", 4);
   await openPopover(t, "Block settings");
-  const route = popover(t).getByLabel("Show as route", { exact: true });
+  const route = shownPopover(t).getByLabel("Show as route", { exact: true });
   await t.check("Show as route starts off", !(await route.isChecked()));
   await t.audit("map block settings: Show as route (off)");
-  await popover(t).getByText("Show as route", { exact: true }).click();
+  await shownPopover(t).getByText("Show as route", { exact: true }).click();
   await t.until("Show as route is stored", async () => (await storedView(t, coll, view)).blocks[0].options.route === true);
   await t.check("the box is checked", await route.isChecked());
   await t.closeAll();
@@ -297,14 +295,14 @@ test("map: Show as route joins the dots, a group has its own colour and line", a
   await t.open(path);
   await t.until("after a reload the route is still drawn", async () => (await mapDots(t)).ink > plain.ink + 300, { timeout: 10000, interval: 300 });
   await openPopover(t, "Block settings");
-  await popover(t).getByText("Show as route", { exact: true }).click();
+  await shownPopover(t).getByText("Show as route", { exact: true }).click();
   await t.until("switching it off is stored", async () => (await storedView(t, coll, view)).blocks[0].options.route === false);
   await t.closeAll();
   await dotsShown(t, "without the route the dots stand apart again", 4);
 
   // Grouped by country: a legend with a colour per group; each group is a single place, so no line even with the route on.
   await openPopover(t, "Sort and group");
-  await popover(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Country" });
+  await shownPopover(t).getByLabel("Group by", { exact: true }).selectOption({ label: "Country" });
   await t.closeAll();
   await saveView(t);
   await t.until("grouping is stored", async () => (await storedView(t, coll, view)).blocks[0].groupBy === ids.fields["places.country"]);
@@ -316,7 +314,7 @@ test("map: Show as route joins the dots, a group has its own colour and line", a
   const colours = await t.page.locator(".map-block__swatch").evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
   await t.check("each group has its own colour", colours.length === 4 && new Set(colours).size === 4, colours.join(" | "));
   await openPopover(t, "Block settings");
-  await popover(t).getByText("Show as route", { exact: true }).click();
+  await shownPopover(t).getByText("Show as route", { exact: true }).click();
   await t.closeAll();
   const grouped = await dotsShown(t, "grouped, one place per group, there is no line to join them", 4);
   await t.audit("map grouped by country, with a legend");
@@ -352,7 +350,7 @@ test("map: hover a dot for its item, click it to open it", async (t) => {
   await t.until("moving away hides the tooltip", async () => (await tip.count()) === 0, { timeout: 4000 });
   // Hide empty fields (Fields popover): Paris has no Note, so its row goes; Amsterdam, which has one, keeps it.
   await openPopover(t, "Fields");
-  await popover(t).getByText("Hide empty fields", { exact: true }).click();
+  await shownPopover(t).getByText("Hide empty fields", { exact: true }).click();
   await t.closeAll();
   await saveView(t);
   await t.until("Hide empty fields is stored", async () => (await storedView(t, coll, view)).blocks[0].layout.hideEmpty === true);
@@ -425,7 +423,7 @@ for (const vp of ["desktop", "phone"]) {
 
     // Show title.
     await openPopover(t, "Block settings");
-    const title = popover(t).getByText("Show title", { exact: true });
+    const title = shownPopover(t).getByText("Show title", { exact: true });
     await title.click();
     await t.until("without Show title no card has a title", async () => (await t.count(`${CARD} .item-card__title`)) === 0 && (await t.count(CARD)) === 8);
     await t.until("Show title off is stored", async () => (await storedOptions(t, ids, "books", "Cards")).showTitle === false);
@@ -435,7 +433,7 @@ for (const vp of ["desktop", "phone"]) {
 
     // Cover beside the text.
     const cardsBefore = await cardBoxes(t);
-    await popover(t).getByText("Cover beside the text", { exact: true }).click();
+    await shownPopover(t).getByText("Cover beside the text", { exact: true }).click();
     await t.until("Cover beside the text puts every cover left of its text", async () => (await t.count(".ws-pane--active .item-card--cover-left")) === 8);
     await t.until("Cover beside the text is stored", async () => (await storedOptions(t, ids, "books", "Cards")).coverBeside === true);
     const beside = await t.page.locator(`${CARD}`).first().evaluate((card) => {
@@ -445,14 +443,14 @@ for (const vp of ["desktop", "phone"]) {
     });
     await t.check("the cover sits beside the text, not above it", beside.coverRight <= beside.bodyLeft + 1 && Math.abs(beside.coverTop - beside.bodyTop) < 40, JSON.stringify(beside));
     await t.audit("cards: cover beside the text");
-    await popover(t).getByText("Cover beside the text", { exact: true }).click();
+    await shownPopover(t).getByText("Cover beside the text", { exact: true }).click();
     await t.until("off again: covers above the text", async () => (await t.count(".ws-pane--active .item-card--cover-left")) === 0);
     await t.check("and the cards are the size they were", (await cardBoxes(t)).every((b, i) => Math.abs(b.h - cardsBefore[i].h) < 2 && Math.abs(b.w - cardsBefore[i].w) < 2));
 
     // Cover shape: each fixed shape gives that ratio to every cover.
     const shapes = { "Square (1:1)": 1, "Landscape (3:2)": 1.5, "Wide (16:9)": 16 / 9, "Portrait (2:3)": 2 / 3 };
     for (const [label, ratio] of Object.entries(shapes)) {
-      await popover(t).getByLabel("Cover shape", { exact: true }).selectOption({ label });
+      await shownPopover(t).getByLabel("Cover shape", { exact: true }).selectOption({ label });
       await t.until(`${label}: every cover has that shape`, async () => {
         const shapesNow = await coverShapes(t);
         return (shapesNow.length === 8 && shapesNow.every((s) => Math.abs(s / ratio - 1) < 0.04)) || shapesNow.map((s) => s.toFixed(2)).join(" ");
@@ -460,14 +458,14 @@ for (const vp of ["desktop", "phone"]) {
       await t.check(`${label} is stored`, (await storedOptions(t, ids, "books", "Cards")).coverRatio === label.replace(/.*\((.*)\)/, "$1"));
     }
     await t.audit("cards: portrait covers");
-    await popover(t).getByLabel("Cover shape", { exact: true }).selectOption({ label: "Automatic" });
+    await shownPopover(t).getByLabel("Cover shape", { exact: true }).selectOption({ label: "Automatic" });
     await t.until("Automatic: the covers take the shape of the images (320 x 200)", async () => {
       const s = await coverShapes(t);
       return (s.length === 8 && s.every((v) => Math.abs(v / 1.6 - 1) < 0.04)) || s.map((v) => v.toFixed(2)).join(" ");
     });
 
     // Cover: the fields that can be one, then None (the options that need a cover are disabled).
-    const cover = popover(t).getByLabel("Cover", { exact: true });
+    const cover = shownPopover(t).getByLabel("Cover", { exact: true });
     const offered = await cover.locator("option").allInnerTexts();
     await t.check("Cover offers images, Markdown, HTML and components giving them", ["None", "Cover", "Notes", "Snippet", "Computed"].every((n) => offered.includes(n)) && !offered.includes("Count") && !offered.includes("Date") && !offered.includes("Title"), offered.join(", "));
     await cover.selectOption({ label: "Notes" });
@@ -477,7 +475,7 @@ for (const vp of ["desktop", "phone"]) {
     await t.until("an HTML field is shown as the cover", async () => (await t.count(`${CARD} .item-card__cover--html`)) === 8);
     await cover.selectOption({ label: "None" });
     await t.until("None: no covers", async () => (await t.count(`${CARD} .item-card__cover`)) === 0 && (await t.count(CARD)) === 8);
-    await t.check("without a cover, Cover beside the text and Cover shape are off", (await popover(t).getByLabel("Cover shape", { exact: true }).isDisabled()) && (await popover(t).getByLabel("Cover beside the text", { exact: true }).isDisabled()));
+    await t.check("without a cover, Cover beside the text and Cover shape are off", (await shownPopover(t).getByLabel("Cover shape", { exact: true }).isDisabled()) && (await shownPopover(t).getByLabel("Cover beside the text", { exact: true }).isDisabled()));
     await t.audit("cards without covers");
     await cover.selectOption({ label: "Cover" });
     await t.until("the image field is the cover again", async () => (await t.count(`${CARD} .item-card__cover img`)) === 8);
@@ -497,7 +495,7 @@ test("cards: Card width sets how many cards a row holds", async (t) => {
   await t.open(`${t.listPath(ids.collections.books)}?view=${ids.views["books/Cards"]}`);
   await t.until("twelve cards", async () => (await t.count(CARD)) === 12);
   await openPopover(t, "Block settings");
-  const thumb = popover(t).locator(".cds--slider__thumb").first();
+  const thumb = shownPopover(t).locator(".cds--slider__thumb").first();
   const widths = {};
   // Shift + arrow moves four rem (Carbon's slider has no Home / End); one step at a time, each stored before
   // the next (a long jump with many cards re-laid-out at once is a known crash, see the report).
@@ -519,7 +517,7 @@ test("cards: Card width sets how many cards a row holds", async (t) => {
   await thumb.focus();
   await t.page.keyboard.press("ArrowLeft");
   await t.until("an arrow key steps one rem", async () => (await storedOptions(t, ids, "books", "Cards")).cardWidth === 31);
-  await t.check("the label tells the width", (await popover(t).innerText()).includes("31rem"));
+  await t.check("the label tells the width", (await shownPopover(t).innerText()).includes("31rem"));
   await t.closeAll();
 });
 
@@ -537,7 +535,7 @@ test("cards: Hide empty fields, Name and the block header", async (t) => {
   // Hide empty fields: the three places without a Note lose that line (a view change: saved with the view).
   await openPopover(t, "Fields");
   await t.audit("block fields popover");
-  await popover(t).getByText("Hide empty fields", { exact: true }).click();
+  await shownPopover(t).getByText("Hide empty fields", { exact: true }).click();
   await t.until("the empty Notes are left out", async () => (await t.count(`${CARD} .item-card__field`)) === 9);
   await t.check("the cards without a Note are the shorter ones", (await t.page.locator(`${CARD}:not(:has(.item-card__field:nth-of-type(2)))`).count()) === 3);
   await t.closeAll();
@@ -547,7 +545,7 @@ test("cards: Hide empty fields, Name and the block header", async (t) => {
   await t.open(path);
   await t.until("after a reload still nine fields", async () => (await t.count(`${CARD} .item-card__field`)) === 9);
   await openPopover(t, "Fields");
-  await popover(t).getByText("Hide empty fields", { exact: true }).click();
+  await shownPopover(t).getByText("Hide empty fields", { exact: true }).click();
   await t.until("off again: twelve", async () => (await t.count(`${CARD} .item-card__field`)) === 12);
   await t.closeAll();
   await saveView(t);
@@ -556,7 +554,7 @@ test("cards: Hide empty fields, Name and the block header", async (t) => {
   const heading = () => header(t).innerText();
   await t.check("an unnamed block is named after its type", (await heading()).includes("Cards"), await heading());
   await openPopover(t, "Block settings");
-  const name = popover(t).getByLabel("Name", { exact: true });
+  const name = shownPopover(t).getByLabel("Name", { exact: true });
   await t.check("its placeholder is that name", (await name.getAttribute("placeholder")) === "Cards");
   await name.fill("Where we went");
   await name.press("Enter");
@@ -566,15 +564,15 @@ test("cards: Hide empty fields, Name and the block header", async (t) => {
   await t.open(path);
   await t.check("after a reload the name is there", (await heading()).includes("Where we went"));
   await openPopover(t, "Block settings");
-  await popover(t).getByLabel("Name", { exact: true }).fill("");
-  await popover(t).getByLabel("Name", { exact: true }).press("Enter");
+  await shownPopover(t).getByLabel("Name", { exact: true }).fill("");
+  await shownPopover(t).getByLabel("Name", { exact: true }).press("Enter");
   await t.until("an emptied name goes back to the type's", async () => (await storedView(t, coll, view)).blocks[0].title === "" && (await heading()).includes("Cards"));
   await t.closeAll();
 
   // Hide block header: View settings lists the blocks, each with a switch for its header.
   await t.check("the header is shown", (await t.page.locator(".ws-pane--active .block .section-header").filter({ visible: true }).count()) === 1);
   await t.openPanel(t.page.locator(".views-bar").first(), "View settings");
-  await popover(t).getByRole("button", { name: "Hide block header", exact: true }).click();
+  await shownPopover(t).getByRole("button", { name: "Hide block header", exact: true }).click();
   await t.until("the header is hidden", async () => (await t.page.locator(".ws-pane--active .block .section-header").filter({ visible: true }).count()) === 0);
   await t.until("hideHeader is stored", async () => (await storedView(t, coll, view)).blocks[0].hideHeader === true);
   await t.check("the cards stay", (await t.count(CARD)) === 6);
@@ -583,7 +581,7 @@ test("cards: Hide empty fields, Name and the block header", async (t) => {
   await t.open(path);
   await t.check("after a reload there is still no header", (await t.page.locator(".ws-pane--active .block .section-header").filter({ visible: true }).count()) === 0 && (await t.count(CARD)) === 6);
   await t.openPanel(t.page.locator(".views-bar").first(), "View settings");
-  await popover(t).getByRole("button", { name: "Show block header", exact: true }).click();
+  await shownPopover(t).getByRole("button", { name: "Show block header", exact: true }).click();
   await t.until("the header is back", async () => (await t.page.locator(".ws-pane--active .block .section-header").filter({ visible: true }).count()) === 1);
   await t.until("hideHeader is gone from the stored block", async () => !(await storedView(t, coll, view)).blocks[0].hideHeader);
   await t.closeAll();
@@ -615,9 +613,9 @@ test("table: Title links to the item", async (t) => {
   await t.until("a click on the title opens the item", async () => (await t.count(".ws-pane--active .item-title")) === 1);
   await t.open(path);
   await openPopover(t, "Block settings");
-  const link = popover(t).getByLabel("Title links to the item", { exact: true });
+  const link = shownPopover(t).getByLabel("Title links to the item", { exact: true });
   await t.check("the option is on", await link.isChecked());
-  await popover(t).getByText("Title links to the item", { exact: true }).click();
+  await shownPopover(t).getByText("Title links to the item", { exact: true }).click();
   await t.until("off: no title is a link", async () => (await t.count(TITLE_LINKS)) === 0 && (await t.count(".ws-pane--active tbody tr")) >= 6);
   await t.until("Title links off is stored", async () => (await storedOptions(t, ids, "books", "Table")).titleLink === false);
   await t.closeAll();
@@ -647,7 +645,7 @@ test("table and cards: Items shown at a time and Show more", async (t) => {
     await t.until(`${name}: all 14 are shown at first (no limit set)`, async () => (await count()) === 14 && (await t.count(".ws-pane--active .block-more")) === 0);
     await openPopover(t, "Filter");
     await t.audit(`${name}: filter popover with Items shown at a time`);
-    const limit = popover(t).getByLabel("Items shown at a time", { exact: true });
+    const limit = shownPopover(t).getByLabel("Items shown at a time", { exact: true });
     await limit.click();
     await limit.fill("5");
     await t.until(`${name}: a limit of 5 shows 5`, async () => (await count()) === 5 || `${await count()} shown`);
@@ -666,9 +664,9 @@ test("table and cards: Items shown at a time and Show more", async (t) => {
     await t.until(`${name}: after a reload it starts with 5 again`, async () => (await count()) === 5 && (await more().innerText()).includes("5 of 14"));
     // Another step size, then empty = all.
     await openPopover(t, "Filter");
-    await popover(t).getByLabel("Items shown at a time", { exact: true }).fill("20");
+    await shownPopover(t).getByLabel("Items shown at a time", { exact: true }).fill("20");
     await t.until(`${name}: a limit above the count shows everything, no button`, async () => (await count()) === 14 && (await t.count(".ws-pane--active .block-more")) === 0);
-    await popover(t).getByLabel("Items shown at a time", { exact: true }).fill("");
+    await shownPopover(t).getByLabel("Items shown at a time", { exact: true }).fill("");
     await t.until(`${name}: emptied: all of them`, async () => (await count()) === 14);
     await t.closeAll();
     await saveView(t);
@@ -697,7 +695,7 @@ test("component block: pick a shared component, switch, New component", async (t
   await t.until("no component chosen says so", async () => (await block.innerText()).includes("No component chosen"));
   await t.audit("component block without a component");
   await openPopover(t, "Block settings");
-  const picker = popover(t).getByRole("combobox", { name: /Component/ });
+  const picker = shownPopover(t).getByRole("combobox", { name: /Component/ });
   await picker.click();
   const offered = await t.page.getByRole("option").allInnerTexts();
   await t.check("the picker offers block and static components, not field components", ["Book count", "Hello block", "Framed"].every((n) => offered.includes(n)) && !offered.includes("Double"), offered.join(", "));
@@ -705,8 +703,8 @@ test("component block: pick a shared component, switch, New component", async (t
   await t.page.getByRole("option", { name: "Book count", exact: true }).click();
   await t.until("the block shows the component's result", async () => (await block.innerText()).includes("5 books listed") || (await block.innerText()));
   await t.until("the pick is stored", async () => (await storedView(t, coll, view)).blocks[0].options.componentId === ids.components.count);
-  await t.check("a block component uses a filter and sorting; Edit component is offered", (await header(t).getByRole("button", { name: "Filter" }).count()) + (await header(t).getByRole("button", { name: "More actions" }).count()) > 0 && (await popover(t).getByRole("link", { name: "Edit component" }).count()) + (await popover(t).getByRole("button", { name: "Edit component" }).count()) > 0);
-  const edit = popover(t).locator("a", { hasText: "Edit component" });
+  await t.check("a block component uses a filter and sorting; Edit component is offered", (await header(t).getByRole("button", { name: "Filter" }).count()) + (await header(t).getByRole("button", { name: "More actions" }).count()) > 0 && (await shownPopover(t).getByRole("link", { name: "Edit component" }).count()) + (await shownPopover(t).getByRole("button", { name: "Edit component" }).count()) > 0);
+  const edit = shownPopover(t).locator("a", { hasText: "Edit component" });
   await t.check("Edit component goes to the component's page", ((await edit.getAttribute("href")) || "").endsWith(`/components/${ids.components.count}`), await edit.getAttribute("href"));
   await t.audit("component block settings");
   // Another one: the block now shows that.
@@ -714,22 +712,22 @@ test("component block: pick a shared component, switch, New component", async (t
   await t.page.getByRole("option", { name: "Hello block", exact: true }).click();
   await t.until("a static component replaces it", async () => (await block.innerText()).includes("Hello from a static component") && !(await block.innerText()).includes("books listed"));
   await t.until("the static pick is stored", async () => (await storedView(t, coll, view)).blocks[0].options.componentId === ids.components.hello);
-  await t.check("Height and aspect only for HTML", (await popover(t).getByText("Height", { exact: true }).count()) === 0);
+  await t.check("Height and aspect only for HTML", (await shownPopover(t).getByText("Height", { exact: true }).count()) === 0);
   await picker.click();
   await t.page.getByRole("option", { name: "Framed", exact: true }).click();
   await t.until("an HTML component shows in a frame", async () => (await t.count(".ws-pane--active .component-block iframe")) === 1);
-  await t.until("an HTML component gets Height settings", async () => (await popover(t).getByText("Height", { exact: true }).count()) > 0);
+  await t.until("an HTML component gets Height settings", async () => (await shownPopover(t).getByText("Height", { exact: true }).count()) > 0);
   await t.audit("component block with HTML settings");
   // New component: a dialog asking for a name; Cancel makes none.
   const before = await t.page.evaluate(async () => (await window.kubus.repo.listComponents()).length);
-  await popover(t).getByRole("button", { name: "New component" }).click();
+  await shownPopover(t).getByRole("button", { name: "New component" }).click();
   const dialog = t.page.locator(".cds--modal.is-visible");
   await t.until("New component asks for a name", async () => (await dialog.innerText()).includes("New component"));
   await t.audit("new component dialog");
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await t.until("Cancel closes it", async () => (await t.count(".cds--modal.is-visible")) === 0);
   await t.check("and makes no component", (await t.page.evaluate(async () => (await window.kubus.repo.listComponents()).length)) === before);
-  await popover(t).getByRole("button", { name: "New component" }).click();
+  await shownPopover(t).getByRole("button", { name: "New component" }).click();
   await dialog.getByLabel("Name", { exact: true }).fill("Made in the block");
   await dialog.getByRole("button", { name: "Create" }).click();
   await t.until("Create makes the component and the block picks it", async () => {
@@ -795,7 +793,7 @@ test("markdown block: Edit text, braces worked out, Save as shared component", a
   // Save as shared component: the block becomes a component block showing the same text.
   await openPopover(t, "Block settings");
   await t.audit("markdown block settings");
-  await popover(t).getByRole("button", { name: "Save as shared component" }).click();
+  await shownPopover(t).getByRole("button", { name: "Save as shared component" }).click();
   const dialog = t.page.locator(".cds--modal.is-visible");
   await t.until("a dialog asks for the name", async () => (await dialog.innerText()).includes("Save as shared component"));
   await dialog.getByLabel("Name", { exact: true }).fill("My shared words");
@@ -825,7 +823,7 @@ test("item page block: Collection picker and Name", async (t) => {
   await t.check("it lists all six Authors", rows >= 6, `${rows} rows`);
   await t.audit("item page with a block");
   await openPopover(t, "Block settings");
-  const picker = popover(t).getByRole("combobox").first();
+  const picker = shownPopover(t).getByRole("combobox").first();
   await t.check("the picker shows the block's collection", (await picker.innerText()).includes("Authors"), await picker.innerText());
   await picker.click();
   const offered = await t.page.getByRole("option").allInnerTexts();
@@ -838,13 +836,13 @@ test("item page block: Collection picker and Name", async (t) => {
   await t.audit("block listing another collection");
   // Back to Authors: linked to nothing either (Authors don't refer to Books), all six.
   // (The block is drawn afresh for another collection, which closes its settings.)
-  if (!(await popover(t).isVisible().catch(() => false))) await openPopover(t, "Block settings");
-  await popover(t).getByRole("combobox").first().click();
+  if (!(await shownPopover(t).isVisible().catch(() => false))) await openPopover(t, "Block settings");
+  await shownPopover(t).getByRole("combobox").first().click();
   await t.page.getByRole("option", { name: "Authors", exact: true }).click();
   await t.until("Authors again", async () => (await stored()).collectionId === ids.collections.authors);
   // Name.
-  if (!(await popover(t).isVisible().catch(() => false))) await openPopover(t, "Block settings");
-  const name = popover(t).getByLabel("Name", { exact: true });
+  if (!(await shownPopover(t).isVisible().catch(() => false))) await openPopover(t, "Block settings");
+  const name = shownPopover(t).getByLabel("Name", { exact: true });
   await name.fill("Who wrote it");
   await name.press("Enter");
   await t.until("the name is stored", async () => (await stored()).title === "Who wrote it");
@@ -876,7 +874,7 @@ test("map: without a sort of its own the route follows time (the first date fiel
   await t.check("the Sort and group button is not marked by default", (await button.getAttribute("data-active")) === null);
   await t.audit("a map with a route in time order");
   await openPopover(t, "Sort and group");
-  const sortBy = popover(t).getByLabel("Sort by", { exact: true });
+  const sortBy = shownPopover(t).getByLabel("Sort by", { exact: true });
   await t.check("Sort by shows the date field", (await sortBy.locator("option:checked").innerText()) === "Day");
   await sortBy.selectOption({ label: "Seq" });
   await t.closeAll();

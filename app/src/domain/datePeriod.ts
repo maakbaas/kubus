@@ -14,6 +14,8 @@ import { newId, pickableFields, type Collection, type FieldDef } from "./model";
 import type { FilterRule } from "./query";
 
 export type PeriodKind = "hour" | "day" | "week" | "month" | "year" | "range";
+/** An hour, day, week, month or year (not a range). */
+export type Unit = Exclude<PeriodKind, "range">;
 
 export interface Period {
   /** First and last day ("yyyy-mm-dd") or minute ("yyyy-mm-ddTHH:MM", local), both included. */
@@ -52,7 +54,7 @@ export const rangeValue = ({ start, end }: Period) => `${start}${SEPARATOR}${end
 
 /** A rolling period: so many hours, days, weeks, months or years from now's (0: now's own). */
 export interface Rolling {
-  kind: Exclude<PeriodKind, "range">;
+  kind: Unit;
   offset: number;
 }
 const ROLLING = /^(hour|day|week|month|year)([+-]\d+)$/;
@@ -63,11 +65,11 @@ export const rollingValue = ({ kind, offset }: Rolling) => `${kind}${offset < 0 
 /** The rolling period of a between rule's value, or null when it holds fixed days (or nothing valid). */
 export function parseRolling(value: string): Rolling | null {
   const m = ROLLING.exec(value.trim());
-  return m ? { kind: m[1] as Rolling["kind"], offset: Number(m[2]) } : null;
+  return m ? { kind: m[1] as Unit, offset: Number(m[2]) } : null;
 }
 
 /** What a rolling range is counted in. */
-export type RangeUnit = "minute" | "hour" | "day" | "week" | "month" | "year";
+export type RangeUnit = "minute" | Unit;
 
 /**
  * A rolling range: its first and last day (minute, hour, week, month, year) counted from today's
@@ -293,9 +295,6 @@ export function periodLabel(period: Period, kind: PeriodKind, locale?: string): 
     }
   }
 }
-
-/** An hour, day, week, month or year (not a range). */
-export type Unit = Exclude<PeriodKind, "range">;
 
 /**
  * Which one of its kind a period is: counted from now (this week, last week: it moves on with

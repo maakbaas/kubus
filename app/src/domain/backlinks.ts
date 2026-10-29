@@ -2,15 +2,16 @@
 //
 // What links to what is kept in the synced table `item_links` (docs/data-model.md "Item links"):
 // one row per (source item, source field) with the items that field's value points at, kept by
-// triggers on field_values from `linkTargets` below and healed after a sync (SyncEngine). The
+// triggers on field_values from `linkTargets` below and healed after a first download (SyncEngine). The
 // "Backlinks" collection (`backlinksCollection`) is a virtual one: the items linking to the item of
 // the page it is on, one row per link, read-only like a remote collection. It is offered only in the
 // collection picker of item page blocks; every block type shows it like any collection's items.
 
+import { mergedPath } from "./mergedCollection";
 import { blankField, META_FIELDS, type Collection, type FieldKind, type Item } from "./model";
 
 /** An item a value points at: a native item's id, or a remote row's item id (domain/sources.ts rowItemId). */
-export interface LinkTarget {
+export interface ItemLinkTarget {
   item: string;
   collection: string;
 }
@@ -21,6 +22,9 @@ const ITEM_LINK = /(?<![^\s("'<])#\/collections\/([A-Za-z0-9_-]+)\/items\/([A-Za
 /** The kinds whose text can hold links to items. */
 const TEXT_KINDS: ReadonlySet<string> = new Set<FieldKind>(["markdown", "html", "ai"]);
 
+/** Every kind whose values can link to items: `linkTargets` gives `[]` for any other (the heal skips them: data/schema.ts). */
+export const LINK_KINDS = ["item", "item_list", ...TEXT_KINDS] as const;
+
 /**
  * The items a stored value points at, as the canonical JSON `item_links.targets` holds: an array of
  * `{ item, collection }` sorted by collection then item, each once. Keys are in the order Postgres'
@@ -30,7 +34,7 @@ const TEXT_KINDS: ReadonlySet<string> = new Set<FieldKind>(["markdown", "html", 
  * the new item form). `[]` for any other kind.
  */
 export function linkTargets(kind: unknown, targetCollectionId: unknown, text: unknown, ref: unknown, json: unknown): string {
-  const found = new Map<string, LinkTarget>();
+  const found = new Map<string, ItemLinkTarget>();
   const add = (collection: string, item: string) => found.set(`${collection}\u0000${item}`, { item, collection });
   if (kind === "item") {
     if (typeof targetCollectionId === "string" && typeof ref === "string" && ref) add(targetCollectionId, ref);
@@ -51,10 +55,10 @@ export function linkTargets(kind: unknown, targetCollectionId: unknown, text: un
 }
 
 /** `item_links.targets` as a list (empty for anything unreadable). */
-export function parseTargets(json: string | null): LinkTarget[] {
+export function parseTargets(json: string | null): ItemLinkTarget[] {
   try {
     const list: unknown = JSON.parse(json ?? "[]");
-    return Array.isArray(list) ? list.filter((t): t is LinkTarget => !!t && typeof t.item === "string" && typeof t.collection === "string") : [];
+    return Array.isArray(list) ? list.filter((t): t is ItemLinkTarget => !!t && typeof t.item === "string" && typeof t.collection === "string") : [];
   } catch {
     return [];
   }
@@ -115,15 +119,9 @@ export function backlinkPath(id: string): string {
   return `/collections/${collection}/items/${item}`;
 }
 
-/** The route of the item or row a merged collection's row stands for (its id: the part's collection and the part's item, domain/blend.ts). Here, not in blend.ts: the database worker imports this file and must not load the rest. */
-export function blendPath(id: string): string {
-  const at = id.indexOf(":");
-  return `/collections/${id.slice(0, at)}/items/${id.slice(at + 1)}`;
-}
-
-/** Where an item opens: its own page, a backlink row the linking item's, a blend's row its part's item or row. */
-export const itemPath = (collection: Pick<Collection, "id" | "virtual" | "blend">, item: Pick<Item, "id">): string =>
-  collection.virtual === "backlinks" ? backlinkPath(item.id) : collection.blend ? blendPath(item.id) : `/collections/${collection.id}/items/${item.id}`;
+/** Where an item opens: its own page, a backlink row the linking item's, a merged collection's row its part's item or row. */
+export const itemPath = (collection: Pick<Collection, "id" | "virtual" | "mergedFrom">, item: Pick<Item, "id">): string =>
+  collection.virtual === "backlinks" ? backlinkPath(item.id) : collection.mergedFrom ? mergedPath(item.id) : `/collections/${collection.id}/items/${item.id}`;
 
 const escapeLabel = (text: string) => text.replace(/[\\[\]]/g, "\\$&");
 
