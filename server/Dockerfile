@@ -22,6 +22,10 @@ COPY server server
 COPY shared shared
 COPY --from=web /build/app/dist app/dist
 COPY --from=web /build/server/headless server/headless
+# Where the headless device keeps its database between starts (KUBUS_HEADLESS_DIR, set in docker-compose.yml;
+# mount a volume here). Made in the image so a new named volume starts with it; writable by root (what the
+# image runs as) and by `node` (for `--user node`).
+RUN mkdir -p /data/headless && chown node:node /data/headless
 ENV PORT=8080
 EXPOSE 8080
 CMD ["node", "server/src/index.ts"]

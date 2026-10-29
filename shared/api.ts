@@ -16,12 +16,20 @@ export interface HeadlessOptions {
   cursor(): number;
   /** Webhooks: called with every change (docs/sync.md). */
   webhooks: { urls: string[]; secret: string | null };
+  /**
+   * A directory (KUBUS_HEADLESS_DIR) where the device keeps its database between starts, so it
+   * resumes from its sync cursor instead of downloading everything; only one server process may use
+   * it. Unset: in memory, a start downloads everything.
+   */
+  dataDir?: string;
   log(message: string): void;
 }
 
 export interface Headless {
   /** Answers a request to /api/v1 (one at a time, each on the latest data). */
   handle(req: ApiRequest): Promise<ApiResponse>;
+  /** Saves the database to disk (when it lives there) and lets go of its directory: the server is stopping. */
+  close(): Promise<void>;
 }
 
 /** The headless bundle's export. */

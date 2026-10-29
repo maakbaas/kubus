@@ -281,6 +281,7 @@ const server = createServer(async (req, res) => {
     serverUrl: `http://127.0.0.1:${port}`,
     token,
     cursor: latestCursor,
+    dataDir: process.env.KUBUS_HEADLESS_DIR || undefined,
     webhooks: {
       urls: (process.env.KUBUS_WEBHOOK_URL ?? "").split(",").map((u) => u.trim()).filter(Boolean),
       secret: process.env.KUBUS_WEBHOOK_SECRET || null,
@@ -294,6 +295,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.once(signal, () => {
     server.close();
     server.closeAllConnections(); // the event streams (/api/events) never end by themselves
-    void pool.end().catch(() => undefined).finally(() => process.exit(0));
+    // The headless device saves its database (KUBUS_HEADLESS_DIR) before the process goes.
+    void headless.close().catch((e) => console.error("Saving the headless device failed", e)).then(() => pool.end()).catch(() => undefined).finally(() => process.exit(0));
   });
 }

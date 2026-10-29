@@ -4,7 +4,7 @@ Your Kubus server can be reached by scripts, automation tools and scheduled jobs
 
 The API goes through the server's own copy of the app (its *headless device*). So it follows the same rules as the app, and a change made through it reaches every device the next time it syncs.
 
-All addresses below start with /api/v1 on your server.
+All addresses below start with /api/v1 on your server. After the server starts, the API may answer 503 for a moment while its copy of your data catches up; with the server's `KUBUS_HEADLESS_DIR` set (the Docker setup does) that copy is kept on disk and a restart takes a moment.
 
 ## Getting started
 
