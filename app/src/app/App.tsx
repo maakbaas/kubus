@@ -181,7 +181,7 @@ function Shell() {
           tabStripStart={navShown ? null : navToggle}
           tabStripEnd={
             <>
-              <IconButton autoAlign label="Search" kind="ghost" size="sm" align="bottom-end" onClick={() => setSearchOpen(true)}>
+              <IconButton autoAlign label="Search" kind="ghost" size="sm" align="bottom-end" data-keeps-active-pane onClick={() => setSearchOpen(true)}>
                 <SearchIcon />
               </IconButton>
               <AiStatusButton onSetup={() => ws.navigate("/settings?section=ai")} />

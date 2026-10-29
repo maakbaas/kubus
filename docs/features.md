@@ -302,7 +302,7 @@ What the app does, feature by feature (read the part you work on).
   written, not what its scripts draw, and reports clicks). Inline, so view and editor have the same geometry.
   Clicking one opens `/search?q=%23name&tag=1` (Ctrl/Cmd beside, middle click a new tab): exactly that tag and the
   tags nested in it; the same text typed in the search box is a text search (`#books` also finds `#bookshelf`).
-- **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`): the shown space's collections
+- **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`; the icon sits in the right-most pane's strip but doesn't activate that pane, so the results open in the pane that was active when it was clicked): the shown space's collections
   (name, description), the Markdown blocks of its collection views (their text; an item view's is the same on every item, so not
   searched; a result opens the view at the block) and its items, substring match over string, markdown, HTML, AI,
   list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; a full-text index is roadmap #1).

@@ -100,7 +100,7 @@ jobs:
       - run: npm ci --prefix server
       # /api/v1 answers from it: the server's HTTP tests use it.
       - run: npm run build:headless
-      - run: npm run suite -- connectors server
+      - run: npm run suite -- nodesqlite connectors server
 
   gui-smoke:
     runs-on: ubuntu-latest

@@ -351,18 +351,23 @@ export class SyncEngine implements SyncControl {
 
   /**
    * Syncs unless this device already has everything up to `serverCursor`, the server's latest
-   * write (the server's headless device knows it; 0: none since a wipe, so always sync).
+   * write (the server's headless device knows it; 0: none since a wipe, so always sync). Only an
+   * equal cursor is up to date: a device's cursor never exceeds the server's, so a higher one means
+   * the server's counter restarted (a wipe), and this device holds another database's data.
    */
   async catchUp(serverCursor: number): Promise<void> {
     await this.running;
-    if (serverCursor > 0 && this.cursor >= serverCursor && this.status.state === "idle") return;
+    if (serverCursor > 0 && this.cursor === serverCursor && this.status.state === "idle") return;
     await this.syncNow();
   }
 
-  /** The server signalled a write up to `cursor` (0: a wipe): syncs unless this device has it (its own, mostly). */
+  /**
+   * The server signalled a write up to `cursor` (0: a wipe): syncs unless this device has it (its
+   * own, mostly). A lower cursor than this device's is not "has it" but a restarted counter (a wipe).
+   */
   private async heard(cursor: number) {
     await this.running;
-    if (cursor > 0 && cursor <= this.cursor) return;
+    if (cursor > 0 && cursor === this.cursor) return;
     await this.syncNow();
   }
 

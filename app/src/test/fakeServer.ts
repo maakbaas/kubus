@@ -5,9 +5,9 @@ import { createHash } from "node:crypto";
 import { vi } from "vitest";
 import type { ServerAi } from "../../../shared/api";
 import { SYNC_COMPATIBLE, SYNC_TABLES, SYNC_VERSION, type SyncMismatch, type SyncOutdated, type SyncRequest, type SyncResponse, type WireRow } from "../../../shared/sync";
-import { DirectSqlClient } from "../data/sqlite/direct";
 import { SqliteRepository } from "../data/sqlite/SqliteRepository";
 import { memoryEnvironment } from "../data/sync/environment";
+import { openTestClient } from "./engine";
 
 export const SERVER_URL = "https://kubus.test";
 export const TOKEN = "secret";
@@ -128,7 +128,7 @@ export class FakeServer {
  * a real server), connected and synced once.
  */
 export async function device(options: { keepFiles?: boolean; originals?: "always" | "opened"; connect?: boolean; url?: string; token?: string } = {}) {
-  const repo = await SqliteRepository.open(await DirectSqlClient.open(), memoryEnvironment({ keepFiles: options.keepFiles }));
+  const repo = await SqliteRepository.open(await openTestClient(), memoryEnvironment({ keepFiles: options.keepFiles }));
   if (options.connect !== false) {
     await repo.sync.configure({ url: options.url ?? SERVER_URL, token: options.token ?? TOKEN, enabled: true, originals: options.originals ?? "always" });
     await settled(repo);

@@ -236,6 +236,7 @@ Extension points are registries, not special cases in pages:
 - Closing every tab leaves an empty workspace (no tab is reopened automatically); middle click
   on a tab closes it.
 - Phones show only the active pane.
+- Pressing a pane makes it active (`Workspace.tsx`), except on an element marked `data-keeps-active-pane`: the strip's Search button (it ends the right-most pane's strip) acts on the pane that was active, so the results open there.
 - **Tab width** (`fit` in `PaneView`, `Workspace.tsx`, plus `.ws-pane__tabs` in `styles.css`): a
   tab's natural width is its text plus padding and close button. Cap = min(16rem, 80% of the room
   for tabs), where the room is the `.cds--tabs` box minus the scroll buttons while they show

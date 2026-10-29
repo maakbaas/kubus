@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HeadlessOptions } from "../../../shared/api";
 import { SqliteRepository } from "../data/sqlite/SqliteRepository";
+import { SYNC_COMPATIBLE, SYNC_VERSION } from "../../../shared/sync";
 import { FakeServer, SERVER_URL, TOKEN } from "../test/fakeServer";
 import { HeadlessDevice, startHeadless } from "./index";
 
@@ -138,6 +139,23 @@ describe("a replaced server database", () => {
     server.wipe();
     const spaces = (await get(api, "/spaces")).json as { name: string }[];
     expect(spaces.map((s) => s.name)).toEqual(["Space"]);
+    expect(logged).toEqual(["The server's database was replaced: the headless device starts over"]);
+  });
+
+  it("notices a replaced database although the new one has had fewer writes than this device's cursor", async () => {
+    const api = await startHeadless(options());
+    for (const name of ["A", "B", "C", "D", "E"]) await get(api, "/spaces", "POST", { name });
+    const before = server.seq;
+    expect(before).toBeGreaterThanOrEqual(5);
+    // The wipe restarts the server's counter; another device then makes two writes. No /api/events signal reaches the device.
+    server.wipe();
+    const row = (id: string, name: string) => ({ id, name, icon: null, position: 1, created_at: "2026-10-28T10:00:00.000Z", updated_at: "2026-10-28T10:00:00.000Z", deleted_at: null });
+    server.sync({ since: 0, changes: { spaces: [row("n1", "New 1"), row("n2", "New 2")] }, version: SYNC_VERSION, compatible: SYNC_COMPATIBLE });
+    expect(server.seq).toBeGreaterThan(0);
+    expect(server.seq).toBeLessThan(before);
+    const names = ((await get(api, "/spaces")).json as { name: string }[]).map((s) => s.name);
+    expect(names).toEqual(expect.arrayContaining(["New 1", "New 2"]));
+    expect(names).not.toContain("A");
     expect(logged).toEqual(["The server's database was replaced: the headless device starts over"]);
   });
 });

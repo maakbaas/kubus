@@ -37,6 +37,15 @@ services:
       # secret (X-Kubus-Signature; see Help → API in the app).
       # KUBUS_WEBHOOK_URL: https://automation.example.com/hooks/kubus
       # KUBUS_WEBHOOK_SECRET: another-long-random-string
+      # The API's own copy of your data (the headless device) is kept in this directory, so a restart
+      # resumes where it was instead of downloading everything and answering 503 meanwhile. It is
+      # only a cache of the database above (nothing is lost if it is deleted), and only one server
+      # may use it. Remove this line and the mount below to keep it in memory.
+      KUBUS_HEADLESS_DIR: /data/headless
+    volumes:
+      - headless:/data/headless
+      # or a folder next to this file instead of a named volume:
+      # - ./kubus-headless:/data/headless
     ports:
       - "8080:8080"
     depends_on:
@@ -46,3 +55,4 @@ services:
 
 volumes:
   pgdata:
+  headless:
