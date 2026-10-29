@@ -32,11 +32,10 @@ async function freePort(): Promise<number> {
 /** Starts a server on `databaseUrl`; resolves once it answers. */
 export async function startServer(databaseUrl: string, env: Record<string, string> = {}): Promise<RunningServer> {
   const port = await freePort();
-  // Under coverage (vitest.config.ts sets KUBUS_V8_DIR) the server leaves its V8 coverage there, which it only
-  // does when it exits, not when it is killed.
+  // Under coverage (vitest.config.ts sets KUBUS_V8_DIR) the server leaves its V8 coverage there when it exits
+  // (stop() sends SIGTERM, on which it shuts down and exits).
   const dump = process.env.KUBUS_V8_DIR;
-  const preload = dump ? ["--import", join(import.meta.dirname, "exitOnTerm.mjs")] : [];
-  const child = spawn(process.execPath, [...preload, join(import.meta.dirname, "../src/index.ts")], {
+  const child = spawn(process.execPath, [join(import.meta.dirname, "../src/index.ts")], {
     env: { ...process.env, DATABASE_URL: databaseUrl, KUBUS_TOKEN: TOKEN, PORT: String(port), ...(dump ? { NODE_V8_COVERAGE: dump } : {}), ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });

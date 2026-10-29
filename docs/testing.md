@@ -119,8 +119,8 @@ npm run coverage:report                       # merges what exists: coverage/ind
   `coverage/unit/coverage-final.json`. Pass `--coverage.include='<glob>'` and `--coverage.reporter=text-summary` to look at one area.
   Coverage slows tests down, so under `--coverage` a test may take 20 s instead of 5.
 - **Server child process**: the HTTP and device tests run the real server as a child process (`server/test/serve.ts`), invisible to vitest.
-  Under coverage `vitest.config.ts` sets `KUBUS_V8_DIR`; `serve.ts` then gives the child `NODE_V8_COVERAGE` of that folder (and
-  `exitOnTerm.mjs`, because V8 writes a process's coverage when it exits, and `stop()` would kill it). `coverage/server-v8/` holds the dumps.
+  Under coverage `vitest.config.ts` sets `KUBUS_V8_DIR`; `serve.ts` then gives the child `NODE_V8_COVERAGE` of that folder
+  (V8 writes it when the process exits: `stop()` sends SIGTERM, on which the server shuts down). `coverage/server-v8/` holds the dumps.
 - **GUI**: `--coverage` makes `run.mjs` build with source maps and each test collect V8 precise coverage over CDP (Chromium; the app's main
   thread, not its workers), into `coverage/gui-v8/`, one file per test (`gui-tests/README.md`).
 - **The merge** (`tests/coverage.mjs`) converts the V8 data with `ast-v8-to-istanbul` (the GUI's through the build's source maps, the server's
