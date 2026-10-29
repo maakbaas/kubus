@@ -157,6 +157,16 @@ export function ChoroplethMap({ map: regionMap, values, options, label, dark }: 
     if (!Number.isFinite(west)) return [-180, -60, 180, 85];
     return [west, world ? Math.max(south, -58) : south, east, Math.min(north, 85)];
   }, [whole, world]);
+  /**
+   * The map's own shape (width / height in Mercator): its canvas is no wider than that, centred, as Carbon centres
+   * its drawing. MapLibre showing one world (renderWorldCopies off) zooms out no further than the world filling the
+   * canvas's width, so a world in a wide block stayed cropped top and bottom.
+   */
+  const aspect = useMemo(() => {
+    const y = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+    const [west, south, east, north] = bounds;
+    return ((east - west) * Math.PI) / 180 / Math.max(1e-6, y(north) - y(south));
+  }, [bounds]);
   const fitAll = (animate: boolean) => {
     moved.current = false;
     mapRef.current?.fitBounds(bounds, { padding: 8, animate });
@@ -270,7 +280,7 @@ export function ChoroplethMap({ map: regionMap, values, options, label, dark }: 
   return (
     <div ref={box} className="choropleth-map">
       <div className="map-block__map" style={{ "--map-height": `calc(${blockHeightCss(options.height, options.aspect)} - ${LEGEND_HEIGHT})` } as CSSProperties}>
-        <div ref={canvas} className="map-block__canvas" />
+        <div ref={canvas} className="map-block__canvas choropleth-map__canvas" style={{ "--map-aspect": String(aspect) } as CSSProperties} />
         {failed && <p className="helper map-block__message">The map couldn't be loaded.</p>}
         <div className="map-block__controls">
           <IconButton kind="secondary" size="sm" label="Zoom in" align="left" autoAlign onClick={() => zoom(1)}>

@@ -3175,6 +3175,11 @@ img[data-lightbox] {
   border: 0;
   background: none;
 }
+/* As wide as the map's shape at the map's height (ChoroplethMap: `aspect`), centred. */
+.choropleth-map__canvas {
+  inline-size: min(100%, calc(var(--map-height) * var(--map-aspect)));
+  margin-inline: auto;
+}
 .choropleth-map__legend {
   inline-size: 18.75rem;
   max-inline-size: 100%;
