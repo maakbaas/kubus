@@ -1,9 +1,10 @@
 import { Button } from "@carbon/react";
 import { SYNC_OUTDATED } from "../data/repository";
 import type { SyncStatus } from "../data/repository";
+import { inDesktopShell } from "../platform/shell";
 
 /** The installed desktop app bundles its build: only a new install updates it. The web and home-screen app load a new build on reload. */
-const reloads = typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window);
+const reloads = !inDesktopShell();
 
 const DETAIL = {
   app: "This device runs an older version of Kubus than the server. Your changes stay on this device and sync once it is updated.",

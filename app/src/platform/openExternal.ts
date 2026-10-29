@@ -1,4 +1,5 @@
 // Platform adapter: the core app never imports Tauri APIs directly.
+import { inDesktopShell } from "./shell";
 
 /** A URL's scheme ("https", "spotify", …), lower case; null for a relative URL (`files/…`). */
 const schemeOf = (url: string): string | null => /^([a-z][a-z0-9+.-]*):/i.exec(url.trim())?.[1].toLowerCase() ?? null;
@@ -31,7 +32,7 @@ export const safeUrl = (url: string): string => (schemeOf(url) === null || isOpe
  */
 export async function openExternal(url: string): Promise<void> {
   if (!isOpenableUrl(url)) return;
-  if ("__TAURI_INTERNALS__" in window) {
+  if (inDesktopShell()) {
     const { openUrl } = await import("@tauri-apps/plugin-opener");
     await openUrl(url);
   } else if (/^https?:/i.test(url.trim())) {
