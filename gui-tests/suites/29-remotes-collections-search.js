@@ -14,6 +14,10 @@ const COLUMNS = [
   { name: "active", type: "boolean", kind: "checkbox" },
 ];
 
+/** The customers table with a date column too (`fake.columns = DATED_COLUMNS`): joined, in January (rows 1 to 60), February (61 to 100) or March (101 on) 2026. */
+const DATED_COLUMNS = [...COLUMNS, { name: "joined", type: "date", kind: "date" }];
+const joinedOf = (i) => `2026-0${i < 60 ? 1 : i < 100 ? 2 : 3}-${String(1 + (i % 28)).padStart(2, "0")}`;
+
 /**
  * A fake Kubus server at `url` that offers remote sources: GET /api/sources, /tables, POST /describe,
  * /query (pages of `fake.total` made-up customers, at most `fake.pageCap` per answer, `fake.hold`
@@ -27,6 +31,7 @@ async function fakeRemotes(t, url = CRM_URL) {
     describes: 0,
     sources: [{ name: "CRM", connector: "postgres" }, { name: "Files", connector: "csv", problem: "unreachable" }],
     tables: [{ schema: "public", name: "customers", type: "table" }, { schema: "public", name: "order_items", type: "table" }, { schema: "public", name: "recent_orders", type: "view" }],
+    columns: COLUMNS,
     total: 250,
     pageCap: 100,
     hold: null,
@@ -45,7 +50,7 @@ async function fakeRemotes(t, url = CRM_URL) {
     if (/^\/api\/sources\/[^/]+\/tables$/.test(path)) return route.fulfill({ status: 200, headers: cors, json: fake.tables });
     if (/^\/api\/sources\/[^/]+\/describe$/.test(path)) {
       fake.describes += 1;
-      return route.fulfill({ status: 200, headers: cors, json: { columns: COLUMNS, key: ["id"], dropped: [{ name: "secret", type: "bytea" }] } });
+      return route.fulfill({ status: 200, headers: cors, json: { columns: fake.columns, key: ["id"], dropped: [{ name: "secret", type: "bytea" }] } });
     }
     if (/^\/api\/sources\/[^/]+\/query$/.test(path)) {
       const body = JSON.parse(req.postData() || "{}");
@@ -55,7 +60,7 @@ async function fakeRemotes(t, url = CRM_URL) {
       const end = Math.min(body.offset + Math.min(body.limit, fake.pageCap), fake.total);
       const rows = [];
       for (let i = body.offset; i < end; i++) {
-        const cell = { id: i + 1, name: `Customer ${i + 1}`, city: `City ${i % 7}`, active: i % 2 === 0 };
+        const cell = { id: i + 1, name: `Customer ${i + 1}`, city: `City ${i % 7}`, active: i % 2 === 0, joined: joinedOf(i) };
         rows.push({ key: String(i + 1), values: body.columns.map((c) => (c in cell ? cell[c] : null)) });
       }
       return route.fulfill({ status: 200, headers: cors, json: { rows, more: end < fake.total, ...(body.counts && { total: fake.total }) } });
@@ -70,7 +75,7 @@ const connectTo = (t, url = CRM_URL) =>
   t.page.evaluate((url) => localStorage.setItem("kubus.sync", JSON.stringify({ url, token: "tok", enabled: false, originals: "always" })), url);
 
 /** Stores a remote collection reading the fake source's customers table, as the editor would; `block` is merged into its view's blocks. */
-const makeRemote = (t, { name = "Customer", plural = "Customers", spaceIds = null, block = null } = {}) =>
+const makeRemote = (t, { name = "Customer", plural = "Customers", spaceIds = null, block = null, columns = COLUMNS } = {}) =>
   t.page.evaluate(
     async ([name, plural, columns, spaceIds, block]) => {
       const repo = window.kubus.repo;
@@ -82,12 +87,18 @@ const makeRemote = (t, { name = "Customer", plural = "Customers", spaceIds = nul
       const source = { name: "CRM", target: { table: { schema: "public", name: "customers" } }, key: "id", columns };
       await repo.saveCollection({ id, name, pluralName: plural, icon: "DataBase", description: "", spaceIds, source, titleField: null, fields }, "default");
       if (block) {
+        // "@joined" in the block names the field of that column.
+        const named = (v) =>
+          typeof v === "string" && v.startsWith("@") ? (fields.find((f) => f.column === v.slice(1))?.id ?? v)
+          : Array.isArray(v) ? v.map(named)
+          : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, named(x)]))
+          : v;
         const [v] = await repo.listViews(id, "default");
-        await repo.saveView({ ...v, blocks: v.blocks.map((b) => ({ ...b, ...block })) });
+        await repo.saveView({ ...v, blocks: v.blocks.map((b) => ({ ...b, ...named(block) })) });
       }
       return id;
     },
-    [name, plural, COLUMNS, spaceIds, block],
+    [name, plural, columns, spaceIds, block],
   );
 
 const pane = (t) => t.page.locator(".ws-pane--active");
@@ -382,6 +393,106 @@ test("remote block: loading every row shows its progress, can be cancelled and g
   await t.until("Load all rows goes on to the end", async () => (await tableRows(t).count()) === 120 && (await pane(t).getByRole("button", { name: "Load all rows" }).count()) === 0);
   await t.check("the progress bar is gone", (await pane(t).locator(".block-more .cds--progress-bar").count()) === 0);
   await t.check("pages were read in order without repeats", JSON.stringify(fake.queries.map((q) => q.offset)) === JSON.stringify([0, 40, 80]) || JSON.stringify(fake.queries.map((q) => q.offset).filter((o, i, a) => a.indexOf(o) === i)) === JSON.stringify([0, 40, 80]), JSON.stringify(fake.queries.map((q) => q.offset)));
+}, { viewport: "desktop" });
+
+// A remote block grouped by a date part other than the day (year, month, week, hour): the source groups
+// by the value (a day), so the app loads every row and groups them itself.
+const groupTitles = (t) => pane(t).locator(".block .table-group__title").allInnerTexts().then((l) => l.map((s) => s.trim()));
+const groupSizes = (t) => pane(t).locator(".block .cds--accordion__item").evaluateAll((els) => els.map((e) => e.querySelectorAll("tbody tr").length));
+const panelOf = (t) => t.page.locator(".toolbar-popover__panel:visible").last();
+
+test("remote block: grouped by a month loads every row, groups them in the app, partial when stopped, resumed", async (t) => {
+  await t.boot();
+  const fake = await fakeRemotes(t);
+  fake.columns = DATED_COLUMNS;
+  fake.total = 120;
+  fake.pageCap = 40;
+  await connectTo(t);
+  const id = await makeRemote(t, { columns: DATED_COLUMNS });
+  await t.open(t.listPath(id));
+  await t.until("the first page is in", async () => (await tableRows(t).count()) === 40);
+  await t.openPanel(pane(t).locator(".block .section-header").first(), "Sort and group");
+  const groupBy = panelOf(t).getByLabel("Group by", { exact: true });
+  const by = panelOf(t).getByLabel("Group dates by", { exact: true });
+  await t.check("a remote collection's date column can be grouped", (await groupBy.locator("option").allInnerTexts()).includes("joined"));
+  await t.check("no Group dates by before a date is grouped", (await by.count()) === 0);
+  await groupBy.selectOption({ label: "joined" });
+  const parts = await by.locator("option").allInnerTexts();
+  await t.check("Group dates by offers year, month, week and day (an hour is of a date & time)", JSON.stringify(parts) === JSON.stringify(["Year", "Month", "Week", "Day"]), JSON.stringify(parts));
+  await t.until("by day the source groups, page by page", async () => fake.queries.at(-1)?.groupBy === "joined" && (await pane(t).locator(".block-more").innerText().catch(() => "")).includes("of 120"));
+  const before = fake.queries.length;
+
+  // By month: the source does not group; every row comes, the next page held back to look at the partial grouping.
+  let release;
+  fake.hold = new Promise((resolve) => (release = resolve));
+  fake.holdFrom = 40;
+  await by.selectOption({ label: "Month" });
+  const bar = pane(t).locator(".block-more");
+  await t.until("the bar counts the rows in so far", async () => (await bar.innerText().catch(() => "")).replace(/\s+/g, " ").includes("Loading rows: 40 of 120"), await bar.innerText().catch(() => ""));
+  await t.check("the groups show what is in so far", JSON.stringify(await groupTitles(t)) === JSON.stringify(["January 2026"]) && JSON.stringify(await groupSizes(t)) === "[40]", JSON.stringify(await groupTitles(t)));
+  await t.check("the source was asked for the rows without grouping, in big pages", fake.queries.slice(before).every((q) => q.groupBy === null && q.limit === 10000), JSON.stringify(fake.queries.slice(before)));
+  await t.check("it can be stopped", (await bar.getByRole("button", { name: "Cancel" }).count()) === 1);
+  await t.audit("grouped by month, loading");
+  await bar.getByRole("button", { name: "Cancel" }).click();
+  release();
+  await t.until("stopped: the groups are marked as of the rows loaded so far, with Load all rows", async () => (await pane(t).getByRole("button", { name: "Load all rows" }).count()) === 1 && (await groupTitles(t)).length === 2);
+  await t.settle(300);
+  const note = (await pane(t).locator(".block-more").innerText()).replace(/\s+/g, " ");
+  await t.check("the block says the groups are of the rows loaded so far: 80 of 120", note.includes("Groups of the rows loaded so far: 80 of 120"), note);
+  await t.check("January 60 rows, February 20 so far", JSON.stringify(await groupTitles(t)) === JSON.stringify(["January 2026", "February 2026"]) && JSON.stringify(await groupSizes(t)) === "[60,20]", JSON.stringify(await groupSizes(t)));
+  await t.check("no further page was asked", fake.queries.slice(before).filter((q) => q.groupBy === null).length === 2, JSON.stringify(fake.queries.map((q) => [q.offset, q.groupBy])));
+  await t.audit("grouped by month, stopped (partial)");
+
+  // Resumed: the rest comes, the note goes.
+  fake.hold = null;
+  await pane(t).getByRole("button", { name: "Load all rows" }).click();
+  await t.until("all rows are in: January 60, February 40, March 20", async () => JSON.stringify(await groupSizes(t)) === "[60,40,20]", JSON.stringify(await groupSizes(t)));
+  await t.until("the note and the bar are gone", async () => (await pane(t).locator(".block-more").count()) === 0);
+  await t.check("the groups are labelled and in time order", JSON.stringify(await groupTitles(t)) === JSON.stringify(["January 2026", "February 2026", "March 2026"]), JSON.stringify(await groupTitles(t)));
+  const asked = fake.queries.length;
+
+  // The order and the part of the groups are the app's: no new request.
+  await t.openPanel(pane(t).locator(".block .section-header").first(), "Sort and group");
+  await panelOf(t).getByLabel("Group order", { exact: true }).selectOption({ label: "Descending" });
+  await t.until("descending: March first", async () => JSON.stringify(await groupTitles(t)) === JSON.stringify(["March 2026", "February 2026", "January 2026"]), JSON.stringify(await groupTitles(t)));
+  await t.check("the rows were not loaded again", fake.queries.length === asked, `${fake.queries.length} vs ${asked}`);
+  await panelOf(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Year" });
+  await t.until("by year: one group of all 120", async () => JSON.stringify(await groupTitles(t)) === JSON.stringify(["2026"]) && JSON.stringify(await groupSizes(t)) === "[120]", JSON.stringify(await groupTitles(t)));
+  await t.check("a year is grouped from the rows already in", fake.queries.length === asked, `${fake.queries.length} vs ${asked}`);
+  await panelOf(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Week" });
+  await t.until("by week: ISO weeks, the latest first (Week 13 to Week 1)", async () => { const l = await groupTitles(t); return (l[0] === "Week 13, 2026" && l.at(-1) === "Week 1, 2026") || JSON.stringify(l); });
+  await panelOf(t).getByLabel("Group dates by", { exact: true }).selectOption({ label: "Month" });
+  await panelOf(t).getByLabel("Group order", { exact: true }).selectOption({ label: "Ascending" });
+  await t.closeAll();
+
+  // Stored with the view; after a reload the rows come again and are grouped.
+  await t.page.locator(".views-bar").getByRole("button", { name: "Save changes to view" }).click();
+  await t.settle(200);
+  const stored = await t.page.evaluate(async (cid) => (await window.kubus.repo.listViews(cid, "default"))[0].blocks[0], id);
+  await t.check("the view stores the date part", stored.groupDate === "month" && !!stored.groupBy, JSON.stringify(stored));
+  await t.open(t.listPath(id));
+  await t.until("reloaded: grouped by month again", async () => JSON.stringify(await groupSizes(t)) === "[60,40,20]", JSON.stringify(await groupSizes(t)));
+  await toTop(t);
+  await t.audit("grouped by month, all rows");
+}, { viewport: "desktop" });
+
+test("remote block: a chart by month of a remote collection loads every row", async (t) => {
+  await t.boot();
+  const fake = await fakeRemotes(t);
+  fake.columns = DATED_COLUMNS;
+  fake.total = 120;
+  fake.pageCap = 40;
+  await connectTo(t);
+  const count = { id: "a", value: "count", field: null, label: "", style: null, axis: "left", transform: "none", window: 3 };
+  const id = await makeRemote(t, { columns: DATED_COLUMNS, block: { kind: "chart", options: { chart: "bar", x: { by: "field", field: "@joined", dateStep: "month" }, series: [count] } } });
+  await t.open(t.listPath(id));
+  const bars = () => pane(t).locator(".chart-block path.bar").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
+  await t.until("a bar per month, as high as its rows (60, 40, 20)", async () => {
+    const h = await bars();
+    return (h.length === 3 && Math.abs(h[0] / h[2] - 3) < 0.2 && Math.abs(h[1] / h[2] - 2) < 0.2) || JSON.stringify(h);
+  }, { timeout: 15000 });
+  await t.check("the pages were read in order, without the source grouping", JSON.stringify([...new Set(fake.queries.map((q) => q.offset))]) === "[0,40,80]" && fake.queries.every((q) => q.groupBy === null), JSON.stringify(fake.queries.map((q) => [q.offset, q.groupBy])));
+  await t.audit("remote chart by month");
 }, { viewport: "desktop" });
 
 // ---------------------------------------------------------------------------------------------

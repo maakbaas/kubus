@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SourceColumn, SourceRow } from "../../../shared/sources";
 import { blankField, pickableFields, type Collection } from "./model";
-import { addRows, canGroup, canSort, sourcePeriod, fieldOperators, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
+import { addRows, canGroup, groupsInApp, canSort, sourcePeriod, fieldOperators, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
 import { defaultQuery, TITLE } from "./query";
 
 const columns: SourceColumn[] = [
@@ -82,6 +82,23 @@ describe("remote collections", () => {
     });
     // A value that can't be compared matches nothing, as in the app.
     expect(sourceQuery(people, { ...defaultQuery(), filters: [{ id: "1", fieldId: "f-born", operator: "before", value: "soon" }] }, "", "UTC").filter).toEqual({ or: [] });
+  });
+
+  it("are grouped by a date part in the app: the source is not asked to group (only by the day it groups by itself)", () => {
+    const by = (groupDate?: "year" | "month" | "week" | "day" | "hour") => ({ ...defaultQuery(), groupBy: "f-born", ...(groupDate && { groupDate }) });
+    for (const part of ["year", "month", "week"] as const) {
+      expect(groupsInApp(people, by(part))).toBe(true);
+      expect(sourceQuery(people, by(part), "", "UTC").groupBy).toBeNull();
+    }
+    for (const part of [undefined, "day", "hour"] as const) {
+      expect(groupsInApp(people, by(part))).toBe(false); // an hour of a date is its day
+      expect(sourceQuery(people, by(part), "", "UTC").groupBy).toBe("born");
+    }
+    expect(groupsInApp(people, { ...defaultQuery(), groupBy: "f-name", groupDate: "month" })).toBe(false); // not a date
+    expect(groupsInApp(people, { ...defaultQuery(), groupDate: "month" })).toBe(false); // no grouping
+    expect(groupsInApp({ ...people, source: undefined }, by("month"))).toBe(false); // a native collection groups itself
+    const stamped: Collection = { ...people, fields: [blankField("f-at", "At", "datetime", { column: "born" })] };
+    expect(groupsInApp(stamped, { ...defaultQuery(), groupBy: "f-at", groupDate: "hour" })).toBe(true);
   });
 
   it("send the item itself as its row's key", () => {

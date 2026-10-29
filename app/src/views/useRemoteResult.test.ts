@@ -355,3 +355,88 @@ describe("grouping", () => {
     expect(h.result.current!.items).toHaveLength(3);
   });
 });
+
+describe("grouping by a date part", () => {
+  const columnsAt: SourceColumn[] = [{ name: "id", type: "integer", kind: "number" }, { name: "at", type: "date", kind: "date" }];
+  const events: Collection = {
+    ...tasks,
+    source: { name: "CRM", target: { table: { schema: "public", name: "events" } }, key: "id", columns: columnsAt },
+    fields: [blankField("f-at", "At", "date", { column: "at" })],
+  };
+  const dated = (n: number, date: string): SourceRow => ({ key: String(n), values: [date] });
+  const days = ["2026-03-02", "2026-02-27", "2026-03-15", "2026-02-01", "2025-12-31", "2026-03-31"];
+  const q = (groupDate: "month" | "day"): ViewQuery => ({ ...query0, groupBy: "f-at", groupDate });
+  const pages = () => {
+    const calls: SourceQuery[] = [];
+    const client = sources((query) => {
+      calls.push(query);
+      const slice = days.slice(query.offset, query.offset + 2);
+      return { rows: slice.map((d, i) => dated(query.offset + i + 1, d)), more: query.offset + 2 < days.length, total: days.length };
+    });
+    return { client, calls };
+  };
+
+  it("loads every row (the source not grouping) and groups them by month, in order, labelled", async () => {
+    const p = pages();
+    const h = hook(p.client, { collection: events, query: q("month") });
+    await settle(h, 1100);
+    await settle(h, 1100);
+    await settle(h, 1100);
+    expect(p.calls.map((c) => [c.offset, c.limit, c.groupBy])).toEqual([[0, MAX_SOURCE_PAGE, null], [2, MAX_SOURCE_PAGE, null], [4, MAX_SOURCE_PAGE, null]]);
+    const r = h.result.current!;
+    expect(r.everything).toBe(true);
+    expect(r.more).toBeNull();
+    expect(r.result.groups.map((g) => [g.key, g.label, g.items.length])).toEqual([["2025-12", "December 2025", 1], ["2026-02", "February 2026", 2], ["2026-03", "March 2026", 3]]);
+    expect(r.result.total).toBe(6);
+  });
+
+  it("shows the groups of the rows in so far; stopped, they stay and 'Load all rows' goes on", async () => {
+    // Pages of two rows, each answered when the test says.
+    const calls: SourceQuery[] = [];
+    const waiting: ((r: SourceResult) => void)[] = [];
+    const client = sources((query) => {
+      calls.push(query);
+      return new Promise<SourceResult>((resolve) => waiting.push(resolve));
+    });
+    const answer = async (h: { settle(): Promise<void> }) => {
+      const query = calls[calls.length - waiting.length];
+      const slice = days.slice(query.offset, query.offset + 2);
+      waiting.shift()!({ rows: slice.map((d, i) => dated(query.offset + i + 1, d)), more: query.offset + 2 < days.length, total: days.length });
+      await settle(h, 1100);
+    };
+    const h = hook(client, { collection: events, query: q("month") });
+    await settle(h);
+    await answer(h);
+    expect(h.result.current!.result.groups.map((g) => [g.key, g.items.length])).toEqual([["2026-02", 1], ["2026-03", 1]]);
+    expect(h.result.current!.progress).toMatchObject({ loaded: 2, total: 6 });
+    h.result.current!.stop();
+    await answer(h); // the page on its way arrives, no further one is asked
+    expect(calls).toHaveLength(2);
+    const r = h.result.current!;
+    expect(r.progress).toBeNull();
+    expect(r.more).toBeInstanceOf(Function);
+    expect(r.result.groups.map((g) => [g.key, g.items.length])).toEqual([["2026-02", 2], ["2026-03", 2]]);
+    expect(r.result.total).toBe(6); // of the source's rows, not of those in
+    r.more!(); // "Load all rows"
+    await settle(h);
+    await answer(h);
+    expect(h.result.current!.result.groups.map((g) => [g.key, g.items.length])).toEqual([["2025-12", 1], ["2026-02", 2], ["2026-03", 3]]);
+    expect(h.result.current!.more).toBeNull();
+  });
+
+  it("leaves the day to the source: paged as usual, its groups", async () => {
+    const client = sources(() => ({ rows: [dated(1, "2026-03-02")], more: true, total: 300, groups: [{ key: "2026-03-02", count: 300 }] }));
+    const h = hook(client, { collection: events, query: q("day") });
+    await settle(h);
+    expect(client.calls[0]).toMatchObject({ groupBy: "at", limit: 100 });
+    expect(h.result.current!.everything).toBe(false);
+    expect(h.result.current!.more).toBeInstanceOf(Function);
+  });
+
+  it("orders the groups as the query says (largest first)", async () => {
+    const p = pages();
+    const h = hook(p.client, { collection: events, query: { ...q("month"), groupOrder: "count" } });
+    for (let i = 0; i < 3; i++) await settle(h, 1100);
+    expect(h.result.current!.result.groups.map((g) => g.key)).toEqual(["2026-03", "2026-02", "2025-12"]);
+  });
+});
