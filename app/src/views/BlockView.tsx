@@ -13,6 +13,7 @@ import { PromoteComponentModal } from "../ui/PromoteComponentModal";
 import type { MarkdownBlockOptions } from "./MarkdownBlock";
 import type { ComponentBlockOptions } from "./ComponentBlock";
 import { applyQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type ItemGroup, type QueryResult } from "../domain/query";
+import { blockSort, isDefaultBlockSort } from "../domain/blockSort";
 import { blockLimit, blockQuery, NO_FILTERS, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
@@ -20,7 +21,7 @@ import { ToolbarPopover } from "../ui/ToolbarPopover";
 import { SectionHeader } from "../ui/SectionHeader";
 import { useConfirm } from "../ui/useConfirm";
 import type { RefOptions } from "../ui/useReferenceOptions";
-import { BLOCK_TYPES, blockSort, blockType, isDefaultBlockSort, normalizeBlock, type BlockPlace, type BlockTypeDefinition, type PageItem } from ".";
+import { BLOCK_TYPES, blockType, normalizeBlock, type BlockPlace, type BlockTypeDefinition, type PageItem } from ".";
 import { QueryEditor } from "./QueryEditor";
 import type { CollectionData } from "./useCollectionData";
 import { useItemActions } from "./useItemActions";
@@ -161,7 +162,7 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
       )}
       {uses.query && (
         <ToolbarPopover label={uses.groups ? "Sort and group" : "Sort"} icon={ArrowsVertical} active={!isDefaultSort(block, collection, uses.groups)} onOpenChange={onOpenChange}>
-          <QueryEditor collection={collection} query={query} refs={refs} part="sortGroup" noGroup={!uses.groups} onChange={(q) => onChange(withQuery(block, q))} />
+          <QueryEditor collection={collection} query={query} refs={refs} part="sortGroup" noGroup={!uses.groups} onChange={(q) => onChange(withQuery(block, q, query.sort))} />
         </ToolbarPopover>
       )}
       {uses.fields && (
@@ -201,6 +202,8 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
             autoAlign
             size="sm"
             id={`${uid}-collection`}
+            className="multi-select--keep-one"
+            clearSelectionText="A block always lists at least one collection"
             titleText="Collections"
             label={chosen.map((c) => c.pluralName).join(", ") || "Collections"}
             items={pageCollections}
@@ -388,7 +391,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
     stored: data.stored,
     query,
     preset,
-    onSort: (sort) => onChange({ ...block, sort }),
+    onSort: (sort) => onChange({ ...block, sort, sortChosen: true }),
     confirm,
     onError,
   });

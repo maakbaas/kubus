@@ -5,7 +5,7 @@ import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "mapl
 import { itemPath } from "../domain/backlinks";
 import { isCoordinateField, isLocationTextField, locationOf, locationOfPair, type LngLat } from "../domain/geo";
 import { fieldValue, isStruckThrough, itemLabel, pickableFields, type Collection, type FieldDef, type Item } from "../domain/model";
-import { fieldText, isEmptyValue, isGrouped, timeSort, type QueryResult } from "../domain/query";
+import { fieldText, isEmptyValue, isGrouped, type QueryResult } from "../domain/query";
 import { BLOCK_HEIGHT, blockHeightCss, DEFAULT_ASPECT, normalizeAspect, normalizeBlockHeight, type AspectRatio } from "../domain/views";
 import { Highlight } from "../ui/Highlight";
 import { useMediaQuery } from "../ui/useMediaQuery";
@@ -565,7 +565,6 @@ export const mapView = defineBlockType<MapOptions>({
   label: "Map",
   icon: Earth,
   defaultOptions: (collection) => ({ ...guessLocation(collection), height: BLOCK_HEIGHT.initial, aspect: DEFAULT_ASPECT, route: false }),
-  defaultSort: timeSort,
   uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true } }),
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<MapOptions>;

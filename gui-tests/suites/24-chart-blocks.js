@@ -1150,3 +1150,35 @@ test("default sort: a chart without a sort of its own is in time order (a stat's
   await t.until("the Sort button is marked while a sort other than the default is in effect", async () => (await sortButton(0).getAttribute("data-active")) !== null);
   await t.closeAll();
 });
+
+test("default sort: picking Title explicitly on a chart is honoured (title order, Sort button marked), also after a reload", async (t) => {
+  const rows = [["Alpha", "2025-05-01", 5], ["Bravo", "2025-01-01", 7], ["Charlie", "2025-03-01", 9], ["Delta", "2025-02-01", 11]];
+  await t.boot();
+  const ids = await t.seed({
+    collections: [{
+      key: "w", name: "Reading", plural: "Readings", icon: "Cube",
+      fields: [{ key: "name", name: "Name", kind: "string" }, { key: "date", name: "Day", kind: "date" }, { key: "weight", name: "Weight", kind: "number" }],
+      items: rows.map(([name, date, weight]) => ({ key: name, values: { name, date, weight } })),
+      views: [{ name: "Stats", blocks: [{ kind: "chart", title: "Last", options: { chart: "stat", sparkline: "none", series: [S("a", "last", "@weight")] } }] }],
+    }],
+  });
+  const stored = () => t.page.evaluate(async (c) => (await window.kubus.repo.listViews(c, "default")).find((v) => v.name === "Stats").blocks[0], ids.collections.w);
+  const sortButton = () => blockAt(t, 0).getByRole("button", { name: "Sort", exact: true });
+  await t.open(t.listPath(ids.collections.w));
+  await waitDrawn(t, 0);
+  await drawn(t, "by date: Last is Alpha's 5", (f) => f.kind === "stat" && f.lines_.includes("5"), 0);
+  await t.openPanel(blockAt(t, 0).locator(".section-header").first(), "Sort");
+  const panel = t.page.locator(PANEL).first();
+  await choose(t, panel, null, "Sort by", "Title");
+  await drawn(t, "by title: Last is Delta's 11", (f) => f.kind === "stat" && f.lines_.includes("11") && !f.lines_.includes("5"), 0);
+  await t.until("the Sort button is marked: Title is not the chart's default", async () => (await sortButton().getAttribute("data-active")) !== null);
+  await t.closeAll(); // Save is held while the panel is open
+  await t.openPanel(t.page.locator(".views-bar").first(), "Save changes to view");
+  await t.until("the view is saved", async () => !(await t.page.locator(".views-bar").first().innerText()).includes("*"));
+  await t.until("the choice is stored as chosen", async () => (await stored()).sortChosen === true);
+  await t.closeAll();
+  await t.open(t.listPath(ids.collections.w));
+  await waitDrawn(t, 0);
+  await drawn(t, "after a reload: still by title", (f) => f.kind === "stat" && f.lines_.includes("11"), 0);
+  await t.check("the Sort button is still marked", (await sortButton().getAttribute("data-active")) !== null);
+});

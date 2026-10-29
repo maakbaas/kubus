@@ -10,14 +10,17 @@ Extension points are registries, not special cases in pages:
   `applyQuery()`. Everything field-kind specific (filter operators, sort key, group keys, text for
   search) is in one `KIND_RULES` table: a new field kind or operator is added there. Pseudo fields
   `$title`, `$updated`, `$created` can be sorted on; the default query sorts by `$title`.
-  A block type can have a default sort of its own (`BlockTypeDefinition.defaultSort`, resolved by `blockSort` in
-  `views/index.ts`): a chart block (every chart kind, a stat's Last / First / Previous value too) and a map block, with no
-  sort set (an empty one, or the title sort every new block starts with), run in time order, ascending by the
+  A block type can have a default sort of its own (`DEFAULT_SORTS` by kind in `domain/blockSort.ts`, pure so the headless
+  API's view-items route applies it too; `blockSort` / `isDefaultBlockSort` live there): a chart block (every chart kind, a
+  stat's Last / First / Previous value too) and a map block, whose sort was not chosen, run in time order, ascending by the
   collection's first date or date & time field (`timeSort`; for blocks of several collections, the merged first one),
   so "Last" is the latest and a route follows time. Without a date field, and for every other block type, the default
-  stays the title. Blocks keep following their sort otherwise. The Sort button is marked (blue) only for a sort other than
-  the block type's default, and the Sort panel shows the sort in effect. Change: stored chart and map blocks that had
-  only the title sort now run by date; picking Title explicitly on those types means the default, so sort by another field.
+  stays the title. **A chosen sort is always honoured**: whatever picks a sort (the Sort panel, a column header, an API block
+  that gives a `sort`) marks the block `sortChosen: true` (`withQuery`, `ViewBlock.sortChosen`), Title included; a marked block
+  never gets the default. New blocks are stored with the title sort and no marker (= unset). Legacy: blocks stored before the
+  marker with exactly the title sort (or none) can't be told from a deliberate Title, and are read as unset (a one-time
+  ambiguity of old data; picking the sort again marks them). The Sort button is marked (blue) only when the sort in effect
+  differs from the block type's default (an explicit Title on a chart is marked), and the Sort panel shows the sort in effect.
   A remote collection gets the default like any sort (it goes to the source when the date column can be sorted).
   **Group by a date or date & time field** (`domain/groupDate.ts`, `ViewQuery.groupDate`, stored on the block as
   `groupDate`, absent = day): by year, month, week (ISO: Monday to Sunday, week 1 holds the year's first Thursday), day or

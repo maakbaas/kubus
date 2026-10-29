@@ -2213,6 +2213,12 @@ img[data-lightbox] {
 .toolbar-popover__panel--wide {
   inline-size: min(40rem, var(--popover-width, calc(100vw - 2 * var(--cds-spacing-05))));
 }
+/* A multi-select that can't be emptied (a block's Collections) shows its count without Carbon's clear-all ×: it would do nothing
+   (BlockView ignores an empty selection) and is an 18px target beside the field. The tag is not focusable; Delete / Backspace do the same. */
+.multi-select--keep-one .cds--tag__close-icon {
+  display: none;
+}
+
 .view-settings {
   display: flex;
   flex-direction: column;

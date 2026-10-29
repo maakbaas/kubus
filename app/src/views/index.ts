@@ -6,7 +6,6 @@ import { markdownBlock } from "./MarkdownBlock";
 import type { BlockTypeDefinition } from "./registry";
 import { tableView } from "./TableView";
 import { pickableFields, type Collection } from "../domain/model";
-import { defaultQuery, type SortRule } from "../domain/query";
 import { listedCollection, newBlock, type ViewBlock, type ViewState } from "../domain/views";
 
 /** All block types, in the order the "Show as" menu lists them. Add new block types here. */
@@ -14,23 +13,6 @@ export const BLOCK_TYPES: BlockTypeDefinition[] = [tableView, cardsView, chartBl
 
 /** The block type for a kind; falls back to the table for unknown (e.g. removed) kinds. */
 export const blockType = (kind: string): BlockTypeDefinition => BLOCK_TYPES.find((v) => v.kind === kind) ?? tableView;
-
-/**
- * The sort a block runs with: its own, unless it has none (or only the title one every new block starts with) and its
- * type has a default of its own (a chart or map: time order, `timeSort`; without a date field, by title as before).
- */
-export function blockSort(block: ViewBlock, collection: Collection): SortRule[] {
-  const unset = block.sort.length === 0 || sameSort(block.sort, TITLE_SORT);
-  return (unset && blockType(block.kind).defaultSort?.(collection)) || block.sort;
-}
-
-/** Whether the block's sort is its type's default (what the Sort button leaves unmarked). */
-export function isDefaultBlockSort(block: ViewBlock, collection: Collection): boolean {
-  return sameSort(blockSort(block, collection), blockType(block.kind).defaultSort?.(collection) ?? TITLE_SORT);
-}
-
-const TITLE_SORT = defaultQuery().sort;
-const sameSort = (a: SortRule[], b: SortRule[]) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
  * A block made valid for its collection: its type's options normalized, fields that no longer
@@ -58,6 +40,7 @@ export function normalizeBlock(base: Collection, block: ViewBlock, all?: Collect
     collectionId: block.collectionId,
     options: type.normalizeOptions(block.options, collection),
   };
+  if (block.sortChosen) normalized.sortChosen = true;
   if (block.hideHeader) normalized.hideHeader = true;
   if (block.limit !== undefined) normalized.limit = block.limit;
   if (block.collectionIds) normalized.collectionIds = block.collectionIds;

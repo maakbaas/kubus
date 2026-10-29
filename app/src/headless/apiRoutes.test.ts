@@ -515,6 +515,15 @@ describe("views", () => {
     expect(await refused(404, "GET", "/collections/Book/views/By%20pages/items?space=work&block=Nope")).toBe("The view “By pages” has no block “Nope”");
   });
 
+  it("run a chart or map block in time order unless a sort was given, Title included", async () => {
+    await ok("POST", "/collections", { name: "Log", fields: [{ name: "Title", kind: "string" }, { name: "Day", kind: "date" }] });
+    for (const [Title, Day] of [["B", "2026-01-01"], ["A", "2026-03-01"], ["C", "2026-02-01"]] as const) await ok("POST", "/collections/Log/items", { values: { Title, Day } });
+    await ok("POST", "/collections/Log/views", { name: "Charts", blocks: [{ kind: "chart", title: "Default" }, { kind: "chart", title: "Titled", sort: [{ fieldId: "Title", direction: "asc" }] }] });
+    const titles = async (block: string) => (await ok("GET", `/collections/Log/views/Charts/items?block=${block}`)).items.map((i: { values: Record<string, string> }) => Object.values(i.values)[0]);
+    expect(await titles("Default")).toEqual(["B", "C", "A"]);
+    expect(await titles("Titled")).toEqual(["A", "B", "C"]);
+  });
+
   it("have item views that are replaced as a list, with one default", async () => {
     expect((await ok("GET", "/collections/Book/item-views")).map((v: { name: string; isDefault: boolean }) => [v.name, v.isDefault])).toEqual([["Default", true]]);
     const views = await ok("PUT", "/collections/Book/item-views", [

@@ -25,6 +25,8 @@ export interface ViewBlock {
    */
   filters: FilterRule[] | null;
   sort: SortRule[];
+  /** The sort was picked (Title too), so the block type's default sort (domain/blockSort.ts) no longer applies. Absent = not picked. */
+  sortChosen?: true;
   /** Field to group by, or null. */
   groupBy: string | null;
   groupOrder?: GroupOrder;
@@ -186,9 +188,11 @@ export function blockQuery(inherited: FilterRule[] | null, block: ViewBlock, sor
 }
 
 /** A block with a changed sort / grouping (the query editor edits a whole query). */
-export function withQuery(block: ViewBlock, query: ViewQuery): ViewBlock {
+export function withQuery(block: ViewBlock, query: ViewQuery, shownSort: SortRule[] = block.sort): ViewBlock {
   const { groupOrder: _old, groupDate: _oldDate, ...rest } = block;
-  return { ...rest, sort: query.sort, groupBy: query.groupBy, ...(query.groupDate && { groupDate: query.groupDate }), ...(query.groupOrder && { groupOrder: query.groupOrder }) };
+  // A sort other than the one the editor showed was picked (a grouping change alone leaves it unmarked).
+  const sortChosen = block.sortChosen || JSON.stringify(query.sort) !== JSON.stringify(shownSort);
+  return { ...rest, ...(sortChosen && { sortChosen: true as const }), sort: query.sort, groupBy: query.groupBy, ...(query.groupDate && { groupDate: query.groupDate }), ...(query.groupOrder && { groupOrder: query.groupOrder }) };
 }
 
 /** Whether two view states show the same thing (used to tell if a saved view was changed). */
@@ -214,6 +218,7 @@ export function parseBlock(raw: unknown): ViewBlock | null {
     collectionId: typeof o.collectionId === "string" ? o.collectionId : null,
     options: o.options ?? null,
   };
+  if (o.sortChosen === true) block.sortChosen = true;
   if (o.hideHeader === true) block.hideHeader = true;
   if (typeof o.limit === "number" && Number.isInteger(o.limit) && o.limit >= 0) block.limit = o.limit;
   if (Array.isArray(o.collectionIds) && o.collectionIds.length > 1 && o.collectionIds.every((id) => typeof id === "string")) block.collectionIds = o.collectionIds as string[];

@@ -140,7 +140,7 @@ Any field can also have a choiceFilter, a toggleIcon and strikeThrough.
 A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, options? }`. Its kind is table, cards, map, component or markdown. Fields in a block can be named by id or by name, in:
 
 - filters, a list of `{ fieldId, operator, value, join? }`. `join` is `and` (the default) or `or`: how the rule joins the rules before it, read in order (`A or B and C` is `(A or B) and C`). A block always builds on its view's filter (on an item page, on the item view's `layout.filters`, whose fields can be of any of its blocks' collections, applied while it has more than one block listing items): its rules come after the view's, so `and` narrows the view's filter and `or` makes an exception to it. A date period frames its own filter: it is and-ed with that filter's other rules, wherever it is in the list (a date period: operator `between`, value `2026-10-01..2026-10-31`, both days included, or local minutes `2026-10-28T14:00..2026-10-28T14:59`, or counted from now: `hour`, `day`, `week`, `month` or `year` and an offset, `week+0` this week, `month-1` last month; `day-6..day+0` the last 7 days, likewise `hour-23..hour+0` and `minute-29..minute+0`; `year+0..day+0` this year so far, likewise `week` and `month`; such a period followed by `@$item.<fieldId>` is counted from that date field of the item page it is on instead of today);
-- sort, a list of `{ fieldId, direction }`;
+- sort, a list of `{ fieldId, direction }` (a chart or map block without one runs in time order, by its collection's first date field; a sort given is always followed);
 - layout.fields.
 
 ## Spaces, bookmarks and components

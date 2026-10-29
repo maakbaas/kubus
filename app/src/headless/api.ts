@@ -17,6 +17,7 @@ import { canBeTitle, collectionDraft, isReferenceKind, newId, NO_TITLE, suggestP
 import { applyQuery, filterValueProblem, isGrouped, operatorsFor, type FilterRule, type SortRule, type ViewQuery } from "../domain/query";
 import { refLabelForSpace } from "../domain/refOptions";
 import { DEFAULT_SPACE_ID, type Space } from "../domain/spaces";
+import { blockSort } from "../domain/blockSort";
 import { blockQuery, defaultViewState, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
 import { draftProblem } from "../domain/collectionDraft";
 import { computeItems, loadWorld, type World } from "../domain/world";
@@ -184,6 +185,8 @@ function blockIn(world: World, own: Collection, raw: unknown): ViewBlock {
     collectionId: listed === own ? null : listed.id,
     filters: o.filters === null || o.filters === undefined ? null : resolveRules<FilterRule>(listed, o.filters, "filters"),
     sort: resolveRules<SortRule>(listed, o.sort, "sort").map(({ fieldId, direction }) => ({ fieldId, direction })),
+    // A sort given is a sort chosen (the block type's default no longer applies).
+    ...(Array.isArray(o.sort) && o.sort.length > 0 && { sortChosen: true }),
     groupBy: typeof o.groupBy === "string" ? fieldOf(listed, o.groupBy).id : null,
     layout: { ...layout, fields: layout.fields === null ? null : ids(layout.fields), hiddenLabels: ids(layout.hiddenLabels) ?? [] },
   });
@@ -639,7 +642,7 @@ export function createApi(repo: Repository): Router {
         const block = name === null ? view.blocks[0] : (view.blocks.find((b) => b.id === name) ?? view.blocks.find((b) => same(b.title, name)));
         if (!block) throw new HttpError(404, `The view “${view.name}” has no block “${name}”`);
         const { limit, offset } = paging(req, 100, 1000);
-        const result = await queried(w, collection, view.spaceId, blockQuery(view.filters, block), limit, offset);
+        const result = await queried(w, collection, view.spaceId, blockQuery(view.filters, block, blockSort(block, block.collectionId ? collectionOf(w, block.collectionId) : collection)), limit, offset);
         return json(200, {
           view: { id: view.id, name: view.name },
           block: { id: block.id, title: block.title, kind: block.kind },
