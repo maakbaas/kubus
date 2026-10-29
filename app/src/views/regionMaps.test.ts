@@ -11,7 +11,7 @@ describe("region maps", () => {
   });
 
   it("are downloaded from one pinned release, and named for people", () => {
-    expect(geodataUrl("netherlandsLow")).toBe("https://cdn.jsdelivr.net/npm/@amcharts/amcharts5-geodata@5.1.6/json/netherlandsLow.json");
+    expect(geodataUrl("netherlandsLow")).toBe("https://unpkg.com/@amcharts/amcharts5-geodata@5.1.6/json/netherlandsLow.json");
     expect(mapLabel("netherlandsLow")).toBe("Netherlands");
     expect(mapLabel("worldLow")).toBe("World");
   });

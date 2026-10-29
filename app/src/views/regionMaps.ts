@@ -9,14 +9,14 @@ import maps from "../geodata/maps.json";
 
 // The maps a choropleth shows: amCharts' geodata (@amcharts/amcharts5-geodata, its LICENSE in
 // app/src/geodata). The countries of the world and of each continent or area are bundled
-// (app/src/geodata, each its own chunk, loaded when shown); a country's regions are downloaded once, when chosen, from jsDelivr at a
-// pinned version and stored as a file (`ChartRegions.file`), so the chart looks the same offline and
+// (app/src/geodata, each its own chunk, loaded when shown); a country's regions are downloaded once, when chosen, from unpkg at a
+// pinned version (not jsDelivr: it refuses, 403, every file of a package over 150 MB, and this one is 355 MB) and stored as a file (`ChartRegions.file`), so the chart looks the same offline and
 // on every synced device. Carbon's choropleth takes TopoJSON with the regions in `objects.countries`,
 // each named by `properties.NAME`: a map is made into that here, named by its regions' keys.
 
 /** The geodata release maps are downloaded from: every device downloads the same bytes (one file id). */
 export const GEODATA_VERSION = "5.1.6";
-export const geodataUrl = (map: string) => `https://cdn.jsdelivr.net/npm/@amcharts/amcharts5-geodata@${GEODATA_VERSION}/json/${map}.json`;
+export const geodataUrl = (map: string) => `https://unpkg.com/@amcharts/amcharts5-geodata@${GEODATA_VERSION}/json/${map}.json`;
 
 /** A country's maps (a country can have several: "France · Departments"), in the order the Regions select lists them. */
 export interface CountryMap {

@@ -242,7 +242,7 @@ Extension points are registries, not special cases in pages:
     the countries of the world, a continent or an area (World, Africa, Asia, Europe, North and South America, Oceania, Central
     America, Caribbean, Latin America, Middle East: `BUNDLED_MAPS`, bundled in `app/src/geodata`, each a chunk loaded when shown) or a country's regions
     (244 maps of 213 countries and territories, `app/src/geodata/maps.json`, grouped by continent: "Netherlands" its provinces, "France ·
-    Departments"), downloaded from jsDelivr at a pinned version (`GEODATA_VERSION`) when chosen and stored as a file
+    Departments"), downloaded from unpkg (jsDelivr refuses a package this large) at a pinned version (`GEODATA_VERSION`) when chosen and stored as a file
     (`regions.file`, `files/<id>`: the same bytes on every device, so one file; synced like an image, kept while a block
     names it: docs/data-model.md, block_file_uses; "Downloading the map…" under the select meanwhile, the map shown until it's done;
     offline it says so); Regions from, the field whose values are the regions (a category per value, as the X axis's); and
