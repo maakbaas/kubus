@@ -36,6 +36,10 @@ paths again at several times the cost. A test that fails and then
 passes on its retry (`--retries`, default 1) is reported as **flaky** and fails the run; so does a
 test whose `--repeat` runs disagree.
 
+A hung test cannot stall the run: one that takes longer than `--test-timeout <s>` (wall clock, default 300; `heavy`
+tests get three times that) is recorded as errored ("Timed out"), not retried, and its browser session is killed and
+reopened; the run goes on.
+
 Every test also fails when the app loads a font, script, style or image from another host: the
 app is offline first and must look the same without a network (IBM Plex is bundled, `app/src/fonts.css`). It tests a
 bundled build of the app in `gui-tests/.build`, made with `NODE_ENV=development` (so the dev-only

@@ -18,6 +18,8 @@
 //   --port <n>         port for serving the build (default 1430)
 //   --base-url <url>   test an app that is already running there (no build, no server)
 //   --list             list the tests and exit
+//   --test-timeout <s> a test running longer than this many seconds (wall clock; default 300, 3x for
+//                      `heavy` tests) is recorded as errored and not retried; its browser is reopened, the run goes on
 //   --retries <n>      re-run a test that errored or failed up to n times (default 1); one that
 //                      failed and then passed is "flaky" in the report, and counts as a failure
 //   --repeat <n>       run each selected test n times (names get " #k"), to measure how flaky it is
@@ -173,16 +175,17 @@ function run(cmd, cmdArgs, { timeout = 0 } = {}) {
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (err += d));
     // On Windows the child is a shell: end its whole tree, or the real process keeps going.
-    const timer = timeout ? setTimeout(() => killTree(child.pid), timeout) : null;
+    let timedOut = false;
+    const timer = timeout ? setTimeout(() => { timedOut = true; killTree(child.pid); }, timeout) : null;
     child.on("close", (code) => {
       if (timer) clearTimeout(timer);
-      done({ code, out, err });
+      done({ code, out, err, timedOut });
     });
     child.on("error", (e) => done({ code: -1, out, err: String(e) }));
   });
 }
-/** A test that takes longer has hung (the slowest take about 6 minutes). */
-const TEST_TIMEOUT = 15 * 60 * 1000;
+/** A test that takes longer has hung: wall-clock seconds (`--test-timeout`, `heavy` tests get 3x). */
+const TEST_TIMEOUT = Number(opt("test-timeout", 300)) * 1000;
 const cli = (session, ...rest) => run("playwright-cli", [`-s=${session}`, ...rest], { timeout: rest.includes("run-code") ? TEST_TIMEOUT : 120000 });
 
 function killTree(pid) {
@@ -330,9 +333,12 @@ async function runTest(session, t, n) {
   const code = `async page => {\nconst __OPTS = ${JSON.stringify(opts)};\n${lib}\n${t.src}\nreturn await __main(page);\n}`;
   const file = join(tmpDir, `t${n}.js`);
   writeFileSync(file, code);
-  const r = await cli(session, "--raw", "run-code", `--filename=${file}`);
+  const limit = t.opts.heavy ? TEST_TIMEOUT * 3 : TEST_TIMEOUT;
+  const r = await run("playwright-cli", [`-s=${session}`, "--raw", "run-code", `--filename=${file}`], { timeout: limit });
   let result;
-  try {
+  if (r.timedOut) {
+    result = { name: t.name, status: "error", timedOut: true, error: `Timed out: the test ran longer than ${limit / 1000}s (--test-timeout${t.opts.heavy ? ", x3 for a heavy test" : ""}); its browser session was killed and reopened`, checkpoints: [] };
+  } else try {
     let v = JSON.parse(r.out.trim());
     if (typeof v === "string") v = JSON.parse(v);
     result = v;
@@ -411,7 +417,7 @@ async function main() {
         // What failed first: a test that fails and then passes is flaky (an error that then passes
         // was the browser: a crash, a hang).
         let failedFirst = null;
-        for (let k = 0; k < retries && r.status !== "pass"; k++) {
+        for (let k = 0; k < retries && r.status !== "pass" && !r.timedOut; k++) {
           if (r.status === "fail" && !failedFirst) failedFirst = r;
           // A browser session can die (crash, hang): reopen it before retrying.
           if (r.status === "error") await openSession(session);

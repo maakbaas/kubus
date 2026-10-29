@@ -175,6 +175,15 @@ test("each tab has its own history: Alt+arrows, mouse buttons, and a reload keep
   await t.page.keyboard.press("Alt+ArrowRight");
   await t.until("Alt+Right returns tab 1 to Help", async () => (await title(t)) === "Help");
 
+  // With focus on a tab, Alt+arrows are still only history: Carbon's tab list must not also switch tabs.
+  await t.page.locator(".ws-pane__tabs .cds--tabs__nav-item").first().focus();
+  await t.page.keyboard.press("Alt+ArrowLeft");
+  await t.settle();
+  await t.check("Alt+Left on a focused tab goes back in the history and keeps the tab", (await title(t)) === "Collections" && (await storedPanes(t))[0].active === 0, JSON.stringify(await storedPanes(t)));
+  await t.page.locator(".ws-pane__tabs .cds--tabs__nav-item").first().focus();
+  await t.page.keyboard.press("Alt+ArrowRight");
+  await t.until("Alt+Right on a focused tab goes forward, still tab 1", async () => (await title(t)) === "Help" && (await storedPanes(t))[0].active === 0);
+
   // A reload: the tabs, their pages and the active one come back.
   await t.page.locator(".ws-pane__tabs .cds--tabs__nav-item").nth(1).click();
   await t.go(t.itemPath(books, ids.items["books/i1"]));
