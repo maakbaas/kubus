@@ -62,6 +62,35 @@ for (const file of guiFiles) {
 }
 const guiNumbers = guiFiles.map((f) => f.slice(0, 2));
 
+/**
+ * The last measured time of each GUI suite, from gui-tests/report/results.json when a run has made it:
+ * `{ "01": { serial, wall } }` in minutes. `serial` is the sum of its tests (what one worker would take);
+ * `wall` is what CI sees, with its 2 workers (the report's own duration when the run held that suite only).
+ */
+function measuredGui() {
+  const out = {};
+  try {
+    const { summary, results } = JSON.parse(readFileSync(join(root, "gui-tests", "report", "results.json"), "utf8"));
+    const bySuite = {};
+    for (const r of results) (bySuite[r.suite.slice(0, 2)] ||= []).push(r.ms || 0);
+    const only = Object.keys(bySuite).length === 1;
+    for (const [n, list] of Object.entries(bySuite)) {
+      const serial = list.reduce((a, b) => a + b, 0) / 60_000;
+      out[n] = { serial, wall: only && !summary.partial ? summary.seconds / 60 : serial / 2 };
+    }
+  } catch { /* no report yet */ }
+  return out;
+}
+const measured = measuredGui();
+/** Warnings for GUI suites whose last measured time is over their budget (a suite should be split then). */
+function overBudget(name) {
+  const m = /^gui-(\d\d)$/.exec(name);
+  const t = m && measured[m[1]];
+  const budget = suites.get(name)?.budget;
+  return t && budget && t.wall > budget ? `${name}: last measured ${t.wall.toFixed(1)} min (${t.serial.toFixed(1)} min serial) is over its ${budget} min budget: split the suite file` : null;
+}
+if (process.argv[2] !== "shards") for (const w of guiNumbers.map((n) => overBudget(`gui-${n}`)).filter(Boolean)) console.warn(`warning: ${w}`);
+
 // Shards for CI: each about 8 minutes on a 4-CPU runner (an estimate from the tests' count, ~13 s per test
 // with three browsers; gui-tests/report/results.json holds the measured durations once a run has made them:
 // rebalance from those). Suite 21 (screenshot baselines) is machine-dependent and runs where it was made,

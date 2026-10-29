@@ -137,15 +137,20 @@ suite 21 out.
 playwright-cli's own Playwright (`node <global node_modules>/@playwright/cli/node_modules/playwright-core/cli.js
 install webkit` plus its system packages) and no `PLAYWRIGHT_MCP_CONFIG` pointing at Chromium. The
 iOS rules (sticky tab strip, no filter above floating panels, popover placement, dialogs over the
-strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
+strip, the on-screen keyboard) are in suites 01 (and 35-39), 02, 10, 14 and 20.
 
 ## Suites
 
 | File | What |
 |---|---|
-| `01-pages-matrix` | every page × 5 content styles (typical, long, unbroken, unicode, short) × 7 window sizes; dark theme; empty database, empty items, no fields |
+| `01-pages-typical` | the pages matrix, part 1: every page with typical content × 7 window sizes (the pages and the test are in `lib/matrix.js`; each part stays within the ~10 minute budget per suite) |
+| `35-pages-long` .. `38-pages-short` | the pages matrix, parts 2-5: every page with long (all sizes but wide), unbroken, unicode and short content × 7 window sizes |
+| `39-pages-dark-empty` | the pages matrix, part 6: long content on the wide window; dark theme; empty database, empty items, no fields |
 | `02-shell` | side nav (toggle, branches, overlay, resize gutter), space switcher, global search, sync status, many tabs and the tab width rules, tab close / middle click / history, split panes, divider drag, drag a tab to split |
-| `03-click-everything` | every visible control on 14 pages is clicked (and what it opens, one level down), every icon button hovered; audit after each |
+| `03-click-everything-desktop` | every visible control of 16 pages is clicked on a desktop window (and what it opens, one level down); audit after each. The crawl is in `lib/crawl.js` (shared with 40-42) |
+| `40-click-everything-phone` | the same on a phone window |
+| `41-hover-icon-buttons-desktop` | every icon button of nine pages hovered (desktop): its tooltip stays in the window and covers nothing important; six tests of a page or two each |
+| `42-hover-icon-buttons-phone` | the same on a phone window |
 | `04-item-editing` | in-place editing of every field kind: label, box and text stay put, nothing else moves, Escape / Enter / click outside; title, checkboxes, lists, collapse, image hover; item views |
 | `05-table` | cell editing keeps column widths, add row, sorting, hover, row actions, grouping, 60 columns, 200 / 1000 rows, narrow panes scroll sideways (all columns together), the header row held while the pane scrolls down |
 | `06-views-blocks` | views (add, rename, star, unsaved changes, delete, 25 views), filters, every block menu, Show as, add / hide / remove blocks, collapse, cards options |
@@ -181,6 +186,7 @@ strip, the on-screen keyboard) are in suites 01, 02, 10, 14 and 20.
 A new rule goes into `__audit` in `lib/audit.js` (breakage) or `__design` in `lib/design.js`
 (consistency) with an entry in `CRITERIA`. A new test is
 `test(name, async (t) => { … }, { viewport, dark })` in a suite; tests share nothing but `lib/`.
+**A suite stays within about 12 minutes of serial test time** (under 10 minutes at 2 workers, CI's, with margin): a suite that grows past it is split into numbered parts, with the shared code in `lib/` (`matrix.js` and `crawl.js` are the two splits so far); `tests/run.mjs` warns when a suite's last measured time (`report/results.json`) is over its budget.
 The `run-code` sandbox has no `require`, `setTimeout` or file system: wait with `t.settle()`, and use
 Playwright's API on `t.page`. Wait for a state, not a time: `t.editorReady()` after opening an
 in-place editor, `t.until(label, fn)` for what a save should show (a fixed `t.wait` is outrun on a

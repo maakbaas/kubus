@@ -2,9 +2,12 @@
 // the files changed since origin/main (committed or not), with --smoke only their smoke tests.
 // Each entry is a path pattern and the suites (by number) that test it; a changed file takes every
 // entry it matches. A file under app/ or shared/ that matches none takes every suite (unknown
-// reach); files outside them (server/, docs/, desktop/) take none. Suite 01 (every page at every
+// reach); files outside them (server/, docs/, desktop/) take none. The pages matrix (suites 01 and 35-39: every page at every
 // size) runs whenever anything in the app changed. Keep this current when adding a suite or a
 // part of the app (docs/testing.md).
+
+/** The parts of the pages matrix (every page at every size): 01 typical, 35 long, 36 unbroken, 37 unicode, 38 short, 39 the rest. */
+const PAGES_MATRIX = [1, 35, 36, 37, 38, 39];
 
 /** Anything that changes every page: all suites. */
 const EVERYTHING = "all";
@@ -53,7 +56,7 @@ export const AREAS = [
   [/^app\/src\/(app\/(useDataChanges|itemCache|useItems|useItemCounts|useLinks)|views\/useCollectionData)/, [12, 13]],
   [/^app\/src\/(pages\/SettingsPage|ui\/(ConnectionSettings|useServerSettings|SourceSettings|localPrefs))/, [7, 18]],
   [/^app\/src\/(pages\/SettingsPage|ui\/(AiSettings|MapSettings|ServerConnection|ConnectionSettings|ApiTokens|SyncSettings|SourceSettings|useServerSettings)|app\/mapStyle|data\/remote\/client|data\/sync\/SyncEngine)/, [28]],
-  [/^app\/src\/(pages\/HelpPage|help\/)/, [1, 30]],
+  [/^app\/src\/(pages\/HelpPage|help\/)/, [...PAGES_MATRIX, 30]],
 ];
 
 /** The suite numbers (or "all") that cover these changed files; [] when none touches the app's GUI. */
@@ -72,7 +75,7 @@ export function suitesFor(files) {
       else if (which === "self") suites.add(Number(m[1]));
       else for (const n of which) suites.add(n);
     }
-    if (/^(app|shared)\//.test(file)) suites.add(1);
+    if (/^(app|shared)\//.test(file)) for (const n of PAGES_MATRIX) suites.add(n);
   }
   return all ? "all" : [...suites].sort((a, b) => a - b);
 }

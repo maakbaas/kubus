@@ -1,6 +1,6 @@
-// Click everything: on every page, every visible control is clicked (and every icon button
-// hovered); what opens (a popover, menu, modal) is audited and its own controls are clicked in
-// turn. After every click the layout audit must pass and no console error may appear.
+// Shared by the click-everything suites (03, 40-42): on every page, every visible control is clicked
+// (and every icon button hovered); what opens (a popover, menu, modal) is audited and its own controls
+// are clicked in turn. After every click the layout audit must pass and no console error may appear.
 // Destructive controls (delete / remove) are clicked to open their confirmation only; inside
 // confirmations and menus they are not clicked.
 
@@ -58,14 +58,19 @@ async function crawlPage(t, label, path) {
   const startTitle = await urlOf();
   const targets = (await crawlTargets(t, "page")).slice(0, CRAWL_MAX);
   let clicked = 0;
+  // True while the page is as freshly opened and nothing was clicked since: opening it again would give the same page.
+  let fresh = true;
   for (const target of targets) {
     // Back to the page as opened when the last click changed it (navigated, closed a tab).
     let now = await crawlTargets(t, "page");
     if (!now[target.i] || now[target.i].name !== target.name || (await urlOf()) !== startTitle) {
+      if (fresh && (await urlOf()) === startTitle) continue; // not there any more (a click's change is kept: a new view)
       await t.open(path);
+      fresh = true;
       now = await crawlTargets(t, "page");
       if (!now[target.i] || now[target.i].name !== target.name) continue; // not there any more
     }
+    fresh = false;
     const loc = t.page.locator(`[data-crawl="${target.i}"]`);
     t.at(`${label} › click "${target.name}"`);
     try {
@@ -151,6 +156,7 @@ function crawlSpec() {
   return spec;
 }
 
+/** [label, path]: the pages crawled. */
 const CRAWL_PAGES = [
   ["collections", () => "/collections"],
   ["collection table", (ids) => `/collections/${ids.collections.books}/items`],
@@ -170,17 +176,25 @@ const CRAWL_PAGES = [
   ["search", () => "/search?q=the"],
 ];
 
-for (const vp of ["desktop", "phone"]) {
-  for (const [label, path] of CRAWL_PAGES) {
+/** Registers the click-everything tests of these pages (by label) at a window size. */
+function clickTests(vp, labels, { smoke = [] } = {}) {
+  for (const label of labels) {
+    const page = CRAWL_PAGES.find((p) => p[0] === label);
+    if (!page) throw new Error(`no crawl page "${label}"`);
+    const [, path] = page;
     test(`click everything: ${label} @ ${vp}`, async (t) => {
       await t.boot();
       const ids = await t.seed(crawlSpec());
       await crawlPage(t, label, path(ids));
-    }, { viewport: vp, smoke: vp === "desktop" && label === CRAWL_PAGES[0][0] });
+    }, { viewport: vp, smoke: smoke.includes(label) });
   }
-  test(`hover every icon button @ ${vp}`, async (t) => {
+}
+
+/** Registers the hover test of pages [from, to) of CRAWL_PAGES. */
+function hoverTests(vp, from, to) {
+  test(`hover every icon button: ${CRAWL_PAGES.slice(from, to).map((p) => p[0]).join(", ")} @ ${vp}`, async (t) => {
     await t.boot();
     const ids = await t.seed(crawlSpec());
-    for (const [label, path] of CRAWL_PAGES.slice(0, 9)) await hoverPage(t, label, path(ids));
+    for (const [label, path] of CRAWL_PAGES.slice(from, to)) await hoverPage(t, label, path(ids));
   }, { viewport: vp });
 }
