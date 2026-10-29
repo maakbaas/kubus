@@ -1,7 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { Button, Checkbox, Dropdown, InlineNotification, MultiSelect, NumberInput, TextInput } from "@carbon/react";
-import { ArrowsVertical, Dashboard, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
-import { MoveToDashboardModal } from "./MoveToDashboardModal";
+import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { groupsInApp, isReadOnly } from "../domain/sources";
 import { BACKLINKS_FIELDS, VIRTUAL_COLLECTIONS } from "../domain/backlinks";
@@ -30,7 +29,6 @@ import { useMergedResult } from "./useMergedResult";
 import { useBlockName } from "./BlockListEditor";
 import { useShownOnce } from "../ui/useShownOnce";
 import { MergeFields } from "./MergeFields";
-import { translateRules } from "../domain/mergedCollection";
 import { dashboardFiltersFor } from "../domain/dashboards";
 
 // One block: a collection's items shown one way (its block type), with its own sort, grouping,
@@ -64,9 +62,7 @@ export function newPageBlock(target: Collection, page: Collection, spec?: { kind
   return normalizeBlock(target, target.virtual === "backlinks" ? { ...block, layout: { ...block.layout, fields: BACKLINKS_FIELDS } } : block);
 }
 
-/** A collection in the Collections picker; `disabled`: listed, but can't be taken out (a collection view's own). */
-type CollectionChoice = Collection & { disabled?: boolean };
-
+/** A collection in the Collection(s) picker, with its icon. */
 function CollectionChoiceLabel({ collection }: { collection: Collection }) {
   return (
     <span className="view-kind">
@@ -81,9 +77,9 @@ const isDefaultSort = (block: ViewBlock, collection: Collection, grouped: boolea
   (!grouped || block.groupBy === null) && isDefaultBlockSort(block, collection);
 
 interface MenusProps {
-  /** The collection the block reads: its own, or the one several chosen are read as (domain/mergedCollection.ts). */
+  /** The collection the block reads: its own, or on a dashboard the one several chosen are read as (domain/mergedCollection.ts). */
   collection: Collection;
-  /** The collection the block starts from: the view's, or the page's (the first of several chosen on an item page is the block's own). */
+  /** The collection the block starts from: the view's, an item page block's own, or a dashboard block's (first). */
   home: Collection;
   block: ViewBlock;
   refs: RefOptions;
@@ -97,21 +93,24 @@ interface MenusProps {
   /** What arranges the view (type, its options, name, the listed collection): stored right away. */
   onSet(patch: Partial<ViewBlock>): void;
   onRemove?(): void;
-  /** Takes the block out of its place without asking (moved to a dashboard); absent: it is the last one there, so it is copied. */
-  onTakeOut?(): Promise<void>;
   onError?(message: string): void;
   onOpenChange?(open: boolean): void;
 }
 
 /** A block's menus: Filter, Sort and group, Fields (each where its block type uses it), and its type's settings. */
-export function BlockMenus({ collection, home, block, refs, place, viewFilters, page, onChange, onSet, onRemove, onTakeOut, onOpenChange }: MenusProps) {
+export function BlockMenus({ collection, home, block, refs, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange }: MenusProps) {
   const uid = useId();
   const { components, collections } = useStore();
   // The virtual collections (Backlinks) are listed only here, among the page's block collections.
   // The Backlinks collection can't be read together with others (its rows depend on the page's item).
   const pageCollections = useMemo(() => (page ? [...collections, ...VIRTUAL_COLLECTIONS] : collections), [collections, page]);
-  const chosen = useMemo(() => (block.collectionIds ?? [block.collectionId ?? home.id]).flatMap((id) => pageCollections.filter((c) => c.id === id)), [block.collectionIds, block.collectionId, home.id, pageCollections]);
-  const merged = !!block.collectionIds && block.collectionIds.length > 1;
+  const dashboard = place === "dashboard";
+  // Several collections in one block are a dashboard's: elsewhere a block lists one.
+  const chosen = useMemo(
+    () => ((dashboard && block.collectionIds) || [block.collectionId ?? home.id]).flatMap((id) => pageCollections.filter((c) => c.id === id)),
+    [dashboard, block.collectionIds, block.collectionId, home.id, pageCollections],
+  );
+  const merged = dashboard && chosen.length > 1;
   // A Markdown block's text is its own static component: promoted, it becomes a shared one (named
   // like the block), which the block then shows as a component block: the same text, now reusable
   // elsewhere and edited in the component editor.
@@ -125,38 +124,26 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
   // A block always builds on its view's (or item page's) filter; its own rules are marked blue.
   const filterCount = query.filters.length;
   const inherits = place === "item" ? "the page's" : place === "dashboard" ? "the dashboard's" : "the view's";
-  const dashboard = place === "dashboard";
-  // A block of several collections outside a dashboard (made before they were for dashboards): its picker lists only
-  // those, to remove; a collection view's own can't be (its block always lists it). The same objects as selected (Carbon compares them).
-  const chosenChoices = useMemo<CollectionChoice[]>(() => chosen.map((c) => (!page && c.id === home.id ? { ...c, disabled: true } : c)), [chosen, page, home.id]);
-  const [moving, setMoving] = useState(false);
-  /** The collections the block lists now: other collections' fields and filter don't apply, so it starts afresh (linked to the page's item where it can be). */
-  const pick = (picked: Collection[]) => {
-    let list = picked.map(({ disabled: _d, ...c }: CollectionChoice) => c as Collection);
+  /**
+   * The collections the block lists now (an item page's block: one, Backlinks too; a dashboard's: one or several): other
+   * collections' fields and filter don't apply, so it starts afresh (linked to the page's item where it can be).
+   */
+  const pick = (list: Collection[]) => {
     // Escape clears a Carbon multi-select: a block always lists at least one collection.
-    if (list.length === 0) return;
-    // A collection view's block always lists the view's collection (a dashboard has none of its own).
-    if (!page && !dashboard && !list.some((c) => c.id === home.id)) list = [home, ...list];
-    // The virtual Backlinks collection stands alone: picking it leaves the others, picking another leaves it.
-    const added = list.find((c) => c.virtual && !chosen.some((x) => x.id === c.id));
-    if (added) list = [added];
-    else if (list.length > 1) list = list.filter((c) => !c.virtual);
     if (list.length === 0 || (list.length === chosen.length && list.every((c) => chosen.some((x) => x.id === c.id)))) return;
     const ids = list.map((c) => c.id);
     // The block keeps its type and the options that still apply (fields found again by name).
     const keep = (to: Collection) => ({ kind: type.kind, options: carryOptions(block.options, collection, to) });
-    // On a dashboard or in a collection view there is no page's item to link to: a plain block of the collection.
+    // On a dashboard there is no page's item to link to: a plain block of the collection (down to one: a plain block of it).
     const start = (to: Collection) => (page ? newPageBlock(to, page, keep(to)) : normalizeBlock(to, newBlock(type.kind, keep(to).options)));
-    // An item page's and a dashboard's block names its (first) collection; a collection view's lists the view's.
-    const named = !!page || dashboard;
     if (list.length === 1) {
       const { id: _id, title: _title, ...fresh } = start(list[0]);
-      onSet({ ...fresh, collectionId: named ? list[0].id : null, collectionIds: undefined, merges: undefined, groupOrder: undefined, groupDate: undefined });
+      onSet({ ...fresh, collectionId: list[0].id, collectionIds: undefined, merges: undefined, groupOrder: undefined, groupDate: undefined });
       return;
     }
     const { collection: read } = listedCollection(home, { collectionIds: ids }, collections);
     const { id: _id, title: _title, ...fresh } = start(read);
-    onSet({ ...fresh, collectionId: named ? ids[0] : null, collectionIds: ids, merges: undefined, groupOrder: undefined, groupDate: undefined });
+    onSet({ ...fresh, collectionId: ids[0], collectionIds: ids, merges: undefined, groupOrder: undefined, groupDate: undefined });
   };
   const limit = blockLimit(block, !!uses.all);
   // Its type's own Limit is kept as none (it follows the type), any other as itself.
@@ -245,26 +232,24 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
       <ToolbarPopover label="Block settings" icon={Settings} width="narrow" onOpenChange={onOpenChange}>
         <div className="view-settings">
           {/* On a dashboard: one collection, or several read as one (native and remote ones mixed; their fields of one name
-              are one column). Elsewhere several are only kept from before (they can be removed), and an item page's block
-              picks one (Backlinks too); a collection view's lists the view's own. */}
-          {(dashboard || merged) && (
-            <MultiSelect<CollectionChoice>
+              are one column). An item page's block picks one (Backlinks too); a collection view's lists the view's own. */}
+          {dashboard && (
+            <MultiSelect<Collection>
               autoAlign
               size="sm"
               id={`${uid}-collection`}
               className="multi-select--keep-one"
               clearSelectionText="A block always lists at least one collection"
               titleText="Collections"
-              helperText={dashboard ? undefined : "Several collections in one block are for dashboards. Here they can only be removed."}
               label={chosen.map((c) => c.pluralName).join(", ") || "Collections"}
-              items={dashboard ? pageCollections : chosenChoices}
-              selectedItems={dashboard ? chosen : chosenChoices}
+              items={pageCollections}
+              selectedItems={chosen}
               itemToString={(c) => c?.pluralName ?? ""}
               itemToElement={(c) => <CollectionChoiceLabel collection={c} />}
               onChange={({ selectedItems }) => pick(selectedItems ?? [])}
             />
           )}
-          {!dashboard && !merged && page && (
+          {page && (
             <Dropdown<Collection>
               autoAlign
               size="sm"
@@ -340,15 +325,6 @@ export function BlockMenus({ collection, home, block, refs, place, viewFilters, 
               }}
             />
           )}
-          {/* A collection view's or item page's block (not of Backlinks: its rows are the page's item's) can go on a dashboard. */}
-          {!dashboard && !collection.virtual && (
-            <Button kind="tertiary" size="sm" renderIcon={Dashboard} onClick={() => setMoving(true)}>
-              Move to a dashboard
-            </Button>
-          )}
-          {moving && (
-            <MoveToDashboardModal block={block} home={home} inherited={viewFilters ?? NO_FILTERS} inherits={inherits} onTakeOut={onTakeOut} onClose={() => setMoving(false)} />
-          )}
           {onRemove && (
             <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} onClick={onRemove}>
               Remove block
@@ -382,25 +358,25 @@ interface Props {
   /** A change to how it is arranged (type, options, name, collection): stored right away. */
   onSet(patch: Partial<ViewBlock>): void;
   onRemove?(): void;
-  /** Takes it out of its view or item view without asking ("Move to a dashboard"); absent: the place keeps it (copied). */
-  onTakeOut?(): Promise<void>;
   onError(message: string): void;
   onOpenChange?(open: boolean): void;
 }
 
-export function BlockView({ collection: home, data: given, block, viewFilters: givenFilters, search, place, page, editable, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onTakeOut, onError, onOpenChange }: Props) {
+export function BlockView({ collection: home, data: given, block, viewFilters: givenFilters, search, place, page, editable, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange }: Props) {
   const { components, collections } = useStore();
   const { confirm, dialog } = useConfirm();
-  // Several collections chosen: the block reads them as one (its columns merged by name), from the parts, not the item cache.
-  const listed = useMemo(() => listedCollection(home, block, collections), [home, block.collectionIds, block.merges, collections]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Several collections chosen (only on a dashboard): the block reads them as one (its columns merged by name), from the
+  // parts, not the item cache. Elsewhere a block lists one collection.
+  const dashboard = place === "dashboard";
+  const listed = useMemo(
+    () => (dashboard ? listedCollection(home, block, collections) : { collection: home }),
+    [dashboard, home, block.collectionIds, block.merges, collections], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const collection = listed.collection;
   const data = useMemo(() => (collection === home ? given : { items: [], stored: [], refs: {}, ctx: given.ctx, error: given.error }), [collection, home, given]);
-  // The view's (or page's) filter is written over the view's collection: for several collections, over their columns.
-  // A dashboard's is over all its blocks' collections: each block takes its rules ("Date" on its own first date field).
-  const viewFilters = useMemo(
-    () => (givenFilters && place === "dashboard" ? dashboardFiltersFor(collection, givenFilters) : givenFilters && collection !== home ? translateRules(givenFilters, collection, home) : givenFilters),
-    [givenFilters, collection, home, place],
-  );
+  // The view's (or page's) filter is written over the block's collection. A dashboard's is over all its blocks' collections:
+  // each block takes its rules ("Date" on its own first date field; several collections: on their columns).
+  const viewFilters = useMemo(() => (givenFilters && dashboard ? dashboardFiltersFor(collection, givenFilters) : givenFilters), [givenFilters, collection, dashboard]);
 
   const type = blockType(block.kind);
   const uses = type.uses(block.options, components);
@@ -492,7 +468,6 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
           onChange={onChange}
           onSet={onSet}
           onRemove={onRemove}
-          onTakeOut={onTakeOut}
           onError={onError}
           onOpenChange={onOpenChange}
         />

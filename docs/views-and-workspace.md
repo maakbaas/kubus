@@ -45,15 +45,13 @@ Extension points are registries, not special cases in pages:
   under it, what the code works out to ("= true").
 - **The collections a block lists** (`BlockMenus`, Block settings): a collection view's block lists the view's collection (no picker); an
   item page's block one collection, picked in a single-select **Collection** dropdown (the store's collections and Backlinks); a
-  dashboard's block one or several (a **Collections** multi-select). A legacy block of several outside a dashboard (`collectionIds`
-  of more than one) keeps showing them; its Collections multi-select lists only its own, to remove (a collection view's own is a
-  disabled item), with the helper text "Several collections in one block are for dashboards. Here they can only be removed."; Block
-  settings → Move to a dashboard (any collection-view or item-page block but Backlinks) takes a block to a dashboard (docs/features.md "Dashboards").
-- **Several collections in one block** (dashboards; legacy blocks elsewhere): the block's Collections picker (Block settings) reads them as one read-only collection, fields
-  merged by name, Collection / Title / Created / Updated always there, Fields → Merge fields by hand, the view's filter translated to its
-  columns, a page at a time from every part, a chart over all rows: docs/features.md "Several collections in one block". Choosing other collections (more, fewer, another one) keeps the block's type and its type's options (field ids found again by name: `carryOptions`); filter, sort and fields start afresh. On a dashboard (`BlockPlace` "dashboard") the picker forces no home collection in and offers no Backlinks; the block always stores `collectionId` (its first), plus `collectionIds` when there are several.
+  dashboard's block one or several (a **Collections** multi-select). `collectionIds` is read (merged, `listedCollection`) only for a
+  block on a dashboard (`BlockPlace` "dashboard").
+- **Several collections in one block** (dashboards only): the block's Collections picker (Block settings) reads them as one read-only collection, fields
+  merged by name, Collection / Title / Created / Updated always there, Fields → Merge fields by hand, the dashboard's filter on its
+  columns, a page at a time from every part, a chart over all rows: docs/features.md "Several collections in one block". Choosing other collections (more, fewer, another one) keeps the block's type and its type's options (field ids found again by name: `carryOptions`); filter, sort and fields start afresh (down to one: a plain block of it). The picker offers no Backlinks; the block always stores `collectionId` (its first), plus `collectionIds` when there are several.
 - **Virtual collections** (`domain/backlinks.ts` `VIRTUAL_COLLECTIONS`, `Collection.virtual`): a block on an item page may list a collection
-  that stores nothing, **Backlinks** (docs/features.md): offered in that block's Collection picker only (`BlockMenus`, when it has a
+  that stores nothing, **Backlinks** (docs/features.md): offered in that block's Collection dropdown only (`BlockMenus`, when it has a
   page), resolved by id next to the store's collections (`findCollection`, in `ItemPageBlock` and the page-wide filter's scope).
   Its rows come from `useBacklinkData` (the items linking to the page's item, current from the change feed) instead of the shared item
   cache or a remote source, then go through `applyQuery` like any collection's items, so every block type, filter, sort, group and

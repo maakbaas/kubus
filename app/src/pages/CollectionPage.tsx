@@ -33,7 +33,7 @@ export function CollectionPage() {
 }
 
 /** A view state valid for this collection (stored blocks may be outdated). */
-const normalized = (collection: Collection, state: ViewState, all?: Collection[]): ViewState => normalizeView(collection, { filters: state.filters, blocks: state.blocks, editable: state.editable }, all);
+const normalized = (collection: Collection, state: ViewState): ViewState => normalizeView(collection, { filters: state.filters, blocks: state.blocks, editable: state.editable });
 
 /** A view with "Show filter bar" set or taken off (absent when off). */
 const withFilterBar = (view: CollectionView, on: boolean): CollectionView => {
@@ -53,9 +53,9 @@ const SEARCH_DELAY_MS = 150;
 function CollectionContent({ collection }: { collection: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { repo, space, sources, collections } = useStore();
+  const { repo, space, sources } = useStore();
   const navigate = useNavigate();
-  // A remote collection's rows are read from its source, read-only (domain/sources.ts); a block's several collections are read-only too (domain/mergedCollection.ts).
+  // A remote collection's rows are read from its source, read-only (domain/sources.ts).
   const remote = isRemote(collection);
   const readOnly = isReadOnly(collection);
   const { confirm, dialog } = useConfirm();
@@ -80,8 +80,6 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const withVirtual = (list: CollectionView[]) => (list.length > 0 ? list : [virtualView]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>(base);
-  // Rows of a source are read again on demand (they aren't kept current by themselves).
-  const readsSource = remote || view.blocks.some((b) => b.collectionIds?.some((id) => collections.some((c) => c.id === id && isRemote(c))));
   const [search, setSearch] = useState("");
   // What the blocks search for: the typed text once typing pauses (each search goes over every item), an emptied box at once.
   const [searched, setSearched] = useState("");
@@ -116,9 +114,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
         // elsewhere, instead of turning into "changed".
         const cur = shown.current;
         const next = cur?.activeId ? list.find((v) => v.id === cur.activeId) : undefined;
-        if (cur && next && sameView(cur.view, cur.reference)) setView(normalized(collection, next, collections));
+        if (cur && next && sameView(cur.view, cur.reference)) setView(normalized(collection, next));
       }, (e) => setError(errorMessage(e))),
-    [repo, collection, collections, space.id],
+    [repo, collection, space.id],
   );
   useEffect(() => {
     loadViews();
@@ -135,7 +133,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
 
   const views = savedViews === null ? [] : withVirtual(savedViews);
   const active = views.find((v) => v.id === activeId) ?? null;
-  const reference = active ? normalized(collection, active, collections) : base;
+  const reference = active ? normalized(collection, active) : base;
   const changed = !sameView(view, reference);
   const viewsBar = useRef<HTMLDivElement>(null);
   const clippedTabs = useClippedTabs(viewsBar);
@@ -147,7 +145,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
     (id: string | null, list: CollectionView[] = savedViews ?? []) => {
       const next = withVirtual(list).find((v) => v.id === id);
       setActiveId(next ? next.id : null);
-      setView(next ? normalized(collection, next, collections) : base);
+      setView(next ? normalized(collection, next) : base);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [savedViews, collection, base, virtualView],
@@ -429,8 +427,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
             />
           )}
           {/* A remote collection's rows, read again from its source (they aren't kept current by themselves). */}
-          {readsSource && (
-            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label={remote ? `Read again from ${collection.source!.name}` : "Read the remote parts again"} onClick={() => sources.refresh(collection.id)}>
+          {remote && (
+            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label={`Read again from ${collection.source!.name}`} onClick={() => sources.refresh(collection.id)}>
               <Renew />
             </IconButton>
           )}
@@ -533,8 +531,6 @@ function CollectionContent({ collection }: { collection: Collection }) {
             onSet={(patch) => setBlockNow(block.id, patch)}
             // A view keeps at least one block.
             onRemove={view.blocks.length > 1 ? () => removeBlocks([block.id]).catch((e) => setError(errorMessage(e))) : undefined}
-            // Moved to a dashboard: taken out without asking (the last one is copied instead).
-            onTakeOut={view.blocks.length > 1 ? () => arrange((blocks) => blocks.filter((b) => b.id !== block.id)) : undefined}
             onError={setError}
             onOpenChange={panels.onOpenChange}
           />

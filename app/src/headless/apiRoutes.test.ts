@@ -495,7 +495,7 @@ describe("views", () => {
     expect(await refused(400, "PATCH", "/collections/Book/views/All", { name: " " })).toBe("`name` can't be empty");
   });
 
-  it("refuse a block of several collections (for dashboards), but keep one made before", async () => {
+  it("refuse a block of several collections (for dashboards)", async () => {
     const several = "Several collections in one block are for dashboards";
     expect(await refused(400, "POST", "/collections/Book/views", { name: "V", blocks: [{ kind: "table", collectionIds: ["Book", "Person"] }] })).toBe(several);
     expect(await refused(400, "PATCH", "/collections/Book/views/All", { blocks: [{ kind: "table", collectionIds: ["Book", "Person"] }] })).toBe(several);
@@ -505,32 +505,6 @@ describe("views", () => {
     const single = await ok("POST", "/collections/Book/views", { name: "One", blocks: [{ kind: "table", collectionIds: ["Person"] }] });
     expect(single.blocks[0]).toMatchObject({ collectionId: person.id });
     expect(single.blocks[0].collectionIds).toBeUndefined();
-  });
-
-  it("keep a legacy block of several collections: left out of a PATCH, or sent back as it is", async () => {
-    const headless = await HeadlessDevice.start(options());
-    const direct = createApi(headless.repo);
-    const asked = async (method: string, path: string, body?: unknown) => {
-      const answer = await send(direct, method, path, body);
-      expect(answer.status, `${method} ${path}: ${JSON.stringify(answer.body)}`).toBeLessThan(500);
-      return answer;
-    };
-    await asked("POST", "/collections", { name: "Book", fields: [{ name: "Title", kind: "string" }] });
-    await asked("POST", "/collections", { name: "Person", fields: [{ name: "Name", kind: "string" }] });
-    const book = (await asked("GET", "/collections/Book")).body;
-    const person = (await asked("GET", "/collections/Person")).body;
-    const view = (await asked("POST", "/collections/Book/views", { name: "Both" })).body;
-    const legacy = { ...view.blocks[0], id: "legacy", collectionId: null, collectionIds: [book.id, person.id] };
-    await headless.repo.saveView({ ...view, blocks: [legacy] });
-    // Changing the view without its blocks keeps the block as it is.
-    const renamed = (await asked("PATCH", "/collections/Book/views/Both", { name: "Both again" })).body;
-    expect(renamed.blocks[0]).toMatchObject({ id: "legacy", collectionIds: [book.id, person.id] });
-    // Sent back with its id and collections it is kept (its other settings taken as sent); another id, or other collections, are refused.
-    const back = await asked("PATCH", `/collections/Book/views/${view.id}`, { blocks: [{ ...renamed.blocks[0], sort: [], title: "Renamed" }] });
-    expect(back.status, JSON.stringify(back.body)).toBe(200);
-    expect(back.body.blocks[0]).toMatchObject({ id: "legacy", title: "Renamed", collectionIds: [book.id, person.id] });
-    expect((await asked("PATCH", `/collections/Book/views/${view.id}`, { blocks: [{ ...renamed.blocks[0], sort: [], id: "other" }] })).body.error).toBe("Several collections in one block are for dashboards");
-    expect((await asked("PATCH", `/collections/Book/views/${view.id}`, { blocks: [{ ...renamed.blocks[0], sort: [], collectionIds: [person.id, book.id] }] })).status).toBe(400);
   });
 
   it("star a default per space, or none", async () => {

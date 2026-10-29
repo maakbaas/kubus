@@ -44,11 +44,9 @@ append-only migrations in one transaction, the version stored in the database.
 | 4 | `block_file_uses` (the files blocks use: a Markdown block's images, a choropleth's map; docs/data-model.md): the table, its index, the insert / update / delete triggers on `views` (`config`), `collections` (`item_views`) and `dashboard_views` (`config`), and the rows of the live views, collections and dashboard tabs already there (`file_ids`). Before it a Markdown block's pasted image was released when its editor closed and swept a week later. | None: local only and derived, nothing synced changes. |
 
 A chart's `regions` (a choropleth's map) is a key in its block's options, like the next: no sync version; an older device shows the chart as its default kind.
-A block listing several collections keeps `collectionIds` and `merges` in its JSON (a view's config, an item view's layout): no schema change, no
-migration, no sync version. An older device parses blocks leniently (`parseBlock`, `parseLayout` leave what they don't know) and shows such a block
-as its first collection only; saving a view there drops the two keys. Since dashboards (version 3) a block of several collections is made only
-on a dashboard; one made before in a view or item view is kept as it is (no migration: it keeps showing them, and can only lose some, or be
-moved to a dashboard), so no data is lost.
+A dashboard's block listing several collections keeps `collectionIds` and `merges` in its JSON (the dashboard tab's config): no schema change, no
+migration, no sync version. Blocks are parsed leniently (`parseBlock`, `parseLayout` leave what they don't know). Several collections in one block
+are only a dashboard's: a collection view's or item view's block lists one.
 
 ## The server's database
 

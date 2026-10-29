@@ -37,8 +37,9 @@ export interface ViewBlock {
   /** The collection it lists; null = the page's own (always so in a collection view). */
   collectionId: string | null;
   /**
-   * Every collection it lists when that is several (native and remote ones mixed; `collectionId` or the page's own first):
-   * read as one, their fields merged by name (domain/mergedCollection.ts). Absent = the one collection.
+   * On a dashboard only: every collection it lists when that is several (native and remote ones mixed; `collectionId` first):
+   * read as one, their fields merged by name (domain/mergedCollection.ts). Absent = the one collection. Elsewhere a block
+   * lists one collection (a collection view's block its view's; an item page's one, or Backlinks).
    */
   collectionIds?: string[];
   /** With several collections: columns merged by hand (Fields → Merge fields). */

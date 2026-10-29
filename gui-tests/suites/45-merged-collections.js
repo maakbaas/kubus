@@ -1,11 +1,11 @@
 // Several collections in one block: Invoices (native) and Shop sales (a remote table behind a faked server, routes on the
-// test's browser context) read as one. On a dashboard the block's Collections picker (Block settings) takes more than one
-// (choosing them, and the block keeping its kind and options, are tested there); the other tests read a block of both seeded
-// in the Invoices collection view (a legacy block: since dashboards only made there, it keeps working; suite 62 has what its
-// picker may still do). Their fields of one name are one column, Collection says which one a row is from, Created / Updated / Title stay; Fields → Merge fields
+// test's browser context) read as one, in a block of the dashboard Sales (several collections in one block are a dashboard's).
+// The block's Collections picker (Block settings) takes more than one (choosing them, and the block keeping its kind and
+// options, are tested from it); the other tests read a block of both stored on the dashboard's tab. Their fields of one name
+// are one column, Collection says which one a row is from, Created / Updated / Title stay; Fields → Merge fields
 // merges two differently named fields by hand. Tables, groups, charts and stats work on it as on any collection: the rows
 // of both parts in the order of the sort a page at a time (Show more asks the remote part only when its rows are used up),
-// the group sizes and the total summed, the view's filter (its date period stepped) reaching both parts, read-only rows that
+// the group sizes and the total summed, the dashboard's filter (its date period stepped) reaching both parts, read-only rows that
 // open their own item or remote row, and a problem (not a crash) when a collection is deleted. Every step is followed by
 // what the page shows and, where it is stored, what window.kubus.repo holds.
 
@@ -121,60 +121,57 @@ const makeSales = (t) =>
     [COLUMNS],
   );
 
-/** Boots with Invoices (native) and Shop sales (remote), on the Invoices page; returns the ids and the fake server. */
-async function world(t, { blocks = [{}], filters = [] } = {}) {
-  await t.boot();
-  const fake = await fakeShop(t);
-  const ids = await t.seed({
-    collections: [{
-      key: "inv", name: "Invoice", plural: "Invoices", icon: "Receipt",
-      fields: [{ key: "client", name: "Client", kind: "string" }, { key: "price", name: "Price", kind: "number" }, { key: "date", name: "Date", kind: "date" }],
-      items: INVOICES.map(([client, price, date]) => ({ values: { client, price, date } })),
-    }],
-  });
-  ids.sales = await makeSales(t);
-  await setBlocks(t, ids, blocks, filters);
-  await t.open(t.listPath(ids.collections.inv));
-  return { ids, fake };
-}
-
-const COL = { source: "merged:collection", date: "merged:name:date", client: "merged:name:client", amount: "merged:m1", total: "merged:name:total", price: "merged:name:price" };
-const BLOCK = { title: "", kind: "table", filters: null, sort: [{ fieldId: COL.date, direction: "asc" }], groupBy: null, layout: { fields: null, editable: true, hiddenLabels: [], hideEmpty: false }, collectionId: null, options: { titleLink: true, editable: true } };
-
-/** Both collections in every block (`collectionIds`), each block as given over BLOCK; the Invoices view stores them. */
-const setBlocks = (t, ids, blocks, filters = []) =>
-  t.page.evaluate(
-    async ([inv, sales, blocks, base, filters]) => {
-      const repo = window.kubus.repo;
-      const [view] = await repo.listViews(inv, "default");
-      await repo.saveView({
-        ...view,
-        filters,
-        blocks: blocks.map((b, i) => ({ ...base, id: `b${i}`, collectionIds: [inv, sales], ...b })),
-      });
-    },
-    [ids.collections.inv, ids.sales, blocks, BLOCK, filters],
-  );
-
 const INVOICE_COLLECTION = {
   key: "inv", name: "Invoice", plural: "Invoices", icon: "Receipt",
   fields: [{ key: "client", name: "Client", kind: "string" }, { key: "price", name: "Price", kind: "number" }, { key: "date", name: "Date", kind: "date" }],
   items: INVOICES.map(([client, price, date]) => ({ values: { client, price, date } })),
 };
 
-/** Boots with Invoices and Shop sales and the dashboard Sales, whose tab Overview has one block of Invoices; opens it. */
+/** The dashboard Sales with one tab, Overview, holding `blocks` (seeded through `spec.dashboards`, gui-tests/lib/data.js). */
+const salesDashboard = (blocks = []) => [{ key: "sales", name: "Sales", tabs: [{ name: "Overview", blocks }] }];
+const dashPath = (ids) => `/dashboards/${ids.dashboards.sales}`;
+
+/**
+ * Boots with Invoices (native), Shop sales (remote) and the dashboard Sales, whose tab holds `blocks` of both (several
+ * collections in one block are a dashboard's) and the tab's `filters`; opens the dashboard; returns the ids and the fake server.
+ */
+async function world(t, { blocks = [{}], filters = [] } = {}) {
+  await t.boot();
+  const fake = await fakeShop(t);
+  const ids = await t.seed({ collections: [INVOICE_COLLECTION], dashboards: salesDashboard() });
+  ids.sales = await makeSales(t);
+  await setBlocks(t, ids, blocks, filters);
+  await t.open(dashPath(ids));
+  return { ids, fake };
+}
+
+const COL = { source: "merged:collection", date: "merged:name:date", client: "merged:name:client", amount: "merged:m1", total: "merged:name:total", price: "merged:name:price" };
+const BLOCK = { title: "", kind: "table", filters: null, sort: [{ fieldId: COL.date, direction: "asc" }], groupBy: null, layout: { fields: null, editable: true, hiddenLabels: [], hideEmpty: false }, collectionId: null, options: { titleLink: true, editable: true } };
+
+/** Both collections in every block (`collectionIds`, Invoices named first), each block as given over BLOCK; the dashboard's tab stores them, with `filters`. */
+const setBlocks = (t, ids, blocks, filters = []) =>
+  t.page.evaluate(
+    async ([dashboard, inv, sales, blocks, base, filters]) => {
+      const repo = window.kubus.repo;
+      const tab = (await repo.listAllDashboardViews()).find((v) => v.dashboardId === dashboard);
+      await repo.saveDashboardView({
+        ...tab,
+        filters,
+        blocks: blocks.map((b, i) => ({ ...base, id: `b${i}`, collectionId: inv, collectionIds: [inv, sales], ...b })),
+      });
+    },
+    [ids.dashboards.sales, ids.collections.inv, ids.sales, blocks, BLOCK, filters],
+  );
+
+/** Boots with Invoices and Shop sales and the dashboard Sales, whose tab Overview has one block of Invoices alone; opens it. */
 async function dashWorld(t) {
   await t.boot();
   const fake = await fakeShop(t);
-  const ids = await t.seed({
-    collections: [INVOICE_COLLECTION],
-    dashboards: [{ key: "sales", name: "Sales", tabs: [{ name: "Overview", blocks: [{ id: "b0", kind: "table", collection: "inv", sort: [{ field: "date" }] }] }] }],
-  });
+  const ids = await t.seed({ collections: [INVOICE_COLLECTION], dashboards: salesDashboard([{ id: "b0", kind: "table", collection: "inv", sort: [{ field: "date" }] }]) });
   ids.sales = await makeSales(t);
   await t.open(dashPath(ids));
   return { ids, fake };
 }
-const dashPath = (ids) => `/dashboards/${ids.dashboards.sales}`;
 /** The dashboard's stored tab (its only one). */
 const storedTab = (t, ids) => t.page.evaluate(async (d) => (await window.kubus.repo.listAllDashboardViews()).find((v) => v.dashboardId === d), ids.dashboards.sales);
 const tabBlocks = async (t, ids) => (await storedTab(t, ids)).blocks;
@@ -182,9 +179,6 @@ const tabBlocks = async (t, ids) => (await storedTab(t, ids)).blocks;
 /** The id of the field named `name` of a collection. */
 const fieldId = (t, collectionId, name) =>
   t.page.evaluate(async ([c, n]) => (await window.kubus.repo.listCollections()).find((x) => x.id === c).fields.find((f) => f.name === n).id, [collectionId, name]);
-
-/** The stored blocks of the Invoices view. */
-const storedBlocks = (t, ids) => t.page.evaluate(async (c) => (await window.kubus.repo.listViews(c, "default"))[0].blocks, ids.collections.inv);
 
 // ---- reading the page -----------------------------------------------------------------------------
 
@@ -315,7 +309,7 @@ test("merged collections: a chart of Amount by month stacked by Collection, and 
     { kind: "chart", options: { chart: "bar", stack: "stacked", x: { by: "field", field: COL.date, dateStep: "month" }, series: [{ id: "a", value: "sum", field: COL.amount, label: "", style: null, axis: "left", transform: "none", window: 3 }], splitBy: COL.source }, merges },
     { kind: "chart", options: { chart: "stat", series: [{ id: "a", value: "sum", field: COL.amount, label: "", style: null, axis: "left", transform: "none", window: 3 }] }, merges },
   ]);
-  await t.open(t.listPath(ids.collections.inv));
+  await t.open(dashPath(ids));
   await t.until("the chart is drawn", async () => ((await chart(t, 0))?.bars ?? 0) > 0, { timeout: 20000 });
   await t.until("the chart has a bar for each month and collection", async () => {
     const c = await chart(t, 0);
@@ -326,12 +320,12 @@ test("merged collections: a chart of Amount by month stacked by Collection, and 
   await t.audit("a chart and a stat over two collections", { skip: [] });
 });
 
-test("merged collections: the view's filter reaches both, its date period stepped by month", async (t) => {
+test("merged collections: the dashboard's filter on an Invoices field reaches both, its date period stepped by month", async (t) => {
   const { ids } = await world(t);
   const dateField = await fieldId(t, ids.collections.inv, "Date");
   const rule = { id: "period", fieldId: dateField, operator: "between", value: "2026-10-01..2026-10-31" };
   await setBlocks(t, ids, [{}], [rule]);
-  await t.open(t.listPath(ids.collections.inv));
+  await t.open(dashPath(ids));
   await expectTitles(t, "October: both collections' rows of the month", OCTOBER);
   await t.openPanel(t.page.locator(`${PANE} .views-bar`), "Filter (1)");
   await toolbarPanel(t).getByRole("button", { name: "Previous" }).click();
@@ -340,7 +334,7 @@ test("merged collections: the view's filter reaches both, its date period steppe
   await toolbarPanel(t).getByRole("button", { name: "Next" }).click();
   await expectTitles(t, "two months on", NOVEMBER);
   await t.closeAll();
-  await t.audit("the view filtered to a month");
+  await t.audit("the dashboard filtered to a month");
 });
 
 test("merged collections: Merge fields joins two differently named fields into one column", async (t) => {
@@ -365,10 +359,10 @@ test("merged collections: Merge fields joins two differently named fields into o
   const all = await rows(t);
   const amounts = all.filter((r) => ["Ada", "Gus"].includes(r[0]));
   await t.check("it shows each collection's own number", amounts.some((r) => r.includes("120")) && amounts.some((r) => r.includes("25")), JSON.stringify(amounts));
-  const merges = (await storedBlocks(t, ids))[0].merges;
+  const merges = (await tabBlocks(t, ids))[0].merges;
   await t.check("the merge is stored with the block", merges?.length === 1 && merges[0].name === "Amount" && merges[0].fields.length === 2, JSON.stringify(merges));
   await t.audit("a column merged by hand");
-  await t.open(t.listPath(ids.collections.inv));
+  await t.open(dashPath(ids));
   await t.until("after a reload", async () => (await headers(t)).includes("Amount"), { timeout: 10000 });
   await t.openPanel(header(t), "Fields");
   await shownPopover(t).getByRole("button", { name: "Unmerge Amount" }).click();

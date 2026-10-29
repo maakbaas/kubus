@@ -310,17 +310,3 @@ export function mergeCandidates(field: FieldDef, owner: string, collections: Col
   const kind = readKind(field);
   return collections.filter((c) => c.id !== owner).flatMap((c) => partFields(c).filter((f) => canShow(kind!, readKind(f)) || canShow(readKind(f)!, kind)).map((f) => ({ owner: c, field: f })));
 }
-
-/**
- * A view's (or page's) filter, written over the fields of the collection the view is of, for the merged collection a block reads:
- * each rule goes to the column that shows that field (Created, Updated and the item itself stay); a rule on a field no column
- * shows is left out. So the view's filter, its date period included, reaches a block that lists several collections.
- */
-export function translateRules<R extends { fieldId: string }>(rules: R[], merged: Collection, home: Collection): R[] {
-  const own = merged.mergedFrom?.parts.find((p) => p.collectionId === home.id);
-  return rules.flatMap((rule) => {
-    if (rule.fieldId.startsWith("$") || isMergedColumn(rule.fieldId)) return [rule];
-    const column = own && Object.entries(own.map).find(([, field]) => field === rule.fieldId)?.[0];
-    return column ? [{ ...rule, fieldId: column }] : [];
-  });
-}

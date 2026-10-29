@@ -178,6 +178,7 @@ test("backlinks: the Collection dropdown of an item page's block offers Backlink
   await t.until("the block lists the four notes", async () => ((await rowsOf(t)) || []).filter((r) => r[0]).length === 4);
   await t.openPanel(header(t), "Block settings");
   await t.check("one collection: a single Collection dropdown, no Collections multi-select", (await collectionsPicker(shownPopover(t)).count()) === 0 && (await collectionDropdown(t, shownPopover(t)).count()) === 1);
+  await t.check("the dropdown shows the block's collection", (await collectionDropdown(t, shownPopover(t)).innerText()).includes("Notes"), await collectionDropdown(t, shownPopover(t)).innerText().catch(() => ""));
   await collectionDropdown(t, shownPopover(t)).locator(".cds--list-box__field").first().click();
   const offered = (await t.page.getByRole("option").filter({ visible: true }).allInnerTexts()).map((s) => s.trim());
   await t.check("the dropdown lists the collections and Backlinks", ["Books", "Notes", "People", "Backlinks"].every((o) => offered.includes(o)), offered.join(", "));

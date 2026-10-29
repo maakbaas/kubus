@@ -196,14 +196,8 @@ function paging(req: ApiRequest, fallback: number, max: number) {
   return { limit, offset };
 }
 
-/**
- * Where a block is given: a collection view or an item view (`own`: its collection; `kept`: the blocks it has now), or a
- * dashboard's tab (none of its own).
- */
-type BlockPlace = { own: Collection; kept?: ViewBlock[] } | { dashboard: true };
-
-/** Several collections in one block are for dashboards: elsewhere only a block that already lists them (by its id) keeps them. */
-const SEVERAL_FOR_DASHBOARDS = "Several collections in one block are for dashboards";
+/** Where a block is given: a collection view or an item view (`own`: its collection), or a dashboard's tab (none of its own). */
+type BlockPlace = { own: Collection } | { dashboard: true };
 
 function blockIn(world: World, place: BlockPlace, raw: unknown): ViewBlock {
   if (!raw || typeof raw !== "object") throw new HttpError(400, "A block must be an object");
@@ -211,11 +205,8 @@ function blockIn(world: World, place: BlockPlace, raw: unknown): ViewBlock {
   const own = "own" in place ? place.own : null;
   // On a dashboard a block names its collection, or several (read as one: their fields merged by name).
   const several = Array.isArray(o.collectionIds) ? [...new Set(o.collectionIds.map((n) => collectionOf(world, String(n)).id))] : null;
-  // Elsewhere several are refused, but for a block made before (sent back with its id and the same collections): it is kept.
-  if (own && several && several.length > 1) {
-    const kept = "own" in place ? place.kept?.find((b) => b.id === o.id) : undefined;
-    if (JSON.stringify(kept?.collectionIds) !== JSON.stringify(several)) throw new HttpError(400, SEVERAL_FOR_DASHBOARDS);
-  }
+  // Several collections in one block are a dashboard's: a view's or item view's block lists one.
+  if (own && several && several.length > 1) throw new HttpError(400, "Several collections in one block are for dashboards");
   if (!own && !several?.length && typeof o.collectionId !== "string") {
     throw new HttpError(400, "A dashboard's block needs `collectionId` (a collection's id or name) or `collectionIds`");
   }
@@ -388,7 +379,7 @@ export function createApi(repo: Repository): Router {
       o.blocks === undefined
         ? existing.blocks
         : Array.isArray(o.blocks) && o.blocks.length > 0
-          ? o.blocks.map((b) => blockIn(w, { own: collection, kept: existing.blocks }, b))
+          ? o.blocks.map((b) => blockIn(w, { own: collection }, b))
           : (() => {
               throw new HttpError(400, "`blocks` must be a list of at least one block");
             })(),
@@ -402,8 +393,7 @@ export function createApi(repo: Repository): Router {
     const resolved = v.map((raw) => {
       const o = (raw ?? {}) as Body;
       const layout = (o.layout && typeof o.layout === "object" ? o.layout : {}) as Body;
-      const kept = collection.itemViews.flatMap((x) => x.layout.blocks);
-      const blocks = Array.isArray(layout.blocks) ? layout.blocks.map((b) => blockIn(w, { own: collection, kept }, b)) : [];
+      const blocks = Array.isArray(layout.blocks) ? layout.blocks.map((b) => blockIn(w, { own: collection }, b)) : [];
       const ids = (x: unknown) =>
         Array.isArray(x) ? x.map((n) => blocks.find((b) => b.id === n)?.id ?? fieldOf(collection, String(n)).id) : x;
       return {

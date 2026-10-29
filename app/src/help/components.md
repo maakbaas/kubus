@@ -100,7 +100,7 @@ A block on a dashboard sees its own block's items as `$items` (the rows of all i
 
 ### Several collections in one block
 
-On a dashboard, a block's Block settings → **Collections** can choose more than one collection, native and remote ones together (a block of a collection view or item page lists one; one made before with several keeps them, and they can only be removed there). The block then lists them as one: `$items` holds the rows of all of them. Fields with the same name (and a type that fits) are one field; a field only one has is empty for the others' rows; **Collection** is the name of the collection a row is from, and Created and Updated are there too. Fields → **Merge fields** makes one field of two with different names. These rows can't be changed.
+On a dashboard, a block's Block settings → **Collections** can choose more than one collection, native and remote ones together (a block of a collection view lists its own collection, an item page's block one collection or Backlinks). The block then lists them as one: `$items` holds the rows of all of them. Fields with the same name (and a type that fits) are one field; a field only one has is empty for the others' rows; **Collection** is the name of the collection a row is from, and Created and Updated are there too. Fields → **Merge fields** makes one field of two with different names. These rows can't be changed.
 
 ### Backlinks
 

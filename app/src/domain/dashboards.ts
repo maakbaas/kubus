@@ -7,9 +7,8 @@
 // blocks of that field's collection, a rule on "Date" (DASHBOARD_DATE) to each block's own first date.
 
 import { pageFilterScope, pageFiltersFor, newBlock, type BlockKind, type Collapsed, type ViewBlock, type ViewState } from "./views";
-import { blankField, newId, nextName, type Collection, type FieldDef } from "./model";
+import { blankField, nextName, type Collection, type FieldDef } from "./model";
 import type { FilterRule } from "./query";
-import { filterTree } from "./filterTree";
 
 export interface Dashboard {
   id: string;
@@ -145,33 +144,3 @@ export const tabLinkId = (tab: Pick<DashboardView, "id">): string => (isVirtualT
 /** The tab a link's (or bookmark's) tab id names among the tabs shown: by its id, or the copy of it. */
 export const findTab = <T extends Pick<DashboardView, "id">>(tabs: T[], id: string): T | undefined =>
   tabs.find((v) => v.id === id) ?? tabs.find((v) => v.id === VIRTUAL_TAB + id);
-
-/** What a block of a collection view or item page becomes on a dashboard ("Move to a dashboard"), and what changes in it. */
-export interface MovedBlock {
-  block: ViewBlock;
-  /** Rules taking a value from the page's item ($item, "this item"): a dashboard has none, so they don't filter as they did. */
-  pageRules: boolean;
-  /** The filter it built on and its own, made one, don't read the same (a date period framed only the filter it built on). */
-  reframed: boolean;
-}
-
-/**
- * A block of a collection view or item page as a dashboard's: a new id, naming its collection (`home`, its place's, when it
- * lists none of its own) or keeping its several (and their merges), with the filter it built on (`inherited`: its view's,
- * or its item page's for its collection) made the first rules of its own. That keeps what it shows (inherited rules come
- * first anyway), but for a date period of the filter it built on, which framed only that filter.
- */
-export function movedBlock(block: ViewBlock, home: Pick<Collection, "id">, inherited: FilterRule[]): MovedBlock {
-  const own = block.filters ?? [];
-  const filters = [...inherited.map((r) => ({ ...r, id: newId() })), ...own];
-  // Compared without the rules' ids (the inherited ones are copied with new ones).
-  const tree = (layers: FilterRule[][]) => JSON.stringify(filterTree(layers.map((l) => l.map((r) => ({ ...r, id: "" })))));
-  return {
-    block: { ...block, id: newId(), collectionId: block.collectionIds?.[0] ?? block.collectionId ?? home.id, filters: filters.length > 0 ? filters : null },
-    pageRules: filters.some((r) => /\$item\b/.test(r.value)),
-    reframed: inherited.length > 0 && tree([inherited, own]) !== tree([filters]),
-  };
-}
-
-/** The tab a block moved to a dashboard goes on: its starred one in the space, else its first (null: it has none). */
-export const tabToMoveTo = <T extends Pick<DashboardView, "isDefault">>(tabs: T[]): T | null => tabs.find((v) => v.isDefault) ?? tabs[0] ?? null;

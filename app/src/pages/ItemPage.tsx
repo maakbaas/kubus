@@ -316,12 +316,9 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const setBlockNow = (id: string, patch: Partial<ViewBlock>) =>
     arrange((l) => ({ ...l, blocks: l.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) }));
   const addBlock = (block: ViewBlock) => arrange((l) => ({ ...l, blocks: [...l.blocks, block], fields: l.fields && [...l.fields, block.id] }));
-  /** Out of the page's layout, without asking (moved to a dashboard). */
-  const takeOutBlock = (block: ViewBlock) =>
-    arrange((l) => ({ ...l, blocks: l.blocks.filter((b) => b.id !== block.id), fields: l.fields && l.fields.filter((f) => f !== block.id) }));
   async function removeBlock(block: ViewBlock) {
     if (!(await confirm({ title: `Remove block “${blockName(block)}”?`, body: "Items are not affected." }))) return;
-    takeOutBlock(block);
+    arrange((l) => ({ ...l, blocks: l.blocks.filter((b) => b.id !== block.id), fields: l.fields && l.fields.filter((f) => f !== block.id) }));
   }
 
   /**
@@ -622,7 +619,6 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   onChange={setBlock}
                   onSet={(patch) => setBlockNow(block.id, patch)}
                   onRemove={() => removeBlock(block)}
-                  onTakeOut={async () => takeOutBlock(block)}
                   onError={setError}
                   onOpenChange={panels.onOpenChange}
                 />
@@ -810,7 +806,6 @@ function ItemPageBlock({
   onChange,
   onSet,
   onRemove,
-  onTakeOut,
   onError,
   onOpenChange,
 }: {
@@ -825,8 +820,6 @@ function ItemPageBlock({
   onChange(block: ViewBlock): void;
   onSet(patch: Partial<ViewBlock>): void;
   onRemove(): void;
-  /** Moved to a dashboard: out of the layout without asking. */
-  onTakeOut(): Promise<void>;
   onError(message: string): void;
   onOpenChange(open: boolean): void;
 }) {
@@ -852,7 +845,6 @@ function ItemPageBlock({
       onChange={onChange}
       onSet={onSet}
       onRemove={onRemove}
-      onTakeOut={onTakeOut}
       onError={onError}
       onOpenChange={onOpenChange}
     />
@@ -875,8 +867,7 @@ function BacklinksBlockContent(props: ContentProps) {
 
 /** The block with its collection's data: normalized for it, under the page-wide filter's rules for its fields. */
 function PageBlockView({ collection, block, pageFilters, ...rest }: ContentProps & { data: CollectionData }) {
-  const { collections } = useStore();
-  const normalized = useMemo(() => normalizeBlock(collection, block, collections), [collection, block, collections]);
+  const normalized = useMemo(() => normalizeBlock(collection, block), [collection, block]);
   const applying = useMemo(() => pageFiltersFor(collection, pageFilters), [collection, pageFilters]);
   return <BlockView collection={collection} block={normalized} viewFilters={applying} search="" place="item" {...rest} />;
 }

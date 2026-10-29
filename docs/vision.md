@@ -65,7 +65,7 @@ The stages, in order:
   Cloudflare D1, Actual Budget, calendar (ICS) subscriptions and JSON / CSV over HTTP. Remote data stays read-only by
   design (no Directus side).
 - **Chart / dashboard block types** (Metabase side). The chart block is built (docs/views-and-workspace.md
-  "Block types"), and so is reading several collections as one in a block (native and remote mixed, fields merged by name or by hand,
+  "Block types"), and so is reading several collections as one in a dashboard's block (native and remote mixed, fields merged by name or by hand,
   paging, groups, totals and charts over all of them: docs/features.md "Several collections in one block"), so one chart can total two
   sources. Dashboards are built too (docs/features.md "Dashboards": pages of blocks of any collections, in tabs per space, with one
   filter whose Date steps every dated block). What is left is laying their blocks out side by side (roadmap #17).
