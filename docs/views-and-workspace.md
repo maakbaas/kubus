@@ -217,7 +217,7 @@ Extension points are registries, not special cases in pages:
     `views/regionMaps.ts`): a map's regions coloured by the value (the first series, Value section). Data: Regions, the map
     (`ChartOptions.regions`: an amCharts geodata map by name, @amcharts/amcharts5-geodata, its LICENSE in `app/src/geodata`):
     the world's or Europe's countries (bundled, `app/src/geodata`, each a chunk loaded when shown) or a country's regions
-    (245 maps of 214 countries, `app/src/geodata/maps.json`, grouped by continent: "Netherlands" its provinces, "France ·
+    (244 maps of 213 countries and territories, `app/src/geodata/maps.json`, grouped by continent: "Netherlands" its provinces, "France ·
     Departments"), downloaded from jsDelivr at a pinned version (`GEODATA_VERSION`) when chosen and stored as a file
     (`regions.file`, `files/<id>`: the same bytes on every device, so one file; synced like an image, kept while a block
     names it: docs/data-model.md, block_file_uses; "Downloading the map…" under the select meanwhile, the map shown until it's done;
