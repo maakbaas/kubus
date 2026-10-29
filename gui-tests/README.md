@@ -30,7 +30,7 @@ It needs `playwright-cli` on the PATH (`npm install -g @playwright/cli`) and Chr
 `PLAYWRIGHT_MCP_CONFIG`, e.g. `{ "browser": { "browserName": "chromium", "launchOptions":
 { "executablePath": "/path/to/chromium", "chromiumSandbox": false } } }` (no sandbox when running as root).
 
-Smoke for quick checks while working; the full run before larger pushes (and twice in a row green
+Smoke for quick checks while working; the full run before larger pushes (and green once
 before calling the GUI stable). No test throttles the CPU: that would only measure the same
 paths again at several times the cost. A test that fails and then
 passes on its retry (`--retries`, default 1) is reported as **flaky** and fails the run; so does a
