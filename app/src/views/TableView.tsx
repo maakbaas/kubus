@@ -154,7 +154,7 @@ function AddRow({ collection, columns, refs, preset, groupBy, bare, create, onCl
           {/* Inputs are laid over the cell, so they never change the column widths; a checkbox
               is small enough to stay in the flow. */}
           {addable(f) && f.id !== groupBy && (
-            <div className={f.kind === "checkbox" ? "add-check" : "add-cell"}>
+            <div className={f.kind === "checkbox" ? "add-check" : "add-cell"} title={errors[f.id]}>
               <FieldInput
                 field={f}
                 value={raw[f.id]}

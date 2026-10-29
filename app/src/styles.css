@@ -2526,6 +2526,17 @@ img[data-lightbox] {
   flex-direction: column;
   justify-content: center;
 }
+/* An invalid input keeps Carbon's red outline, but its message (also the cell's title) isn't
+   drawn: below a 2rem laid-over cell it would push the input up over the row above and be
+   clipped by the table. It stays for screen readers. */
+.add-cell .cds--form-requirement {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 /* Right-aligned with the trash icons above (inside the cell's 1rem end padding). */
 .add-cell--actions {
   inset: 0 var(--cds-spacing-05) 0 auto;
@@ -2601,6 +2612,8 @@ img[data-lightbox] {
 .items-table .table-add-row:not(.table-add-row--bare) td:nth-last-child(2) .add-cell {
   inset-inline-end: auto;
   inline-size: max(calc(100% - 2 * var(--cds-spacing-02)), 12rem);
+  /* above the actions cell it reaches over (a later sibling, which would paint over it) */
+  z-index: 1;
 }
 /* The cell's text sits 1px lower than an input's (its bottom border lifts the input's text). */
 .items-table td.cell--editing :is(.cds--text-input, .cds--number input[type="number"], .cds--date-picker__input, .cds--time-picker__input-field, .cds--list-box) {
