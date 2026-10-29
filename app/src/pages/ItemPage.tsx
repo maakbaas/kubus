@@ -316,9 +316,12 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const setBlockNow = (id: string, patch: Partial<ViewBlock>) =>
     arrange((l) => ({ ...l, blocks: l.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) }));
   const addBlock = (block: ViewBlock) => arrange((l) => ({ ...l, blocks: [...l.blocks, block], fields: l.fields && [...l.fields, block.id] }));
+  /** Out of the page's layout, without asking (moved to a dashboard). */
+  const takeOutBlock = (block: ViewBlock) =>
+    arrange((l) => ({ ...l, blocks: l.blocks.filter((b) => b.id !== block.id), fields: l.fields && l.fields.filter((f) => f !== block.id) }));
   async function removeBlock(block: ViewBlock) {
     if (!(await confirm({ title: `Remove block “${blockName(block)}”?`, body: "Items are not affected." }))) return;
-    arrange((l) => ({ ...l, blocks: l.blocks.filter((b) => b.id !== block.id), fields: l.fields && l.fields.filter((f) => f !== block.id) }));
+    takeOutBlock(block);
   }
 
   /**
@@ -619,6 +622,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   onChange={setBlock}
                   onSet={(patch) => setBlockNow(block.id, patch)}
                   onRemove={() => removeBlock(block)}
+                  onTakeOut={async () => takeOutBlock(block)}
                   onError={setError}
                   onOpenChange={panels.onOpenChange}
                 />
@@ -806,6 +810,7 @@ function ItemPageBlock({
   onChange,
   onSet,
   onRemove,
+  onTakeOut,
   onError,
   onOpenChange,
 }: {
@@ -820,6 +825,8 @@ function ItemPageBlock({
   onChange(block: ViewBlock): void;
   onSet(patch: Partial<ViewBlock>): void;
   onRemove(): void;
+  /** Moved to a dashboard: out of the layout without asking. */
+  onTakeOut(): Promise<void>;
   onError(message: string): void;
   onOpenChange(open: boolean): void;
 }) {
@@ -845,6 +852,7 @@ function ItemPageBlock({
       onChange={onChange}
       onSet={onSet}
       onRemove={onRemove}
+      onTakeOut={onTakeOut}
       onError={onError}
       onOpenChange={onOpenChange}
     />
