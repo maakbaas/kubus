@@ -2609,6 +2609,11 @@ img[data-lightbox] {
   inset-inline-end: auto;
   inline-size: max(100%, 12rem);
 }
+/* …and where it does, the row's buttons under it are not drawn while it is open (they keep their
+   place, nothing moves): an editor never lies over a button you could still see, or tap by mistake. */
+.items-table tr:has(> td.cell--editing:nth-last-child(2)) > td.row-actions > * {
+  visibility: hidden;
+}
 .items-table .table-add-row:not(.table-add-row--bare) td:nth-last-child(2) .add-cell {
   inset-inline-end: auto;
   inline-size: max(calc(100% - 2 * var(--cds-spacing-02)), 12rem);

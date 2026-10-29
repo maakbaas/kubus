@@ -325,3 +325,87 @@ for (const vp of ["desktop", "phone"]) {
     await t.check("scrolled back up: the header row is in its place again", Math.abs(back.head - before.head) <= 1, JSON.stringify({ before, back }));
   }, { viewport: vp });
 }
+
+/** The editor of the cell being edited and the row's buttons: boxes, and whether they overlap. */
+async function editorVsButtons(t) {
+  return t.page.evaluate(() => {
+    const cell = document.querySelector(".items-table td.cell--editing");
+    const row = cell && cell.closest("tr");
+    const input = cell && cell.querySelector("input, textarea, [contenteditable]");
+    if (!row || !input) return null;
+    const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+    const editor = box(input);
+    const buttons = [...row.querySelectorAll("td.row-actions button")].filter((b) => b.getClientRects().length && getComputedStyle(b).visibility !== "hidden");
+    const hits = buttons.map((b) => ({ label: b.getAttribute("aria-label") || b.textContent.trim(), ...box(b) })).filter((b) => Math.min(editor.right, b.right) - Math.max(editor.left, b.left) > 1 && Math.min(editor.bottom, b.bottom) - Math.max(editor.top, b.top) > 1);
+    return { editor, buttons: buttons.length, overlapping: hits.map((h) => h.label) };
+  });
+}
+
+// A single-line editor in the last column sat over the row's open button (the title column is
+// left out, so each row has one): on a phone the column is a sliver, and the editor reached over
+// the actions cell. Short and long values; every row button must stay clear of it.
+const LAST_COLUMNS = [["Place", "string"], ["Count", "number"], ["Day", "date"], ["When", "datetime"], ["Related", "item"]];
+for (const vp of ["phone", "phone-small", "desktop"]) {
+  test(`table: a cell editor in the last column never covers the row's buttons @ ${vp}`, async (t) => {
+    await t.boot();
+    const places = ["Oslo", "A place with a name that goes on and on and on and on, Lorem ipsum dolor sit amet", "Bern"];
+    const fields = [{ key: "title", name: "Title", kind: "string" }, { key: "place", name: "Place", kind: "string" }, { key: "count", name: "Count", kind: "number" }, { key: "day", name: "Day", kind: "date" }, { key: "when", name: "When", kind: "datetime" }, { key: "tags", name: "Tags", kind: "string_list" }, { key: "ref", name: "Related", kind: "item", target: "notes" }];
+    const spec = {
+      collections: [{
+        key: "notes", name: "Note", plural: "Notes", fields,
+        items: places.map((place, k) => ({ key: `n${k}`, values: { title: `Note ${k}`, place, count: k + 1, day: `2024-05-0${k + 1}`, when: `2024-05-0${k + 1}T10:30:00`, tags: k === 1 ? ["a", "b"] : ["x"], ref: { ref: `notes/n${(k + 1) % 3}` } } })),
+        // One view per kind, the title column left out (each row has an open button) and that kind last.
+        views: LAST_COLUMNS.map(([name]) => ({ name, blocks: [{ kind: "table", layout: { fields: ["count", ...fields.filter((f) => f.name === name && f.key !== "count").map((f) => f.key)] } }] })),
+      }],
+    };
+    const ids = await t.seed(spec);
+    for (const [col, kind] of LAST_COLUMNS) {
+      await t.open(`${t.listPath(ids.collections.notes)}?view=${ids.views[`notes/${col}`]}`);
+      for (let row = 0; row < 3; row++) {
+        const cell = t.page.locator(`.items-table .cell-editable[aria-label='Edit ${col}']`).nth(row);
+        await cell.evaluate((el) => el.scrollIntoView({ block: "center", inline: "center" }));
+        await t.wait(100);
+        await cell.click({ position: { x: 3, y: 3 } });
+        await t.wait(250);
+        const s = await editorVsButtons(t);
+        await t.check(`${col} (${kind}), row ${row}: the editor is open in a row with buttons`, !!s, JSON.stringify(s));
+        if (s) await t.check(`${col} (${kind}), row ${row}: the editor covers none of the row's visible buttons`, s.overlapping.length === 0, `covers ${s.overlapping.join(", ")}: ${JSON.stringify(s)}`);
+        // (A calendar is taller than a 320x568 window's room: its own finding, not this test's.)
+        await t.audit(`${col} (${kind}), row ${row}: editing`, { shotOnFail: true, skip: vp === "phone-small" ? ["popover-in-viewport"] : [] });
+        await escapeEditor(t);
+        await t.settle(100);
+      }
+    }
+  }, { viewport: vp });
+}
+
+// The same on the pages that list spaces and collections (a name / description edited in place
+// beside "Switch to" / the row's other buttons).
+for (const vp of ["phone", "phone-small", "desktop"]) {
+  test(`spaces and collections lists: an editor never covers the row's buttons @ ${vp}`, async (t) => {
+    await t.boot();
+    const spec = profileSpec("typical", { items: 2 });
+    spec.spaces = [{ key: "w", name: "Work" }, { key: "h", name: "A space with a long name for the narrow screen" }];
+    spec.collections[0].description = "Short";
+    await t.seed(spec);
+    for (const [path, label] of [["/spaces", /^Rename /], ["/collections", /^Edit description of /]]) {
+      await t.open(path);
+      const cells = t.page.getByRole("button", { name: label }).filter({ visible: true });
+      if (vp === "desktop") await t.until(`${path}: editable cells are listed`, async () => (await cells.count()) > 0);
+      else await t.wait(500); // (the description column is left out of a phone's list)
+      const n = await cells.count();
+      for (let i = 0; i < Math.min(n, 3); i++) {
+        const cell = cells.nth(i);
+        await cell.evaluate((el) => el.scrollIntoView({ block: "center", inline: "center" }));
+        await cell.click({ position: { x: 3, y: 3 } });
+        await t.wait(250);
+        const s = await editorVsButtons(t);
+        await t.check(`${path}, row ${i}: the editor is open in a row with buttons`, !!s, JSON.stringify(s));
+        if (s) await t.check(`${path}, row ${i}: the editor covers none of the row's visible buttons`, s.overlapping.length === 0, `${JSON.stringify(s)}`);
+        await t.audit(`${path}, row ${i}: editing`, { shotOnFail: true });
+        await escapeEditor(t);
+        await t.settle(100);
+      }
+    }
+  }, { viewport: vp });
+}
