@@ -350,7 +350,7 @@ test("remote block: pages, Show more, errors", async (t) => {
   fake.hold = new Promise((resolve) => (release = resolve));
   fake.holdFrom = 0;
   await t.open(t.listPath(id), { settle: false });
-  await t.until("while the first page is on its way, a bar says rows are loading", async () => (await pane(t).locator(".block-more .cds--progress-bar").count()) === 1 && fake.queries.length === 1);
+  await t.until("while the first page is on its way, a bar says rows are loading", async () => ((await pane(t).locator(".block-more .cds--progress-bar").count()) === 1 && fake.queries.length === 1) || `${await pane(t).locator(".block-more .cds--progress-bar").count()} bars, ${fake.queries.length} queries`);
   await t.check("the bar has a × to stop, also for a block with a Limit", (await stopOf(t).count()) === 1);
   await t.check("the × lines up with the block's header buttons", await alignedWithHeader(t));
   await t.audit("remote block, first page on its way");
