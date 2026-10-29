@@ -28,7 +28,7 @@ export const AREAS = [
   [/^app\/src\/pages\/(SearchPage|BookmarksPage|SpacesPage)/, [2, 7, 19]],
 
   // Item pages and editing values in place.
-  [/^app\/src\/(pages\/(ItemPage|NewItemPage)|ui\/(FieldInput|ListField|ToggleInput|TagChip|RefCombo|editStart|useBuffered|useReferenceOptions|Highlight))/, [4, 12, 19, 27]],
+  [/^app\/src\/(pages\/(ItemPage|NewItemPage)|ui\/(FieldInput|ListField|ToggleInput|TagChip|RefCombo|editStart|useBuffered|useReferenceOptions|Highlight))/, [4, 12, 19, 27, 31]],
   [/^app\/src\/ui\/(MarkdownEditor|MarkdownView|codeHighlight)/, [8, 19]],
   [/^app\/src\/(ui\/(Lightbox|images|thumbnails)|domain\/files)/, [16]],
 
@@ -45,10 +45,10 @@ export const AREAS = [
   // Collections, fields, components.
   [/^app\/src\/(pages\/(CollectionEditorPage|CollectionsPage|RemotesPage)|ui\/(FieldEditor|FieldModal|FieldOrderEditor|FieldSettings|fieldKindIcons|ChoiceFilterEditor)|domain\/(collectionDraft|fieldKinds|fieldLayout))/, [7, 17, 22, 27]],
   [/^app\/src\/ui\/useReorder/, [17]],
-  [/^app\/src\/(pages\/(ComponentEditorPage|ComponentsPage)|ui\/(Component|PromoteComponentModal|promoteLocal|ValueSourceSwitch|frameFonts)|domain\/(components|componentWriter))/, [7, 19, 22]],
+  [/^app\/src\/(pages\/(ComponentEditorPage|ComponentsPage)|ui\/(Component|PromoteComponentModal|promoteLocal|ValueSourceSwitch|frameFonts)|domain\/(components|componentWriter))/, [7, 19, 22, 31]],
 
   // AI, sync, live changes, settings.
-  [/^app\/src\/(app\/(ai|aiBackfill|aiScan|useAi|AiBackfillRunner)|ui\/(Ai|WriteWithAi)|domain\/ai|platform\/llm)/, [15]],
+  [/^app\/src\/(app\/(ai|aiBackfill|aiScan|useAi|AiBackfillRunner)|ui\/(Ai|WriteWithAi)|domain\/ai|platform\/llm)/, [15, 31]],
   [/^app\/src\/(data\/sync\/|ui\/(SyncSettings|ServerConnection|ApiTokens|SyncStatusButton|ServerReplaced))/, [13, 18]],
   [/^app\/src\/(app\/(useDataChanges|itemCache|useItems|useItemCounts|useLinks)|views\/useCollectionData)/, [12, 13]],
   [/^app\/src\/(pages\/SettingsPage|ui\/(ConnectionSettings|useServerSettings|SourceSettings|localPrefs))/, [7, 18]],

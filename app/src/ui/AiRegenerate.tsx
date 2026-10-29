@@ -11,6 +11,12 @@ import { formatDateTime } from "../domain/fieldKinds";
 export function AiRegenerate({ generatedAt, edited, onGenerate }: { generatedAt?: string; /** The value was typed by the user (generating replaces it). */ edited?: boolean; onGenerate(hint: string): void }) {
   const id = useId();
   const [hint, setHint] = useState("");
+  // The nudge is for this one value: the panel stays mounted once opened, so it is emptied when used.
+  const generate = () => {
+    const nudge = hint.trim();
+    setHint("");
+    onGenerate(nudge);
+  };
   return (
     <div className="ai-regenerate">
       {generatedAt && <p className="helper ai-regenerate__when">{edited ? "Edited by you" : "Last generated"} {formatDateTime(generatedAt)}</p>}
@@ -23,10 +29,10 @@ export function AiRegenerate({ generatedAt, edited, onGenerate }: { generatedAt?
         value={hint}
         onChange={(e) => setHint(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) onGenerate(hint.trim());
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) generate();
         }}
       />
-      <Button className="ai-regenerate__go" size="sm" kind="primary" onClick={() => onGenerate(hint.trim())}>
+      <Button className="ai-regenerate__go" size="sm" kind="primary" onClick={generate}>
         Generate
       </Button>
     </div>
