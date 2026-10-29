@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { columnsFor, rowLines, sideBySide, blockRows, canBeside, moveDivider, placeBlock, reordered, rowShares, rowStart, setBeside, rowHeightPx, setRowSettings, setRowShares, withCopy, withoutBlock } from "./blockRows";
+import { rowLines, blockRows, canBeside, moveDivider, placeBlock, reordered, rowShares, rowStart, setBeside, rowHeightPx, setRowSettings, setRowShares, withCopy, withoutBlock } from "./blockRows";
 import { newBlock, parseBlock, type ViewBlock } from "./views";
 
 const block = (id: string, extra: Partial<ViewBlock> = {}): ViewBlock => ({ ...newBlock("table", null, id), ...extra });
@@ -95,29 +95,16 @@ describe("block rows", () => {
     expect(moveDivider([50, 50], 1, 30, 37.5)).toEqual([62.5, 37.5]);
   });
 
-  it("wraps a row onto lines of as many blocks as get 15rem, stacked below 40rem", () => {
-    expect(columnsFor(4, 66 * 16, 16)).toBe(4);
-    expect(columnsFor(4, 50 * 16, 16)).toBe(3);
-    expect(columnsFor(4, 48 * 16, 16)).toBe(2);
-    expect(columnsFor(3, 45 * 16, 16)).toBe(2);
-    expect(columnsFor(4, 39 * 16, 16)).toBe(1);
-    expect(columnsFor(2, 100 * 16, 16)).toBe(2);
-  });
-
-  it("balances the lines: 4 blocks 3 to a line make 2 and 2, 5 make 3 and 2", () => {
-    expect(rowLines(["a", "b", "c", "d"], 3)).toEqual([["a", "b"], ["c", "d"]]);
-    expect(rowLines(["a", "b", "c", "d", "e"], 3)).toEqual([["a", "b", "c"], ["d", "e"]]);
-    expect(rowLines(["a", "b", "c"], 3)).toEqual([["a", "b", "c"]]);
-    expect(rowLines(["a", "b", "c"], 1)).toEqual([["a", "b", "c"]]);
-  });
-
-  it("stands side by side only where every block gets 15rem, and the row is 40rem", () => {
-    expect(sideBySide(2, 40 * 16, 16)).toBe(true);
-    expect(sideBySide(2, 39 * 16, 16)).toBe(false);
-    expect(sideBySide(3, 48 * 16, 16)).toBe(false);
-    expect(sideBySide(3, 49 * 16, 16)).toBe(true);
-    expect(sideBySide(4, 66 * 16, 16)).toBe(true);
-    expect(sideBySide(1, 40 * 16, 16)).toBe(true);
+  it("breaks a row into lines by its widths (shares of the row as if unbroken, 15rem at least), stacked below 40rem", () => {
+    // Equal shares: 4 in 66rem fit, in 50rem three, then one.
+    expect(rowLines([25, 25, 25, 25], 66 * 16, 16)).toEqual([[0, 1, 2, 3]]);
+    expect(rowLines([25, 25, 25, 25], 50 * 16, 16)).toEqual([[0, 1, 2], [3]]);
+    // A wide block: 20 / 20 / 60 in 50rem (10, 10, 30rem, the narrow ones counted 15) breaks before it.
+    expect(rowLines([20, 20, 60], 50 * 16, 16)).toEqual([[0, 1], [2]]);
+    // Its shares changed (60 / 20 / 20: 27.6, 15, 15rem): the wide one and one narrow one fit, then the other.
+    expect(rowLines([60, 20, 20], 50 * 16, 16)).toEqual([[0, 1], [2]]);
+    expect(rowLines([50, 50], 40 * 16, 16)).toEqual([[0, 1]]);
+    expect(rowLines([25, 25, 25, 25], 39 * 16, 16)).toBeNull();
   });
 
   it("moves a divider in steps, each side keeping its least share", () => {

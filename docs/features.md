@@ -338,11 +338,12 @@ What the app does, feature by feature (read the part you work on).
   field in between starts a new row), `width` (its share of the row in percent; absent = equal) and, on a row's first
   block, the row's height: `rowFit` (absent: as its tallest block; "shortest": as its shortest) and `rowHeight` (rem: at
   most that tall with the tallest, at least with the shortest; `rowMaxHeight`, its name before the fit, is read as it). At
-  most 4 to a row. Where at least two blocks get 15rem each and the row is at least 40rem wide (`columnsFor`, measured on the row:
-  2 blocks from 40rem, 3 from 49rem, 4 from 66rem; a narrow tiled pane counts like a phone), as many as do stand side
-  by side, a row of more wrapping onto lines of that many, as even as can be (`rowLines`: 4 three to a line make 2 and
-  2), every line the row's height as if unbroken (a line's blocks keep their shares among themselves; the divider
-  resizes only a row on one line)
+  most 4 to a row. Where the row is at least 40rem wide (measured on the row, so a narrow tiled pane counts like a phone) its blocks
+  stand side by side on lines by their widths (`rowLines`, `blockWidths`): each block's width is its share of the row as
+  if unbroken, 15rem at least, and a line takes blocks in order while they fit, the next starting a new line (equal
+  shares: 2 blocks from 40rem, 3 from 49rem, 4 from 66rem; a wide block breaks sooner than narrow ones, and moving a
+  divider can move a break). Every line is the row's height as if unbroken, split by its blocks' widths; the divider
+  resizes only a row on one line
   its blocks stand side by side, each its share, all exactly as tall as the row: the part of each below its name is the
   row's tallest or shortest block's own height (`rowHeightPx`: what a table, cards or text take, overhang included; a
   chart's, map's or HTML component's Height at its Aspect ratio, `BlockUses.ownHeight`, measured by an invisible

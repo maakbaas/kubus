@@ -24,33 +24,35 @@ export const COLUMN_GAP_REM = 2;
 /** A row narrower than this (rem) stacks its blocks, a row of one too (its height limit applies only side by side). */
 export const ROW_MIN_REM = 40;
 
-/** Whether a row of `count` blocks, `widthPx` wide, stands side by side: every block has MIN_COLUMN_REM, and it is ROW_MIN_REM wide. */
-export function sideBySide(count: number, widthPx: number, rem: number): boolean {
-  const least = Math.max(ROW_MIN_REM, count * MIN_COLUMN_REM + (count - 1) * COLUMN_GAP_REM);
-  return widthPx >= least * rem;
+/** Each block's width in rem: its share of the row as if unbroken (gaps left out), MIN_COLUMN_REM at least. */
+export function blockWidths(shares: number[], widthPx: number, rem: number): number[] {
+  const room = widthPx / rem - (shares.length - 1) * COLUMN_GAP_REM;
+  return shares.map((s) => Math.max(MIN_COLUMN_REM, (s / 100) * room));
 }
 
 /**
- * How many of a row's `count` blocks stand side by side on a line, `widthPx` wide: as many as get MIN_COLUMN_REM each (a
- * row of more wraps onto lines of that many, all its row's height); 1 (stacked, as on a phone) below ROW_MIN_REM.
+ * A row's blocks on lines (their indices), by their widths: each block's width is its share of the row as if unbroken
+ * (`shares`, percent; less than MIN_COLUMN_REM counts as that), and a line takes blocks in order while they and the gaps
+ * between them fit; the next starts a new line. So a row breaks where its widths say a block wouldn't fit, a wide block
+ * sooner than narrow ones. null: stacked (narrower than ROW_MIN_REM, as on a phone).
  */
-export function columnsFor(count: number, widthPx: number, rem: number): number {
-  if (widthPx < ROW_MIN_REM * rem) return 1;
-  const fit = Math.floor((widthPx / rem + COLUMN_GAP_REM) / (MIN_COLUMN_REM + COLUMN_GAP_REM));
-  return Math.max(1, Math.min(count, fit));
-}
-
-/**
- * A row's blocks on lines of at most `columns` side by side, as even as can be (4 three to a line: 2 and 2); with one
- * column, one "line" of all, stacked.
- */
-export function rowLines<T>(entries: T[], columns: number): T[][] {
-  if (columns <= 1 || columns >= entries.length) return [entries];
-  const lines = Math.ceil(entries.length / columns);
-  const per = Math.ceil(entries.length / lines);
-  const out: T[][] = [];
-  for (let i = 0; i < entries.length; i += per) out.push(entries.slice(i, i + per));
-  return out;
+export function rowLines(shares: number[], widthPx: number, rem: number): number[][] | null {
+  if (widthPx < ROW_MIN_REM * rem) return null;
+  const width = widthPx / rem;
+  const needs = blockWidths(shares, widthPx, rem);
+  const lines: number[][] = [];
+  let used = 0;
+  for (const [i, need] of needs.entries()) {
+    const line = lines[lines.length - 1];
+    if (line && used + COLUMN_GAP_REM + need <= width + 0.01) {
+      line.push(i);
+      used += COLUMN_GAP_REM + need;
+    } else {
+      lines.push([i]);
+      used = need;
+    }
+  }
+  return lines;
 }
 
 /** A stored row height made valid: whole rem within ROW_HEIGHT. */
