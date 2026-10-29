@@ -10,7 +10,9 @@ import { existsSync } from "node:fs";
 import type { HeadlessOptions, StartHeadless } from "../../../shared/api";
 import type { ApiRequest, ApiResponse } from "../../../shared/router";
 import { HttpError, json } from "../../../shared/router";
+import { SYNC_VERSION } from "../../../shared/sync";
 import { NodeSqlClient } from "../data/sqlite/node";
+import { SYNC_OUTDATED } from "../data/repository";
 import { SqliteRepository } from "../data/sqlite/SqliteRepository";
 import { memoryEnvironment } from "../data/sync/environment";
 import { setCompiler } from "../domain/components";
@@ -108,8 +110,8 @@ export class HeadlessDevice {
 
   /** Throws (503) unless the last sync worked. */
   private check() {
-    const { state, error } = this.repo.sync.status;
-    if (state === "error") throw new HttpError(503, `The server's headless device can't sync: ${error}`);
+    const { state, error, outdated } = this.repo.sync.status;
+    if (state === "error") throw new HttpError(503, `The server's headless device can't sync: ${error ?? (outdated && SYNC_OUTDATED[outdated])}`);
   }
 
   /**
@@ -130,6 +132,9 @@ export class HeadlessDevice {
     return run;
   }
 }
+
+/** The sync version this bundle was built with: the server checks it is its own (server/src/headless.ts). */
+export const syncVersion = SYNC_VERSION;
 
 export const startHeadless: StartHeadless = async (options) => {
   const device = await HeadlessDevice.start(options);

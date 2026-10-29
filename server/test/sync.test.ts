@@ -4,7 +4,7 @@
 // ./postgres.ts). ./database.test.ts has the migrations' own cases; ./http.test.ts the endpoint.
 import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { SYNC_COMPATIBLE, SYNC_TABLES, SYNC_VERSION, type SyncRequest, type WireRow } from "../../shared/sync.ts";
+import { SYNC_TABLES, SYNC_VERSION, type SyncRequest, type WireRow } from "../../shared/sync.ts";
 import { createPool } from "../src/db.ts";
 import { applySchema } from "../src/migrations.ts";
 import { loadSchema } from "../src/schema.ts";
@@ -225,51 +225,38 @@ describe.skipIf(!ADMIN)("the server's side of sync", () => {
   });
 
   describe("versions", () => {
-    const request = (over: Partial<SyncRequest> = {}): SyncRequest => ({ since: 0, changes: {}, version: SYNC_VERSION, compatible: SYNC_VERSION, ...over });
+    const request = (over: Partial<SyncRequest> = {}): SyncRequest => ({ since: 0, changes: {}, version: SYNC_VERSION, ...over });
 
-    it("syncs with devices from SYNC_COMPATIBLE up, whatever their own compatible version up to this one's", () => {
+    it("syncs with devices of its own version only", () => {
       expect(refusal(request())).toBeNull();
-      expect(refusal(request({ version: SYNC_COMPATIBLE }))).toBeNull();
-      expect(refusal(request({ version: SYNC_VERSION + 5, compatible: SYNC_VERSION }))).toBeNull();
+      // `compatible` is only for servers from before the strict gate: this one ignores it.
+      expect(refusal(request({ compatible: 0 }))).toBeNull();
+      expect(refusal(request({ compatible: SYNC_VERSION + 5 }))).toBeNull();
     });
 
     it("tells an older device to update the app, and writes nothing", async () => {
-      expect(refusal(request({ version: SYNC_COMPATIBLE - 1 }))).toMatchObject({ update: "app" });
+      expect(refusal(request({ version: SYNC_VERSION - 1 }))).toMatchObject({ update: "app", version: SYNC_VERSION });
       // A device from before versions sends none.
       expect(refusal({ since: 0, changes: {} } as unknown as SyncRequest)).toMatchObject({ update: "app" });
       expect(refusal(request({ version: "abc" as unknown as number }))).toMatchObject({ update: "app" });
       expect(await handleSync(pool, request({ version: 0, compatible: 0, changes: { spaces: [space("a", "A")] } }))).toMatchObject({ outdated: { update: "app" } });
+      expect(await handleSync(pool, request({ version: SYNC_VERSION - 1, changes: { spaces: [space("a", "A")] } }))).toMatchObject({ outdated: { update: "app" } });
       expect(await names()).toEqual([]);
     });
 
-    it("tells a device whose data this server can't read to update the server", async () => {
-      expect(refusal(request({ compatible: SYNC_VERSION + 1 }))).toMatchObject({ update: "server" });
-      expect(refusal(request({ changes: { newtable: [{ id: "x" }] } }))).toMatchObject({ update: "server" });
-      expect(refusal(request({ changes: { spaces: [{ ...space("a", "A"), colour: "teal" }] } }))).toMatchObject({ update: "server" });
-      expect(await handleSync(pool, request({ changes: { spaces: [{ ...space("a", "A"), colour: "teal" }] } }))).toMatchObject({ outdated: { update: "server" } });
+    it("tells a newer device to update the server, and writes nothing", async () => {
+      expect(refusal(request({ version: SYNC_VERSION + 1 }))).toMatchObject({ update: "server", version: SYNC_VERSION });
+      expect(await handleSync(pool, request({ version: SYNC_VERSION + 1, compatible: SYNC_VERSION, changes: { spaces: [space("a", "A")] } }))).toMatchObject({ outdated: { update: "server" } });
       expect(await names()).toEqual([]);
     });
 
-    it("checks the version before the database, so an outdated device isn't told its database changed", async () => {
-      const result = await handleSync(pool, request({ version: 0, database: "someone-else" }));
-      expect(result).toMatchObject({ outdated: { update: "app" } });
+    it("checks the version before the database, so a refused device isn't told its database changed", async () => {
+      expect(await handleSync(pool, request({ version: 0, database: "someone-else" }))).toMatchObject({ outdated: { update: "app" } });
+      expect(await handleSync(pool, request({ version: SYNC_VERSION + 1, database: "someone-else" }))).toMatchObject({ outdated: { update: "server" } });
     });
 
-    it("syncs with a device from before the item links table: it sends values only, and is sent the links with the rest", async () => {
-      // SYNC_COMPATIBLE stays at 1: the table is an addition an older device leaves alone.
-      expect(SYNC_COMPATIBLE).toBe(1);
-      const link = { id: "i/f", source_item_id: "i", source_field_id: "f", targets: "[]", updated_at: T1, deleted_at: T1 };
-      await sync({ item_links: [link] });
-      const older = await sync({ spaces: [space("a", "A")] }, { version: 1, compatible: 1 });
-      expect(older.changes.item_links).toEqual([link]);
-      expect(await names()).toEqual(["a=A"]);
-    });
-
-    it("writes what an older device sends and keeps what it doesn't know", async () => {
-      await sync({ spaces: [space("a", "A", T1, { icon: "Star" })] });
-      const { icon: _icon, ...older } = space("a", "A renamed", T2);
-      await sync({ spaces: [older] }, { version: SYNC_COMPATIBLE });
-      expect((await pool.query("SELECT name, icon FROM spaces")).rows).toEqual([{ name: "A renamed", icon: "Star" }]);
+    it("answers with its version", async () => {
+      expect(await sync({})).toMatchObject({ version: SYNC_VERSION });
     });
   });
 

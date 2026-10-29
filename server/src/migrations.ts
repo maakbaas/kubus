@@ -4,7 +4,7 @@ import { SYNC_TABLES } from "../../shared/sync.ts";
 
 // The server database's migrations: what changes its stored tables beyond adding a table or a
 // column (which the schema does by itself: server/src/schema.ts). A rename, another type, values
-// converted for a new format (with SYNC_COMPATIBLE raised in shared/sync.ts: each side converts its
+// converted for a new format (with SYNC_VERSION raised in shared/sync.ts: each side converts its
 // own copy, the devices theirs in app/src/data/migrations.ts) or a change to the server's own
 // tables (schema.sql). See docs/migrations.md.
 //

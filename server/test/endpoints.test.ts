@@ -138,11 +138,13 @@ describe.skipIf(!ADMIN)("the server's HTTP error paths", () => {
       expect(await response.json()).toMatchObject({ changes: {} });
     });
 
-    it("answers 426 to a request without a version, and to a table it doesn't know", async () => {
-      expect((await sync({ since: 0, changes: {} })).status).toBe(426);
-      const unknown = await sync({ since: 0, version: SYNC_VERSION, compatible: SYNC_VERSION, changes: { nothing: [{ id: "x" }] } });
-      expect(unknown.status).toBe(426);
-      expect((await unknown.json()).update).toBe("server");
+    it("answers 426 to a request without a version or of another one, saying which side to update", async () => {
+      const none = await sync({ since: 0, changes: {} });
+      expect(none.status).toBe(426);
+      expect(await none.json()).toMatchObject({ update: "app", version: SYNC_VERSION });
+      const newer = await sync({ since: 0, version: SYNC_VERSION + 1, compatible: SYNC_VERSION + 1, changes: {} });
+      expect(newer.status).toBe(426);
+      expect(await newer.json()).toMatchObject({ update: "server", version: SYNC_VERSION });
     });
 
     it("refuses a wipe that isn't confirmed in so many words", async () => {

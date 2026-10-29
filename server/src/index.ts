@@ -16,7 +16,7 @@ import type { ServerSettingsUpdate } from "../../shared/settings.ts";
 import { currentCursor, handleSync } from "./sync.ts";
 import { allows, ApiTokens, READ_ONLY } from "./tokens.ts";
 import { wipe } from "./wipe.ts";
-import { MAX_FILE_BYTES, type SyncRequest } from "../../shared/sync.ts";
+import { MAX_FILE_BYTES, SYNC_VERSION, type SyncRequest } from "../../shared/sync.ts";
 import { HttpError, json, readJson, Router, type ApiRequest, type ApiResponse } from "../../shared/router.ts";
 
 // Kubus server: the sync API (/api), the HTTP API for other tools (/api/v1, answered by the
@@ -236,7 +236,7 @@ const server = createServer(async (req, res) => {
   res.setHeader("Access-Control-Max-Age", "7200");
   try {
     if (req.method === "OPTIONS") return send(res, 204, "");
-    if (url.pathname === "/api/health") return send(res, 200, '{"ok":true}');
+    if (url.pathname === "/api/health") return send(res, 200, JSON.stringify({ ok: true, syncVersion: SYNC_VERSION }));
     if (url.pathname === MCP_PATH) {
       // Any token's access: the server refuses a read token's writes itself (every MCP request is a POST).
       const access = (await tokens.check(req.headers.authorization))?.access;

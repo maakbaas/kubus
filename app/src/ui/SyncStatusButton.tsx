@@ -4,6 +4,8 @@ import { CheckmarkOutline, Cloud, Renew, WarningAltFilled } from "@carbon/icons-
 import { useStore } from "../app/store";
 import { ToolbarPopover } from "./ToolbarPopover";
 import { ServerReplaced } from "./ServerReplaced";
+import { OutdatedNotice } from "./OutdatedNotice";
+import { SYNC_OUTDATED } from "../data/repository";
 
 const ICONS = { off: Cloud, idle: CheckmarkOutline, syncing: Renew, error: WarningAltFilled } as const;
 const TITLES = { off: "Sync is off", idle: "Up to date", syncing: "Syncing…", error: "Sync failed" } as const;
@@ -20,8 +22,9 @@ export function SyncStatusButton({ onConfigure }: { onConfigure(): void }) {
   // Paused because the server's database is another one: shown as a failure until answered.
   const replaced = status.replaced;
   const state = replaced ? "error" : status.state;
+  const outdated = status.outdated;
   return (
-    <ToolbarPopover label={replaced ? "Server database replaced" : TITLES[state]} icon={ICONS[state]} className={`sync-status sync-status--${state}`} fit>
+    <ToolbarPopover label={replaced ? "Server database replaced" : outdated ? SYNC_OUTDATED[outdated] : TITLES[state]} icon={ICONS[state]} className={`sync-status sync-status--${state}`} fit>
       {(close) => replaced ? (
         <div className="sync-popover">
           <ServerReplaced replaced={replaced} onConnect={close}>
@@ -40,7 +43,11 @@ export function SyncStatusButton({ onConfigure }: { onConfigure(): void }) {
         </div>
       ) : (
         <div className="sync-popover">
-          <p className="sync-popover__state">{TITLES[status.state]}</p>
+          {outdated ? (
+            <OutdatedNotice update={outdated} />
+          ) : (
+            <p className="sync-popover__state">{TITLES[status.state]}</p>
+          )}
           {status.error && <p className="helper sync-popover__detail">{status.error}</p>}
           {lastSync && <p className="helper sync-popover__detail">Last synced {lastSync}</p>}
           <Button

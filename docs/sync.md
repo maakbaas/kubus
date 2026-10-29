@@ -51,12 +51,22 @@ needs server-side queries (docs/vision.md).
   skew instead of a hybrid logical clock.
 - *Item links* (`item_links`, docs/data-model.md "Item links"): derived from the values but synced, so devices and the server hold the
   index. The row carries its value's own `updated_at` and is written in the same transaction (triggers on `field_values`, not while
-  `sync_applying`), so the newest-wins merge keeps value and row together. Values from a device that doesn't know the table (`SYNC_VERSION`
-  1, which `SYNC_COMPATIBLE` still lets sync; it never reads the table's rows) have no row: after applying a sync the engine
-  rebuilds the rows of the applied values that are missing or older (`healAppliedLinks`, after `sync_applying` is cleared, so the table's outbox trigger queues
-  them and the next sync sends them), and after a first download for every value. Nothing is computed on the server; it stores the rows
-  (jsonb `targets`, handed back as the same text). A newer app talking to a server that lacks the table is told to update the server
-  (the usual answer to an unknown table); a row that arrives alone announces its source item's change (`announce`).
+  `sync_applying`), so the newest-wins merge keeps value and row together. Every device of a sync writes the rows with its values (the strict
+  version gate lets no other sync), so a sync heals nothing; only a first download from a server holding values without rows (it was filled
+  before the table existed) rebuilds the rows of every value (`healLinks`, queued for the server). Nothing is computed on the server; it stores
+  the rows (jsonb `targets`, handed back as the same text). A row that arrives alone announces its source item's change (`announce`).
+- *Versions* (a strict gate, `docs/migrations.md`): only a device and a server of the same `SYNC_VERSION` sync, both ways. Every request
+  carries the device's (`version`; `compatible`, equal to it, only for servers from before the gate, which then turn the device
+  away); the server answers 426 (`SyncOutdated`: `update` is `app` when the device is older, `server` when the server is older, plus its
+  `version`) and writes nothing; every answer and `/api/health` carry the server's (`SyncResponse.version`, `syncVersion`), and
+  the device refuses a response of another one itself (`SyncRefused`), and "Test connection" says so before connecting. The device
+  keeps working offline and its outbox is not touched (nothing is dropped or marked as sent, a first connection is not made);
+  `SyncStatus.outdated` (`app` / `server`, with `state` "error" and no `error`) turns the status button's label and the Settings → Sync
+  state into "Update Kubus to keep syncing" or "The server needs updating" (`ui/OutdatedNotice.tsx`), with "Reload to update" for a
+  device older than the server in a browser (the web and home-screen app load the new build on reload: `app/sw.js` takes over
+  at once and serves pages network first; the desktop app needs the new install). Every sync (reload, the 30 s poll, a change signal)
+  asks again, so the first one after the versions match sends what was queued. The server's own headless device is the same build:
+  the server checks the bundle's `syncVersion` before starting it (a stale `server/headless` says to run `npm run build:headless`).
 - *First connection to a server* (or a changed server URL): the server is the source of truth. If it
   holds data, that replaces everything on the device (one local transaction, nothing is sent; the
   Server tab (saving a new address while sync is on) and the Sync tab (switching it on) ask for confirmation first, `isNewServer`). Only an empty server takes the device's data
@@ -88,7 +98,7 @@ which is how the answer leaves them out. Pushed rows are written a statement per
 1000 rows: `jsonb_to_recordset`), not one by one. The synced tables are made from `shared/sync.ts`
 (`schema.ts`: jsonb, timestamptz, …; no foreign keys or checks; added columns added), then `server/schema.sql` (the
 server's own tables), all applied idempotently at start after the migrations (`server/src/migrations.ts`). Devices of
-other versions: `SYNC_VERSION`, 426 and rows written in the columns they have (`docs/migrations.md`). `events.ts` is the change signal. Proxies must not
+other versions: `SYNC_VERSION` and 426 (`refusal`; only equal versions sync: `docs/migrations.md`). `events.ts` is the change signal. Proxies must not
 buffer `/api/events` (nginx: `proxy_buffering off`); polling covers a dropped stream. Its routes
 (`index.ts`) go through the shared `Router` (`shared/router.ts`).
 

@@ -89,7 +89,7 @@ describe.skipIf(!ADMIN)("the server's database", () => {
     await expect(start()).rejects.toThrow(/spaces.position is text, not integer/);
   });
 
-  it("keeps a column an older device's row leaves out, and refuses devices of incompatible versions", async () => {
+  it("keeps a column a row leaves out, and refuses devices of another version", async () => {
     await start();
     const row = { id: "s1", name: "Work", icon: "Briefcase", position: 0, created_at: "2026-10-01T00:00:00.000Z", updated_at: "2026-10-01T00:00:00.000Z", deleted_at: null };
     await sync({ spaces: [row] });
@@ -98,8 +98,7 @@ describe.skipIf(!ADMIN)("the server's database", () => {
     expect((await pool.query("SELECT name, icon FROM spaces")).rows).toEqual([{ name: "Office", icon: "Briefcase" }]);
 
     expect(await sync({ spaces: [{ ...row, name: "Old" }] }, { version: 0, compatible: 0 })).toMatchObject({ outdated: { update: "app" } });
-    expect(await sync({}, { compatible: SYNC_VERSION + 1 })).toMatchObject({ outdated: { update: "server" } });
-    expect(await sync({ spaces: [{ ...row, color: "teal" }] })).toMatchObject({ outdated: { update: "server" } });
+    expect(await sync({}, { version: SYNC_VERSION + 1 })).toMatchObject({ outdated: { update: "server" } });
     expect((await pool.query("SELECT name FROM spaces")).rows).toEqual([{ name: "Office" }]);
   });
 

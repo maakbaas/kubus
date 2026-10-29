@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HeadlessOptions } from "../../../shared/api";
-import { SYNC_COMPATIBLE, SYNC_VERSION, type SyncRequest } from "../../../shared/sync";
+import { SYNC_VERSION, type SyncRequest } from "../../../shared/sync";
 import { FakeServer, SERVER_URL, TOKEN } from "../test/fakeServer";
 import { startHeadless } from "./index";
 
@@ -48,7 +48,7 @@ const get = (api: Api, path: string, method = "GET", body?: unknown) => {
 };
 const spaces = async (api: Api) => ((await get(api, "/spaces")).json as { name: string }[]).map((s) => s.name);
 const row = (id: string, name: string) => ({ id, name, icon: null, position: 1, created_at: "2026-10-28T10:00:00.000Z", updated_at: "2026-10-28T10:00:00.000Z", deleted_at: null });
-const elsewhere = (...rows: ReturnType<typeof row>[]) => server.sync({ since: 0, changes: { spaces: rows }, version: SYNC_VERSION, compatible: SYNC_COMPATIBLE });
+const elsewhere = (...rows: ReturnType<typeof row>[]) => server.sync({ since: 0, changes: { spaces: rows }, version: SYNC_VERSION });
 
 describe("a restart with a data directory", () => {
   it("starts empty the first time, downloading everything", async () => {
@@ -216,9 +216,9 @@ describe("the data directory's lock", () => {
   });
 
   it("gives the lock up when the device can't start, so the next try can", async () => {
-    server.compatible = 99;
+    server.version = 99;
     await expect(startHeadless(options())).rejects.toMatchObject({ status: 503 });
-    server.compatible = SYNC_COMPATIBLE;
+    server.version = SYNC_VERSION;
     expect(readdirSync(dir)).not.toContain("headless.lock");
     await (await startHeadless(options())).close();
   });
