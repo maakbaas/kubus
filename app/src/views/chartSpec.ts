@@ -32,12 +32,14 @@ import {
   type ChartAxis,
   type ChartInput,
   type ChartOptions,
+  type ScaleColor,
   type DrawnSeries,
   type SeriesStyle,
   type ThresholdStatus,
 } from "../domain/chart";
 import { pickableFields, type FieldDef } from "../domain/model";
 import { WORLD_MAP, type Region } from "../domain/regions";
+import * as carbonColors from "@carbon/colors";
 import { blockHeightCss } from "../domain/views";
 
 /** The Carbon Charts components a chart block uses (named as @carbon/charts-react exports them). */
@@ -650,10 +652,22 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
           // The world as an equal-area map; a country or Europe as the familiar Mercator.
           thematic: { projection: options.regions.map === WORLD_MAP ? "geoNaturalEarth1" : "geoMercator" },
           choropleth: { colorLegend: { title: seriesLabel(first, collection), type: "linear" } },
+          color: { gradient: { colors: scaleShades(options.scaleColor, theme) } },
           tooltip: tooltip(options, input),
         }),
         format: formatOf(options, { map }),
       };
     }
   }
+}
+
+/**
+ * A choropleth's shades of its hue, lowest value first: Carbon's own scale (white, 10 … 100) without its two
+ * palest steps, so a region with a little is a light shade rather than white; on a dark theme the other way round
+ * (from 90, not near-black 100 or white).
+ */
+export function scaleShades(color: ScaleColor, theme: string): string[] {
+  const grades = theme === "g100" ? [90, 80, 70, 60, 50, 40, 30, 20, 10] : [20, 30, 40, 50, 60, 70, 80, 90, 100];
+  const hue = carbonColors[color] as Record<number, string>;
+  return grades.map((g) => hue[g]);
 }

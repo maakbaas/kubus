@@ -3,7 +3,7 @@ import { CHART_KINDS, defaultChartOptions, newSeries, type ChartInput, type Char
 import { blankField, type Collection, type Item } from "../domain/model";
 import type { QueryContext } from "../domain/query";
 import { regionsOf } from "../domain/regions";
-import { chartSpec, meterHeight, METER_LABEL_ROW_REM, type ChartSpec } from "./chartSpec";
+import { chartSpec, meterHeight, scaleShades, METER_LABEL_ROW_REM, type ChartSpec } from "./chartSpec";
 
 const collection: Collection = {
   id: "books", name: "Book", pluralName: "Books", icon: null, description: "", itemViews: [], spaceIds: null, createdAt: "", updatedAt: "",
@@ -60,6 +60,12 @@ describe("chartSpec", () => {
     expect(s.map).toBe("worldLow");
     expect(s.format).toMatchObject({ map: "worldLow" });
     expect(s.options).toMatchObject({ thematic: { projection: "geoNaturalEarth1" }, choropleth: { colorLegend: { title: "Sum of Pages" } } });
+    // Its shades start light, not white (dark from 90, not near-black), in the hue chosen.
+    expect(s.options).toMatchObject({ color: { gradient: { colors: expect.arrayContaining(["#e8daff", "#1c0f30"]) } } });
+    expect((s.options.color as { gradient: { colors: string[] } }).gradient.colors).not.toContain("#ffffff");
+    const dark = chartSpec(input(), { ...o, scaleColor: "teal" }, "g100", undefined, regions) as ChartSpec;
+    expect((dark.options.color as { gradient: { colors: string[] } }).gradient.colors).toEqual(scaleShades("teal", "g100"));
+    expect(scaleShades("teal", "g100")[0]).toBe("#022b30");
     const country = chartSpec(input(), { ...o, regions: { map: "netherlandsLow", file: `files/${"a".repeat(64)}` } }, "white", undefined, regions) as ChartSpec;
     expect(country.map).toBe(`files/${"a".repeat(64)}`);
     expect(country.options).toMatchObject({ thematic: { projection: "geoMercator" } });

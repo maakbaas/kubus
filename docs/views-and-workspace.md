@@ -245,7 +245,10 @@ Extension points are registries, not special cases in pages:
     Departments"), downloaded from jsDelivr at a pinned version (`GEODATA_VERSION`) when chosen and stored as a file
     (`regions.file`, `files/<id>`: the same bytes on every device, so one file; synced like an image, kept while a block
     names it: docs/data-model.md, block_file_uses; "Downloading the map…" under the select meanwhile, the map shown until it's done;
-    offline it says so); and Regions from, the field whose values are the regions (a category per value, as the X axis's). A
+    offline it says so); Regions from, the field whose values are the regions (a category per value, as the X axis's); and
+    Colour (`ChartOptions.scaleColor`: Carbon's first five series colours, purple by default), whose shades Carbon is given
+    (`color.gradient.colors`, `scaleShades` in chartSpec.ts): its own scale without white and the palest step, so a region with
+    little is a light shade rather than white (on a dark theme from 90 to 10). A
     value is a region when it is its code (`id`: "NL", "NL-DR") or its name (`name`), the two properties every amCharts map has
     (an English name is in a few maps only, under several keys: not used), ignoring case,
     accents and punctuation ("noord holland" is Noord-Holland, "Fryslan" Fryslân), a code first (`regionFinder`); two

@@ -32,6 +32,7 @@ import {
   statOf,
   styleOf,
   drawsTimeline,
+  SCALE_COLORS,
   THRESHOLD_STATUSES,
   TRANSFORMS,
   type Aggregate,
@@ -41,6 +42,7 @@ import {
   type ChartX,
   type Compare,
   type DateStep,
+  type ScaleColor,
   type SeriesStyle,
   type ThresholdStatus,
   type Transform,
@@ -596,6 +598,11 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
             helper="A field whose values are the regions' names or codes"
             onChange={(field) => setX({ by: "field", field })}
           />
+          <Select size="sm" id={`${uid}-scale-color`} labelText="Colour" value={o.scaleColor} onChange={(e) => set({ scaleColor: e.target.value as ScaleColor })}>
+            {SCALE_COLORS.map((c) => (
+              <SelectItem key={c.value} value={c.value} text={c.text} />
+            ))}
+          </Select>
           {/* The map's regions: what a value has to be, and which of the block's values are which. */}
           <Button kind="tertiary" size="sm" className="chart-options__add" onClick={() => setShowRegions(true)}>
             Show regions
