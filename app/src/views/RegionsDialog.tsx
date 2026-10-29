@@ -12,8 +12,8 @@ import { refLabelOf, type RefOptions } from "../ui/useReferenceOptions";
 import { loadRegionMap, mapLabel, type RegionMap } from "./regionMaps";
 
 // A choropleth's map's regions, from its Block settings ("Show regions"): every region's name (and
-// English name) and code, what a value has to be to be it (domain/regions.ts), and which of the
-// block's values are it, with their items' number; searchable, and narrowed to the regions none is.
+// English name) and code, what a value has to be to be it (domain/regions.ts), and how many of the
+// block's items are in it; searchable, and narrowed to the regions with none.
 // The values that are no region are listed above, as under the chart.
 
 export function RegionsDialog({
@@ -60,7 +60,7 @@ export function RegionsDialog({
 
   const rows = useMemo(() => {
     const q = matchKey(query);
-    const text = (r: Region) => matchKey([r.key, r.english, r.id, ...(byRegion.get(r)?.labels ?? [])].join(" "));
+    const text = (r: Region) => matchKey([r.key, r.english, r.id].join(" "));
     return (map?.regions ?? [])
       .filter((r) => !onlyEmpty || !byRegion.has(r))
       .filter((r) => !q || text(r).includes(q))
@@ -68,15 +68,11 @@ export function RegionsDialog({
   }, [map, query, onlyEmpty, byRegion]);
 
   const notOnMap = matched && matched.unmatched.length > 0 ? matched.unmatched.map((u) => `${u.label} (${u.items})`).join(", ") : null;
-  const valuesOf = (r: Region) => {
-    const m = byRegion.get(r);
-    return m ? `${m.labels.join(", ")} (${m.items})` : "";
-  };
 
-  // At the window level (opened from the Block settings popover), inside the app root for the theme. Medium, not
-  // the dialogs' xs: three columns of names ("Noord-Holland (North Holland)") and values don't fit a smaller one.
+  // At the window level (opened from the Block settings popover), inside the app root for the theme. Small, not
+  // the dialogs' xs: a name, its English name, a code and a number don't fit an xs one.
   return createPortal(
-    <Modal open={open} size="md" passiveModal modalHeading={`Regions of ${mapLabel(regions.map)}`} onRequestClose={onClose} className="regions-dialog">
+    <Modal open={open} size="sm" passiveModal modalHeading={`Regions of ${mapLabel(regions.map)}`} onRequestClose={onClose} className="regions-dialog">
       <Stack gap={5}>
         <p className="helper">A value is a region when it is the region's name, English name or code (case, accents and punctuation aside).</p>
         {error && <p className="helper">{error}</p>}
@@ -105,7 +101,7 @@ export function RegionsDialog({
                   <TableRow>
                     <TableHeader>Region</TableHeader>
                     <TableHeader>Code</TableHeader>
-                    {matched && <TableHeader>Values (items)</TableHeader>}
+                    {matched && <TableHeader>Items</TableHeader>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -115,7 +111,7 @@ export function RegionsDialog({
                       <TableRow key={r.key}>
                         <TableCell title={name}>{name}</TableCell>
                         <TableCell>{r.id}</TableCell>
-                        {matched && <TableCell title={valuesOf(r)}>{valuesOf(r)}</TableCell>}
+                        {matched && <TableCell>{byRegion.get(r)?.items ?? ""}</TableCell>}
                       </TableRow>
                     );
                   })}

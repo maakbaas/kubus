@@ -227,9 +227,9 @@ Extension points are registries, not special cases in pages:
     accents and punctuation ("noord holland" is Noord-Holland, "Fryslan" Fryslân), a code first (`regionFinder`); two
     values of one region ("NL", "Netherlands") are one. A region without items is striped (Carbon's missing data); the
     values that are no region are listed under the map ("Not on the map: Atlantis (1)", ellipsized, the whole list in its
-    title). "Show regions" (Data, under Regions from) opens the map's regions (`views/RegionsDialog.tsx`, a medium dialog:
-    three columns of names and values don't fit a smaller one): every region's name (with its English name), its code and which of the block's values
-    are it with their items' number (`RegionValues.matches`; the Block settings get the block's result for it,
+    title). "Show regions" (Data, under Regions from) opens the map's regions (`views/RegionsDialog.tsx`, a small dialog:
+    a name, its English name, a code and a number don't fit an xs one): every region's name (with its English name), its code and how many of the
+    block's items are in it (`RegionValues.matches`; the Block settings get the block's result for it,
     `BlockOptionsProps.result`), searchable, "Only regions without a value", and the values that are no region above. The whole map is shown, whichever regions have values: Carbon fits its projection to the regions with a value
     only (and no data can change that: it reads 0 and empty alike as missing), so after every render the regions are drawn
     again fitted to the whole map (`frameWholeMap` in ChartCanvas: the size Carbon fitted to, `width.baseVal`, each path's
