@@ -493,7 +493,8 @@ What the app does, feature by feature (read the part you work on).
   of the view named (`books/reading-list#`), or the fields and blocks of the item's page under its default or named
   item view (`book/dune/compact#`; under an item view named in the link only the fields it lists, `listsField`, and the
   title field); a first part that names no collection but an item of the shown space is read as that item's
-  (`dune/compact` as `book/dune/compact`, `itemFirstNameTargets`), as `dune` alone finds the item; `dashboards/` the shown space's dashboards, `dashboards/health/` its views and
+  (`dune/compact` as `book/dune/compact`, `itemFirstNameTargets`), as `dune` alone finds the item; typed and applied
+  without picking it resolves the same way when one collection has such an item (`resolveNameLink`, `itemFirstLink`); `dashboards/` the shown space's dashboards, `dashboards/health/` its views and
   `dashboards/health/daily#` (or `dashboards/health#`: the default view) a view's blocks; dashboards and views are also
   found by name, and `#/dashboards/<id>…` by address. Every option shows its link by name (`describeLink`) beside its place, one line
   per row. ↑/↓ move, Enter or

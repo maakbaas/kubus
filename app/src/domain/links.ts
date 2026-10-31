@@ -103,6 +103,7 @@ export async function resolveNameLink(href: string, data: LinkData): Promise<str
     // Else a collection called "Dashboards" (when there is one).
     if (link || all.length === 0) return link;
   }
+  if (all.length === 0 && segments.length > 1) return itemFirstLink(segments, fragment, data);
   if (all.length !== 1) return null;
   const collection = all[0];
   // "views/" and "items/" name the kind of the next segment, for when the name could be either.
@@ -146,6 +147,21 @@ export async function resolveNameLink(href: string, data: LinkData): Promise<str
   const blocks = itemView?.layout.blocks ?? [];
   const b = indexOfSlug(blocks.map(blockName), fragment);
   return b >= 0 ? path + query({ view, block: blocks[b].id }) : null;
+}
+
+/**
+ * A link by name that starts at an item's name instead of its collection's (`dune/details`, `dune/details#author`): the
+ * same as `book/dune/…` when exactly one native collection has an item of that name (as the link options offer it,
+ * domain/linkTargets.ts); null when none has, or several have.
+ */
+async function itemFirstLink(segments: string[], fragment: string | null, data: LinkData): Promise<string | null> {
+  const owners: Collection[] = [];
+  for (const c of data.collections) {
+    if (c.source) continue;
+    if (indexOfSlug((await data.items(c)).map((l) => l.label ?? ""), segments[0]) >= 0) owners.push(c);
+  }
+  if (owners.length !== 1) return null;
+  return resolveNameLink(`${slug(owners[0].name)}/${segments.join("/")}${fragment ? `#${fragment}` : ""}`, data);
 }
 
 async function viewLink(collection: Collection, view: CollectionView | undefined, fragment: string | null, data: LinkData): Promise<string | null> {

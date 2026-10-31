@@ -73,6 +73,12 @@ describe("resolveNameLink", () => {
     expect(await resolveNameLink("sheep/shaun", data)).toBe("#/collections/c2/items/i9");
     expect(await resolveNameLink("sheep/views/shaun", data)).toBeNull();
   });
+
+  it("reads a link that starts at an item's name as that item's, when one collection has it", async () => {
+    expect(await resolveNameLink("dune/compact#author", data)).toBe("#/collections/c1/items/i1?view=iv2&field=f2");
+    expect(await resolveNameLink("shaun/x", data)).toBeNull(); // Shaun has no item view x
+    expect(await resolveNameLink("nobody/compact", data)).toBeNull();
+  });
 });
 
 describe("describeLink", () => {
