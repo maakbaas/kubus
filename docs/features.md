@@ -50,7 +50,7 @@ What the app does, feature by feature (read the part you work on).
   42rem only the name (still its link; Spaces also its icon) and the row's icon buttons show, one line per row;
   every other column is hidden (`ui/listTable.ts`: `LIST_TABLE` on the table, `LIST_MAIN` on the kept column).
 - **Markdown editor has no toolbar**: formatting is typed, images pasted/dropped, links edited from
-  their hover popover. Its height follows the content (no inner scrolling, no resize handle).
+  their hover popover (on a touch screen a tap on a link shows it instead of opening the link; its Open link opens it). Its height follows the content (no inner scrolling, no resize handle).
 - **Collection editor header is the editor** for the collection's icon (button + popover picker) and name
   (heading-sized input).
 - **Collections have an icon** from the full Carbon set (`collections.icon`, an `@carbon/icons-react`

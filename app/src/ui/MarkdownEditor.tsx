@@ -465,11 +465,21 @@ function EditorChrome(props: Props) {
   const links = useLinks();
   const linksRef = useRef(links);
   linksRef.current = links;
-  // A click on a link (see linkClick) opens it: a page of the app, or outside.
+  /** What last pointed into the editor: a touch screen has no hover, so a tap on a link shows its popover. */
+  const pointerType = useRef("mouse");
+  // A click on a link (see linkClick) opens it: a page of the app, or outside. A tap shows the link's
+  // popover instead (its Open, Edit and Remove): a touch screen's emulated mouseover, which a mouse's
+  // popover hangs on, doesn't come with every tap (iOS leaves it out while the editor takes the tap).
   useEffect(() => {
     const box = editorBox.current;
     if (!box) return;
     const onOpen = (e: Event) => {
+      const a = e.target instanceof HTMLElement && e.target.tagName === "A" ? e.target : null;
+      if (a && pointerType.current !== "mouse") {
+        cancelHideRef.current();
+        showLinkPopoverRef.current(a);
+        return;
+      }
       const { href, mode } = (e as CustomEvent<{ href: string; mode: OpenMode }>).detail;
       linksRef.current.open(href, mode).catch((err) => setError(errorMessage(err)));
     };
@@ -690,6 +700,17 @@ function EditorChrome(props: Props) {
     hideTimer.current = window.setTimeout(() => setHovered(null), 250);
   };
   useEffect(() => () => window.clearTimeout(hideTimer.current), []);
+  // Shown by a tap, the popover goes with a tap anywhere but it or its link (a touch sends no mouseout).
+  useEffect(() => {
+    if (!hovered) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement;
+      if (e.pointerType === "mouse" || hovered.a.contains(target) || target.closest(".md-link-popover")) return;
+      setHovered(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [hovered]);
 
   function showLinkPopover(a: HTMLElement) {
     const container = editorBox.current;
@@ -698,6 +719,11 @@ function EditorChrome(props: Props) {
     const r = a.getBoundingClientRect();
     setHovered({ a, box: { left: r.left - outer.left, top: r.top - outer.top, width: r.width, height: r.height } });
   }
+
+  const showLinkPopoverRef = useRef(showLinkPopover);
+  showLinkPopoverRef.current = showLinkPopover;
+  const cancelHideRef = useRef(cancelHide);
+  cancelHideRef.current = cancelHide;
 
   /** Where the link rendered as `a` is in the document, read now (null when it is gone). */
   function linkAt(a: HTMLElement): { from: number; to: number } | null {
@@ -736,14 +762,17 @@ function EditorChrome(props: Props) {
         data-own-click
         onMouseLeave={() => !menu && setCell(null)}
         onMouseMove={(e) => trackPointer(e.clientX, e.clientY)}
+        onPointerOverCapture={(e) => (pointerType.current = e.pointerType)}
+        onPointerDownCapture={(e) => (pointerType.current = e.pointerType)}
         onMouseOver={(e) => {
           const a = (e.target as HTMLElement).closest<HTMLElement>(".md-editor__content a");
-          if (!a) return;
+          // A touch's emulated hover is left alone: its tap shows the popover (see OPEN_LINK above).
+          if (!a || pointerType.current !== "mouse") return;
           cancelHide();
           if (hovered?.a !== a) showLinkPopover(a);
         }}
         onMouseOut={(e) => {
-          if ((e.target as HTMLElement).closest(".md-editor__content a")) scheduleHide();
+          if (pointerType.current === "mouse" && (e.target as HTMLElement).closest(".md-editor__content a")) scheduleHide();
         }}
       >
         <EditorSurface {...props} labelId={labelId} onError={setError} />
