@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Html as HtmlIcon } from "@carbon/icons-react";
 import type { FieldValue } from "../domain/model";
 import { useStore } from "../app/store";
 import { fileSrc, fileIdsIn } from "../domain/files";
@@ -13,6 +12,7 @@ import { fileDataUrl, UrlImage } from "./images";
 import { MarkdownView } from "./MarkdownView";
 import { frameFonts } from "./frameFonts";
 import { useOpenTag } from "./TagChip";
+import { InlineHtml } from "./InlineHtml";
 
 /**
  * App tokens a frame's base styles use: passed in as resolved values (the frame has no Carbon
@@ -230,7 +230,7 @@ const FILL_THRESHOLD = 4;
  * The HTML with every stored image it refers to (`files/<sha256>`) embedded as a data URL;
  * undefined while those load.
  */
-function useEmbeddedFiles(html: string): string | undefined {
+export function useEmbeddedFiles(html: string): string | undefined {
   const { repo } = useStore();
   const ids = useMemo(() => fileIdsIn(html), [html]);
   const [embedded, setEmbedded] = useState<{ html: string; out: string }>();
@@ -437,7 +437,7 @@ export function HtmlFrame({
 /**
  * A component field's result, shown by its component's output type: rendered Markdown, text, a
  * number, an image or HTML. `cell` is the compact form for table cells and card lines (Markdown
- * as plain text, a thumbnail, HTML as a note); errors show as their message.
+ * as plain text, a thumbnail, HTML drawn inline without scripts: InlineHtml); errors show as their message.
  */
 export function ComponentValue({
   value,
@@ -468,11 +468,9 @@ export function ComponentValue({
     case "image":
       return <UrlImage url={text} className={variant === "cell" ? "image-thumb" : "item-view__image"} compact={variant === "cell"} />;
     case "html":
+      // In a cell drawn in the page without its scripts (InlineHtml); elsewhere the frame, scripts and all.
       return variant === "cell" ? (
-        <span className="icon-label component-html-note">
-          <HtmlIcon />
-          HTML
-        </span>
+        <InlineHtml html={text} />
       ) : (
         <HtmlFrame html={text} maxHeight={maxHeight} aspect={aspect} onContentClick={onContentClick} />
       );

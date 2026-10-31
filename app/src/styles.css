@@ -4243,8 +4243,15 @@ img[data-lightbox] {
   inset: 0;
   min-block-size: 0;
 }
-.component-html-note {
-  color: var(--cds-text-secondary);
+/* HTML drawn in a cell or a card's field line (ui/InlineHtml.tsx): its own content in a shadow root, cut off at a
+   table row's height (as an image thumbnail is) or a few lines on a card. */
+.inline-html {
+  display: block;
+  max-block-size: var(--cds-spacing-12);
+  overflow: hidden;
+}
+.cds--data-table .inline-html {
+  max-block-size: var(--cds-spacing-06);
 }
 
 /* Components on an item view only (layout popover): one block per component, under a rule. */

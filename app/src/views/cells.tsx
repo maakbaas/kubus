@@ -1,6 +1,6 @@
 import { useId, type KeyboardEvent, type MouseEvent } from "react";
 import { Link } from "@carbon/react";
-import { htmlPreview, markdownPreviewParts } from "../domain/fieldKinds";
+import { markdownPreviewParts } from "../domain/fieldKinds";
 import { isOpenableUrl, openExternal } from "../platform/openExternal";
 import { ToggleInput } from "../ui/ToggleInput";
 import { openModeOf } from "../workspace/Workspace";
@@ -90,12 +90,9 @@ export function FieldCell({ field, item, refs, search, actions }: Props) {
   // Element ids unique per cell: the same item can show in several blocks, panes and tabs at once.
   const uid = useId();
   const value: FieldValue = fieldValue(item, field);
-  // HTML (a field, or a component's result) shows its text; without any (a chart, a map) a note.
+  // HTML (a field, or a component's result) drawn in the cell without its scripts (ui/InlineHtml.tsx).
   const html = field.kind === "html" || (field.kind === "component" && outputOf(field, components) === "html");
-  if (html && typeof value === "string" && value) {
-    const text = htmlPreview(value);
-    return text ? <Highlight text={text} query={search} links /> : <ComponentValue value={value} output="html" variant="cell" search={search} />;
-  }
+  if (html && typeof value === "string" && value) return <ComponentValue value={value} output="html" variant="cell" search={search} />;
   // Component images show as a thumbnail; other results as text.
   if (field.kind === "component") {
     const output = outputOf(field, components);

@@ -7,7 +7,7 @@ What the app does, feature by feature (read the part you work on).
 - **User-defined schema.** Users create collections (e.g. Book, Person, Meeting) with arbitrary
   fields, and CRUD both the collections and their items.
 - **Field types:** String, Markdown, HTML (source edited in the component code editor, shown in the
-  sandboxed `HtmlFrame` like a component's HTML output; its text in tables, cards and search; the
+  sandboxed `HtmlFrame` like a component's HTML output; drawn inline in tables and card field lines (below); its text in search; the
   frame reports clicks on plain content, which start editing, while links, controls, canvas/svg
   and elements with handlers keep their clicks), Number, Date, Date & time, Checkbox, Image, Item (reference
   to an item of another collection, e.g. Book → Author), List of strings, Checklist (items with a
@@ -104,6 +104,12 @@ What the app does, feature by feature (read the part you work on).
   - HTML output renders in a sandboxed frame that sizes itself, one component for every place
     (`HtmlFrame` in `ui/ComponentValue.tsx`, which documents flow/fill sizing, `frame_ratio`, the
     `<meta name="frame">` override and the zero-specificity base styles).
+  - **In a table cell or a card's field line** HTML (a field or a component's output) is drawn in the page, without
+    scripts (`ui/InlineHtml.tsx`): DOMPurify with the policy of `ui/inlineHtmlPolicy.ts` (no scripts, handlers, forms,
+    frames or media; addresses only links, `#…`, `files/…` and `data:image/…`; CSS without `@import`, outside `url()`,
+    `image-set`), in a shadow root (its `<style>` stays inside; the theme's custom properties and font reach it), cut off at
+    the row's height. A frame per cell would be a document each. A card's cover, an item page and a component block keep
+    the frame, scripts and all: one HTML component, three ways of showing it.
   - Components see an image field as its src, `files/<sha256>`: Markdown and image outputs (and
     card covers) resolve it to the stored file; HTML frames get each file embedded as a data URL.
   - **Click to edit only what belongs to the place** (field values, Markdown blocks). A component
