@@ -1,4 +1,5 @@
 import { checklistProgress } from "./checklist";
+import { numberList } from "./numberList";
 import type { FieldKind, FieldValue } from "./model";
 
 // Registry of field kinds. Adding a kind = add an item here, a column mapping
@@ -152,6 +153,16 @@ function listFromDb(raw: unknown): FieldValue {
 }
 const listToDb = (v: FieldValue) => (Array.isArray(v) && v.length > 0 ? JSON.stringify(v) : null);
 
+function numberListFromDb(raw: unknown): FieldValue {
+  if (raw == null) return null;
+  try {
+    const list = numberList(JSON.parse(String(raw)));
+    return list.length > 0 ? list : null;
+  } catch {
+    return null;
+  }
+}
+
 export const fieldKinds: Record<FieldKind, FieldKindSpec> = {
   string: {
     label: "String",
@@ -225,6 +236,14 @@ export const fieldKinds: Record<FieldKind, FieldKindSpec> = {
     fromDb: listFromDb,
     toDb: listToDb,
     format: (v) => (Array.isArray(v) ? v.join(", ") : ""),
+  },
+  // Numbers as typed, in order (measurements, scores): its entries are numbers wherever they are read (a list block's Value, a component).
+  number_list: {
+    label: "List of numbers",
+    column: "value_json",
+    fromDb: numberListFromDb,
+    toDb: (v) => listToDb(numberList(v)),
+    format: (v) => numberList(v).join(", "),
   },
   checklist: {
     label: "Checklist",

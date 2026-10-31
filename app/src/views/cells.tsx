@@ -7,7 +7,7 @@ import { openModeOf } from "../workspace/Workspace";
 import { useComponents } from "../app/store";
 import { outputOf } from "../domain/components";
 import { ComponentValue } from "../ui/ComponentValue";
-import { fieldValue, isMetaField, type FieldDef, type FieldKind, type FieldValue, type Item } from "../domain/model";
+import { fieldValue, isMetaField, stringList, type FieldDef, type FieldKind, type FieldValue, type Item } from "../domain/model";
 import { AiStatus } from "../ui/AiStatus";
 import { Highlight } from "../ui/Highlight";
 import { ImageThumb } from "../ui/images";
@@ -135,7 +135,7 @@ export function FieldCell({ field, item, refs, search, actions }: Props) {
     if (options) {
       return (
         <>
-          {value.map((id, i) => (
+          {stringList(value).map((id, i) => (
             <span key={`${id}-${i}`}>
               {i > 0 && ", "}
               <ItemLink field={field} id={id} refs={refs} search={search} />

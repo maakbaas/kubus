@@ -203,8 +203,8 @@ describe("the HTTP API", () => {
     const moved = await call("POST", `/items/${item.body.id}/move`, { space: "work" });
     expect(moved.body.spaceId).toBe(work.body.id);
     expect((await call("GET", "/search?q=findable")).body).toEqual([]);
-    const bookmark = await call("POST", "/bookmarks", { kind: "item", target: item.body.id, space: "Work" });
-    expect(bookmark.body).toMatchObject({ label: "Findable", targetId: item.body.id });
+    const bookmark = await call("POST", "/bookmarks", { link: "book/findable", space: "Work" });
+    expect(bookmark.body).toMatchObject({ label: "Findable", link: expect.stringContaining(`/items/${item.body.id}`) });
     expect((await call("GET", "/bookmarks?space=Work")).body).toHaveLength(1);
     expect((await call("DELETE", `/items/${item.body.id}`)).status).toBe(200);
     expect((await call("GET", `/items/${item.body.id}`)).status).toBe(404);

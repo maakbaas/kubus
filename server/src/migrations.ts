@@ -23,7 +23,23 @@ export interface ServerMigration {
   up: string | ((client: pg.PoolClient) => Promise<void>);
 }
 
-export const MIGRATIONS: ServerMigration[] = [];
+export const MIGRATIONS: ServerMigration[] = [
+  {
+    version: 1,
+    description: "bookmarks hold a link instead of a kind and ids (SYNC_VERSION 4; the devices' migration 5)",
+    // The same text the devices make of their own rows, so both copies stay equal without sending anything.
+    up: `
+ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS link text;
+UPDATE bookmarks SET link = CASE kind
+    WHEN 'item' THEN '#/collections/' || collection_id || '/items/' || target_id
+    WHEN 'view' THEN '#/collections/' || collection_id || '/items?view=' || target_id
+    ELSE '#/dashboards/' || dashboard_id || '?view=' || target_id
+  END
+  WHERE link IS NULL;
+ALTER TABLE bookmarks DROP COLUMN IF EXISTS kind, DROP COLUMN IF EXISTS collection_id, DROP COLUMN IF EXISTS target_id, DROP COLUMN IF EXISTS dashboard_id;
+`,
+  },
+];
 
 /** Serializes servers starting on the same database. */
 const LOCK_ID = 7_236_002;

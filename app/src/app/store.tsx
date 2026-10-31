@@ -127,21 +127,15 @@ export function StoreProvider({
   }, [cache, space.id]);
   useEffect(() => {
     if (!repo) return;
-    let bookmarked = new Set<string>();
     let stale = false;
     const reload = () =>
       repo.listBookmarks(space.id).then((list) => {
-        if (stale) return;
-        bookmarked = new Set(list.map((b) => b.targetId));
-        setBookmarks(list);
+        if (!stale) setBookmarks(list);
       }, (e) => console.error("Reloading bookmarks failed", e));
     void reload();
+    // Deleting what a bookmark links to deletes the bookmark in the same write, which says so (scope "bookmarks").
     const unsubscribe = repo.subscribe((change) => {
-      // Bookmarks of deleted views / items / dashboard tabs disappear too. Item edits only matter
-      // for a bookmarked item (it may have been deleted), not on every cell edit.
-      const itemChange = change.scope === "items" && (!change.itemId || bookmarked.has(change.itemId));
-      const dashboardChange = change.scope === "dashboards" || change.scope === "dashboardViews";
-      if (change.scope === "bookmarks" || change.scope === "views" || change.scope === "collections" || dashboardChange || itemChange) void reload();
+      if (change.scope === "bookmarks") void reload();
     });
     return () => {
       stale = true;

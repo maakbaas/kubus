@@ -2,6 +2,7 @@ import { useState, type ElementType, type MouseEvent } from "react";
 import { TreeNode, TreeView } from "@carbon/react";
 import { Bookmark as BookmarkIcon, Cube, Code as ComponentIcon, Dashboard as DashboardIcon, DataBase, Help as HelpIcon, Settings as SettingsIcon } from "@carbon/icons-react";
 import { bookmarkPath } from "../domain/bookmarks";
+import { bookmarkPlace } from "../ui/bookmarkPlace";
 import { dashboardIcon } from "../domain/dashboards";
 import { readPref, writePref } from "../ui/localPrefs";
 import { CollectionIcon } from "../ui/collectionIcons";
@@ -127,7 +128,7 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
                 id={`bookmark-${b.id}`}
                 label={b.label}
                 onSelect={() => navigate(bookmarkPath(b))}
-                renderIcon={collectionIcon(b.kind === "dashboard" ? dashboardIcon(dashboards.find((d) => d.id === b.dashboardId) ?? { icon: null }) : (collections.find((t) => t.id === b.collectionId)?.icon ?? null))}
+                renderIcon={collectionIcon(bookmarkPlace(b.link, collections, dashboards)?.icon ?? null)}
               />
             ))}
           </TreeNode>

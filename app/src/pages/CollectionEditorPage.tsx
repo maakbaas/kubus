@@ -1,7 +1,7 @@
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router";
 import { Button, Dropdown, FilterableMultiSelect, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
-import { Add, TrashCan, ViewOff } from "@carbon/icons-react";
+import { Add, SettingsAdjust, TrashCan, ViewOff } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { useItemCounts } from "../app/useItemCounts";
 import { fieldKinds, offeredKind } from "../domain/fieldKinds";
@@ -20,7 +20,8 @@ import {
   type Collection,
   type CollectionDraft,
 } from "../domain/model";
-import { FieldKindLabel } from "../ui/fieldKindIcons";
+import { FIELD_KIND_ICONS, FieldKindLabel } from "../ui/fieldKindIcons";
+import { ToolbarPopover } from "../ui/ToolbarPopover";
 import { draftProblems } from "../domain/collectionDraft";
 import { FieldSettings, hasSettings, newKindPatch, type Target } from "../ui/FieldSettings";
 import { IconPicker } from "../ui/IconPicker";
@@ -94,10 +95,19 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
   const [draft, setDraft] = useState(() => initialDraft(existing, newRemote, space.id));
   const remote = isRemote(draft);
   const [submitted, setSubmitted] = useState(false);
+  // Raised by each save that can't go ahead: the first problem is then scrolled into view.
+  const [refused, setRefused] = useState(0);
+  const form = useRef<HTMLFormElement>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   // The singular follows the plural (the name shown most: lists, menus, blocks) until the user edits it themselves.
   const [singularTouched, setSingularTouched] = useState(!!existing);
+
+  // A refused save shows why: the problems are shown at their inputs, often far above the Save
+  // button (a field's component), so the first one is brought into view.
+  useEffect(() => {
+    if (refused) form.current?.querySelector(".cds--form-requirement")?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [refused]);
 
   // A new collection starts by naming it.
   useEffect(() => {
@@ -164,7 +174,7 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
   async function save(e: FormEvent) {
     e.preventDefault();
     setSubmitted(true);
-    if (!valid) return;
+    if (!valid) return setRefused((n) => n + 1);
 
     // Hidden columns aren't asked about: the source's values stay where they are.
     const removed = existing?.fields.filter((f) => !draft.fields.some((d) => d.id === f.id) && !(draft.source && f.column)) ?? [];
@@ -224,9 +234,47 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
           </div>
         }
         breadcrumbs={[remote ? { label: "Remotes", href: "#/remotes" } : { label: "Collections", href: "#/collections" }]}
+        actions={
+          // The fields' order and removal: a list as on an item page's layout, apart from their settings below.
+          draft.fields.length > 0 && (
+            <ToolbarPopover label="Fields" icon={SettingsAdjust} width="narrow">
+              <FormGroup legendText="Fields" className="field-order">
+                {draft.fields.map((f, i) => {
+                  const Icon = FIELD_KIND_ICONS[f.kind];
+                  const name = f.name.trim() || "Unnamed field";
+                  return (
+                    <div key={f.id} className="field-order__row" {...reorder.row(i)}>
+                      <span className="icon-label">
+                        <Icon size={16} aria-hidden="true" />
+                        <span className="icon-label__text" title={name}>
+                          {name}
+                        </span>
+                      </span>
+                      <span className="field-order__moves">
+                        {/* A column's field is hidden (and stays so when the columns are read again), not removed. */}
+                        <IconButton
+                          autoAlign
+                          size="sm"
+                          kind="ghost"
+                          label={draft.fields.length === 1 ? "A collection needs at least one field" : remote && f.column ? "Hide column" : "Remove field"}
+                          disabled={draft.fields.length === 1}
+                          onClick={() => (remote && f.column ? hideColumns([...hiddenColumns, f.column]) : removeField(f.id))}
+                        >
+                          {remote && f.column ? <ViewOff /> : <TrashCan />}
+                        </IconButton>
+                        {/* The drag handle is always a row's last icon. */}
+                        {reorder.handle(i)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </FormGroup>
+            </ToolbarPopover>
+          )
+        }
       />
       {error && <InlineNotification kind="error" title="Could not save" subtitle={error} onClose={() => setError(undefined)} />}
-      <Form onSubmit={save} noValidate>
+      <Form ref={form} onSubmit={save} noValidate>
         <Stack gap={6}>
           <TextInput size="sm"
             id={`${uid}-collection-name`}
@@ -279,9 +327,10 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
               {remote
                 ? "Its fields show the source's columns (a text column also as Markdown or HTML); fields added here are component fields."
                 : "A field's type cannot change once saved."}
+              {" Order and remove them under Fields, at the top."}
             </p>
-            {draft.fields.map((f, i) => (
-              <div className="field-row" key={f.id} data-field-id={f.id} {...reorder.row(i)}>
+            {draft.fields.map((f) => (
+              <div className="field-row" key={f.id} data-field-id={f.id}>
                 <TextInput size="sm"
                   id={`${uid}-field-name-${f.id}`}
                   labelText="Field name"
@@ -304,21 +353,6 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
                   renderSelectedItem={(k) => <FieldKindLabel kind={k} />}
                   onChange={({ selectedItem: k }) => k && updateField(f.id, newKindPatch(k))}
                 />
-                <div className="field-row__actions">
-                  {/* A column's field is hidden (and stays so when the columns are read again), not removed. */}
-                  <IconButton
-                    autoAlign
-                    size="sm"
-                    kind="ghost"
-                    label={draft.fields.length === 1 ? "A collection needs at least one field" : remote && f.column ? "Hide column" : "Remove field"}
-                    disabled={draft.fields.length === 1}
-                    onClick={() => (remote && f.column ? hideColumns([...hiddenColumns, f.column]) : removeField(f.id))}
-                  >
-                    {remote && f.column ? <ViewOff /> : <TrashCan />}
-                  </IconButton>
-                  {/* The drag handle is always a row's last icon. */}
-                  {reorder.handle(i)}
-                </div>
                 {/* What the field's type brings (its target, icon, component): a part of the field, under it. */}
                 {hasSettings(f.kind) && (
                   <div className="field-row__settings">

@@ -15,6 +15,7 @@ import { isRemote } from "../domain/sources";
 import type { Space } from "../domain/spaces";
 import { isFullWidth, NOTHING_COLLAPSED, sameView, type Collapsed, type ViewBlock, type ViewState } from "../domain/views";
 import { BookmarkButton } from "../ui/BookmarkButton";
+import { dashboardViewLink } from "../domain/bookmarks";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { IconPicker } from "../ui/IconPicker";
 import { NotFound } from "../ui/NotFound";
@@ -35,7 +36,8 @@ import { BlockRows, besideOf, listRowActions, rowCollapse, type RowControls } fr
 import { reordered, withCopy, withoutBlock } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
-import { useCollectionData } from "../views/useCollectionData";
+import { useCollectionData, type CollectionData } from "../views/useCollectionData";
+import { ListData } from "../views/useListData";
 
 // A dashboard: tabs (its views, per space like a collection's: domain/dashboards.ts) of blocks, each block listing
 // collections of its own (one, or several read as one). Built like a collection view (CollectionPage): what changes the
@@ -250,7 +252,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
     setRenameRequest((r) => r + 1);
   }
   const addButton = (
-    <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Add tab" onClick={() => addView().catch(fail)}>
+    <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Add view" onClick={() => addView().catch(fail)}>
       <Add />
     </IconButton>
   );
@@ -330,7 +332,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   }
 
   async function deleteActive() {
-    if (!active || !(await confirm({ title: `Delete tab “${active.name}”?`, body: "Items are not affected." }))) return;
+    if (!active || !(await confirm({ title: `Delete view “${active.name}”?`, body: "Items are not affected." }))) return;
     const tab = await stored();
     if (!tab) return;
     await repo.deleteDashboardView(tab.id);
@@ -344,7 +346,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
     repo.saveDashboard({ id: dashboard.id, name: dashboard.name, icon: dashboard.icon, description: dashboard.description, spaceIds: dashboard.spaceIds, ...patch }, space.id).catch(fail);
 
   async function deleteDashboard() {
-    if (!(await confirm({ title: `Delete dashboard “${dashboard.name}”?`, body: "Its tabs go too, in every space. Items are not affected.", danger: true }))) return;
+    if (!(await confirm({ title: `Delete dashboard “${dashboard.name}”?`, body: "Its views go too, in every space. Items are not affected.", danger: true }))) return;
     await repo.deleteDashboard(dashboard.id);
     navigate("/dashboards");
   }
@@ -421,19 +423,19 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
             </TabList>
           </Tabs>
           {clippedTabs && (
-            <TabMenu label="Tabs" items={views.map((v) => ({ id: v.id, name: v.name + (changed && v.id === active?.id ? " *" : "") }))} activeId={active?.id} onSelect={selectView} />
+            <TabMenu label="Views" items={views.map((v) => ({ id: v.id, name: v.name + (changed && v.id === active?.id ? " *" : "") }))} activeId={active?.id} onSelect={selectView} />
           )}
           {!clippedTabs && <span className="tab-menu">{addButton}</span>}
           <span className="views-bar__spacer" />
           {panels.hold("changed", changed) && active && (
-            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Save changes to tab" onClick={() => updateActive().catch(fail)}>
+            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Save changes to view" onClick={() => updateActive().catch(fail)}>
               <Save />
             </IconButton>
           )}
           <OverflowBar>
             {clippedTabs && addButton}
             {active && views.length > 1 && (
-              <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Delete tab" onClick={() => deleteActive().catch(fail)}>
+              <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Delete view" onClick={() => deleteActive().catch(fail)}>
                 <TrashCan />
               </IconButton>
             )}
@@ -443,7 +445,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
                 kind="ghost"
                 size="sm"
                 align="bottom"
-                label={active.isDefault ? "Revert default tab" : "Star as default tab"}
+                label={active.isDefault ? "Revert default view" : "Star as default view"}
                 aria-pressed={active.isDefault}
                 onClick={() => toggleDefault().catch(fail)}
               >
@@ -452,11 +454,9 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
             )}
             {active && (
               <BookmarkButton
-                kind="dashboard"
-                ownerId={dashboard.id}
-                targetId={active.id}
-                // A virtual tab is stored first: a bookmark needs a real one.
-                prepare={active.virtual ? () => stored().then((t) => t?.id) : undefined}
+                link={dashboardViewLink(dashboard.id, active.id)}
+                // A view copied from another space is stored first: a bookmark needs a real one.
+                prepare={active.virtual ? () => stored().then((t) => (t ? dashboardViewLink(dashboard.id, t.id) : undefined)) : undefined}
                 label={`${dashboard.name} / ${active.name}`}
                 onError={fail}
               />
@@ -483,7 +483,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
               <SearchIcon />
             </IconButton>
             {!filterInBar && filterButton}
-            <ToolbarPopover label="Tab settings" icon={SettingsAdjust} width="narrow" openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
+            <ToolbarPopover label="View settings" icon={SettingsAdjust} width="narrow" openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
               <div className="view-settings">
                 {active && (
                   <TextInput
@@ -491,7 +491,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
                     key={active.id + active.name}
                     id={`${uid}-tab-rename`}
                     ref={nameInput}
-                    labelText="Tab name"
+                    labelText="View name"
                     defaultValue={active.name}
                     onBlur={(e) => renameActive(e.target.value.trim()).catch(fail)}
                     onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
@@ -685,12 +685,18 @@ function DashboardBlock(props: BlockProps) {
       </section>
     );
   }
-  return <DashboardBlockContent home={home} {...props} />;
+  // A list field's entries are made from the items in the shared cache (domain/listEntries.ts).
+  if (home.listOf) return <ListData list={home}>{(data) => <DashboardBlockContent home={home} data={data} {...props} />}</ListData>;
+  return <NativeDashboardBlock home={home} {...props} />;
 }
 
-function DashboardBlockContent({ home, block, filters, search, editable, collapsed, onCollapse, collapse, onChange, onSet, onRemove, onError, onOpenChange, onDragStart, row }: BlockProps & { home: Collection }) {
+function NativeDashboardBlock(props: BlockProps & { home: Collection }) {
+  const data = useCollectionData(props.home);
+  return <DashboardBlockContent data={data} {...props} />;
+}
+
+function DashboardBlockContent({ home, data, block, filters, search, editable, collapsed, onCollapse, collapse, onChange, onSet, onRemove, onError, onOpenChange, onDragStart, row }: BlockProps & { home: Collection; data: CollectionData }) {
   const { collections } = useStore();
-  const data = useCollectionData(home);
   const normalized = useMemo(() => normalizeBlock(home, block, collections), [home, block, collections]);
   return (
     <BlockView

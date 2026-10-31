@@ -2,7 +2,7 @@ import { useMemo, useRef } from "react";
 import { useStore } from "../app/store";
 import { isReadOnly } from "../domain/sources";
 import { useOpenRelated } from "../workspace/Workspace";
-import { buildItemActions, stableItemActions, type ItemActionsOptions } from "./itemActions";
+import { buildItemActions, entryActions, stableItemActions, type ItemActionsOptions } from "./itemActions";
 import type { ItemActions } from "./registry";
 
 /**
@@ -12,10 +12,13 @@ import type { ItemActions } from "./registry";
  * every row again. Whatever shows the sort renders with the rows it reorders.
  */
 export function useItemActions(options: ItemActionsOptions): ItemActions {
-  const { repo, cache, space } = useStore();
+  const { repo, cache, space, collections } = useStore();
   const openRelated = useOpenRelated();
   const latest = useRef<ItemActions>(null as unknown as ItemActions);
-  latest.current = buildItemActions(options, { repo, cache, spaceId: space.id, openRelated });
+  const built = buildItemActions(options, { repo, cache, spaceId: space.id, openRelated });
+  // A checklist's entries are read-only but for ticking one (Done).
+  const tickable = options.collection.listOf?.kind === "checklist";
+  latest.current = tickable ? entryActions(built, options.collection, collections, { repo, cache }, options.onError) : built;
   const readOnly = isReadOnly(options.collection);
-  return useMemo(() => stableItemActions(latest, readOnly), [readOnly]);
+  return useMemo(() => stableItemActions(latest, readOnly, tickable), [readOnly, tickable]);
 }

@@ -13,6 +13,7 @@ import { useBlockName } from "../views/BlockListEditor";
 import { AddBlockButton, type NewBlockSpec } from "../views/AddBlockButton";
 import { useCollectionData, type CollectionData } from "../views/useCollectionData";
 import { useBacklinkData } from "../views/useBacklinks";
+import { ListData } from "../views/useListData";
 import { findCollection } from "../domain/backlinks";
 import { useStore, useCollection } from "../app/store";
 import { useAiFill } from "../app/useAi";
@@ -48,6 +49,7 @@ import { formatDateTime } from "../domain/fieldKinds";
 import { ERROR_PREFIX, fieldComponent, outputOf, withComputed } from "../domain/components";
 import { HtmlFrame, ComponentValue, FramesSizing } from "../ui/ComponentValue";
 import { BookmarkButton } from "../ui/BookmarkButton";
+import { itemLink } from "../domain/bookmarks";
 import {
   itemPageFields,
   itemViewOf,
@@ -134,6 +136,7 @@ function PropertyValue({ field, value, refs, onFrameClick }: { field: FieldDef; 
       return value == null ? null : field.output === "markdown" ? <MarkdownView source={String(value)} /> : <Highlight text={String(value)} query="" links />;
     case "checkbox":
     case "string_list":
+    case "number_list":
     case "checklist":
       return null; // laid out by ViewField
   }
@@ -486,7 +489,12 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   {standard ? <Checkmark /> : <Edit />}
                 </IconButton>
               )}
-              <BookmarkButton kind="item" ownerId={collection.id} targetId={item.id} label={title} onError={(e) => setError(errorMessage(e))} />
+              {/* The page as shown: `book/dune`, or `book/dune/details` under an item view it doesn't show by default. */}
+              <BookmarkButton
+                link={itemLink(collection.id, item.id, activeView && activeView.id !== itemViewOf(collection, item)?.id ? activeView.id : null)}
+                label={activeView && activeView.id !== itemViewOf(collection, item)?.id ? `${title} / ${activeView.name}` : title}
+                onError={(e) => setError(errorMessage(e))}
+              />
               {/* Metadata lives in a popover; more facts about the item can be added to its list. */}
               <ToolbarPopover label="Details" icon={Information} fit onOpenChange={panels.onOpenChange}>
                 <dl className="item-info">
@@ -915,7 +923,7 @@ function ItemPageBlock({
       </section>
     );
   }
-  const Content = collection.virtual === "backlinks" ? BacklinksBlockContent : ItemPageBlockContent;
+  const Content = collection.virtual === "backlinks" ? BacklinksBlockContent : collection.listOf ? ListBlockContent : ItemPageBlockContent;
   return (
     <Content
       key={collection.id}
@@ -951,6 +959,11 @@ function ItemPageBlockContent(props: ContentProps) {
 function BacklinksBlockContent(props: ContentProps) {
   const data = useBacklinkData(props.page);
   return <PageBlockView {...props} data={data} />;
+}
+
+/** A block of a list field's entries (domain/listEntries.ts): made from the items in the shared cache. */
+function ListBlockContent(props: ContentProps) {
+  return <ListData list={props.collection}>{(data) => <PageBlockView {...props} data={data} />}</ListData>;
 }
 
 /** The block with its collection's data: normalized for it, under the page-wide filter's rules for its fields. */
@@ -1257,7 +1270,7 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, fixed,
   }
 
   // Lists edit one item at a time, in place (ListField saves each change itself).
-  if (field.kind === "checklist" || field.kind === "string_list" || field.kind === "item_list") {
+  if (field.kind === "checklist" || field.kind === "string_list" || field.kind === "number_list" || field.kind === "item_list") {
     return <ListField field={field} value={value} readOnly={readOnly} refs={refs} onSave={onSave} />;
   }
 

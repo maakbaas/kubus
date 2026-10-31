@@ -20,6 +20,7 @@ import { upload, uploadConfig, type Uploader } from "@milkdown/kit/plugin/upload
 import { InputRule } from "@milkdown/kit/prose/inputrules";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
+import { liftTarget } from "@milkdown/kit/prose/transform";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $inputRule, $prose, callCommand } from "@milkdown/kit/utils";
 import { prism } from "@milkdown/plugin-prism";
@@ -69,6 +70,47 @@ const tabAddsRow = $prose(
           if (!callCommand(addRowAfterCommand.key)(ctx)) return false;
           goToNextCell(1)(view.state, view.dispatch);
           return true;
+        },
+      },
+    }),
+);
+
+/**
+ * Backspace at the start of a styled block makes it plain in one press: a heading (of any level) or
+ * a code block becomes a paragraph, a paragraph in a quote comes out of it. A DOM keydown handler,
+ * so it runs before the presets' keymaps (the heading one steps down a level per press).
+ */
+const backspaceUnstyles = $prose(
+  () =>
+    new Plugin({
+      props: {
+        handleDOMEvents: {
+          keydown(view, event) {
+            if (event.key !== "Backspace" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
+            const { state } = view;
+            const { $from, empty } = state.selection;
+            if (!empty || $from.parentOffset !== 0 || !$from.parent.isTextblock) return false;
+            const block = $from.parent;
+            const { paragraph, hardbreak } = state.schema.nodes;
+            let tr = null;
+            if (block.type.name === "heading") tr = state.tr.setBlockType($from.pos, $from.pos, paragraph);
+            else if (block.type.name === "code_block") {
+              // Its lines stay lines: hard breaks in the paragraph.
+              const lines = block.textContent.split("\n");
+              const content = lines.flatMap((line, i) => [...(i > 0 && hardbreak ? [hardbreak.create()] : []), ...(line ? [state.schema.text(line)] : [])]);
+              const at = $from.before();
+              tr = state.tr.replaceWith(at, at + block.nodeSize, paragraph.create(null, content));
+              tr.setSelection(TextSelection.create(tr.doc, at + 1));
+            } else if ($from.depth >= 2 && $from.node(-1).type.name === "blockquote") {
+              const range = $from.blockRange();
+              const target = range && liftTarget(range);
+              if (range && target != null) tr = state.tr.lift(range, target);
+            }
+            if (!tr) return false;
+            event.preventDefault();
+            view.dispatch(tr.scrollIntoView());
+            return true;
+          },
         },
       },
     }),
@@ -992,6 +1034,7 @@ function EditorSurface({
         })
         .use(commonmark)
         .use(gfm)
+        .use(backspaceUnstyles)
         .use(taskToggle)
         .use(tabAddsRow)
         .use(linkInputRule)

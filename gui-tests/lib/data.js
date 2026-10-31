@@ -18,7 +18,7 @@
 //                   (a block filter value "$item.@key": the page item's field by key)
 //                   (a block's `collection` is a collection key, or the id of a virtual collection: "$backlinks")
 //                   itemViews?: [{ name, layout, fullWidth? }] }],
-//   bookmarks: [{ kind: "item"|"view", collection, item?, view?, label }],
+//   bookmarks: [{ kind: "item"|"view"|"dashboard", collection?, item?, view?, dashboard?, tab?, label }] (stored as links),
 //   prefs: { localStorageKey: value },
 // }
 // Values: plain values as stored; { ref: "collKey/itemKey" } for an item field, { refs: [...] }
@@ -163,12 +163,11 @@ async function __seedInPage(spec) {
     }
   }
   for (const b of spec.bookmarks || []) {
-    if (b.kind === "dashboard") {
-      await repo.addBookmark("dashboard", ids.dashboards[b.dashboard], ids.dashboardViews[b.tab], b.label, "default");
-      continue;
-    }
-    const target = b.kind === "item" ? ids.items[b.item] : ids.views[b.view];
-    await repo.addBookmark(b.kind, ids.collections[b.collection], target, b.label, "default");
+    // A bookmark is a stored link (domain/bookmarks.ts).
+    const link = b.kind === "dashboard" ? `#/dashboards/${ids.dashboards[b.dashboard]}?view=${ids.dashboardViews[b.tab]}`
+      : b.kind === "item" ? `#/collections/${ids.collections[b.collection]}/items/${ids.items[b.item]}`
+      : `#/collections/${ids.collections[b.collection]}/items?view=${ids.views[b.view]}`;
+    await repo.addBookmark(link, b.label, "default");
   }
   for (const [k, v] of Object.entries(spec.prefs || {})) localStorage.setItem(k, JSON.stringify(v));
   return ids;

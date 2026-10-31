@@ -55,7 +55,7 @@ interface Props {
 /** The page's fields whose values a rule on a field of this kind compares with (same kind; text with text). */
 const TEXT_KINDS: FieldKind[] = ["string", "markdown", "html", "ai", "string_list", "checklist"];
 function comparablePageFields(kind: FieldKind, page: Collection): FieldDef[] {
-  const kinds: FieldKind[] = TEXT_KINDS.includes(kind) ? ["string", "ai"] : kind === "number" || kind === "date" || kind === "datetime" || kind === "checkbox" ? [kind] : [];
+  const kinds: FieldKind[] = TEXT_KINDS.includes(kind) ? ["string", "ai"] : kind === "number_list" ? ["number"] : kind === "number" || kind === "date" || kind === "datetime" || kind === "checkbox" ? [kind] : [];
   return page.fields.filter((f) => kinds.includes(f.kind));
 }
 
@@ -108,7 +108,7 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
       labelText="Value"
       hideLabel
       size="sm"
-      inputMode={field.kind === "number" ? "decimal" : undefined}
+      inputMode={field.kind === "number" || field.kind === "number_list" ? "decimal" : undefined}
       placeholder={field.kind === "checkbox" ? "true or false" : date ? "yyyy-mm-dd" : "Value"}
       value={rule.value}
       helperText={note.helper}

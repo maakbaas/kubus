@@ -11,17 +11,29 @@ const isExternal = (text: string) => (/^[a-z][a-z0-9+.-]*:/i.test(text) && !text
  * The link dialog's URL field with the link picker's options (LinkPicker) under it while a page of
  * the app is typed: ↑ ↓ move, Enter or Tab choose, Escape closes the list (not the dialog), a click
  * chooses. Choosing writes the page's link in its name form (`toShown`), stored by id on Apply.
+ * The New bookmark dialog uses it too: only the pages it can bookmark (`filter`), and a pick is
+ * also handed over (`onPick`).
  */
 export function LinkTargetInput({
   id,
   value,
   onChange,
   toShown,
+  labelText = "URL",
+  placeholder = "https:// or a page: books/reading-list, book/dune#author",
+  filter,
+  onPick,
 }: {
   id: string;
   value: string;
   onChange(value: string): void;
   toShown(href: string): Promise<string>;
+  labelText?: string;
+  placeholder?: string;
+  /** Only these options are offered. */
+  filter?(target: LinkTarget): boolean;
+  /** Told of the option picked (after the field shows its link). */
+  onPick?(target: LinkTarget): void;
 }) {
   const { search, reset } = useLinkTargets();
   const [targets, setTargets] = useState<LinkTarget[]>([]);
@@ -38,10 +50,10 @@ export function LinkTargetInput({
       return;
     }
     let current = true;
-    search(query, { items: true, limit: 30 }).then(
+    search(query, { items: true, limit: filter ? 100 : 30 }).then(
       (found) => {
         if (!current) return;
-        setTargets(found);
+        setTargets(filter ? found.filter(filter).slice(0, 30) : found);
         setActive(0);
       },
       () => current && setTargets([]),
@@ -49,20 +61,21 @@ export function LinkTargetInput({
     return () => {
       current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, typing, search]);
   useEffect(() => reset, [reset]);
 
   const pick = (t: LinkTarget) => {
     setTyping(false);
-    toShown(t.href).then(onChange, () => onChange(t.href));
+    toShown(t.href).then(onChange, () => onChange(t.href)).finally(() => onPick?.(t));
   };
   return (
     <div className="link-target-input">
       <TextInput
         size="sm"
         id={id}
-        labelText="URL"
-        placeholder="https:// or a page: books/reading-list, book/dune#author"
+        labelText={labelText}
+        placeholder={placeholder}
         autoComplete="off"
         value={value}
         onChange={(e) => {

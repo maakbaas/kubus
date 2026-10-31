@@ -98,31 +98,30 @@ describe.skipIf(!ADMIN)("the server's database", () => {
     expect((await pool.query("SELECT name, icon FROM spaces")).rows).toEqual([{ name: "Office", icon: "Briefcase" }]);
   });
 
-  it("makes the dashboards' tables and the bookmarks' dashboard column by themselves (sync version 3), typed", async () => {
-    await start();
-    await pool.query("DROP TABLE dashboards, dashboard_views; ALTER TABLE bookmarks DROP COLUMN dashboard_id"); // as a server of version 2 left it
-    await start();
-    const columns = await pool.query<{ table_name: string; column_name: string; data_type: string }>(
-      `SELECT table_name, column_name, data_type FROM information_schema.columns
-        WHERE (table_name IN ('dashboards', 'dashboard_views') AND column_name IN ('space_ids', 'config', 'position', 'is_default', 'updated_at'))
-           OR (table_name = 'bookmarks' AND column_name IN ('dashboard_id', 'collection_id'))
-        ORDER BY table_name, column_name`,
-    );
-    expect(columns.rows.map((c) => `${c.table_name}.${c.column_name} ${c.data_type}`)).toEqual([
-      "bookmarks.collection_id text", "bookmarks.dashboard_id text",
-      "dashboard_views.config jsonb", "dashboard_views.is_default integer", "dashboard_views.position integer", "dashboard_views.updated_at timestamp with time zone",
-      "dashboards.position integer", "dashboards.space_ids jsonb", "dashboards.updated_at timestamp with time zone",
-    ]);
+  it("turns the bookmarks of a server before sync version 4 into links (migration 1), and refuses older devices", async () => {
+    await start(MIGRATIONS);
+    // As a server of sync version 3 left them: a kind and ids, no link, migration 1 not had.
+    await pool.query(`DELETE FROM schema_migrations WHERE version = 1;
+      ALTER TABLE bookmarks DROP COLUMN link, ADD COLUMN kind text, ADD COLUMN collection_id text, ADD COLUMN target_id text, ADD COLUMN dashboard_id text`);
     const ts = "2026-10-01T00:00:00.000Z";
-    await sync({
-      dashboards: [{ id: "d", name: "Home", icon: null, description: "", space_ids: '["default"]', position: 0, created_at: ts, updated_at: ts, deleted_at: null }],
-      dashboard_views: [{ id: "v", dashboard_id: "d", space_id: "default", name: "Tab", config: '{"filters":[],"blocks":[]}', position: 0, is_default: 1, created_at: ts, updated_at: ts, deleted_at: null }],
-      bookmarks: [{ id: "b", kind: "dashboard", collection_id: null, dashboard_id: "d", space_id: "default", target_id: "v", label: "Home / Tab", position: 0, created_at: ts, updated_at: ts, deleted_at: null }],
-    });
-    expect((await pool.query("SELECT b.label, v.name FROM bookmarks b JOIN dashboard_views v ON v.id = b.target_id")).rows).toEqual([{ label: "Home / Tab", name: "Tab" }]);
-    // A device of version 2 is refused: nothing it sends is written.
-    expect(await sync({ dashboards: [{ id: "x", name: "Old" }] }, { version: 2 })).toMatchObject({ outdated: { update: "app", version: 3 } });
-    expect((await pool.query("SELECT id FROM dashboards")).rows).toEqual([{ id: "d" }]);
+    await pool.query(
+      `INSERT INTO bookmarks (id, kind, collection_id, dashboard_id, space_id, target_id, label, position, created_at, updated_at) VALUES
+        ('b1', 'item', 'c', NULL, 'default', 'i', 'Dune', 0, $1, $1),
+        ('b2', 'view', 'c', NULL, 'default', 'v', 'Books / All', 1, $1, $1),
+        ('b3', 'dashboard', NULL, 'd', 'default', 't', 'Home / Daily', 2, $1, $1)`,
+      [ts],
+    );
+    await start(MIGRATIONS);
+    expect((await pool.query("SELECT id, link, label FROM bookmarks ORDER BY position")).rows).toEqual([
+      { id: "b1", link: "#/collections/c/items/i", label: "Dune" },
+      { id: "b2", link: "#/collections/c/items?view=v", label: "Books / All" },
+      { id: "b3", link: "#/dashboards/d?view=t", label: "Home / Daily" },
+    ]);
+    const old = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'bookmarks' AND column_name IN ('kind', 'collection_id', 'target_id', 'dashboard_id')");
+    expect(old.rows).toEqual([]);
+    // A device of an older version is refused: nothing it sends is written.
+    expect(await sync({ bookmarks: [{ id: "x", label: "Old" }] }, { version: SYNC_VERSION - 1 })).toMatchObject({ outdated: { update: "app", version: SYNC_VERSION } });
+    expect((await pool.query("SELECT count(*)::int AS n FROM bookmarks")).rows).toEqual([{ n: 3 }]);
   });
 
   it("records every migration again after a wipe, dropping the server's settings and API tokens", async () => {

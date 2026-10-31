@@ -146,6 +146,78 @@ INSERT OR IGNORE INTO block_file_uses (file_id, owner_id)
 `);
     },
   },
+  {
+    version: 5,
+    description: "bookmarks hold a link (any page a link can name: a field, a block, an item under an item view, …) instead of a kind and ids",
+    // Each side converts its own copy (the server's migration 1 does the same to its rows, to the same text): nothing is queued.
+    up: `
+CREATE TABLE bookmarks_new (
+  id         TEXT PRIMARY KEY,
+  space_id   TEXT NOT NULL,
+  link       TEXT NOT NULL,
+  label      TEXT NOT NULL,
+  position   INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
+INSERT INTO bookmarks_new (id, space_id, link, label, position, created_at, updated_at, deleted_at)
+  SELECT id, space_id,
+         CASE kind
+           WHEN 'item' THEN '#/collections/' || collection_id || '/items/' || target_id
+           WHEN 'view' THEN '#/collections/' || collection_id || '/items?view=' || target_id
+           ELSE '#/dashboards/' || dashboard_id || '?view=' || target_id
+         END,
+         label, position, created_at, updated_at, deleted_at
+    FROM bookmarks;
+DROP TABLE bookmarks;
+ALTER TABLE bookmarks_new RENAME TO bookmarks;
+CREATE INDEX idx_bookmarks_link ON bookmarks(link);
+`,
+  },
+  {
+    version: 6,
+    description: "fields may be lists of numbers (kind number_list)",
+    // A CHECK changes: the table is rebuilt (SQLite's 12 steps). item_links' triggers on field_values read `fields`: dropped
+    // first and made again as migration 2 made them, so the rename doesn't trip over them. Its rows are copied as they are.
+    up: `
+DROP TRIGGER item_links_insert;
+DROP TRIGGER item_links_update;
+CREATE TABLE fields_new (
+  id             TEXT PRIMARY KEY,
+  collection_id  TEXT NOT NULL REFERENCES collections(id),
+  name           TEXT NOT NULL,
+  kind           TEXT NOT NULL CHECK (kind IN (
+                   'string', 'markdown', 'html', 'number', 'date', 'datetime', 'checkbox', 'image',
+                   'item', 'string_list', 'number_list', 'checklist', 'item_list', 'component', 'ai')),
+  target_collection_id TEXT REFERENCES collections(id),
+  component_id   TEXT REFERENCES components(id),
+  choice_filter  TEXT,
+  toggle_icon    TEXT,
+  strike_through INTEGER,
+  code           TEXT,
+  output         TEXT,
+  frame_ratio    TEXT,
+  source_column  TEXT,
+  position       INTEGER NOT NULL DEFAULT 0,
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL,
+  deleted_at     TEXT,
+  CHECK ((kind IN ('item', 'item_list')) = (target_collection_id IS NOT NULL))
+);
+INSERT INTO fields_new (id, collection_id, name, kind, target_collection_id, component_id, choice_filter, toggle_icon, strike_through,
+                        code, output, frame_ratio, source_column, position, created_at, updated_at, deleted_at)
+  SELECT id, collection_id, name, kind, target_collection_id, component_id, choice_filter, toggle_icon, strike_through,
+         code, output, frame_ratio, source_column, position, created_at, updated_at, deleted_at
+    FROM fields;
+DROP TABLE fields;
+ALTER TABLE fields_new RENAME TO fields;
+CREATE INDEX idx_fields_collection ON fields(collection_id);
+CREATE INDEX idx_fields_target ON fields(target_collection_id);
+CREATE TRIGGER item_links_insert AFTER INSERT ON field_values WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying') ${ITEM_LINKS_TRIGGER}
+CREATE TRIGGER item_links_update AFTER UPDATE ON field_values WHEN NOT EXISTS (SELECT 1 FROM meta WHERE key = 'sync_applying') ${ITEM_LINKS_TRIGGER}
+`,
+  },
 ];
 
 /** block_file_uses' triggers on one owner table (schema.sql): its blocks' JSON column. Frozen with migration 4. */

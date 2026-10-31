@@ -80,12 +80,12 @@ is what this split avoids. Keep them current when behaviour changes.
 | Collection | `Collection` / `collections`                |
 | Item       | `Item` / `items`                            |
 | Field      | `FieldDef` / `fields`                       |
-| View       | collection view: `CollectionView` / `views`; item view: `ItemView` / `collections.item_views` |
-| Block      | `ViewBlock` (in a view's config, an item view's layout, a dashboard tab's config); its kind: "Show as" / `BlockTypeDefinition` |
+| View       | collection view: `CollectionView` / `views`; item view: `ItemView` / `collections.item_views`; dashboard view: `DashboardView` / `dashboard_views` |
+| Block      | `ViewBlock` (in a view's config, an item view's layout, a dashboard view's config); its kind: "Show as" / `BlockTypeDefinition` |
 | Layout     | `FieldLayout` (a block's fields), `ItemLayout` (the fields and blocks of an item view) |
 | Component  | `Component` / `components`                  |
 | Space      | `Space` / `spaces`                          |
-| Dashboard  | `Dashboard` / `dashboards`; its tabs (UI "Tab") `DashboardView` / `dashboard_views` |
+| Dashboard  | `Dashboard` / `dashboards`; its views are dashboard views |
 
 A Collection defines fields and holds its items (Books); an Item is one of them (a particular
 book). "View" is both how a collection's items are listed (collection view: its blocks) and how
@@ -94,7 +94,7 @@ one item's page looks (item view, whose layout is its fields and blocks); say "c
 component) inside a view. A Component is rendering ({{ }} code over the built-in $ names), shared
 (reusable, by name) or local (written in one place): a field, block or static component by the
 built-ins it uses; with "AI prompt" its text is a prompt for an AI field.
-A Dashboard is a page of blocks of any collections, belonging to none; its tabs are views per space (a
+A Dashboard is a page of blocks of any collections, belonging to none; its views are per space (a
 space without its own shows copies of the first space's). A Space keeps items apart while sharing collections. A field's own kind is called "Field type" in the UI.
 
 ## Architecture
@@ -134,6 +134,10 @@ headless device that answers the server's HTTP API (bundled into `server/headles
   item-page blocks and read-only through the same guard (`isReadOnly`); its rows are the items linking to the page's item, read from the
   synced `item_links` index (docs/data-model.md "Item links": one row per value with the value's own `updated_at`, kept by triggers on
   `field_values`, healed after a first download from a server filled before the table existed). Keep `item_links` in step with what counts as a link (`linkTargets`).
+- **A list field's entries are a virtual collection too** (`domain/listEntries.ts`, `$list:<field id>` in `ViewBlock.collectionId`,
+  `Collection.listOf`): one row per entry of every item, made from the item cache when shown (`views/useListData.tsx` `ListData`), resolved by
+  `findCollection`; read-only but for ticking a checklist's Done (`entryActions` writes the entry back into its item). Offered in the Collection
+  pickers of item page, collection view (its own list fields) and dashboard blocks (alone). docs/features.md "A list field's entries in a block".
 - **A dashboard's block may list several collections** (`ViewBlock.collectionIds`, native and remote mixed; only on a dashboard, place
   "dashboard": a collection view's block lists the view's collection, an item page's one collection or Backlinks; the API answers 400 for
   several there): `domain/mergedCollection.ts` makes one read-only

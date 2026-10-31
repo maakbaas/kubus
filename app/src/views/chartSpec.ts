@@ -88,9 +88,13 @@ const COMPACT_REM = 4;
  * What every chart shares: its theme and height (the most it takes: ChartCanvas fits a pie or gauge
  * to less), no toolbar, the legend as set ("auto": with more than one series or part, `several`).
  */
+/** Whether the chart shows its legend: as set ("auto": with more than one series or part), never on a compact chart. */
+const legendShown = (options: ChartOptions, several: boolean) =>
+  !(isXY(options.chart) && options.compact) && (options.legend === "auto" ? several : options.legend === "show");
+
 function base(options: ChartOptions, theme: string, several: boolean, extra: Record<string, unknown> = {}): Record<string, unknown> {
   const compact = isXY(options.chart) && options.compact;
-  const legend = !compact && (options.legend === "auto" ? several : options.legend === "show");
+  const legend = legendShown(options, several);
   return {
     theme,
     height: compact ? `${COMPACT_REM}rem` : blockHeightCss(options.height, options.aspect),
@@ -106,12 +110,19 @@ function base(options: ChartOptions, theme: string, several: boolean, extra: Rec
  * A meter's height in rem. Carbon draws a label row above the bar (its name and total, and a spacer): with
  * `meter.showLabels` off the bar would keep its place against the legend only if the row's height, measured
  * in the GUI suite (27.33px for one value's label, 37.33px for a proportional meter's with its breakdown),
- * were taken off, so it is.
+ * were taken off, so it is. Likewise the legend's row above or below the bar (`legendRow`): one line of
+ * legend items (1rem: Carbon's 16px line, its items' 5px margins cancelled by the list's -5px) and the 24px
+ * spacer Carbon puts between legend and graph; a legend left or right of the bar takes no height.
  */
 export const METER_LABEL_ROW_REM = { one: 27.33 / 16, proportional: 37.33 / 16 };
-export function meterHeight(rem: number, row: keyof typeof METER_LABEL_ROW_REM, showLabel: boolean): string {
-  return `${showLabel ? rem : Math.round((rem - METER_LABEL_ROW_REM[row]) * 1000) / 1000}rem`;
+export const METER_LEGEND_ROW_REM = (16 + 24) / 16;
+export function meterHeight(rem: number, row: keyof typeof METER_LABEL_ROW_REM, showLabel: boolean, legendRow = true): string {
+  const height = rem - (showLabel ? 0 : METER_LABEL_ROW_REM[row]) - (legendRow ? 0 : METER_LEGEND_ROW_REM);
+  return `${Math.round(height * 1000) / 1000}rem`;
 }
+/** Whether a meter's legend takes a row (shown, above or below the bar). */
+const meterLegendRow = (options: ChartOptions, several: boolean) =>
+  legendShown(options, several) && (options.legendPosition === "top" || options.legendPosition === "bottom");
 
 const DATE_FORMAT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
 
@@ -401,7 +412,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
           chart: "MeterChart",
           // The bar is in %; the label gives the value itself against its total.
           data: [{ group: label, value: clampPercent(percent) }],
-          options: base(options, theme, false, { height: meterHeight(5, "one", options.showLabel), meter: { showLabels: options.showLabel, ...(ranges && { status: { ranges } }) } }),
+          options: base(options, theme, false, { height: meterHeight(5, "one", options.showLabel, meterLegendRow(options, false)), meter: { showLabels: options.showLabel, ...(ranges && { status: { ranges } }) } }),
           format,
         };
       }
@@ -415,7 +426,7 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
         chart: "MeterChart",
         data: parts.parts.map((p) => ({ group: p.name, value: p.value })),
         options: base(options, theme, true, {
-          height: meterHeight(6, "proportional", options.showLabel),
+          height: meterHeight(6, "proportional", options.showLabel, meterLegendRow(options, true)),
           tooltip: tooltip(options, input),
           meter: {
             showLabels: options.showLabel,

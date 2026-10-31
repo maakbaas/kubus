@@ -353,3 +353,22 @@ describe("the lists a query works from", () => {
     expect(filterFields(collection()).map((f) => f.id).slice(-3)).toEqual(["$created", "$updated", "$id"]);
   });
 });
+
+describe("a list of numbers", () => {
+  const scores = blankField("sc", "Scores", "number_list");
+  const things: Collection = { ...collection(), fields: [fields.s, scores] };
+  const rows: Item[] = [
+    { id: "a", collectionId: "c", spaceId: "default", values: { s: "A", sc: [3, 4] }, createdAt: "", updatedAt: "" },
+    { id: "b", collectionId: "c", spaceId: "default", values: { s: "B", sc: [10] }, createdAt: "", updatedAt: "" },
+    { id: "e", collectionId: "c", spaceId: "default", values: { s: "E" }, createdAt: "", updatedAt: "" },
+  ];
+  const titles = (q: Partial<ViewQuery>) => applyQuery(things, rows, { filters: [], sort: [], groupBy: null, ...q }, ctx).groups.map((g) => [g.label, g.items.map((i) => i.values.s)]);
+
+  it("matches by an entry, sorts by the sum of its entries and groups by each entry", () => {
+    expect(operatorsFor("number_list").map((o) => o.id)).toContain("is");
+    expect(titles({ filters: [{ id: "r", fieldId: "sc", operator: "is", value: "4" }] })).toEqual([["", ["A"]]]);
+    expect(titles({ filters: [{ id: "r", fieldId: "sc", operator: "isNot", value: "4" }] })).toEqual([["", ["B", "E"]]]);
+    expect(titles({ sort: [{ fieldId: "sc", direction: "desc" }] })[0][1].slice(0, 2)).toEqual(["B", "A"]);
+    expect(groupKeysOf(scores, rows[0], ctx).map((k) => k.key)).toEqual(["3", "4"]);
+  });
+});

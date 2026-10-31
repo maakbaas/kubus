@@ -3,7 +3,7 @@
 // Readable in the database and in exports, searchable by its text, and the same notation the
 // Markdown fields use for their task lists.
 
-import type { FieldValue } from "./model";
+import { stringList, type FieldValue } from "./model";
 
 export interface ChecklistItem {
   text: string;
@@ -23,7 +23,7 @@ export const itemString = (item: ChecklistItem) => `[${item.done ? "x" : " "}] $
 
 /** A checklist value's items ([] when empty). */
 export const checklistItems = (value: FieldValue | undefined): ChecklistItem[] =>
-  Array.isArray(value) ? value.map(parseItem) : [];
+  stringList(value).map(parseItem);
 
 /** "2/5": done of all; "" when empty. */
 export function checklistProgress(value: FieldValue | undefined): string {

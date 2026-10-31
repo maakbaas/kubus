@@ -8,6 +8,7 @@ import type { Component } from "../../domain/components";
 import type { ItemView } from "../../domain/fieldLayout";
 import { collectionDraft, newId, type Collection, type FieldDef, type FieldKind } from "../../domain/model";
 import { rowItemId } from "../../domain/sources";
+import { collectionViewLink, itemLink } from "../../domain/bookmarks";
 import type { DataChange } from "../repository";
 
 // Each test builds devices and a database: on a busy machine that outlasts the default 5 s.
@@ -78,7 +79,7 @@ describe("deleting a space", () => {
     const ts = new Date().toISOString();
     await repo.saveView({ ...all, id: newId(), spaceId: "work", name: "Work view", createdAt: ts, updatedAt: ts });
     const id = await repo.createItem(book, {}, "work");
-    await repo.addBookmark("item", book.id, id, "It", "work");
+    await repo.addBookmark(itemLink(book.id, id), "It", "work");
     changes = [];
     await repo.deleteSpace("work");
     expect(changes).toEqual([
@@ -178,13 +179,14 @@ describe("saving a collection", () => {
 });
 
 describe("deleting a collection", () => {
-  it("soft-deletes its items, fields and views, and hides its bookmarks", async () => {
+  it("soft-deletes its items, fields and views, and deletes its bookmarks", async () => {
     const book = await collection("Book", [field("Title")]);
     const id = await repo.createItem(book, {}, "default");
-    await repo.addBookmark("item", book.id, id, "It", "default");
+    await repo.addBookmark(itemLink(book.id, id), "It", "default");
+    await repo.addBookmark(`#/collections/${book.id}/items`, "Books", "default");
     changes = [];
     await repo.deleteCollection(book.id);
-    expect(changes).toEqual([{ scope: "collections" }, { scope: "items", collectionId: book.id }, { scope: "views", collectionId: book.id }]);
+    expect(changes).toEqual([{ scope: "collections" }, { scope: "items", collectionId: book.id }, { scope: "views", collectionId: book.id }, { scope: "bookmarks" }]);
     expect(await repo.listCollections()).toEqual([]);
     expect(await repo.listAllViews()).toEqual([]);
     expect(await repo.listBookmarks("default")).toEqual([]);
@@ -329,7 +331,7 @@ describe("moving and pinning items", () => {
     const book = await collection("Book", [field("Title")]);
     await repo.saveSpace({ id: "work", name: "Work", icon: null });
     const id = await repo.createItem(book, {}, "default");
-    await repo.addBookmark("item", book.id, id, "Book", "default");
+    await repo.addBookmark(itemLink(book.id, id), "Book", "default");
     const before = (await repo.getItem(book, id))!;
     await new Promise((r) => setTimeout(r, 5));
     await repo.moveItem(id, "default");
@@ -417,42 +419,64 @@ describe("collection views", () => {
 });
 
 describe("bookmarks and what they lead to", () => {
-  it("disappear from the list when their item or view is deleted", async () => {
+  it("are deleted with their item or view", async () => {
     const book = await collection("Book", [field("Title")]);
     const id = await repo.createItem(book, {}, "default");
     const [all] = await repo.listViews(book.id, "default");
-    await repo.addBookmark("item", book.id, id, "Item", "default");
-    await repo.addBookmark("view", book.id, all.id, "View", "default");
-    expect((await repo.listBookmarks("default")).map((b) => [b.kind, b.label, b.position])).toEqual([["item", "Item", 0], ["view", "View", 1]]);
+    await repo.addBookmark(itemLink(book.id, id), "Item", "default");
+    await repo.addBookmark(collectionViewLink(book.id, all.id), "View", "default");
+    expect((await repo.listBookmarks("default")).map((b) => [b.label, b.position])).toEqual([["Item", 0], ["View", 1]]);
+    changes = [];
     await repo.deleteItem(id);
-    expect((await repo.listBookmarks("default")).map((b) => b.kind)).toEqual(["view"]);
+    expect(changes).toContainEqual({ scope: "bookmarks" });
+    expect((await repo.listBookmarks("default")).map((b) => b.label)).toEqual(["View"]);
     await repo.deleteView(all.id);
     expect(await repo.listBookmarks("default")).toEqual([]);
+    // Deleted, not hidden: the rows are tombstones that sync sends.
+    expect(await sql("SELECT count(*) AS n FROM bookmarks WHERE deleted_at IS NOT NULL")).toEqual([{ n: 2 }]);
+  });
+
+  it("of a field or a block are deleted when it is removed, the others stay", async () => {
+    const title = field("Title");
+    const pages = field("Pages", "number");
+    const book = await collection("Book", [title, pages]);
+    const id = await repo.createItem(book, {}, "default");
+    const [all] = await repo.listViews(book.id, "default");
+    const blockId = all.blocks[0]?.id;
+    expect(blockId).toBeTruthy();
+    await repo.addBookmark(`${itemLink(book.id, id)}?field=${pages.id}`, "Pages", "default");
+    await repo.addBookmark(`${itemLink(book.id, id)}?field=${title.id}`, "Title", "default");
+    await repo.addBookmark(`${collectionViewLink(book.id, all.id)}&block=${blockId}`, "Block", "default");
+    const now = (await repo.listCollections()).find((c) => c.id === book.id)!;
+    await repo.saveCollection({ ...now, fields: now.fields.filter((f) => f.id !== pages.id) }, "default");
+    expect((await repo.listBookmarks("default")).map((b) => b.label)).toEqual(["Title", "Block"]);
+    await repo.saveView({ ...all, blocks: [] });
+    expect((await repo.listBookmarks("default")).map((b) => b.label)).toEqual(["Title"]);
   });
 
   it("are numbered per space, and removing one leaves a gap that new ones go after", async () => {
     const book = await collection("Book", [field("Title")]);
     await repo.saveSpace({ id: "work", name: "Work", icon: null });
-    const a = await repo.createItem(book, {}, "default");
-    const b = await repo.createItem(book, {}, "default");
-    await repo.addBookmark("item", book.id, a, "A", "default");
-    await repo.addBookmark("item", book.id, b, "B", "default");
-    await repo.addBookmark("item", book.id, a, "A in work", "work");
+    const a = itemLink(book.id, await repo.createItem(book, {}, "default"));
+    const b = itemLink(book.id, await repo.createItem(book, {}, "default"));
+    await repo.addBookmark(a, "A", "default");
+    await repo.addBookmark(b, "B", "default");
+    await repo.addBookmark(a, "A in work", "work");
     await repo.removeBookmark(a, "default");
-    await repo.addBookmark("item", book.id, a, "A again", "default");
+    await repo.addBookmark(a, "A again", "default");
     expect((await repo.listBookmarks("default")).map((x) => [x.label, x.position])).toEqual([["B", 1], ["A again", 2]]);
     expect((await repo.listBookmarks("work")).map((x) => [x.label, x.position])).toEqual([["A in work", 0]]);
   });
 
   it("report a relabel only when the label changes", async () => {
     const book = await collection("Book", [field("Title")]);
-    const id = await repo.createItem(book, {}, "default");
-    await repo.addBookmark("item", book.id, id, "Same", "default");
+    const link = itemLink(book.id, await repo.createItem(book, {}, "default"));
+    await repo.addBookmark(link, "Same", "default");
     changes = [];
-    await repo.relabelBookmark(id, "Same");
-    await repo.relabelBookmark("unknown", "x");
+    await repo.relabelBookmark(link, "Same");
+    await repo.relabelBookmark("#/unknown", "x");
     expect(changes).toEqual([]);
-    await repo.relabelBookmark(id, "New");
+    await repo.relabelBookmark(link, "New");
     expect(changes).toEqual([{ scope: "bookmarks" }]);
   });
 });
@@ -713,11 +737,12 @@ describe("remote collections", () => {
   it("keep a bookmark of a row (its id is a key: no stored item), until the collection goes", async () => {
     const people = await remote();
     const row = rowItemId("42");
-    await repo.addBookmark("item", people.id, row, "Ada", "default");
-    expect((await repo.listBookmarks("default")).map((b) => [b.targetId, b.label])).toEqual([[row, "Ada"]]);
-    await repo.removeBookmark(row, "default");
+    const link = itemLink(people.id, row);
+    await repo.addBookmark(link, "Ada", "default");
+    expect((await repo.listBookmarks("default")).map((b) => [b.link, b.label])).toEqual([[link, "Ada"]]);
+    await repo.removeBookmark(link, "default");
     expect(await repo.listBookmarks("default")).toEqual([]);
-    await repo.addBookmark("item", people.id, row, "Ada", "default");
+    await repo.addBookmark(link, "Ada", "default");
     await repo.deleteCollection(people.id);
     expect(await repo.listBookmarks("default")).toEqual([]);
   });

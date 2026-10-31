@@ -12,7 +12,7 @@ import {
 import { Add, TrashCan } from "@carbon/icons-react";
 import { itemString, parseItem, type ChecklistItem } from "../domain/checklist";
 import { formatDate, formatTime } from "../domain/fieldKinds";
-import type { FieldDef, FieldKind, FieldValue, Collection } from "../domain/model";
+import { stringList, type FieldDef, type FieldKind, type FieldValue, type Collection } from "../domain/model";
 import type { EditStart } from "./editStart";
 import { FieldLabel } from "./fieldKindIcons";
 import { ImageInput } from "./images";
@@ -44,9 +44,10 @@ export function toInputValue(kind: FieldKind, value: FieldValue | undefined): In
       return Number.isNaN(d.getTime()) ? "" : `${formatDate(d)}T${formatTime(d)}`;
     }
     case "string_list":
+    case "number_list":
     case "checklist":
     case "item_list":
-      return Array.isArray(value) ? value : [];
+      return stringList(value);
     case "string":
     case "markdown":
     case "html":
@@ -75,6 +76,12 @@ export function parseInputValue(kind: FieldKind, raw: InputValue): { value: Fiel
     case "string_list": {
       const items = withoutTrailingEmpty((raw as string[]).map((x) => x.trim()), (x) => x === "");
       return { value: items.length > 0 ? items : null };
+    }
+    case "number_list": {
+      const entries = withoutTrailingEmpty((raw as string[]).map((x) => x.trim()), (x) => x === "").filter((x) => x !== "");
+      const numbers = entries.map(Number);
+      if (numbers.some((n) => !Number.isFinite(n))) return { error: "Each entry is a number" };
+      return { value: numbers.length > 0 ? numbers : null };
     }
     case "checklist": {
       // Each item keeps its "[x] " / "[ ] " marker.
@@ -285,6 +292,7 @@ export function FieldInput({
     }
 
     case "string_list":
+    case "number_list":
       return (
         <ListInput<string>
           id={id}

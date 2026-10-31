@@ -3,7 +3,7 @@ import { Button, Checkbox, Dropdown, InlineNotification, MultiSelect, NumberInpu
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { groupsInApp, isReadOnly } from "../domain/sources";
-import { BACKLINKS_FIELDS, VIRTUAL_COLLECTIONS } from "../domain/backlinks";
+import { BACKLINKS_FIELDS, virtualCollections } from "../domain/backlinks";
 import { orderFields } from "../domain/fieldLayout";
 import { newId, pickableFields, titleFields, type Collection } from "../domain/model";
 import { placeProblem } from "../domain/components";
@@ -107,10 +107,18 @@ interface MenusProps {
 export function BlockMenus({ collection, home, block, refs, result, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange, row }: MenusProps) {
   const uid = useId();
   const { components, collections } = useStore();
-  // The virtual collections (Backlinks) are listed only here, among the page's block collections.
-  // The Backlinks collection can't be read together with others (its rows depend on the page's item).
-  const pageCollections = useMemo(() => (page ? [...collections, ...VIRTUAL_COLLECTIONS] : collections), [collections, page]);
   const dashboard = place === "dashboard";
+  // A collection view's block lists the view's collection, or the entries of one of its list fields.
+  const viewCollection = place === "collection" ? (collections.find((c) => c.id === (home.listOf?.collectionId ?? home.id)) ?? home) : null;
+  // The virtual collections are listed only here: on an item page Backlinks (its rows depend on the page's item) and the
+  // list fields' entries; on a dashboard the list fields' entries; on a collection view its own list fields' entries.
+  const pageCollections = useMemo(
+    () =>
+      viewCollection
+        ? [viewCollection, ...virtualCollections(collections, "collection", viewCollection)]
+        : [...collections, ...virtualCollections(collections, page ? "item" : "dashboard")],
+    [collections, page, viewCollection],
+  );
   // Several collections in one block are a dashboard's: elsewhere a block lists one.
   const chosen = useMemo(
     () => ((dashboard && block.collectionIds) || [block.collectionId ?? home.id]).flatMap((id) => pageCollections.filter((c) => c.id === id)),
@@ -134,7 +142,9 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
    * The collections the block lists now (an item page's block: one, Backlinks too; a dashboard's: one or several): other
    * collections' fields and filter don't apply, so it starts afresh (linked to the page's item where it can be).
    */
-  const pick = (list: Collection[]) => {
+  const pick = (picked: Collection[]) => {
+    // A list field's entries aren't read together with other collections: chosen with others, the one chosen last stays.
+    const list = picked.length > 1 && picked.some((c) => c.listOf) ? picked.filter((c) => !chosen.some((x) => x.id === c.id)).slice(-1) : picked;
     // Delete clears a Carbon multi-select: a block always lists at least one collection.
     if (list.length === 0 || (list.length === chosen.length && list.every((c) => chosen.some((x) => x.id === c.id)))) return;
     const ids = list.map((c) => c.id);
@@ -144,7 +154,9 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
     const start = (to: Collection) => (page ? newPageBlock(to, page, keep(to)) : normalizeBlock(to, newBlock(type.kind, keep(to).options)));
     if (list.length === 1) {
       const { id: _id, title: _title, ...fresh } = start(list[0]);
-      onSet({ ...fresh, collectionId: list[0].id, collectionIds: undefined, merges: undefined, groupOrder: undefined, groupDate: undefined });
+      // A collection view's own collection is no collection of the block's own.
+      const collectionId = viewCollection?.id === list[0].id ? null : list[0].id;
+      onSet({ ...fresh, collectionId, collectionIds: undefined, merges: undefined, groupOrder: undefined, groupDate: undefined });
       return;
     }
     const { collection: read } = listedCollection(home, { collectionIds: ids }, collections);
@@ -238,7 +250,8 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
       <ToolbarPopover label="Block settings" icon={Settings} width="narrow" onOpenChange={onOpenChange}>
         <div className="view-settings">
           {/* On a dashboard: one collection, or several read as one (native and remote ones mixed; their fields of one name
-              are one column). An item page's block picks one (Backlinks too); a collection view's lists the view's own. */}
+              are one column), or a list field's entries. An item page's block picks one (Backlinks, a list field's entries too); a
+              collection view's lists the view's own, or the entries of one of its list fields. */}
           {dashboard && (
             <MultiSelect<Collection>
               autoAlign
@@ -255,7 +268,7 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
               onChange={({ selectedItems }) => pick(selectedItems ?? [])}
             />
           )}
-          {page && (
+          {(page || (viewCollection && pageCollections.length > 1)) && (
             <Dropdown<Collection>
               autoAlign
               size="sm"
