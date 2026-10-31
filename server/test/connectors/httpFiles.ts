@@ -128,6 +128,8 @@ function send(dir: string, name: string, req: IncomingMessage, res: ServerRespon
     res.writeHead(200, headers);
     return void createReadStream(f.path, { highWaterMark: 16_384 }).pipe(res);
   }
-  res.writeHead(200, { ...headers, "Content-Length": f.size });
-  createReadStream(f.path).pipe(res);
+  // The bytes read now, with their own length: a stream opened later could read a file rewritten meanwhile (a test
+  // changing it), longer than the length said, and the rest would be taken for the next response on the connection.
+  const body = readFileSync(f.path);
+  res.writeHead(200, { ...headers, "Content-Length": body.length }).end(body);
 }
