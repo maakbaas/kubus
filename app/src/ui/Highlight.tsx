@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { Link } from "@carbon/react";
 import { splitWarnings } from "../domain/components";
-import { openExternal } from "../platform/openExternal";
+import { isOpenableUrl, openExternal } from "../platform/openExternal";
 import { isTag, splitTags, TAG_QUERY_END } from "../domain/tags";
 import { ComponentWarning } from "./ComponentWarning";
 import { TagChip } from "./TagChip";
@@ -30,11 +30,28 @@ export function splitMatches(text: string, re: RegExp): string[] {
   return parts;
 }
 
-/** Web addresses in plain text (http and https), without the punctuation that ends a sentence around them. */
-const URL_IN_TEXT = /\bhttps?:\/\/[^\s<>"]*[^\s<>"'.,;:!?)\]}]/gi;
+/**
+ * App links written without slashes (`spotify:album:…`, `mailto:…`, `tel:…`). Others count only as `scheme://…`
+ * (`obsidian://…`): any `word:text` would make "TODO:fix" a link.
+ */
+const BARE_SCHEMES = ["mailto", "tel", "sms", "spotify", "magnet", "geo", "facetime", "facetime-audio", "skype", "callto", "sip", "xmpp", "bitcoin", "maps"];
 
-/** Splits `text` into alternating [plain, url, plain, url, …] parts. */
-export const splitUrls = (text: string): string[] => splitMatches(text, new RegExp(URL_IN_TEXT));
+/**
+ * Links in plain text, without the punctuation that ends a sentence around them: web addresses, other apps' links
+ * (`scheme://…`, and the BARE_SCHEMES' without slashes).
+ */
+const URL_IN_TEXT = new RegExp(`\\b(?:[a-z][a-z0-9+.-]*:\\/\\/|(?:${BARE_SCHEMES.join("|")}):)[^\\s<>"]*[^\\s<>"'.,;:!?)\\]}]`, "gi");
+
+/** Splits `text` into alternating [plain, url, plain, url, …] parts; a link that may not be opened (javascript:, file:, …) stays text. */
+export function splitUrls(text: string): string[] {
+  const parts = splitMatches(text, new RegExp(URL_IN_TEXT));
+  const out: string[] = [parts[0]];
+  for (let i = 1; i < parts.length; i += 2) {
+    if (isOpenableUrl(parts[i])) out.push(parts[i], parts[i + 1]);
+    else out[out.length - 1] += parts[i] + parts[i + 1];
+  }
+  return out;
+}
 
 /**
  * Renders `text` with every case-insensitive occurrence of `query` marked, the warnings of
@@ -55,7 +72,7 @@ export function Highlight({
   /** False where `#` is no tag: code, a link's text. */
   tags?: boolean;
   /**
-   * Web addresses in it are links (opened outside the app): in values (text, list entries, AI and
+   * Web addresses and other apps' links in it are links (opened outside the app, or in the app the link is for): in values (text, list entries, AI and
    * component text), never in a title, which is a link to its item itself or is edited by a click.
    */
   links?: boolean;
