@@ -4628,11 +4628,13 @@ html[data-swiping] body {
 .swipe-hint[data-direction] {
   display: flex;
 }
+/* From half the safe area (a notch in landscape), so that at full travel (Workspace.tsx HINT_TRAVEL) its edge is halfway
+   between the screen's edge and the content, which starts after the whole safe area. */
 .swipe-hint[data-direction="back"] {
-  inset-inline-start: 0;
+  inset-inline-start: calc(env(safe-area-inset-left) / 2);
 }
 .swipe-hint[data-direction="forward"] {
-  inset-inline-end: 0;
+  inset-inline-end: calc(env(safe-area-inset-right) / 2);
 }
 .swipe-hint[data-leaving] {
   transition: transform 150ms ease-in, opacity 150ms ease-in;

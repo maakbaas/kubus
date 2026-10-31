@@ -145,8 +145,12 @@ const SWIPE_EDGE = 24;
 const SWIPE_DISTANCE = 64;
 /** A touch from the edge this far along it (px), mostly sideways, is a swipe: no press on what it started on. */
 const SWIPE_ENGAGE = 8;
-/** How far the swipe's arrow comes out of the edge at most (px), and its size (2.5rem). */
-const HINT_TRAVEL = 56;
+/**
+ * How far the swipe's arrow comes out of the edge at most (px), and its size (2.5rem): it stops with its edge halfway
+ * between the screen's edge and the page's content (a page's padding is 16px; in landscape the safe area beside a notch
+ * counts too: styles.css starts the arrow at half of it).
+ */
+const HINT_TRAVEL = 40 + 8;
 const HINT_SIZE = 40;
 
 /** The tabs of one space; remount it (key) for another space. */
