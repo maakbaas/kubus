@@ -332,6 +332,21 @@ What the app does, feature by feature (read the part you work on).
   (`FieldCollapse` context, read by `FieldLabel`, so view and edit mode look alike), stored right
   away with the item view's `Collapsed` (field ids among the block ids). The layout's name toggle
   (tag icon, `hiddenLabels`) also covers blocks there: it hides the block's header (its menus move to a "⋮" beside it).
+- **Linked blocks** (`views/LinkedBlock.tsx`, `domain/linkedBlocks.ts`; Show as "Linked block"): a block that shows another
+  block, of a collection view, an item's page or a dashboard's tab, as it is set up there: its collection, filter, sort,
+  fields, type and options, under that page's filter, and on an item page with that item as the page's item (its "this
+  item" filters and `$item`). So a chart is made once and shown on any page; a change to the original shows everywhere
+  it is linked. Its only setting is the link, written by name like any internal link and picked from the same list
+  (`books/reading-list#chart`, `book/dune#chart`, `dashboards/health#chart`; asked for in the block itself until set) and
+  stored by id (`options.href`, the stored form of links, so renames break nothing); its header takes the original's
+  name (`options.name`, kept as last shown) unless it has a title of its own. What is shown is read-only here: the
+  original's menus aren't offered (its settings are changed on the original, "Open original" in Block settings), a
+  Markdown block's text isn't edited through it (`useLinked`, `views/linkChain.ts`), and its groups collapse for the
+  time being only; values are edited in place where the original's page lets them be. The block is found by its id in
+  the view the link names, else the page's default one, else any of that page's views (a block moved to another view
+  keeps its id). A deleted original, item or view says so; a block linking to itself, or more than four linked blocks
+  inside one another, stops with a message (`linkProblem`). A link to a field (`book/dune#author`) isn't a block and is
+  refused, as is a block of a remote row's page. Nothing new is stored: the block is in its view's config like any other.
 - **Blocks side by side** (`domain/blockRows.ts`, `views/BlockRows.tsx`): a collection view's, an item page's or a
   dashboard tab's blocks stand in rows, with or without "Full width" (its 700px column is wide enough). Stored on the
   blocks, the list staying the page's order: `beside` (it joins the row of the block just before it; on an item page a

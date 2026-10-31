@@ -164,6 +164,8 @@ Extension points are registries, not special cases in pages:
   "Cover beside the text" puts the cover at the card's left instead of on top, at every width (a
   list row where one card fills the row)),
   `component` (`views/ComponentBlock.tsx`),
+  `linked` (`views/LinkedBlock.tsx`, `domain/linkedBlocks.ts`: another block shown as it is set up where it is; docs/features.md
+  "Linked blocks"),
   `map` (`views/MapView.tsx`: the items as dots on a vector map, MapLibre GL with OpenFreeMap's styles and tiles, the
   one thing the app loads from elsewhere; MapLibre is loaded on demand, `views/mapLibre.ts`, its worker bundled. An
   item's place is read from its fields, `domain/geo.ts`: Location is a text field or a component giving text with both
