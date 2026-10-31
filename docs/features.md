@@ -348,8 +348,8 @@ What the app does, feature by feature (read the part you work on).
   Once a collection has item views its item pages show them as tabs with "+", delete, star (default for all items) and,
   beside it as on a collection page, the bookmark (the item as the shown view shows it). The layout popover edits the
   shown view's layout, stored right away; changes to what its blocks show are unsaved, saved like
-  a collection page's views (Discard / Save changes beside the tabs, left of the bar's other buttons and
-  never in its "⋮" menu; "+" after the tabs makes a
+  a collection page's views (Save changes beside the tabs, left of the bar's other buttons and
+  never in its "⋮" menu; no Discard: a click on the view's tab, or leaving the page, shows it as saved; "+" after the tabs makes a
   new view of what is shown, unsaved changes included). A collection always has at least one item view:
   without stored ones it is a virtual "Default" (`withDefaultItemView`, id `default`), stored once
   changed; the last view can't be deleted. Both tab bars (collection page, item pages) are always

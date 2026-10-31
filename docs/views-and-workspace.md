@@ -326,7 +326,7 @@ Extension points are registries, not special cases in pages:
   with the collection in `saveCollection`; it can be renamed (view settings), edited, starred or deleted like
   any other; "+" adds one ("New", then "New 2", …) as a copy of what is shown, unsaved changes
   included (so it is also "save as new view"), and opens View settings with its name selected.
-  "+" sits after the last tab. The tab bar's right end holds the view's tools after Discard /
+  "+" sits after the last tab. The tab bar's right end holds the view's tools after
   Save, delete, star and bookmark: Search (opens a search bar below the tabs; closes when emptied
   or with Escape on an empty box; the blocks filter once typing pauses 150 ms, an emptied box at once; while it has text, a block listing items with none matching is
   left out, `BlockView`), Filter (the view's; on the filter bar instead while "Show filter bar" is on) and View settings (name, Show filter bar, Full width, Fields are editable, blocks);

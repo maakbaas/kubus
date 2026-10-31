@@ -2,7 +2,7 @@ import { isEmptyValue as isEmpty, type FilterRule } from "../domain/query";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
-import { Add, Checkmark, Code, Edit, Filter, Information, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
+import { Add, Checkmark, Code, Edit, Filter, Information, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Save } from "@carbon/icons-react";
 import { isFullWidth, movedId, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
@@ -589,13 +589,9 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
           {/* "+" takes the menu arrow's place; with the arrow it joins the icons at the right edge. */}
           {!clippedTabs && <span className="tab-menu">{addButton}</span>}
           <span className="views-bar__spacer" />
-          {/* Always in the bar, left of the other buttons (never in the "⋮" menu), as on collection
-              pages; held while a panel is open, so they appear once the panel closes. */}
-          {panels.hold("changed", changed) && (
-            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Discard changes" onClick={() => setDraft(null)}>
-              <Undo />
-            </IconButton>
-          )}
+          {/* Save, always in the bar, left of the other buttons (never in the "⋮" menu), as on collection pages; held
+              while a panel is open, so it appears once the panel closes. No Discard, as on collection pages: a click on the
+              view's tab (or leaving the page) shows it as saved again. */}
           {panels.hold("changed", changed) && activeView && (
             <IconButton
               autoAlign
