@@ -28,6 +28,32 @@ const SCOPES = ["all", "shared", "local"] as const;
 type Scope = (typeof SCOPES)[number];
 const SCOPE_TEXT: Record<Scope, string> = { all: "All components", shared: "Shared", local: "Local" };
 
+/**
+ * Sets `--widest` on the element: the button of the Carbon dropdown in it as wide as its widest choice (its text in
+ * the button's font, and the button's padding), so it neither changes width with the choice nor cuts one off with "…".
+ */
+function useWidestChoice(texts: string[]) {
+  const key = texts.join("\n");
+  // A callback ref: the dropdown is shown only once the list has loaded.
+  return useCallback(
+    (el: HTMLDivElement | null) => {
+      const update = () => {
+        const text = el?.querySelector<HTMLElement>(".cds--dropdown-text");
+        const context = document.createElement("canvas").getContext("2d");
+        if (!el?.isConnected || !text || !context) return;
+        const cs = getComputedStyle(text);
+        context.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        const widest = Math.max(...key.split("\n").map((t) => context.measureText(t).width));
+        el.style.setProperty("--widest", `${Math.ceil(widest + parseFloat(cs.paddingInlineStart) + parseFloat(cs.paddingInlineEnd) + 1)}px`);
+      };
+      update();
+      // Measured again once IBM Plex has loaded (until then the text is in a fallback font).
+      document.fonts?.ready.then(update);
+    },
+    [key],
+  );
+}
+
 /** A row of the list: a shared component, or a local one (written in place) by where it is used. */
 type Row = { shared: Component; local?: undefined } | { local: LocalComponent; shared?: undefined };
 const codeOf = (r: Row): ComponentCode => (r.shared ? r.shared : r.local.component);
@@ -44,6 +70,7 @@ export function ComponentsPage() {
   const navigate = useNavigate();
   // null while loading: the list shows once complete, so the local ones of views don't shift it.
   const [views, setViews] = useState<CollectionView[] | null>(null);
+  const scopeBox = useWidestChoice(Object.values(SCOPE_TEXT));
   const loadViews = useCallback(() => {
     repo.listAllViews().then(setViews, (e) => console.error("Loading views failed", e));
   }, [repo]);
@@ -92,7 +119,7 @@ export function ComponentsPage() {
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
       {/* Shared ones, those written in place, or both. */}
       {views !== null && rows.length > 0 && (
-        <div className="components-scope">
+        <div className="components-scope" ref={scopeBox}>
           <Dropdown<Scope>
             autoAlign
             type="inline"

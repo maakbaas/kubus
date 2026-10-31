@@ -32,6 +32,7 @@ import { itemPath } from "../domain/backlinks";
 import { isStruckThrough, itemLabel, labelField, titleFields, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
 import { cellEditStart, type EditStart } from "../ui/editStart";
 import { itemViewOf, FULL_LAYOUT, isRestricted } from "../domain/fieldLayout";
+import { isReadOnly } from "../domain/sources";
 import { isGrouped } from "../domain/query";
 import { FieldEditor } from "../ui/FieldEditor";
 import { FieldInput, parseInputValue, toInputValue, type InputValue } from "../ui/FieldInput";
@@ -493,8 +494,8 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
   // A checked "strike through the item" checkbox strikes the item's title, link or not.
   const struckId = isStruckThrough(collection, item) ? (titleId ?? labelField(collection, item)?.id ?? titleColumn(collection)?.id) : undefined;
   // Its page's layout holds something back (read-only, fields left out): like the page's
-  // own edit icon, an edit button opens it with every field, editable.
-  const restricted = isRestricted(collection, item, itemViewOf(collection, item)?.layout ?? FULL_LAYOUT);
+  // own edit icon, an edit button opens it with every field, editable. Not for an item that can't be edited (remote).
+  const restricted = !isReadOnly(collection) && isRestricted(collection, item, itemViewOf(collection, item)?.layout ?? FULL_LAYOUT);
   const rowButtons = (
     <>
       {/* Without the title column (its link opens the item), each row gets an open button. */}

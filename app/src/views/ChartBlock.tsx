@@ -108,7 +108,7 @@ function ChartView({ collection, result, options, refs, actions, page }: BlockPr
     const stat = options.chart === "stat" ? statOf(input, options) : null;
     const regions = regionMap.map?.regions;
     const unmatched = regions ? regionValues(input, options, regions).unmatched : [];
-    return { spec: chartSpec(input, options, dark ? "g100" : "white", stat ?? undefined, regions), stat, unmatched };
+    return { spec: chartSpec(input, options, dark ? "g100" : "white", regions), stat, unmatched };
   }, [collection, items, refs, options, dark, regionMap.map]);
   if (wrongPage) return <p className="helper chart-block__problem">“Of this item” charts the page's item: the block lists {collection.pluralName}, not the page's collection.</p>;
   if (regionMap.error) return <p className="helper chart-block__problem">{regionMap.error}</p>;

@@ -146,6 +146,11 @@ INSERT OR IGNORE INTO block_file_uses (file_id, owner_id)
 `);
     },
   },
+  {
+    version: 5,
+    description: "collections.hidden_in_nav: a collection (native or remote) left out of the side nav",
+    up: "ALTER TABLE collections ADD COLUMN hidden_in_nav INTEGER;",
+  },
 ];
 
 /** block_file_uses' triggers on one owner table (schema.sql): its blocks' JSON column. Frozen with migration 4. */

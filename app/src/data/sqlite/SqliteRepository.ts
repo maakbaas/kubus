@@ -45,6 +45,7 @@ interface CollectionRow {
   space_ids: string | null;
   source: string | null;
   title_field: string | null;
+  hidden_in_nav: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -202,6 +203,8 @@ const spaceIdsJson = (ids: string[] | null) => (ids === null ? null : JSON.strin
 /** The title field as stored: one of its fields that can be one (canBeTitle), NO_TITLE, else null (the first text field with a value). */
 const titleFieldOf = (draft: CollectionDraft) =>
   draft.titleField === NO_TITLE || draft.fields.some((f) => f.id === draft.titleField && canBeTitle(f)) ? draft.titleField! : null;
+/** Stored hidden_in_nav: 1 when left out of the side nav, else null (shown, as a collection made before it). */
+const hiddenInNavOf = (draft: CollectionDraft) => (draft.hiddenInNav ? 1 : null);
 /** Whether a label field (lf) is one its collection's titles come from (titleFields). */
 const IS_TITLE_FIELD = "coalesce((SELECT tc.title_field FROM collections tc WHERE tc.id = lf.collection_id), lf.id) = lf.id";
 /** A remote collection's source, as stored (null: a native collection). */
@@ -374,6 +377,7 @@ export class SqliteRepository implements Repository {
       spaceIds: spaceIdsOf(t.space_ids),
       source: parseJson<CollectionSource | null>(t.source, null),
       titleField: t.title_field,
+      ...(t.hidden_in_nav ? { hiddenInNav: true } : {}),
       createdAt: t.created_at,
       updatedAt: t.updated_at,
     }));
@@ -387,8 +391,8 @@ export class SqliteRepository implements Repository {
     const existing = await this.db.select<{ id: string }>("SELECT id FROM collections WHERE id = ?1", [draft.id]);
     if (existing.length === 0) {
       writes.push({
-        sql: "INSERT INTO collections (id, name, plural_name, icon, description, space_ids, source, title_field, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?7, ?8, ?9, ?6, ?6)",
-        bind: [draft.id, draft.name, draft.pluralName, draft.icon, draft.description, ts, spaceIdsJson(draft.spaceIds), sourceJson(draft), titleFieldOf(draft)],
+        sql: "INSERT INTO collections (id, name, plural_name, icon, description, space_ids, source, title_field, hidden_in_nav, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?7, ?8, ?9, ?10, ?6, ?6)",
+        bind: [draft.id, draft.name, draft.pluralName, draft.icon, draft.description, ts, spaceIdsJson(draft.spaceIds), sourceJson(draft), titleFieldOf(draft), hiddenInNavOf(draft)],
       });
       // Every collection starts with an ordinary (renamable, deletable) "All" view in the space it
       // was made in: a table of all items sorted by title; its options are filled in by the block
@@ -446,8 +450,8 @@ export class SqliteRepository implements Repository {
     }
 
     writes.push({
-      sql: "UPDATE collections SET name = ?1, plural_name = ?2, icon = ?3, description = ?4, space_ids = ?7, source = ?8, title_field = ?9, updated_at = ?5 WHERE id = ?6",
-      bind: [draft.name, draft.pluralName, draft.icon, draft.description, ts, draft.id, spaceIdsJson(draft.spaceIds), sourceJson(draft), titleFieldOf(draft)],
+      sql: "UPDATE collections SET name = ?1, plural_name = ?2, icon = ?3, description = ?4, space_ids = ?7, source = ?8, title_field = ?9, hidden_in_nav = ?10, updated_at = ?5 WHERE id = ?6",
+      bind: [draft.name, draft.pluralName, draft.icon, draft.description, ts, draft.id, spaceIdsJson(draft.spaceIds), sourceJson(draft), titleFieldOf(draft), hiddenInNavOf(draft)],
     });
     for (const old of removed) {
       writes.push(...(await this.releaseFilesWhere("field_id = ?1", [old.id])));

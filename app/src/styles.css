@@ -3597,6 +3597,10 @@ img[data-lightbox] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* IBM Plex Sans' glyphs reach 1.3em from top to bottom: a label's tighter line (14px at 1.28572) clipped
+     the foot of a g or y. Room for it in the box that clips, taken back outside: the label's height stays. */
+  padding-block: 0.1em;
+  margin-block: -0.1em;
 }
 /* The label holding it never grows past its field (Carbon's labels are inline-blocks as wide as
    their content): a long field name is cut with "…" instead of making the page scroll sideways. */
@@ -4440,6 +4444,15 @@ body[data-reordering] [data-reorder-row] {
 }
 .components-scope .cds--dropdown__wrapper--inline .cds--label {
   margin: 0;
+}
+/* As wide as its widest choice (`--widest`, ComponentsPage), whichever is chosen; at most the room beside its label. */
+.components-scope .cds--dropdown--inline {
+  min-inline-size: 0;
+  inline-size: var(--widest, auto);
+  max-inline-size: 100%;
+}
+.components-scope .cds--dropdown--inline .cds--list-box__field {
+  inline-size: 100%;
 }
 /* Its menu as wide as its three short choices: Carbon's 18rem, aligned to the end of the narrow
    button, reached out of a phone's window on the left. */

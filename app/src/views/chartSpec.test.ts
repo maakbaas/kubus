@@ -44,7 +44,7 @@ describe("chartSpec", () => {
     const genres = regionsOf([{ properties: { name: "Novel", id: "NO" } }, { properties: { name: "Poetry", id: "PO" } }]);
     for (const { kind } of CHART_KINDS) {
       const x = kind === "scatter" ? { ...byGenre, by: "item" as const, field: "year" } : byGenre;
-      const s = chartSpec(input(), options({ ...settings, x, chart: kind }), "white", undefined, genres);
+      const s = chartSpec(input(), options({ ...settings, x, chart: kind }), "white", genres);
       if ("problem" in s) throw new Error(`${kind}: ${s.problem}`);
       expect(s.data.length, kind).toBeGreaterThan(0);
     }
@@ -54,7 +54,7 @@ describe("chartSpec", () => {
     const regions = regionsOf([{ properties: { name: "Novel", id: "NV" } }, { properties: { name: "Poetry", id: "PO" } }, { properties: { name: "Essay", id: "ES" } }]);
     const o = options({ chart: "choropleth", series: [sum("pages")] });
     expect(chartSpec(input(), o, "white")).toEqual({ problem: "Loading the map…" });
-    const s = chartSpec(input(), o, "white", undefined, regions) as ChartSpec;
+    const s = chartSpec(input(), o, "white", regions) as ChartSpec;
     expect(s.chart).toBe("ChoroplethChart");
     expect(s.data).toEqual([{ name: "Novel", value: 500 }, { name: "Poetry", value: 80 }]);
     expect(s.map).toBe("worldLow");
@@ -63,24 +63,24 @@ describe("chartSpec", () => {
     // Its shades start light, not white (dark from 90, not near-black), in the hue chosen.
     expect(s.options).toMatchObject({ color: { gradient: { colors: expect.arrayContaining(["#e8daff", "#1c0f30"]) } } });
     expect((s.options.color as { gradient: { colors: string[] } }).gradient.colors).not.toContain("#ffffff");
-    const dark = chartSpec(input(), { ...o, scaleColor: "teal" }, "g100", undefined, regions) as ChartSpec;
+    const dark = chartSpec(input(), { ...o, scaleColor: "teal" }, "g100", regions) as ChartSpec;
     expect((dark.options.color as { gradient: { colors: string[] } }).gradient.colors).toEqual(scaleShades("teal", "g100"));
     expect(scaleShades("teal", "g100")[0]).toBe("#081a1c");
     // A Max: values above it drawn as it, the tooltip the region's own value; the legend with the unit and decimals.
-    const capped = chartSpec(input(), { ...o, scaleMax: 100 }, "white", undefined, regions) as ChartSpec;
+    const capped = chartSpec(input(), { ...o, scaleMax: 100 }, "white", regions) as ChartSpec;
     expect(capped.data).toEqual([{ name: "Novel", value: 100 }, { name: "Poetry", value: 80 }]);
     const opts = capped.options as { locale: { number(n: number): string }; tooltip: { valueFormatter(v: unknown, label: string): string } };
     expect([opts.locale.number(50), opts.locale.number(100)]).toEqual(["50", "100"]);
-    const kg = (chartSpec(input(), { ...o, scaleMax: 100, unit: "kg", decimals: 1 }, "white", undefined, regions) as ChartSpec).options as typeof opts;
+    const kg = (chartSpec(input(), { ...o, scaleMax: 100, unit: "kg", decimals: 1 }, "white", regions) as ChartSpec).options as typeof opts;
     expect(kg.locale.number(100)).toBe("100.0 kg");
     expect(opts.tooltip.valueFormatter(100, "Novel")).toBe("500");
     // A Max above every value changes nothing.
-    expect((chartSpec(input(), { ...o, scaleMax: 1000 }, "white", undefined, regions) as ChartSpec).data).toEqual(s.data);
-    const country = chartSpec(input(), { ...o, regions: { map: "netherlandsLow", file: `files/${"a".repeat(64)}` } }, "white", undefined, regions) as ChartSpec;
+    expect((chartSpec(input(), { ...o, scaleMax: 1000 }, "white", regions) as ChartSpec).data).toEqual(s.data);
+    const country = chartSpec(input(), { ...o, regions: { map: "netherlandsLow", file: `files/${"a".repeat(64)}` } }, "white", regions) as ChartSpec;
     expect(country.map).toBe(`files/${"a".repeat(64)}`);
     expect(country.options).toMatchObject({ thematic: { projection: "geoMercator" } });
-    expect(chartSpec(input(), o, "white", undefined, regionsOf([{ properties: { name: "Essay" } }]))).toEqual({ problem: "No value of the field is a region of this map." });
-    expect(chartSpec(input(), { ...o, x: { ...byGenre, field: null } }, "white", undefined, regions)).toEqual({ problem: "Choose the field whose values are the regions." });
+    expect(chartSpec(input(), o, "white", regionsOf([{ properties: { name: "Essay" } }]))).toEqual({ problem: "No value of the field is a region of this map." });
+    expect(chartSpec(input(), { ...o, x: { ...byGenre, field: null } }, "white", regions)).toEqual({ problem: "Choose the field whose values are the regions." });
   });
 
   it("makes a bar per group, grouped or stacked when split", () => {
@@ -232,14 +232,26 @@ describe("chartSpec", () => {
     expect([shown.numberFormatter("58"), shown.numberFormatter(57.94)]).toEqual(["58.0", "57.9"]);
   });
 
-  it("draws a stat's sparkline in its change's colour", () => {
+  it("draws a stat's sparkline in the colour of where it goes, not of the tag's change", () => {
     const stat = (o: Partial<ChartOptions>) => spec({ chart: "stat", series: [sum("pages")], ...o });
     expect(stat({}).chart).toBe("AreaChart");
-    expect(stat({}).options.color).toBeUndefined();
     const scale = (o: Partial<ChartOptions>) => Object.values((stat(o).options.color as { scale: Record<string, string> }).scale);
-    expect(scale({ compare: "number", baseline: 0 })).toEqual(["var(--cds-support-success)"]);
-    expect(scale({ compare: "number", baseline: 0, better: "lower" })).toEqual(["var(--cds-support-error)"]);
+    // Novel 500 → Poetry 80: a fall, bad where higher is better, though the tag's change from 0 is a rise.
+    expect(scale({ compare: "number", baseline: 0 })).toEqual(["var(--cds-support-error)"]);
+    expect(scale({ better: "lower" })).toEqual(["var(--cds-support-success)"]);
+    // Neither: Carbon's first chart colour.
+    expect(stat({ better: "neither" }).options.color).toBeUndefined();
     expect(stat({ sparkline: "line" }).chart).toBe("LineChart");
+    // Its line runs the whole width: no room at the X axis' ends (Carbon pads a linear domain by 10% a side).
+    const labels = stat({});
+    const bottom = axes(labels).bottom;
+    expect(labels.data.map((d) => d.index)).toEqual([0, 1]);
+    expect(bottom.scaleType).toBe("linear");
+    const [a, b] = bottom.domain as number[];
+    expect([a - (b - a) * 0.1, b + (b - a) * 0.1].map((n) => Math.round(n * 1e9) / 1e9)).toEqual([0, 1]);
+    const tip = labels.options.tooltip as { valueFormatter(v: unknown, label: string): string };
+    expect(tip.valueFormatter(1, "x-value")).toBe("Poetry");
+    expect(stat({ x: byMonth }).options.timeScale).toEqual({ addSpaceOnEdges: 0 });
   });
 
   it("puts a scatter's items on X and Y, a series per Y field, each dot naming its item", () => {

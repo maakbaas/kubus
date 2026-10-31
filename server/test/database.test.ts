@@ -121,7 +121,7 @@ describe.skipIf(!ADMIN)("the server's database", () => {
     });
     expect((await pool.query("SELECT b.label, v.name FROM bookmarks b JOIN dashboard_views v ON v.id = b.target_id")).rows).toEqual([{ label: "Home / Tab", name: "Tab" }]);
     // A device of version 2 is refused: nothing it sends is written.
-    expect(await sync({ dashboards: [{ id: "x", name: "Old" }] }, { version: 2 })).toMatchObject({ outdated: { update: "app", version: 3 } });
+    expect(await sync({ dashboards: [{ id: "x", name: "Old" }] }, { version: 2 })).toMatchObject({ outdated: { update: "app", version: SYNC_VERSION } });
     expect((await pool.query("SELECT id FROM dashboards")).rows).toEqual([{ id: "d" }]);
   });
 

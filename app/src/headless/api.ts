@@ -94,6 +94,7 @@ const collectionOut = (c: Collection, itemCount?: number) => ({
   description: c.description,
   spaces: c.spaceIds,
   titleField: c.titleField ?? null,
+  hiddenInNav: !!c.hiddenInNav,
   ...(itemCount !== undefined && { itemCount }),
   fields: c.fields.map(fieldOut),
   itemViews: c.itemViews.map(itemViewOut),
@@ -131,6 +132,12 @@ const dashboardOut = ({ spaceIds, ...d }: Dashboard) => ({ ...d, spaces: spaceId
 const tabOut = ({ collapsed: _collapsed, ...tab }: DashboardView) => ({ ...tab, fullWidth: isFullWidth("dashboard", tab.fullWidth) });
 
 /** A collection's title field as asked for: a text, number or date field (by id or name), "none", or null (the first text field with a value). */
+/** `hiddenInNav` as sent: true leaves the collection out of the side nav. */
+function hiddenInNavIn(raw: unknown): boolean {
+  if (typeof raw !== "boolean") throw new HttpError(400, "`hiddenInNav` must be true or false");
+  return raw;
+}
+
 function titleFieldIn(collection: Collection, raw: unknown): string | null {
   if (raw === null) return null;
   if (typeof raw !== "string") throw new HttpError(400, "`titleField` is a text, number or date field's id or name, \"none\" or null");
@@ -605,6 +612,7 @@ export function createApi(repo: Repository): Router {
             description: o.description === undefined ? draft.description : (text(o, "description") ?? ""),
             spaceIds: o.spaces === undefined ? draft.spaceIds : spacesIn(w, o.spaces),
             titleField: o.titleField === undefined ? draft.titleField : titleFieldIn(collection, o.titleField),
+            hiddenInNav: o.hiddenInNav === undefined ? draft.hiddenInNav : hiddenInNavIn(o.hiddenInNav),
           },
           DEFAULT_SPACE_ID,
         );

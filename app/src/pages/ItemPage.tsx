@@ -421,7 +421,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
     : {};
   const blockRowControls = (block: ViewBlock): RowControls =>
     rowControls(orderOf(layout), layout.blocks, block, (change) => arrange((l) => ({ ...l, blocks: change(l.blocks, orderOf(l)) })));
-  const restricted = !!item && isRestricted(collection, item, remote ? { ...shownLayout, editable: true } : layout);
+  // A remote item is never editable: no edit icon on its page.
+  const restricted = !!item && !remote && isRestricted(collection, item, layout);
 
   async function saveField(field: FieldDef, value: FieldValue) {
     if (!item) return;
@@ -479,7 +480,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   size="sm"
                   kind="ghost"
                   align="bottom"
-                  label={standard ? "Back to this page's layout" : remote ? "Show all fields" : "Show all fields, editable"}
+                  label={standard ? "Back to this page's layout" : "Show all fields, editable"}
                   aria-pressed={standard}
                   onClick={() => setStandard((s) => !s)}
                 >

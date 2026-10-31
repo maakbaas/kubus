@@ -4,8 +4,6 @@
 
 import {
   baselineOf,
-  statOf,
-  type Stat,
   chartTable,
   formatValue,
   heatmapCells,
@@ -333,6 +331,46 @@ function xyChart(input: ChartInput, options: ChartOptions, theme: string): Chart
   };
 }
 
+/** Carbon pads a linear axis' domain by this share of it on each side (its `paddingRatio`). */
+const CARBON_PADDING = 0.1;
+
+/**
+ * A sparkline whose line runs the whole width, as its area's box does: Carbon leaves room at the X axis' ends (a time
+ * scale a step on each side, `timeScale.addSpaceOnEdges`; a linear one 10% of its domain; labels half a band each).
+ * Time: no added space. Numbers: a domain that Carbon's padding widens to exactly the values' extremes. Labels: their
+ * place in order on such a linear axis instead, the tooltip naming each by its label.
+ */
+function edgeToEdge(spec: ChartSpec): ChartSpec {
+  const axes = spec.options.axes as { bottom?: { mapsTo: string; scaleType: string; domain?: unknown[] } } | undefined;
+  const bottom = axes?.bottom;
+  if (!bottom) return spec;
+  if (bottom.scaleType === "time") return { ...spec, options: { ...spec.options, timeScale: { addSpaceOnEdges: 0 } } };
+  const labels = bottom.scaleType === "labels" ? ((bottom.domain ?? []) as string[]) : null;
+  const key = labels ? "index" : bottom.mapsTo;
+  const data = labels ? (spec.data as Record<string, unknown>[]).map((d) => ({ ...d, index: labels.indexOf(d[bottom.mapsTo] as string) })) : spec.data;
+  const xs = (data as Record<string, unknown>[]).map((d) => d[key]).filter((x): x is number => typeof x === "number");
+  if (xs.length < 2) return spec;
+  const [lo, hi] = [Math.min(...xs), Math.max(...xs)];
+  // Carbon makes [a, b] into [a − r(b − a), b + r(b − a)]: given this, that is [lo, hi].
+  const inner = (hi - lo) / (1 + 2 * CARBON_PADDING);
+  const domain = [lo + inner * CARBON_PADDING, hi - inner * CARBON_PADDING];
+  const tooltip = spec.options.tooltip as { valueFormatter: (v: unknown, label: string) => string };
+  return {
+    ...spec,
+    data,
+    options: {
+      ...spec.options,
+      axes: { ...axes, bottom: { ...bottom, mapsTo: key, scaleType: "linear", domain, includeZero: false } },
+      // A compact chart's X axis has no title: Carbon calls it "x-value".
+      tooltip: {
+        ...tooltip,
+        valueFormatter: (v: unknown, label: string) =>
+          label === "x-value" && typeof v === "number" ? (labels ? (labels[v] ?? "") : v.toLocaleString()) : tooltip.valueFormatter(v, label),
+      },
+    },
+  };
+}
+
 /** What a parts chart (pie, meter, treemap, word cloud) is still missing; null when nothing. */
 function partsProblem(input: ChartInput, options: ChartOptions): string | null {
   if (options.parts === "fields") return options.fields.length === 0 ? "Choose the number fields that are the parts." : null;
@@ -344,11 +382,10 @@ function partsProblem(input: ChartInput, options: ChartOptions): string | null {
 
 /**
  * The chart for a block: its type's Carbon chart, data and options; or why there is nothing to draw
- * (a setting still to choose, no items). A stat's sparkline takes its colour from the block's `stat` (statOf,
- * which the block works out for its figure; worked out here when not given). A choropleth needs its map's
+ * (a setting still to choose, no items). A stat's sparkline is coloured by its own direction. A choropleth needs its map's
  * `regions` (views/regionMaps.ts loads them).
  */
-export function chartSpec(input: ChartInput, options: ChartOptions, theme: string, stat?: Stat, regions?: Region[]): ChartSpec | Problem {
+export function chartSpec(input: ChartInput, options: ChartOptions, theme: string, regions?: Region[]): ChartSpec | Problem {
   const { collection, items } = input;
   const fields = new Map(pickableFields(collection).map((f) => [f.id, f]));
   const first = options.series[0];
@@ -477,13 +514,16 @@ export function chartSpec(input: ChartInput, options: ChartOptions, theme: strin
       };
       const drawn = xyChart(input, line, theme);
       // As tall as its place in the stat (StatView, styles.css: a compact chart's 4rem).
-      const sparkline = "problem" in drawn ? drawn : { ...drawn, options: { ...drawn.options, height: "100%" } };
-      // In the colour of its change's tag (Carbon's color.scale for its one series): green good, red bad, grey neither.
-      const trend = (stat ?? statOf(input, options)).trend;
-      const series = (sparkline as ChartSpec).data?.[0] as { group?: string } | undefined;
-      if ("problem" in sparkline || !trend || !series?.group) return sparkline;
-      const color = trend === "good" ? "var(--cds-support-success)" : trend === "bad" ? "var(--cds-support-error)" : "var(--cds-icon-secondary)";
-      return { ...sparkline, options: { ...sparkline.options, color: { scale: { [series.group]: color } } } };
+      const sparkline = "problem" in drawn ? drawn : edgeToEdge({ ...drawn, options: { ...drawn.options, height: "100%" } });
+      // Coloured by where the line goes (its last point against its first, read by `better`): green up good, red
+      // down bad; flat or "neither" in Carbon's first chart colour. Not the tag's change: its baseline may differ.
+      if ("problem" in sparkline) return sparkline;
+      const points = (sparkline.data as { group?: string; value?: unknown }[]).filter((d) => typeof d.value === "number");
+      const group = points[0]?.group;
+      const rise = points.length > 1 ? (points[points.length - 1].value as number) - (points[0].value as number) : 0;
+      if (!group || !rise || options.better === "neither") return sparkline;
+      const color = (rise > 0) === (options.better === "higher") ? "var(--cds-support-success)" : "var(--cds-support-error)";
+      return { ...sparkline, options: { ...sparkline.options, color: { scale: { [group]: color } } } };
     }
     case "gauge": {
       if (needsField(first, collection)) return { problem: "Choose the field to measure." };

@@ -139,7 +139,7 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
           isExpanded={isOpen("collections")}
           onToggle={onToggle("collections")}
         >
-          {spaceCollections.filter((t) => !isRemote(t)).map(collectionNode)}
+          {spaceCollections.filter((t) => !isRemote(t) && !t.hiddenInNav).map(collectionNode)}
         </TreeNode>
         {remotesShown && (
           <TreeNode autoAlign
@@ -150,7 +150,7 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
             isExpanded={isOpen("remotes")}
             onToggle={onToggle("remotes")}
           >
-            {spaceCollections.filter(isRemote).map(collectionNode)}
+            {spaceCollections.filter((t) => isRemote(t) && !t.hiddenInNav).map(collectionNode)}
           </TreeNode>
         )}
         <TreeNode autoAlign

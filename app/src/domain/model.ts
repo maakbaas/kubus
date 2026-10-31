@@ -116,6 +116,8 @@ export interface Collection {
   mergedFrom?: MergedFrom | null;
   /** The field its items' titles are (a field id: text, a number or a date, TITLE_KINDS), NO_TITLE for none; null (or absent) = the first text field with a value. */
   titleField?: string | null;
+  /** Left out of the side nav's Collections / Remotes (its page and everything else unchanged); absent = shown there. */
+  hiddenInNav?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -192,12 +194,13 @@ export interface CollectionDraft {
   spaceIds: string[] | null;
   source?: CollectionSource | null;
   titleField?: string | null;
+  hiddenInNav?: boolean;
   /** Order in the array is the field order. Ids are client-generated. */
   fields: FieldDraft[];
 }
 
 /** A collection as a draft for saving, its fields as they are. */
-export const collectionDraft = ({ id, name, pluralName, icon, description, spaceIds, source, titleField, fields }: Collection): CollectionDraft => ({
+export const collectionDraft = ({ id, name, pluralName, icon, description, spaceIds, source, titleField, hiddenInNav, fields }: Collection): CollectionDraft => ({
   id,
   name,
   pluralName,
@@ -206,6 +209,7 @@ export const collectionDraft = ({ id, name, pluralName, icon, description, space
   spaceIds,
   source: source ?? null,
   titleField: titleField ?? null,
+  hiddenInNav: !!hiddenInNav,
   fields: fields.map(({ collectionId: _collectionId, position: _position, ...field }) => field),
 });
 

@@ -41,7 +41,8 @@ CREATE TABLE collections (
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   deleted_at  TEXT,
-  title_field TEXT             -- the text field its items' titles are: a field id, 'none' (no title); null = the first text field with a value (model.ts titleFields)
+  title_field TEXT,            -- the text field its items' titles are: a field id, 'none' (no title); null = the first text field with a value (model.ts titleFields)
+  hidden_in_nav INTEGER        -- 1: left out of the side nav (model.ts Collection.hiddenInNav); null = shown
 );
 
 -- Saved views of a collection's items (see src/domain/views.ts and src/views/registry.ts), per space.

@@ -11,7 +11,7 @@ import type { ViewBlock } from "./views";
 /** At most this many blocks in a row. */
 export const ROW_MAX_BLOCKS = 4;
 /** A row's height limit (rem: its max height, or with `rowFit` "shortest" its min height): the range offered. */
-export const ROW_HEIGHT = { min: 8, max: 96 };
+export const ROW_HEIGHT = { min: 4, max: 96 };
 /** A row's height with nothing to measure (only charts, maps, HTML components) and no height set, in rem. */
 export const ROW_HEIGHT_DEFAULT = 24;
 /** A block's least share of its row (percent) and the step a divider moves by. */

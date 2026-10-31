@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router";
-import { Button, Dropdown, FilterableMultiSelect, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
+import { Button, Checkbox, Dropdown, FilterableMultiSelect, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
 import { Add, TrashCan, ViewOff } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { useItemCounts } from "../app/useItemCounts";
@@ -268,6 +268,14 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
             />
           )}
 
+          {/* Bookmarks and dashboards are always in the side nav; a collection can be left out (its page stays in the list). */}
+          <Checkbox
+            id={`${uid}-collection-in-nav`}
+            labelText="Show in the side nav"
+            helperText={`Listed under ${remote ? "Remotes" : "Collections"} in the side nav; its page is always on the ${remote ? "Remotes" : "Collections"} page.`}
+            checked={!draft.hiddenInNav}
+            onChange={(_, { checked }) => setDraft((d) => ({ ...d, hiddenInNav: !checked }))}
+          />
           {draft.source && (
             <FormGroup legendText="Source">
               <SourceSettings draft={draft} isNew={!existing} namesFree={!namesTyped} problem={submitted ? sourceError : undefined} onChange={setDraft} />

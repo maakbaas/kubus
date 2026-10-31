@@ -168,6 +168,8 @@ describe("collections", () => {
     expect((await ok("PATCH", "/collections/Task", { titleField: nameId })).titleField).toBe(nameId);
     expect((await ok("PATCH", "/collections/Task", { titleField: "none" })).titleField).toBe("none");
     expect((await ok("PATCH", "/collections/Task", { titleField: null })).titleField).toBeNull();
+    expect((await ok("PATCH", "/collections/Task", { hiddenInNav: true })).hiddenInNav).toBe(true);
+    expect(await refused(400, "PATCH", "/collections/Task", { hiddenInNav: "yes" })).toMatch(/hiddenInNav/);
     expect(await refused(400, "PATCH", "/collections/Task", { titleField: "Done" })).toMatch(/isn't a text, number or date field/);
     expect(await refused(400, "PATCH", "/collections/Task", { titleField: 3 })).toMatch(/`titleField` is a text, number or date field's id or name/);
     expect(await refused(404, "PATCH", "/collections/Task", { titleField: "Nope" })).toBe("Task has no field “Nope”");

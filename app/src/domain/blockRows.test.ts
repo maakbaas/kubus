@@ -114,7 +114,7 @@ describe("block rows", () => {
   });
 
   it("reads and checks the stored row keys of a block", () => {
-    expect(parseBlock({ ...block("a"), beside: true, width: 40, rowHeight: 3, rowFit: "shortest" })).toMatchObject({ beside: true, width: 40, rowHeight: 8, rowFit: "shortest" });
+    expect(parseBlock({ ...block("a"), beside: true, width: 40, rowHeight: 3, rowFit: "shortest" })).toMatchObject({ beside: true, width: 40, rowHeight: 4, rowFit: "shortest" });
     // Its name before the fit: a max height.
     expect(parseBlock({ ...block("a"), rowMaxHeight: 30 })).toMatchObject({ rowHeight: 30 });
     const plain = parseBlock({ ...block("a"), beside: "yes", width: 400, rowHeight: "x", rowFit: "short" })!;

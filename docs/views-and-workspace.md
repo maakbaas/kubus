@@ -286,7 +286,7 @@ Extension points are registries, not special cases in pages:
   A setting still to choose (a field, three spokes) or nothing to chart says so instead of an empty chart. The chart follows
   the theme (`white` / `g100`); Carbon's toolbar is off. A remote collection's chart loads all its rows for the active filters (`useRemoteResult` with `uses.all`: pages of `MAX_SOURCE_PAGE` (10,000) rows one after the other, a loading bar of the rows in against the source's total; its "×" stops it, the chart then shows the rows in and "Load all rows" goes on).
   A chart, a map and a component block showing HTML have the same Height setting (`BLOCK_HEIGHT` and
-  `normalizeBlockHeight` in `domain/views.ts`, the slider `views/HeightSlider.tsx`: 8 to 48rem, 24 for a new block;
+  `normalizeBlockHeight` in `domain/views.ts`, the slider `views/HeightSlider.tsx`: 4 to 48rem, 24 for a new block;
   a chart's old Small / Medium / Large reads as 16 / 24 / 32) and Aspect ratio beside it (`ASPECT_RATIOS`: none, 2:1,
   16:9, 3:2, 4:3, 1:1, 3:4; 4:3 unless set, `AspectSelect`): the block is as tall as the less of the two, worked out
   in CSS from its own width (`blockHeightCss`: `min(<Height>rem, 100cqi × h / w)`, its box a size container), so a
@@ -341,7 +341,9 @@ Extension points are registries, not special cases in pages:
   shown space's native collections below it), Remotes (`#/remotes`, once the server has a remote
   connection or remote collections exist: `useRemotesShown`; the space's remote collections below it),
   Dashboards (`#/dashboards`, with the shown space's dashboards below it, each with its icon)
-  and Components; branches remember being open per
+  and Components. A collection or remote collection whose "Show in the side nav" is off (`Collection.hiddenInNav`,
+  `collections.hidden_in_nav`, set in its editor) is left out of the tree, nothing else; bookmarks and dashboards are
+  always listed. Branches remember being open per
   device. The space switcher (`ui/SpaceSwitcher.tsx`, always shown) sits in the nav's top row beside the
   menu toggle; its last entry "Manage spaces" opens `#/spaces` (no nav entry).
 - There is no header bar. The side nav toggle (filled/outlined panel icon) sits left of the space

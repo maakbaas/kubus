@@ -286,7 +286,7 @@ export function parseViewConfig(json: string): ViewState & { collapsed: Collapse
  * the most it takes: content that is less tall (a pie in a narrow block, a component's text) is
  * shown at its own height; content that fills its box (a map, a chart or HTML at 100%) gets it all.
  */
-export const BLOCK_HEIGHT = { min: 8, max: 48, step: 1, initial: 24 };
+export const BLOCK_HEIGHT = { min: 4, max: 48, step: 1, initial: 24 };
 /** Heights saved as a size before the slider (charts): their rem. */
 const LEGACY_HEIGHTS: Record<string, number> = { s: 16, m: 24, l: 32 };
 
