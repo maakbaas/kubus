@@ -2067,7 +2067,13 @@ img[data-lightbox] {
 }
 .item-card__cover {
   margin: calc(-1 * var(--cds-spacing-05)) calc(-1 * var(--cds-spacing-05)) var(--cds-spacing-05);
-  background: var(--cds-layer-accent-01);
+  background-color: var(--cds-layer-accent-01);
+}
+/* A cover keeps 1px of the card's own colour around it (hovered too: the border is clear, the cover's background
+   stops inside it), so an image doesn't run into the card's edge. A Markdown cover is the card's own text. */
+.item-card__cover:not(.item-card__cover--markdown) {
+  border: 1px solid transparent;
+  background-clip: padding-box;
 }
 /* An image cover has its shape before its image is there (it is read from storage first), so the
    card doesn't grow when it arrives. */
@@ -2080,7 +2086,7 @@ img[data-lightbox] {
 /* Around a whole-shown image: its average colour, nudged a few percent towards the theme's
    layer colour (a touch lighter in light themes, darker in dark ones). */
 .item-card__cover[style*="--cover-tint"] {
-  background: color-mix(in srgb, var(--cover-tint) 92%, var(--cds-layer-01));
+  background-color: color-mix(in srgb, var(--cover-tint) 92%, var(--cds-layer-01));
 }
 /* Every cover area has the view's shape (--cover-ratio). A fixed shape shows the image whole
    inside it; "automatic" (the images' average shape) fills it, cropping what sticks out. */
@@ -3650,6 +3656,13 @@ img[data-lightbox] {
 /* Image columns centre their thumbnails; the header is left-aligned like every other column. */
 .items-table td.cell--image .image-thumb {
   object-position: center;
+}
+/* A table's Image height (its block option, TableView `--table-image-height`): from the row's own 2rem up to 8rem; the
+   row grows with it. The box keeps a fixed width for its height (an image loading after the row doesn't move the
+   table), wider than tall as at the standard height, at most one and a half times as wide when taller. */
+.table-wrap[style*="--table-image-height"] .image-thumb {
+  block-size: var(--table-image-height);
+  inline-size: max(6rem, calc(var(--table-image-height) * 1.5));
 }
 /* An empty markdown field is as tall as the empty editor it turns into (one body-01 line plus
    the editor's padding above and below and the field's bottom border). */

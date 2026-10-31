@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type Dispatch,
   type KeyboardEvent,
   type ReactNode,
@@ -28,6 +29,8 @@ import {
 import { Add, ArrowRight, Close, DataTable as TableIcon, Edit, Save, TrashCan } from "@carbon/icons-react";
 import { RowActions, ROW_BUTTON, RowIconButton } from "../ui/RowActions";
 import { useStore } from "../app/store";
+import { outputOf, type Component } from "../domain/components";
+import { SettledSlider } from "./SettledSlider";
 import { itemPath } from "../domain/backlinks";
 import { isStruckThrough, itemLabel, labelField, titleFields, type FieldDef, type FieldValue, type Item, type Collection } from "../domain/model";
 import { cellEditStart, type EditStart } from "../ui/editStart";
@@ -47,7 +50,20 @@ import { defineBlockType, type BlockOptionsProps, type BlockProps, type ItemActi
 export interface TableOptions {
   /** The title column links to the item (else it is an ordinary, editable column and rows get an open button). */
   titleLink: boolean;
+  /** How tall images are in their cells, in rem (IMAGE_HEIGHT: a row's own 2rem up to 8rem); rows grow with them. */
+  imageHeight: number;
 }
+
+/** An image's height in a table cell, in rem: from a row's standard height up. */
+export const IMAGE_HEIGHT = { min: 2, max: 8, step: 0.5 };
+
+/** Whether a collection has fields shown as images in a table (image fields, components giving an image). */
+const hasImages = (collection: Collection, components: Component[]) =>
+  collection.fields.some((f) => f.kind === "image" || (f.kind === "component" && outputOf(f, components) === "image"));
+
+/** The table's style for its images' height (styles.css `--table-image-height`); none at the standard height. */
+const imageStyle = (options: TableOptions): CSSProperties | undefined =>
+  options.imageHeight > IMAGE_HEIGHT.min ? ({ "--table-image-height": `${options.imageHeight}rem` } as CSSProperties) : undefined;
 
 /** The column that names an item and opens it (the collection's first text field). */
 const titleColumn = (collection: Collection) => titleFields(collection)[0];
@@ -282,7 +298,7 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
  * A table that doesn't fit its pane (a phone, a narrow tiled pane) stays a table: it scrolls
  * sideways, all its columns together. While the pane scrolls down, its header row stays in view.
  */
-export function FillTable({ children }: { children: ReactNode }) {
+export function FillTable({ children, style }: { children: ReactNode; /** E.g. a table block's image height (`--table-image-height`). */ style?: CSSProperties }) {
   const box = useRef<HTMLDivElement>(null);
   // Set up once: the observer refills whenever the box or the table changes size.
   useLayoutEffect(() => {
@@ -373,7 +389,7 @@ export function FillTable({ children }: { children: ReactNode }) {
     };
   }, []);
   return (
-    <div ref={box} className="table-wrap">
+    <div ref={box} className="table-wrap" style={style}>
       <TableContainer className="items-table">{children}</TableContainer>
     </div>
   );
@@ -635,7 +651,7 @@ export function TableView(props: BlockProps<TableOptions>) {
 
   if (!grouped || result.total === 0) {
     return (
-      <FillTable>
+      <FillTable style={imageStyle(options)}>
         <Table size="sm">
           {head}
           <TableBody>
@@ -663,7 +679,7 @@ export function TableView(props: BlockProps<TableOptions>) {
               </span>
             }
           >
-            <FillTable>
+            <FillTable style={imageStyle(options)}>
               <Table size="sm">
                 {head}
                 <TableBody>
@@ -679,8 +695,9 @@ export function TableView(props: BlockProps<TableOptions>) {
   );
 }
 
-function TableOptionsEditor({ options, onChange }: BlockOptionsProps<TableOptions>) {
+function TableOptionsEditor({ collection, options, onChange }: BlockOptionsProps<TableOptions>) {
   const uid = useId();
+  const { components } = useStore();
   return (
     <div className="view-options">
       <div className="view-options__checks">
@@ -691,6 +708,20 @@ function TableOptionsEditor({ options, onChange }: BlockOptionsProps<TableOption
           onChange={(_, { checked }) => onChange({ ...options, titleLink: checked })}
         />
       </div>
+      {/* Only where there are images to size (as the cards' cover is offered where there are covers). */}
+      {hasImages(collection, components) && (
+        <SettledSlider
+          id={`${uid}-table-image-height`}
+          labelText="Image height"
+          min={IMAGE_HEIGHT.min}
+          max={IMAGE_HEIGHT.max}
+          step={IMAGE_HEIGHT.step}
+          value={options.imageHeight}
+          formatLabel={(v) => `${v}rem`}
+          hideTextInput
+          onChange={(imageHeight) => onChange({ ...options, imageHeight })}
+        />
+      )}
     </div>
   );
 }
@@ -699,11 +730,15 @@ export const tableView = defineBlockType<TableOptions>({
   kind: "table",
   label: "Table",
   icon: TableIcon,
-  defaultOptions: () => ({ titleLink: true }),
+  defaultOptions: () => ({ titleLink: true, imageHeight: IMAGE_HEIGHT.min }),
   normalizeOptions(raw) {
     const o = (raw ?? {}) as Partial<TableOptions>;
+    const height = typeof o.imageHeight === "number" && Number.isFinite(o.imageHeight) ? o.imageHeight : IMAGE_HEIGHT.min;
     // (Older versions also stored `stackNarrow`: restacking rows as cards when narrow, now gone.)
-    return { titleLink: o.titleLink !== false };
+    return {
+      titleLink: o.titleLink !== false,
+      imageHeight: Math.min(IMAGE_HEIGHT.max, Math.max(IMAGE_HEIGHT.min, Math.round(height / IMAGE_HEIGHT.step) * IMAGE_HEIGHT.step)),
+    };
   },
   // Columns are its fields.
   uses: () => ({ query: true, groups: true, fields: { labels: true, hideEmpty: false } }),
