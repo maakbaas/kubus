@@ -68,6 +68,12 @@ describe("requests", () => {
     expect(await refused(413, "POST", "/spaces", { name: "x".repeat(5 * 1024 * 1024 + 1) })).toBe("The body is too large");
   });
 
+  it("give the reference: this API's, or components' code", async () => {
+    expect(await ok("GET", "/reference")).toMatchObject({ topic: "api", text: expect.stringContaining("## Files") });
+    expect((await ok("GET", "/reference?topic=components")).text).toContain("$item");
+    expect(await refused(404, "GET", "/reference?topic=nope")).toBe("No reference “nope”: api or components");
+  });
+
   it("answer 404 for an unknown address and 405 for a wrong method", async () => {
     expect(await refused(404, "GET", "/nothing")).toBe("Not found");
     expect(await refused(405, "PUT", "/spaces")).toBe("Method not allowed");

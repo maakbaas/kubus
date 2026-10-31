@@ -28,6 +28,12 @@ import { draftProblem } from "../domain/collectionDraft";
 import { computeItems, loadWorld, type World } from "../domain/world";
 import { entryItems, findListCollection, isListCollectionId } from "../domain/listEntries";
 import { fieldOf, itemOut, same, valuesIn, type ItemsExist } from "./values";
+// The Help page's texts (the app's own), served as the API's reference: what an assistant reads before writing views or code.
+import apiReference from "../help/api.md?raw";
+import componentsReference from "../help/components.md?raw";
+
+/** The reference texts by topic (GET /api/v1/reference). */
+const REFERENCE: Record<string, string> = { api: apiReference, components: componentsReference };
 import { errorMessage } from "../domain/errors";
 
 const MAX_JSON = 5 * 1024 * 1024;
@@ -769,6 +775,12 @@ export function createApi(repo: Repository): Router {
         const { collection, field, hash } = await aiOf(id, f);
         await repo.acceptEdit(collection, id, field, hash);
         return itemAnswer(id);
+      })
+      .add("GET", "/api/v1/reference", async (req) => {
+        const topic = req.query.get("topic") ?? "api";
+        const text = REFERENCE[topic];
+        if (text === undefined) throw new HttpError(404, `No reference “${topic}”: api or components`);
+        return json(200, { topic, text });
       })
       .add("GET", "/api/v1/search", async (req) => {
         const w = await world();

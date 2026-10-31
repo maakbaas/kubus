@@ -486,10 +486,12 @@ file release, AI fields, the "All" view, soft deletes, change sets).
 - *MCP* (`server/src/mcp.ts`): `POST /api/v1/mcp` is a remote MCP server (streamable
   HTTP, protocol 2025-11-25 / 2025-06-18 / 2025-03-26) for assistants. Stateless (no session id),
   JSON answers, no SSE (GET: 405); a notification or response gets 202; batches only in 2025-03-26;
-  an `Origin` other than the server's own (`Host` / `X-Forwarded-Host`) gets 403. Its tools (search,
-  spaces, collections, items with filters and sort, views and a view's result; create, update and
-  delete an item; upload an image, its bytes base64 or a data: URL sent raw to `POST /api/v1/files`, the request
-  limit room for the largest file in base64) each build an `ApiRequest` for one `/api/v1` route and call `handleApi`, as an HTTP
+  an `Origin` other than the server's own (`Host` / `X-Forwarded-Host`) gets 403. Its tools cover every request of the
+  API (`mcp.test.ts` checks each one documented in help/api.md has a tool): spaces, collections and fields, items, views
+  and item views, dashboards and their views, bookmarks, components, `read_reference` (`GET /api/v1/reference`: the Help
+  page's api.md or components.md, the shapes and the {{ }} code an assistant needs), `upload_image` (base64 or a data: URL
+  sent raw to `POST /api/v1/files`, the request limit room for the largest file in base64) and `get_image` (MCP image
+  content). Each builds an `ApiRequest` for one `/api/v1` route and call `handleApi`, as an HTTP
   caller would: nothing of its own reaches the device or Postgres. `handleMcp` takes the caller's
   `Access` (`ApiTokens.check` in `index.ts`: `KUBUS_TOKEN` is `"all"`, an API token its own; the read rule
   by method doesn't apply, every MCP request being a `POST`); with `"read"` the tools that write are neither

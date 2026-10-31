@@ -18,7 +18,8 @@ const UNNAMED_VERSION = "2025-03-26";
 const MAX_BODY = Math.ceil((MAX_FILE_BYTES * 4) / 3) + 1024 * 1024;
 
 const INSTRUCTIONS = `Kubus is a personal knowledge base. Its data is in collections (such as Books or People), each with typed fields; an item is one entry of a collection (a particular book), its values listed by field name. Spaces keep items apart (default: the default space). Views list a collection's items through filters, sorts and grouping, in blocks.
-Start with list_collections to learn the collections and their fields; collections, fields, views and spaces can be named by name or id, in any case. Item and List-of-items fields hold item ids (labels: get_item or search). Component fields are worked out and read-only.`;
+Start with list_collections to learn the collections and their fields; collections, fields, views and spaces can be named by name or id, in any case. Item and List-of-items fields hold item ids (labels: get_item or search). Component fields are worked out and read-only.
+Everything the app does can be done here: spaces, collections and fields, items, views and item views, dashboards, bookmarks, components and images. Before making views, blocks, fields or components, read_reference gives the exact shapes (topic api) and the {{ }} code of components and AI prompts (topic components).`;
 
 const PARSE_ERROR = -32700;
 const INVALID_REQUEST = -32600;
@@ -36,6 +37,10 @@ interface Tool {
   /** Whether it changes data (then it isn't offered to a token that only reads). */
   writes: boolean;
   destructive?: boolean;
+  /** Makes something new each time it is called (not idempotent): a create. */
+  creates?: boolean;
+  /** Its answer is a file's bytes, given to the model as an image. */
+  image?: boolean;
   /** The /api/v1 request it makes: a JSON body, or raw bytes of a content type (an image). */
   request(args: Args): { method: string; path: string; query?: Record<string, string | undefined>; body?: unknown; bytes?: Uint8Array; contentType?: string };
   /** The property a list answer is put under in structuredContent (which is an object). */
@@ -62,6 +67,50 @@ function decodeImage(data: string): { bytes: Uint8Array; type: string | null } {
 }
 const num = (v: unknown) => (v === undefined ? undefined : String(v));
 const seg = (v: unknown) => encodeURIComponent(String(v));
+/** The arguments given, of these keys: a request body that changes only what was asked for. */
+const pick = (a: Args, keys: string[]) => Object.fromEntries(keys.filter((k) => a[k] !== undefined).map((k) => [k, a[k]]));
+const bool = (description: string) => ({ type: "boolean", description });
+const list = (description: string) => ({ type: "array", description, items: { type: "object", additionalProperties: true } });
+const names = (description: string) => ({ type: "array", description, items: { type: "string" } });
+const spaces = { type: ["array", "null"], items: { type: "string" }, description: "The spaces it is shown in (names or ids); null for every space" };
+const view = str("A view, by name or id");
+const dashboard = str("A dashboard, by name or id");
+const component = str("A component, by name or id");
+const fieldArg = str("A field, by name or id");
+const viewSpace = str("The view's space (default: any; give it when views of several spaces share the name)");
+/** What a view (of a collection or a dashboard) is made of: see read_reference for blocks, filters and their fields. */
+const VIEW_KEYS = ["name", "filters", "blocks", "editable", "filterBar", "fullWidth"];
+const viewProperties = {
+  name: str("Its name"),
+  filters: list("The view's filter: rules { fieldId, operator, value, join? }, as list_items takes"),
+  blocks: list("Its blocks, in order: { kind (table, cards, chart, map, component, markdown, linked), title?, filters?, sort?, groupBy?, layout?, collectionId?, collectionIds? (dashboards), options?, beside?, width?, rowFit?, rowHeight? }; read_reference (api) gives every key and each kind's options"),
+  editable: bool("Values can be edited in place"),
+  filterBar: bool("Show the filter bar"),
+  fullWidth: { type: ["boolean", "null"], description: "Use the page's whole width (null: the default)" },
+};
+/** What describes a field (add_field, update_field). */
+const FIELD_KEYS = ["name", "kind", "targetCollection", "component", "code", "output", "frameRatio", "choiceFilter", "toggleIcon", "strikeThrough"];
+const fieldProperties = {
+  name: str("Its name"),
+  kind: str("Its type: string, markdown, html, number, date, datetime, checkbox, image, item, string_list, number_list, checklist, item_list, component or ai (fixed once made)"),
+  targetCollection: str("item and item_list: the collection they point to (fixed once made)"),
+  component: str("component and ai: a shared component (by name or id), instead of code of its own"),
+  code: str("component: its own {{ }} code; ai: its prompt (read_reference components)"),
+  output: str("component: markdown, string, number, html or image; ai: string, number or markdown"),
+  frameRatio: str("An HTML component's frame ratio, such as 4/3"),
+  choiceFilter: list("item and item_list: rules limiting the items offered"),
+  toggleIcon: str("checkbox and checklist: an icon instead of the box"),
+  strikeThrough: bool("checkbox: strike the item through when checked; checklist: a checked entry"),
+};
+const COMPONENT_KEYS = ["name", "code", "output", "ai", "description", "frameRatio"];
+const componentProperties = {
+  name: str("Its name"),
+  code: str("Its {{ }} code, or with ai its prompt (read_reference components)"),
+  output: str("markdown (default), string, number, html or image"),
+  ai: bool("A prompt for AI fields rather than code"),
+  description: str("What it is for"),
+  frameRatio: str("HTML output: its frame's ratio, such as 4/3"),
+};
 
 export const TOOLS: Tool[] = [
   {
@@ -161,6 +210,7 @@ export const TOOLS: Tool[] = [
     required: ["collection", "values"],
     writes: true,
     destructive: false,
+    creates: true,
     request: (a) => ({ method: "POST", path: `/api/v1/collections/${seg(a.collection)}/items`, body: { values: a.values, space: a.space } }),
   },
   {
@@ -184,6 +234,423 @@ export const TOOLS: Tool[] = [
     request: (a) => ({ method: "DELETE", path: `/api/v1/items/${seg(a.id)}` }),
   },
   {
+    name: "read_reference",
+    title: "Read the reference",
+    description:
+      "The API's reference (topic api): every value, view, block and its options, filter operator, dashboard and bookmark shape these tools take; or (topic components) the {{ }} code of components and AI prompts. Read it before making views, blocks, fields or components.",
+    properties: { topic: { type: "string", enum: ["api", "components"], description: "api (default) or components" } },
+    writes: false,
+    request: (a) => ({ method: "GET", path: "/api/v1/reference", query: { topic: a.topic as string } }),
+  },
+  {
+    name: "get_image",
+    title: "Get an image",
+    description: "An image stored in Kubus by its id (an Image field's value, or the id in files/<id>), to look at.",
+    properties: { id: str("The file's id (its SHA-256)") },
+    required: ["id"],
+    writes: false,
+    image: true,
+    request: (a) => ({ method: "GET", path: `/api/v1/files/${seg(String(a.id).replace(/^files\//, ""))}` }),
+  },
+  // Spaces
+  {
+    name: "create_space",
+    title: "Create a space",
+    description: "Adds a space (items are kept apart per space; collections are shared).",
+    properties: { name: str("Its name"), icon: str("A Carbon icon name") },
+    required: ["name"],
+    writes: true,
+    creates: true,
+    request: (a) => ({ method: "POST", path: "/api/v1/spaces", body: pick(a, ["name", "icon"]) }),
+  },
+  {
+    name: "update_space",
+    title: "Update a space",
+    description: "Renames a space or changes its icon.",
+    properties: { space: str("The space, by name or id"), name: str("Its new name"), icon: str("A Carbon icon name") },
+    required: ["space"],
+    writes: true,
+    request: (a) => ({ method: "PATCH", path: `/api/v1/spaces/${seg(a.space)}`, body: pick(a, ["name", "icon"]) }),
+  },
+  {
+    name: "delete_space",
+    title: "Delete a space",
+    description: "Deletes a space with its items, views and bookmarks (the default space can't be deleted).",
+    properties: { space: str("The space, by name or id") },
+    required: ["space"],
+    writes: true,
+    destructive: true,
+    request: (a) => ({ method: "DELETE", path: `/api/v1/spaces/${seg(a.space)}` }),
+  },
+  // Collections and fields
+  {
+    name: "create_collection",
+    title: "Create a collection",
+    description: "Makes a collection with its fields and an \"All\" view in the space; answers it. Fields as add_field takes them.",
+    properties: {
+      name: str("Its singular name, such as Book"),
+      pluralName: str("Its plural name (default: made from the name)"),
+      icon: str("A Carbon icon name"),
+      description: str("What it holds"),
+      spaces,
+      space: str("The space its first view is made in (default: the default space)"),
+      fields: list("Its fields: { name, kind, … } as add_field takes them"),
+    },
+    required: ["name", "fields"],
+    writes: true,
+    creates: true,
+    request: (a) => ({ method: "POST", path: "/api/v1/collections", body: pick(a, ["name", "pluralName", "icon", "description", "spaces", "space", "fields"]) }),
+  },
+  {
+    name: "update_collection",
+    title: "Update a collection",
+    description: "Changes a collection's settings (only those given).",
+    properties: {
+      collection,
+      name: str("Its singular name"),
+      pluralName: str("Its plural name"),
+      icon: str("A Carbon icon name"),
+      description: str("What it holds"),
+      spaces,
+      titleField: { type: ["string", "null"], description: "The text, number or date field its items are called by (name or id); \"none\" for no title; null for the first text field with a value" },
+      hiddenInNav: bool("Left out of the side nav"),
+    },
+    required: ["collection"],
+    writes: true,
+    request: (a) => ({ method: "PATCH", path: `/api/v1/collections/${seg(a.collection)}`, body: pick(a, ["name", "pluralName", "icon", "description", "spaces", "titleField", "hiddenInNav"]) }),
+  },
+  {
+    name: "delete_collection",
+    title: "Delete a collection",
+    description: "Deletes a collection with its items, views and bookmarks.",
+    properties: { collection },
+    required: ["collection"],
+    writes: true,
+    destructive: true,
+    request: (a) => ({ method: "DELETE", path: `/api/v1/collections/${seg(a.collection)}` }),
+  },
+  {
+    name: "add_field",
+    title: "Add a field",
+    description: "Adds a field to a collection; answers the collection.",
+    properties: { collection, ...fieldProperties },
+    required: ["collection", "name", "kind"],
+    writes: true,
+    creates: true,
+    request: (a) => ({ method: "POST", path: `/api/v1/collections/${seg(a.collection)}/fields`, body: pick(a, FIELD_KEYS) }),
+  },
+  {
+    name: "update_field",
+    title: "Update a field",
+    description: "Changes a field (only what is given; its kind and target can't change).",
+    properties: { collection, field: fieldArg, ...fieldProperties },
+    required: ["collection", "field"],
+    writes: true,
+    request: (a) => ({ method: "PATCH", path: `/api/v1/collections/${seg(a.collection)}/fields/${seg(a.field)}`, body: pick(a, FIELD_KEYS) }),
+  },
+  {
+    name: "delete_field",
+    title: "Delete a field",
+    description: "Removes a field and its values (a collection keeps at least one field).",
+    properties: { collection, field: fieldArg },
+    required: ["collection", "field"],
+    writes: true,
+    destructive: true,
+    request: (a) => ({ method: "DELETE", path: `/api/v1/collections/${seg(a.collection)}/fields/${seg(a.field)}` }),
+  },
+  {
+    name: "order_fields",
+    title: "Order fields",
+    description: "Puts a collection's fields in this order; fields left out keep theirs, after these.",
+    properties: { collection, fields: names("The fields, by name or id, in their new order") },
+    required: ["collection", "fields"],
+    writes: true,
+    request: (a) => ({ method: "PUT", path: `/api/v1/collections/${seg(a.collection)}/fields/order`, body: a.fields }),
+  },
+  // Items beyond their values
+  {
+    name: "move_item",
+    title: "Move an item",
+    description: "Moves an item to another space (its collection must be shown there).",
+    properties: { id: str("The item's id"), space: str("The space, by name or id") },
+    required: ["id", "space"],
+    writes: true,
+    request: (a) => ({ method: "POST", path: `/api/v1/items/${seg(a.id)}/move`, body: { space: a.space } }),
+  },
+  {
+    name: "set_ai_value",
+    title: "Set an AI field's value",
+    description: "Writes an AI field's generated value, for its prompt as it reads now (as if generated).",
+    properties: { id: str("The item's id"), field: fieldArg, value: { type: ["string", "number", "null"], description: "The value: text, or a number for a number prompt" } },
+    required: ["id", "field"],
+    writes: true,
+    request: (a) => ({ method: "PUT", path: `/api/v1/items/${seg(a.id)}/ai/${seg(a.field)}`, body: { value: a.value ?? null } }),
+  },
+  {
+    name: "accept_ai_value",
+    title: "Keep a typed AI value",
+    description: "Keeps a value someone typed over an AI field, so it isn't generated again.",
+    properties: { id: str("The item's id"), field: fieldArg },
+    required: ["id", "field"],
+    writes: true,
+    request: (a) => ({ method: "POST", path: `/api/v1/items/${seg(a.id)}/ai/${seg(a.field)}/accept` }),
+  },
+  // Collection views and item views
+  {
+    name: "create_view",
+    title: "Create a view",
+    description: "Adds a view to a collection in a space: its filter and blocks; answers it.",
+    properties: { collection, space, ...viewProperties },
+    required: ["collection", "name"],
+    writes: true,
+    creates: true,
+    request: (a) => ({ method: "POST", path: `/api/v1/collections/${seg(a.collection)}/views`, body: pick(a, ["space", ...VIEW_KEYS]) }),
+  },
+  {
+    name: "update_view",
+    title: "Update a view",
+    description: "Changes a collection view (only what is given; blocks given replace its blocks).",
+    properties: { collection, view, space: viewSpace, ...viewProperties },
+    required: ["collection", "view"],
+    writes: true,
+    request: (a) => ({ method: "PATCH", path: `/api/v1/collections/${seg(a.collection)}/views/${seg(a.view)}`, query: { space: a.space as string }, body: pick(a, VIEW_KEYS) }),
+  },
+  {
+    name: "delete_view",
+    title: "Delete a view",
+    description: "Deletes a collection view.",
+    properties: { collection, view, space: viewSpace },
+    required: ["collection", "view"],
+    writes: true,
+    destructive: true,
+    request: (a) => ({ method: "DELETE", path: `/api/v1/collections/${seg(a.collection)}/views/${seg(a.view)}`, query: { space: a.space as string } }),
+  },
+  {
+    name: "set_default_view",
+    title: "Set the default view",
+    description: "Stars a collection's view as the one it opens with in a space (view null: none).",
+    properties: { collection, view: { type: ["string", "null"], description: "The view, by name or id; null for none" }, space },
+    required: ["collection"],
+    writes: true,
+    request: (a) => ({ method: "PUT", path: `/api/v1/collections/${seg(a.collection)}/default-view`, body: { space: a.space, view: a.view ?? null } }),
+  },
+  {
+    name: "list_item_views",
+    title: "List item views",
+    description: "A collection's item views: how its item pages are laid out (fields and blocks).",
+    properties: { collection },
+    required: ["collection"],
+    writes: false,
+    listKey: "itemViews",
+    request: (a) => ({ method: "GET", path: `/api/v1/collections/${seg(a.collection)}/item-views` }),
+  },
+  {
+    name: "set_item_views",
+    title: "Set item views",
+    description: "Replaces a collection's item views with these: { name, isDefault?, fullWidth?, layout } each (layout: fields, editable, hiddenLabels, hideEmpty, blocks, filters; read_reference).",
+    properties: { collection, itemViews: list("The item views, in order") },
+    required: ["collection", "itemViews"],
+    writes: true,
+    destructive: true,
+    request: (a) => ({ method: "PUT", path: `/api/v1/collections/${seg(a.collection)}/item-views`, body: a.itemViews }),
+  },
+  // Dashboards
+  {
+    name: "list_dashboards",
+    title: "List dashboards",
+    description: "The dashboards (in a space: those shown there): pages of blocks of any collections.",
+    properties: { space },
+    writes: false,
+    listKey: "dashboards",
+    request: (a) => ({ method: "GET", path: "/api/v1/dashboards", query: { space: a.space as string } }),
+  },
+  {
+    name: "get_dashboard",
+    title: "Get a dashboard",
+    description: "One dashboard.",
+    properties: { dashboard },
+    required: ["dashboard"],
+    writes: false,
+    request: (a) => ({ method: "GET", path: `/api/v1/dashboards/${seg(a.dashboard)}` }),
+  },
+  {
+    name: "create_dashboard",
+    title: "Create a dashboard",
+    description: "Makes a dashboard with a first view \"Dashboard\" in the space (shown only there unless spaces is given).",
+    properties: { name: str("Its name"), icon: str("A Carbon icon name"), description: str("What it shows"), space, spaces },
+    required: ["name"],
+    writes: true,
+    creates: true,
+    request: (a) => ({ method: "POST", path: "/api/v1/dashboards", body: pick(a, ["name", "icon", "description", "space", "spaces"]) }),
+  },
+  {
+    name: "update_dashboard",
+    title: "Update a dashboard",
+    description: "Changes a dashboard's name, icon, description or spaces.",
+    properties: { dashboard, name: str("Its name"), icon: str("A Carbon icon name"), description: str("What it shows"), spaces },
+    required: ["dashboard"],
+    writes: true,
+    request: (a) => ({ method: "PATCH", path: `/api/v1/dashboards/${seg(a.dashboard)}`, body: pick(a, ["name", "icon", "description", "spaces"]) }),
+  },
+  {
+    name: "delete_dashboard",
+    title: "Delete a dashboard",
+    description: "Deletes a dashboard with its views and their bookmarks.",
+    properties: { dashboard },
+    required: ["dashboard"],
+    writes: true,
+    destructive: true,
+    request: (a) => ({ method: "DELETE", path: `/api/v1/dashboards/${seg(a.dashboard)}` }),
+  },
+  {
+    name: "list_dashboard_views",
+    title: "List a dashboard's views",
+    description: "A dashboard's views in a space, with their filters and blocks.",
+    properties: { dashboard, space },
+    required: ["dashboard"],
+    writes: false,
+    listKey: "views",
+    request: (a) => ({ method: "GET", path: `/api/v1/dashboards/${seg(a.dashboard)}/views`, query: { space: a.space as string } }),
+  },
+  {
+    name: "dashboard_view_items",
+    title: "A dashboard view's items",
+    description: "The items one block of a dashboard view shows, as view_items does for a collection view.",
+    properties: { dashboard, view, block: str("One of its blocks, by title or id (default: the first)"), space: viewSpace, limit: int("At most this many (default 100, up to 1000)"), offset: int("Skip this many") },
+    required: ["dashboard", "view"],
+    writes: false,
+    request: (a) => ({
+      method: "GET",
+      path: `/api/v1/dashboards/${seg(a.dashboard)}/views/${seg(a.view)}/items`,
+      query: { block: a.block as string, space: a.space as string, limit: num(a.limit), offset: num(a.offset) },
+    }),
+  },
+  {
+    name: "create_dashboard_view",
+    title: "Create a dashboard view",
+    description: "Adds a view to a dashboard in a space it is shown in; its blocks name their collections (collectionId, or collectionIds read as one).",
+    properties: { dashboard, space, ...viewProperties },
+    required: ["dashboard", "name"],
+    writes: true,
+    creates: true,
+    request: (a) => ({ method: "POST", path: `/api/v1/dashboards/${seg(a.dashboard)}/views`, body: pick(a, ["space", ...VIEW_KEYS]) }),
+  },
+  {
+    name: "update_dashboard_view",
+    title: "Update a dashboard view",
+    description: "Changes a dashboard's view (only what is given; blocks given replace its blocks).",
+    properties: { dashboard, view, space: viewSpace, ...viewProperties },
+    required: ["dashboard", "view"],
+    writes: true,
+    request: (a) => ({ method: "PATCH", path: `/api/v1/dashboards/${seg(a.dashboard)}/views/${seg(a.view)}`, query: { space: a.space as string }, body: pick(a, VIEW_KEYS) }),
+  },
+  {
+    name: "delete_dashboard_view",
+    title: "Delete a dashboard view",
+    description: "Deletes a dashboard's view.",
+    properties: { dashboard, view, space: viewSpace },
+    required: ["dashboard", "view"],
+    writes: true,
+    destructive: true,
+    request: (a) => ({ method: "DELETE", path: `/api/v1/dashboards/${seg(a.dashboard)}/views/${seg(a.view)}`, query: { space: a.space as string } }),
+  },
+  {
+    name: "set_default_dashboard_view",
+    title: "Set a dashboard's default view",
+    description: "Stars a dashboard's view in a space (view null: none).",
+    properties: { dashboard, view: { type: ["string", "null"], description: "The view, by name or id; null for none" }, space },
+    required: ["dashboard"],
+    writes: true,
+    request: (a) => ({ method: "PUT", path: `/api/v1/dashboards/${seg(a.dashboard)}/default-view`, body: { space: a.space, view: a.view ?? null } }),
+  },
+  // Bookmarks
+  {
+    name: "list_bookmarks",
+    title: "List bookmarks",
+    description: "The bookmarks of a space: { id, link, label, position }.",
+    properties: { space },
+    writes: false,
+    listKey: "bookmarks",
+    request: (a) => ({ method: "GET", path: "/api/v1/bookmarks", query: { space: a.space as string } }),
+  },
+  {
+    name: "add_bookmark",
+    title: "Add a bookmark",
+    description: "Bookmarks a page by its link, by name (book/dune, book/dune/details#author, books/reading-list, dashboards/health/daily) or stored (#/collections/…).",
+    properties: { link: str("The page's link"), label: str("Its label (default: the page's name)"), space },
+    required: ["link"],
+    writes: true,
+    creates: true,
+    request: (a) => ({ method: "POST", path: "/api/v1/bookmarks", body: pick(a, ["link", "label", "space"]) }),
+  },
+  {
+    name: "rename_bookmark",
+    title: "Rename a bookmark",
+    description: "Changes a bookmark's label.",
+    properties: { id: str("The bookmark's id"), label: str("Its new label"), space },
+    required: ["id", "label"],
+    writes: true,
+    request: (a) => ({ method: "PATCH", path: `/api/v1/bookmarks/${seg(a.id)}`, query: { space: a.space as string }, body: { label: a.label } }),
+  },
+  {
+    name: "delete_bookmark",
+    title: "Delete a bookmark",
+    description: "Removes a bookmark.",
+    properties: { id: str("The bookmark's id"), space },
+    required: ["id"],
+    writes: true,
+    destructive: true,
+    request: (a) => ({ method: "DELETE", path: `/api/v1/bookmarks/${seg(a.id)}`, query: { space: a.space as string } }),
+  },
+  // Components
+  {
+    name: "list_components",
+    title: "List components",
+    description: "The shared components, with their code.",
+    properties: {},
+    writes: false,
+    listKey: "components",
+    request: () => ({ method: "GET", path: "/api/v1/components" }),
+  },
+  {
+    name: "get_component",
+    title: "Get a component",
+    description: "One shared component, with its code.",
+    properties: { component },
+    required: ["component"],
+    writes: false,
+    request: (a) => ({ method: "GET", path: `/api/v1/components/${seg(a.component)}` }),
+  },
+  {
+    name: "create_component",
+    title: "Create a component",
+    description: "Adds a shared component (or, with ai, a prompt for AI fields); read_reference components for its code.",
+    properties: componentProperties,
+    required: ["name", "code"],
+    writes: true,
+    creates: true,
+    request: (a) => ({ method: "POST", path: "/api/v1/components", body: pick(a, COMPONENT_KEYS) }),
+  },
+  {
+    name: "update_component",
+    title: "Update a component",
+    description: "Changes a shared component (only what is given): everywhere it is used.",
+    properties: { component, ...componentProperties },
+    required: ["component"],
+    writes: true,
+    request: (a) => ({ method: "PATCH", path: `/api/v1/components/${seg(a.component)}`, body: pick(a, COMPONENT_KEYS) }),
+  },
+  {
+    name: "delete_component",
+    title: "Delete a component",
+    description: "Deletes a shared component; with withFields the fields that use it go too (else it is refused while in use).",
+    properties: { component, withFields: bool("Also delete the fields that use it") },
+    required: ["component"],
+    writes: true,
+    destructive: true,
+    request: (a) => ({ method: "DELETE", path: `/api/v1/components/${seg(a.component)}`, query: { withFields: a.withFields ? "true" : undefined } }),
+  },
+  {
     name: "upload_image",
     title: "Upload an image",
     description:
@@ -205,7 +672,7 @@ const listed = (t: Tool) => ({
   title: t.title,
   description: t.description,
   inputSchema: { type: "object", properties: t.properties, ...(t.required && { required: t.required }), additionalProperties: false },
-  annotations: { title: t.title, readOnlyHint: !t.writes, ...(t.writes && { destructiveHint: !!t.destructive, idempotentHint: t.name !== "create_item" }), openWorldHint: false },
+  annotations: { title: t.title, readOnlyHint: !t.writes, ...(t.writes && { destructiveHint: !!t.destructive, idempotentHint: !t.creates }), openWorldHint: false },
 });
 
 type Message = { jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown; result?: unknown; error?: unknown };
@@ -240,6 +707,11 @@ async function callTool(tool: Tool, args: Args, api: Api): Promise<unknown> {
   if (response.status >= 400) {
     const error = (response.json as { error?: unknown } | undefined)?.error;
     return { content: [{ type: "text", text: `${typeof error === "string" ? error : "Failed"} (HTTP ${response.status})` }], isError: true };
+  }
+  // A file: the image itself, which the model can look at.
+  if (tool.image && response.bytes) {
+    const mimeType = Object.entries(response.headers ?? {}).find(([k]) => k.toLowerCase() === "content-type")?.[1] ?? "application/octet-stream";
+    return { content: [{ type: "image", data: Buffer.from(response.bytes).toString("base64"), mimeType }] };
   }
   const data = response.json ?? { ok: true };
   return {

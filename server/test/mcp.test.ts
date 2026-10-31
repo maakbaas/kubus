@@ -1,6 +1,7 @@
 // @vitest-environment node
 // The MCP endpoint (server/src/mcp.ts) without a server: the protocol, the tools a token's access
 // offers, and each tool call as the /api/v1 request it makes (a fake API answers).
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { handleMcp, PROTOCOL_VERSIONS, TOOLS } from "../src/mcp.ts";
 import type { Access } from "../src/tokens.ts";
@@ -152,6 +153,24 @@ describe("the MCP endpoint", () => {
         { path: "/api/v1/files", type: "image/png", bytes: [0x89, 0x50, 0x4e, 0x47] },
         { path: "/api/v1/files", type: "image/webp", bytes: [0x89, 0x50, 0x4e, 0x47] },
       ]);
+    });
+
+    it("covers every request of the API (help/api.md), so an assistant can do what any caller can", () => {
+      const doc = readFileSync(new URL("../../app/src/help/api.md", import.meta.url), "utf8");
+      const routes = [...doc.matchAll(/`(GET|POST|PUT|PATCH|DELETE) (\/[^`\s]+)`/g)].map((m) => [m[1], m[2]] as const);
+      expect(routes.length).toBeGreaterThan(40);
+      const made = TOOLS.map((t) => t.request(Object.fromEntries(Object.keys(t.properties).map((k) => [k, "x"]))));
+      const missing = routes.filter(([method, path]) => {
+        const pattern = new RegExp(`^/api/v1${path.replace(/\{[^}]+\}/g, "[^/]+")}$`);
+        return !made.some((r) => r.method === method && pattern.test(r.path));
+      });
+      expect(missing).toEqual([]);
+    });
+
+    it("gives an image as an image the model can look at", async () => {
+      const api = async (): Promise<ApiResponse> => ({ status: 200, bytes: new Uint8Array([1, 2, 3]), headers: { "Content-Type": "image/png" } });
+      const answer = await mcp(call("get_image", { id: "files/abc" }), { api });
+      expect(answer.json.result.content).toEqual([{ type: "image", data: Buffer.from([1, 2, 3]).toString("base64"), mimeType: "image/png" }]);
     });
 
     it("gives the answer as JSON text and structured content, a list under its name", async () => {

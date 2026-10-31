@@ -93,6 +93,7 @@ Component values run on the server, without Node's globals, and each section get
 | `PUT /items/{id}/ai/{field}` | set an AI field's generated value: `{ value }` (for the prompt as it reads now) |
 | `POST /items/{id}/ai/{field}/accept` | keep a value someone typed over an AI field |
 | `GET /search` | search, as the app does. Takes q, and optionally space and limit |
+| `GET /reference` | this text (topic api, the default) or the Help page's on components and their code (topic components): `{ topic, text }` |
 
 ## Collections and fields
 
@@ -214,14 +215,20 @@ Each tool does what one of the requests above does, so it follows the same rules
 
 | Tool | What it does |
 |---|---|
+| read_reference | this text, or the Help page's on components (`GET /reference`): what the assistant reads before making views, fields or components |
 | search | search, as the app does (`GET /search`) |
-| list_spaces | the spaces |
-| list_collections, get_collection | collections, with their fields |
-| list_items | a collection's items, optionally filtered and sorted |
-| get_item | one item |
-| list_views, view_items | a collection's views, and the items one of them shows |
-| create_item, update_item, delete_item | add, change or delete an item |
-| upload_image | store an image (its bytes base64-encoded, or a data: URL) as `POST /files` does: its id goes in an image field, its src in Markdown |
+| list_spaces, create_space, update_space, delete_space | spaces |
+| list_collections, get_collection, create_collection, update_collection, delete_collection | collections, with their fields |
+| add_field, update_field, delete_field, order_fields | a collection's fields |
+| list_items, get_item, create_item, update_item, delete_item, move_item | items, optionally filtered and sorted |
+| set_ai_value, accept_ai_value | an AI field's value |
+| list_views, view_items, create_view, update_view, delete_view, set_default_view | a collection's views, and the items one of them shows |
+| list_item_views, set_item_views | a collection's item views |
+| list_dashboards, get_dashboard, create_dashboard, update_dashboard, delete_dashboard | dashboards |
+| list_dashboard_views, dashboard_view_items, create_dashboard_view, update_dashboard_view, delete_dashboard_view, set_default_dashboard_view | a dashboard's views, and the items one of their blocks shows |
+| list_bookmarks, add_bookmark, rename_bookmark, delete_bookmark | bookmarks |
+| list_components, get_component, create_component, update_component, delete_component | shared components |
+| upload_image, get_image | store an image (its bytes base64-encoded, or a data: URL) as `POST /files` does, or look at one |
 
 > The assistant can do whatever the token allows. Most MCP clients ask before a tool that changes something runs; keep that on.
 
