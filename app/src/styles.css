@@ -4583,6 +4583,18 @@ body[data-reordering] [data-reorder-row] {
   }
 }
 
+/* While a back / forward swipe from the edge is under way (Workspace.tsx sets data-swiping once the touch is clearly
+   sideways), nothing on the page reacts to it as a press: no element is hit (so none keeps a hover or pressed look),
+   no tap highlight, no text selected. Touch events still reach the window's listeners. */
+html[data-swiping] {
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-swiping] body {
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* The back / forward swipe's arrow (Workspace.tsx): out of the edge the swipe started at, following the finger
    (top and transform set while swiping). Faint while the swipe is short of going anywhere; solid (the inverse
    colours, not the interactive blue) once letting go would go back or forward. Not rendered between swipes. */

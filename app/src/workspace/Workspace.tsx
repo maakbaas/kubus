@@ -143,6 +143,8 @@ export function useOpenRelated(): (path: string, mode?: OpenMode) => void {
 /** A back / forward swipe starts this close to the screen's edge (px) and travels at least this far. */
 const SWIPE_EDGE = 24;
 const SWIPE_DISTANCE = 64;
+/** A touch from the edge this far along it (px), mostly sideways, is a swipe: no press on what it started on. */
+const SWIPE_ENGAGE = 8;
 /** How far the swipe's arrow comes out of the edge at most (px), and its size (2.5rem). */
 const HINT_TRAVEL = 56;
 const HINT_SIZE = 40;
@@ -194,8 +196,29 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
     // While swiping, an arrow comes out of that edge and follows the finger (`hint`, moved here directly, no
     // render per move): faint until the swipe is far enough, solid once letting go would go there. Only when
     // the tab has a page in that direction.
-    let swipe: { x: number; y: number; direction: "back" | "forward" } | null = null;
+    // Once a touch from the edge is clearly a sideways swipe (SWIPE_ENGAGE along it), it is no press any more: its
+    // touchmove is cancelled (no tap, so no click and no pressed look where it started) and the page shows no
+    // pressed, hover or tap-highlight effects until the finger lifts (`html[data-swiping]`, styles.css). The
+    // listener that cancels is not passive, so it is only there while a touch from the edge lasts.
+    let swipe: { x: number; y: number; direction: "back" | "forward"; engaged: boolean } | null = null;
     let leaving: number | undefined;
+    const root = document.documentElement;
+    const blockMove = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!swipe || !t) return;
+      if (!swipe.engaged) {
+        const dx = (t.clientX - swipe.x) * (swipe.direction === "back" ? 1 : -1);
+        if (dx < SWIPE_ENGAGE || Math.abs(t.clientY - swipe.y) >= dx / 2) return;
+        swipe.engaged = true;
+        root.dataset.swiping = "";
+      }
+      if (e.cancelable) e.preventDefault();
+    };
+    const endSwipe = () => {
+      swipe = null;
+      delete root.dataset.swiping;
+      window.removeEventListener("touchmove", blockMove);
+    };
     const hintAt = (dx: number, dy: number, y: number) => {
       const el = hint.current;
       if (!el || !swipe) return;
@@ -223,12 +246,13 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
     };
     const onTouchStart = (e: TouchEvent) => {
       const t = e.touches[0];
-      swipe = null;
+      endSwipe();
       if (e.touches.length !== 1) return;
       const direction = t.clientX <= SWIPE_EDGE ? "back" : t.clientX >= window.innerWidth - SWIPE_EDGE ? "forward" : null;
       const history = activeHistory();
       if (!direction || !history || !(direction === "back" ? history.canGoBack() : history.canGoForward())) return;
-      swipe = { x: t.clientX, y: t.clientY, direction };
+      swipe = { x: t.clientX, y: t.clientY, direction, engaged: false };
+      window.addEventListener("touchmove", blockMove, { passive: false });
     };
     const onTouchMove = (e: TouchEvent) => {
       const t = e.touches[0];
@@ -241,22 +265,26 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
       if (!swipe || !t) return;
       const dx = (t.clientX - swipe.x) * (swipe.direction === "back" ? 1 : -1);
       const dy = Math.abs(t.clientY - swipe.y);
-      if (dx >= SWIPE_DISTANCE && dy < dx / 2) go(swipe.direction);
-      swipe = null;
+      const done = dx >= SWIPE_DISTANCE && dy < dx / 2 ? swipe.direction : null;
+      // A swipe that went somewhere is no tap on what the page under the finger has become.
+      if (swipe.engaged && e.cancelable) e.preventDefault();
+      endSwipe();
+      if (done) go(done);
     };
     const onTouchCancel = () => {
       hideHint();
-      swipe = null;
+      endSwipe();
     };
     window.addEventListener("touchstart", onTouchStart, { passive: true });
     window.addEventListener("touchmove", onTouchMove, { passive: true });
-    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: false });
     window.addEventListener("touchcancel", onTouchCancel, { passive: true });
     window.addEventListener("mouseup", onMouseUp);
     // Capture phase: before the tab list's onKeyDownCapture (below) stops the event.
     window.addEventListener("keydown", onKeyDown, true);
     return () => {
       window.clearTimeout(leaving);
+      endSwipe();
       window.removeEventListener("touchstart", onTouchStart);
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onTouchEnd);
