@@ -353,14 +353,14 @@ function rankBySlug(options: { t: LinkTarget; slug: string }[], typed: string, l
  * collection's default view or the view named, or the fields and blocks of the item's page. The parts
  * before the last are matched exactly (as slugs), the last as typed. `dashboards/` lists the dashboards,
  * `dashboards/health/` the tabs of Health, and after a `#` the blocks of its default tab or the tab named
- * (with those of a collection called Dashboards, if there is one). A first part that names no collection but an
- * item of the shown space (`dune/details`, `dune/details#chart`) is read as that item's link in its collection
- * (`book/dune/…`), as `dune` alone finds the item. Null when it is a single word (no `/` or `#`) or its first
- * part names no collection (or two) and no item.
+ * (with those of a collection called Dashboards, if there is one). A first part that names no collection but another
+ * page the name alone finds (an item, a dashboard, a view) is read as that page's full link (shortNameTargets).
+ * Null when it is a single word (no `/` or `#`) or its first part names nothing.
  */
 async function nameLinkTargets(query: string, data: LinkTargetData, limit: number): Promise<LinkTarget[] | null> {
   const dashboards = dashboardNameTargets(query, data, limit);
-  const collections = (await collectionNameTargets(query, data, limit)) ?? (await itemFirstNameTargets(query, data, limit));
+  const collections = await collectionNameTargets(query, data, limit);
+  if (!dashboards && !collections) return shortNameTargets(query, data, limit);
   if (!dashboards) return collections;
   return [...dashboards, ...(collections ?? [])].slice(0, limit);
 }
@@ -396,31 +396,45 @@ function dashboardNameTargets(query: string, data: LinkTargetData, limit: number
   return tab ? rankBySlug(withSlugs(tabBlockTargets(d, tab, rest.length === 2), tab.blocks.map(blockName)), fragment, limit) : [];
 }
 
-/** A link by name that starts at an item's name (nameLinkTargets): read under each collection with such an item in the shown space. */
-async function itemFirstNameTargets(query: string, data: LinkTargetData, limit: number): Promise<LinkTarget[] | null> {
+/**
+ * A link by name whose first part names no collection but another page the name alone finds (nameLinkTargets), read as
+ * that page's full link with the rest after it: an item of the shown space (`dune/compact`, `dune#author` as
+ * `book/dune/…`), a dashboard (`health/daily` as `dashboards/health/daily`), and, before a `#`, a collection view
+ * (`reading-list#shelf` as `books/reading-list#shelf`) or a dashboard view (`daily#chart` as
+ * `dashboards/health/daily#chart`). Every page of that name counts (their options together); null when none.
+ */
+async function shortNameTargets(query: string, data: LinkTargetData, limit: number): Promise<LinkTarget[] | null> {
   const text = query.trim().replace(/^#?\//, "");
   const hash = text.indexOf("#");
-  const parts = (hash < 0 ? text : text.slice(0, hash)).split("/");
-  if (parts.length < 2) return null;
-  let head: string;
-  try {
-    head = slug(decodeURIComponent(parts[0]));
-  } catch {
-    head = slug(parts[0]);
-  }
-  if (!head) return null;
-  const owners: Collection[] = [];
+  const path = (hash < 0 ? text : text.slice(0, hash)).split("/");
+  const { parts, fragment } = nameLinkParts(query);
+  if (parts.length < 2 && fragment === null) return null;
+  const head = parts[0];
+  if (!head || head === DASHBOARDS) return null;
+  // What follows the first part, as typed.
+  const rest = text.slice(path[0].length);
+  const full: string[] = [];
   for (const c of data.collections) {
     if (isRemote(c)) continue;
     // Counted among every space's items, as domain/links.ts counts; only the shown space's are offered.
     const labels = await data.labels(c);
     const at = slugs(labels.map((l) => l.label ?? "")).indexOf(head);
-    if (at >= 0 && labels[at].spaceId === data.spaceId && labels[at].label) owners.push(c);
+    if (at >= 0 && labels[at].spaceId === data.spaceId && labels[at].label) full.push(`${slug(c.name)}/${head}${rest}`);
   }
-  if (owners.length === 0) return null;
-  const rest = text.slice(parts[0].length);
-  const found = await Promise.all(owners.map((c) => collectionNameTargets(`${slug(c.name)}/${head}${rest}`, data, limit)));
-  return found.flatMap((f) => f ?? []).slice(0, limit);
+  for (const d of data.dashboards ?? []) if (slug(d.name) === head) full.push(`${DASHBOARDS}/${head}${rest}`);
+  // A view has nothing under it but its blocks: only before a `#`.
+  if (parts.length === 1 && fragment !== null) {
+    for (const c of data.collections) {
+      const views = data.views.filter((v) => v.collectionId === c.id);
+      if (slugs(views.map((v) => v.name)).includes(head)) full.push(`${slug(c.pluralName)}/${head}${rest}`);
+    }
+    for (const d of data.dashboards ?? []) {
+      if (slugs(tabsOf(data, d).map((v) => v.name)).includes(head)) full.push(`${DASHBOARDS}/${slug(d.name)}/${head}${rest}`);
+    }
+  }
+  if (full.length === 0) return null;
+  const found = await Promise.all(full.map(async (q) => dashboardNameTargets(q, data, limit) ?? (await collectionNameTargets(q, data, limit)) ?? []));
+  return withoutShown(found.flat(), []).slice(0, limit);
 }
 
 /** A link by name to a collection's page part by part (nameLinkTargets). */

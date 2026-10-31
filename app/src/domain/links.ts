@@ -103,7 +103,7 @@ export async function resolveNameLink(href: string, data: LinkData): Promise<str
     // Else a collection called "Dashboards" (when there is one).
     if (link || all.length === 0) return link;
   }
-  if (all.length === 0 && segments.length > 1) return itemFirstLink(segments, fragment, data);
+  if (all.length === 0 && head !== DASHBOARDS && (segments.length > 1 || fragment)) return shortNameLink(segments, fragment, data);
   if (all.length !== 1) return null;
   const collection = all[0];
   // "views/" and "items/" name the kind of the next segment, for when the name could be either.
@@ -150,18 +150,30 @@ export async function resolveNameLink(href: string, data: LinkData): Promise<str
 }
 
 /**
- * A link by name that starts at an item's name instead of its collection's (`dune/details`, `dune/details#author`): the
- * same as `book/dune/…` when exactly one native collection has an item of that name (as the link options offer it,
- * domain/linkTargets.ts); null when none has, or several have.
+ * A link by name whose first part names no collection but another page its name alone finds, read as that page's full
+ * link with the rest after it (as the link options read it, domain/linkTargets.ts shortNameTargets): an item of a native
+ * collection (`dune/compact#author` as `book/dune/…`), a dashboard (`health/daily` as `dashboards/health/daily`), and,
+ * before a `#`, a collection view (`reading-list#shelf`) or a dashboard view (`daily#chart`). Null unless exactly one
+ * page goes by that name.
  */
-async function itemFirstLink(segments: string[], fragment: string | null, data: LinkData): Promise<string | null> {
-  const owners: Collection[] = [];
+async function shortNameLink(segments: string[], fragment: string | null, data: LinkData): Promise<string | null> {
+  const [head] = segments;
+  const after = `${segments.length > 1 ? `/${segments.slice(1).join("/")}` : ""}${fragment ? `#${fragment}` : ""}`;
+  const full: string[] = [];
   for (const c of data.collections) {
-    if (c.source) continue;
-    if (indexOfSlug((await data.items(c)).map((l) => l.label ?? ""), segments[0]) >= 0) owners.push(c);
+    if (!c.source && indexOfSlug((await data.items(c)).map((l) => l.label ?? ""), head) >= 0) full.push(`${slug(c.name)}/${head}${after}`);
   }
-  if (owners.length !== 1) return null;
-  return resolveNameLink(`${slug(owners[0].name)}/${segments.join("/")}${fragment ? `#${fragment}` : ""}`, data);
+  for (const d of data.dashboards ?? []) if (slug(d.name) === head) full.push(`${DASHBOARDS}/${head}${after}`);
+  if (segments.length === 1 && fragment) {
+    for (const c of data.collections) {
+      if (indexOfSlug((await data.views(c)).map((v) => v.name), head) >= 0) full.push(`${slug(c.pluralName)}/${head}${after}`);
+    }
+    for (const d of data.dashboards ?? []) {
+      if (data.tabs && indexOfSlug((await data.tabs(d)).map((v) => v.name), head) >= 0) full.push(`${DASHBOARDS}/${slug(d.name)}/${head}${after}`);
+    }
+  }
+  const links = new Set((await Promise.all(full.map((f) => resolveNameLink(f, data)))).filter((l): l is string => !!l));
+  return links.size === 1 ? [...links][0] : null;
 }
 
 async function viewLink(collection: Collection, view: CollectionView | undefined, fragment: string | null, data: LinkData): Promise<string | null> {

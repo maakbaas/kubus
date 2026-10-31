@@ -114,6 +114,16 @@ describe("links to dashboards", () => {
     }
   });
 
+  it("are also read from a dashboard's or a view's name alone, when one page goes by it", async () => {
+    expect(await resolveNameLink("health/daily", withDashboards)).toBe("#/dashboards/d1?view=t1");
+    expect(await resolveNameLink("health#chart", withDashboards)).toBe("#/dashboards/d1?block=db1");
+    expect(await resolveNameLink("weekly#notes", withDashboards)).toBe("#/dashboards/d1?view=t2&block=db2");
+    expect(await resolveNameLink("reading-list#open-1", withDashboards)).toBe("#/collections/c1/items?view=v2&block=b3");
+    // A view has nothing under it but blocks; a name of nothing stays nothing.
+    expect(await resolveNameLink("weekly/x", withDashboards)).toBeNull();
+    expect(await resolveNameLink("nothing/x", withDashboards)).toBeNull();
+  });
+
   it("give the name form back", async () => {
     for (const name of ["dashboards", "dashboards/health", "dashboards/health/daily", "dashboards/health/weekly#notes", "dashboards/health#chart"]) {
       const stored = await resolveNameLink(name, withDashboards);

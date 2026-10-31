@@ -125,7 +125,8 @@ describe("searchLinkTargets", () => {
     expect(auth).toMatchObject({ kind: "field", name: "Author", href: "#/collections/c1/items/i1?field=f2", context: "Book / Dune" });
   });
   it("lists the fields of the items named when nothing follows the #, and only matching fields otherwise", async () => {
-    expect(names(await searchLinkTargets("dune#", data, { items: false }))).toEqual(["Author", "Title"]);
+    // Its page's fields and blocks, as book/dune# lists them.
+    expect(names(await searchLinkTargets("dune#", data, { items: false }))).toEqual(["Title", "Author", "Notes"]);
     expect(await searchLinkTargets("dune#zzz", data, { items: false })).toEqual([]);
     // The item's name is no match for a field.
     expect(await searchLinkTargets("dune#dune", data, { items: false })).toEqual([]);
@@ -216,6 +217,21 @@ describe("dashboards as link targets", () => {
     expect(names(await search("dashboards/health/"))).toEqual(["Daily", "Weekly"]);
     expect((await search("dashboards/health/weekly#")).map((t) => [t.name, t.href])).toEqual([["Notes", "#/dashboards/d1?view=t2&block=db2"]]);
     expect((await search("dashboards/health#ch")).map((t) => t.link)).toEqual(["dashboards/health#chart"]);
+  });
+
+  it("go on from a dashboard's or a view's name alone, as its full link would (the name alone finds it)", async () => {
+    // A dashboard: its views, and after a # the blocks of its default view.
+    expect(names(await search("health/"))).toEqual(["Daily", "Weekly"]);
+    expect((await search("health/dai")).map((t) => t.link)).toEqual(["dashboards/health/daily"]);
+    expect((await search("health#ch")).map((t) => t.link)).toEqual(["dashboards/health#chart"]);
+    // A dashboard view or a collection view: its blocks after a #.
+    expect((await search("weekly#")).map((t) => t.link)).toEqual(["dashboards/health/weekly#notes"]);
+    expect((await search("reading-list#sh")).map((t) => t.link)).toEqual(["books/reading-list#shelf"]);
+    // An item: its fields and its page's blocks after a #.
+    expect((await searchLinkTargets("dune#", withDashboards, { items: true })).map((t) => t.link)).toEqual(["book/dune#title", "book/dune#author", "book/dune#notes"]);
+    // A name of nothing, or a view followed by a /, stays nothing.
+    expect(await search("nothing/")).toEqual([]);
+    expect(await search("weekly/")).toEqual([]);
   });
 
   it("are found by a stored link", async () => {
