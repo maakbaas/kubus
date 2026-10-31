@@ -61,6 +61,20 @@ function text(o: Body, key: string, required = false): string | undefined {
   return v;
 }
 
+/**
+ * An item's given creation time (`createdAt`, for moving items in from elsewhere) as a stored ISO time: a day
+ * (its midnight UTC) or a time, UTC unless it has an offset. Never in the future.
+ */
+function createdAtIn(o: Body): string | undefined {
+  const v = text(o, "createdAt");
+  if (v === undefined) return undefined;
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?)(Z|[+-]\d{2}:\d{2})?)?$/.exec(v.trim());
+  const t = m ? Date.parse(`${m[1]}T${m[2] ?? "00:00"}${m[3] ?? "Z"}`) : NaN;
+  if (!Number.isFinite(t)) throw new HttpError(400, "`createdAt` must be a date (yyyy-mm-dd) or a time (yyyy-mm-ddTHH:MM:SS, UTC unless it ends with an offset such as +02:00)");
+  if (t > Date.now()) throw new HttpError(400, "`createdAt` can't be in the future");
+  return new Date(t).toISOString();
+}
+
 /** A repository refusal (a rule of the app, like deleting the only space) as 409. */
 async function rule<T>(work: Promise<T>): Promise<T> {
   try {
@@ -726,9 +740,10 @@ export function createApi(repo: Repository): Router {
         const w = await world();
         const collection = collectionOf(w, c);
         const space = spaceOf(w, text(o, "space"));
+        const createdAt = createdAtIn(o);
         const values = await valuesIn(collection, o.values ?? {}, exist(w));
         if (collection.fields.some((f) => f.kind === "ai" && f.id in values)) throw new HttpError(400, "AI fields are generated: set them with PUT /api/v1/items/{id}/ai/{field}");
-        const id = await rule(repo.createItem(collection, values, space.id));
+        const [id] = await rule(repo.createItems([{ collection, values, spaceId: space.id, createdAt }]));
         return itemAnswer(id, 201);
       })
       .add("GET", "/api/v1/items/{id}", async (_req, { id }) => {

@@ -87,6 +87,19 @@ describe("the HTTP API", () => {
     expect((await call("DELETE", "/spaces")).status).toBe(405);
   });
 
+  it("keeps a given creation time (moving items in), and refuses a wrong or future one", async () => {
+    await call("POST", "/collections", books);
+    const day = await call("POST", "/collections/Book/items", { values: { Title: "Old" }, createdAt: "2019-05-04" });
+    expect(day.status).toBe(201);
+    expect(day.body.createdAt).toBe("2019-05-04T00:00:00.000Z");
+    expect(Date.parse(day.body.updatedAt)).toBeGreaterThan(Date.parse("2026-01-01"));
+    const offset = await call("POST", "/collections/Book/items", { values: { Title: "Older" }, createdAt: "2018-01-02T10:30:00+02:00" });
+    expect(offset.body.createdAt).toBe("2018-01-02T08:30:00.000Z");
+    expect((await call("GET", `/items/${offset.body.id}`)).body.createdAt).toBe("2018-01-02T08:30:00.000Z");
+    expect((await call("POST", "/collections/Book/items", { values: {}, createdAt: "yesterday" })).status).toBe(400);
+    expect((await call("POST", "/collections/Book/items", { values: {}, createdAt: "2999-01-01" })).body.error).toMatch(/future/);
+  });
+
   it("includes computed values, and refuses to write them", async () => {
     const component = await call("POST", "/components", { name: "Twice", code: "{{ $item.N * 2 }}", output: "number" });
     expect(component.status).toBe(201);

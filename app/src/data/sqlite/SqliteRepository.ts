@@ -594,9 +594,10 @@ export class SqliteRepository implements Repository {
     // Each its own time, in order (as if created one by one).
     const stamps = entries.map(() => now());
     // Every item before any value, so a reference to another new item finds it.
+    // A given creation time (an import) is kept as created; updated is still now, when it was written here.
     const writes: Statement[] = entries.map((e, i) => ({
-      sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES (?1, ?2, ?4, ?3, ?3)",
-      bind: [ids[i], e.collection.id, stamps[i], e.spaceId],
+      sql: "INSERT INTO items (id, collection_id, space_id, created_at, updated_at) VALUES (?1, ?2, ?4, ?5, ?3)",
+      bind: [ids[i], e.collection.id, stamps[i], e.spaceId, e.createdAt ?? stamps[i]],
     }));
     // Only actual values: an empty field has no row, component fields are computed, never stored,
     // and AI fields are generated (setGenerated), never entered.
