@@ -440,6 +440,9 @@ What the app does, feature by feature (read the part you work on).
   nav's top-level sections (Bookmarks, Collections, Remotes when shown, Dashboards, Components) as cards, styled as a cards
   block's, each with what it holds in the space ("3 collections") and opening its page; below them the space's bookmarks, the
   Bookmarks page's table (`BookmarksTable`). First node of the side nav (no children) and first crumb of every breadcrumb (an icon).
+  Its two blocks (Pages, Bookmarks) are shown, hidden and ordered in its Page layout popover (the item page's list, `FieldOrderEditor`)
+  and collapse by their header's caret, as blocks elsewhere; stored as the synced setting `home` (`settings` table, `domain/home.ts`), so
+  every device has the same Home.
 - **Bookmarks** (`app/src/domain/bookmarks.ts`, table `bookmarks`): a bookmark is a link to any page of the app a link can name
   ("Links to pages of the app" below): a collection, a collection view, an item (under an item view), a field of an item's page (opened with the
   field flashed), a block, a dashboard, a dashboard view. Stored as the link itself by id (`bookmarks.link`, as a Markdown link

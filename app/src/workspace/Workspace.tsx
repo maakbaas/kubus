@@ -193,9 +193,9 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
     // Touch screens: a swipe in from the left edge is back, from the right edge forward (the
     // tab's own history, like the mouse buttons). Only from the edge: elsewhere horizontal swipes
     // scroll (tab strips, wide tables).
-    // While swiping, an arrow comes out of that edge and follows the finger (`hint`, moved here directly, no
-    // render per move): faint until the swipe is far enough, solid once letting go would go there. Only when
-    // the tab has a page in that direction.
+    // While swiping, an arrow comes out of that edge as far as the finger has come along it (`hint`, moved here
+    // directly, no render per move), at the middle of the screen's height; it looks the same all the way (styles.css).
+    // Only when the tab has a page in that direction.
     // Once a touch from the edge is clearly a sideways swipe (SWIPE_ENGAGE along it), it is no press any more: its
     // touchmove is cancelled (no tap, so no click and no pressed look where it started) and the page shows no
     // pressed, hover or tap-highlight effects until the finger lifts (`html[data-swiping]`, styles.css). The
@@ -219,7 +219,7 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
       delete root.dataset.swiping;
       window.removeEventListener("touchmove", blockMove);
     };
-    const hintAt = (dx: number, dy: number, y: number) => {
+    const hintAt = (dx: number, dy: number) => {
       const el = hint.current;
       if (!el || !swipe) return;
       window.clearTimeout(leaving);
@@ -228,9 +228,7 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
       const out = Math.min(HINT_TRAVEL, along * 0.6);
       const side = swipe.direction === "back" ? 1 : -1;
       el.dataset.direction = swipe.direction;
-      el.dataset.ready = along >= SWIPE_DISTANCE ? "true" : "false";
-      el.style.opacity = String(Math.min(1, along / SWIPE_DISTANCE));
-      el.style.top = `${y - HINT_SIZE / 2}px`;
+      el.style.opacity = along > 0 ? "1" : "0";
       el.style.transform = `translateX(${side * (out - HINT_SIZE)}px)`;
     };
     const hideHint = () => {
@@ -257,7 +255,7 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
     const onTouchMove = (e: TouchEvent) => {
       const t = e.touches[0];
       if (!swipe || !t) return;
-      hintAt((t.clientX - swipe.x) * (swipe.direction === "back" ? 1 : -1), Math.abs(t.clientY - swipe.y), t.clientY);
+      hintAt((t.clientX - swipe.x) * (swipe.direction === "back" ? 1 : -1), Math.abs(t.clientY - swipe.y));
     };
     const onTouchEnd = (e: TouchEvent) => {
       const t = e.changedTouches[0];

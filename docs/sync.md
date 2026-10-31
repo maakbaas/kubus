@@ -183,7 +183,8 @@ Dark, and the maps' style, one OpenFreeMap style for every Map block, `MAP_STYLE
 are the synced table `settings` (one row per key, its value JSON; `Repository.getSettings` / `setSetting`, change scope
 `settings`), since `SYNC_VERSION` 4: local first, they work without a server and sync like any row (newest
 `updated_at` wins). `app/settings.ts` holds them for the UI, with a copy on the device (`kubus.theme`, `kubus.mapStyle`)
-for the first paint before the database opens. A database without a map style yet starts from the one in use: the
+for the first paint before the database opens. The Home page's layout is one too (key `home`: its blocks shown, their order,
+the collapsed ones; `domain/home.ts`, `app/homeLayout.ts`). A database without a map style yet starts from the one in use: the
 server's `map` setting when connected, else the device's own copy. Nothing secret is ever a setting here: a language
 model's key stays where it is set (Settings → AI: the device's own in `kubus.ai`, the server's in `server_settings`).
 

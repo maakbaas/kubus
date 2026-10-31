@@ -4595,20 +4595,22 @@ html[data-swiping] body {
   user-select: none;
 }
 
-/* The back / forward swipe's arrow (Workspace.tsx): out of the edge the swipe started at, following the finger
-   (top and transform set while swiping). Faint while the swipe is short of going anywhere; solid (the inverse
-   colours, not the interactive blue) once letting go would go back or forward. Not rendered between swipes. */
+/* The back / forward swipe's arrow (Workspace.tsx): out of the edge the swipe started at, how far following the finger
+   (the transform set while swiping), at the middle of the screen's height whatever its height. It looks as it will when
+   letting go goes back or forward from the start (the inverse colours, solid; not the interactive blue): only its travel
+   shows how far the swipe is. Round, as a system's back gesture draws it (design.js exempts it). Not rendered between swipes. */
 .swipe-hint {
   display: none;
   position: fixed;
   z-index: 9000;
+  inset-block-start: calc(50% - 1.25rem);
   inline-size: 2.5rem;
   block-size: 2.5rem;
   align-items: center;
   justify-content: center;
-  background: var(--cds-layer-01);
-  border: 1px solid var(--cds-border-strong-01);
-  color: var(--cds-icon-secondary);
+  border-radius: 50%;
+  background: var(--cds-background-inverse);
+  color: var(--cds-icon-inverse);
   box-shadow: 0 2px 6px var(--cds-shadow);
   pointer-events: none;
 }
@@ -4620,11 +4622,6 @@ html[data-swiping] body {
 }
 .swipe-hint[data-direction="forward"] {
   inset-inline-end: 0;
-}
-.swipe-hint[data-ready="true"] {
-  background: var(--cds-background-inverse);
-  border-color: var(--cds-background-inverse);
-  color: var(--cds-icon-inverse);
 }
 .swipe-hint[data-leaving] {
   transition: transform 150ms ease-in, opacity 150ms ease-in;

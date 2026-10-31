@@ -211,8 +211,9 @@ function __design(opts) {
   // ---- radius / shadow / border -------------------------------------------------------------------
   {
     // Carbon's own round parts: checkbox (2px), toggle (track and knob), tag, slider thumb, radio,
-    // the content switcher's ends, loading spinner, a chart legend's swatches (Carbon Charts'); the Markdown's inline code (the editor's).
-    const ROUND = ".cds--popover-content, .cds--checkbox-label, .cds--toggle__switch, .cds--toggle__appearance, .cds--tag, .cds--slider__thumb, .cds--radio-button__appearance, .cds--loading, .cds--popover-caret, .cds--tooltip-content, .cds--skeleton, .cds--chart-holder";
+    // the content switcher's ends, loading spinner, a chart legend's swatches (Carbon Charts'); the Markdown's inline code (the editor's);
+    // the back / forward swipe's arrow (round, as a system's back gesture shows it; only there while swiping).
+    const ROUND = ".swipe-hint, .cds--popover-content, .cds--checkbox-label, .cds--toggle__switch, .cds--toggle__appearance, .cds--tag, .cds--slider__thumb, .cds--radio-button__appearance, .cds--loading, .cds--popover-caret, .cds--tooltip-content, .cds--skeleton, .cds--chart-holder";
     // Floating layers (shadows give them depth) and the dragged row of a reorder.
     const FLOATING = ".cds--popover-content, .overflow-bar[data-open] > .overflow-bar__items, .cds--modal-container, .cds--list-box__menu, .cds--overflow-menu-options, .flatpickr-calendar, [role=menu], .search-bar, .cds--side-nav, [data-dragging], .cds--toast-notification, .ws-drop, .cds--cc--tooltip";
     for (const el of shown) {
