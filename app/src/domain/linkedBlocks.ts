@@ -1,4 +1,4 @@
-// Linked blocks: a block that shows another block, wherever that one is (a collection view, an item page, a
+// Linked blocks: a block that shows another block (or one field of an item), wherever that one is (a collection view, an item page, a
 // dashboard view), as it is set up there. It stores a link to it in the stored form of links (domain/links.ts),
 // `#/collections/<id>/items?view=&block=`, `#/collections/<id>/items/<item>?view=&block=`, `#/dashboards/<id>?view=&block=`,
 // written by name in its settings like any link (`books/reading-list#chart`, `book/dune#chart`, `dashboards/health#chart`).
@@ -6,11 +6,15 @@
 
 import type { ViewBlock } from "./views";
 
-/** Where the block a link names is. `viewId` null: the page's own choice (the default view, the item's item view, the default tab). */
+/**
+ * What a linked block shows: a block where it is (`viewId` null: the page's own choice, the default view, the item's item
+ * view, the default dashboard view), or one field of an item (its value as the item's page shows it).
+ */
 export type BlockLink =
   | { place: "collection"; collectionId: string; viewId: string | null; blockId: string }
   | { place: "item"; collectionId: string; itemId: string; viewId: string | null; blockId: string }
-  | { place: "dashboard"; dashboardId: string; viewId: string | null; blockId: string };
+  | { place: "dashboard"; dashboardId: string; viewId: string | null; blockId: string }
+  | { place: "field"; collectionId: string; itemId: string; fieldId: string };
 
 /** The block kind of a linked block. */
 export const LINKED = "linked";
@@ -29,7 +33,7 @@ const decode = (s: string) => {
   }
 };
 
-/** The block a stored link names; null for any other link (a page, a field, a URL, a link by name not yet resolved). */
+/** The block or item's field a stored link names; null for any other link (a page, a URL, a link by name not yet resolved). */
 export function parseBlockLink(href: string): BlockLink | null {
   const text = href.trim();
   const d = DASHBOARD_ROUTE.exec(text);
@@ -42,9 +46,12 @@ export function parseBlockLink(href: string): BlockLink | null {
   if (!m) return null;
   const params = new URLSearchParams(m[3] ?? "");
   const blockId = params.get("block");
-  if (!blockId || params.get("field")) return null;
-  const viewId = params.get("view") || null;
+  const fieldId = params.get("field");
   const collectionId = decode(m[1]);
+  // A field of an item (its item view doesn't matter: the value is the same).
+  if (fieldId && m[2]) return { place: "field", collectionId, itemId: decode(m[2]), fieldId };
+  if (!blockId || fieldId) return null;
+  const viewId = params.get("view") || null;
   return m[2] ? { place: "item", collectionId, itemId: decode(m[2]), viewId, blockId } : { place: "collection", collectionId, viewId, blockId };
 }
 
@@ -54,7 +61,9 @@ export const blockLinkKey = (link: BlockLink): string =>
     ? `c/${link.collectionId}/${link.blockId}`
     : link.place === "item"
       ? `i/${link.collectionId}/${link.itemId}/${link.blockId}`
-      : `d/${link.dashboardId}/${link.blockId}`;
+      : link.place === "field"
+        ? `f/${link.collectionId}/${link.itemId}/${link.fieldId}`
+        : `d/${link.dashboardId}/${link.blockId}`;
 
 /**
  * The block a link names among a page's views (a collection's views, its item views, a dashboard's views): in the view it
@@ -75,7 +84,7 @@ export function findLinkedBlock<V>(views: V[], blocksOf: (view: V) => ViewBlock[
  */
 export function linkProblem(link: BlockLink | null, href: string, chain: string[]): string | null {
   if (!href.trim()) return "No block linked yet: choose one in its settings.";
-  if (!link) return "The link doesn't name a block.";
+  if (!link) return "The link doesn't name a block or an item's field.";
   if (chain.includes(blockLinkKey(link))) return "The block links to itself.";
   if (chain.length >= MAX_LINK_DEPTH) return "Too many linked blocks inside one another.";
   return null;

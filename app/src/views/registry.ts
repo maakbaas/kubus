@@ -92,6 +92,8 @@ export interface BlockUses {
   ownHeight?: { height: number; aspect: AspectRatio; extra?: string };
   /** Drawn at a height of its own that it can't shrink from or scroll (a stat, a meter, a compact chart): a row is never less tall. */
   fixedHeight?: boolean;
+  /** It shows another block as that one is set up (a linked block): no collection of its own to pick in Block settings. */
+  inheritsCollection?: boolean;
   /** It needs every item (a chart charts them all): its Limit is "all" unless set, a remote collection's rows all loaded. */
   all?: boolean;
 }
@@ -125,6 +127,8 @@ export interface BlockTypeDefinition<O = unknown> {
   View: ComponentType<BlockProps<O>>;
   /** Settings specific to this block type, in its own menu. */
   OptionsEditor?: ComponentType<BlockOptionsProps<O>>;
+  /** Its settings are still to be made (a linked block without its link): its Block settings open by themselves. */
+  unset?(options: O): boolean;
 }
 
 /** Typed helper so each block type's options stay type-checked inside its own file. */

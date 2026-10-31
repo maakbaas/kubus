@@ -1806,14 +1806,23 @@ img[data-lightbox] {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* The link dialog's list sits under its URL field, inside the dialog. */
+/* The link field's list (LinkTargetInput: the link dialog, New bookmark, a linked block's link) floats in a popover
+   hanging from the field, so the dialog or panel around it keeps its size: the field's width, capped to the room on
+   its side (--popover-room) and scrolling inside. The popover is the field's own wrapper, as wide as the field. */
+.link-target-input__popover {
+  display: block;
+  inline-size: 100%;
+}
+.link-target-input .cds--popover .cds--popover-content {
+  inline-size: max(var(--link-field-width), 16rem);
+  max-inline-size: 90vw;
+}
 .link-target-input .link-target-list {
-  margin-block-start: var(--cds-spacing-03);
-  max-block-size: 12rem;
+  max-block-size: min(16rem, var(--popover-room, 16rem));
 }
 
-/* A linked block's link (views/LinkedBlock.tsx: its settings, and its body until it links a block): the field
-   across, its Open original button under it. */
+/* A linked block's link (views/LinkedBlock.tsx: in its Block settings): the field across, its Open original button
+   under it. */
 .linked-block-settings {
   display: flex;
   flex-direction: column;

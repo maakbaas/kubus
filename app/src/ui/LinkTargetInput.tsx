@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
-import { TextInput } from "@carbon/react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Popover, PopoverContent, TextInput } from "@carbon/react";
 import { useLinkTargets } from "../app/useLinkTargets";
 import type { LinkTarget } from "../domain/linkTargets";
 import { LinkTargetList } from "./LinkTargetList";
+import { onViewportChange, panelRoom } from "./panelRoom";
 
 /** Text that is a link with a scheme or a site (`https://…`, `mailto:…`, `//host`): no pages of the app to offer. */
 const isExternal = (text: string) => (/^[a-z][a-z0-9+.-]*:/i.test(text) && !text.includes("#/collections/")) || text.startsWith("//");
 
 /**
- * The link dialog's URL field with the link picker's options (LinkPicker) under it while a page of
- * the app is typed: ↑ ↓ move, Enter or Tab choose, Escape closes the list (not the dialog), a click
+ * The link dialog's URL field with the link picker's options (LinkPicker) in a popover hanging from it while a page
+ * of the app is typed (floating: the dialog or panel it is in keeps its size, autoAlign flips it to the side with room,
+ * capped to that room and scrolling inside): ↑ ↓ move, Enter or Tab choose, Escape closes the list (not the dialog), a click
  * chooses. Choosing writes the page's link in its name form (`toShown`), stored by id on Apply.
  * Used alike by the link dialog, the New bookmark dialog (only the pages it can bookmark: `filter`) and a linked
  * block's link: a pick is handed over (`onPick`), and what was typed counts too (Apply, Add, or `onCommit`: the field
@@ -50,10 +52,22 @@ export function LinkTargetInput({
   const { search, reset } = useLinkTargets();
   const [targets, setTargets] = useState<LinkTarget[]>([]);
   const [active, setActive] = useState(0);
-  /** Whether the text was typed here (the list shows only then; a pick or Escape closes it until more is typed).
-   *  Not closed when the field is left: the dialog would shrink under a click on Apply. */
+  /** Whether the text was typed here (the list shows only then; a pick, Escape or leaving the field closes it until more
+   *  is typed). A press on an option doesn't take the focus (LinkTargetList), so choosing doesn't leave the field. */
   const [typing, setTyping] = useState(false);
   const shown = typing && targets.length > 0;
+  // The room beside the field (the roomier side, as the popover flips there), within what can be seen.
+  const field = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState<number>();
+  useEffect(() => {
+    if (!shown) return;
+    const update = () => {
+      const r = field.current?.querySelector("input")?.getBoundingClientRect();
+      if (r) setRoom(panelRoom(r, null));
+    };
+    update();
+    return onViewportChange(update);
+  }, [shown]);
 
   useEffect(() => {
     const query = value.trim();
@@ -85,43 +99,51 @@ export function LinkTargetInput({
     };
     toShown(t.href).then(chosen, () => chosen(t.href));
   };
+  const list = { "--popover-room": `${Math.max(room ?? 256, 0)}px`, "--link-field-width": `${field.current?.offsetWidth ?? 0}px` } as CSSProperties;
   return (
-    <div className="link-target-input">
-      <TextInput
-        size="sm"
-        id={id}
-        labelText={labelText}
-        placeholder={placeholder}
-        helperText={helperText}
-        invalid={!!invalidText}
-        invalidText={invalidText}
-        autoComplete="off"
-        {...(primaryFocus && { "data-modal-primary-focus": true })}
-        value={value}
-        onBlur={() => onCommit?.()}
-        onChange={(e) => {
-          setTyping(true);
-          onChange(e.target.value);
-        }}
-        onKeyDown={(e) => {
-          if (!shown) {
-            if (e.key === "Enter" && onCommit) {
-              e.preventDefault();
-              onCommit();
+    <div ref={field} className="link-target-input link-picker" style={list}>
+      <Popover autoAlign open={shown} align="bottom-start" className="link-target-input__popover">
+        <TextInput
+          size="sm"
+          id={id}
+          labelText={labelText}
+          placeholder={placeholder}
+          helperText={helperText}
+          invalid={!!invalidText}
+          invalidText={invalidText}
+          autoComplete="off"
+          {...(primaryFocus && { "data-modal-primary-focus": true })}
+          value={value}
+          onBlur={() => {
+            setTyping(false);
+            onCommit?.();
+          }}
+          onChange={(e) => {
+            setTyping(true);
+            onChange(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (!shown) {
+              if (e.key === "Enter" && onCommit) {
+                e.preventDefault();
+                onCommit();
+              }
+              return;
             }
-            return;
-          }
-          const key = e.key;
-          if (key === "ArrowDown") setActive((active + 1) % targets.length);
-          else if (key === "ArrowUp") setActive((active - 1 + targets.length) % targets.length);
-          else if (key === "Enter" || key === "Tab") pick(targets[Math.min(active, targets.length - 1)]);
-          else if (key === "Escape") setTyping(false);
-          else return;
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-      />
-      {shown && <LinkTargetList targets={targets} active={Math.min(active, targets.length - 1)} label="Link to" onPick={pick} compact />}
+            const key = e.key;
+            if (key === "ArrowDown") setActive((active + 1) % targets.length);
+            else if (key === "ArrowUp") setActive((active - 1 + targets.length) % targets.length);
+            else if (key === "Enter" || key === "Tab") pick(targets[Math.min(active, targets.length - 1)]);
+            else if (key === "Escape") setTyping(false);
+            else return;
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        />
+        <PopoverContent>
+          {shown && <LinkTargetList targets={targets} active={Math.min(active, targets.length - 1)} label="Link to" onPick={pick} compact />}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

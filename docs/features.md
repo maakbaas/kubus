@@ -364,8 +364,11 @@ What the app does, feature by feature (read the part you work on).
   block, of a collection view, an item's page or a dashboard view, as it is set up there: its collection, filter, sort,
   fields, type and options, under that page's filter, and on an item page with that item as the page's item (its "this
   item" filters and `$item`). So a chart is made once and shown on any page; a change to the original shows everywhere
-  it is linked. Its only setting is the link, written by name like any internal link and picked from the same list
-  (`books/reading-list#chart`, `book/dune#chart`, `dashboards/health#chart`; asked for in the block itself until set) and
+  it is linked. It can also show one field of an item (`book/dune#author`, stored `…/items/<item>?field=<field>`): its value
+  as the item's page shows it (a component field computed; `ItemPage`'s `ViewField`), read-only, named "Dune / Author"
+  unless titled. Its only setting is the link, written by name like any internal link and picked from the same list
+  (`books/reading-list#chart`, `book/dune#chart`, `dashboards/health#chart`; chosen in its Block settings, which open by themselves while it has none: `unset`; no in-page field, and no Collection picker there,
+  `inheritsCollection`: everything comes from the original) and
   stored by id (`options.href`, the stored form of links, so renames break nothing); its header takes the original's
   name (`options.name`, kept as last shown) unless it has a title of its own. What is shown is read-only here: the
   original's menus aren't offered (its settings are changed on the original, "Open original" in Block settings), a

@@ -247,12 +247,14 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
         </ToolbarPopover>
       )}
       {/* A gear, not the type's icon: this is also where the type is switched. */}
-      <ToolbarPopover label="Block settings" icon={Settings} width="narrow" onOpenChange={onOpenChange}>
+      {/* Opened by itself while the block's settings are still to be made (a new linked block's link). */}
+      <ToolbarPopover label="Block settings" icon={Settings} width="narrow" openRequest={type.unset?.(block.options) ? 1 : undefined} onOpenChange={onOpenChange}>
         <div className="view-settings">
           {/* On a dashboard: one collection, or several read as one (native and remote ones mixed; their fields of one name
               are one column), or a list field's entries. An item page's block picks one (Backlinks, a list field's entries too); a
               collection view's lists the view's own, or the entries of one of its list fields. */}
-          {dashboard && (
+          {/* None where the block shows another one as that one is set up (a linked block): its collection is that one's. */}
+          {dashboard && !uses.inheritsCollection && (
             <MultiSelect<Collection>
               autoAlign
               size="sm"
@@ -268,7 +270,7 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
               onChange={({ selectedItems }) => pick(selectedItems ?? [])}
             />
           )}
-          {(page || (viewCollection && pageCollections.length > 1)) && (
+          {!uses.inheritsCollection && (page || (viewCollection && pageCollections.length > 1)) && (
             <Dropdown<Collection>
               autoAlign
               size="sm"

@@ -12,8 +12,15 @@ describe("linked blocks", () => {
     expect(parseBlockLink("#/dashboards/d1?view=t1&block=b3")).toEqual({ place: "dashboard", dashboardId: "d1", viewId: "t1", blockId: "b3" });
   });
 
-  it("names no block for any other link", () => {
-    for (const href of ["", "#/collections/c1/items", "#/collections/c1/items/i1?field=f1", "#/collections/c1/items/i1?field=f1&block=b1", "#/dashboards/d1", "#/dashboards", "books/reading-list#chart", "https://example.com?block=b1"]) {
+  it("reads an item's field, whichever item view the link names", () => {
+    const field = { place: "field", collectionId: "c1", itemId: "i1", fieldId: "f1" };
+    expect(parseBlockLink("#/collections/c1/items/i1?field=f1")).toEqual(field);
+    expect(parseBlockLink("#/collections/c1/items/i1?view=iv2&field=f1")).toEqual(field);
+    expect(blockLinkKey(parseBlockLink("#/collections/c1/items/i1?field=f1")!)).not.toBe(blockLinkKey(parseBlockLink("#/collections/c1/items/i1?block=f1")!));
+  });
+
+  it("names nothing for any other link", () => {
+    for (const href of ["", "#/collections/c1/items", "#/collections/c1/items?field=f1", "#/dashboards/d1", "#/dashboards", "books/reading-list#chart", "https://example.com?block=b1"]) {
       expect(parseBlockLink(href)).toBeNull();
     }
   });

@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { Button, InlineNotification } from "@carbon/react";
 import { Launch, Link as LinkIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
@@ -9,11 +9,12 @@ import { withComputed } from "../domain/components";
 import { findTab, type Dashboard, type DashboardView } from "../domain/dashboards";
 import { itemViewOf, type ItemView } from "../domain/fieldLayout";
 import { blockLinkKey, findLinkedBlock, linkProblem, parseBlockLink, type BlockLink } from "../domain/linkedBlocks";
-import type { Collection, Item } from "../domain/model";
+import { fieldValue, itemLabel, pickableFields, type Collection, type Item } from "../domain/model";
 import { isRemote } from "../domain/sources";
 import { NOTHING_COLLAPSED, pageFiltersFor, type Collapsed, type CollectionView, type ViewBlock } from "../domain/views";
 import type { FilterRule } from "../domain/query";
 import { LinkTargetInput } from "../ui/LinkTargetInput";
+import { ViewField } from "../pages/ItemPage";
 import { errorMessage } from "../ui/useConfirm";
 import { refLabelOf, useReferenceOptions } from "../ui/useReferenceOptions";
 import { blockType, normalizeBlock } from "./index";
@@ -54,15 +55,16 @@ function LinkedBlockView({ options, onOptions }: BlockProps<LinkedBlockOptions>)
     },
     [chain.length, options, onOptions],
   );
-  // Not linked yet: the link is asked for here (as in its settings).
-  if (!options.href.trim() && chain.length === 0) return <LinkedBlockSettings options={options} onChange={onOptions} />;
+  // Not linked yet: its Block settings, where the link is chosen, open by themselves (`unset`); here linkProblem says so.
   if (problem || !link) return <Notice text={problem ?? ""} />;
   return (
     <LinkChain.Provider value={[...chain, blockLinkKey(link)]}>
       {link.place === "collection" ? (
         <FromView link={link} onName={onName} />
       ) : link.place === "item" ? (
-        <FromItemPage link={link} onName={onName} />
+        <ItemOf link={link}>{(collection, item) => <FromItem collection={collection} item={item} link={link} onName={onName} />}</ItemOf>
+      ) : link.place === "field" ? (
+        <ItemOf link={link}>{(collection, item) => <LinkedField collection={collection} item={item} fieldId={link.fieldId} onName={onName} />}</ItemOf>
       ) : (
         <FromDashboard link={link} onName={onName} />
       )}
@@ -115,8 +117,8 @@ function FromDashboard({ link, onName }: FromProps<"dashboard">) {
   return <Original home={home} block={found.block} place="dashboard" page={null} viewFilters={found.view.filters} editable={found.view.editable} onName={onName} />;
 }
 
-/** A block of an item's page (under the item view it names, else the item's own), with the item as its page's item. */
-function FromItemPage({ link, onName }: FromProps<"item">) {
+/** The item a link names (of an item's page, or one of its fields), read and kept current, given to `children`. */
+function ItemOf({ link, children }: { link: { collectionId: string; itemId: string }; children(collection: Collection, item: Item): ReactNode }) {
   const { repo, collections } = useStore();
   const collection = collections.find((c) => c.id === link.collectionId);
   const [item, setItem] = useState<Item | null | undefined>(undefined);
@@ -128,13 +130,36 @@ function FromItemPage({ link, onName }: FromProps<"item">) {
   }, [repo, collection?.id, link.itemId]);
   useEffect(load, [load]);
   useDataChanges((change) => change.scope === "items" && change.collectionId === link.collectionId && (!change.itemId || change.itemId === link.itemId) && load());
-  if (collection && isRemote(collection)) return <Notice text="Blocks of a remote row's page can't be linked." />;
+  if (collection && isRemote(collection)) return <Notice text="A remote row's page can't be linked." />;
   if (error) return <Notice text={error} />;
   if (item === undefined && collection) return null;
   if (!collection || !item) return <Notice text={GONE} />;
-  return <FromItem collection={collection} item={item} link={link} onName={onName} />;
+  return <>{children(collection, item)}</>;
 }
 
+/**
+ * One field of an item, its value as the item's page shows it (a component field computed), read-only: it is changed on
+ * the item. Its name is the block's ("Dune / Author", as bookmarks name a field).
+ */
+function LinkedField({ collection, item, fieldId, onName }: { collection: Collection; item: Item; fieldId: string; onName(name: string): void }) {
+  const { components } = useStore();
+  const refs = useReferenceOptions(collection);
+  const shown = useMemo(() => withComputed(collection, [item], components, refLabelOf(refs))[0], [collection, item, components, refs]);
+  const field = pickableFields(collection).find((f) => f.id === fieldId);
+  const name = field ? `${itemLabel(collection, shown)} / ${field.name}` : "";
+  useEffect(() => {
+    if (name) onName(name);
+  }, [name, onName]);
+  if (!field) return <Notice text={GONE} />;
+  // Without the field's name (the block's header says it), as an item page shows a field without its name.
+  return (
+    <div className="item-field--no-label">
+      <ViewField field={field} value={fieldValue(shown, field)} refs={refs} onEdit={ignore} onSave={ignore} readOnly fixed labelHidden itemId={item.id} />
+    </div>
+  );
+}
+
+/** A block of an item's page (under the item view it names, else the item's own), with the item as its page's item. */
 function FromItem({ collection, item, link, onName }: { collection: Collection; item: Item } & FromProps<"item">) {
   const { components, collections } = useStore();
   const refs = useReferenceOptions(collection);
@@ -236,7 +261,7 @@ function LinkedBlockSettings({ options, onChange }: Pick<BlockOptionsProps<Linke
   const apply = async (value: string) => {
     if (!value.trim()) return setProblem(undefined);
     const stored = await links.toStored(value.trim());
-    if (!parseBlockLink(stored)) return setProblem("Not a block: link to a block of a view, an item's page or a dashboard (…#block).");
+    if (!parseBlockLink(stored)) return setProblem("Not a block or a field: link to a block of a view, an item's page or a dashboard (…#block), or to an item's field (book/dune#author).");
     setProblem(undefined);
     if (stored !== options.href) onChange({ href: stored });
   };
@@ -245,7 +270,7 @@ function LinkedBlockSettings({ options, onChange }: Pick<BlockOptionsProps<Linke
       <LinkTargetInput
         id={`${id}-href`}
         labelText="Linked block"
-        placeholder="books/reading-list#chart, book/dune#chart"
+        placeholder="books/reading-list#chart, book/dune#author"
         helperText="Shown as it is set up there: its settings are changed on the original."
         invalidText={problem}
         value={text}
@@ -273,7 +298,8 @@ export const linkedBlock = defineBlockType<LinkedBlockOptions>({
   icon: LinkIcon,
   defaultOptions: () => ({ href: "" }),
   normalizeOptions,
-  uses: () => ({ query: false, groups: false, fields: null }),
+  uses: () => ({ query: false, groups: false, fields: null, inheritsCollection: true }),
+  unset: (options) => !options.href.trim(),
   View: LinkedBlockView,
   OptionsEditor: LinkedBlockSettings,
 });
