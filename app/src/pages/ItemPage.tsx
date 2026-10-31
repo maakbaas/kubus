@@ -2,7 +2,7 @@ import { isEmptyValue as isEmpty, type FilterRule } from "../domain/query";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
-import { Add, Checkmark, Code, Edit, Filter, Information, Pin, PinFilled, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
+import { Add, Checkmark, Code, Edit, Filter, Information, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
 import { isFullWidth, movedId, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
@@ -261,7 +261,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   // Once per link, when the item is in: not again when the person turns the standard page off.
   useEffect(() => {
     if (!linkedField || !shown) return;
-    const view = collection.itemViews.find((v) => v.id === tab) ?? itemViewOf(collection, shown);
+    const view = collection.itemViews.find((v) => v.id === tab) ?? itemViewOf(collection);
     if (view && !showsField(collection, shown, view.layout, linkedField)) setStandard(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkedField, shown === null]);
@@ -279,12 +279,11 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   // A number or date title is edited among the fields (editedTitleField).
   const titleField = shown ? editedTitleField(collection, shown) : undefined;
   const titleSource = titleField && item ? String(item.values[titleField.id] ?? "") : title;
-  // The page's layout: the chosen tab's item view, else the one this item is pinned to, else its
-  // collection's default (starred, else the first), else the standard one (all fields, editable, with
-  // names), which the edit icon also switches to for the time being (`standard`, above).
+  // The page's layout: the chosen tab's item view, else the collection's default (starred, else the first), else the
+  // standard one (all fields, editable, with names), which the edit icon also switches to for the time being
+  // (`standard`, above).
   const itemViews = collection.itemViews;
-  const activeView = itemViews.find((v) => v.id === tab) ?? (item ? itemViewOf(collection, item) : null);
-  const pinned = !!activeView && activeView.id === item?.itemViewId;
+  const activeView = itemViews.find((v) => v.id === tab) ?? (item ? itemViewOf(collection) : null);
   const saved = (activeView && local[activeView.id]?.layout) ?? activeView?.layout ?? FULL_LAYOUT;
   const current = draft ?? saved;
   const changed = draft !== null && !sameLayout(draft, saved);
@@ -361,10 +360,6 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
       <Add />
     </IconButton>
   );
-
-  /** Pin the shown view to this item (it then opens with it, whatever the default), or unpin it. */
-  const togglePin = (view: ItemView) =>
-    item && repo.pinItemView(item.id, pinned ? null : view.id).catch((e) => setError(errorMessage(e)));
 
   /** Star the shown view as the default for the collection's items, or unstar it (then the first is). */
   const toggleDefault = (view: ItemView) => saveViews(itemViews.map((v) => ({ ...v, isDefault: v.id === view.id && !view.isDefault })));
@@ -501,12 +496,6 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   {standard ? <Checkmark /> : <Edit />}
                 </IconButton>
               )}
-              {/* The page as shown: `book/dune`, or `book/dune/details` under an item view it doesn't show by default. */}
-              <BookmarkButton
-                link={itemLink(collection.id, item.id, activeView && activeView.id !== itemViewOf(collection, item)?.id ? activeView.id : null)}
-                label={activeView && activeView.id !== itemViewOf(collection, item)?.id ? `${title} / ${activeView.name}` : title}
-                onError={(e) => setError(errorMessage(e))}
-              />
               {/* Metadata lives in a popover; more facts about the item can be added to its list. */}
               <ToolbarPopover label="Details" icon={Information} fit onOpenChange={panels.onOpenChange}>
                 <dl className="item-info">
@@ -570,7 +559,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
       {showError && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
 
       {/* Once the collection has item views: one tab each, like the views of the collection page. The
-          star makes the shown one the default for all items, the pin this item's own choice.
+          star makes the shown one the default for all items; the bookmark keeps this item as the shown view shows it.
           Changes to what a block shows stay unsaved until saved with the icon buttons beside the tabs. */}
       {/* Always shown, also for a single view: its name, "+" and saving stay in one place. */}
       {item && (
@@ -629,21 +618,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   <TrashCan />
                 </IconButton>
               )}
-              {/* Pin and star choose between views: with one view it opens anyway. */}
+              {/* The star chooses between views: with one view it opens anyway. */}
               {itemViews.length > 1 && (
-                <>
-              {/* A remote item has nothing stored to pin a view to. */}
-              {!remote && <IconButton
-                autoAlign
-                kind="ghost"
-                size="sm"
-                align="bottom"
-                label={pinned ? `Unpin from this ${collection.name}` : `Always show this ${collection.name} with this view`}
-                aria-pressed={pinned}
-                onClick={() => togglePin(activeView)}
-              >
-                {pinned ? <PinFilled /> : <Pin />}
-              </IconButton>}
               <IconButton
                 autoAlign
                 kind="ghost"
@@ -655,10 +631,16 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
               >
                 {activeView.isDefault ? <StarFilled /> : <Star />}
               </IconButton>
-                </>
               )}
             </>
           )}
+          {/* Beside the star, as on a collection page: the item as this view shows it (`book/dune`, or
+              `book/dune/details` under a view it doesn't open with by default). */}
+          <BookmarkButton
+            link={itemLink(collection.id, item.id, activeView && activeView.id !== itemViewOf(collection)?.id ? activeView.id : null)}
+            label={activeView && activeView.id !== itemViewOf(collection)?.id ? `${title} / ${activeView.name}` : title}
+            onError={(e) => setError(errorMessage(e))}
+          />
           {/* The view's own tools, as on a collection page: its filter (every block uses it unless it has its own) and its
               settings, last. The settings are always here, so the bar (and its "⋮" on a phone) is never empty. */}
           {/* Held while a panel is open: adding a block in the layout panel mustn't move its button. */}

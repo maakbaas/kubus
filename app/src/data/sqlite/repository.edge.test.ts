@@ -348,20 +348,6 @@ describe("moving and pinning items", () => {
     await repo.moveItem("unknown", "default");
     expect(changes).toEqual([]);
   });
-
-  it("pins an item to an item view and back to the default", async () => {
-    const book = await collection("Book", [field("Title")]);
-    const id = await repo.createItem(book, {}, "default");
-    changes = [];
-    await repo.pinItemView(id, "compact");
-    expect((await repo.getItem(book, id))?.itemViewId).toBe("compact");
-    await repo.pinItemView(id, null);
-    expect((await repo.getItem(book, id))?.itemViewId ?? null).toBeNull();
-    expect(changes).toEqual(Array(2).fill({ scope: "items", collectionId: book.id, itemId: id }));
-    changes = [];
-    await repo.pinItemView("unknown", "x");
-    expect(changes).toEqual([]);
-  });
 });
 
 describe("item views", () => {

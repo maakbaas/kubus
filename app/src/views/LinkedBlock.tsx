@@ -169,7 +169,7 @@ function FromItem({ collection, item, link, onName }: { collection: Collection; 
   }, [collection, item, components, refs]);
   const views = collection.itemViews;
   const named = link.viewId ? views.find((v) => v.id === link.viewId) : undefined;
-  const found = findLinkedBlock<ItemView>(views, (v) => v.layout.blocks, named, itemViewOf(collection, item) ?? undefined, link.blockId);
+  const found = findLinkedBlock<ItemView>(views, (v) => v.layout.blocks, named, itemViewOf(collection) ?? undefined, link.blockId);
   if (!found) return <Notice text={GONE} />;
   const layout = found.view.layout;
   // The page's filter for all its blocks applies with more than one block listing items (as on the page itself).

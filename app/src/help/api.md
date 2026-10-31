@@ -56,7 +56,7 @@ An item comes back like this:
 
 ```json
 {
-  "id": "…", "collection": "Book", "collectionId": "…", "spaceId": "default", "itemViewId": null,
+  "id": "…", "collection": "Book", "collectionId": "…", "spaceId": "default",
   "label": "Dune", "createdAt": "2026-10-27T09:00:00.000Z", "updatedAt": "…",
   "values": { "Title": "Dune", "Pages": 412, "Read": false, "Author": "<item id>", "Summary": "…" }
 }
@@ -90,7 +90,6 @@ Component values run on the server, without Node's globals, and each section get
 | `PATCH /items/{id}` | change only the fields given in `{ values }` |
 | `DELETE /items/{id}` | delete |
 | `POST /items/{id}/move` | move to another space: `{ space }` |
-| `PUT /items/{id}/item-view` | pin an item view: `{ itemView }` (null for the collection's default) |
 | `PUT /items/{id}/ai/{field}` | set an AI field's generated value: `{ value }` (for the prompt as it reads now) |
 | `POST /items/{id}/ai/{field}/accept` | keep a value someone typed over an AI field |
 | `GET /search` | search, as the app does. Takes q, and optionally space and limit |

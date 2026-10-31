@@ -751,16 +751,6 @@ export function createApi(repo: Repository): Router {
         await repo.moveItem(id, space.id);
         return itemAnswer(id);
       })
-      .add("PUT", "/api/v1/items/{id}/item-view", async (req, { id }) => {
-        const o = await body(req);
-        const w = await world();
-        const { collection } = await itemOf(w, id);
-        const given = o.itemView === null || o.itemView === undefined ? null : String(o.itemView);
-        const view = given === null ? null : (collection.itemViews.find((v) => v.id === given) ?? collection.itemViews.find((v) => same(v.name, given)));
-        if (given !== null && !view) throw new HttpError(404, `${collection.name} has no item view “${given}”`);
-        await repo.pinItemView(id, view?.id ?? null);
-        return itemAnswer(id);
-      })
       .add("PUT", "/api/v1/items/{id}/ai/{f}", async (req, { id, f }) => {
         const o = await body(req);
         const { collection, field, hash } = await aiOf(id, f);

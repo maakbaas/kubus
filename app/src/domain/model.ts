@@ -99,7 +99,7 @@ export interface Collection {
   icon: string | null;
   description: string;
   fields: FieldDef[];
-  /** Item page layouts (the starred one is used unless an item is pinned to another). */
+  /** Item page layouts (the starred one is what an item's page opens with). */
   itemViews: ItemView[];
   /** The spaces it is shown in; null = every space. */
   spaceIds: string[] | null;
@@ -146,8 +146,6 @@ export interface Item {
   spaceId: string;
   /** Keyed by field id. Missing key = no value. */
   values: Record<string, FieldValue>;
-  /** The item view this item is pinned to, instead of its collection's default. */
-  itemViewId?: string | null;
   /** AI fields: a fingerprint of the prompt each stored value was generated from (domain/ai.ts), by field id. */
   aiInputs?: Record<string, string>;
   /** AI fields: the values the user typed over (never made again by themselves), by field id. */

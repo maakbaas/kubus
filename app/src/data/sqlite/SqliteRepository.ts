@@ -91,7 +91,6 @@ interface ItemRow {
   id: string;
   collection_id: string;
   space_id: string;
-  item_view_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -740,14 +739,6 @@ export class SqliteRepository implements Repository {
     this.emit({ scope: "collections" }, ...(owners.length > 0 ? [{ scope: "bookmarks" } as const] : []));
   }
 
-  async pinItemView(itemId: string, viewId: string | null): Promise<void> {
-    await this.db.write([
-      { sql: "UPDATE items SET item_view_id = ?1, updated_at = ?2 WHERE id = ?3", bind: [viewId, now(), itemId] },
-    ]);
-    const collectionId = await this.collectionOfItem(itemId);
-    if (collectionId) this.emit({ scope: "items", collectionId, itemId });
-  }
-
   async listDashboards(): Promise<Dashboard[]> {
     const rows = await this.db.select<DashboardRow>("SELECT * FROM dashboards WHERE deleted_at IS NULL ORDER BY position, created_at");
     return rows.map((r) => ({
@@ -1180,7 +1171,6 @@ export class SqliteRepository implements Repository {
       ...(inputsByItem.has(o.id) && { aiInputs: inputsByItem.get(o.id) }),
       ...(generatedByItem.has(o.id) && { aiGeneratedAt: generatedByItem.get(o.id) }),
       ...(editedByItem.has(o.id) && { aiEdited: editedByItem.get(o.id) }),
-      itemViewId: o.item_view_id,
       createdAt: o.created_at,
       updatedAt: o.updated_at,
     }));

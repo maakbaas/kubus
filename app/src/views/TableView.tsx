@@ -495,7 +495,7 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
   const struckId = isStruckThrough(collection, item) ? (titleId ?? labelField(collection, item)?.id ?? titleColumn(collection)?.id) : undefined;
   // Its page's layout holds something back (read-only, fields left out): like the page's
   // own edit icon, an edit button opens it with every field, editable. Not for an item that can't be edited (remote).
-  const restricted = !isReadOnly(collection) && isRestricted(collection, item, itemViewOf(collection, item)?.layout ?? FULL_LAYOUT);
+  const restricted = !isReadOnly(collection) && isRestricted(collection, item, itemViewOf(collection)?.layout ?? FULL_LAYOUT);
   const rowButtons = (
     <>
       {/* Without the title column (its link opens the item), each row gets an open button. */}

@@ -32,13 +32,10 @@ describe("item views", () => {
     expect(withDefaultItemView(stored)).toBe(stored);
   });
 
-  it("an item opens with its pinned view, else the starred one, else the first, else none", () => {
-    const views = [view("a"), view("b", { isDefault: true }), view("c")];
-    expect(itemViewOf(collection(views), item({ itemViewId: "c" }))?.id).toBe("c");
-    expect(itemViewOf(collection(views), item({ itemViewId: "gone" }))?.id).toBe("b");
-    expect(itemViewOf(collection(views), item())?.id).toBe("b");
-    expect(itemViewOf(collection([view("a"), view("b")]), item())?.id).toBe("a");
-    expect(itemViewOf(collection([]), item())).toBeNull();
+  it("an item opens with the starred view, else the first, else none", () => {
+    expect(itemViewOf(collection([view("a"), view("b", { isDefault: true }), view("c")]))?.id).toBe("b");
+    expect(itemViewOf(collection([view("a"), view("b")]))?.id).toBe("a");
+    expect(itemViewOf(collection([]))).toBeNull();
   });
 
   it("makes ids of its own", () => {

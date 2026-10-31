@@ -344,9 +344,9 @@ What the app does, feature by feature (read the part you work on).
   approach for which fields show in which order: a block's fields (table columns, card fields)
   and item pages (`orderFields`; null = all in the collection's order). Item pages show an item view
   (`collections.item_views`, JSON: name + layout = editable, field names shown, fields and blocks + order):
-  the one the item is pinned to (`items.item_view_id`), else the starred one, else the first.
-  Once a collection has item views its item pages show them as tabs with "+", delete, pin (this
-  item always opens with it) and star (default for all items). The layout popover edits the
+  the starred one, else the first (no per-item choice: `items.item_view_id` is unused, kept as it was stored).
+  Once a collection has item views its item pages show them as tabs with "+", delete, star (default for all items) and,
+  beside it as on a collection page, the bookmark (the item as the shown view shows it). The layout popover edits the
   shown view's layout, stored right away; changes to what its blocks show are unsaved, saved like
   a collection page's views (Discard / Save changes beside the tabs, left of the bar's other buttons and
   never in its "⋮" menu; "+" after the tabs makes a
@@ -554,7 +554,7 @@ What the app does, feature by feature (read the part you work on).
   what a column supports (`fieldOperators`, `canSort`, `canGroup`: JSON and the like only "contains" /
   "is empty"); blocks show their Limit of rows (100 unless set; a chart all) and "Show more" (`useRemoteResult`). Nothing edits them: no "New",
   no add row, no in-place editing, no delete or duplicate, checkboxes don't toggle, the item page has
-  no editable fields, pin or space; the repository refuses item writes to them too. "Read again" (the
+  no editable fields or space; the repository refuses item writes to them too. "Read again" (the
   collection page's views bar) reads the rows again. Needs the server online; nothing is kept offline.
 - **Local first.** The app works fully offline on the device's own SQLite database. Every asset is part of the build (IBM Plex included, `app/src/fonts.css`; nothing from a
   CDN) and the service worker caches all of it, so offline it looks exactly as online.

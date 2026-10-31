@@ -81,13 +81,10 @@ export const sameLayout = (a: ItemLayout, b: ItemLayout) =>
   JSON.stringify(a.blocks) === JSON.stringify(b.blocks) &&
   JSON.stringify(a.filters) === JSON.stringify(b.filters);
 
-/**
- * The item view an item's page opens with: the one it is pinned to, else the collection's starred
- * one, else the first; null when the collection has none (the standard page).
- */
-export function itemViewOf(collection: Collection, item: Item): ItemView | null {
+/** The item view an item's page opens with: the collection's starred one, else the first; null when it has none (the standard page). */
+export function itemViewOf(collection: Pick<Collection, "itemViews">): ItemView | null {
   const views = collection.itemViews;
-  return views.find((v) => v.id === item.itemViewId) ?? views.find((v) => v.isDefault) ?? views[0] ?? null;
+  return views.find((v) => v.isDefault) ?? views[0] ?? null;
 }
 
 /**

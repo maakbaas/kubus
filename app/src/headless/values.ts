@@ -12,7 +12,6 @@ export interface ApiItem {
   collection: string;
   collectionId: string;
   spaceId: string;
-  itemViewId: string | null;
   label: string;
   createdAt: string;
   updatedAt: string;
@@ -38,7 +37,6 @@ export function itemOut(collection: Collection, item: Item): ApiItem {
     collection: collection.name,
     collectionId: collection.id,
     spaceId: item.spaceId,
-    itemViewId: item.itemViewId ?? null,
     label: itemLabel(collection, item),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,

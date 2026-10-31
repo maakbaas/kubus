@@ -133,7 +133,6 @@ describe("edits on two devices", () => {
     const [all] = await a.listViews(n.id, "default");
     await a.saveView({ ...all, id: "second", name: "Second", position: 1, createdAt: ts, updatedAt: ts });
     await a.saveItemViews(n.id, [{ id: "compact", name: "Compact", isDefault: true, collapsed: { blocks: [], groups: {} }, layout: { fields: null, filters: [], hiddenLabels: [], blocks: [], editable: true, hideEmpty: false } }]);
-    await a.pinItemView(id, "compact");
     await settled(a);
     await settled(b);
     expect((await b.listSpaces()).map((s) => [s.id, s.icon])).toEqual([["default", null], ["work", "Briefcase"]]);
@@ -142,7 +141,6 @@ describe("edits on two devices", () => {
     expect((await b.listViews(n.id, "default")).map((v) => v.name)).toEqual(["All", "Second"]);
     const onB = (await b.listCollections()).find((c) => c.id === n.id)!;
     expect(onB.itemViews.map((v) => v.id)).toEqual(["compact"]);
-    expect((await b.getItem(onB, id))?.itemViewId).toBe("compact");
     await a.deleteSpace("work");
     await settled(a);
     await settled(b);

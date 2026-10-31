@@ -366,11 +366,11 @@ describe("items", () => {
 
   it("are read, changed and deleted by id; unknown or deleted ones are 404", async () => {
     const item = await ok("POST", "/collections/Book/items", { values: { Title: "Dune" } });
-    expect(await ok("GET", `/items/${item.id}`)).toMatchObject({ id: item.id, label: "Dune", itemViewId: null });
+    expect(await ok("GET", `/items/${item.id}`)).toMatchObject({ id: item.id, label: "Dune" });
     expect(await ok("PATCH", `/items/${item.id}`, { values: { Title: "Dune!" } })).toMatchObject({ label: "Dune!" });
     expect(await ok("PATCH", `/items/${item.id}`, {})).toMatchObject({ label: "Dune!" });
     expect(await ok("DELETE", `/items/${item.id}`)).toEqual({ ok: true });
-    for (const [method, path] of [["GET", `/items/${item.id}`], ["PATCH", `/items/${item.id}`], ["DELETE", `/items/${item.id}`], ["POST", `/items/${item.id}/move`], ["PUT", `/items/${item.id}/item-view`]] as const) {
+    for (const [method, path] of [["GET", `/items/${item.id}`], ["PATCH", `/items/${item.id}`], ["DELETE", `/items/${item.id}`], ["POST", `/items/${item.id}/move`]] as const) {
       expect(await refused(404, method, path, method === "GET" || method === "DELETE" ? undefined : { space: "default" })).toBe(`No item ${item.id}`);
     }
   });
@@ -384,16 +384,6 @@ describe("items", () => {
     await ok("PATCH", "/collections/Book", { spaces: ["default", "Work"] });
     expect(await refused(409, "POST", `/items/${item.id}/move`, { space: "Home" })).toBe("Books aren't shown in Home");
     expect((await ok("POST", `/items/${item.id}/move`, { space: "Work" })).spaceId).not.toBe("default");
-  });
-
-  it("are pinned to an item view by id or name, and back to the default", async () => {
-    const item = await ok("POST", "/collections/Book/items", { values: { Title: "Dune" } });
-    const views = await ok("PUT", "/collections/Book/item-views", [{ name: "Compact", layout: {} }, { name: "Wide", layout: {} }]);
-    expect((await ok("PUT", `/items/${item.id}/item-view`, { itemView: "wide" })).itemViewId).toBe(views[1].id);
-    expect((await ok("PUT", `/items/${item.id}/item-view`, { itemView: views[0].id })).itemViewId).toBe(views[0].id);
-    expect((await ok("PUT", `/items/${item.id}/item-view`, { itemView: null })).itemViewId).toBeNull();
-    expect((await ok("PUT", `/items/${item.id}/item-view`, {})).itemViewId).toBeNull();
-    expect(await refused(404, "PUT", `/items/${item.id}/item-view`, { itemView: "Nope" })).toBe("Book has no item view “Nope”");
   });
 
   it("have AI values written for the prompt as it reads now, and accepted when typed over", async () => {

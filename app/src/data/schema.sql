@@ -148,7 +148,7 @@ CREATE TABLE items (
   id            TEXT PRIMARY KEY,
   collection_id TEXT NOT NULL REFERENCES collections(id),
   space_id      TEXT NOT NULL,         -- the space it belongs to (spaces.id; 'default' needs no row)
-  item_view_id  TEXT,                  -- the item view (collections.item_views) this item is pinned to
+  item_view_id  TEXT,                  -- unused: once the item view an item was pinned to (kept, synced, so no data or sync change)
   created_at    TEXT NOT NULL,
   updated_at    TEXT NOT NULL,
   deleted_at    TEXT

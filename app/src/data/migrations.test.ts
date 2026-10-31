@@ -88,9 +88,10 @@ describe("migrations", () => {
     expect(book.itemViews.map((v) => v.name)).toEqual(["Compact"]);
     const cover = "e06cc5dc61902f1ec01216ae3298216b218ad494ca253a85557ed4e44a23994b";
     const dune = await repo.getItem(book, "item-dune");
+    // The item view it was pinned to: no longer read (pinning is gone), but kept as it was stored.
+    expect(await client.select("SELECT item_view_id FROM items WHERE id = 'item-dune'")).toEqual([{ item_view_id: "itemview-compact" }]);
     expect(dune).toMatchObject({
       spaceId: "default",
-      itemViewId: "itemview-compact",
       aiInputs: { "field-summary": "hash-1" },
       values: {
         "field-title": "Dune", "field-notes": `# Notes\n\nA *desert* planet. ![](files/${cover})`, "field-pages": 412.5, "field-published": "1965-08-01",

@@ -205,8 +205,6 @@ export interface Repository {
 
   /** Replaces a collection's item page layouts. */
   saveItemViews(collectionId: string, views: ItemView[]): Promise<void>;
-  /** Pins an item to one of its collection's item views, or back to the collection's default with null. */
-  pinItemView(itemId: string, viewId: string | null): Promise<void>;
 
   /** Every dashboard, in their order (whichever spaces it is shown in: domain/spaces.ts inSpace). */
   listDashboards(): Promise<Dashboard[]>;
