@@ -23,6 +23,7 @@ import type { RefOptions } from "../ui/useReferenceOptions";
 import { BLOCK_TYPES, blockType, carryOptions, normalizeBlock, type BlockPlace, type BlockTypeDefinition, type PageItem } from ".";
 import { QueryEditor } from "./QueryEditor";
 import type { CollectionData } from "./useCollectionData";
+import { entriesEditable } from "../domain/listEntries";
 import { useItemActions } from "./useItemActions";
 import { useRemoteResult } from "./useRemoteResult";
 import { useMergedResult } from "./useMergedResult";
@@ -450,6 +451,9 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   const showError = useShownOnce(error);
   const fields = useMemo(() => orderFields(pickableFields(collection), block.layout.fields), [collection, block.layout.fields]);
   const preset = useMemo(() => filterPreset(collection, filters, inherited), [collection, filters, inherited]);
+  // A list field's entries are edited in place only on an item page whose fields are editable, a new one going to the
+  // page's item (elsewhere there would be no item to add it to): domain/listEntries.ts entriesEditable.
+  const entriesOn = place === "item" && editable && page && entriesEditable(collection) ? page : null;
   const actions = useItemActions({
     collection,
     stored: data.stored,
@@ -458,6 +462,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
     onSort: (sort) => onChange({ ...block, sort, sortChosen: true }),
     confirm,
     onError,
+    entriesOn,
   });
   const blockName = useBlockName();
   // Headed like a field (its name as a label, with its type's icon), collapsible. A hidden header
@@ -539,7 +544,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
                 fields={fields}
                 layout={block.layout}
                 options={block.options}
-                editable={editable && !isReadOnly(collection)}
+                editable={editable && (!isReadOnly(collection) || !!entriesOn)}
                 onOptions={(options) => onSet({ options })}
                 refs={data.refs}
                 search={search}

@@ -136,7 +136,8 @@ headless device that answers the server's HTTP API (bundled into `server/headles
   `field_values`, healed after a first download from a server filled before the table existed). Keep `item_links` in step with what counts as a link (`linkTargets`).
 - **A list field's entries are a virtual collection too** (`domain/listEntries.ts`, `$list:<field id>` in `ViewBlock.collectionId`,
   `Collection.listOf`): one row per entry of every item, made from the item cache when shown (`views/useListData.tsx` `ListData`), resolved by
-  `findCollection`; read-only but for ticking a checklist's Done (`entryActions` writes the entry back into its item). Offered in the Collection
+  `findCollection`; read-only but for ticking a checklist's Done, and on an item page whose fields are editable for editing, adding (to the page's item) and
+  deleting entries of a checklist or list of strings / numbers (`entryActions` writes the list back into its item). Offered in the Collection
   pickers of item page, collection view (its own list fields) and dashboard blocks (alone). docs/features.md "A list field's entries in a block".
 - **A dashboard's block may list several collections** (`ViewBlock.collectionIds`, native and remote mixed; only on a dashboard, place
   "dashboard": a collection view's block lists the view's collection, an item page's one collection or Backlinks; the API answers 400 for

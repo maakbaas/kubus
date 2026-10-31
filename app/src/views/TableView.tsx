@@ -36,6 +36,7 @@ import { isStruckThrough, itemLabel, labelField, titleFields, type FieldDef, typ
 import { cellEditStart, type EditStart } from "../ui/editStart";
 import { itemViewOf, FULL_LAYOUT, isRestricted } from "../domain/fieldLayout";
 import { isReadOnly } from "../domain/sources";
+import { entriesEditable, isEntryPlace } from "../domain/listEntries";
 import { isGrouped } from "../domain/query";
 import { FieldEditor } from "../ui/FieldEditor";
 import { FieldInput, parseInputValue, toInputValue, type InputValue } from "../ui/FieldInput";
@@ -69,7 +70,7 @@ const imageStyle = (options: TableOptions): CSSProperties | undefined =>
 const titleColumn = (collection: Collection) => titleFields(collection)[0];
 
 /** Fields that get an input in the add row: everything editable inline, plus checkboxes. */
-const addable = (f: FieldDef) => f.kind === "checkbox" || isInlineEditable(f.kind);
+const addable = (collection: Collection, f: FieldDef) => !isEntryPlace(collection, f.id) && (f.kind === "checkbox" || isInlineEditable(f.kind));
 
 /**
  * The add row: one compact input per editable column; Enter (or the + button) creates the
@@ -92,7 +93,7 @@ interface AddRowProps {
 
 function AddRow({ collection, columns, refs, preset, groupBy, bare, create, onClose }: AddRowProps) {
   const { collections } = useStore();
-  const fields = columns.filter((f) => addable(f) && f.id !== groupBy);
+  const fields = columns.filter((f) => addable(collection, f) && f.id !== groupBy);
   const blank = () => Object.fromEntries(fields.map((f) => [f.id, toInputValue(f.kind, preset[f.id] ?? null)])) as Record<string, InputValue>;
   const initial = JSON.stringify(blank());
   const [raw, setRaw] = useState(blank);
@@ -171,7 +172,7 @@ function AddRow({ collection, columns, refs, preset, groupBy, bare, create, onCl
           {f.id === groupBy && <div>{formatValue(f, preset[f.id] ?? null, refs)}</div>}
           {/* Inputs are laid over the cell, so they never change the column widths; a checkbox
               is small enough to stay in the flow. */}
-          {addable(f) && f.id !== groupBy && (
+          {addable(collection, f) && f.id !== groupBy && (
             <div className={f.kind === "checkbox" ? "add-check" : "add-cell"} title={errors[f.id]}>
               <FieldInput
                 field={f}
@@ -232,7 +233,8 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
   }
   // An AI value is typed over like text or a number (Markdown needs the item page).
   const inline = isInlineEditable(field.kind) || (field.kind === "ai" && field.output !== "markdown");
-  if (!editable || !inline || isMetaField(field)) {
+  // A list entry's item and place in the list say where it is: they aren't edited.
+  if (!editable || !inline || isMetaField(field) || isEntryPlace(collection, field.id)) {
     // Wrapped so the column-width rules (one line where possible) apply to plain text too.
     return (
       <div>
@@ -562,8 +564,10 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
 
 export function TableView(props: BlockProps<TableOptions>) {
   const { collection, result, fields: shown, options, editable, refs, search, actions, collapsedGroups, onGroupCollapse } = props;
-  // Without the title link the title is an ordinary column (and rows get an open button).
-  const titleId = options.titleLink ? titleColumn(collection)?.id : undefined;
+  // Without the title link the title is an ordinary column (and rows get an open button). A list field's entries edited
+  // on their item's page (domain/listEntries.ts entriesEditable): their text is edited, not a link to the page shown.
+  const entriesEdited = editable && !!collection.listOf && entriesEditable(collection);
+  const titleId = options.titleLink && !entriesEdited ? titleColumn(collection)?.id : undefined;
   const titleShown = shown.some((f) => f.id === titleId);
   const [editing, setEditing] = useState<EditingCell | null>(null);
   /** The group whose add row is open ("" when not grouped), or null. */
@@ -619,7 +623,7 @@ export function TableView(props: BlockProps<TableOptions>) {
   const plusColumn = (shown.some((f) => f.id === titleColumn(collection)?.id) ? titleColumn(collection)?.id : undefined) ?? shown[0]?.id;
   // Without a column to type into, "+" opens the new item form instead.
   const groupField = grouped ? actions.groupBy : null;
-  const inlineAdd = shown.some((f) => addable(f) && f.id !== groupField);
+  const inlineAdd = shown.some((f) => addable(collection, f) && f.id !== groupField);
   const addRows = (groupKey: string, bare = false) =>
     actions.create &&
     editable &&

@@ -1,11 +1,11 @@
 import type { ItemCache } from "../app/itemCache";
 import type { Repository } from "../data";
 import { itemPath } from "../domain/backlinks";
-import { LIST_DONE, LIST_VALUE, parseEntryId, withEntryDone } from "../domain/listEntries";
+import { LIST_DONE, LIST_VALUE, parseEntryId, withEntryAdded, withEntryChanged, withEntryRemoved } from "../domain/listEntries";
 import { itemLabel, labelField, nextName, type Collection, type FieldValue, type Item } from "../domain/model";
 import { groupPreset, type ViewQuery } from "../domain/query";
 import type { OpenMode } from "../workspace/Workspace";
-import type { ItemActions } from "./registry";
+import type { ItemActions, PageItem } from "./registry";
 import { errorMessage } from "../domain/errors";
 
 // What a block can do with its items (useItemActions wires these to the app): the handlers worked out
@@ -24,10 +24,12 @@ export interface ItemActionsOptions {
   onSort(sort: ViewQuery["sort"]): void;
   confirm(options: { title: string; body: string }): Promise<boolean>;
   onError(message: string): void;
+  /** A block of a list field's entries on an item page whose fields are editable: its entries are edited, added (to this item) and deleted. */
+  entriesOn?: PageItem | null;
 }
 
 export interface ItemActionsEnvironment {
-  repo: Pick<Repository, "deleteItem" | "createItem" | "updateItem">;
+  repo: Pick<Repository, "deleteItem" | "createItem" | "updateItem" | "getItem">;
   cache: Pick<ItemCache, "items">;
   /** The space new items land in. */
   spaceId: string;
@@ -53,25 +55,56 @@ export function readOnlyActions(actions: ItemActions): ItemActions {
  * What a block can do with a checklist's entries (domain/listEntries.ts): open and sort them, and tick one (Done), which
  * writes the entry back into its item's checklist; nothing else of them is edited here.
  */
-export function entryActions(actions: ItemActions, list: Collection, collections: Collection[], { repo, cache }: Pick<ItemActionsEnvironment, "repo" | "cache">, onError: (message: string) => void): ItemActions {
+export function entryActions(
+  actions: ItemActions,
+  list: Collection,
+  collections: Collection[],
+  { repo, cache }: Pick<ItemActionsEnvironment, "repo" | "cache">,
+  { onError, confirm, entriesOn }: Pick<ItemActionsOptions, "onError" | "confirm" | "entriesOn">,
+): ItemActions {
+  const source = list.listOf;
+  const owner = collections.find((c) => c.id === source?.collectionId);
+  if (!source || !owner) return readOnlyActions(actions);
+  /**
+   * The owner item's list value made into `change` of it (null: nothing to do), shown at once and stored. Read from the
+   * database, not the cache: a reload of the cache after an earlier edit may still show the list before it, and the
+   * whole list is written back.
+   */
+  const write = async (itemId: string, change: (value: FieldValue | undefined) => FieldValue | null) => {
+    const item = await repo.getItem(owner, itemId).catch(() => null);
+    const next = item && change(item.values[source.fieldId]);
+    if (!next) return;
+    cache.items.patch(owner.id, itemId, (o) => ({ ...o, values: { ...o.values, [source.fieldId]: next } }));
+    try {
+      await repo.updateItem(owner, itemId, { [source.fieldId]: next });
+    } catch (e) {
+      onError(errorMessage(e));
+      void cache.items.reload(owner.id);
+    }
+  };
+  // A checklist's Done is ticked wherever its entries are listed; the rest only on an item page (`entriesOn`), whose item a
+  // new entry goes to.
+  const page = entriesOn && entriesOn.item.collectionId === owner.id ? entriesOn : null;
   return {
     ...readOnlyActions(actions),
     async setValue(entry, field, value) {
-      const source = list.listOf;
-      const owner = collections.find((c) => c.id === source?.collectionId);
-      if (!source || !owner || field.id !== LIST_DONE) return;
       const { itemId, index } = parseEntryId(entry.id);
-      const item = cache.items.snapshot(owner.id).items?.find((i) => i.id === itemId);
-      const next = item && withEntryDone(item.values[source.fieldId], index, String(entry.values[LIST_VALUE] ?? ""), value === true);
-      if (!next) return;
-      cache.items.patch(owner.id, itemId, (o) => ({ ...o, values: { ...o.values, [source.fieldId]: next } }));
-      try {
-        await repo.updateItem(owner, itemId, { [source.fieldId]: next });
-      } catch (e) {
-        onError(errorMessage(e));
-        void cache.items.reload(owner.id);
-      }
+      const shown = entry.values[LIST_VALUE];
+      if (field.id === LIST_DONE && source.kind === "checklist") await write(itemId, (v) => withEntryChanged(source.kind, v, index, shown, { done: value === true }));
+      else if (field.id === LIST_VALUE && page) await write(itemId, (v) => withEntryChanged(source.kind, v, index, shown, { text: value }));
     },
+    ...(page && {
+      groupPreset: actions.groupPreset,
+      async create(values) {
+        await write(page.item.id, (v) => withEntryAdded(source.kind, v, values[LIST_VALUE], values[LIST_DONE] === true));
+      },
+      async remove(entry) {
+        const { itemId, index } = parseEntryId(entry.id);
+        const shown = entry.values[LIST_VALUE];
+        if (!(await confirm({ title: `Delete “${String(shown ?? "")}”?`, body: `It is removed from ${owner.name}'s ${list.name.split(" / ").pop()}.` }))) return;
+        await write(itemId, (v) => withEntryRemoved(source.kind, v, index, shown));
+      },
+    }),
   };
 }
 
@@ -143,7 +176,7 @@ export function buildItemActions({ collection, stored, query, preset, onSort, co
  * query, so it never changes (except between editable and read-only). A read-only one (a remote
  * collection) can only open and sort.
  */
-export function stableItemActions(latest: { current: ItemActions }, readOnly: boolean, tickable = false): ItemActions {
+export function stableItemActions(latest: { current: ItemActions }, readOnly: boolean, tickable = false, entries = false): ItemActions {
   const actions: ItemActions = {
     open: (item, mode, options) => latest.current.open(item, mode, options),
     remove: (item) => latest.current.remove?.(item),
@@ -160,5 +193,7 @@ export function stableItemActions(latest: { current: ItemActions }, readOnly: bo
     },
     sortBy: (fieldId) => latest.current.sortBy!(fieldId),
   };
+  // A list field's entries: ticked (a checklist's Done), and on an item page edited, added and deleted (entryActions).
+  if (entries) return { ...readOnlyActions(actions), setValue: actions.setValue, create: actions.create, remove: actions.remove, groupPreset: actions.groupPreset };
   return tickable ? { ...readOnlyActions(actions), setValue: actions.setValue } : readOnly ? readOnlyActions(actions) : actions;
 }

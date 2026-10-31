@@ -5,7 +5,8 @@ import { ItemCache } from "../app/itemCache";
 import { newId, type FieldDef, type Item } from "../domain/model";
 import type { ViewQuery } from "../domain/query";
 import { device } from "../test/fakeServer";
-import { buildItemActions, stableItemActions, type ItemActionsOptions } from "./itemActions";
+import { buildItemActions, entryActions, stableItemActions, type ItemActionsOptions } from "./itemActions";
+import { entryItems, LIST_DONE, LIST_VALUE, listCollection } from "../domain/listEntries";
 
 const field = (name: string, kind: FieldDef["kind"], position: number, extra: Partial<FieldDef> = {}): FieldDef => ({
   id: newId(), collectionId: "", name, kind, targetCollectionId: null, componentId: null, code: null, output: null,
@@ -201,3 +202,49 @@ describe("stable actions", () => {
   });
 });
 
+
+describe("a checklist's entries", () => {
+  /** A Task with subtasks, its entries collection and the actions of a block of them (`page`: on the task's own page). */
+  async function entries(page: boolean) {
+    const repo = await device({ connect: false });
+    const id = newId();
+    await repo.saveCollection({ id, name: "Task", pluralName: "Tasks", icon: null, description: "", spaceIds: null, fields: [field("Title", "string", 0), field("Subtasks", "checklist", 1)] }, "default");
+    const task = (await repo.listCollections()).find((c) => c.id === id)!;
+    const subtasks = task.fields[1];
+    const cache = new ItemCache(repo, (cid) => (cid === id ? task : undefined), () => "default");
+    cache.items.subscribe(id, () => {});
+    await until(() => cache.items.snapshot(id).items !== null);
+    const itemId = await repo.createItem(task, { [task.fields[0].id]: "Move", [subtasks.id]: ["[ ] pack", "[x] book van"] }, "default");
+    await until(() => !!cache.items.snapshot(id).items?.length);
+    const list = listCollection(task, subtasks, [task])!;
+    const owner = () => cache.items.snapshot(id).items!.find((i) => i.id === itemId)!;
+    const rows = () => entryItems(list, [owner()], null);
+    const confirm = vi.fn(async () => true);
+    const onError = vi.fn();
+    const built = buildItemActions({ collection: list, stored: rows(), query: query(), preset: {}, onSort: vi.fn(), confirm, onError }, { repo, cache, spaceId: "default", openRelated: () => {} });
+    const actions = entryActions(built, list, [task], { repo, cache }, { onError, confirm, entriesOn: page ? { collection: task, item: owner(), refLabel: () => "" } : null });
+    const listField = (fid: string) => list.fields.find((f) => f.id === fid)!;
+    const stored = async () => (await repo.getItem(task, itemId))!.values[subtasks.id];
+    return { actions, rows, field: listField, stored, onError };
+  }
+
+  it("on their item's page are edited, added to that item and deleted, each stored in its checklist", async () => {
+    const t = await entries(true);
+    await t.actions.setValue!(t.rows()[0], t.field(LIST_VALUE), "pack boxes");
+    await t.actions.setValue!(t.rows()[0], t.field(LIST_DONE), true);
+    await t.actions.create!({ [LIST_VALUE]: "clean", [LIST_DONE]: true });
+    expect(await t.stored()).toEqual(["[x] pack boxes", "[x] book van", "[x] clean"]);
+    await t.actions.remove!(t.rows()[1]);
+    expect(await t.stored()).toEqual(["[x] pack boxes", "[x] clean"]);
+    expect(t.onError).not.toHaveBeenCalled();
+  });
+
+  it("elsewhere are only ticked: no text edits, nothing added or deleted", async () => {
+    const t = await entries(false);
+    expect(t.actions.create).toBeUndefined();
+    expect(t.actions.remove).toBeUndefined();
+    await t.actions.setValue!(t.rows()[0], t.field(LIST_VALUE), "changed");
+    await t.actions.setValue!(t.rows()[0], t.field(LIST_DONE), true);
+    expect(await t.stored()).toEqual(["[x] pack", "[x] book van"]);
+  });
+});

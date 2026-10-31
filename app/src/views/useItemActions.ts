@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { useStore } from "../app/store";
 import { isReadOnly } from "../domain/sources";
+import { entriesEditable } from "../domain/listEntries";
 import { useOpenRelated } from "../workspace/Workspace";
 import { buildItemActions, entryActions, stableItemActions, type ItemActionsOptions } from "./itemActions";
 import type { ItemActions } from "./registry";
@@ -16,9 +17,11 @@ export function useItemActions(options: ItemActionsOptions): ItemActions {
   const openRelated = useOpenRelated();
   const latest = useRef<ItemActions>(null as unknown as ItemActions);
   const built = buildItemActions(options, { repo, cache, spaceId: space.id, openRelated });
-  // A checklist's entries are read-only but for ticking one (Done).
+  // A list field's entries: a checklist's are ticked (Done) wherever they are listed; on an item page whose fields are
+  // editable, its entries are edited, added (to the page's item) and deleted too (entryActions).
   const tickable = options.collection.listOf?.kind === "checklist";
-  latest.current = tickable ? entryActions(built, options.collection, collections, { repo, cache }, options.onError) : built;
+  const entries = !!options.entriesOn && entriesEditable(options.collection);
+  latest.current = tickable || entries ? entryActions(built, options.collection, collections, { repo, cache }, options) : built;
   const readOnly = isReadOnly(options.collection);
-  return useMemo(() => stableItemActions(latest, readOnly, tickable), [readOnly, tickable]);
+  return useMemo(() => stableItemActions(latest, readOnly, tickable, entries), [readOnly, tickable, entries]);
 }

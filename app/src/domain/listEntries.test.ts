@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { findCollection, itemPath } from "./backlinks";
-import { entryItems, findListCollection, LIST_DONE, LIST_ITEM, LIST_POSITION, LIST_VALUE, listCollection, listCollectionId, listCollections, withEntryDone, type EntryMemo } from "./listEntries";
+import { entryItems, findListCollection, LIST_DONE, LIST_ITEM, LIST_POSITION, LIST_VALUE, listCollection, listCollectionId, listCollections, entriesEditable, isEntryPlace, withEntryAdded, withEntryChanged, withEntryRemoved, type EntryMemo } from "./listEntries";
 import { blankField, type Collection, type FieldDef, type Item } from "./model";
 import { applyQuery } from "./query";
 import { isReadOnly } from "./sources";
@@ -80,8 +80,33 @@ describe("a list field's entries as a collection", () => {
   });
 
   it("tick a checklist's entry in its item's value, found again by its text when the list changed", () => {
-    expect(withEntryDone(["[ ] a", "[ ] b"], 1, "b", true)).toEqual(["[ ] a", "[x] b"]);
-    expect(withEntryDone(["[ ] new", "[ ] a", "[x] b"], 1, "b", false)).toEqual(["[ ] new", "[ ] a", "[ ] b"]);
-    expect(withEntryDone(["[ ] a"], 3, "gone", true)).toBeNull();
+    expect(withEntryChanged("checklist", ["[ ] a", "[ ] b"], 1, "b", { done: true })).toEqual(["[ ] a", "[x] b"]);
+    expect(withEntryChanged("checklist", ["[ ] new", "[ ] a", "[x] b"], 1, "b", { done: false })).toEqual(["[ ] new", "[ ] a", "[ ] b"]);
+    expect(withEntryChanged("checklist", ["[ ] a"], 3, "gone", { done: true })).toBeNull();
+  });
+
+  it("change an entry's text (a number in a list of numbers), keeping a checklist entry's Done; empty or no number changes nothing", () => {
+    expect(withEntryChanged("checklist", ["[x] a", "[ ] b"], 0, "a", { text: " A " })).toEqual(["[x] A", "[ ] b"]);
+    expect(withEntryChanged("string_list", ["x", "y"], 1, "y", { text: "z" })).toEqual(["x", "z"]);
+    expect(withEntryChanged("number_list", [1, 2.5], 1, 2.5, { text: "3" })).toEqual([1, 3]);
+    expect(withEntryChanged("string_list", ["x"], 0, "x", { text: "  " })).toBeNull();
+    expect(withEntryChanged("number_list", [1], 0, 1, { text: "two" })).toBeNull();
+  });
+
+  it("add an entry at the end (done in a checklist when asked) and remove one, found again by its text", () => {
+    expect(withEntryAdded("checklist", ["[ ] a"], "b", true)).toEqual(["[ ] a", "[x] b"]);
+    expect(withEntryAdded("checklist", undefined, "first")).toEqual(["[ ] first"]);
+    expect(withEntryAdded("number_list", [1], 2)).toEqual([1, 2]);
+    expect(withEntryAdded("string_list", ["a"], "")).toBeNull();
+    expect(withEntryRemoved("checklist", ["[ ] a", "[x] b", "[ ] c"], 1, "b")).toEqual(["[ ] a", "[ ] c"]);
+    expect(withEntryRemoved("string_list", ["new", "a", "b"], 1, "b")).toEqual(["new", "a"]);
+    expect(withEntryRemoved("string_list", ["a"], 0, "gone")).toBeNull();
+  });
+
+  it("are edited for checklists and lists of strings or numbers, never where an entry is (its item, its place)", () => {
+    expect(entriesEditable(list("todo")!)).toBe(true);
+    expect(entriesEditable(list("scores")!)).toBe(true);
+    expect(entriesEditable(list("authors")!)).toBe(false); // a list of items' entries are items
+    expect([LIST_ITEM, LIST_POSITION, LIST_VALUE].map((id) => isEntryPlace(list("todo")!, id))).toEqual([true, true, false]);
   });
 });

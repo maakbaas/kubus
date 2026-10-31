@@ -157,13 +157,82 @@ export function entryItems(list: Collection, items: Item[], targets: Map<string,
   });
 }
 
+// --- Editing entries (a table on an item page: views/itemActions.ts entryActions) -----------------------------------
+
+/** The list kinds whose entries are edited where they are listed: their text and Done (a list of items' entries are items). */
+const EDITABLE_KINDS: readonly ListSource["kind"][] = ["checklist", "string_list", "number_list"];
+
+/** Whether a list field's entries can be edited, added and deleted where they are listed (on its items' pages). */
+export const entriesEditable = (list: Pick<Collection, "listOf">): boolean => !!list.listOf && EDITABLE_KINDS.includes(list.listOf.kind);
+
+/** An entry field that says where the entry is (its item, its place in the list), not what it is: never edited. */
+export const isEntryPlace = (list: Pick<Collection, "listOf">, fieldId: string): boolean => !!list.listOf && (fieldId === LIST_ITEM || fieldId === LIST_POSITION);
+
+/** One entry as it is edited: its text (a number in a list of numbers) and, in a checklist, whether it is done. */
+interface Entry {
+  value: string | number;
+  done: boolean;
+}
+
+const entriesOf = (kind: ListSource["kind"], value: FieldValue | undefined): Entry[] =>
+  kind === "checklist"
+    ? checklistItems(value).map((e) => ({ value: e.text, done: e.done }))
+    : kind === "number_list"
+      ? numberList(value).map((n) => ({ value: n, done: false }))
+      : (Array.isArray(value) ? value : []).map((v) => ({ value: String(v), done: false }));
+
+/** Entries as their list stores them: a checklist's as "[x] text", a list of numbers' as numbers, others as text. */
+const valueOf = (kind: ListSource["kind"], entries: Entry[]): string[] | number[] =>
+  kind === "checklist"
+    ? entries.map((e) => itemString({ text: String(e.value), done: e.done }))
+    : kind === "number_list"
+      ? entries.map((e) => Number(e.value))
+      : entries.map((e) => String(e.value));
+
+/** An entry's value as typed for its list: a number for a list of numbers (null when it isn't one), else trimmed text (null when empty). */
+function entryValue(kind: ListSource["kind"], typed: FieldValue | undefined): string | number | null {
+  if (kind === "number_list") {
+    const n = typeof typed === "number" ? typed : typeof typed === "string" && typed.trim() !== "" ? Number(typed) : NaN;
+    return Number.isFinite(n) ? n : null;
+  }
+  const text = typed === null || typed === undefined ? "" : String(typed).trim();
+  return text === "" ? null : text;
+}
+
+/** Where the entry shown at `index` with `shown` (its value then) is now: there, else the first with that value (the list changed meanwhile). */
+const findEntry = (entries: Entry[], index: number, shown: FieldValue | undefined) => {
+  const same = (e: Entry | undefined) => e !== undefined && String(e.value) === String(shown ?? "");
+  return same(entries[index]) ? index : entries.findIndex(same);
+};
+
 /**
- * A checklist value with one entry ticked or unticked (the entry at `index`, or, when the list changed meanwhile, the
- * first with the same text); null when the entry is no longer there.
+ * A list value with one entry changed: its value (`text`, a number in a list of numbers) or, in a checklist, whether it
+ * is done. Null when the entry is no longer there, or the new value is empty (or no number).
  */
-export function withEntryDone(value: FieldValue | undefined, index: number, text: string, done: boolean): string[] | null {
-  const entries = checklistItems(value);
-  const at = entries[index]?.text === text ? index : entries.findIndex((e) => e.text === text);
+export function withEntryChanged(
+  kind: ListSource["kind"],
+  value: FieldValue | undefined,
+  index: number,
+  shown: FieldValue | undefined,
+  change: { text?: FieldValue; done?: boolean },
+): string[] | number[] | null {
+  const entries = entriesOf(kind, value);
+  const at = findEntry(entries, index, shown);
   if (at < 0) return null;
-  return entries.map((e, i) => itemString(i === at ? { ...e, done } : e));
+  const next = change.text === undefined ? entries[at].value : entryValue(kind, change.text);
+  if (next === null) return null;
+  return valueOf(kind, entries.map((e, i) => (i === at ? { value: next, done: change.done ?? e.done } : e)));
+}
+
+/** A list value with an entry added at its end (done or not, in a checklist); null when the entry would be empty (or no number). */
+export function withEntryAdded(kind: ListSource["kind"], value: FieldValue | undefined, typed: FieldValue | undefined, done = false): string[] | number[] | null {
+  const next = entryValue(kind, typed);
+  return next === null ? null : valueOf(kind, [...entriesOf(kind, value), { value: next, done }]);
+}
+
+/** A list value without one entry; null when it is no longer there. */
+export function withEntryRemoved(kind: ListSource["kind"], value: FieldValue | undefined, index: number, shown: FieldValue | undefined): string[] | number[] | null {
+  const entries = entriesOf(kind, value);
+  const at = findEntry(entries, index, shown);
+  return at < 0 ? null : valueOf(kind, entries.filter((_, i) => i !== at));
 }
