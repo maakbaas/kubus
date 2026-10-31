@@ -1492,7 +1492,12 @@ img[data-lightbox] {
   line-height: var(--cds-code-02-line-height);
   letter-spacing: var(--cds-code-02-letter-spacing);
 }
-.md-editor__content > * + * {
+/* Blocks are spaced apart: at the top level, inside a quote (its paragraphs, separated by an empty `>` line, are
+   paragraphs too: Carbon zeroes a <p>'s margin, so they ran together), and a list item's paragraphs (a nested list right
+   under its item's text stays close). Editor and view alike. */
+.md-editor__content > * + *,
+.md-editor__content blockquote > * + *,
+.md-editor__content li > p + p {
   margin-top: var(--cds-spacing-04);
 }
 .md-editor__content h1 { font-size: 1.75rem; line-height: 1.3; }
