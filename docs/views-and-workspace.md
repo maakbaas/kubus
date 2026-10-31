@@ -347,8 +347,10 @@ Extension points are registries, not special cases in pages:
   global router: in-app links are plain `href="#/…"` anchors, intercepted per tab (click = this tab,
   Ctrl/Cmd/middle click = new tab); links in the side nav go to the active tab. Code that
   navigates uses `useNavigate()` (this tab) or `useOpenRelated()` (beside / new tab).
-- Pages name their tab through `PageHeader` (its breadcrumb's current item). Every breadcrumb starts with Home, its
-  icon alone (`#/`); the Home page shows just that one.
+- Pages name their tab through `PageHeader` (`current`, else its title). Every breadcrumb starts with Home, its icon
+  alone (`#/`), followed by the page's parents as links, each with a slash after it (`⌂ / Collections / Books /`); the
+  page itself isn't in it (its title is right below; on a phone, a crumb per line, it took a line). The Home page shows
+  just `⌂ /`.
 - Opening a related item (item from a list/cards, referenced item) goes through
   `useOpenRelated(path, mode)` with `openModeOf(event)`: plain click = this tab; Ctrl/Cmd click =
   beside (the pane to the right, reused or split off; a new tab on windows < 72rem); middle click =
