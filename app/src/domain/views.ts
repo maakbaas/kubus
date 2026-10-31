@@ -223,7 +223,19 @@ export function withQuery(block: ViewBlock, query: ViewQuery, shownSort: SortRul
 
 /** Whether two view states show the same thing (used to tell if a saved view was changed). */
 export function sameView(a: ViewState, b: ViewState): boolean {
-  return JSON.stringify(a.filters) === JSON.stringify(b.filters) && JSON.stringify(a.blocks) === JSON.stringify(b.blocks) && a.editable === b.editable;
+  return canonicalJson(a.filters) === canonicalJson(b.filters) && canonicalJson(a.blocks) === canonicalJson(b.blocks) && a.editable === b.editable;
+}
+
+/**
+ * JSON whatever the order of an object's keys, and without its undefined ones: a block as shown and as read back
+ * from the database (parsed in its own order, `beside: undefined` left out) are the same view, not an unsaved change.
+ */
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, (v as Record<string, unknown>)[k]]))
+      : v,
+  );
 }
 
 const array = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);

@@ -111,7 +111,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const shown = useRef<{ activeId: string | null; view: ViewState; reference: ViewState } | undefined>(undefined);
   // A reload asked before the latest change shown here (or before a later reload) is dropped: it would undo that change for a moment.
   const fresh = useFreshLoads();
-  const loadViews = useCallback(() => {
+  // `saved`: the view just saved from here, shown as stored (no longer changed, whatever the shown state still differs in).
+  const loadViews = useCallback((saved?: string) => {
     const isFresh = fresh.ticket();
     return repo.listViews(collection.id, space.id).then((list) => {
       if (!isFresh()) return;
@@ -119,12 +120,12 @@ function CollectionContent({ collection }: { collection: Collection }) {
       // A shown view without unsaved changes follows its stored settings when they change
       // elsewhere, instead of turning into "changed".
       const cur = shown.current;
-      const next = cur?.activeId ? list.find((v) => v.id === cur.activeId) : undefined;
-      if (cur && next && sameView(cur.view, cur.reference)) setView(normalized(collection, next));
+      const next = list.find((v) => v.id === (saved ?? cur?.activeId));
+      if (cur && next && (saved !== undefined || sameView(cur.view, cur.reference))) setView(normalized(collection, next));
     }, (e) => setError(errorMessage(e)));
   }, [repo, collection, space.id, fresh]);
   useEffect(() => {
-    loadViews();
+    void loadViews();
   }, [loadViews]);
   // Opening the page shows the starred view, else the first — once, when the views have loaded.
   const openedDefault = useRef(false);
@@ -224,8 +225,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
   async function updateActive() {
     if (!active) return;
     const id = (await storeVirtual()) ?? active.id;
-    await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), filters: view.filters, blocks: view.blocks });
-    await loadViews();
+    // Everything Save is offered for (sameView): filters, blocks and "Fields are editable".
+    await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), filters: view.filters, blocks: view.blocks, editable: view.editable });
+    await loadViews(id);
   }
 
   /**

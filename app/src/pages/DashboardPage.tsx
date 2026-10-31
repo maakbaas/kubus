@@ -124,15 +124,16 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   const shown = useRef<{ activeId: string | null; view: ViewState; reference: ViewState } | undefined>(undefined);
   // As a collection page's: a reload asked before the latest change shown here (or before a later reload) is dropped.
   const fresh = useFreshLoads();
-  const loadViews = useCallback(() => {
+  // `saved`: the tab just saved from here, shown as stored (no longer changed, whatever the shown state still differs in).
+  const loadViews = useCallback((saved?: string) => {
     const isFresh = fresh.ticket();
     return repo.listDashboardViews(dashboard.id, space.id).then((list) => {
       if (!isFresh()) return;
       setSavedViews(list);
       // A shown tab without unsaved changes follows its stored settings when they change elsewhere.
       const cur = shown.current;
-      const next = cur?.activeId ? list.find((v) => v.id === cur.activeId) : undefined;
-      if (cur && next && sameView(cur.view, cur.reference)) setView(stateOf(next));
+      const next = list.find((v) => v.id === (saved ?? cur?.activeId));
+      if (cur && next && (saved !== undefined || sameView(cur.view, cur.reference))) setView(stateOf(next));
     }, fail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo, dashboard.id, space.id, fresh]);
@@ -264,7 +265,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
     const tab = await stored();
     if (!tab) return;
     await repo.saveDashboardView({ ...tab, ...view });
-    await loadViews();
+    await loadViews(tab.id);
   }
 
   /** Arranging the tab (blocks added, removed, moved; a block's type, options, name, collections): stored right away. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { blankField, type Collection } from "./model";
 import {
+  sameView,
   ASPECT_RATIOS,
   BLOCK_HEIGHT,
   BLOCK_LAYOUT,
@@ -211,5 +212,14 @@ describe("pageFilterScope", () => {
   it("names a field that several collections have after its collection", () => {
     const scope = pageFilterScope([c("a", "Book", ["Title", "Year"]), c("b", "Film", ["Title"])]);
     expect(scope.fields.map((f) => f.name)).toEqual(["Title (Book)", "Year", "Title (Film)"]);
+  });
+});
+
+describe("sameView", () => {
+  it("is the same view whatever the order of a block's keys and its undefined ones (as read back after Save)", () => {
+    const shown = { filters: [], editable: true, blocks: [{ id: "a", kind: "table", beside: undefined, title: "" }] } as never;
+    const stored = { filters: [], editable: true, blocks: [{ title: "", kind: "table", id: "a" }] } as never;
+    expect(sameView(shown, stored)).toBe(true);
+    expect(sameView(shown, { ...(stored as object), editable: false } as never)).toBe(false);
   });
 });
