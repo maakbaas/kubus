@@ -7,12 +7,12 @@ describe("web addresses in text", () => {
     expect(splitUrls("See https://example.com/a?b=1#c, or (http://x.org/y).")).toEqual(["See ", "https://example.com/a?b=1#c", ", or (", "http://x.org/y", ")."]);
   });
 
-  it("include other apps' links: scheme:// ones, and the well-known ones without slashes", () => {
+  it("include anything written as scheme:…, other apps' links too", () => {
     expect(splitUrls("Play spotify:album:35yZZTWeSrszSKjRlFETwf.")).toEqual(["Play ", "spotify:album:35yZZTWeSrszSKjRlFETwf", "."]);
-    expect(splitUrls("open obsidian://open?vault=a or mailto:me@example.com")).toEqual(["open ", "obsidian://open?vault=a", " or ", "mailto:me@example.com", ""]);
-    // A word before a colon is no link, nor one that may not be opened.
-    expect(splitUrls("TODO:fix at 10:30, Note: done")).toEqual(["TODO:fix at 10:30, Note: done"]);
-    expect(splitUrls("see javascript://alert and file:///etc")).toEqual(["see javascript://alert and file:///etc"]);
+    expect(splitUrls("open obsidian://open?vault=a or slack:open")).toEqual(["open ", "obsidian://open?vault=a", " or ", "slack:open", ""]);
+    // A space after the colon, a time, a drive letter: text. A scheme that may not be opened: text.
+    expect(splitUrls("Note: done at 10:30 in C:\\Users")).toEqual(["Note: done at 10:30 in C:\\Users"]);
+    expect(splitUrls("see javascript:alert(1) and file:///etc")).toEqual(["see javascript:alert(1) and file:///etc"]);
   });
 
   it("leave other text as it is", () => {

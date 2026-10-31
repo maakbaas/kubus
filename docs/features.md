@@ -508,11 +508,11 @@ What the app does, feature by feature (read the part you work on).
   caret). Labels come from `Repository.listLabels`, per collection, read when first needed. The Edit link dialog's URL
   field offers the same list under it while a page of the app is typed (`ui/LinkTargetInput.tsx`; Escape closes the list,
   not the dialog); a choice writes the link by name, stored by id on Apply.
-- **Web addresses and app links in plain values are links** (`Highlight`'s `links`, `splitUrls`): `http(s)://…`, any
-  other `scheme://…` (`obsidian://…`) and well-known app links without slashes (`spotify:album:…`, `mailto:`, `tel:`,
-  `magnet:`, … `BARE_SCHEMES`; not any `word:text`, so "TODO:fix" stays text) in text, list and checklist entries, AI
-  and component text (cells, card fields, the item page) open outside the app, an app's link in its app
-  (`openExternal`; not the item, nor the value's editor); a blocked scheme (`javascript:`, `file:`) stays text. In
+- **Web addresses and app links in plain values are links** (`Highlight`'s `links`, `splitUrls`): anything written as
+  `scheme:…` (`https://…`, `spotify:album:…`, `mailto:…`, `obsidian://…`; a scheme of at least two characters, so a drive
+  letter `C:\…` isn't one, and the link going on right after the colon, so "Note: done" is text) in text, list and
+  checklist entries, AI and component text (cells, card fields, the item page) opens outside the app, an app's link in
+  its app (`openExternal`; not the item, nor the value's editor); a blocked scheme (`javascript:`, `file:`) stays text. In
   Markdown, GFM links bare web addresses only: an app link there is written `<spotify:album:…>` (a CommonMark autolink). Never in titles (the title is the item's own link, or edited by a click), group
   titles or search results.
 - **Tags** (`domain/tags.ts`): `#name` anywhere in text (letters, digits, `_`, `-`, `/` for nested

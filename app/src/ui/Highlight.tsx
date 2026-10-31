@@ -31,16 +31,11 @@ export function splitMatches(text: string, re: RegExp): string[] {
 }
 
 /**
- * App links written without slashes (`spotify:album:…`, `mailto:…`, `tel:…`). Others count only as `scheme://…`
- * (`obsidian://…`): any `word:text` would make "TODO:fix" a link.
+ * Links in plain text: anything written as `scheme:…` (https://…, spotify:album:…, mailto:…, obsidian://…), without the
+ * punctuation that ends a sentence around it. The scheme is at least two characters (a drive letter, `C:\…`, isn't one)
+ * and the link goes on right after the colon ("Note: done" is text); a scheme that may not be opened stays text.
  */
-const BARE_SCHEMES = ["mailto", "tel", "sms", "spotify", "magnet", "geo", "facetime", "facetime-audio", "skype", "callto", "sip", "xmpp", "bitcoin", "maps"];
-
-/**
- * Links in plain text, without the punctuation that ends a sentence around them: web addresses, other apps' links
- * (`scheme://…`, and the BARE_SCHEMES' without slashes).
- */
-const URL_IN_TEXT = new RegExp(`\\b(?:[a-z][a-z0-9+.-]*:\\/\\/|(?:${BARE_SCHEMES.join("|")}):)[^\\s<>"]*[^\\s<>"'.,;:!?)\\]}]`, "gi");
+const URL_IN_TEXT = /\b[a-z][a-z0-9+.-]+:[^\s<>"]*[^\s<>"'.,;:!?)\]}]/gi;
 
 /** Splits `text` into alternating [plain, url, plain, url, …] parts; a link that may not be opened (javascript:, file:, …) stays text. */
 export function splitUrls(text: string): string[] {
