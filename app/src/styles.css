@@ -1017,9 +1017,11 @@ body {
 }
 /* Open over the page (a phone): in landscape its content keeps clear of a notch or Dynamic Island on the left, as
    the workspace does (.app-content--workspace), its colour running to the screen's edge. One class: the docked
-   nav's width (wide screens, no notch) stays the user's. */
+   nav's width (wide screens, no notch) stays the user's. Carbon caps the nav at 16rem (max-inline-size): lifted, or the
+   inset came out of the menu's own room and it was that much narrower than in portrait. */
 .cds--side-nav--expanded {
   inline-size: calc(16rem + env(safe-area-inset-left));
+  max-inline-size: none;
   padding-inline-start: env(safe-area-inset-left);
   box-sizing: border-box;
 }
