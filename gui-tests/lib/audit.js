@@ -152,6 +152,8 @@ function __audit(opts) {
     !(collapsedNav && collapsedNav.contains(el));
   /** Screen-reader-only content: clipped to 1px or less. */
   const srOnly = (el) => {
+    // KaTeX's MathML copy of a formula is for screen readers only (clipped to 1px, the formula shown beside it).
+    if (el.closest(".katex-mathml")) return true;
     const r = el.getBoundingClientRect();
     if (r.width <= 1.5 || r.height <= 1.5) return true;
     const s = cs(el);
@@ -323,7 +325,8 @@ function __audit(opts) {
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       if (!n.textContent.trim()) continue;
       const el = n.parentElement;
-      if (!el || !rects.has(el) || srOnly(el) || el.closest("script,style,textarea,.cds--assistive-text,svg,[aria-hidden=true] .cds--visually-hidden")) continue;
+      // A formula is typeset by KaTeX: its limits and scripts sit over their symbol's box on purpose.
+      if (!el || !rects.has(el) || srOnly(el) || el.closest("script,style,textarea,.cds--assistive-text,svg,[aria-hidden=true] .cds--visually-hidden,.katex")) continue;
       // Text in a box that clips it counts only where it shows.
       range.selectNodeContents(n);
       for (const r of range.getClientRects()) {

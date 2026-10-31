@@ -31,7 +31,8 @@ is what this split avoids. Keep them current when behaviour changes.
 
 - **Carbon only** (`@carbon/react`): Carbon components for every control, never native inputs or
   hand-rolled widgets; theme tokens (`var(--cds-…)`), no custom colors.
-- **Markdown is strictly GFM**: Milkdown loads only CommonMark + GFM presets; no syntax plugins.
+- **Markdown is strictly GFM, plus GitHub's math** (`$…$`, `$$…$$`, ```` ```math ````: remark-math, `ui/markdownMath.ts` in the
+  editor, KaTeX in the view, `ui/mathRender.ts`): Milkdown loads only CommonMark + GFM presets and that; no other syntax plugins.
   The editor reports changes synchronously (`changes` plugin); don't use Milkdown's debounced
   listener plugin.
 - **Local first, one codebase**: all logic and storage in the web frontend (SQLite WASM in a worker,

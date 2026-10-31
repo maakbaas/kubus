@@ -1,6 +1,8 @@
-import { createContext, memo, useContext, useMemo, type ReactNode } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import type { Pluggable } from "unified";
 import type { ElementContent, Root, RootContent } from "hast";
 import type { Nodes as MdNodes, Root as MdRoot } from "mdast";
 import { Link } from "@carbon/react";
@@ -16,7 +18,8 @@ import { ComponentWarning } from "./ComponentWarning";
 import { TagChip } from "./TagChip";
 import { UrlImage, useFileUrl } from "./images";
 
-// Read-only GFM rendering (remark-gfm, the same parser family Milkdown uses).
+// Read-only GFM rendering (remark-gfm, the same parser family Milkdown uses), with GitHub's math ($…$, $$…$$, ```math:
+// remark-math, rendered by KaTeX, ui/mathRender.ts), the one addition to GFM.
 // Raw HTML is skipped, so stored content can't inject markup.
 //  - "full": the item view; links are clickable (system browser).
 //  - "excerpt": search results, rendered inside clickable list items, so it has no
@@ -35,7 +38,8 @@ function rehypeCodeColor() {
         if (code?.type === "element") {
           const classes = (code.properties.className as string[] | undefined) ?? [];
           const lang = classes.find((c) => c.startsWith("language-"))?.slice("language-".length);
-          if (lang) {
+          // A math fence is a formula: KaTeX draws it (last), not the code colours.
+          if (lang && lang !== "math") {
             const text = code.children.map((c) => (c.type === "text" ? c.value : "")).join("");
             code.children = lang === COMPONENT_LANGUAGE ? highlightComponent(text) : highlightCode(text, lang);
           }
@@ -144,6 +148,30 @@ function rehypeTags() {
       });
     tree.children = walk(tree.children);
   };
+}
+
+/** Text that may hold math (a `$`, a math fence): KaTeX is loaded for it. */
+const HAS_MATH = /\$|```\s*math/;
+let mathLoaded: Pluggable | null = null;
+let mathLoading: Promise<Pluggable> | null = null;
+
+/**
+ * KaTeX's rehype plugin once a text has math in it, loaded on first use (ui/mathRender.ts); null before. Until then a
+ * formula shows as its source.
+ */
+function useMath(source: string): Pluggable | null {
+  const wanted = HAS_MATH.test(source);
+  const [plugin, setPlugin] = useState<Pluggable | null>(mathLoaded);
+  useEffect(() => {
+    if (!wanted || plugin) return;
+    let live = true;
+    mathLoading ??= import("./mathRender").then((m) => (mathLoaded = m.rehypeMath));
+    void mathLoading.then((p) => live && setPlugin(() => p));
+    return () => {
+      live = false;
+    };
+  }, [wanted, plugin]);
+  return wanted ? plugin : null;
 }
 
 /** rehype plugin: wraps every match of `query` in text nodes with <mark>. */
@@ -288,12 +316,14 @@ export const MarkdownView = memo(function MarkdownView({ source, highlight = "",
     }),
     [source, onChange],
   );
+  const math = useMath(source);
   return (
     <div className={`md-editor__content md-view md-view--${variant}`}>
       <TaskContext.Provider value={tasks}>
         <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkEditorBreaks]}
-          rehypePlugins={[rehypeSoftBreaks, rehypeWarnings, rehypeTags, rehypeCodeColor, rehypeMark(highlight, exactTag)]}
+          remarkPlugins={[remarkGfm, remarkMath, remarkEditorBreaks]}
+          // KaTeX last: the plugins before it leave a formula's source (a code element) alone.
+          rehypePlugins={[rehypeSoftBreaks, rehypeWarnings, rehypeTags, rehypeCodeColor, rehypeMark(highlight, exactTag), ...(math ? [math] : [])]}
           components={variant === "full" ? fullComponents : excerptComponents}
           // Links to other apps (spotify:, obsidian:, …) are kept; react-markdown's default drops them.
           urlTransform={safeUrl}

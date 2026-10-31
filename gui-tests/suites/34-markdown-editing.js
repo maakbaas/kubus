@@ -85,3 +85,18 @@ test("markdown editing: Tab in a table, task boxes and typed links", async (t) =
   await t.check("the link is stored as Markdown", notes.includes("[the docs](https://example.org/docs)"), notes);
   await t.check("the view shows the table and the link", (await t.count(".item-fields .md-view table")) === 1 && (await t.count('.item-fields .md-view a[href="https://example.org/docs"]')) === 1);
 }, { smoke: true });
+
+test("markdown editing: math ($…$, $$…$$) kept, typed as math, dollars stay text", async (t) => {
+  const md = "Inline $E = mc^2$ here.\n\n$$\n\\sum_{i=1}^n i\n$$\n\nEnd";
+  const ids = await openNote(t, md);
+  await t.until("the view renders the formulas", async () => (await t.count(".ws-pane--active .md-view .katex")) === 2 || `${await t.count(".ws-pane--active .md-view .katex")}`);
+  await openEditor(t);
+  await t.check("the editor shows the formulas' source", (await t.count(".ProseMirror code.md-math")) === 1 && (await t.count(".ProseMirror pre.md-math-block")) === 1);
+  const k = t.page.keyboard;
+  await k.press("Control+End");
+  await k.press("Enter");
+  await k.type("Typed $y^2$, costs $5 and $10");
+  await saveEditor(t);
+  const stored = await storedNotes(t, ids);
+  await t.check("math kept and typed as math, dollars as text", stored.startsWith(md) && /Typed \$y\^2\$, costs \\?\$5 and \\?\$10/.test(stored), JSON.stringify(stored));
+});

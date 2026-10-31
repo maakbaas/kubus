@@ -1557,6 +1557,36 @@ img[data-lightbox] {
   padding-left: var(--cds-spacing-05);
   color: var(--cds-text-secondary);
 }
+/* Math (GitHub's $…$ / $$…$$, ui/markdownMath.ts): the editor shows a formula's source, in code type between its
+   dollar signs (shown, not part of the text: the formula is the text inside); the view renders it with KaTeX
+   (ui/mathRender.ts), in the text's colour, a block formula centred with the content's block spacing. */
+.md-editor__content code.md-math::before,
+.md-editor__content code.md-math::after {
+  content: "$";
+  color: var(--cds-text-secondary);
+}
+.md-editor__content pre.md-math-block::before,
+.md-editor__content pre.md-math-block::after {
+  display: block;
+  content: "$$";
+  color: var(--cds-text-secondary);
+}
+.md-view .katex {
+  color: var(--cds-text-primary);
+}
+/* A block formula is a block like any other (the content's spacing between blocks, not KaTeX's 1em); a wide one scrolls
+   sideways inside itself, with room above and below for its limits and scripts. */
+.md-view .katex-display {
+  margin: 0;
+  padding-block: var(--cds-spacing-02);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.md-editor__content.md-view > * + .katex-display,
+.md-editor__content.md-view > .katex-display + * {
+  margin-top: var(--cds-spacing-04);
+}
+
 /* Code sits on a subtle layer (the step below the field's surface), its tokens in vivid colours. */
 .md-editor__content code {
   font-family: "IBM Plex Mono", monospace;

@@ -24,10 +24,15 @@ What the app does, feature by feature (read the part you work on).
   the item when checked" also strikes the item where it is listed (`isStruckThrough`: its title in
   table rows, `cell--struck`, and on cards). Component blocks get the checkbox's value in `$items`
   and show it as their code says.
-- **Markdown is strictly GitHub Flavored Markdown.** The Milkdown editor (`app/src/ui/MarkdownEditor.tsx`)
+- **Markdown is strictly GitHub Flavored Markdown, with GitHub's math.** The Milkdown editor (`app/src/ui/MarkdownEditor.tsx`)
   loads only the CommonMark + GFM presets (plus non-syntax utilities: history, clipboard, upload,
-  prism, and its own `changes` plugin). Don't add syntax plugins (math, emoji, diagrams, frontmatter, Crepe, …),
-  and any future renderer must also be GFM-only. Behaviour-only additions are fine: clickable task
+  prism, and its own `changes` plugin) and, as the one syntax addition, GitHub's math: `$…$` inline, `$$…$$` as a block and
+  a ```` ```math ```` fence (remark-math; `ui/markdownMath.ts` in the editor, which shows a formula's source between its dollar
+  signs and makes typed `$x$` / `$$` + space into math, a `$` in text otherwise written escaped, `\$`; `MarkdownView` renders it
+  with KaTeX, `ui/mathRender.ts`, loaded the first time a text has math, bundled with its fonts: offline too; a formula
+  KaTeX can't read shows its source in the error colour). As on GitHub, two dollars in a line (`$5 and $10`) read as a
+  formula unless escaped; typed in the editor they stay dollars. Don't add other syntax plugins (emoji, diagrams,
+  frontmatter, Crepe, …), and any future renderer must also be GFM with this math only. Behaviour-only additions are fine: clickable task
   checkboxes, typed `[text](url)` links, link hover popover (open/edit/remove), code coloring
   (refractor common languages), images via button/paste/drop stored as `files/<sha256>` URLs. A Markdown value is data: `{{ }}` in it is plain text, never run (code lives only in components).
 - **Collections have a singular and plural name** ("Author" / "Authors"): singular for one item
