@@ -58,13 +58,13 @@ export const dashboardViewLink = (dashboardId: string, viewId: string) => `#/das
 
 /**
  * A bookmark's label for a page found by its link: a collection's, dashboard's or item's name; a view's with where it is
- * ("Books / Reading list", "Health / Daily", "Dune / Details"); a field's or block's with its page ("Dune › Author").
+ * ("Books / Reading list", "Health / Daily", "Dune / Details"); a field's or block's with its page ("Dune / Author").
  */
 export function bookmarkLabel(t: Pick<LinkTarget, "kind" | "name" | "context">): string {
   if (t.kind === "collection" || t.kind === "dashboard" || t.kind === "item") return t.name;
-  const parts = t.context.split(" › ");
+  const parts = t.context.split(" / ");
   if (t.kind === "view" || t.kind === "tab") return `${parts[parts.length - 1]} / ${t.name}`;
-  return `${parts[parts.length - 1]} › ${t.name}`;
+  return `${parts[parts.length - 1]} / ${t.name}`;
 }
 
 /** A link with one id of its `view=` replaced (a dashboard view copied from another space, stored in this one). */

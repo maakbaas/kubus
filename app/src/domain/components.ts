@@ -475,7 +475,7 @@ export interface LocalComponent {
   key: string;
   component: ComponentCode;
   owner: LocalOwner;
-  /** Where it is used, for people: "Books › Reading time", "Books › All › Notes". */
+  /** Where it is used, for people: "Books / Reading time", "Books / All / Notes". */
   where: string;
   /** Where to edit it (its collection's settings, its view), or null when there is no one place. */
   href: string | null;
@@ -515,7 +515,7 @@ export function localComponents(collections: Collection[], views: ViewLike[]): L
           key: `field:${f.id}`,
           component: { code: f.code, output: f.output ?? (f.kind === "ai" ? "string" : "markdown"), frameRatio: f.frameRatio, ai: f.kind === "ai" },
           owner: { type: "field", collectionId: c.id, fieldId: f.id },
-          where: `${c.pluralName} › ${f.name}`,
+          where: `${c.pluralName} / ${f.name}`,
           href: `#/collections/${c.id}/edit?field=${encodeURIComponent(f.id)}`,
         });
       }
@@ -528,7 +528,7 @@ export function localComponents(collections: Collection[], views: ViewLike[]): L
           key: `itemView:${v.id}:${b.id}`,
           component: local.component,
           owner: { type: "itemView", collectionId: c.id, itemViewId: v.id, blockId: b.id, markdown: local.markdown },
-          where: `${c.name} pages › ${v.name} › ${blockName(b, local.markdown)}`,
+          where: `${c.name} pages / ${v.name} / ${blockName(b, local.markdown)}`,
           href: null,
         });
       }
@@ -544,7 +544,7 @@ export function localComponents(collections: Collection[], views: ViewLike[]): L
         key: `view:${v.id}:${b.id}`,
         component: local.component,
         owner: { type: "view", collectionId: c.id, viewId: v.id, blockId: b.id, markdown: local.markdown },
-        where: `${c.pluralName} › ${v.name} › ${blockName(b, local.markdown)}`,
+        where: `${c.pluralName} / ${v.name} / ${blockName(b, local.markdown)}`,
         href: `#/collections/${c.id}/items?view=${encodeURIComponent(v.id)}&block=${encodeURIComponent(b.id)}`,
       });
     }

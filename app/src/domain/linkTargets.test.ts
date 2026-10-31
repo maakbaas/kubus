@@ -20,7 +20,7 @@ const field = (id: string, name: string) => ({ id, name }) as Collection["fields
 const block = (id: string, title: string, kind = "table") => ({ id, title, kind });
 const itemViews = [
   { id: "iv1", name: "Default", isDefault: true, layout: { blocks: [block("ib1", "Notes", "markdown")] } },
-  { id: "iv2", name: "Compact", isDefault: false, layout: { blocks: [] } },
+  { id: "iv2", name: "Compact", isDefault: false, layout: { fields: ["f1"], blocks: [] } },
 ];
 const books = { id: "c1", name: "Book", pluralName: "Books", fields: [field("f1", "Title"), field("f2", "Author")], itemViews } as unknown as Collection;
 const people = { id: "c2", name: "Person", pluralName: "People", fields: [field("f3", "Name")], itemViews: [] } as unknown as Collection;
@@ -122,7 +122,7 @@ describe("searchLinkTargets", () => {
   it("stores by id: view, item and field links", async () => {
     expect((await searchLinkTargets("reading", data, { items: true }))[0].href).toBe("#/collections/c1/items?view=v1");
     const [auth] = await searchLinkTargets("dune#auth", data, { items: false });
-    expect(auth).toMatchObject({ kind: "field", name: "Author", href: "#/collections/c1/items/i1?field=f2", context: "Book › Dune" });
+    expect(auth).toMatchObject({ kind: "field", name: "Author", href: "#/collections/c1/items/i1?field=f2", context: "Book / Dune" });
   });
   it("lists the fields of the items named when nothing follows the #, and only matching fields otherwise", async () => {
     expect(names(await searchLinkTargets("dune#", data, { items: false }))).toEqual(["Author", "Title"]);
@@ -164,8 +164,16 @@ describe("searchLinkTargets by name, part by part", () => {
     expect(await hrefs("books#over")).toEqual(["#/collections/c1/items?block=b3"]);
     expect(names(await searchLinkTargets("book/dune#", data, { items: true }))).toEqual(["Title", "Author", "Notes"]);
     expect(await hrefs("book/dune#author")).toEqual(["#/collections/c1/items/i1?field=f2"]);
-    expect(await hrefs("book/dune/compact#author")).toEqual(["#/collections/c1/items/i1?view=iv2&field=f2"]);
+    expect(await hrefs("book/dune/default#author")).toEqual(["#/collections/c1/items/i1?view=iv1&field=f2"]);
+    // Under a named item view only the fields it shows: Compact lists Title alone.
+    expect(names(await searchLinkTargets("book/dune/compact#", data, { items: true }))).toEqual(["Title"]);
+    expect(await hrefs("book/dune/compact#author")).toEqual([]);
     expect(await hrefs("book/dune/comp")).toEqual(["#/collections/c1/items/i1?view=iv2"]);
+  });
+  it("reads a path that starts at an item's name as that item's, as the name alone finds it", async () => {
+    expect(await hrefs("dune/comp")).toEqual(["#/collections/c1/items/i1?view=iv2"]);
+    expect(await hrefs("dune/default#auth")).toEqual(["#/collections/c1/items/i1?view=iv1&field=f2"]);
+    expect(await hrefs("elsewhere/comp")).toEqual([]);
   });
   it("offers nothing for a path that names nothing, and leaves other words to the name search", async () => {
     for (const gone of ["books/zzz", "book/zzz#author", "books/reading-list#zzz", "book/elsewhere#author", "book/dune/zzz#author"]) {
@@ -177,7 +185,7 @@ describe("searchLinkTargets by name, part by part", () => {
     const links = async (q: string) => (await searchLinkTargets(q, data, { items: true })).map((t) => t.link);
     expect(await links("books/")).toEqual(["books/reading-list", "books/all"]);
     expect(await links("book/dune#")).toEqual(["book/dune#title", "book/dune#author", "book/dune#notes"]);
-    expect(await links("book/dune/compact#auth")).toEqual(["book/dune/compact#author"]);
+    expect(await links("book/dune/default#auth")).toEqual(["book/dune/default#author"]);
     expect(await links("books/reading-list#shelf")).toEqual(["books/reading-list#shelf"]);
     expect(await links("herbert")).toEqual(["person/frank-herbert"]);
   });

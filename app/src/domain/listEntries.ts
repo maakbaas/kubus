@@ -1,5 +1,5 @@
 // A list field's entries as a collection: a block can list them, filter, sort and group them like any items
-// ("Books › Todo" grouped by Done). Virtual (`Collection.virtual: "list"`, `listOf`): made from the list field when
+// ("Books / Todo" grouped by Done). Virtual (`Collection.virtual: "list"`, `listOf`): made from the list field when
 // the block is shown, never stored, read-only through `isReadOnly` (a checklist's Done is the one thing ticked in it:
 // views/useItemActions.ts writes the entry back into its item's value).
 //
@@ -64,8 +64,8 @@ export function listCollection(owner: Collection, field: FieldDef, collections: 
         : [item, own(LIST_VALUE, field.name, field.kind === "number_list" ? "number" : "string"), position];
   const list: Collection = {
     id,
-    name: `${owner.name} › ${field.name}`,
-    pluralName: `${owner.pluralName} › ${field.name}`,
+    name: `${owner.name} / ${field.name}`,
+    pluralName: `${owner.pluralName} / ${field.name}`,
     icon: field.kind === "item_list" ? (target?.icon ?? owner.icon) : owner.icon,
     description: `The entries of ${owner.pluralName}' ${field.name}`,
     fields: fields.map((f, i) => ({ ...f, position: i })),

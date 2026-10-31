@@ -222,7 +222,7 @@ export function ComponentsPage() {
       {promoting && (
         <PromoteComponentModal
           local={promoting.component}
-          suggestedName={promoting.where.split(" › ").pop()}
+          suggestedName={promoting.where.split(" / ").pop()}
           onClose={() => setPromoting(null)}
           onPromoted={async (c) => {
             setPromoting(null);

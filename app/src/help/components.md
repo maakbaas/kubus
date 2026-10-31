@@ -123,7 +123,7 @@ A table, cards, a chart or a Component block shows them like any items: filter, 
 
 ### A list field's entries
 
-A block can list the entries of a list field (a Checklist, List of strings, List of numbers or List of items) of every item of a collection: choose it as the block's Collection in Block settings, named like "Books › Todo" (on a collection view: its own list fields; on a dashboard: alone). Each entry is a row with these fields:
+A block can list the entries of a list field (a Checklist, List of strings, List of numbers or List of items) of every item of a collection: choose it as the block's Collection in Block settings, named like "Books / Todo" (on a collection view: its own list fields; on a dashboard: alone). Each entry is a row with these fields:
 
 | Field | What it is |
 |---|---|

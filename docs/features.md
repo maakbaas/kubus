@@ -86,7 +86,7 @@ What the app does, feature by feature (read the part you work on).
     a block's own `options.local`, written by earlier versions, still shows and can only be saved as
     shared. A Markdown block's text is local too (static only: `$now`, nothing about items). `fieldComponent` / `blockComponent`
     resolve either. Deleting the place deletes it; nothing else refers to it. The Components page
-    lists local ones too (`localComponents`: by where they are used, "Books › Reading time", linked
+    lists local ones too (`localComponents`: by where they are used, "Books / Reading time", linked
     to their place; Markdown blocks only when their text has `{{ }}` sections), with "Save as shared
     component" (`PromoteComponentModal`, `ui/promoteLocal.ts`: a shared copy is saved, then the place
     picks it; a Markdown block becomes a component block). The same action sits in the place itself
@@ -328,7 +328,7 @@ What the app does, feature by feature (read the part you work on).
   `Repository.listBacklinks`). No backlinks to collections, views or blocks. Text in Component and string fields isn't scanned (not stored / not a link).
 - **A list field's entries in a block** (`domain/listEntries.ts`, `views/useListData.tsx`): a block can list the entries of a list field
   (Checklist, List of strings, List of numbers, List of items) of every item of a collection, as rows: a virtual collection
-  (`Collection.virtual` "list", `listOf`; id `$list:<field id>` in `ViewBlock.collectionId`), named "Books › Todo", offered in the Collection
+  (`Collection.virtual` "list", `listOf`; id `$list:<field id>` in `ViewBlock.collectionId`), named "Books / Todo", offered in the Collection
   dropdown of an item page's block (every native collection's list fields), of a collection view's block (its own list fields; not under
   the view's filter, which is over the items) and in a dashboard block's Collections (alone, never merged with others). Fields: the item the
   entry is in (a reference named after the collection, "Book": a new block on that collection's item page starts filtered to the page's item,
@@ -475,7 +475,9 @@ What the app does, feature by feature (read the part you work on).
   again. A name link typed or pasted into the Markdown editor is converted as soon as it names a page (each
   href tried once per editor); one that names nothing stays as written and is resolved when clicked. `?block=` /
   `?field=` scroll to the target and flash it (`ui/useLinkTarget.ts`; blocks carry `data-block-id`, item page
-  fields are found by their place among the page's entries). Dashboards the same way, under `dashboards/`:
+  fields are found by their place among the page's entries). A link to a field opens the item's page under its item view (the
+  one named, else the one it opens with) when that view shows the field (listed, and not empty under "Hide empty fields":
+  `showsField`), else the standard page with every field (as the edit icon shows it), scrolled to the field there. Dashboards the same way, under `dashboards/`:
   `dashboards` (the Dashboards page), `dashboards/health` (a dashboard, its default view), `dashboards/health/daily` (a view of
   the shown space), `dashboards/health/daily#chart` (a block of it; `dashboards/health#chart` of the default view); stored as
   `#/dashboards/<id>?view=<tab>&block=<id>`. A view that is a copy of another space's (domain/dashboards.ts) is stored by the
@@ -489,7 +491,9 @@ What the app does, feature by feature (read the part you work on).
   last match exactly as slugs, the last as typed): `books/` the collection's views (and `book/` its items; `views/` /
   `items/` force the kind), `book/dune/` the item's item views, after `#` the blocks of the collection's default view or
   of the view named (`books/reading-list#`), or the fields and blocks of the item's page under its default or named
-  item view (`book/dune/compact#`); `dashboards/` the shown space's dashboards, `dashboards/health/` its views and
+  item view (`book/dune/compact#`; under an item view named in the link only the fields it lists, `listsField`, and the
+  title field); a first part that names no collection but an item of the shown space is read as that item's
+  (`dune/compact` as `book/dune/compact`, `itemFirstNameTargets`), as `dune` alone finds the item; `dashboards/` the shown space's dashboards, `dashboards/health/` its views and
   `dashboards/health/daily#` (or `dashboards/health#`: the default view) a view's blocks; dashboards and views are also
   found by name, and `#/dashboards/<id>…` by address. Every option shows its link by name (`describeLink`) beside its place, one line
   per row. ↑/↓ move, Enter or

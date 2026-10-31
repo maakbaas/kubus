@@ -6,9 +6,9 @@
 // pasted), on a link written by name part by part (`books/reading-list#table`, `book/dune/compact#author`),
 // and `item#field` lists the fields of the items named (the item page is what a field link opens).
 
-import type { ItemView } from "./fieldLayout";
+import { listsField, type ItemView } from "./fieldLayout";
 import { blockName, DASHBOARDS, describeLink, resolveNameLink, slug, slugs, type LinkData } from "./links";
-import type { Collection, ItemLabel } from "./model";
+import { titleFields, type Collection, type ItemLabel } from "./model";
 import { isRemote } from "./sources";
 import type { CollectionView } from "./views";
 import { findTab, tabLinkId, type Dashboard, type DashboardView } from "./dashboards";
@@ -21,7 +21,7 @@ export interface LinkTarget {
   kind: LinkTargetKind;
   /** What it is called: a collection's plural name, a view's, an item's label, a field's, a dashboard's, a tab's, a block's. */
   name: string;
-  /** Where it is: "Books" for a view, "Book" for an item, "Book › Dune" for a field or an item view, "Books › Reading list" for a block, "Health" for a tab. */
+  /** Where it is: "Books" for a view, "Book" for an item, "Book / Dune" for a field or an item view, "Books / Reading list" for a block, "Health" for a tab. */
   context: string;
   /** The stored link. */
   href: string;
@@ -79,23 +79,29 @@ export const itemViewTarget = (c: Collection, item: ItemLabel, v: ItemView): Lin
   key: `itemview:${item.id}:${v.id}`,
   kind: "view",
   name: v.name,
-  context: `${c.name} › ${item.label ?? ""}`,
+  context: `${c.name} / ${item.label ?? ""}`,
   href: `${LIST(c)}/${item.id}${search({ view: v.id })}`,
   collectionId: c.id,
   itemId: item.id,
 });
 
-/** The fields of an item's page (`itemView`: under that item view, named in the link). */
-export const fieldTargets = (c: Collection, item: ItemLabel, itemView?: ItemView): LinkTarget[] =>
-  c.fields.map((f) => ({
+/**
+ * The fields of an item's page. Without an item view: every field (the page opens the view that shows it, else the
+ * standard page: pages/ItemPage.tsx). Under an item view named in the link: only those it lists, and the title field,
+ * shown as its title.
+ */
+export const fieldTargets = (c: Collection, item: ItemLabel, itemView?: ItemView): LinkTarget[] => {
+  const title = titleFields(c).find((f) => f.kind === "string")?.id;
+  return c.fields.filter((f) => !itemView || f.id === title || listsField(itemView.layout, f.id)).map((f) => ({
     key: fieldKey(item.id, f.id, itemView?.id),
     kind: "field",
     name: f.name,
-    context: `${c.name} › ${item.label ?? ""}`,
+    context: `${c.name} / ${item.label ?? ""}`,
     href: `${LIST(c)}/${item.id}${search({ view: itemView?.id, field: f.id })}`,
     collectionId: c.id,
     itemId: item.id,
   }));
+};
 
 /** The blocks of a collection view (`named`: the view is named in the link, else it is the collection's default one). */
 export const viewBlockTargets = (c: Collection, v: CollectionView, named: boolean): LinkTarget[] =>
@@ -103,7 +109,7 @@ export const viewBlockTargets = (c: Collection, v: CollectionView, named: boolea
     key: `block:${v.id}:${b.id}`,
     kind: "block",
     name: blockName(b),
-    context: `${c.pluralName} › ${v.name}`,
+    context: `${c.pluralName} / ${v.name}`,
     href: `${LIST(c)}${search({ view: named ? v.id : undefined, block: b.id })}`,
     collectionId: c.id,
   }));
@@ -114,7 +120,7 @@ export const itemBlockTargets = (c: Collection, item: ItemLabel, v: ItemView, na
     key: `block:${item.id}:${v.id}:${b.id}`,
     kind: "block",
     name: blockName(b),
-    context: `${c.name} › ${item.label ?? ""}`,
+    context: `${c.name} / ${item.label ?? ""}`,
     href: `${LIST(c)}/${item.id}${search({ view: named ? v.id : undefined, block: b.id })}`,
     collectionId: c.id,
     itemId: item.id,
@@ -147,7 +153,7 @@ export const tabBlockTargets = (d: Dashboard, v: DashboardView, named: boolean):
     key: `block:${tabLinkId(v)}:${b.id}`,
     kind: "block",
     name: blockName(b),
-    context: `${d.name} › ${v.name}`,
+    context: `${d.name} / ${v.name}`,
     href: `${DASHBOARD(d)}${search({ view: named ? tabLinkId(v) : undefined, block: b.id })}`,
     dashboardId: d.id,
   }));
@@ -347,12 +353,14 @@ function rankBySlug(options: { t: LinkTarget; slug: string }[], typed: string, l
  * collection's default view or the view named, or the fields and blocks of the item's page. The parts
  * before the last are matched exactly (as slugs), the last as typed. `dashboards/` lists the dashboards,
  * `dashboards/health/` the tabs of Health, and after a `#` the blocks of its default tab or the tab named
- * (with those of a collection called Dashboards, if there is one). Null when it is a single word
- * (no `/` or `#`) or its first part names no collection (or two).
+ * (with those of a collection called Dashboards, if there is one). A first part that names no collection but an
+ * item of the shown space (`dune/details`, `dune/details#chart`) is read as that item's link in its collection
+ * (`book/dune/…`), as `dune` alone finds the item. Null when it is a single word (no `/` or `#`) or its first
+ * part names no collection (or two) and no item.
  */
 async function nameLinkTargets(query: string, data: LinkTargetData, limit: number): Promise<LinkTarget[] | null> {
   const dashboards = dashboardNameTargets(query, data, limit);
-  const collections = await collectionNameTargets(query, data, limit);
+  const collections = (await collectionNameTargets(query, data, limit)) ?? (await itemFirstNameTargets(query, data, limit));
   if (!dashboards) return collections;
   return [...dashboards, ...(collections ?? [])].slice(0, limit);
 }
@@ -386,6 +394,33 @@ function dashboardNameTargets(query: string, data: LinkTargetData, limit: number
   if (fragment === null) return rankBySlug(withSlugs(tabs.map((v) => tabTarget(d, v)), tabs.map((v) => v.name)), rest[1], limit);
   const tab = rest.length === 2 ? tabs[slugs(tabs.map((v) => v.name)).indexOf(rest[1])] : defaultOf(tabs);
   return tab ? rankBySlug(withSlugs(tabBlockTargets(d, tab, rest.length === 2), tab.blocks.map(blockName)), fragment, limit) : [];
+}
+
+/** A link by name that starts at an item's name (nameLinkTargets): read under each collection with such an item in the shown space. */
+async function itemFirstNameTargets(query: string, data: LinkTargetData, limit: number): Promise<LinkTarget[] | null> {
+  const text = query.trim().replace(/^#?\//, "");
+  const hash = text.indexOf("#");
+  const parts = (hash < 0 ? text : text.slice(0, hash)).split("/");
+  if (parts.length < 2) return null;
+  let head: string;
+  try {
+    head = slug(decodeURIComponent(parts[0]));
+  } catch {
+    head = slug(parts[0]);
+  }
+  if (!head) return null;
+  const owners: Collection[] = [];
+  for (const c of data.collections) {
+    if (isRemote(c)) continue;
+    // Counted among every space's items, as domain/links.ts counts; only the shown space's are offered.
+    const labels = await data.labels(c);
+    const at = slugs(labels.map((l) => l.label ?? "")).indexOf(head);
+    if (at >= 0 && labels[at].spaceId === data.spaceId && labels[at].label) owners.push(c);
+  }
+  if (owners.length === 0) return null;
+  const rest = text.slice(parts[0].length);
+  const found = await Promise.all(owners.map((c) => collectionNameTargets(`${slug(c.name)}/${head}${rest}`, data, limit)));
+  return found.flatMap((f) => f ?? []).slice(0, limit);
 }
 
 /** A link by name to a collection's page part by part (nameLinkTargets). */
@@ -426,8 +461,12 @@ async function collectionNameTargets(query: string, data: LinkTargetData, limit:
     const at = itemSlugs.indexOf(s);
     return at >= 0 && offered(labels[at]) ? labels[at] : undefined;
   };
+  // A field's slug counts among all the fields (as domain/links.ts counts), whichever a view offers.
+  const fieldSlugs = slugs(c.fields.map((f) => f.name));
   const itemPage = (item: ItemLabel, itemView: ItemView | undefined, named: boolean) => {
-    const fields = withSlugs(fieldTargets(c, item, named ? itemView : undefined), c.fields.map((f) => f.name));
+    const viewId = named ? itemView?.id : undefined;
+    const slugOf = new Map(c.fields.map((f, i) => [fieldKey(item.id, f.id, viewId), fieldSlugs[i]]));
+    const fields = fieldTargets(c, item, named ? itemView : undefined).map((t) => ({ t, slug: slugOf.get(t.key) ?? "" }));
     const blocks = itemView ? withSlugs(itemBlockTargets(c, item, itemView, named), itemView.layout.blocks.map(blockName)) : [];
     return [...fields, ...blocks];
   };

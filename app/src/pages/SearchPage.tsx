@@ -292,7 +292,7 @@ export function SearchPage() {
                     <Highlight text={block.title || "Markdown"} query={query} exactTag={exactTag} />
                   </span>
                   <Tag size="sm" type="cool-gray">
-                    {dashboard.name} › {view.name}
+                    {dashboard.name} / {view.name}
                   </Tag>
                 </div>
                 <div className="search-hit__excerpt">
@@ -319,7 +319,7 @@ export function SearchPage() {
                     <Highlight text={block.title || "Markdown"} query={query} exactTag={exactTag} />
                   </span>
                   <Tag size="sm" type="cool-gray">
-                    {collection.pluralName} › {view.name}
+                    {collection.pluralName} / {view.name}
                   </Tag>
                 </div>
                 <div className="search-hit__excerpt">

@@ -27,7 +27,7 @@ const list = (fieldId: string) => findListCollection(all, listCollectionId(field
 
 describe("a list field's entries as a collection", () => {
   it("is offered for every list field of a native collection, read-only, and found by its id", () => {
-    expect(listCollections(all).map((c) => c.pluralName)).toEqual(["Books › Todo", "Books › Tags", "Books › Scores", "Books › Authors"]);
+    expect(listCollections(all).map((c) => c.pluralName)).toEqual(["Books / Todo", "Books / Tags", "Books / Scores", "Books / Authors"]);
     const todo = list("todo");
     expect(isReadOnly(todo)).toBe(true);
     expect(todo.listOf).toEqual({ collectionId: "book", fieldId: "todo", kind: "checklist", targetCollectionId: null });

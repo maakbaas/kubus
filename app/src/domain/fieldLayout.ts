@@ -3,8 +3,8 @@
 // Item pages hold blocks too (lists of items, components; domain/views.ts), placed among the
 // fields: their ids are in the same list.
 
-import { editedTitleField, isMetaField, type Item, type Collection } from "./model";
-import type { FilterRule } from "./query";
+import { editedTitleField, fieldValue, isMetaField, pickableFields, type Item, type Collection } from "./model";
+import { isEmptyValue, type FilterRule } from "./query";
 import { NOTHING_COLLAPSED, parseBlock, parseCollapsed, type Collapsed, type ViewBlock } from "./views";
 
 /** The fields to show, in the layout's order (unknown ids are skipped); the default ones for null. */
@@ -96,6 +96,22 @@ export function itemViewOf(collection: Collection, item: Item): ItemView | null 
  */
 export function itemPageFields<F extends { id: string }>(fields: F[], layout: ItemLayout, titleFieldId: string | undefined): F[] {
   return layout.fields === null ? fields.filter((f) => f.id !== titleFieldId && !isMetaField(f)) : orderFields(fields, layout.fields);
+}
+
+/** Whether a layout lists a field among its page's fields (null: every one), whatever an item's values. */
+export const listsField = (layout: Pick<FieldLayout, "fields">, fieldId: string): boolean => !layout.fields || layout.fields.includes(fieldId);
+
+/**
+ * Whether an item's page under a layout shows a field: as its title (the edited title field), or among its fields and not
+ * left out for being empty ("Hide empty fields"). A link to a field its view doesn't show opens the standard page instead
+ * (pages/ItemPage.tsx), where every field is.
+ */
+export function showsField(collection: Collection, item: Item, layout: ItemLayout, fieldId: string): boolean {
+  const titleId = editedTitleField(collection, item)?.id;
+  if (fieldId === titleId) return true;
+  const field = pickableFields(collection).find((f) => f.id === fieldId);
+  if (!field || itemPageFields([field], layout, titleId).length === 0) return false;
+  return !layout.hideEmpty || !isEmptyValue(fieldValue(item, field));
 }
 
 /** Whether a layout holds something back (read-only, or fields left out): the page then offers an edit icon. */

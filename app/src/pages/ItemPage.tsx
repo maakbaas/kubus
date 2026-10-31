@@ -57,6 +57,7 @@ import {
   isRestricted,
   newItemViewId,
   sameLayout,
+  showsField,
   type ItemLayout,
   type ItemView,
 } from "../domain/fieldLayout";
@@ -255,6 +256,15 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
     (id) => (linkedBlock ? findBlock(id) : fieldList.current?.children[fieldIndex.current.indexOf(id)]),
     item != null,
   );
+  // A link to a field that the view the page opens with doesn't show (left out, or empty with "Hide empty fields") opens
+  // the standard page instead, where every field is; it is scrolled to there (useLinkTarget keeps looking meanwhile).
+  // Once per link, when the item is in: not again when the person turns the standard page off.
+  useEffect(() => {
+    if (!linkedField || !shown) return;
+    const view = collection.itemViews.find((v) => v.id === tab) ?? itemViewOf(collection, shown);
+    if (view && !showsField(collection, shown, view.layout, linkedField)) setStandard(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedField, shown === null]);
   const viewsBar = useRef<HTMLDivElement>(null);
   const clippedTabs = useClippedTabs(viewsBar);
   // The same error as the page's blocks (the server can't be reached) shows once.

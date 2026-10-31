@@ -10,6 +10,7 @@ import {
   parseItemViews,
   parseLayout,
   sameLayout,
+  showsField,
   withDefaultItemView,
   type ItemView,
 } from "./fieldLayout";
@@ -167,5 +168,18 @@ describe("isRestricted", () => {
     expect(isRestricted(collection(), item(), { ...FULL_LAYOUT, fields: ["pages", "note"] })).toBe(false); // the title is the heading
     expect(isRestricted(collection(), item(), { ...FULL_LAYOUT, fields: ["pages"] })).toBe(true);
     expect(isRestricted(collection(), item({ values: {} }), { ...FULL_LAYOUT, fields: ["pages", "note"] })).toBe(true); // no title value: the title field is an ordinary one
+  });
+});
+
+describe("showsField", () => {
+  it("is the title, a field the layout lists, unless it is empty and empty ones are hidden", () => {
+    const c = collection();
+    const only = { ...FULL_LAYOUT, fields: ["pages"] };
+    expect(showsField(c, item(), only, "title")).toBe(true); // the page's title
+    expect(showsField(c, item({ values: { title: "Dune", pages: 3 } }), only, "pages")).toBe(true);
+    expect(showsField(c, item(), only, "note")).toBe(false); // left out: a link to it opens the standard page
+    expect(showsField(c, item(), { ...FULL_LAYOUT, hideEmpty: true }, "note")).toBe(false); // empty, and empty ones hidden
+    expect(showsField(c, item({ values: { title: "Dune", note: "x" } }), { ...FULL_LAYOUT, hideEmpty: true }, "note")).toBe(true);
+    expect(showsField(c, item(), FULL_LAYOUT, "gone")).toBe(false);
   });
 });

@@ -301,13 +301,13 @@ describe("local components", () => {
     const list = localComponents([c], views);
     expect(list.map((l) => l.key)).toEqual(["field:calc", "field:ai", "itemView:iv:ib", "view:v:cb", "view:v:md"]);
     const byKey = Object.fromEntries(list.map((l) => [l.key, l]));
-    expect(byKey["field:calc"]).toMatchObject({ where: "Books › Calc", component: { code: "{{ $item.A }}", output: "number", ai: false }, owner: { type: "field", fieldId: "calc" } });
+    expect(byKey["field:calc"]).toMatchObject({ where: "Books / Calc", component: { code: "{{ $item.A }}", output: "number", ai: false }, owner: { type: "field", fieldId: "calc" } });
     expect(byKey["field:calc"].href).toBe("#/collections/c/edit?field=calc");
     expect(byKey["field:ai"].component).toMatchObject({ ai: true, output: "string" });
-    expect(byKey["itemView:iv:ib"]).toMatchObject({ where: "Book pages › Page › Markdown", href: null, owner: { markdown: true }, component: { code: "hi {{ 1 }}" } });
-    expect(byKey["view:v:cb"]).toMatchObject({ where: "Books › All › Count", component: { output: "markdown", frameRatio: "4/3" }, owner: { markdown: false } });
+    expect(byKey["itemView:iv:ib"]).toMatchObject({ where: "Book pages / Page / Markdown", href: null, owner: { markdown: true }, component: { code: "hi {{ 1 }}" } });
+    expect(byKey["view:v:cb"]).toMatchObject({ where: "Books / All / Count", component: { output: "markdown", frameRatio: "4/3" }, owner: { markdown: false } });
     expect(byKey["view:v:cb"].href).toBe("#/collections/c/items?view=v&block=cb");
-    expect(byKey["view:v:md"].where).toBe("Books › All › Markdown");
+    expect(byKey["view:v:md"].where).toBe("Books / All / Markdown");
   });
 });
 
