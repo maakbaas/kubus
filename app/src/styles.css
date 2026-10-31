@@ -874,6 +874,13 @@ body {
   overflow: visible;
   white-space: normal;
 }
+/* A tag is one word: it moves to the next line whole, never broken inside (a table cell's `overflow-wrap: anywhere`,
+   which lets a narrow column break long words, broke "#books" into "#bo" / "oks"). The text around it wraps as before. */
+.cds--tag.inline-tag,
+.inline-tag .cds--tag__label {
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
 /* A tag in a card sits above the card's link (.item-card__link), as the card's other links do. */
 .item-card .inline-tag {
   position: relative;
