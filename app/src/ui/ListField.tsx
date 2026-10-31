@@ -243,7 +243,7 @@ export function ListField({
               </div>
             )}
             {!readOnly && (
-              <IconButton autoAlign kind="ghost" size="sm" align="top" label="Remove item" onMouseDown={(e) => e.preventDefault()} onClick={() => remove(i)}>
+              <IconButton autoAlign kind="ghost" size="sm" align="top" label="Remove item" onMouseDown={(e) => e.preventDefault()} {...reorder.remove(i, () => remove(i))}>
                 <TrashCan />
               </IconButton>
             )}

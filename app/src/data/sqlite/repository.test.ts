@@ -387,3 +387,14 @@ describe("components", () => {
     expect((await repo.listCollections()).find((c) => c.id === book.id)?.fields.map((f) => f.name)).toEqual(["Title"]);
   });
 });
+
+describe("settings", () => {
+  it("are stored as JSON by key, replaced in place, and announced", async () => {
+    expect(await repo.getSettings()).toEqual({});
+    await repo.setSetting("theme", "dark");
+    await repo.setSetting("mapStyle", "liberty");
+    await repo.setSetting("theme", "light");
+    expect(await repo.getSettings()).toEqual({ theme: "light", mapStyle: "liberty" });
+    expect(changes.filter((c) => c.scope === "settings")).toHaveLength(3);
+  });
+});

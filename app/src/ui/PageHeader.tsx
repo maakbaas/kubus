@@ -1,6 +1,7 @@
 import { useLocation } from "react-router";
 import type { ReactNode } from "react";
-import { Breadcrumb, BreadcrumbItem, Heading } from "@carbon/react";
+import { Breadcrumb, BreadcrumbItem, Heading, Link } from "@carbon/react";
+import { Home as HomeIcon } from "@carbon/icons-react";
 import { useTabTitle } from "../workspace/Workspace";
 
 interface Props {
@@ -25,14 +26,15 @@ export function PageHeader({ title, current, subtitle, breadcrumbs = [], actions
       <div className="page-header__row">
         <div className="page-header__main">
       {/* A long breadcrumb is cut with "…": its whole text is its title (hover). */}
-      {/* A top-level page (no parents) shows itself as a link with a trailing slash ("Collections /");
-          deeper pages show their parents as links, ending in the current page as plain text. */}
-      {breadcrumbs.length === 0 ? (
+      {/* It starts at Home, an icon only. The Home page shows just that, as a link with a trailing slash ("⌂ /"); other
+          pages show their parents as links after it, ending in the current page as plain text. */}
+      {pathname === "/" ? (
         <Breadcrumb>
-          <BreadcrumbItem href={`#${pathname}`} title={currentLabel}>{currentLabel}</BreadcrumbItem>
+          <HomeCrumb />
         </Breadcrumb>
       ) : (
         <Breadcrumb noTrailingSlash>
+          <HomeCrumb />
           {breadcrumbs.map((b) => (
             <BreadcrumbItem key={b.href} href={b.href} title={b.label}>
               {b.label}
@@ -47,6 +49,17 @@ export function PageHeader({ title, current, subtitle, breadcrumbs = [], actions
       </div>
       {subtitle && <p className="page-header__subtitle">{subtitle}</p>}
     </div>
+  );
+}
+
+/** The breadcrumb's first item: the Home page, as its icon. */
+function HomeCrumb() {
+  return (
+    <BreadcrumbItem className="breadcrumb-home">
+      <Link href="#/" title="Home" aria-label="Home">
+        <HomeIcon size={16} aria-hidden="true" />
+      </Link>
+    </BreadcrumbItem>
   );
 }
 

@@ -300,90 +300,67 @@ describe("useLinks", () => {
   });
 });
 
-describe("the map style", () => {
-  it("is the default, changes for every map at once, and is remembered on this device", async () => {
-    const items = new Map<string, string>();
+describe("the display settings", () => {
+  /** A repository holding these settings, telling of its changes. */
+  function settingsRepo(stored: Record<string, unknown>, config = { url: "", token: "" }) {
+    const listeners = new Set<(c: DataChange) => void>();
+    const repo = {
+      sync: fakeSync(config),
+      stored,
+      getSettings: vi.fn(async () => ({ ...repo.stored })),
+      setSetting: vi.fn(async (key: string, value: unknown) => {
+        repo.stored = { ...repo.stored, [key]: value };
+        listeners.forEach((l) => l({ scope: "settings" }));
+      }),
+      subscribe: (l: (c: DataChange) => void) => (listeners.add(l), () => void listeners.delete(l)),
+    };
+    return repo;
+  }
+  const load = async (items = new Map<string, string>()) => {
     vi.stubGlobal("localStorage", { getItem: (k: string) => items.get(k) ?? null, setItem: (k: string, v: string) => items.set(k, v) });
     vi.resetModules();
-    const { setMapStyle, useMapStyle } = await import("./mapStyle");
-    m.store = { repo: { sync: fakeSync() }, sources: {} };
-    const a = renderHook(() => useMapStyle());
-    const b = renderHook(() => useMapStyle());
-    expect(a.result.current).toBe(DEFAULT_MAP_STYLE);
-    setMapStyle("dark");
-    await a.settle();
-    await b.settle();
-    expect(a.result.current).toBe("dark");
-    expect(b.result.current).toBe("dark");
-    expect(items.get("kubus.mapStyle")).toBe("dark");
-    const renders = a.renders;
-    setMapStyle("dark"); // unchanged: nobody hears of it
-    await a.settle();
-    expect(a.renders).toBe(renders);
+    return { items, mod: await import("./settings") };
+  };
+
+  it("start from the device's copy (a value that is no setting: the default), before the database answers", async () => {
+    const { mod } = await load(new Map([["kubus.theme", "dark"], ["kubus.mapStyle", "neon"]]));
+    expect(renderHook(() => mod.useDisplaySettings()).result.current).toEqual({ theme: "dark", mapStyle: DEFAULT_MAP_STYLE });
   });
 
-  it("starts from the stored style, and ignores a stored value that is not a style", async () => {
-    vi.stubGlobal("localStorage", { getItem: () => "liberty" });
-    vi.resetModules();
-    m.store = { repo: { sync: fakeSync() }, sources: {} };
-    let mod = await import("./mapStyle");
-    expect(renderHook(() => mod.useMapStyle()).result.current).toBe("liberty");
-    vi.stubGlobal("localStorage", { getItem: () => "neon" });
-    vi.resetModules();
-    mod = await import("./mapStyle");
-    expect(renderHook(() => mod.useMapStyle()).result.current).toBe(DEFAULT_MAP_STYLE);
-  });
-
-  it("works without storage", async () => {
-    vi.stubGlobal("localStorage", {
-      getItem: () => {
-        throw new Error("blocked");
-      },
-      setItem: () => {
-        throw new Error("blocked");
-      },
-    });
-    vi.resetModules();
-    m.store = { repo: { sync: fakeSync() }, sources: {} };
-    const mod = await import("./mapStyle");
-    const h = renderHook(() => mod.useMapStyle());
-    expect(h.result.current).toBe(DEFAULT_MAP_STYLE);
-    mod.setMapStyle("bright");
+  it("follow the database, a synced change too, and keep a copy on the device", async () => {
+    const { items, mod } = await load();
+    const repo = settingsRepo({ theme: "light", mapStyle: "dark" });
+    m.store = { repo, sources: { serverSettings: vi.fn() } };
+    await renderHook(() => mod.DisplaySettingsSync()).settle();
+    const h = renderHook(() => mod.useDisplaySettings());
+    expect(h.result.current).toEqual({ theme: "light", mapStyle: "dark" });
+    expect(items.get("kubus.theme")).toBe("light");
+    await mod.setDisplaySetting(repo, "theme", "dark");
     await h.settle();
-    expect(h.result.current).toBe("bright");
+    expect(h.result.current.theme).toBe("dark");
+    expect(repo.stored.theme).toBe("dark");
+    expect(items.get("kubus.theme")).toBe("dark");
   });
 
-  it("takes the server's style once per server, and asks again after a failure", async () => {
-    vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
-    vi.resetModules();
-    const mod = await import("./mapStyle");
-    const serverSettings = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ map: { style: "positron" } });
-    m.store = { repo: { sync: fakeSync({ url: "https://s", token: "t" }) }, sources: { serverSettings } };
-    const a = renderHook(() => mod.useMapStyle());
-    await a.settle();
-    expect(serverSettings).toHaveBeenCalledTimes(1);
-    expect(a.result.current).toBe(DEFAULT_MAP_STYLE); // offline: as it was
-    const b = renderHook(() => mod.useMapStyle()); // the next map asks again
-    await b.settle();
-    expect(serverSettings).toHaveBeenCalledTimes(2);
-    expect(b.result.current).toBe("positron");
-    const c = renderHook(() => mod.useMapStyle()); // answered: not asked again
-    await c.settle();
-    expect(serverSettings).toHaveBeenCalledTimes(2);
-  });
+  it("start a database without a map style from the server's (it was the server's setting), else the device's own", async () => {
+    let { mod } = await load();
+    const serverSettings = vi.fn().mockResolvedValue({ map: { style: "positron" } });
+    let repo = settingsRepo({}, { url: "https://s", token: "t" });
+    m.store = { repo, sources: { serverSettings } };
+    await renderHook(() => mod.DisplaySettingsSync()).settle();
+    expect(repo.setSetting).toHaveBeenCalledWith("mapStyle", "positron");
 
-  it("does not ask without a server, and tolerates a server that has no map setting", async () => {
-    vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
-    vi.resetModules();
-    const mod = await import("./mapStyle");
-    const serverSettings = vi.fn().mockResolvedValue({});
-    m.store = { repo: { sync: fakeSync() }, sources: { serverSettings } };
-    await renderHook(() => mod.useMapStyle()).settle();
-    expect(serverSettings).not.toHaveBeenCalled();
-    m.store = { repo: { sync: fakeSync({ url: "https://s", token: "t" }) }, sources: { serverSettings } };
-    const h = renderHook(() => mod.useMapStyle());
-    await h.settle();
-    expect(serverSettings).toHaveBeenCalledTimes(1);
-    expect(h.result.current).toBe(DEFAULT_MAP_STYLE);
+    ({ mod } = await load(new Map([["kubus.mapStyle", "liberty"]])));
+    repo = settingsRepo({});
+    m.store = { repo, sources: { serverSettings } };
+    await renderHook(() => mod.DisplaySettingsSync()).settle();
+    expect(repo.setSetting).toHaveBeenCalledWith("mapStyle", "liberty");
+    expect(serverSettings).toHaveBeenCalledTimes(1); // no server: not asked
+
+    // One already set is left alone.
+    repo = settingsRepo({ mapStyle: "bright" }, { url: "https://s", token: "t" });
+    m.store = { repo, sources: { serverSettings } };
+    await renderHook(() => mod.DisplaySettingsSync()).settle();
+    expect(repo.setSetting).not.toHaveBeenCalled();
   });
 });

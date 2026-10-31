@@ -145,7 +145,7 @@ describe("create", () => {
 });
 
 describe("sorting and grouping", () => {
-  it("clicking a column sorts ascending, then descending, then ascending again; another column starts ascending", async () => {
+  it("clicking a column sorts ascending, then descending, then ascending again; another column starts ascending, the others after it", async () => {
     const t = await setup();
     const sortBy = (q: ViewQuery, id: string) => t.make({ query: q }).sortBy!(id);
     sortBy(query(), "f");
@@ -155,7 +155,10 @@ describe("sorting and grouping", () => {
     sortBy(query({ sort: [{ fieldId: "f", direction: "desc" }] }), "f");
     expect(t.onSort).toHaveBeenLastCalledWith([{ fieldId: "f", direction: "asc" }]);
     sortBy(query({ sort: [{ fieldId: "f", direction: "desc" }] }), "g");
-    expect(t.onSort).toHaveBeenLastCalledWith([{ fieldId: "g", direction: "asc" }]);
+    expect(t.onSort).toHaveBeenLastCalledWith([{ fieldId: "g", direction: "asc" }, { fieldId: "f", direction: "desc" }]);
+    // A later level clicked moves first; the levels keep their directions.
+    sortBy(query({ sort: [{ fieldId: "f", direction: "desc" }, { fieldId: "g", direction: "desc" }] }), "g");
+    expect(t.onSort).toHaveBeenLastCalledWith([{ fieldId: "g", direction: "asc" }, { fieldId: "f", direction: "desc" }]);
   });
 
   it("exposes the query's primary sort and grouping, and the preset a new item starts with", async () => {

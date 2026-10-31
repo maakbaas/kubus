@@ -5,21 +5,24 @@ import { AiSettings } from "../ui/AiSettings";
 import { ApiTokens } from "../ui/ApiTokens";
 import { BackupSettings } from "../ui/BackupSettings";
 import { ConnectionSettings } from "../ui/ConnectionSettings";
-import { MapSettings } from "../ui/MapSettings";
+import { DisplaySettings } from "../ui/DisplaySettings";
 import { PageHeader } from "../ui/PageHeader";
 import { ServerConnection } from "../ui/ServerConnection";
 import { SyncSettings } from "../ui/SyncSettings";
 import { TabMenu, useClippedTabs } from "../ui/TabMenu";
 
-/** The sections, in order; `?section=` opens one (the sync status's "Configure sync" leads to sync). */
-const SECTIONS = ["server", "sync", "backup", "connections", "ai", "maps", "tokens"] as const;
-const NAMES: Record<(typeof SECTIONS)[number], string> = { server: "Server", sync: "Sync", backup: "Backup", connections: "Connections", ai: "AI", maps: "Maps", tokens: "API tokens" };
+/**
+ * The sections, in order; `?section=` opens one (the sync status's "Configure sync" leads to sync). First what works
+ * without a server (how the app looks, AI, a backup), from Server on what is the server's.
+ */
+const SECTIONS = ["display", "ai", "backup", "server", "sync", "connections", "tokens"] as const;
+const NAMES: Record<(typeof SECTIONS)[number], string> = { display: "Display", ai: "AI", backup: "Backup", server: "Server", sync: "Sync", connections: "Connections", tokens: "API tokens" };
 
 /**
- * Settings of this device and of the server it is connected to: the server (address, token), whether
- * this device syncs with it (and wiping data), a backup of this device's data and restoring one, the databases the server reads (connections), the
- * language model for AI (the server's or this device's own), how maps look (the server's, else this device's) and
- * the server's API tokens for other tools.
+ * The settings: how the app looks (theme, maps; synced like content), the language model for AI (this device's own,
+ * or the server's, set up here too), a backup of this device's data and restoring one; then the server (address,
+ * token), whether this device syncs with it (and wiping data), the databases the server reads (connections) and the
+ * server's API tokens for other tools.
  */
 export function SettingsPage() {
   const uid = useId();
@@ -48,12 +51,12 @@ export function SettingsPage() {
           {clipped && <TabMenu label="Settings" items={SECTIONS.map((s) => ({ id: s, name: NAMES[s] }))} activeId={SECTIONS[selected]} onSelect={(id) => select(SECTIONS.indexOf(id as (typeof SECTIONS)[number]))} />}
         </div>
         <TabPanels>
+          {panel(<DisplaySettings />)}
+          {panel(<AiSettings />)}
+          {panel(<BackupSettings />)}
           {panel(<ServerConnection />)}
           {panel(<SyncSettings />)}
-          {panel(<BackupSettings />)}
           {panel(<ConnectionSettings />)}
-          {panel(<AiSettings />)}
-          {panel(<MapSettings />)}
           {panel(<ApiTokens />)}
         </TabPanels>
       </Tabs>

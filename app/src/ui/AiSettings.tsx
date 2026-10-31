@@ -18,7 +18,7 @@ const serverDraftOf = (view: ServerSettingsView): ServerAiDraft => ({ url: view.
  * set up. A section of the settings.
  */
 export function AiSettings() {
-  const { ai } = useStore();
+  const { ai, sources } = useStore();
   const uid = useId();
   const saved = useAiSettings();
   const offer = useServerAi();
@@ -42,6 +42,26 @@ export function AiSettings() {
       serverDraft.codeModel !== server.view.ai.codeModel ||
       serverDraft.key !== undefined ||
       serverDraft.keySet !== server.view.ai.keySet);
+
+  // The models of the server's provider being set up, for its pickers: asked through the server (the key typed, else
+  // the stored one while the address is the stored one), a moment after typing stops.
+  const [serverModels, setServerModels] = useState<string[]>([]);
+  const serverUrl = serverDraft?.url ?? "";
+  const serverKey = serverDraft?.key;
+  useEffect(() => {
+    if (own || !server.connected || !serverUrl.trim()) return setServerModels([]);
+    let live = true;
+    const timer = setTimeout(() => {
+      sources.serverAiModels(serverUrl, serverKey).then(
+        (list) => live && setServerModels(list),
+        () => live && setServerModels([]),
+      );
+    }, 400);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [own, server.connected, sources, serverUrl, serverKey]);
 
   // The provider's models, for the picker (a typed name works too). Without a list (no key yet, or
   // a provider that doesn't say) it is a plain text box.
@@ -224,23 +244,31 @@ export function AiSettings() {
                   </Button>
                 </div>
               )}
-              <TextInput
+              <ComboBox
+                autoAlign
                 size="sm"
                 id={`${uid}-server-field`}
-                labelText="Model for AI fields"
+                titleText="Model for AI fields"
                 placeholder="e.g. gpt-4.1-mini"
-                helperText="The provider's name for the model. Runs for every value, so a fast, cheap one fits."
-                value={serverDraft.fieldModel}
-                onChange={(e) => setServerAi({ fieldModel: e.target.value })}
+                helperText={serverModels.length ? `${serverModels.length} models offered. Type to search, or enter any name. Runs for every value, so a fast, cheap one fits.` : "The provider's name for the model. Runs for every value, so a fast, cheap one fits."}
+                items={serverModels}
+                allowCustomValue
+                selectedItem={serverDraft.fieldModel || null}
+                onChange={({ selectedItem }) => selectedItem && setServerAi({ fieldModel: selectedItem })}
+                onInputChange={(fieldModel) => setServerAi({ fieldModel })}
               />
-              <TextInput
+              <ComboBox
+                autoAlign
                 size="sm"
                 id={`${uid}-server-code`}
-                labelText="Model for writing components"
+                titleText="Model for writing components"
                 placeholder="Same as for AI fields"
-                helperText="Writes the code of a component (Write with AI). Leave empty to use the model for AI fields."
-                value={serverDraft.codeModel}
-                onChange={(e) => setServerAi({ codeModel: e.target.value })}
+                helperText="Writes the code of a component (Write with AI). Leave empty to use the model for AI fields; a stronger one fits here, as it runs once in a while."
+                items={serverModels}
+                allowCustomValue
+                selectedItem={serverDraft.codeModel || null}
+                onChange={({ selectedItem }) => selectedItem && setServerAi({ codeModel: selectedItem })}
+                onInputChange={(codeModel) => setServerAi({ codeModel })}
               />
               {!serverDirty && offer.problem && <InlineNotification kind="warning" title="No model from the server" subtitle={offer.problem} lowContrast hideCloseButton />}
             </>

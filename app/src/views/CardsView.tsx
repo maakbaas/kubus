@@ -343,7 +343,7 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
  * by a card plus its gap, rounded to the nearest whole number. Follows the container's width.
  */
 /** `present`: the grid is shown (its element exists); set up again when that changes. */
-function useCardColumns(container: RefObject<HTMLDivElement | null>, targetRem: number, present: boolean): number {
+export function useCardColumns(container: RefObject<HTMLDivElement | null>, targetRem: number, present: boolean): number {
   const [columns, setColumns] = useState(1);
   useLayoutEffect(() => {
     const el = container.current;

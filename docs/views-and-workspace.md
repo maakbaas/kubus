@@ -10,6 +10,10 @@ Extension points are registries, not special cases in pages:
   `applyQuery()`. Everything field-kind specific (filter operators, sort key, group keys, text for
   search) is in one `KIND_RULES` table: a new field kind or operator is added there. Pseudo fields
   `$title`, `$updated`, `$created` can be sorted on; the default query sorts by `$title`.
+  A sort has levels (`ViewQuery.sort`, a list): the first decides, each next one orders what the ones above leave equal
+  ("by date, then by title"). The Sort panel lists them ("Sort by", "Then by", each field once, Add sort level); a table's
+  column header puts its field first (turning its direction when it already was first) and keeps the other levels after
+  it, and shows its arrow on the first level only.
   A block type can have a default sort of its own (`DEFAULT_SORTS` by kind in `domain/blockSort.ts`, pure so the headless
   API's view-items route applies it too; `blockSort` / `isDefaultBlockSort` live there): a chart block (every chart kind, a
   stat's Last / First / Previous value too) and a map block, whose sort was not chosen, run in time order, ascending by the
@@ -64,7 +68,9 @@ Extension points are registries, not special cases in pages:
   (`ViewQuery.inherited`, `blockQuery`), so its And rules tighten the view's filter and its Or rules make
   exceptions to it; a block's Filter button is blue while it has rules of its own. A filter's date period
   frames that filter (and-ed with its other rules and what it builds on), so a block's Or can step outside
-  the view's period but not its own. A rule without its value yet, or on a missing field, takes no part
+  the view's period but not its own; in a filter building on another (a block's) the period has its own And / Or
+  in front of its line (`DatePeriodFilter` `joins`), and with Or it is or-ed with the filter it builds on, the
+  block's other rules following on that: "(view's filter or period) and …". A rule without its value yet, or on a missing field, takes no part
   (`waitsForValue`), so a half-written Or never lets everything through. The result is one condition tree
   (`filterTree`), checked locally (`filterOf`) and sent as is to remote sources (`sourceQuery`,
   `SourceCondition`), so every connector filters the same way; a new item is preset only from rules every
@@ -74,7 +80,8 @@ Extension points are registries, not special cases in pages:
   Year, Range) picks the kind; the line under it shows the period ("Any date" while there is none), a blue "Rolling"
   tag while it moves on with time, "by <field>" (the first date or date & time field, none: Updated; Created and
   Updated can be picked) and, once a period is set, ‹ › (the one before / after: a rolling one stays rolling, `week-1`
-  "Last week"; a chosen one by its length), the calendar button (the current one) and × (any date). "Which" says which
+  "Last week"; a chosen one by its length; the last n by n, still rolling: `day-6..day+0` → `day-13..day-7`, "7 days up
+  to 7 days ago"; off only for a so far), the calendar button (the current one) and × (any date). "Which" says which
   one of its kind: counted from now (`hour+0`, `week+0`, `month-1`: `resolveRange` works it out when the filter runs,
   so a saved "this week" stays this week), so far for a week, month or year (`year+0..day+0`, "Year to date"), the last
   n up to now with n beside it (`day-6..day+0` the last 7 days, `hour-23..hour+0`, `month-11..month+0` the last 12
@@ -93,8 +100,8 @@ Extension points are registries, not special cases in pages:
   view tab strip with the view filter's date period without opening the panel. At the LEFT the period in words (the panel's
   period line, separated by " - ": "This week - Week 44 - 25 Oct – 31 Oct 2026", "Last 7 days - …", "Any date" while there
   is none); at the RIGHT, touching at the 32px pitch and ending where the toolbar's icon buttons end, from left to right
-  ‹ › (step as the panel's do: a rolling one stays rolling, a chosen one by its kind, a range by its length, off for a
-  period up to now), the "most recent" button (the calendar: this hour / today / this week / month / year as a rolling
+  ‹ › (step as the panel's do: a rolling one stays rolling, a chosen one by its kind, a range by its length, the last n by n, off for a
+  so far), the "most recent" button (the calendar: this hour / today / this week / month / year as a rolling
   `kind+0`, whatever the period was; off for a range or no period) and the view's Filter button (it leaves the toolbar for
   the bar while the bar is shown; same states: grey while open, blue while rules are in effect, same panel). There is no
   separate kind control: the UNIT WORD of the words is a Carbon inline Dropdown (`type="inline"`, sm, autoAlign) whose menu
@@ -102,10 +109,11 @@ Extension points are registries, not special cases in pages:
   "[Year] to date": `periodWords` (domain/datePeriod.ts) splits the counting into before / unit word / after, so the
   trigger shows the word in the sentence's own number ("week" / "weeks") and follows the new kind after a pick
   (`kindValue`: the same window in the other kind, as the panel's switcher does; a rolling one starts at the current one;
-  with no period it creates one on the default field, the first date or date & time field, else Updated). A period with
-  no unit word has the kind in front of its first words instead: "[Monthly] - October 2026", "[Weekly] - Week 43", "[Daily] -
-  Today", a range "[Range] - 4 Oct – 13 Oct 2026" (no kind chosen in the menu), none yet "[Any date]" (the dropdown is the
-  whole text). The "by <field>", Which, × and Range stay in the panel. The pure steps are `periodState`, `stepValue`,
+  with no period it creates one on the default field, the first date or date & time field, else Updated). In a period with
+  no unit word its first words are the dropdown instead: "[Today]", "[Yesterday]", "[October 2026]", "[Week 43] - 18 Oct – 24
+  Oct 2026", a range "[4 Oct – 13 Oct 2026]" (no kind chosen in the menu), none yet "[Any date]". The trigger has room on both
+  sides and a gap before its arrow; its menu, wider than the word, is moved left as far as it would run past the window's
+  right edge (`keepMenuOnPage`). The "by <field>", Which, × and Range stay in the panel. The pure steps are `periodState`, `stepValue`,
   `kindValue`, `latestValue`, `withPeriod` (domain/datePeriod.ts), shared with `DatePeriodFilter`. Every change is an
   edit of the view's filter (`view.filters`): the tab gets its * and Save appears, which is how the view shows it deviates
   from its saved period; all blocks follow. The setting itself is stored with the view right away (like arranging blocks;
@@ -132,7 +140,7 @@ Extension points are registries, not special cases in pages:
   Date as the same rule on its own first date or date & time field (none: dropped), a rule on a field only where that field's collection
   is listed (a block of several: on the column showing it), Created / Updated on native ones. Unlike the page-wide filter it applies with
   any number of blocks; a block's own filter builds on it like on a view's.
-- **Page-wide filter** (item pages): with more than one block listing items (`uses.query`), the page toolbar gets "Filter all blocks", the collection views' filter panel (`QueryEditor`, date period included) over the fields of all those collections (`pageFilterScope`; a name several share gets its collection behind it; remote collections included: a remote block hands the rules to its source like its own filter, `sourceQuery`, connector-neutral, so a block of a remote table can show this month's rows). It is `ItemLayout.filters`, unsaved until Save changes like a block's filter. Like a view's filter, each block builds on it (And / Or above): a block takes the rules on its collection's fields and, if native, the pseudo fields (`pageFiltersFor`) and ignores the rest. With one block, or none, it doesn't apply.
+- **Page-wide filter** (item pages): with more than one block listing items (`uses.query`), the views bar gets "Filter all blocks" (beside Page layout, the item view's settings, as a collection page has its view's filter and View settings there; the page header keeps what is about the item: Show all fields, bookmark, Details, delete), the collection views' filter panel (`QueryEditor`, date period included) over the fields of all those collections (`pageFilterScope`; a name several share gets its collection behind it; remote collections included: a remote block hands the rules to its source like its own filter, `sourceQuery`, connector-neutral, so a block of a remote table can show this month's rows). It is `ItemLayout.filters`, unsaved until Save changes like a block's filter. Like a view's filter, each block builds on it (And / Or above): a block takes the rules on its collection's fields and, if native, the pseudo fields (`pageFiltersFor`) and ignores the rest. With one block, or none, it doesn't apply.
 - **Block types** (`app/src/views/`): a `BlockTypeDefinition` (kind, label, icon, default options,
   `normalizeOptions` for stored configs, `uses` = which common menus apply (filter/sort,
   fields with labels / hide empty), the `View` component, optional `OptionsEditor` in
@@ -183,8 +191,8 @@ Extension points are registries, not special cases in pages:
   map fits the dots when which items are shown changes, not when one is edited. Zoom buttons are Carbon icon
   buttons, and "Show all" only with more than one place; the wheel zooms and one finger moves the map (no
   cooperative gestures), and there is no attribution box. Route joins the dots in the block's order with a line, one
-  per group in its colour (`routeJson`). The style is one for all maps (Settings → Maps, `app/mapStyle.ts`, docs/sync.md:
-  the server's settings). Block settings: Location, Longitude, Route and Height (see below)),
+  per group in its colour (`routeJson`). The style is one for all maps (Settings → Display, `app/settings.ts`, docs/sync.md:
+  synced settings). Block settings: Location, Longitude, Route, Hide legend (no row of the groups' colours under the map, `hideLegend`) and Height (see below)),
   and
   `chart` (`views/ChartBlock.tsx`: settings and view; `domain/chart.ts`: the values, pure; `views/chartSpec.ts`: Carbon
   Charts' component, data and options for them; `views/ChartCanvas.tsx`: Carbon Charts itself, a lazily loaded chunk with
@@ -334,12 +342,13 @@ Extension points are registries, not special cases in pages:
   global router: in-app links are plain `href="#/…"` anchors, intercepted per tab (click = this tab,
   Ctrl/Cmd/middle click = new tab); links in the side nav go to the active tab. Code that
   navigates uses `useNavigate()` (this tab) or `useOpenRelated()` (beside / new tab).
-- Pages name their tab through `PageHeader` (its breadcrumb's current item).
+- Pages name their tab through `PageHeader` (its breadcrumb's current item). Every breadcrumb starts with Home, its
+  icon alone (`#/`); the Home page shows just that one.
 - Opening a related item (item from a list/cards, referenced item) goes through
   `useOpenRelated(path, mode)` with `openModeOf(event)`: plain click = this tab; Ctrl/Cmd click =
   beside (the pane to the right, reused or split off; a new tab on windows < 72rem); middle click =
   new tab. Such links carry `data-own-click`.
-- The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Bookmarks, Collections (with the
+- The side nav is a Carbon TreeView (`app/src/app/NavTree.tsx`): Home (`#/`, no children), Bookmarks, Collections (with the
   shown space's native collections below it), Remotes (`#/remotes`, once the server has a remote
   connection or remote collections exist: `useRemotesShown`; the space's remote collections below it),
   Dashboards (`#/dashboards`, with the shown space's dashboards below it, each with its icon)
@@ -357,7 +366,9 @@ Extension points are registries, not special cases in pages:
 - Each tab keeps its own history for its lifetime (outside navigation is pushed into it); mouse
   back/forward buttons, Alt+←/→, the browser-back key and, on touch screens, a swipe in from the
   left / right screen edge (the app's own touch listeners in `Workspace.tsx`) act on the active
-  tab. The browser's own history isn't used for this (no iOS-specific history handling).
+  tab. While swiping, a square arrow (`.swipe-hint`) comes out of that edge and follows the finger (moved
+  directly, no render per move): faint until the swipe is far enough, solid in the inverse colours once letting
+  go would go there, sliding away on release; none when the tab has no page in that direction. The browser's own history isn't used for this (no iOS-specific history handling).
 - Closing every tab leaves an empty workspace (no tab is reopened automatically); middle click
   on a tab closes it.
 - Phones show only the active pane.

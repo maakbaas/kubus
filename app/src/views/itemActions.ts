@@ -99,10 +99,11 @@ export function buildItemActions({ collection, stored, query, preset, onSort, co
     groupPreset: (key) => ({ ...preset, ...groupPreset(collection, query, key) }),
     groupBy: query.groupBy,
     sort: query.sort[0],
+    // A column's header: that field first (its direction turned when it already was), the other levels after it.
     sortBy(fieldId) {
       const sort = query.sort[0];
       const direction = sort?.fieldId === fieldId && sort.direction === "asc" ? "desc" : "asc";
-      onSort([{ fieldId, direction }]);
+      onSort([{ fieldId, direction }, ...query.sort.filter((s) => s.fieldId !== fieldId)]);
     },
   };
 }

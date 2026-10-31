@@ -124,11 +124,14 @@ const RANGE_WORDS: Record<RangeUnit, [one: string, many: string, current: string
   month: ["month", "months", "This month"],
   year: ["year", "years", "This year"],
 };
-/** A rolling range in words: "Last 7 days" (up to today), "Today", "Last 24 hours". */
+/** A rolling range in words: "Last 7 days" (up to today), "Today", "Last 24 hours", "7 days up to 7 days ago" (one stepped back). */
 export function rollingRangeLabel({ from, to, unit = "day" }: RollingRange): string {
   const n = to - from + 1;
-  const [, many, current] = RANGE_WORDS[unit];
-  if (to !== 0) return `${n} ${many}`;
+  const [one, many, current] = RANGE_WORDS[unit];
+  if (to !== 0) {
+    const distance = `${Math.abs(to)} ${Math.abs(to) === 1 ? one : many}`;
+    return `${n} ${n === 1 ? one : many} up to ${distance} ${to < 0 ? "ago" : "from now"}`;
+  }
   return n === 1 ? current : `Last ${n} ${many}`;
 }
 
@@ -315,7 +318,7 @@ export interface PeriodState {
   rolling: Rolling | null;
   rollingRange: RollingRange | null;
   toDate: ToDate | null;
-  /** The last n up to now (another rolling range, not up to today, is a range). */
+  /** The last n up to now, or n of them stepped back or on from there ("7 days up to 7 days ago"). */
   last: RollingRange | null;
   /** Counted from now (it moves on with time). */
   counted: boolean;
@@ -330,7 +333,7 @@ export function periodState(value: string, now = nowMinute()): PeriodState | nul
   const rolling = parseRolling(value);
   const rollingRange = parseRollingRange(value);
   const toDate = parseToDate(value);
-  const last = rollingRange && rollingRange.to === 0 ? rollingRange : null;
+  const last = rollingRange;
   const lastKind: PeriodKind | null = last ? (last.unit === "minute" ? "hour" : (last.unit ?? "day")) : null;
   const kind: PeriodKind = lastKind ?? (toDate || (rolling ? rolling.kind : rollingRange ? "range" : periodKind(period)));
   const window: Window | null =
@@ -393,12 +396,18 @@ export function kindValue(value: string | null, unit: Unit, now = nowMinute()): 
 
 /**
  * The period before (-1) or after (1): a rolling one stays rolling (this week, last week), a chosen
- * one moves by its kind (a range by its length; `kind` given, else the one it is). Null for one up
- * to now (so far, the last n), which has nothing before or after it, and for a value that is no period.
+ * one moves by its kind (a range by its length; `kind` given, else the one it is), and the last n by n,
+ * still counted from now ("day-13..day-7": the 7 days before the last 7). Null for one so far (year to
+ * date), which has nothing before or after it, and for a value that is no period.
  */
 export function stepValue(value: string, direction: 1 | -1, now = nowMinute(), kind?: PeriodKind): string | null {
   const state = periodState(value, now);
-  if (!state || state.toDate || state.last) return null;
+  if (!state || state.toDate) return null;
+  if (state.last) {
+    const { from, to, unit } = state.last;
+    const by = (to - from + 1) * direction;
+    return rollingRangeValue({ from: from + by, to: to + by, unit });
+  }
   if (state.rolling) return rollingValue({ kind: state.rolling.kind, offset: state.rolling.offset + direction });
   return rangeValue(shiftPeriod(state.period, kind ?? state.kind, direction));
 }
@@ -437,7 +446,7 @@ export function withPeriod(filters: FilterRule[], fieldId: string, value: string
   const rule = periodRule(filters);
   const anchor = from === undefined ? (rule ? splitAnchor(rule.value).fieldId : null) : from;
   const fromDay = parseRolling(value) || parseRollingRange(value) || parseToDate(value);
-  const written: FilterRule = { id: rule?.id ?? newId(), fieldId: rule?.fieldId ?? fieldId, operator: "between", value: anchoredValue(value, fromDay ? anchor : null) };
+  const written: FilterRule = { id: rule?.id ?? newId(), fieldId: rule?.fieldId ?? fieldId, operator: "between", value: anchoredValue(value, fromDay ? anchor : null), ...(rule?.join && { join: rule.join }) };
   return rule ? filters.map((r) => (r === rule ? written : r)) : [written, ...filters];
 }
 

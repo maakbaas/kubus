@@ -82,6 +82,11 @@ export class SourcesClient {
     return this.call("/settings", update, "PUT");
   }
 
+  /** The models of a language model's address being set up on the server (`key`: as typed; absent: the stored one, for the stored address only). */
+  async serverAiModels(url: string, key?: string): Promise<string[]> {
+    return (await this.call<{ models: string[] }>("/settings/ai/models", { url, ...(key !== undefined && { key }) })).models;
+  }
+
   /** The server's API tokens (shared/tokens.ts), without the tokens themselves. */
   apiTokens(): Promise<ApiTokenInfo[]> {
     return this.call("/tokens");

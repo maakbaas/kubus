@@ -31,7 +31,7 @@ export function loadMapLibre(): Promise<MapLibre> {
 /** OpenFreeMap's styles (https://openfreemap.org): free, no key, OpenStreetMap data. */
 const STYLE_BASE = "https://tiles.openfreemap.org/styles/";
 
-/** One style for every map (Settings → Maps, app/mapStyle.ts). */
+/** One style for every map (Settings → Display, app/settings.ts). */
 export type MapStyle = MapStyleId;
 export const MAP_STYLES: { value: MapStyle; text: string }[] = [
   { value: "auto", text: "Automatic" },

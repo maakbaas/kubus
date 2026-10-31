@@ -64,14 +64,9 @@ function bookmarkOf(b: Bookmark, collections: Collection[], dashboards: Dashboar
  * "New bookmark": pick a collection or dashboard, then one of its views, items or tabs.
  */
 export function BookmarksPage() {
-  const { repo, collections, dashboards, bookmarks, space } = useStore();
   const [error, setError] = useState<string>();
   const [adding, setAdding] = useState(false);
   const fail = (e: unknown) => setError(errorMessage(e));
-  const { sort, header } = useTableSort<Bookmark, "name" | "kind">({
-    name: (b) => b.label,
-    kind: (b) => bookmarkOf(b, collections, dashboards)?.text ?? "",
-  });
 
   return (
     <>
@@ -81,6 +76,21 @@ export function BookmarksPage() {
         actions={<NewButton label="New bookmark" onClick={() => setAdding(true)} />}
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
+      <BookmarksTable onError={fail} />
+      {adding && <NewBookmarkModal onClose={() => setAdding(false)} onError={fail} />}
+    </>
+  );
+}
+
+/** The space's bookmarks as a table (name opens it; what it is; remove): the Bookmarks page's and the Home page's. */
+export function BookmarksTable({ onError }: { onError(e: unknown): void }) {
+  const { repo, collections, dashboards, bookmarks, space } = useStore();
+  const { sort, header } = useTableSort<Bookmark, "name" | "kind">({
+    name: (b) => b.label,
+    kind: (b) => bookmarkOf(b, collections, dashboards)?.text ?? "",
+  });
+  return (
+    <>
       {bookmarks.length === 0 ? (
         <Tile className="empty-state">
           <p>No bookmarks yet.</p>
@@ -112,7 +122,7 @@ export function BookmarksPage() {
                       )}
                     </TableCell>
                     <RowActions>
-                      <IconButton {...ROW_BUTTON} label={`Remove bookmark ${b.label}`} onClick={() => repo.removeBookmark(b.targetId, space.id).catch(fail)}>
+                      <IconButton {...ROW_BUTTON} label={`Remove bookmark ${b.label}`} onClick={() => repo.removeBookmark(b.targetId, space.id).catch(onError)}>
                         <TrashCan />
                       </IconButton>
                     </RowActions>
@@ -123,7 +133,6 @@ export function BookmarksPage() {
           </Table>
         </FillTable>
       )}
-      {adding && <NewBookmarkModal onClose={() => setAdding(false)} onError={fail} />}
     </>
   );
 }

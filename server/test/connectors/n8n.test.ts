@@ -35,9 +35,9 @@ function n8nFilters(rows: Record<string, unknown>[], url: URL): Record<string, u
         gt: () => v !== null && cmp(v, f.value) > 0,
         gte: () => v !== null && cmp(v, f.value) >= 0,
         lt: () => v !== null && cmp(v, f.value) < 0,
-        isEmpty: () => v === null || v === "",
-        isNotEmpty: () => v !== null && v !== "",
-      }[f.condition]();
+      }[f.condition]?.();
+      // n8n answers 400 to a condition its API doesn't take.
+      if (ok === undefined) throw new Error(`400 ${f.condition}`);
       if (!ok) return false;
     }
     const own = TABLES[0].columns.map((c) => c.name);
@@ -59,7 +59,13 @@ function stub() {
     requests.push({ url, method: init.method ?? "GET", key: new Headers(init.headers).get("X-N8N-API-KEY") });
     if (new Headers(init.headers).get("X-N8N-API-KEY") !== "secret") return new Response(JSON.stringify({ message: "unauthorized" }), { status: 401 });
     if (url.pathname === "/n8n/api/v1/data-tables") return Response.json(page(TABLES, url));
-    if (url.pathname === "/n8n/api/v1/data-tables/aaaaaaaaaaaaaaaa/rows") return Response.json(page(n8nFilters(LEADS, url), url));
+    if (url.pathname === "/n8n/api/v1/data-tables/aaaaaaaaaaaaaaaa/rows") {
+      try {
+        return Response.json(page(n8nFilters(LEADS, url), url));
+      } catch (e) {
+        return new Response(JSON.stringify({ message: (e as Error).message }), { status: 400 });
+      }
+    }
     return new Response(JSON.stringify({ message: "Not found" }), { status: 404 });
   });
   return requests;
@@ -161,6 +167,15 @@ describe("n8n connector", () => {
     // Rules n8n can't narrow by aren't sent.
     expect(n8nRules({ name: "email", type: "string", kind: "string" }, { column: "email", operator: "contains", value: "café" }, "UTC")).toBeNull();
     expect(n8nRules({ name: "won", type: "boolean", kind: "checkbox" }, { column: "won", operator: "isChecked", value: "" }, "UTC")).toBeNull();
+  });
+  it("filters empty and not empty with the conditions n8n's API takes (eq / neq null), on every kind of column", async () => {
+    stub();
+    const connector = new N8nConnector(config());
+    const count = async (column: string, operator: "isEmpty" | "isNotEmpty") => (await connector.query(leads({ filter: { and: [{ column, operator, value: "" }] } }))).total;
+    expect([await count("email", "isEmpty"), await count("email", "isNotEmpty")]).toEqual([0, 300]);
+    expect([await count("score", "isEmpty"), await count("score", "isNotEmpty")]).toEqual([0, 300]);
+    expect([await count("met", "isEmpty"), await count("met", "isNotEmpty")]).toEqual([299, 1]);
+    expect(n8nRules({ name: "email", type: "string", kind: "string" }, { column: "email", operator: "isNotEmpty", value: "" }, "UTC")).toEqual([{ columnName: "email", condition: "neq", value: null }]);
   });
   it("keeps a read from when it is done, however long it took", async () => {
     stub();

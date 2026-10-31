@@ -1,6 +1,6 @@
 import { useState, type ElementType, type MouseEvent } from "react";
 import { TreeNode, TreeView } from "@carbon/react";
-import { Bookmark as BookmarkIcon, Cube, Code as ComponentIcon, Dashboard as DashboardIcon, DataBase, Help as HelpIcon, Settings as SettingsIcon } from "@carbon/icons-react";
+import { Bookmark as BookmarkIcon, Cube, Home as HomeIcon, Code as ComponentIcon, Dashboard as DashboardIcon, DataBase, Help as HelpIcon, Settings as SettingsIcon } from "@carbon/icons-react";
 import { bookmarkPath } from "../domain/bookmarks";
 import { dashboardIcon } from "../domain/dashboards";
 import { readPref, writePref } from "../ui/localPrefs";
@@ -32,7 +32,7 @@ function collectionIcon(name: string | null): ElementType {
 }
 
 /**
- * The side nav as a Carbon tree: Bookmarks (the space's bookmarked views, items and dashboard tabs), Collections
+ * The side nav as a Carbon tree: Home (the start page, no children), Bookmarks (the space's bookmarked views, items and dashboard tabs), Collections
  * (its page, with the space's native collections below it), Remotes (while the server has a remote
  * connection or remote collections exist: its page, with the space's remote collections below it),
  * Dashboards (its page, with the space's dashboards below it) and Components. Choosing a node opens its page in the active tab
@@ -66,6 +66,8 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
       ? `collection-${collection.id}`
       : dashboard
         ? `dashboard-${dashboard.id}`
+      : pathname === "/"
+        ? "home"
       : pathname === "/dashboards"
         ? "dashboards"
       : pathname === "/collections"
@@ -80,6 +82,7 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
 
   // Every node's page, by node id (Carbon renders the id on the node's <li>), for middle clicks.
   const paths: Record<string, string> = {
+    home: "/",
     bookmarks: "/bookmarks",
     dashboards: "/dashboards",
     collections: "/collections",
@@ -113,6 +116,7 @@ export function NavTree({ activePath, navigate, openTab }: { activePath: string;
     >
       {/* Carbon ignores an empty `selected` and keeps the last node lit (e.g. on the Spaces page, which has no node), so the tree is remounted when there is none. */}
       <TreeView key={selected ? "tree" : "tree-none"} label="Navigation" hideLabel size="xs" selected={selected ? [selected] : []} active={selected} className="nav-tree">
+        <TreeNode autoAlign id="home" label="Home" onSelect={() => navigate("/")} renderIcon={HomeIcon} />
         <TreeNode autoAlign
             id="bookmarks"
             label="Bookmarks"

@@ -296,14 +296,18 @@ describe("the service worker", () => {
   async function load(env: { prod: boolean; worker: boolean; tauri?: boolean }) {
     vi.resetModules();
     vi.stubEnv("PROD", env.prod);
-    const register = vi.fn(async () => {});
+    const update = vi.fn(async () => {});
+    const register = vi.fn(async (): Promise<unknown> => ({ update }));
     const loads: (() => void)[] = [];
+    const shown: (() => void)[] = [];
+    const doc = { visibilityState: "visible", addEventListener: (_: string, l: () => void) => shown.push(l) };
+    vi.stubGlobal("document", doc);
     vi.stubGlobal("window", env.tauri ? { __TAURI_INTERNALS__: {} } : {});
     vi.stubGlobal("navigator", env.worker ? { serviceWorker: { register } } : {});
     vi.stubGlobal("addEventListener", (_: string, l: () => void) => loads.push(l));
     const { registerServiceWorker } = await import("./serviceWorker");
     registerServiceWorker();
-    return { register, loads };
+    return { register, update, loads, shown, doc };
   }
   afterEach(() => vi.unstubAllEnvs());
 
@@ -311,7 +315,21 @@ describe("the service worker", () => {
     const t = await load({ prod: true, worker: true });
     expect(t.loads).toHaveLength(1);
     t.loads[0]();
-    expect(t.register).toHaveBeenCalledWith("sw.js");
+    expect(t.register).toHaveBeenCalledWith("sw.js", { updateViaCache: "none" });
+  });
+
+  it("looks for a new build whenever the app is shown again (iOS resumes without loading the page)", async () => {
+    const t = await load({ prod: true, worker: true });
+    t.loads[0]();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(t.shown).toHaveLength(1);
+    t.doc.visibilityState = "hidden";
+    t.shown[0]();
+    expect(t.update).not.toHaveBeenCalled();
+    t.doc.visibilityState = "visible";
+    t.shown[0]();
+    expect(t.update).toHaveBeenCalledOnce();
   });
 
   it("warns instead of failing when it can't register", async () => {

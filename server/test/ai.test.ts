@@ -2,7 +2,7 @@
 // The language model the server offers (src/ai.ts), against a stand-in for an OpenAI-style provider.
 import { createServer, type Server } from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { aiInfo, aiProxy, setAiSettings } from "../src/ai.ts";
+import { aiInfo, aiModels, aiProxy, setAiSettings } from "../src/ai.ts";
 import { apiRequest } from "./request.ts";
 
 describe("the server's language model", () => {
@@ -35,6 +35,20 @@ describe("the server's language model", () => {
   });
 
   const text = (bytes: Uint8Array | undefined) => new TextDecoder().decode(bytes);
+
+  it("lists the models of an address being set up, with the stored key only for the stored address", async () => {
+    reply = { status: 200, type: "application/json", body: '{"data":[{"id":"b"},{"id":"a"},{"x":1}]}' };
+    expect((await aiModels({ url: `${base}/v1/` })).json).toEqual({ models: ["a", "b"] });
+    expect(seen[0]).toMatchObject({ method: "GET", path: "/v1/models", authorization: "Bearer sk-server" });
+    await aiModels({ url: `${base}/other` });
+    expect(seen[1]).toMatchObject({ path: "/other/models", authorization: undefined });
+    await aiModels({ url: `${base}/other`, key: "sk-typed" });
+    expect(seen[2]).toMatchObject({ authorization: "Bearer sk-typed" });
+    reply = { status: 401, type: "application/json", body: "{}" };
+    expect((await aiModels({ url: `${base}/v1` })).json).toEqual({ models: [] });
+    expect((await aiModels({ url: "file:///etc" })).json).toEqual({ models: [] });
+    expect(seen).toHaveLength(4);
+  });
 
   it("says what it offers, never its address or key", async () => {
     expect(await aiInfo()).toEqual({ status: 200, json: { available: true, fieldModel: "small", codeModel: "big" } });

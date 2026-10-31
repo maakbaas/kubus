@@ -14,6 +14,9 @@ const range = (from: number, to: number) => Array.from({ length: to - from + 1 }
 const byIndex = (a: number, b: number) => a - b;
 /** The selection is one connected group of rows. */
 const isBlock = (ids: number[]) => ids.length > 0 && ids.every((v, i) => i === 0 || v === ids[i - 1] + 1);
+/** How long a touch on a handle is held to start selecting (iOS's own long press is about this). */
+const LONG_PRESS_MS = 450;
+
 /** Where a press or a Delete key belongs to the control, not to the list's selection. */
 const INTERACTIVE = "input, textarea, select, button, a, label, [role=button], [role=combobox], [role=listbox], [role=checkbox], [contenteditable], .cds--list-box, .cds--popover-container";
 const EDITABLE = "input, textarea, select, [contenteditable], [role=combobox]";
@@ -41,7 +44,11 @@ interface Options {
  *    and they move when dropped. Dragging the handle of a selected, connected group moves the whole
  *    group. With the handle focused, Arrow up / down move the row or group.
  *  - Delete: with rows selected, Delete (outside a text input) asks to remove them all; Escape or a
- *    press elsewhere clears the selection.
+ *    press elsewhere clears the selection. A row's own delete icon (`remove(i, one)`) removes the whole
+ *    selection when its row is one of several selected.
+ *  - Touch (no Ctrl or Shift): a long press on a handle adds its row to the selection and starts
+ *    selecting: from then on a tap on a row's handle or blank part adds or removes it (as Ctrl does),
+ *    until the selection is empty again.
  * Pointer events throughout, so touch screens work too.
  */
 export function useReorder(options: Options) {
@@ -52,6 +59,8 @@ export function useReorder(options: Options) {
   /** While dragging: the gap (0…count) the rows would be dropped into (their own place included); null = not dragging. */
   const [dropSlot, setDropSlot] = useState<number | null>(null);
   const anchor = useRef(0);
+  /** Selecting by touch (started by a long press): taps toggle rows, as Ctrl-clicks do. */
+  const touchSelecting = useRef(false);
   const { confirm, dialog } = useConfirm();
   // The latest options and selection, for handlers that outlive the render they were made in
   // (a drag is many steps; each reorders the list the page has by then).
@@ -60,10 +69,12 @@ export function useReorder(options: Options) {
 
   // Rows added or removed: the selection no longer points at the same rows.
   useEffect(() => setSelected([]), [options.count]);
+  if (selected.length === 0) touchSelecting.current = false;
 
   const rowsOf = (row: Element) => [...(row.parentElement?.children ?? [])].filter((r) => r.hasAttribute("data-reorder-row"));
 
-  const click = (index: number, mods: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => {
+  const click = (index: number, given: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => {
+    const mods = touchSelecting.current ? { ...given, ctrlKey: true } : given;
     if (mods.shiftKey) {
       setSelected(range(Math.min(anchor.current, index), Math.max(anchor.current, index)));
       return;
@@ -91,24 +102,14 @@ export function useReorder(options: Options) {
         return;
       }
       if ((e.key !== "Delete" && e.key !== "Backspace") || (e.target as HTMLElement).closest?.(EDITABLE) || (e.target as HTMLElement).closest?.(".cds--modal")) return;
-      const { selected: ids, onDelete, canDelete } = latest.current;
-      if (!onDelete || (canDelete && !canDelete(ids))) return;
-      e.preventDefault();
-      confirm({
-        title: `Delete ${ids.length} ${ids.length === 1 ? noun[0] : noun[1]}?`,
-        body: `The selected ${ids.length === 1 ? noun[0] : noun[1]} will be removed.`,
-      }).then((ok) => {
-        if (!ok) return;
-        onDelete(ids);
-        setSelected([]);
-      });
+      if (deleteSelected()) e.preventDefault();
     };
     const onPress = (e: globalThis.PointerEvent) => {
       const target = e.target as HTMLElement;
       if (target.closest?.(".cds--modal")) return;
       const row = target.closest?.("[data-reorder-row]");
-      // On a row's blank part or handle of this list: that is selecting.
-      if (row?.getAttribute("data-reorder-group") === group && (!target.closest(INTERACTIVE) || target.closest("[data-reorder-handle]"))) return;
+      // On a row's blank part, handle or delete icon of this list: that is selecting (or deleting the selection).
+      if (row?.getAttribute("data-reorder-group") === group && (!target.closest(INTERACTIVE) || target.closest("[data-reorder-handle], [data-reorder-delete]"))) return;
       setSelected([]);
     };
     // A button acts on Space's keyup: swallow that too after handling the keydown.
@@ -128,6 +129,34 @@ export function useReorder(options: Options) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [any, group]);
+
+  /** Asks to delete the selected rows (if they can go); false when they can't. */
+  function deleteSelected(): boolean {
+    const { selected: ids, onDelete, canDelete } = latest.current;
+    if (!onDelete || ids.length === 0 || (canDelete && !canDelete(ids))) return false;
+    confirm({
+      title: `Delete ${ids.length} ${ids.length === 1 ? noun[0] : noun[1]}?`,
+      body: `The selected ${ids.length === 1 ? noun[0] : noun[1]} will be removed.`,
+    }).then((ok) => {
+      if (!ok) return;
+      onDelete(ids);
+      setSelected([]);
+    });
+    return true;
+  }
+
+  /**
+   * A row's delete icon: spread on it. It removes the row (`one`), or, with the row one of several selected,
+   * the whole selection (asked first, as the Delete key does).
+   */
+  const remove = (index: number, one: () => void) => ({
+    "data-reorder-delete": "",
+    onClick: () => {
+      const ids = latest.current.selected;
+      if (ids.length > 1 && ids.includes(index) && deleteSelected()) return;
+      one();
+    },
+  });
 
   /** A press on a row's blank part selects it (Ctrl/Cmd toggles, Shift extends). */
   const rowDown = (index: number, e: PointerEvent<HTMLElement>) => {
@@ -170,14 +199,26 @@ export function useReorder(options: Options) {
     let rows: HTMLElement[] = [];
     let boxes: DOMRect[] = [];
     let to = from;
+    // A long touch on the handle (not moved): its row joins the selection and selecting by touch starts.
+    let held = false;
+    const longPress =
+      e.pointerType === "touch" && !modified
+        ? window.setTimeout(() => {
+            held = true;
+            touchSelecting.current = true;
+            anchor.current = index;
+            setSelected((s) => (s.includes(index) ? s : [...s, index].sort(byIndex)));
+          }, LONG_PRESS_MS)
+        : undefined;
     const { cursor, userSelect } = document.body.style;
     const lift = (dy: number) => {
       for (const r of rows.slice(from, last + 1)) r.style.transform = `translateY(${dy}px)`;
     };
     // On the window: the pointer leaves the small handle as soon as the rows follow it.
     const onMovePointer = (ev: globalThis.PointerEvent) => {
-      if (modified) return;
+      if (modified || held) return;
       if (!moved && Math.abs(ev.clientY - y0) < 4) return;
+      window.clearTimeout(longPress);
       if (!moved) {
         moved = true;
         rows = rowsOf(first) as HTMLElement[];
@@ -195,6 +236,7 @@ export function useReorder(options: Options) {
       setDropSlot(to === from ? (from > 0 ? from : last + 1) : slot);
     };
     const end = (ev: globalThis.PointerEvent) => {
+      window.clearTimeout(longPress);
       window.removeEventListener("pointermove", onMovePointer);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
@@ -205,6 +247,7 @@ export function useReorder(options: Options) {
       for (const r of rows) r.style.transform = "";
       setDragging([]);
       setDropSlot(null);
+      if (held) return; // the long press did the selecting
       if (!moved) click(index, mods);
       else if (ev.type === "pointerup" && to !== from) {
         latest.current.onMove(from, last, to);
@@ -242,7 +285,7 @@ export function useReorder(options: Options) {
       kind="ghost"
       size="sm"
       align="top"
-      label="Drag to reorder. Click to select"
+      label="Drag to reorder. Click to select (on a touch screen: hold to select several)"
       className="reorder-handle"
       data-reorder-handle=""
       onPointerDown={start(index)}
@@ -255,5 +298,5 @@ export function useReorder(options: Options) {
     </IconButton>
   );
 
-  return { row, handle, dialog };
+  return { row, handle, remove, dialog };
 }

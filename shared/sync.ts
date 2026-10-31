@@ -143,6 +143,12 @@ export const SYNC_TABLES: SyncTable[] = [
       ...stamps, dashboard_id: "text",
     },
   },
+  {
+    name: "settings",
+    key: ["key"],
+    version: "updated_at",
+    columns: { key: "text", value: "json", ...stamps },
+  },
 ];
 
 export type WireValue = string | number | null;

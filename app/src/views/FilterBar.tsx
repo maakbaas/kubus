@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useId, useRef, type ReactNode } from "react";
 import { Dropdown, IconButton } from "@carbon/react";
 import { Calendar, ChevronLeft, ChevronRight } from "@carbon/icons-react";
 import type { Collection } from "../domain/model";
@@ -31,9 +31,9 @@ const UNITS: UnitChoice[] = KINDS.filter((k): k is { kind: Unit; text: string } 
  * stays rolling), "this one" (the most recent one of its kind: rolling, this week, not literally these
  * days) and the view's Filter button (`children`: it leaves the toolbar while the bar is shown), touching
  * and ending where the toolbar's icon buttons end. The unit word of the line is the dropdown that
- * switches the kind (Hourly … Yearly): "This [week]", "7 [weeks] ago", "Last 7 [days]". A period with no
- * unit word has the kind in front of its first words ("[Monthly] - October 2026", "[Daily] - Today",
- * "[Range] - 1 Oct – 15 Nov 2026"), and none yet is "[Any date]". The words are separated by " - ", and on
+ * switches the kind (Hourly … Yearly): "This [week]", "7 [weeks] ago", "Last 7 [days]". In a period with no
+ * unit word its first words are the dropdown ("[Today]", "[October 2026]", "[1 Oct – 15 Nov 2026]"), and none
+ * yet is "[Any date]". The words are separated by " - ", and on
  * a narrow bar everything from the second separator on is left out (CSS: the head is what stays; the
  * whole line is the tooltip). Every change is an edit of the view's filter, as in the filter panel
  * (DatePeriodFilter), which keeps what only it has: a range, the window (last n, so far) and the field the
@@ -41,6 +41,7 @@ const UNITS: UnitChoice[] = KINDS.filter((k): k is { kind: Unit; text: string } 
  */
 export function FilterBar({ collection, filters, onChange, children }: { collection: Collection; filters: FilterRule[]; onChange(filters: FilterRule[]): void; children: ReactNode }) {
   const uid = useId();
+  const head = useRef<HTMLSpanElement>(null);
   const now = nowMinute();
   const rule = periodRule(filters);
   const value = rule ? splitAnchor(rule.value) : null;
@@ -50,19 +51,33 @@ export function FilterBar({ collection, filters, onChange, children }: { collect
   const kind = state && state.kind !== "range" ? UNITS.find((u) => u.kind === state.kind) : undefined;
   const latest = state && state.kind !== "range" ? rollingLabel({ kind: state.kind, offset: 0 }) : "Most recent";
   const still = !steps(state, !!value?.fieldId);
-  // What the dropdown shows: the unit word, else the kind ("Monthly"), else what stands for no kind.
-  const shown = words?.unit ?? (kind ? kind.text : state ? "Range" : "Any date");
-  // The rest of the line after the dropdown: with a unit word, what follows it (" ago") then the days; else
-  // the counting ("Today") or the days' first part follows it, and the days' rest is what a narrow bar drops.
+  // What the dropdown shows: the unit word ("Last 7 [days]"), else the words that stand first: the counting
+  // ("[Today]"), else the period's first part ("[October 2026]", "[Week 44] - 26 Oct – 1 Nov 2026"); none: "Any date".
   const dayParts = words ? words.days.split(" - ") : [];
-  const headText = words ? (words.unit ? words.after : ` - ${words.before || dayParts[0]}`) : "";
-  const more = words ? (words.unit ? dayParts : words.before ? dayParts : dayParts.slice(1)) : [];
+  const shown = words?.unit ?? (words ? words.before || dayParts[0] : "Any date");
+  // The rest of the head after the dropdown (" ago"), then the days, or what of them the dropdown doesn't show:
+  // what a narrow bar drops.
+  const headText = words?.unit ? words.after : "";
+  const more = words ? (words.unit || words.before ? dayParts : dayParts.slice(1)) : [];
   // The whole line as shown (a narrow bar drops its end): the tooltip.
   const label = `${words?.unit ? words.before : ""}${shown}${headText}${more.length ? ` - ${more.join(" - ")}` : ""}`;
+  // The menu hangs from the dropdown's left edge and is wider than its word: moved left as far as it would
+  // run past the window's right edge (Carbon's floating placement only flips it up or down). Once placed.
+  const keepMenuOnPage = () =>
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const menu = head.current?.querySelector<HTMLElement>(".cds--list-box__menu");
+        if (!menu) return;
+        menu.style.marginInlineStart = "";
+        const room = document.documentElement.clientWidth - parseFloat(getComputedStyle(document.documentElement).fontSize);
+        const over = menu.getBoundingClientRect().right - room;
+        if (over > 0) menu.style.marginInlineStart = `${-over}px`;
+      }),
+    );
   return (
     <div className="filter-bar">
       <span className="filter-bar__label" title={label}>
-        <span className="filter-bar__head">
+        <span className="filter-bar__head" ref={head} onClickCapture={keepMenuOnPage} onKeyDownCapture={keepMenuOnPage}>
           {words?.unit && words.before && <span className="filter-bar__text">{words.before}</span>}
           <Dropdown<UnitChoice | null>
             autoAlign

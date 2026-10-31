@@ -18,6 +18,8 @@ export type DataChange =
   | { scope: "views"; collectionId: string }
   | { scope: "components" }
   | { scope: "bookmarks" }
+  /** The synced settings (`getSettings`). */
+  | { scope: "settings" }
   | { scope: "dashboards" }
   /** A dashboard's tabs, in any space (a space without tabs of its own shows another's: domain/dashboards.ts). */
   | { scope: "dashboardViews"; dashboardId: string };
@@ -234,6 +236,11 @@ export interface Repository {
   orderDashboardViews(dashboardId: string, spaceId: string, ids: string[]): Promise<void>;
   /** Stars a tab as the dashboard's default in a space (unstarring any other there), or clears it with null. */
   setDefaultDashboardView(dashboardId: string, spaceId: string, viewId: string | null): Promise<void>;
+
+  /** The user's synced settings (Settings → Display), by key; a setting never set is absent. */
+  getSettings(): Promise<Record<string, unknown>>;
+  /** Sets one synced setting (its value stored as JSON). */
+  setSetting(key: string, value: unknown): Promise<void>;
 
   /** A space's side-nav bookmarks, in their order. */
   listBookmarks(spaceId: string): Promise<Bookmark[]>;

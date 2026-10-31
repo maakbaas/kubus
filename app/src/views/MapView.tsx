@@ -14,7 +14,7 @@ import { itemLinkProps } from "./cells";
 import { refLabelOf } from "../ui/useReferenceOptions";
 import { useBuffered } from "../ui/useBuffered";
 import { AspectSelect, HeightSlider, InRowNote } from "./HeightSlider";
-import { useMapStyle } from "../app/mapStyle";
+import { useDark, useMapStyle } from "../app/settings";
 import { loadMapLibre, styleUrl } from "./mapLibre";
 import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./registry";
 
@@ -38,6 +38,8 @@ export interface MapOptions {
   aspect: AspectRatio;
   /** A line through the dots, in the block's order (a track, a trip): one per group. */
   route: boolean;
+  /** No row under the map naming the groups' colours (and how many items have no location). */
+  hideLegend: boolean;
 }
 
 /**
@@ -167,8 +169,8 @@ function fit(map: MapLibreMap, places: Place[], animate: boolean) {
 
 
 export function MapView({ collection, result, fields, layout, options, refs, search, actions }: BlockProps<MapOptions>) {
-  const dark = useMediaQuery("(prefers-color-scheme: dark)");
-  // One style for every map (Settings → Maps).
+  const dark = useDark();
+  // One style for every map (Settings → Display).
   const mapStyle = useMapStyle();
   const touch = useMediaQuery("(hover: none)");
   const box = useRef<HTMLDivElement>(null);
@@ -478,7 +480,7 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
           </div>
         )}
       </div>
-      {(legend.length > 0 || (chosen && missing > 0)) && (
+      {!options.hideLegend && (legend.length > 0 || (chosen && missing > 0)) && (
         <div className="map-block__legend">
           {legend.map((g) => (
             <span key={g.key} className="map-block__legend-entry">
@@ -545,6 +547,12 @@ function MapOptionsEditor({ collection, options, inRow, onChange }: BlockOptions
         checked={options.route}
         onChange={(_, { checked }) => onChange({ ...options, route: checked })}
       />
+      <Checkbox
+        id={`${uid}-map-hide-legend`}
+        labelText="Hide legend"
+        checked={options.hideLegend}
+        onChange={(_, { checked }) => onChange({ ...options, hideLegend: checked })}
+      />
     </div>
   );
 }
@@ -565,7 +573,7 @@ export const mapView = defineBlockType<MapOptions>({
   kind: "map",
   label: "Map",
   icon: Earth,
-  defaultOptions: (collection) => ({ ...guessLocation(collection), height: BLOCK_HEIGHT.initial, aspect: DEFAULT_ASPECT, route: false }),
+  defaultOptions: (collection) => ({ ...guessLocation(collection), height: BLOCK_HEIGHT.initial, aspect: DEFAULT_ASPECT, route: false, hideLegend: false }),
   uses: (options) => ({ query: true, groups: true, fields: { labels: true, hideEmpty: true }, ownHeight: { height: options.height, aspect: options.aspect } }),
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<MapOptions>;
@@ -578,6 +586,7 @@ export const mapView = defineBlockType<MapOptions>({
       height: normalizeBlockHeight(o.height),
       aspect: normalizeAspect(o.aspect),
       route: o.route === true,
+      hideLegend: o.hideLegend === true,
     };
   },
   View: MapView,

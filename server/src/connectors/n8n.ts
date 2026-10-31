@@ -98,7 +98,8 @@ export function n8nRow(raw: Record<string, unknown>, columns: SourceColumn[]): M
 /** A rule as n8n's API filters rows (`filter={"type":"and","filters":[…]}`). */
 export interface N8nRule {
   columnName: string;
-  condition: "eq" | "neq" | "ilike" | "gt" | "gte" | "lt" | "isEmpty" | "isNotEmpty";
+  /** n8n's API takes only these (no isEmpty / isNotEmpty: n8n's own node turns those into eq / neq null; anything else is a 400). */
+  condition: "eq" | "neq" | "ilike" | "gt" | "gte" | "lt";
   value: string | number | null;
 }
 
@@ -129,7 +130,9 @@ export function n8nRules(c: SourceColumn, rule: SourceFilter, timeZone: string):
   const op = rule.operator;
   const r = (condition: N8nRule["condition"], v: N8nRule["value"]): N8nRule => ({ columnName: c.name, condition, value: v });
   if (c.kind === "string") {
-    if (op === "isEmpty" || op === "isNotEmpty") return [r(op, null)];
+    // Not empty: not null (a "" kept too, which memory.ts drops). Empty is null or "": n8n can't say "or", so not narrowed.
+    if (op === "isNotEmpty") return [r("neq", null)];
+    if (op === "isEmpty") return null;
     if ((op === "contains" || op === "is") && ASCII.test(value)) return [r("ilike", containing(value))];
     return null;
   }

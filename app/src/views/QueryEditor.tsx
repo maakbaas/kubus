@@ -15,6 +15,7 @@ import {
   type FilterOperator,
   type FilterRule,
   type GroupOrder,
+  type SortRule,
   type ViewQuery,
 } from "../domain/query";
 import { DEFAULT_GROUP_DATE, GROUP_DATES, type GroupDate } from "../domain/groupDate";
@@ -172,7 +173,10 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
   // And narrows, Or lets more items in. The first rule of a filter building on nothing has nothing to join.
   const listed = query.filters.filter((r) => r !== period);
   const joinsFirst = (query.inherited?.length ?? 0) > 0;
-  const sort = query.sort[0];
+  // Sort levels: what a remote collection's source can sort by; a field is in one level at most.
+  const sortable = sortableFields(collection).filter((f) => canSort(collection, f.id));
+  const unsorted = sortable.filter((f) => !query.sort.some((s) => s.fieldId === f.id));
+  const setSort = (i: number, rule: SortRule) => onChange({ ...query, sort: query.sort.map((s, j) => (j === i ? rule : s)) });
   const groupable = pickableFields(collection).filter((f) => canGroup(collection, f));
   const dated = dateFields(collection).length > 0;
   const { collections } = useStore();
@@ -185,7 +189,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
       <section>
         {title && <Heading className="query-editor__title">{title}</Heading>}
         {/* Not for a remote collection without dates (its rows have no Created or Updated). */}
-        {dated && <DatePeriodFilter collection={collection} filters={query.filters} page={page} onChange={(filters) => onChange({ ...query, filters })} />}
+        {dated && <DatePeriodFilter collection={collection} filters={query.filters} page={page} joins={joinsFirst} onChange={(filters) => onChange({ ...query, filters })} />}
         {query.filters.length === 0 && (emptyText !== SHOWING_ALL || !dated) && <p className="helper">{emptyText}</p>}
         {query.filters.map((rule) => {
           if (rule === period) return null;
@@ -274,33 +278,58 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
       <>
       <section>
         <Heading className="query-editor__title">Sort</Heading>
-        <div className="query-editor__pair">
-          <Select
-            id={`${uid}-sort-field`}
-            labelText="Sort by"
-            size="sm"
-            value={sort?.fieldId ?? ""}
-            onChange={(e) =>
-              onChange({ ...query, sort: e.target.value ? [{ fieldId: e.target.value, direction: sort?.direction ?? "asc" }] : [] })
-            }
-          >
-            <SelectItem value="" text="No sorting" />
-            {sortableFields(collection).filter((f) => canSort(collection, f.id)).map((f) => (
-              <SelectItem key={f.id} value={f.id} text={f.name} />
-            ))}
-          </Select>
-          <Select
-            id={`${uid}-sort-direction`}
-            labelText="Direction"
-            size="sm"
-            disabled={!sort}
-            value={sort?.direction ?? "asc"}
-            onChange={(e) => sort && onChange({ ...query, sort: [{ ...sort, direction: e.target.value as "asc" | "desc" }] })}
-          >
-            <SelectItem value="asc" text="Ascending" />
-            <SelectItem value="desc" text="Descending" />
-          </Select>
-        </div>
+        {/* Levels: the first sorts, each next one orders what the ones above leave equal ("by date, then by name"). */}
+        {query.sort.length === 0 && <p className="helper">Not sorted.</p>}
+        {query.sort.map((rule, i) => (
+          <div key={i} className="query-editor__rule query-editor__rule--sort">
+            <span className="query-editor__join">{i === 0 ? "Sort by" : "Then by"}</span>
+            <Select
+              id={`${uid}-sort-field-${i}`}
+              labelText={i === 0 ? "Sort by" : "Then by"}
+              hideLabel
+              size="sm"
+              value={rule.fieldId}
+              onChange={(e) => setSort(i, { ...rule, fieldId: e.target.value })}
+            >
+              {sortable.filter((f) => f.id === rule.fieldId || !query.sort.some((s) => s.fieldId === f.id)).map((f) => (
+                <SelectItem key={f.id} value={f.id} text={f.name} />
+              ))}
+            </Select>
+            <Select
+              id={`${uid}-sort-direction-${i}`}
+              labelText="Direction"
+              hideLabel
+              size="sm"
+              value={rule.direction}
+              onChange={(e) => setSort(i, { ...rule, direction: e.target.value as "asc" | "desc" })}
+            >
+              <SelectItem value="asc" text="Ascending" />
+              <SelectItem value="desc" text="Descending" />
+            </Select>
+            <IconButton autoAlign
+              label="Remove sort level"
+              kind="ghost"
+              size="sm"
+              align="left"
+              onClick={() => onChange({ ...query, sort: query.sort.filter((_, j) => j !== i) })}
+            >
+              <TrashCan />
+            </IconButton>
+          </div>
+        ))}
+        {unsorted.length > 0 && (
+          <div className="query-editor__foot">
+            <Button
+              kind="tertiary"
+              size="sm"
+              renderIcon={Add}
+              iconDescription="Add sort level"
+              onClick={() => onChange({ ...query, sort: [...query.sort, { fieldId: unsorted[0].id, direction: "asc" }] })}
+            >
+              {query.sort.length === 0 ? "Add sort" : "Add sort level"}
+            </Button>
+          </div>
+        )}
       </section>
 
       {!noGroup && (

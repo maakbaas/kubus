@@ -83,7 +83,7 @@ export function BlockListEditor({
                 </IconButton>
               )}
               {(!keepOne || blocks.length > 1) && (
-                <IconButton autoAlign kind="ghost" size="sm" label="Remove block" onClick={() => onRemove([b.id], false)}>
+                <IconButton autoAlign kind="ghost" size="sm" label="Remove block" {...reorder.remove(i, () => onRemove([b.id], false))}>
                   <TrashCan />
                 </IconButton>
               )}

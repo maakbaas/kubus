@@ -213,7 +213,9 @@ for (const vp of POP_VPS) {
     const ids = await t.seed(popoverSpec());
     await t.open(t.itemPath(ids.collections.books, ids.items["books/i0"]));
     const header = t.page.locator(".ws-pane--active .page-header").first();
-    await openPopover(t, header, "Page layout");
+    // The view's settings are in the views bar (as a collection page's), the item's details in the header.
+    const bar = t.page.locator(".ws-pane--active .views-bar").first();
+    await openPopover(t, bar, "Page layout");
     await t.audit("page layout open");
     const panel = openPanel(t);
     const checks = panel.locator(".cds--checkbox-label");
@@ -237,7 +239,7 @@ for (const vp of POP_VPS) {
       await t.check("Escape in the dropdown closes only the dropdown", (await t.count(".toolbar-popover.cds--popover--open")) === 1 && (await t.count(".cds--list-box--expanded")) === 0, `${await t.count(".toolbar-popover.cds--popover--open")} popovers, ${await t.count(".cds--list-box--expanded")} open dropdowns`);
     }
     await t.escapeCloses("details");
-    await noLeak(t, "page layout", () => openPopover(t, header, "Page layout"));
+    await noLeak(t, "page layout", () => openPopover(t, bar, "Page layout"));
   }, { viewport: vp, smoke: vp === "desktop" });
 }
 
