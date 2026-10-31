@@ -3015,16 +3015,17 @@ img[data-lightbox] {
   background: var(--cds-background-inverse-hover);
 }
 /* The page header's actions follow their header's width instead of the window's. */
+/* (One button alone, `data-single`, stays itself: OverflowBar.) */
 @container (max-width: 36rem) {
-  .page-header .overflow-bar {
+  .page-header .overflow-bar:not([data-single]) {
     display: block;
     position: relative;
     flex: none;
   }
-  .page-header .overflow-bar__toggle {
+  .page-header .overflow-bar:not([data-single]) .overflow-bar__toggle {
     display: inline-flex;
   }
-  .page-header .overflow-bar__items {
+  .page-header .overflow-bar:not([data-single]) > .overflow-bar__items {
     display: none;
     position: absolute;
     inset-block-start: calc(100% + 0.375rem);
@@ -3039,11 +3040,11 @@ img[data-lightbox] {
     background: var(--cds-background-inverse);
     box-shadow: 0 2px 6px var(--cds-shadow, rgb(0 0 0 / 30%));
   }
-  .page-header .overflow-bar[data-open] > .overflow-bar__items {
+  .page-header .overflow-bar:not([data-single])[data-open] > .overflow-bar__items {
     display: flex;
   }
   /* A caret to the "⋮" button, as on the other popovers. */
-  .page-header .overflow-bar__items::before {
+  .page-header .overflow-bar:not([data-single]) > .overflow-bar__items::before {
     content: "";
     position: absolute;
     inset-block-start: -0.375rem;
@@ -3053,16 +3054,16 @@ img[data-lightbox] {
     border-block-end-color: var(--cds-background-inverse);
   }
   /* The dark popover's inverse icons (only here: wide, the buttons sit on the page's own colour). */
-  .page-header .overflow-bar__items .toolbar-popover__panel {
+  .page-header .overflow-bar:not([data-single]) > .overflow-bar__items .toolbar-popover__panel {
     color: var(--cds-text-primary);
   }
-  .page-header .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *) svg {
+  .page-header .overflow-bar:not([data-single]) > .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *) svg {
     fill: var(--cds-icon-inverse);
   }
-  .page-header .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *)[data-active] svg {
+  .page-header .overflow-bar:not([data-single]) > .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *)[data-active] svg {
     fill: var(--cds-support-info-inverse, var(--cds-icon-inverse));
   }
-  .page-header .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *):not(:disabled):hover {
+  .page-header .overflow-bar:not([data-single]) > .overflow-bar__items :is(.cds--btn--ghost):not(.toolbar-popover__panel *):not(:disabled):hover {
     background: var(--cds-background-inverse-hover);
   }
 }

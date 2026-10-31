@@ -9,7 +9,8 @@ import { visibleArea } from "./panelRoom";
  * A row of icon buttons. On a phone or in a narrow page header (styles.css, `.overflow-bar`) they
  * collapse into one "⋮" button that opens them in the dark popover the Markdown
  * editor's table menu has. The buttons are the same elements either way (not copies), so toolbar
- * popovers among them keep their state.
+ * popovers among them keep their state. One button alone is never put behind "⋮": it shows as itself
+ * (`single`, counted from what is rendered: its children may be conditional).
  */
 export function OverflowBar({
   children,
@@ -20,7 +21,17 @@ export function OverflowBar({
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
-  const asMenu = narrow;
+  const [single, setSingle] = useState(false);
+  useLayoutEffect(() => {
+    const items = root.current?.querySelector<HTMLElement>(":scope > .overflow-bar__items");
+    if (!items) return;
+    const count = () => setSingle(items.childElementCount <= 1);
+    const changes = new MutationObserver(count);
+    changes.observe(items, { childList: true });
+    count();
+    return () => changes.disconnect();
+  }, []);
+  const asMenu = narrow && !single;
   // Opened near the bottom of the window (a block low on a phone's screen): the menu opens upwards,
   // or it, and the panels opened from it, would run out of the window.
   const [up, setUp] = useState(false);
@@ -66,7 +77,7 @@ export function OverflowBar({
     };
   }, [open]);
   return (
-    <div ref={root} className={asMenu ? "overflow-bar overflow-bar--menu" : "overflow-bar"} data-open={open || undefined} data-up={up || undefined}>
+    <div ref={root} className={asMenu ? "overflow-bar overflow-bar--menu" : "overflow-bar"} data-open={open || undefined} data-up={up || undefined} data-single={single || undefined}>
       <IconButton
         autoAlign
         kind="ghost"
