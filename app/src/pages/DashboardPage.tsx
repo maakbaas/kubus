@@ -31,7 +31,7 @@ import type { NewBlockSpec } from "../views/AddBlockButton";
 import { AddBlockButton } from "../views/AddBlockButton";
 import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
 import { BlockView } from "../views/BlockView";
-import { BlockRows, besideOf, listRowActions, rowCollapse, type RowControls } from "../views/BlockRows";
+import { BlockRows, besideOf, listRowActions, rowCollapse, type RowCollapse, type RowControls } from "../views/BlockRows";
 import { reordered, withCopy, withoutBlock } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
@@ -297,7 +297,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   };
   // Blocks side by side (rows: views/BlockRows.tsx), stored right away like the rest of the tab's arrangement.
   const rowActions = listRowActions(view.blocks, (change) => arrangeNow(change));
-  // A row collapses as one (views/BlockRows.tsx rowCollapse).
+  // Collapsed per block, a row side by side as one (views/BlockRows.tsx rowCollapse).
   const collapsedState = active?.collapsed ?? NOTHING_COLLAPSED;
   const collapseOf = (block: ViewBlock) =>
     rowCollapse(
@@ -668,8 +668,8 @@ interface BlockProps {
   onRemove(): void;
   onError(message: string): void;
   onOpenChange(open: boolean): void;
-  /** Its row's collapse (a dashboard collapses rows, not blocks). */
-  collapse: { collapsed: boolean; onToggle(): void };
+  /** Its own and its row's collapse (views/BlockRows.tsx rowCollapse). */
+  collapse: RowCollapse;
   onDragStart?(e: React.DragEvent): void;
   row?: RowControls;
 }

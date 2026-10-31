@@ -365,8 +365,10 @@ What the app does, feature by feature (read the part you work on).
   own (`reordered`). On an item page fields are dragged by their name too (above or below a field or a row of blocks,
   never beside), and a drop there turns an item view showing all fields into the list of its fields and blocks in the
   order shown (a field added to the collection later is then left out, as with any list). Not while the standard page
-  (edit icon) is shown. **A row collapses, not a block** (`rowCollapse`): any block's caret collapses (or expands) its
-  whole row, stored as the row's first block's id in the view's `Collapsed`. The block list (View settings, Tab settings)
+  (edit icon) is shown. **Collapsing is stored per block** (the view's `Collapsed`), shown per row
+  (`rowCollapse`): side by side, a row is collapsed while any of its blocks is; its caret then expands them all, and on an
+  expanded row collapses the block it belongs to. Where a row's blocks stack (a phone, a narrow pane: `RowSideBySide`) each
+  collapses on its own, and a block dragged out of its row keeps its own state. The block list (View settings, Tab settings)
   has **Duplicate block**: the same block with all its settings, in a row of its own after the original's (`withCopy`).
 - **Full width** (a checkbox in a collection view's View settings, an item view's Page layout popover and a dashboard tab's
   settings): on, the page uses the pane's whole width (as collection views always did); off, it keeps to the narrow

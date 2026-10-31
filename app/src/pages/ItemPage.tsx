@@ -6,7 +6,7 @@ import { Add, Checkmark, Code, Edit, Filter, Information, Pin, PinFilled, Renew,
 import { isFullWidth, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
-import { BlockRows, besideOf, draggedEntry, dragStart, isEntryDrag, rowCollapse, rowControls, shownRows, zoneAt, type RowControls } from "../views/BlockRows";
+import { BlockRows, besideOf, draggedEntry, dragStart, isEntryDrag, rowCollapse, rowControls, shownRows, zoneAt, type RowCollapse, type RowControls } from "../views/BlockRows";
 import { placeBlock, reordered, setRowShares, withoutBlock, type RowZone } from "../domain/blockRows";
 import { QueryEditor } from "../views/QueryEditor";
 import { useBlockName } from "../views/BlockListEditor";
@@ -693,7 +693,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                     onOpenChange={panels.onOpenChange}
                     row={activeView ? blockRowControls(block) : undefined}
                     onDragStart={placed.onDragStart}
-                    // A row collapses as one (views/BlockRows.tsx rowCollapse).
+                    // Collapsed per block, a row side by side as one (views/BlockRows.tsx rowCollapse).
                     collapse={rowCollapse(orderOf(layout), layout.blocks, collapsed, block, setCollapsed)}
                   />
                 );
@@ -904,8 +904,8 @@ function ItemPageBlock({
   row?: RowControls;
   /** Its name drags it to another place on the page. */
   onDragStart?(e: React.DragEvent): void;
-  /** Its row's collapse (a row collapses as one). */
-  collapse?: { collapsed: boolean; onToggle(): void };
+  /** Its own and its row's collapse (views/BlockRows.tsx rowCollapse). */
+  collapse?: RowCollapse;
 }) {
   const { collections } = useStore();
   const collection = findCollection(collections, block.collectionId ?? page.collection.id);

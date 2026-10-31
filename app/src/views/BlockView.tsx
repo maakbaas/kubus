@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type DragEvent } from "react";
+import { useContext, useEffect, useId, useMemo, useRef, useState, type DragEvent } from "react";
 import { Button, Checkbox, Dropdown, InlineNotification, MultiSelect, NumberInput, Select, SelectItem, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
@@ -31,7 +31,7 @@ import { useShownOnce } from "../ui/useShownOnce";
 import { MergeFields } from "./MergeFields";
 import { dashboardFiltersFor } from "../domain/dashboards";
 import { ROW_HEIGHT } from "../domain/blockRows";
-import type { RowControls } from "./BlockRows";
+import { RowSideBySide, type RowCollapse, type RowControls } from "./BlockRows";
 
 // One block: a collection's items shown one way (its block type), with its own sort, grouping,
 // and fields, and the view's filter unless it has its own. Collection views, item pages and
@@ -367,8 +367,8 @@ interface Props {
   onRemove?(): void;
   onError(message: string): void;
   onOpenChange?(open: boolean): void;
-  /** Collapsed with its row instead of on its own (a dashboard's blocks: a row collapses as one). */
-  collapse?: { collapsed: boolean; onToggle(): void };
+  /** Its own and its row's collapse (views/BlockRows.tsx rowCollapse): side by side in a row it follows the row's. */
+  collapse?: RowCollapse;
   /** Its header's name drags it to another place on the page (views/BlockRows.tsx). */
   onDragStart?(e: DragEvent): void;
   /** Its place in a row, set in Block settings. */
@@ -449,8 +449,10 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   // (View settings; Page layout on item pages) goes with its menus; such a block
   // can't collapse.
   const headless = page ? !!headerHidden : !!block.hideHeader;
-  const collapsed = !headless && (collapse ? collapse.collapsed : state.blocks.includes(block.id));
-  const toggleCollapsed = collapse ? collapse.onToggle : () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
+  const sideBySide = useContext(RowSideBySide);
+  const placed = collapse && (sideBySide ? collapse.row : collapse.own);
+  const collapsed = !headless && (placed ? placed.collapsed : state.blocks.includes(block.id));
+  const toggleCollapsed = placed ? placed.onToggle : () => onCollapse(withBlockCollapsed(state, block.id, !collapsed));
   const groups = useMemo(() => collapsedGroups(state, block.id, block.groupBy), [state, block.id, block.groupBy]);
   // Once shown, a block stays while its rows are read again (its collections changed): unmounted, it would close the
   // Block settings being used.

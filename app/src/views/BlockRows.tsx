@@ -1,6 +1,6 @@
-import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { createContext, Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { blockRows, blockWidths, canBeside, MIN_COLUMN_REM, moveDivider, rowLines, placeBlock, rowHeightPx, rowOf, rowShares, rowStart, setBeside, setRowSettings, setRowShares, SHARE_STEP, type RowSettings, type RowZone } from "../domain/blockRows";
-import { withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
+import { type Collapsed, type ViewBlock } from "../domain/views";
 
 // A page's blocks in rows (domain/blockRows.ts): a row's blocks side by side, on lines by their widths (`rowLines`: each
 // its share of the row, 15rem at least; a line takes them while they fit; measured here, so the narrow column of a page
@@ -27,14 +27,31 @@ export interface RowControls {
   onRowSettings(settings: { fit: "tallest" | "shortest"; height: number | undefined }): void;
 }
 
+/** A block's collapse: its own, and its row's (side by side a row collapses as one). */
+export interface RowCollapse {
+  own: { collapsed: boolean; onToggle(): void };
+  row: { collapsed: boolean; onToggle(): void };
+}
+
+/** Whether the blocks rendered within are side by side in a row of several (a row collapses as one then), set by Row. */
+export const RowSideBySide = createContext(false);
+
 /**
- * A row collapses as one, not a block: any block's caret collapses or expands all its blocks, stored as its first block's
- * (so a row of one is collapsed as that block was). `store` keeps the page's collapse state.
+ * Collapsing is stored per block (`state.blocks`), so on a phone, where a row's blocks stack, each collapses on its own,
+ * and a block dragged out of its row keeps its own state. Side by side a row is collapsed while any of its blocks is: its
+ * caret then expands them all; on an expanded row it collapses the block whose caret it is (and so the row). Which of
+ * the two a block follows is up to where it is shown (`RowSideBySide`, BlockView). `store` keeps the page's state.
  */
-export function rowCollapse(order: string[], blocks: ViewBlock[], state: Collapsed, block: ViewBlock, store: (next: Collapsed) => void) {
-  const first = rowStart(order, blocks, block.id)?.id ?? block.id;
-  const collapsed = state.blocks.includes(first);
-  return { collapsed, onToggle: () => store(withBlockCollapsed(state, first, !collapsed)) };
+export function rowCollapse(order: string[], blocks: ViewBlock[], state: Collapsed, block: ViewBlock, store: (next: Collapsed) => void): RowCollapse {
+  const row = rowOf(order, blocks, block.id);
+  const ids = row.length > 0 ? row : [block.id];
+  const own = state.blocks.includes(block.id);
+  const rowCollapsed = ids.some((id) => state.blocks.includes(id));
+  const without = (gone: string[]) => state.blocks.filter((id) => !gone.includes(id));
+  return {
+    own: { collapsed: own, onToggle: () => store({ ...state, blocks: own ? without([block.id]) : [...state.blocks, block.id] }) },
+    row: { collapsed: rowCollapsed, onToggle: () => store({ ...state, blocks: rowCollapsed ? without(ids) : [...state.blocks, block.id] }) },
+  };
 }
 
 /** A block's row controls from the page's order of ids and its blocks; `arrange` applies a change to the blocks. */
@@ -316,6 +333,7 @@ function Row<T extends { id: string }>({
   const style = several && bodyPx !== null ? { "--row-body": `${bodyPx}px` } : one ? { "--row-limit": `${limit}rem` } : undefined;
   let at = 0;
   return (
+    <RowSideBySide.Provider value={side && several}>
     <div ref={rowEl} className={className} style={style as CSSProperties | undefined} onDragEnd={onDragEnd}>
       {dropLine && <div className={`block-drop block-drop--${dropLine}`} aria-hidden="true" />}
       {lines.map((line, l) => {
@@ -356,5 +374,6 @@ function Row<T extends { id: string }>({
         );
       })}
     </div>
+    </RowSideBySide.Provider>
   );
 }

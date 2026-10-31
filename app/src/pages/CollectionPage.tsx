@@ -567,7 +567,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
                 onRemove={view.blocks.length > 1 ? () => removeBlocks([block.id]).catch((e) => setError(errorMessage(e))) : undefined}
                 onError={setError}
                 onOpenChange={panels.onOpenChange}
-                // A row collapses as one (views/BlockRows.tsx rowCollapse).
+                // Collapsed per block, a row side by side as one (views/BlockRows.tsx rowCollapse).
                 collapse={rowCollapse(
                   view.blocks.map((b) => b.id),
                   view.blocks,
