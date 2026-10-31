@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../app/store";
 import { editableField, type FieldDef, type FieldValue } from "../domain/model";
 import type { EditStart } from "./editStart";
@@ -65,27 +65,32 @@ export function FieldEditor({ field: fieldDef, value, refs, start, compact, idPr
     };
   }, [repo]);
 
-  // Focus the input so typing can start right away. The markdown editor creates its
-  // editable area asynchronously, so retry briefly until it exists.
-  useEffect(() => {
+  // Focus the input so typing can start right away. First at once, in the layout effect: that
+  // still runs inside the tap that opened the editor, and iOS only focuses a field (and shows
+  // the keyboard) from within a user gesture; a focus from a timer is ignored there. The
+  // markdown editor creates its editable area asynchronously, so then retry briefly until it exists.
+  useLayoutEffect(() => {
     if (field.kind === "markdown" && start) return; // the markdown editor places caret/selection itself
-    let tries = 0;
-    const t = window.setInterval(() => {
+    const focusInput = () => {
       // The first text input (not a checklist's checkbox).
       const target = box.current?.querySelector<HTMLElement>(
         "input:not([type=hidden], [type=checkbox]), textarea, [contenteditable=true], [contenteditable=plaintext-only]",
       );
-      if (target) {
-        target.focus();
-        // Single-line text inputs (strings, dates, references) show the same text as the view, so
-        // the view's caret/selection maps 1:1. Number inputs can't take a selection.
-        const text = (target instanceof HTMLInputElement && target.type === "text") || target instanceof HTMLTextAreaElement;
-        if (start?.range && text) {
-          const end = (target as HTMLInputElement | HTMLTextAreaElement).value.length;
-          (target as HTMLInputElement | HTMLTextAreaElement).setSelectionRange(Math.min(start.range.start, end), Math.min(start.range.end, end));
-        }
+      if (!target) return false;
+      if (document.activeElement !== target) target.focus();
+      // Single-line text inputs (strings, dates, references) show the same text as the view, so
+      // the view's caret/selection maps 1:1. Number inputs can't take a selection.
+      const text = (target instanceof HTMLInputElement && target.type === "text") || target instanceof HTMLTextAreaElement;
+      if (start?.range && text) {
+        const end = (target as HTMLInputElement | HTMLTextAreaElement).value.length;
+        (target as HTMLInputElement | HTMLTextAreaElement).setSelectionRange(Math.min(start.range.start, end), Math.min(start.range.end, end));
       }
-      if (target || ++tries > 20) window.clearInterval(t);
+      return true;
+    };
+    if (focusInput()) return;
+    let tries = 0;
+    const t = window.setInterval(() => {
+      if (focusInput() || ++tries > 20) window.clearInterval(t);
     }, 50);
     return () => window.clearInterval(t);
   }, [field.kind, start]);

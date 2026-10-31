@@ -51,7 +51,7 @@ import {
 import type { Collection, FieldDef } from "../domain/model";
 import { BUNDLED_MAPS, isBundledMap, type ChartRegions } from "../domain/regions";
 import type { GroupOrder } from "../domain/query";
-import { useMediaQuery } from "../ui/useMediaQuery";
+import { useDark } from "../app/settings";
 import { useBuffered } from "../ui/useBuffered";
 import { usePanelOpenings } from "../ui/ToolbarPopover";
 import { moveBlock, useReorder } from "../ui/useReorder";
@@ -95,7 +95,7 @@ function useRegionMap(repo: Repository, options: ChartOptions): { map: RegionMap
 }
 
 function ChartView({ collection, result, options, refs, actions, page }: BlockProps<ChartOptions>) {
-  const dark = useMediaQuery("(prefers-color-scheme: dark)");
+  const dark = useDark();
   const { repo } = useStore();
   const regionMap = useRegionMap(repo, options);
   // "This item" charts the page's item, which only a block listing the page's collection has.
@@ -370,7 +370,7 @@ function FieldList({ id, label, fields, value, disabled, helper, onChange }: { i
                 {f.name}
               </span>
               <span className="field-order__moves">
-                <IconButton autoAlign kind="ghost" size="sm" label="Remove field" onClick={() => onChange(chosen.filter((x) => x !== f).map((x) => x.id))}>
+                <IconButton autoAlign kind="ghost" size="sm" label="Remove field" {...order.remove(i, () => onChange(chosen.filter((x) => x !== f).map((x) => x.id)))}>
                   <TrashCan />
                 </IconButton>
                 {order.handle(i)}
@@ -385,14 +385,14 @@ function FieldList({ id, label, fields, value, disabled, helper, onChange }: { i
 }
 
 /** A row's heading in a list (a series): its name, a button to remove it and its handle (drag to reorder, useReorder). */
-function RowHead({ title, count, noun, handle, onRemove }: { title: string; count: number; noun: string; handle: ReactNode; onRemove(): void }) {
+function RowHead({ title, count, noun, handle, remove }: { title: string; count: number; noun: string; handle: ReactNode; remove: { onClick(): void } }) {
   return (
     <div className="chart-options__row-head">
       <span className="chart-options__row-title" title={title}>
         {title}
       </span>
       {/* A chart has at least one series: the last can't be removed. */}
-      <IconButton autoAlign label={`Remove ${noun}`} kind="ghost" size="sm" align="top-end" disabled={count === 1} onClick={onRemove}>
+      <IconButton autoAlign label={`Remove ${noun}`} kind="ghost" size="sm" align="top-end" disabled={count === 1} {...remove}>
         <TrashCan />
       </IconButton>
       {handle}
@@ -629,7 +629,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
   // --- Series: bar / line / area (every series' settings), scatter (each a Y field)
   const seriesRows = o.series.map((s, i) => {
     const sid = `${uid}-series-${s.id}`;
-    const head = <RowHead title={seriesLabel(s, collection, o.x)} count={o.series.length} noun={o.chart === "scatter" ? "Y field" : "series"} handle={seriesOrder.handle(i)} onRemove={() => set({ series: o.series.filter((x) => x.id !== s.id) })} />;
+    const head = <RowHead title={seriesLabel(s, collection, o.x)} count={o.series.length} noun={o.chart === "scatter" ? "Y field" : "series"} handle={seriesOrder.handle(i)} remove={seriesOrder.remove(i, () => set({ series: o.series.filter((x) => x.id !== s.id) }))} />;
     if (o.chart === "scatter")
       return (
         <div key={s.id} className="chart-options__series" {...seriesOrder.row(i)}>

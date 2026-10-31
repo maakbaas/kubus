@@ -37,8 +37,10 @@ export const KINDS: { kind: PeriodKind; text: string }[] = [
   { kind: "range", text: "Range" },
 ];
 
-/** Whether ‹ › step the period: one up to now (so far, the last n) has nothing before or after it, nor has one counted from a page's item. */
-export const steps = (state: PeriodState | null, anchored: boolean): boolean => !!state && !anchored && !state.toDate && !state.last;
+/** Whether ‹ › step the period: one so far (year to date) has nothing before or after it, nor has one counted from a page's item. */
+export const steps = (state: PeriodState | null, anchored: boolean): boolean => !!state && !anchored && !state.toDate;
+
+const withoutJoin = ({ join: _join, ...rule }: FilterRule): FilterRule => rule;
 
 const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
 const MONTHS = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString(undefined, { month: "long" }));
@@ -72,7 +74,20 @@ function windows(kind: Unit): { value: Window; text: string }[] {
  * rolling one can be counted from the page's item's date instead ("Counted from": the last 7 days up to
  * this measurement's date; `anchoredValue`), worked out for each page's item.
  */
-export function DatePeriodFilter({ collection, filters, page, onChange }: { collection: Collection; filters: FilterRule[]; page?: Collection; onChange(filters: FilterRule[]): void }) {
+export function DatePeriodFilter({
+  collection,
+  filters,
+  page,
+  joins,
+  onChange,
+}: {
+  collection: Collection;
+  filters: FilterRule[];
+  page?: Collection;
+  /** It builds on another filter (a block's on its view's): the period says how it joins it (And / Or, domain/filterTree.ts). */
+  joins?: boolean;
+  onChange(filters: FilterRule[]): void;
+}) {
   const uid = useId();
   const fields = dateFields(collection);
   const rule = periodRule(filters);
@@ -131,6 +146,20 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
         ))}
       </ContentSwitcher>
       <div className="date-period__nav">
+        {joins && rule && (
+          <Select
+            id={`${uid}-date-join`}
+            className="date-period__join"
+            labelText="Join"
+            hideLabel
+            size="sm"
+            value={rule.join ?? "and"}
+            onChange={(e) => onChange(filters.map((r) => (r === rule ? { ...withoutJoin(r), ...(e.target.value === "or" && { join: "or" as const }) } : r)))}
+          >
+            <SelectItem value="and" text="And" />
+            <SelectItem value="or" text="Or" />
+          </Select>
+        )}
         <span className="date-period__label" title={label}>
           {label}
         </span>
@@ -195,7 +224,7 @@ export function DatePeriodFilter({ collection, filters, page, onChange }: { coll
               min={1}
               hideSteppers
               allowEmpty
-              value={1 - last.from}
+              value={last.to - last.from + 1}
               onChange={(_, { value: n }) => {
                 const count = Number(n);
                 if (Number.isInteger(count) && count >= 1) choose(unit, window, now, count);

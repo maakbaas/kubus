@@ -55,7 +55,8 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
 
 - Tables: `spaces`, `collections`, `fields`, `items`, `field_values` (EAV with typed columns
   `value_text | value_number | value_date | value_datetime | value_bool | value_ref | value_json`),
-  `meta` (holds `replica_id`).
+  `meta` (holds `replica_id`), `settings` (the user's synced settings, JSON by key: Settings → Display; docs/sync.md
+  "Synced settings").
 - Dashboards (`domain/dashboards.ts`): `dashboards` (name, icon, description, `space_ids` like a collection's) and their tabs
   `dashboard_views` (per space, `space_id`, a config as a collection view's, the starred tab per dashboard and space). A space the
   dashboard is shown in without tabs of its own shows copies of the tabs of the space holding its oldest tab (`dashboardViewsIn`: worked

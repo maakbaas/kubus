@@ -8,11 +8,13 @@ import { App } from "./app/App";
 import { suppressShellContextMenu } from "./platform/contextMenu";
 import { registerServiceWorker } from "./platform/serviceWorker";
 import { trackKeyboardInset } from "./platform/keyboardInset";
-import { useMediaQuery } from "./ui/useMediaQuery";
+import { useDark, usePageTheme } from "./app/settings";
 import { escapeThroughDropdowns } from "./ui/escapeThroughDropdowns";
 
 function Root() {
-  const dark = useMediaQuery("(prefers-color-scheme: dark)");
+  // The theme chosen in Settings → Display (synced; the device's copy until the database opens).
+  const dark = useDark();
+  usePageTheme(dark);
   return (
     <Theme theme={dark ? "g100" : "white"} className="app-root">
       <App />

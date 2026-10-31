@@ -543,25 +543,6 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                   <TrashCan />
                 </IconButton>
               )}
-              {/* Held while a panel is open: adding a block in the layout panel mustn't move its button. */}
-              {panels.hold("pageFilter", listing.length > 1 && pageScope.length > 0) && pageScope.length > 0 && (
-                <PageFilter scope={pageScope} filters={layout.filters} onChange={(filters) => setDraft({ ...current, filters })} onOpenChange={panels.onOpenChange} />
-              )}
-              {/* The page's layout last. */}
-              <ToolbarPopover label="Page layout" icon={SettingsAdjust} fit openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
-                <ItemLayoutSettings
-                  collection={collection}
-                  renameRequest={renameRequest}
-                  view={activeView}
-                  layout={current}
-                  titleFieldId={titleField?.id}
-                  fullWidth={isFullWidth("item", storedFullWidth)}
-                  onFullWidth={(on) => storeNow({ fullWidth: on })}
-                  onChange={(patch) => arrange((l) => ({ ...l, ...patch }))}
-                  onAddBlock={addBlock}
-                  onError={(e) => setError(errorMessage(e))}
-                />
-              </ToolbarPopover>
             </OverflowBar>
           )
         }
@@ -647,7 +628,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
                 autoAlign
                 kind="ghost"
                 size="sm"
-                align="bottom-end"
+                align="bottom"
                 label={activeView.isDefault ? "Revert default view" : `Star as default view for all ${collection.pluralName}`}
                 aria-pressed={activeView.isDefault}
                 onClick={() => toggleDefault(activeView)}
@@ -658,6 +639,26 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
               )}
             </>
           )}
+          {/* The view's own tools, as on a collection page: its filter (every block uses it unless it has its own) and its
+              settings, last. The settings are always here, so the bar (and its "⋮" on a phone) is never empty. */}
+          {/* Held while a panel is open: adding a block in the layout panel mustn't move its button. */}
+          {panels.hold("pageFilter", listing.length > 1 && pageScope.length > 0) && pageScope.length > 0 && (
+            <PageFilter scope={pageScope} filters={layout.filters} onChange={(filters) => setDraft({ ...current, filters })} onOpenChange={panels.onOpenChange} />
+          )}
+          <ToolbarPopover label="Page layout" icon={SettingsAdjust} fit openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
+            <ItemLayoutSettings
+              collection={collection}
+              renameRequest={renameRequest}
+              view={activeView}
+              layout={current}
+              titleFieldId={titleField?.id}
+              fullWidth={isFullWidth("item", storedFullWidth)}
+              onFullWidth={(on) => storeNow({ fullWidth: on })}
+              onChange={(patch) => arrange((l) => ({ ...l, ...patch }))}
+              onAddBlock={addBlock}
+              onError={(e) => setError(errorMessage(e))}
+            />
+          </ToolbarPopover>
           </OverflowBar>
         </div>
       )}

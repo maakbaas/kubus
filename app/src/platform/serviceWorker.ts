@@ -1,13 +1,43 @@
 import { inDesktopShell } from "./shell";
 
+const enabled = () => import.meta.env.PROD && "serviceWorker" in navigator && !inDesktopShell();
+
 /**
- * Registers the service worker (public/sw.js) that makes the home-screen app start offline.
- * Only in a production build on the web: not in development, and not in the Tauri shell,
- * which bundles the app itself.
+ * Registers the service worker (app/sw.js) that makes the web and home-screen app start from its cache, offline
+ * or on a weak connection alike. Only in a production build on the web: not in development, and not in the Tauri
+ * shell, which bundles the app itself. A new build is looked for in the background whenever the app is shown again
+ * (iOS resumes a home-screen app without loading the page, so the browser's own check wouldn't run); it is
+ * downloaded whole and shown at the next start.
  */
 export function registerServiceWorker() {
-  if (!import.meta.env.PROD || !("serviceWorker" in navigator) || inDesktopShell()) return;
+  if (!enabled()) return;
   addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Service worker not registered", e));
+    navigator.serviceWorker
+      .register("sw.js", { updateViaCache: "none" })
+      .then((registration) => {
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") registration.update().catch(() => undefined);
+        });
+      })
+      .catch((e) => console.warn("Service worker not registered", e));
   });
+}
+
+/**
+ * Loads the newest build ("Reload to update"): asks for a new worker, waits (at most a minute) while it downloads
+ * the build and takes over, then reloads. The page is served from the cache, so a plain reload would show the
+ * cached build again.
+ */
+export async function updateAndReload() {
+  try {
+    const registration = enabled() ? await navigator.serviceWorker.getRegistration() : undefined;
+    if (registration) {
+      const tookOver = new Promise<void>((resolve) => navigator.serviceWorker.addEventListener("controllerchange", () => resolve(), { once: true }));
+      await registration.update();
+      if (registration.installing || registration.waiting) await Promise.race([tookOver, new Promise((r) => setTimeout(r, 60_000))]);
+    }
+  } catch (e) {
+    console.warn("Checking for a new version failed", e);
+  }
+  location.reload();
 }

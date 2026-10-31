@@ -19,7 +19,7 @@ import { createPortal } from "react-dom";
 import { MemoryRouter, useLocation, useNavigate, useNavigationType } from "react-router";
 import { IconButton, Link, Tab, TabList, Tabs } from "@carbon/react";
 import { ShownOnceProvider } from "../ui/useShownOnce";
-import { Add } from "@carbon/icons-react";
+import { Add, ChevronLeft, ChevronRight } from "@carbon/icons-react";
 import { TabMenu, occupied, useClippedTabs } from "../ui/TabMenu";
 import { AppRoutes } from "../app/routes";
 import { readPref, writePref } from "../ui/localPrefs";
@@ -143,6 +143,9 @@ export function useOpenRelated(): (path: string, mode?: OpenMode) => void {
 /** A back / forward swipe starts this close to the screen's edge (px) and travels at least this far. */
 const SWIPE_EDGE = 24;
 const SWIPE_DISTANCE = 64;
+/** How far the swipe's arrow comes out of the edge at most (px), and its size (2.5rem). */
+const HINT_TRAVEL = 56;
+const HINT_SIZE = 40;
 
 /** The tabs of one space; remount it (key) for another space. */
 export function WorkspaceProvider({ spaceId, children }: { spaceId: string; children: ReactNode }) {
@@ -165,6 +168,7 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
   }, []);
   const current = useRef(workspace);
   current.current = workspace;
+  const hint = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const activeHistory = () => {
       const tab = activeTab(current.current);
@@ -187,16 +191,53 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
     // Touch screens: a swipe in from the left edge is back, from the right edge forward (the
     // tab's own history, like the mouse buttons). Only from the edge: elsewhere horizontal swipes
     // scroll (tab strips, wide tables).
+    // While swiping, an arrow comes out of that edge and follows the finger (`hint`, moved here directly, no
+    // render per move): faint until the swipe is far enough, solid once letting go would go there. Only when
+    // the tab has a page in that direction.
     let swipe: { x: number; y: number; direction: "back" | "forward" } | null = null;
+    let leaving: number | undefined;
+    const hintAt = (dx: number, dy: number, y: number) => {
+      const el = hint.current;
+      if (!el || !swipe) return;
+      window.clearTimeout(leaving);
+      delete el.dataset.leaving;
+      const along = dy < dx / 2 ? Math.max(0, dx) : 0; // mostly vertical: a scroll, no swipe
+      const out = Math.min(HINT_TRAVEL, along * 0.6);
+      const side = swipe.direction === "back" ? 1 : -1;
+      el.dataset.direction = swipe.direction;
+      el.dataset.ready = along >= SWIPE_DISTANCE ? "true" : "false";
+      el.style.opacity = String(Math.min(1, along / SWIPE_DISTANCE));
+      el.style.top = `${y - HINT_SIZE / 2}px`;
+      el.style.transform = `translateX(${side * (out - HINT_SIZE)}px)`;
+    };
+    const hideHint = () => {
+      const el = hint.current;
+      if (!el || !el.dataset.direction) return;
+      el.dataset.leaving = "";
+      el.style.opacity = "0";
+      el.style.transform = `translateX(${(el.dataset.direction === "back" ? -1 : 1) * HINT_SIZE}px)`;
+      leaving = window.setTimeout(() => {
+        delete el.dataset.leaving;
+        delete el.dataset.direction;
+      }, 150);
+    };
     const onTouchStart = (e: TouchEvent) => {
       const t = e.touches[0];
       swipe = null;
       if (e.touches.length !== 1) return;
       const direction = t.clientX <= SWIPE_EDGE ? "back" : t.clientX >= window.innerWidth - SWIPE_EDGE ? "forward" : null;
-      if (direction) swipe = { x: t.clientX, y: t.clientY, direction };
+      const history = activeHistory();
+      if (!direction || !history || !(direction === "back" ? history.canGoBack() : history.canGoForward())) return;
+      swipe = { x: t.clientX, y: t.clientY, direction };
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!swipe || !t) return;
+      hintAt((t.clientX - swipe.x) * (swipe.direction === "back" ? 1 : -1), Math.abs(t.clientY - swipe.y), t.clientY);
     };
     const onTouchEnd = (e: TouchEvent) => {
       const t = e.changedTouches[0];
+      hideHint();
       if (!swipe || !t) return;
       const dx = (t.clientX - swipe.x) * (swipe.direction === "back" ? 1 : -1);
       const dy = Math.abs(t.clientY - swipe.y);
@@ -204,16 +245,20 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
       swipe = null;
     };
     const onTouchCancel = () => {
+      hideHint();
       swipe = null;
     };
     window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
     window.addEventListener("touchend", onTouchEnd, { passive: true });
     window.addEventListener("touchcancel", onTouchCancel, { passive: true });
     window.addEventListener("mouseup", onMouseUp);
     // Capture phase: before the tab list's onKeyDownCapture (below) stops the event.
     window.addEventListener("keydown", onKeyDown, true);
     return () => {
+      window.clearTimeout(leaving);
       window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("touchcancel", onTouchCancel);
       window.removeEventListener("mouseup", onMouseUp);
@@ -241,6 +286,11 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
   return (
     <WorkspaceActionsContext.Provider value={actions}>
       <WorkspaceContext.Provider value={api}>{children}</WorkspaceContext.Provider>
+      {/* The back / forward swipe's arrow (see the touch listeners above): shown only while swiping. */}
+      <div ref={hint} className="swipe-hint" aria-hidden="true">
+        <ChevronLeft className="swipe-hint__back" />
+        <ChevronRight className="swipe-hint__forward" />
+      </div>
     </WorkspaceActionsContext.Provider>
   );
 }

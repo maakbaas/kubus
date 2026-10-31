@@ -312,7 +312,7 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
                     kind="ghost"
                     label={draft.fields.length === 1 ? "A collection needs at least one field" : remote && f.column ? "Hide column" : "Remove field"}
                     disabled={draft.fields.length === 1}
-                    onClick={() => (remote && f.column ? hideColumns([...hiddenColumns, f.column]) : removeField(f.id))}
+                    {...reorder.remove(i, () => (remote && f.column ? hideColumns([...hiddenColumns, f.column]) : removeField(f.id)))}
                   >
                     {remote && f.column ? <ViewOff /> : <TrashCan />}
                   </IconButton>

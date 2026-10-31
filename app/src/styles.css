@@ -29,6 +29,21 @@ html {
     background: #161616; /* g100's --cds-background */
   }
 }
+/* A theme chosen in Settings → Display (app/settings.ts usePageTheme) rather than the system's. */
+html[data-theme="light"] {
+  color-scheme: light;
+}
+html[data-theme="light"],
+html[data-theme="light"] body {
+  background: #fff;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background: #161616;
+}
 /* No iOS long-press menu / share sheet on links and images (it is inherited, but Safari applies
    it to anchors and images themselves). */
 a,
@@ -128,6 +143,12 @@ body {
   inset: 0;
   padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
   box-sizing: border-box;
+  /* What shows in those side margins: the tab strip's colour across the top, as high as the top strips (3rem
+     tabs and their room above, .ws-pane--top), the page's below it, so the strip reads as running to the
+     screen's edges while its tabs and buttons stay clear of the notch. */
+  background:
+    linear-gradient(var(--cds-layer-accent), var(--cds-layer-accent)) top / 100% calc(3rem + var(--cds-spacing-02) + env(safe-area-inset-top)) no-repeat,
+    var(--cds-background);
 }
 .ws-pane__spacer {
   flex: 1;
@@ -467,6 +488,19 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-inline-size: 0;
+}
+/* The first crumb, Home, is its icon alone: never cut, the icon on the crumbs' text line. */
+.page-header .cds--breadcrumb-item.breadcrumb-home {
+  flex: none;
+}
+.page-header .breadcrumb-home > .cds--link {
+  display: inline-flex;
+  align-items: center;
+  block-size: 100%;
+}
+/* Home page cards (pages/HomePage.tsx): the section's name with its icon, its count below. */
+.home-card__count {
+  margin: 0;
 }
 /* Breadcrumb + title wrap within their column; the actions stay at the very top right. */
 .page-header__row {
@@ -981,6 +1015,14 @@ body {
 .cds--side-nav {
   background-color: var(--cds-layer-01);
 }
+/* Open over the page (a phone): in landscape its content keeps clear of a notch or Dynamic Island on the left, as
+   the workspace does (.app-content--workspace), its colour running to the screen's edge. One class: the docked
+   nav's width (wide screens, no notch) stays the user's. */
+.cds--side-nav--expanded {
+  inline-size: calc(16rem + env(safe-area-inset-left));
+  padding-inline-start: env(safe-area-inset-left);
+  box-sizing: border-box;
+}
 /* No header bar: the side nav (and its overlay on narrow screens) starts at the window's top. */
 .cds--side-nav--ux,
 .cds--side-nav__overlay {
@@ -1015,7 +1057,8 @@ body {
   position: fixed;
   inset: 0 0 auto 0;
   z-index: 9000;
-  padding-top: env(safe-area-inset-top);
+  /* Clear of the status bar, and in landscape of a notch or Dynamic Island at either side. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
   box-sizing: border-box;
   block-size: calc(3.25rem + env(safe-area-inset-top)); /* the tab strip's height */
   background: var(--cds-layer);
@@ -1245,6 +1288,13 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
 .list-input__add--rows,
 .list-input__add--empty {
   padding-inline-start: var(--cds-spacing-03);
+}
+/* Phones: an item page's field is pulled left by half an inset only (its name padded by as much), so an empty
+   list's "+" would start half an inset right of the name: without its own padding it starts where the name does. */
+@media (max-width: 42rem) {
+  .item-fields:not(.item-fields--form) .list-input__add--empty {
+    padding-inline-start: 0;
+  }
 }
 .ref-combo {
   flex: 1;
@@ -1641,6 +1691,18 @@ img[data-lightbox] {
 /* An empty cell keeps one line's height in the view, as in the editor (whose cells always hold
    a paragraph): an invisible character gives it its line. */
 .md-view :is(td, th):empty::before { content: "\200b"; }
+/* Read-only, a cell wraps between words only: with `anywhere` (the editor's) every cell may shrink to one letter,
+   and a narrow screen squeezed a short column ("$item") down to a letter a line. A table wider than the room
+   then scrolls sideways inside itself (as a block; its rows still lay out as a table), never the page. */
+.md-view :is(td, th) {
+  overflow-wrap: break-word;
+}
+.md-view table {
+  display: block;
+  inline-size: max-content;
+  max-inline-size: 100%;
+  overflow-x: auto;
+}
 .md-editor__content img { max-width: 100%; }
 
 .md-editor__content img.ProseMirror-selectednode {
@@ -2212,12 +2274,12 @@ img[data-lightbox] {
   inline-size: auto;
   min-inline-size: 0;
 }
-/* In a sentence the word keeps no room of its own on its left, and only the arrow's on its right. */
+/* In a sentence the word has room on both sides (its hover background around it), and a gap before the arrow. */
 .filter-bar__kind .cds--list-box__field {
-  padding-inline: 0 var(--cds-spacing-06);
+  padding-inline: var(--cds-spacing-03) var(--cds-spacing-07);
 }
 .filter-bar__kind .cds--list-box__menu-icon {
-  inset-inline-end: var(--cds-spacing-02);
+  inset-inline-end: var(--cds-spacing-03);
 }
 /* Carbon's inline menu is 18rem wide at least (wider than a phone's room beside the word): as wide as its words. */
 .filter-bar .cds--dropdown--inline .cds--list-box__menu {
@@ -2351,6 +2413,10 @@ img[data-lightbox] {
   gap: var(--cds-spacing-03);
   align-items: center;
 }
+/* A sort level: "Sort by" / "Then by", field, direction, remove (in the filter rules' columns, without a value). */
+.query-editor__rule--sort {
+  grid-template-columns: 6.5rem minmax(0, 1fr) minmax(0, 1fr) auto;
+}
 .query-editor__join {
   padding-inline-start: var(--cds-spacing-05);
 }
@@ -2382,6 +2448,11 @@ img[data-lightbox] {
   flex-wrap: wrap;
   align-items: center;
   column-gap: var(--cds-spacing-03);
+}
+/* A block's period joining its view's filter: as wide as the rules' And / Or. */
+.date-period__join {
+  flex: none;
+  inline-size: 6.5rem;
 }
 .date-period__rolling {
   margin: 0;
@@ -3976,6 +4047,8 @@ img[data-lightbox] {
 }
 .table-wrap[data-head-follow] .items-table thead th::before {
   animation: table-head-cover linear both;
+  will-change: transform;
+  backface-visibility: hidden;
   animation-timeline: --table-wrap;
   animation-range: exit-crossing var(--table-head-start, 0px) exit-crossing calc(var(--table-head-start, 0px) + var(--table-head-gap));
 }
@@ -3991,6 +4064,10 @@ img[data-lightbox] {
   position: relative;
   z-index: 1;
   animation: table-head-follow linear both;
+  /* Always a layer of its own (and its cover, below): iOS otherwise takes the moved cells off their layer when a
+     tap stops a fast scroll (not when the scroll comes to rest by itself) and draws them again, a flicker. */
+  will-change: transform;
+  backface-visibility: hidden;
   animation-timeline: --table-wrap;
   /* From the table's top (below the wrap's by --table-head-start) passing the pane's top edge, as far as the
      table's height less its header's (--table-head-travel). */
@@ -4284,6 +4361,10 @@ img[data-lightbox] {
 .reorder-handle {
   cursor: grab;
   touch-action: none;
+  /* Held to select several on a touch screen: no text selection or iOS callout instead. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 [data-reorder-row] {
   position: relative;
@@ -4461,4 +4542,43 @@ body[data-reordering] [data-reorder-row] {
   .list-table tr > :not(.list-table__main, :last-child) {
     display: none;
   }
+}
+
+/* The back / forward swipe's arrow (Workspace.tsx): out of the edge the swipe started at, following the finger
+   (top and transform set while swiping). Faint while the swipe is short of going anywhere; solid (the inverse
+   colours, not the interactive blue) once letting go would go back or forward. Not rendered between swipes. */
+.swipe-hint {
+  display: none;
+  position: fixed;
+  z-index: 9000;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-strong-01);
+  color: var(--cds-icon-secondary);
+  box-shadow: 0 2px 6px var(--cds-shadow);
+  pointer-events: none;
+}
+.swipe-hint[data-direction] {
+  display: flex;
+}
+.swipe-hint[data-direction="back"] {
+  inset-inline-start: 0;
+}
+.swipe-hint[data-direction="forward"] {
+  inset-inline-end: 0;
+}
+.swipe-hint[data-ready="true"] {
+  background: var(--cds-background-inverse);
+  border-color: var(--cds-background-inverse);
+  color: var(--cds-icon-inverse);
+}
+.swipe-hint[data-leaving] {
+  transition: transform 150ms ease-in, opacity 150ms ease-in;
+}
+.swipe-hint[data-direction="back"] .swipe-hint__forward,
+.swipe-hint[data-direction="forward"] .swipe-hint__back {
+  display: none;
 }

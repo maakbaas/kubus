@@ -133,7 +133,7 @@ describe("the period as the filter bar and panel edit it", () => {
     expect(periodState("minute-29..minute+0", NOW)).toMatchObject({ kind: "hour", window: "lastMinutes" });
     expect(periodState("2026-10-01..2026-10-31", NOW)).toMatchObject({ kind: "month", window: "fixed", counted: false, counting: "" });
     expect(periodState("2026-10-01..2026-10-10", NOW)).toMatchObject({ kind: "range", window: null });
-    expect(periodState("day-10..day-3", NOW)).toMatchObject({ kind: "range", window: null, counted: true });
+    expect(periodState("day-13..day-7", NOW)).toMatchObject({ kind: "day", window: "last", counted: true, counting: "7 days up to 7 days ago" });
     expect(periodState("nonsense", NOW)).toBeNull();
     const words = (v: string) => periodText(periodState(v, NOW)!);
     expect(words("2026-10-01..2026-10-31")).toBe(periodLabel({ start: "2026-10-01", end: "2026-10-31" }, "month"));
@@ -155,12 +155,12 @@ describe("the period as the filter bar and panel edit it", () => {
     expect(words("day-6..day+0")).toMatchObject({ before: "Last 7 ", unit: "days", after: "" });
     expect(words("minute-29..minute+0")).toMatchObject({ before: "Last 30 ", unit: "minutes", after: "" });
     expect(words("year+0..day+0")).toMatchObject({ before: "", unit: "Year", after: " to date" });
-    // No unit word: Today / Yesterday (no match inside a word), a chosen period, a range (even a counted one).
+    expect(words("day-10..day-3")).toMatchObject({ before: "8 ", unit: "days", after: " up to 3 days ago" });
+    // No unit word: Today / Yesterday (no match inside a word), a chosen period, a range.
     expect(words("day+0")).toMatchObject({ before: "Today", unit: null, after: "" });
     expect(words("day-1")).toMatchObject({ before: "Yesterday", unit: null });
     expect(words("2026-10-01..2026-10-31")).toMatchObject({ before: "", unit: null, after: "", days: "October 2026" });
     expect(words("2026-10-01..2026-10-10")).toMatchObject({ before: "", unit: null });
-    expect(words("day-10..day-3")).toMatchObject({ before: "8 days", unit: null });
     // Never inside the days ("Week 44 - …"): put back together it is the period's text.
     for (const v of ["week+0", "week-7", "day-6..day+0", "year+0..day+0", "day+0", "2026-10-01..2026-10-31", "2026-10-25..2026-10-31", "2026-10-01..2026-10-10", "day-10..day-3"]) {
       expect(joined(v)).toBe(periodText(periodState(v, NOW)!));
@@ -181,7 +181,10 @@ describe("the period as the filter bar and panel edit it", () => {
     expect(stepValue("2026-10-01..2026-10-10", 1, NOW)).toBe("2026-10-11..2026-10-20");
     expect(stepValue("2026-10-01..2026-10-31", 1, NOW, "range")).toBe("2026-11-01..2026-12-01");
     // Up to now there is nothing before or after.
-    expect(stepValue("day-6..day+0", -1, NOW)).toBeNull();
+    // The last n step by n, still counted from now.
+    expect(stepValue("day-6..day+0", -1, NOW)).toBe("day-13..day-7");
+    expect(stepValue("day-13..day-7", 1, NOW)).toBe("day-6..day+0");
+    expect(stepValue("minute-29..minute+0", -1, NOW)).toBe("minute-59..minute-30");
     expect(stepValue("week+0..day+0", 1, NOW)).toBeNull();
     expect(stepValue("nonsense", 1, NOW)).toBeNull();
   });

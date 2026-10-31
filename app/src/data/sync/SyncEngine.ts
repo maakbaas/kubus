@@ -712,9 +712,10 @@ export class SyncEngine implements SyncControl {
     if (changes.components?.length) out.push({ scope: "components" });
     if (changes.bookmarks?.length) out.push({ scope: "bookmarks" });
     if (changes.dashboards?.length) out.push({ scope: "dashboards" });
+    if (changes.settings?.length) out.push({ scope: "settings" });
     // Everything was replaced: whatever the old data showed is gone or different now.
     if (replaced) {
-      out.push({ scope: "spaces" }, { scope: "collections" }, { scope: "components" }, { scope: "bookmarks" }, { scope: "dashboards" });
+      out.push({ scope: "spaces" }, { scope: "collections" }, { scope: "components" }, { scope: "bookmarks" }, { scope: "dashboards" }, { scope: "settings" });
       for (const collectionId of replaced.collections) out.push({ scope: "items", collectionId }, { scope: "views", collectionId });
       for (const dashboardId of replaced.dashboards) out.push({ scope: "dashboardViews", dashboardId });
     }

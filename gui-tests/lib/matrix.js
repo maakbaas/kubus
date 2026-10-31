@@ -6,6 +6,7 @@ function matrixPages(ids) {
   const books = ids.collections.books;
   const authors = ids.collections.authors;
   return [
+    ["home", "/"],
     ["collections overview", "/collections"],
     ["collection table", `/collections/${books}/items`],
     ["collection cards", `/collections/${books}/items?view=${ids.views["books/Cards"]}`],
@@ -34,6 +35,7 @@ function matrixPages(ids) {
         ]
       : []),
     ["search", "/search?q=e"],
+    ["settings: display", "/settings?section=display"],
     ["settings: server", "/settings?section=server"],
     ["settings: sync", "/settings?section=sync"],
     ["settings: connections", "/settings?section=connections"],

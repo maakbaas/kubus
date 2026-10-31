@@ -12,6 +12,7 @@ import { AiDialogs, AiStatusButton } from "../ui/AiBanner";
 import { AiBackfillRunner } from "./AiBackfillRunner";
 import { NavFooter, NavTree } from "./NavTree";
 import { StoreProvider, useStore } from "./store";
+import { DisplaySettingsSync } from "./settings";
 
 export function App() {
   return (
@@ -30,6 +31,7 @@ export function App() {
       <SpaceWorkspace />
       <Lightbox />
       <AiBackfillRunner />
+      <DisplaySettingsSync />
     </StoreProvider>
   );
 }

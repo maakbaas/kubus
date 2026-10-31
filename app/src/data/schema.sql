@@ -334,6 +334,17 @@ CREATE TABLE bookmarks (
 );
 CREATE INDEX idx_bookmarks_target ON bookmarks(target_id);
 
+-- Settings that are the user's rather than the device's (Settings → Display: the theme, how maps look), synced like
+-- content: one row per setting, its value JSON (app/src/app/settings.ts). Devices' own settings (where the server
+-- is, a language model's key) are not here: they stay in the device's storage.
+CREATE TABLE settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,     -- JSON
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
+
 -- Sync (app/src/data/sync, shared/sync.ts). Local only, never replicated: every insert / update of
 -- a synced table queues the row's key here, in the same transaction as the change. The sync
 -- engine sends the queued rows and clears them. Rows the engine itself applies from the server

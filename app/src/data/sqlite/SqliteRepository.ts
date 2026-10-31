@@ -863,6 +863,31 @@ export class SqliteRepository implements Repository {
     }));
   }
 
+  async getSettings(): Promise<Record<string, unknown>> {
+    const rows = await this.db.select<{ key: string; value: string }>("SELECT key, value FROM settings WHERE deleted_at IS NULL");
+    const out: Record<string, unknown> = {};
+    for (const r of rows) {
+      try {
+        out[r.key] = JSON.parse(r.value);
+      } catch {
+        // Not JSON (written by hand): left out, as if never set.
+      }
+    }
+    return out;
+  }
+
+  async setSetting(key: string, value: unknown): Promise<void> {
+    const ts = now();
+    await this.db.write([
+      {
+        sql: `INSERT INTO settings (key, value, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)
+              ON CONFLICT (key) DO UPDATE SET value = ?2, updated_at = ?3, deleted_at = NULL`,
+        bind: [key, JSON.stringify(value), ts],
+      },
+    ]);
+    this.emit({ scope: "settings" });
+  }
+
   async addBookmark(kind: BookmarkKind, ownerId: string, targetId: string, label: string, spaceId: string): Promise<void> {
     const ts = now();
     const dashboard = kind === "dashboard";

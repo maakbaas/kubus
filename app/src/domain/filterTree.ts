@@ -2,7 +2,9 @@
 // order (no precedence: "A or B and C" is "(A or B) and C"). A block builds on the filter above it
 // (its view's, or its item page's): its rules come after that filter's, so its And rules tighten it
 // and its Or rules make exceptions to it. A filter's date period frames that filter: it is and-ed
-// with the filter's other rules (and what that filter builds on), wherever it sits in the list.
+// with the filter's other rules (and what that filter builds on), wherever it sits in the list; joined
+// with Or (a block's, building on its view's filter) it is or-ed with what it builds on instead, and
+// the filter's other rules follow on that: "(view's filter or period) and/or the block's rules".
 // The result is a condition tree, checked here (applyQuery) and sent as is to remote sources
 // (shared/sources.ts), so every connector filters the same way.
 
@@ -32,11 +34,14 @@ export function filterTree<R extends FilterRule>(layers: R[][], counts: (rule: R
     const rules = layer.filter(counts);
     // The date period: the first "between" rule (DatePeriodFilter's), and-ed with the rest.
     const period = rules.find((r) => r.operator === "between");
+    // Or-ed with what it builds on: before the layer's own rules.
+    const orPeriod = period && period.join === "or" && tree !== null;
+    if (orPeriod) tree = combine("or", tree!, period);
     for (const rule of rules) {
       if (rule === period) continue;
       tree = tree === null ? rule : combine(rule.join === "or" ? "or" : "and", tree, rule);
     }
-    if (period) tree = tree === null ? period : { and: [period, ...(isAnd(tree) ? tree.and : [tree])] };
+    if (period && !orPeriod) tree = tree === null ? period : { and: [period, ...(isAnd(tree) ? tree.and : [tree])] };
   }
   return tree;
 }

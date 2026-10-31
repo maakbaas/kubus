@@ -65,8 +65,8 @@ needs server-side queries (docs/vision.md).
   keeps working offline and its outbox is not touched (nothing is dropped or marked as sent, a first connection is not made);
   `SyncStatus.outdated` (`app` / `server`, with `state` "error" and no `error`) turns the status button's label and the Settings → Sync
   state into "Update Kubus to keep syncing" or "The server needs updating" (`ui/OutdatedNotice.tsx`), with "Reload to update" for a
-  device older than the server in a browser (the web and home-screen app load the new build on reload: `app/sw.js` takes over
-  at once and serves pages network first; the desktop app needs the new install). Every sync (reload, the 30 s poll, a change signal)
+  device older than the server in a browser (the web and home-screen app: `updateAndReload` has `app/sw.js` download the new
+  build, then reloads; pages are served cache first, so a plain reload would show the cached build; the desktop app needs the new install). Every sync (reload, the 30 s poll, a change signal)
   asks again, so the first one after the versions match sends what was queued. The server's own headless device is the same build:
   the server checks the bundle's `syncVersion` before starting it (a stale `server/headless` says to run `npm run build:headless`).
 - *First connection to a server* (or a changed server URL): the server is the source of truth. If it
@@ -153,14 +153,12 @@ File bytes (images) never travel inside `/api/sync`; the synced `files` row is m
 ## The server's settings
 
 What a server offers beyond sync is set in the app: the language model in Settings → AI ("From server",
-`ui/AiSettings.tsx`), the remote sources in Settings → Connections (`ui/ConnectionSettings.tsx`) and the maps' style
-in Settings → Maps (`ui/MapSettings.tsx`: one OpenFreeMap style for every Map block on every device, `MAP_STYLE_IDS`, Automatic until one is chosen (`DEFAULT_MAP_STYLE`);
-a device keeps the last one it heard in `kubus.mapStyle`, `app/mapStyle.ts`, asks the server once a map is shown, and
-without a server, or with one of an earlier version that has no `map`, sets its own); each saves
+`ui/AiSettings.tsx`) and the remote sources in Settings → Connections (`ui/ConnectionSettings.tsx`); each saves
 its part on top of what the server holds then (`ui/useServerSettings.ts`). `GET` / `PUT /api/settings`
 (`server/src/settings.ts`, types in `shared/settings.ts`) with the sync token; any device with the
 token may change them. They are stored in the server's own table `server_settings` (JSON by key:
-`ai`, `sources`, `map`; an update without `map`, from an earlier app, keeps it), never synced and dropped by a wipe (as are the API tokens, `api_tokens`: "The API" below). Secrets (the model's key, a source's password)
+`ai`, `sources`, `map`; `map`, the maps' style before it became a synced setting (Settings → Display, "Synced settings"
+below), is only read once, as the first value of a device's synced one, and kept as it is), never synced and dropped by a wipe (as are the API tokens, `api_tokens`: "The API" below). Secrets (the model's key, a source's password)
 are write-only: a device sees `keySet` / `passwordSet`, never the value. A secret left out of an
 update stays only while it would go to the same place (the same model address; a source's same kind
 and the fields its password belongs to, `placeOf`: host, port and user, an address, an account): moved
@@ -176,12 +174,25 @@ request, the sources' connectors are replaced and checked (`Sources.replace`), a
 carries each source's problem and warnings. The server's environment variables: `DATABASE_URL`,
 `KUBUS_TOKEN`, `KUBUS_SECRET_KEY`, `PORT`, `STATIC_DIR`, `KUBUS_WEBHOOK_URL` and `KUBUS_WEBHOOK_SECRET`.
 
+## Synced settings
+
+The user's settings that are content rather than the device's (Settings → Display: the theme, Automatic / Light /
+Dark, and the maps' style, one OpenFreeMap style for every Map block, `MAP_STYLE_IDS`, Automatic until one is chosen)
+are the synced table `settings` (one row per key, its value JSON; `Repository.getSettings` / `setSetting`, change scope
+`settings`), since `SYNC_VERSION` 4: local first, they work without a server and sync like any row (newest
+`updated_at` wins). `app/settings.ts` holds them for the UI, with a copy on the device (`kubus.theme`, `kubus.mapStyle`)
+for the first paint before the database opens. A database without a map style yet starts from the one in use: the
+server's `map` setting when connected, else the device's own copy. Nothing secret is ever a setting here: a language
+model's key stays where it is set (Settings → AI: the device's own in `kubus.ai`, the server's in `server_settings`).
+
 ## The server's language model
 
 Set in Settings → AI with "From server" chosen (address, key, a model for AI fields and one for writing components):
 `server/src/ai.ts` gives every device the same model. `GET /api/ai` says what is offered (`ServerAi`
 in `shared/api.ts`: the models, never the address or key); `POST /api/ai/chat/completions` and
-`GET /api/ai/models` forward to the provider with the server's key, for any device with the token.
+`GET /api/ai/models` forward to the provider with the server's key, for any device with the token. While the
+address is being set up, `POST /api/settings/ai/models` `{ url, key? }` lists that address's models for the AI tab's
+pickers (`aiModels`): with the key typed, else the stored one but only for the stored address.
 In the app, Settings → AI → "From server" (`AiConfig.source`, the default without a device's own)
 points `createLlmClient` at `<server>/api/ai` with the sync token (`AiService.providerOf`; saving the
 server's settings asks again, `serverChanged`); "Local" uses the device's own provider. The
@@ -516,7 +527,10 @@ fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position
 Files: `app/public/manifest.webmanifest`, apple-touch-icon (its href gets a content hash at build, `vite.config.ts`; iOS never refreshes an installed icon, so a changed icon only shows after removing and re-adding the app) and
 meta tags in `app/index.html`, safe-area padding in `styles.css`, and a service worker (`app/sw.js`,
 emitted by the build with a version stamp; `platform/serviceWorker.ts` registers it in production
-web builds only) that caches the app shell, so it starts offline. iOS needs HTTPS for OPFS and
+web builds only) that caches the app shell and serves it cache first, so it starts at once offline and on a
+weak connection the phone still counts as online (one bar never delays the start). A new build is downloaded whole
+in the background (also checked when the app is shown again: iOS resumes it without loading the page) and shown at
+the next start; the previous build's cache is kept for a page still running it. iOS needs HTTPS for OPFS and
 service workers: put the container behind a TLS proxy or tunnel (Caddy, Tailscale serve, Cloudflare
 tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 

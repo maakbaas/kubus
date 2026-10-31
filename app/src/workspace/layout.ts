@@ -39,7 +39,7 @@ export interface Workspace {
 /** Where a dragged tab is dropped on a pane. */
 export type DropZone = "center" | "left" | "right" | "top" | "bottom";
 
-export const HOME = "/collections";
+export const HOME = "/";
 
 export const newTab = (path = HOME): WorkspaceTab => ({ id: newId(), path, nav: 0 });
 

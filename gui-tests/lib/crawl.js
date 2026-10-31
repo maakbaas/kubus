@@ -158,6 +158,7 @@ function crawlSpec() {
 
 /** [label, path]: the pages crawled. */
 const CRAWL_PAGES = [
+  ["home", () => "/"],
   ["collections", () => "/collections"],
   ["collection table", (ids) => `/collections/${ids.collections.books}/items`],
   ["collection cards", (ids) => `/collections/${ids.collections.books}/items?view=${ids.views["books/Cards"]}`],
@@ -169,6 +170,7 @@ const CRAWL_PAGES = [
   ["component editor", (ids) => `/components/${ids.components.double}`],
   ["spaces", () => "/spaces"],
   ["bookmarks", () => "/bookmarks"],
+  ["settings display", () => "/settings?section=display"],
   ["settings server", () => "/settings?section=server"],
   ["settings sync", () => "/settings?section=sync"],
   ["settings AI", () => "/settings?section=ai"],

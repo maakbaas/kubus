@@ -42,6 +42,7 @@ append-only migrations in one transaction, the version stored in the database.
 | 2 | `item_links` (which items each value links to, for backlinks; docs/data-model.md "Item links"): the table, its index and the two triggers on `field_values`, the rows of the values already there (`link_targets`, defined by the engine before it migrates), queued for the server as a migration queues nothing by itself | `SYNC_VERSION` 2. The server makes the table by itself. |
 | 3 | `dashboards` and `dashboard_views` (a dashboard's tabs, per space) with its index; `bookmarks` rebuilt (a CHECK and a NOT NULL change): `kind` may be `dashboard`, `collection_id` nullable, `dashboard_id` added last. Its rows are copied as they are; nothing is queued | `SYNC_VERSION` 3. The server makes the tables and the column by itself (its tables have no CHECKs, and no NOT NULL but keys). |
 | 4 | `block_file_uses` (the files blocks use: a Markdown block's images, a choropleth's map; docs/data-model.md): the table, its index, the insert / update / delete triggers on `views` (`config`), `collections` (`item_views`) and `dashboard_views` (`config`), and the rows of the live views, collections and dashboard tabs already there (`file_ids`). Before it a Markdown block's pasted image was released when its editor closed and swept a week later. | None: local only and derived, nothing synced changes. |
+| 5 | `settings` (the user's settings synced like content: Settings → Display's theme and map style; docs/sync.md "Synced settings"): the table, no rows (a device's first map style comes from the server's setting or its own copy, `app/settings.ts`) | `SYNC_VERSION` 4. The server makes the table by itself. |
 
 A chart's `regions` (a choropleth's map) is a key in its block's options, like the next: no sync version; an older device shows the chart as its default kind.
 A dashboard's block listing several collections keeps `collectionIds` and `merges` in its JSON (the dashboard tab's config): no schema change, no
@@ -88,8 +89,10 @@ from the server, so they match it once reloaded; the desktop app is reinstalled.
   sync (reload, every 30 s, a change signal): once the versions match, a sync sends what was queued. A new
   build opens the old build's database as always (its migrations run first), so after updating, the queued
   changes sync normally. A device that never updates only stops syncing.
-- The web app picks a new build up on reload: its service worker (`app/sw.js`) is stamped per build, takes over
-  at once (`skipWaiting`, `clients.claim`) and serves pages network first.
+- The web app picks a new build up at its next start: its service worker (`app/sw.js`) is stamped per build, downloads
+  the new build in the background (the browser's check, and `platform/serviceWorker.ts` when the app is shown again),
+  then takes over (`skipWaiting`, `clients.claim`); pages are served cache first, so a start never waits for the network.
+  "Reload to update" (`updateAndReload`) asks for the new worker and waits for it before reloading.
 - A row written before a column existed has it NULL on the server; a NOT NULL column added after the
   first release needs a value for that (`SyncTable.defaults`: the server's column default and what
   a device stores for such a NULL). `spec.test.ts` checks every such column has one.

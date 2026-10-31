@@ -21,6 +21,29 @@ const offer = (): ServerAi => ({ available: settings.url !== "" && settings.fiel
 /** GET /api/ai: what the server offers (never its address or key). */
 export const aiInfo = async (): Promise<ApiResponse> => json(200, offer());
 
+/**
+ * POST /api/settings/ai/models `{ url, key? }`: the models of the address being set up in Settings → AI (before it is
+ * saved), for its model pickers. With the key typed there, else the stored key, but only while the address is the
+ * stored one: the key never goes to another address (as on saving, where a changed address drops it). The ids,
+ * sorted; none when the provider doesn't say.
+ */
+export async function aiModels(body: unknown): Promise<ApiResponse> {
+  const asked = (body ?? {}) as { url?: unknown; key?: unknown };
+  const url = typeof asked.url === "string" ? asked.url.trim().replace(/\/+$/, "") : "";
+  if (!/^https?:\/\//i.test(url)) return json(200, { models: [] });
+  const key = typeof asked.key === "string" ? asked.key : url === settings.url ? settings.key : "";
+  let response: Response;
+  try {
+    response = await fetch(`${url}/models`, { headers: key ? { Authorization: `Bearer ${key}` } : {}, signal: AbortSignal.timeout(15_000) });
+  } catch {
+    throw new HttpError(502, "The server can't reach this address");
+  }
+  if (!response.ok) return json(200, { models: [] });
+  const listed = (await response.json().catch(() => ({}))) as { data?: { id?: unknown }[] };
+  const models = (Array.isArray(listed.data) ? listed.data : []).map((m) => m?.id).filter((id): id is string => typeof id === "string").sort();
+  return json(200, { models });
+}
+
 /** Forwards a request to the provider (`path`: /chat/completions or /models) with the server's key. */
 export async function aiProxy(req: ApiRequest, path: string): Promise<ApiResponse> {
   if (!offer().available) throw new HttpError(404, "This server offers no language model (set one in Settings → AI)");

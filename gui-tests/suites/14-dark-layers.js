@@ -56,7 +56,7 @@ for (const vp of ["desktop"]) {
     // Item page: layout, details (with the space dropdown), a delete confirmation.
     await t.open(t.itemPath(books, ids.items["books/i0"]));
     const ph = t.page.locator(".ws-pane--active .page-header").first();
-    await auditPanel(t, "page layout", ph, "Page layout");
+    await auditPanel(t, "page layout", t.page.locator(".ws-pane--active .views-bar").first(), "Page layout");
     await t.openPanel(ph, "Details");
     const space = t.page.locator(".toolbar-popover.cds--popover--open .cds--dropdown button").first();
     if (await space.count()) {

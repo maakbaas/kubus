@@ -1,5 +1,6 @@
-import { Navigate, Route, Routes } from "react-router";
+import { Route, Routes } from "react-router";
 import { BookmarksPage } from "../pages/BookmarksPage";
+import { HomePage } from "../pages/HomePage";
 import { ItemPage } from "../pages/ItemPage";
 import { ComponentEditorPage } from "../pages/ComponentEditorPage";
 import { ComponentsPage } from "../pages/ComponentsPage";
@@ -20,7 +21,7 @@ import { NotFound } from "../ui/NotFound";
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/collections" replace />} />
+      <Route path="/" element={<HomePage />} />
       <Route path="/search" element={<SearchPage />} />
       <Route path="/collections" element={<CollectionsPage />} />
       <Route path="/bookmarks" element={<BookmarksPage />} />

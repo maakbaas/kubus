@@ -8,7 +8,7 @@ import { BLOCK_HEIGHT, blockHeightCss, type AspectRatio } from "../domain/views"
 import { TAG_SOURCE } from "../domain/tags";
 import { openModeOf } from "../workspace/Workspace";
 import { Highlight } from "./Highlight";
-import { useMediaQuery } from "./useMediaQuery";
+import { useDark } from "../app/settings";
 import { fileDataUrl, UrlImage } from "./images";
 import { MarkdownView } from "./MarkdownView";
 import { frameFonts } from "./frameFonts";
@@ -400,7 +400,7 @@ export function HtmlFrame({
     return () => reportSizing(id, false);
   }, [reportSizing, id, measuring]);
   // Rebuilt when the theme flips (light / dark): the frame's colours are the app's, passed in.
-  const dark = useMediaQuery("(prefers-color-scheme: dark)");
+  const dark = useDark();
   // The type tokens where the frame is (read once it is in place, before it is first drawn).
   const [tokens, setTokens] = useState<string>();
   useLayoutEffect(() => {

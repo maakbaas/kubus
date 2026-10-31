@@ -146,6 +146,23 @@ INSERT OR IGNORE INTO block_file_uses (file_id, owner_id)
 `);
     },
   },
+  {
+    version: 5,
+    description: "settings: the user's settings synced like content (Settings → Display: theme, map style)",
+    up(db) {
+      // A new table: nothing to convert. A device that chose a map style before keeps it (app/src/app/settings.ts
+      // takes the stored one, or the server's, as the first value).
+      db.exec(`
+CREATE TABLE settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
+`);
+    },
+  },
 ];
 
 /** block_file_uses' triggers on one owner table (schema.sql): its blocks' JSON column. Frozen with migration 4. */

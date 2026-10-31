@@ -32,6 +32,16 @@ describe("applyQuery", () => {
     expect(ids(applyQuery(collection, books, desc, ctx))).toEqual(["1", "3", "2"]);
   });
 
+  it("sorts by several levels: each next one orders what the ones above leave equal", () => {
+    const tied = [book("1", "Charlie", 120), book("2", "Alpha", 300), book("3", "Bravo", 120), book("4", "Delta", null)];
+    const q = (direction: "asc" | "desc") => ({
+      ...defaultQuery(),
+      sort: [{ fieldId: "pages", direction }, { fieldId: "title", direction: "asc" as const }],
+    });
+    expect(ids(applyQuery(collection, tied, q("asc"), ctx))).toEqual(["3", "1", "2", "4"]);
+    expect(ids(applyQuery(collection, tied, q("desc"), ctx))).toEqual(["2", "3", "1", "4"]);
+  });
+
   it("filters and searches", () => {
     const q = { ...defaultQuery(), filters: [{ id: "f", fieldId: "title", operator: "contains" as const, value: "a" }] };
     expect(applyQuery(collection, books, q, ctx).total).toBe(3);

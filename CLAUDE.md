@@ -169,7 +169,8 @@ stale peer range.
 ## Conventions
 
 - TypeScript strict, React function components, Carbon components and theme tokens
-  (`var(--cds-…)`) instead of custom colors. Theme follows the OS (white / g100).
+  (`var(--cds-…)`) instead of custom colors. Theme: white / g100, by Settings → Display (Automatic follows the OS; `useDark`
+  in `app/settings.ts`, never the media query directly).
 - **Compact UI: screen space goes to content.** Every Carbon component that comes in sizes uses
   its smallest (`size="sm"` for buttons, inputs, selects, dropdowns, search, accordion;
   `xs` for modals). The page header's breadcrumb is the exception: the normal size, body text. Tables use `sm` (2rem rows), not `xs`, because inline editors

@@ -1,13 +1,18 @@
-// Service worker: lets the installed app start without a network (the data is local anyway).
-//  * Installing downloads the app shell: index.html and every file it leads to (found by
-//    scanning the build output for asset names), so the very first visit is enough.
-//  * Pages: network first (a new build shows up at once), the cached shell when offline.
-//  * Everything else of this origin: from the cache, else the network (hashed build files never change).
+// Service worker: the installed app starts from its cache, never waiting for the network (the data is
+// local anyway). A weak connection the phone still counts as online (one bar) must not slow the start.
+//  * Installing downloads the app shell: index.html and every file it leads to (found by scanning the
+//    build output for asset names), so the very first visit is enough.
+//  * Pages: the cached shell, always (cache first). Only without one (never installed) the network.
+//  * Everything else of this origin: from the caches, else the network (hashed build files never change).
 //  * /api (the sync server) is never cached.
-// The build replaces __BUILD__ (vite.config.ts), so every build installs a fresh worker and
-// the previous build's cache is removed.
+//  * Updates: the browser checks sw.js in the background (and serviceWorker.ts asks when the app is shown
+//    again); a new build's worker downloads all of its files while the old one keeps serving, then takes
+//    over. The next start (or "Reload to update", `updateAndReload`) shows the new build, entirely from cache.
+// The build replaces __BUILD__ (vite.config.ts), so every build installs a fresh worker. The previous
+// build's cache is kept (a page still running the old build may load its lazy chunks), older ones go.
 
-const CACHE = "kubus-__BUILD__";
+const PREFIX = "kubus-";
+const CACHE = `${PREFIX}__BUILD__`;
 const SHELL = ["./", "manifest.webmanifest", "favicon.svg", "apple-touch-icon.png"];
 const ASSET = /(?:\.\/|\/assets\/|assets\/)([\w.-]+\.(?:js|css|wasm|woff2?|svg|png|json))/g;
 
@@ -18,7 +23,9 @@ async function precache() {
   const seen = new Set(queue);
   while (queue.length > 0) {
     const url = queue.shift();
-    const response = await fetch(url, { cache: "reload" });
+    // Unchanged hashed files come from the previous build's cache instead of the (slow) network.
+    const known = url.includes("/assets/") ? await caches.match(url) : undefined;
+    const response = known ?? (await fetch(url, { cache: "reload" }));
     if (!response.ok) {
       if (SHELL.some((p) => new URL(p, base).href === url)) throw new Error(`Cannot cache ${url}`);
       continue; // a guessed name that doesn't exist
@@ -36,7 +43,12 @@ async function precache() {
   }
 }
 
+/** The build stamp of a cache's name (base 36 of its build time), for keeping the newest. */
+const built = (name) => parseInt(name.slice(PREFIX.length), 36) || 0;
+
 self.addEventListener("install", (event) => {
+  // A failed download (a dropped connection) fails the install: the old worker keeps serving and the
+  // browser tries again at a later check.
   event.waitUntil(precache().then(() => self.skipWaiting()));
 });
 
@@ -44,23 +56,18 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => {
+        const older = keys.filter((k) => k.startsWith(PREFIX) && k !== CACHE).sort((a, b) => built(b) - built(a));
+        return Promise.all(older.slice(1).map((k) => caches.delete(k)));
+      })
       .then(() => self.clients.claim()),
   );
 });
 
 async function page(request) {
-  const cache = await caches.open(CACHE);
-  const shell = () => cache.match(new URL("./", self.registration.scope).href);
-  try {
-    // A flaky connection must not hang the app when the shell is cached.
-    return await Promise.race([
-      fetch(request),
-      new Promise((_, reject) => setTimeout(reject, 4000)),
-    ]);
-  } catch {
-    return (await shell()) ?? fetch(request);
-  }
+  const shell = new URL("./", self.registration.scope).href;
+  const cached = (await (await caches.open(CACHE)).match(shell)) ?? (await caches.match(shell));
+  return cached ?? fetch(request);
 }
 
 self.addEventListener("fetch", (event) => {
@@ -72,11 +79,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   event.respondWith(
-    caches.open(CACHE).then(async (cache) => {
-      const hit = await cache.match(request);
+    caches.match(request).then(async (hit) => {
       if (hit) return hit;
       const response = await fetch(request);
-      if (response.ok && response.status === 200) cache.put(request, response.clone());
+      if (response.ok && response.status === 200) (await caches.open(CACHE)).put(request, response.clone());
       return response;
     }),
   );

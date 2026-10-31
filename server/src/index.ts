@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize } from "node:path";
 import { createPool } from "./db.ts";
 import { broadcast, handleEvents, latestCursor } from "./events.ts";
-import { aiInfo, aiProxy, setAiSettings } from "./ai.ts";
+import { aiInfo, aiModels, aiProxy, setAiSettings } from "./ai.ts";
 import { deleteFile, getFile, hasFile, putFile } from "./files.ts";
 import { HeadlessHost } from "./headless.ts";
 import { FILE_ID } from "../../shared/files.ts";
@@ -129,6 +129,7 @@ const routes = tokens.routes(sources.routes(new Router()))
     await applySettings(next);
     return json(200, settingsView());
   })
+  .add("POST", "/api/settings/ai/models", async (req) => aiModels(await readJson(req, 16 * 1024)))
   .add("GET", "/api/ai", aiInfo)
   .add("GET", "/api/ai/models", (req) => aiProxy(req, "/models"))
   .add("POST", "/api/ai/chat/completions", (req) => aiProxy(req, "/chat/completions"))

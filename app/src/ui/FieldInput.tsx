@@ -464,7 +464,7 @@ function ListInput<T>({
                 align="top"
                 label="Remove item"
                 disabled={rows.length === 1 && textOf(item) === ""}
-                onClick={() => remove(i)}
+                {...reorder.remove(i, () => remove(i))}
               >
                 <TrashCan />
               </IconButton>

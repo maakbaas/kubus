@@ -391,6 +391,10 @@ What the app does, feature by feature (read the part you work on).
   `createItem`, `search`, `countItemsByCollection`, views, bookmarks); `getItem` and `listLabels` read every
   space (a reference may point into another space: labelled, but pickers offer only the shown
   space's items, `RefOption.elsewhere`). An item moves on its page's (i) panel (`moveItem`).
+- **Home** (`#/`, `pages/HomePage.tsx`, the start page and what a new tab opens: `HOME` in `workspace/layout.ts`): the side
+  nav's top-level sections (Bookmarks, Collections, Remotes when shown, Dashboards, Components) as cards, styled as a cards
+  block's, each with what it holds in the space ("3 collections") and opening its page; below them the space's bookmarks, the
+  Bookmarks page's table (`BookmarksTable`). First node of the side nav (no children) and first crumb of every breadcrumb (an icon).
 - **Bookmarks** (`app/src/domain/bookmarks.ts`, table `bookmarks`): a bookmark icon on a view or a dashboard's tab (tab strip,
   next to the star) and on an item (page header, next to (i)) toggles a link in the side nav's
   Bookmarks branch (of the shown space). A view bookmark opens `…/items?view=<id>`, a tab's `#/dashboards/<id>?view=<tab>`

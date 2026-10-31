@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Button } from "@carbon/react";
+import { updateAndReload } from "../platform/serviceWorker";
 import { SYNC_OUTDATED } from "../data/repository";
 import type { SyncStatus } from "../data/repository";
 import { inDesktopShell } from "../platform/shell";
@@ -13,13 +15,18 @@ const DETAIL = {
 
 /** What a refused device (`SyncStatus.outdated`) is told, with Reload where reloading brings the new build. */
 export function OutdatedNotice({ update, className }: { update: NonNullable<SyncStatus["outdated"]>; className?: string }) {
+  const [updating, setUpdating] = useState(false);
   return (
     <div className={className}>
       <p className="sync-popover__state">{SYNC_OUTDATED[update]}</p>
       <p className="helper sync-popover__detail">{DETAIL[update]}</p>
       {update === "app" && reloads && (
-        <Button size="sm" kind="tertiary" onClick={() => location.reload()}>
-          Reload to update
+        <Button size="sm" kind="tertiary" disabled={updating} onClick={() => {
+            setUpdating(true);
+            void updateAndReload();
+          }}
+        >
+          {updating ? "Updating…" : "Reload to update"}
         </Button>
       )}
     </div>
