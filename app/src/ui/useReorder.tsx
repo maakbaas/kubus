@@ -285,7 +285,7 @@ export function useReorder(options: Options) {
       kind="ghost"
       size="sm"
       align="top"
-      label="Drag to reorder. Click to select (on a touch screen: hold to select several)"
+      label="Drag to reorder. Click to select"
       className="reorder-handle"
       data-reorder-handle=""
       onPointerDown={start(index)}
