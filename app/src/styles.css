@@ -4252,6 +4252,8 @@ img[data-lightbox] {
 }
 .cds--data-table .inline-html {
   max-block-size: var(--cds-spacing-06);
+  /* A bar or other shape has no width of its own: the column at least an image thumbnail's (.image-thumb). */
+  min-inline-size: 6rem;
 }
 
 /* Components on an item view only (layout popover): one block per component, under a rule. */
