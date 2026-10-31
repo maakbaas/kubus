@@ -293,7 +293,7 @@ describe("the keyboard inset", () => {
 });
 
 describe("the service worker", () => {
-  async function load(env: { prod: boolean; worker: boolean; tauri?: boolean }) {
+  async function load(env: { prod: boolean; worker: boolean; tauri?: boolean; controlled?: boolean }) {
     vi.resetModules();
     vi.stubEnv("PROD", env.prod);
     const update = vi.fn(async () => {});
@@ -303,11 +303,18 @@ describe("the service worker", () => {
     const doc = { visibilityState: "visible", addEventListener: (_: string, l: () => void) => shown.push(l) };
     vi.stubGlobal("document", doc);
     vi.stubGlobal("window", env.tauri ? { __TAURI_INTERNALS__: {} } : {});
-    vi.stubGlobal("navigator", env.worker ? { serviceWorker: { register } } : {});
+    const takeOver: (() => void)[] = [];
+    const serviceWorker = { register, controller: env.controlled === false ? null : {}, addEventListener: (_: string, l: () => void) => takeOver.push(l) };
+    vi.stubGlobal("navigator", env.worker ? { serviceWorker } : {});
+    const reload = vi.fn();
+    vi.stubGlobal("location", { reload });
+    let now = 0;
+    vi.stubGlobal("performance", { now: () => now });
+    const later = (ms: number) => (now += ms);
     vi.stubGlobal("addEventListener", (_: string, l: () => void) => loads.push(l));
     const { registerServiceWorker } = await import("./serviceWorker");
     registerServiceWorker();
-    return { register, update, loads, shown, doc };
+    return { register, update, loads, shown, doc, takeOver, reload, later };
   }
   afterEach(() => vi.unstubAllEnvs());
 
@@ -330,6 +337,31 @@ describe("the service worker", () => {
     t.doc.visibilityState = "visible";
     t.shown[0]();
     expect(t.update).toHaveBeenCalledOnce();
+  });
+
+  it("shows a new build that took over the next time the app is shown (iOS resumes, it doesn't start again)", async () => {
+    const t = await load({ prod: true, worker: true });
+    t.loads[0]();
+    await Promise.resolve();
+    await Promise.resolve();
+    // In use for a while: no reload under the person's hands, only when they come back.
+    t.later(60_000);
+    t.takeOver[0]();
+    expect(t.reload).not.toHaveBeenCalled();
+    t.doc.visibilityState = "hidden";
+    t.shown[0]();
+    t.doc.visibilityState = "visible";
+    t.shown[0]();
+    expect(t.reload).toHaveBeenCalledOnce();
+    expect(t.update).not.toHaveBeenCalled();
+    // Taking over just as it is shown again: at once.
+    const u = await load({ prod: true, worker: true });
+    u.takeOver[0]();
+    expect(u.reload).toHaveBeenCalledOnce();
+    // A page's very first worker is no new build.
+    const first = await load({ prod: true, worker: true, controlled: false });
+    first.takeOver[0]();
+    expect(first.reload).not.toHaveBeenCalled();
   });
 
   it("warns instead of failing when it can't register", async () => {

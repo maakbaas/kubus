@@ -532,8 +532,10 @@ meta tags in `app/index.html`, safe-area padding in `styles.css`, and a service 
 emitted by the build with a version stamp; `platform/serviceWorker.ts` registers it in production
 web builds only) that caches the app shell and serves it cache first, so it starts at once offline and on a
 weak connection the phone still counts as online (one bar never delays the start). A new build is downloaded whole
-in the background (also checked when the app is shown again: iOS resumes it without loading the page) and shown at
-the next start; the previous build's cache is kept for a page still running it. iOS needs HTTPS for OPFS and
+in the background (also checked when the app is shown again: iOS resumes it without loading the page). Once it has
+taken over, the page reloads the next time it is shown again, or at once when that was just now (`platform/serviceWorker.ts`):
+iOS hardly ever starts a home-screen app afresh, so "the next start" left it on the old build for good. That reload is from
+the cache too (instant, offline), and never while the app is in use. The previous build's cache is kept for a page still running it. iOS needs HTTPS for OPFS and
 service workers: put the container behind a TLS proxy or tunnel (Caddy, Tailscale serve, Cloudflare
 tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 
