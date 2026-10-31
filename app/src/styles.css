@@ -3751,12 +3751,12 @@ img[data-lightbox] {
    pulled 1rem left so its box's own 1rem inset puts the text at the edge (the box border sits
    1rem further left; its right edge stays); labels and checkboxes, without an inset, get the
    1rem back as padding. */
-.item-fields > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label, .block-row),
-.item-field--no-label > :not(.image-input, .view-field--image) {
+.item-fields > :not(.form-actions, .image-input, .image-field, .view-field--image, .item-field--no-label, .block-row),
+.item-field--no-label > :not(.image-input, .image-field, .view-field--image) {
   margin-inline-start: calc(-1 * var(--cds-spacing-05));
 }
 /* The page's own fields only: a block's content (cards' labels, tables) keeps its own insets. */
-.item-fields > :not(.form-actions, .image-input, .view-field--image, .block-row) .cds--label,
+.item-fields > :not(.form-actions, .image-input, .image-field, .view-field--image, .block-row) .cds--label,
 .item-fields > :not(.block-row) .checkbox-field,
 .item-fields > :not(.block-row) .checklist-box {
   padding-inline-start: var(--cds-spacing-05);
@@ -3777,23 +3777,23 @@ img[data-lightbox] {
   border-block-start: 1px solid var(--cds-border-subtle);
   pointer-events: none;
 }
-.item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label, .block-row)::before,
-.item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > :not(.image-input, .view-field--image)::before {
+.item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .image-field, .view-field--image, .item-field--no-label, .block-row)::before,
+.item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > :not(.image-input, .image-field, .view-field--image)::before {
   inset-inline-start: var(--cds-spacing-05);
 }
 @media (max-width: 42rem) {
-  .item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .view-field--image, .item-field--no-label, .block-row)::before,
-  .item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > :not(.image-input, .view-field--image)::before {
+  .item-fields:not(.item-fields--form) > :not(:first-child, .form-actions, .image-input, .image-field, .view-field--image, .item-field--no-label, .block-row)::before,
+  .item-fields:not(.item-fields--form) > .item-field--no-label:not(:first-child) > :not(.image-input, .image-field, .view-field--image)::before {
     inset-inline: calc(0.5 * var(--cds-spacing-05));
   }
 }
 /* An image has no inner inset: its edge itself lines up with the text. */
 /* The form for a new item is an ordinary form: its boxes (not their text) line up with the
    page edge, like the image drop zone and the buttons. */
-.item-fields.item-fields--form > :not(.form-actions, .image-input, .item-field--no-label) {
+.item-fields.item-fields--form > :not(.form-actions, .image-input, .image-field, .item-field--no-label) {
   margin-inline-start: 0;
 }
-.item-fields.item-fields--form > :not(.form-actions, .image-input) .cds--label,
+.item-fields.item-fields--form > :not(.form-actions, .image-input, .image-field) .cds--label,
 .item-fields.item-fields--form .checkbox-field,
 .item-fields.item-fields--form .checklist-box {
   padding-inline-start: 0;
@@ -3803,11 +3803,11 @@ img[data-lightbox] {
    Blocks are left out, as on wider panes: they sit on the page's edges (the same edges as the title
    and the header's "⋮"), not half an inset outside them. */
 @media (max-width: 42rem) {
-  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .item-field--no-label, .block-row),
-  .item-field--no-label > :not(.image-input, .view-field--image) {
+  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .image-field, .view-field--image, .item-field--no-label, .block-row),
+  .item-field--no-label > :not(.image-input, .image-field, .view-field--image) {
     margin-inline: calc(-0.5 * var(--cds-spacing-05));
   }
-  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .view-field--image, .block-row) .cds--label,
+  .item-fields:not(.item-fields--form) > :not(.form-actions, .image-input, .image-field, .view-field--image, .block-row) .cds--label,
   .item-fields:not(.item-fields--form) > :not(.block-row) .checkbox-field,
   .item-fields:not(.item-fields--form) > :not(.block-row) .checklist-box {
     padding-inline-start: calc(0.5 * var(--cds-spacing-05));

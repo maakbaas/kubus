@@ -1227,13 +1227,17 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, fixed,
   }
   if (field.kind === "image") {
     // Also its own editor: replace / remove on hover, or drop a new one; each saves right away.
+    // In a box of its own: it is a fieldset, whose top edge runs through its legend (the name), so the line between
+    // fields (styles.css, placed from the field's top) went through the name. Laid out as the image input.
     return (
-      <ImageInput
-        id={`view-${field.id}`}
-        label={<FieldLabel field={field} />}
-        value={typeof value === "string" ? value : ""}
-        onChange={(fileId) => onSave(fileId || null)}
-      />
+      <div className="image-field">
+        <ImageInput
+          id={`view-${field.id}`}
+          label={<FieldLabel field={field} />}
+          value={typeof value === "string" ? value : ""}
+          onChange={(fileId) => onSave(fileId || null)}
+        />
+      </div>
     );
   }
 
