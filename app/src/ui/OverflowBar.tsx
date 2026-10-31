@@ -25,9 +25,10 @@ export function OverflowBar({
   useLayoutEffect(() => {
     const items = root.current?.querySelector<HTMLElement>(":scope > .overflow-bar__items");
     if (!items) return;
-    const count = () => setSingle(items.childElementCount <= 1);
+    // Its buttons: those in the bar itself, not those of an open panel (a wrapper without a button counts for nothing).
+    const count = () => setSingle([...items.querySelectorAll("button")].filter((b) => !b.closest(".toolbar-popover__panel, .cds--popover-content")).length <= 1);
     const changes = new MutationObserver(count);
-    changes.observe(items, { childList: true });
+    changes.observe(items, { childList: true, subtree: true });
     count();
     return () => changes.disconnect();
   }, []);
