@@ -317,16 +317,28 @@ export const GAUGE_WIDTH = 24;
 /** The most decimals a value is given. */
 export const MAX_DECIMALS = 6;
 
-/** Fields whose values are numbers: number fields, and AI and component fields giving one. */
-export function numberFields(collection: Collection, components: Component[]): FieldDef[] {
-  return collection.fields.filter(
+/**
+ * Fields a chart can take a value of: number fields, AI and component fields giving one, and, after them, checkboxes
+ * (counted 1 when checked, 0 when not: `chartNumber`; their sum is how many are checked, their average the share).
+ * `checkboxes` false: numbers only (an axis, where 0 and 1 would only be two columns).
+ */
+export function numberFields(collection: Collection, components: Component[], checkboxes = true): FieldDef[] {
+  const numbers = collection.fields.filter(
     (f) => f.kind === "number" || (f.kind === "ai" && f.output === "number") || (f.kind === "component" && outputOf(f, components) === "number"),
   );
+  return checkboxes ? [...numbers, ...collection.fields.filter((f) => f.kind === "checkbox")] : numbers;
+}
+
+/** A field's value as a chart counts it: a number as it is, a checkbox 1 when checked and 0 when not; null for no number. */
+export function chartNumber(item: Item, field: FieldDef): number | null {
+  const v = fieldValue(item, field);
+  if (field.kind === "checkbox") return v === true ? 1 : 0;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
 /** Fields that can place items on an axis (a scatter's X, "each item along", a histogram's): numbers and dates. */
 export function axisFields(collection: Collection, components: Component[]): FieldDef[] {
-  const numbers = new Set(numberFields(collection, components).map((f) => f.id));
+  const numbers = new Set(numberFields(collection, components, false).map((f) => f.id));
   return pickableFields(collection).filter((f) => numbers.has(f.id) || f.kind === "date" || f.kind === "datetime");
 }
 
@@ -507,9 +519,9 @@ export const drawsTimeline = (options: Pick<ChartOptions, "series" | "chart">) =
 
 // --- Values ---------------------------------------------------------------------------------------
 
-/** A number field's values on items (those without one left out). */
+/** A field's values on items as a chart counts them (`chartNumber`; those without one left out). */
 const numbersOf = (items: Item[], field: FieldDef | undefined): number[] =>
-  field ? items.flatMap((i) => (typeof fieldValue(i, field) === "number" ? [fieldValue(i, field) as number] : [])) : [];
+  field ? items.flatMap((i) => chartNumber(i, field) ?? []) : [];
 
 /** The items made into one number: counted, or their values of `field` added up (…); null when there is nothing to add up. */
 export function aggregate(items: Item[], how: Compare, field: FieldDef | undefined): number | null {
@@ -1109,13 +1121,13 @@ export function scatterPoints(input: ChartInput, options: ChartOptions): Scatter
     const name = s.label.trim() || field.name;
     for (const item of items) {
       const xv = fieldValue(item, x);
-      const yv = fieldValue(item, field);
-      if (typeof yv !== "number" || (typeof xv !== "number" && !(typeof xv === "string" && xv))) continue;
-      const sv = size ? fieldValue(item, size) : null;
+      const yv = chartNumber(item, field);
+      if (yv === null || (typeof xv !== "number" && !(typeof xv === "string" && xv))) continue;
+      const sv = size ? chartNumber(item, size) : null;
       const parts = split ? split.names.filter((n) => split.items({ key: "", label: "", items: [item] }, n).length > 0) : [name];
       for (const part of parts.length ? parts : [name]) {
         const series = split && ys.length > 1 ? `${name} · ${part}` : part;
-        points.push({ item, title: itemLabel(collection, item), series, x: xv, y: yv, size: typeof sv === "number" ? sv : null });
+        points.push({ item, title: itemLabel(collection, item), series, x: xv, y: yv, size: sv });
       }
     }
   }

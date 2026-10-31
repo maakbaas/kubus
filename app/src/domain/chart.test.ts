@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregate,
+  axisFields,
+  numberFields,
   autoStep,
   chartCategories,
   chartItems,
@@ -229,6 +231,29 @@ describe("aggregate", () => {
     // Items without a value are passed over.
     const rating = field(collection, "rating");
     expect(aggregate(books, "last", rating)).toBe(5);
+  });
+});
+
+describe("checkboxes as values", () => {
+  const todo: Collection = { ...collection, id: "todo", fields: [blankField("done", "Done", "checkbox"), blankField("hours", "Hours", "number"), blankField("due", "Due", "date")] };
+  const task = (id: string, done: boolean | null, hours: number): Item => ({ id, collectionId: "todo", spaceId: "s", values: { ...(done !== null && { done }), hours }, createdAt: "", updatedAt: "" });
+  const tasks = [task("a", true, 1), task("b", false, 2), task("c", null, 3), task("d", true, 4), task("e", true, 5)];
+
+  it("count 1 when checked and 0 otherwise: summed how many are, averaged the share", () => {
+    const done = field(todo, "done");
+    expect(aggregate(tasks, "sum", done)).toBe(3);
+    expect(aggregate(tasks, "avg", done)).toBe(0.6);
+    expect([aggregate(tasks, "min", done), aggregate(tasks, "max", done)]).toEqual([0, 1]);
+  });
+
+  it("are offered as values after the numbers, never as an axis", () => {
+    expect(numberFields(todo, []).map((f) => f.id)).toEqual(["hours", "done"]);
+    expect(axisFields(todo, []).map((f) => f.id)).not.toContain("done");
+  });
+
+  it("are a scatter's Y like a number", () => {
+    const o = options({ chart: "scatter", series: [series({ value: "sum", field: "done" })] }, { field: "hours" }, todo);
+    expect(scatterPoints(input(tasks, todo), o).map((p) => [p.x, p.y])).toEqual([[1, 1], [2, 0], [3, 0], [4, 1], [5, 1]]);
   });
 });
 

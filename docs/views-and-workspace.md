@@ -220,7 +220,9 @@ Extension points are registries, not special cases in pages:
     measurement, on a time or number axis) or without one by its title in the block's order. A radar's shapes, a box
     plot's boxes, a heatmap's columns and parts from categories are the X axis too.
   - **Series** (bar, line, area): any number (`ChartSeries`), each a count or the sum / average / minimum / maximum / first
-    / last value of a number field (number fields and AI or component fields giving numbers, `numberFields`), with a
+    / last value of a number field (number fields and AI or component fields giving numbers, then checkboxes, `numberFields`: a checkbox counts 1 when
+    checked and 0 when not, `chartNumber`, so its sum is how many are checked and its average the share; also a checklist's
+    Done in a block of its entries; not as an axis), with a
     label, drawn as bars, lollipops, a line, an area or dots (the chart's own style, the type's: Bar bars, …, is stored as
     none, so it follows the type), on the left or right axis, and
     shown as its values, a running total, the change from the step before or a moving average (`transformValues`). Split
