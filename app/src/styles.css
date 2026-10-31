@@ -2285,6 +2285,20 @@ img[data-lightbox] {
   flex: 1;
   min-inline-size: 0;
 }
+/* A view's or tab's name with "Move left" / "Move right" after it, on the input's line (ui/ViewMoveButtons.tsx). */
+.view-name-row {
+  display: flex;
+  align-items: flex-end;
+}
+.view-name-row > .cds--form-item,
+.view-name-row > .cds--text-input-wrapper {
+  flex: 1;
+  min-inline-size: 0;
+}
+.view-name-row__moves {
+  display: flex;
+  flex: none;
+}
 
 .query-editor {
   display: flex;

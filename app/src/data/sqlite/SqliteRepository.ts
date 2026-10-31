@@ -693,6 +693,17 @@ export class SqliteRepository implements Repository {
     this.emit({ scope: "views", collectionId: view.collectionId });
   }
 
+  async orderViews(collectionId: string, spaceId: string, ids: string[]): Promise<void> {
+    const ts = now();
+    await this.db.write(
+      ids.map((id, position) => ({
+        sql: "UPDATE views SET position = ?1, updated_at = ?2 WHERE id = ?3 AND collection_id = ?4 AND space_id = ?5 AND position IS NOT ?1",
+        bind: [position, ts, id, collectionId, spaceId],
+      })),
+    );
+    this.emit({ scope: "views", collectionId });
+  }
+
   async setDefaultView(collectionId: string, spaceId: string, viewId: string | null): Promise<void> {
     await this.db.write([
       {
@@ -820,6 +831,17 @@ export class SqliteRepository implements Repository {
       ...(await this.releaseBlockFiles("SELECT ?1", [viewId])),
     ]);
     if (dashboardId) this.emit({ scope: "dashboardViews", dashboardId });
+  }
+
+  async orderDashboardViews(dashboardId: string, spaceId: string, ids: string[]): Promise<void> {
+    const ts = now();
+    await this.db.write(
+      ids.map((id, position) => ({
+        sql: "UPDATE dashboard_views SET position = ?1, updated_at = ?2 WHERE id = ?3 AND dashboard_id = ?4 AND space_id = ?5 AND position IS NOT ?1",
+        bind: [position, ts, id, dashboardId, spaceId],
+      })),
+    );
+    this.emit({ scope: "dashboardViews", dashboardId });
   }
 
   async setDefaultDashboardView(dashboardId: string, spaceId: string, viewId: string | null): Promise<void> {

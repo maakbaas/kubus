@@ -7,12 +7,13 @@ import { useDataChanges } from "../app/useDataChanges";
 import { useFreshLoads } from "../app/useFreshLoads";
 import { newName, now, newId, type Collection } from "../domain/model";
 import { firstShownFields, isReadOnly, isRemote, sourcePeriod } from "../domain/sources";
-import { defaultViewState, isFullWidth, newBlock, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
+import { defaultViewState, isFullWidth, newBlock, movedId, NOTHING_COLLAPSED, sameView, type Collapsed, type CollectionView, type ViewBlock, type ViewState } from "../domain/views";
 import { NotFound } from "../ui/NotFound";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import { NewButton } from "../ui/NewButton";
 import { collectionsCrumb, PageHeader } from "../ui/PageHeader";
+import { ViewNameRow } from "../ui/ViewMoveButtons";
 import { OverflowBar } from "../ui/OverflowBar";
 import { TabMenu, useClippedTabs } from "../ui/TabMenu";
 import { findBlock, useLinkTarget } from "../ui/useLinkTarget";
@@ -325,6 +326,16 @@ function CollectionContent({ collection }: { collection: Collection }) {
     await loadViews();
   }
 
+  /** The shown view one place to the left or right among the tabs (with several, all are stored). */
+  async function moveActive(by: -1 | 1) {
+    if (!active || !savedViews) return;
+    const ids = savedViews.map((v) => v.id);
+    const next = movedId(ids, active.id, by);
+    if (next === ids) return;
+    await repo.orderViews(collection.id, space.id, next);
+    await loadViews();
+  }
+
   async function renameActive(name: string) {
     if (!active || !name || name === active.name) return;
     const id = (await storeVirtual()) ?? active.id;
@@ -478,15 +489,23 @@ function CollectionContent({ collection }: { collection: Collection }) {
           <ToolbarPopover label="View settings" icon={SettingsAdjust} width="narrow" openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
             <div className="view-settings">
               {active && (
-                <TextInput
-                  size="sm"
-                  key={active.id + active.name}
-                  id={`${uid}-view-rename`}
-                  ref={nameInput}
-                  labelText="View name"
-                  defaultValue={active.name}
-                  onBlur={(e) => renameActive(e.target.value.trim()).catch((err) => setError(errorMessage(err)))}
-                  onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                <ViewNameRow
+                  noun="view"
+                  index={savedViews?.findIndex((v) => v.id === active.id) ?? -1}
+                  count={savedViews?.length ?? 0}
+                  onMove={(by) => moveActive(by).catch((e) => setError(errorMessage(e)))}
+                  input={
+                    <TextInput
+                      size="sm"
+                      key={active.id + active.name}
+                      id={`${uid}-view-rename`}
+                      ref={nameInput}
+                      labelText="View name"
+                      defaultValue={active.name}
+                      onBlur={(e) => renameActive(e.target.value.trim()).catch((err) => setError(errorMessage(err)))}
+                      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                    />
+                  }
                 />
               )}
               <div className="view-options__checks">

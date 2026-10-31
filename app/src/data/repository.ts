@@ -196,6 +196,8 @@ export interface Repository {
   /** Creates or updates a view (by id). */
   saveView(view: CollectionView): Promise<void>;
   deleteView(viewId: string): Promise<void>;
+  /** Puts a collection's views in a space in this order (their positions; ids of other views are ignored), in one change. */
+  orderViews(collectionId: string, spaceId: string, ids: string[]): Promise<void>;
   /** Stars a view as the collection's default in a space (unstarring any other there), or clears it with null. */
   setDefaultView(collectionId: string, spaceId: string, viewId: string | null): Promise<void>;
 
@@ -228,6 +230,8 @@ export interface Repository {
   /** Creates or updates a dashboard tab (by id); a virtual one is refused (store it first). */
   saveDashboardView(view: DashboardView): Promise<void>;
   deleteDashboardView(viewId: string): Promise<void>;
+  /** Puts a dashboard's stored tabs in a space in this order (their positions), in one change; store virtual ones first. */
+  orderDashboardViews(dashboardId: string, spaceId: string, ids: string[]): Promise<void>;
   /** Stars a tab as the dashboard's default in a space (unstarring any other there), or clears it with null. */
   setDefaultDashboardView(dashboardId: string, spaceId: string, viewId: string | null): Promise<void>;
 

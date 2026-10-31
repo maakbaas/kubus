@@ -226,6 +226,16 @@ export function sameView(a: ViewState, b: ViewState): boolean {
   return canonicalJson(a.filters) === canonicalJson(b.filters) && canonicalJson(a.blocks) === canonicalJson(b.blocks) && a.editable === b.editable;
 }
 
+/** The ids with `id` moved one place to the left (-1) or right (1); unchanged at either end, or when absent. */
+export function movedId(ids: string[], id: string, by: -1 | 1): string[] {
+  const at = ids.indexOf(id);
+  const to = at + by;
+  if (at < 0 || to < 0 || to >= ids.length) return ids;
+  const next = [...ids];
+  [next[at], next[to]] = [next[to], next[at]];
+  return next;
+}
+
 /**
  * JSON whatever the order of an object's keys, and without its undefined ones: a block as shown and as read back
  * from the database (parsed in its own order, `beside: undefined` left out) are the same view, not an unsaved change.

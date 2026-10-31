@@ -223,6 +223,22 @@ describe("views", () => {
     expect((await repo.listAllViews()).map((v) => v.name)).toEqual(["All"]);
   });
 
+  it("are put in order (Move left / right), one change", async () => {
+    const book = await collection("Book", [field("Title")]);
+    const [all] = await repo.listViews(book.id, "default");
+    const ts = new Date().toISOString();
+    // Positions as made: duplicates included (two views at 0), which the order straightens out.
+    for (const name of ["Reading", "Done"]) await repo.saveView({ ...all, id: newId(), name, position: 0, createdAt: ts, updatedAt: ts });
+    const names = async () => (await repo.listViews(book.id, "default")).map((v) => v.name);
+    const before = await repo.listViews(book.id, "default");
+    const order = [before[2], before[0], before[1]];
+    changes = [];
+    await repo.orderViews(book.id, "default", order.map((v) => v.id));
+    expect(await names()).toEqual(order.map((v) => v.name));
+    expect((await repo.listViews(book.id, "default")).map((v) => v.position)).toEqual([0, 1, 2]);
+    expect(changes).toEqual([{ scope: "views", collectionId: book.id }]);
+  });
+
   it("keep \"Show filter bar\" in their config, and drop it when it is taken off", async () => {
     const book = await collection("Book", [field("Title")]);
     const [all] = await repo.listViews(book.id, "default");
@@ -281,6 +297,15 @@ describe("dashboards", () => {
     expect(tabs.map((v) => [v.dashboardId, v.spaceId, v.name, v.blocks.length, v.editable])).toEqual([["d1", "default", "Dashboard", 0, true], ["d2", "default", "Dashboard", 0, true]]);
     expect(changes).toContainEqual({ scope: "dashboardViews", dashboardId: "d1" });
     expect(changes).toContainEqual({ scope: "dashboards" });
+  });
+
+  it("put their tabs in order (Move left / right)", async () => {
+    await repo.saveDashboard(dashboard("d", "Home"), "default");
+    const [first] = await repo.listDashboardViews("d", "default");
+    const second = tabOf("d", "default", "Second", {});
+    await repo.saveDashboardView(second);
+    await repo.orderDashboardViews("d", "default", [second.id, first.id]);
+    expect((await repo.listDashboardViews("d", "default")).map((v) => v.name)).toEqual(["Second", first.name]);
   });
 
   it("have tabs per space: a space without its own shows copies, stored all at once", async () => {

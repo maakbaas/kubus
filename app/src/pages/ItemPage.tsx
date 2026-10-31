@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
 import { Add, Checkmark, Code, Edit, Filter, Information, Pin, PinFilled, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Undo, Save } from "@carbon/icons-react";
-import { isFullWidth, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
+import { isFullWidth, movedId, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
 import { BlockRows, besideOf, draggedEntry, dragStart, isEntryDrag, rowCollapse, rowControls, shownRows, zoneAt, type RowCollapse, type RowControls } from "../views/BlockRows";
@@ -64,6 +64,7 @@ import { CollectionIcon } from "../ui/collectionIcons";
 import { SpaceLabel } from "../ui/SpaceSwitcher";
 import type { Space } from "../domain/spaces";
 import { collectionsCrumb, PageHeader } from "../ui/PageHeader";
+import { ViewNameRow } from "../ui/ViewMoveButtons";
 import { OverflowBar } from "../ui/OverflowBar";
 import { FieldCollapse, SectionHeader } from "../ui/SectionHeader";
 import { TabMenu, useClippedTabs } from "../ui/TabMenu";
@@ -1052,6 +1053,13 @@ function ItemLayoutSettings({
     });
     return () => cancelAnimationFrame(frame);
   }, [renameRequest, view?.id]);
+  /** The shown item view one place to the left or right among the tabs (their order is the stored list's). */
+  const move = (by: -1 | 1) => {
+    if (!view) return;
+    const order = movedId(collection.itemViews.map((v) => v.id), view.id, by);
+    const byId = new Map(collection.itemViews.map((v) => [v.id, v]));
+    repo.saveItemViews(collection.id, order.map((id) => byId.get(id)!)).catch(onError);
+  };
   const rename = (name: string) => {
     if (view && name && name !== view.name) {
       repo.saveItemViews(collection.id, collection.itemViews.map((v) => (v.id === view.id ? { ...v, name } : v))).catch(onError);
@@ -1061,15 +1069,23 @@ function ItemLayoutSettings({
   return (
     <div className="item-layout">
       {view && (
-        <TextInput
-          size="sm"
-          key={view.id + view.name}
-          id={`${uid}-item-layout-name`}
-          ref={nameInput}
-          labelText="View name"
-          defaultValue={view.name}
-          onBlur={(e) => rename(e.target.value.trim())}
-          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        <ViewNameRow
+          noun="view"
+          index={collection.itemViews.findIndex((v) => v.id === view.id)}
+          count={collection.itemViews.length}
+          onMove={move}
+          input={
+            <TextInput
+              size="sm"
+              key={view.id + view.name}
+              id={`${uid}-item-layout-name`}
+              ref={nameInput}
+              labelText="View name"
+              defaultValue={view.name}
+              onBlur={(e) => rename(e.target.value.trim())}
+              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+            />
+          }
         />
       )}
       <div className="view-options__checks">

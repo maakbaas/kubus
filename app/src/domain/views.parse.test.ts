@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { blankField, type Collection } from "./model";
 import {
+  movedId,
   sameView,
   ASPECT_RATIOS,
   BLOCK_HEIGHT,
@@ -221,5 +222,16 @@ describe("sameView", () => {
     const stored = { filters: [], editable: true, blocks: [{ title: "", kind: "table", id: "a" }] } as never;
     expect(sameView(shown, stored)).toBe(true);
     expect(sameView(shown, { ...(stored as object), editable: false } as never)).toBe(false);
+  });
+});
+
+describe("movedId", () => {
+  it("moves one place left or right, not past either end", () => {
+    expect(movedId(["a", "b", "c"], "b", -1)).toEqual(["b", "a", "c"]);
+    expect(movedId(["a", "b", "c"], "b", 1)).toEqual(["a", "c", "b"]);
+    const ids = ["a", "b"];
+    expect(movedId(ids, "a", -1)).toBe(ids);
+    expect(movedId(ids, "b", 1)).toBe(ids);
+    expect(movedId(ids, "x", 1)).toBe(ids);
   });
 });

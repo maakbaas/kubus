@@ -13,12 +13,13 @@ import { DASHBOARD_ICON, findTab, dashboardBlockCollection,
 import { newId, newName, now, type Collection } from "../domain/model";
 import { isRemote } from "../domain/sources";
 import type { Space } from "../domain/spaces";
-import { isFullWidth, NOTHING_COLLAPSED, sameView, type Collapsed, type ViewBlock, type ViewState } from "../domain/views";
+import { isFullWidth, movedId, NOTHING_COLLAPSED, sameView, type Collapsed, type ViewBlock, type ViewState } from "../domain/views";
 import { BookmarkButton } from "../ui/BookmarkButton";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { IconPicker } from "../ui/IconPicker";
 import { NotFound } from "../ui/NotFound";
 import { OverflowBar } from "../ui/OverflowBar";
+import { ViewNameRow } from "../ui/ViewMoveButtons";
 import { PageHeader } from "../ui/PageHeader";
 import { SpaceLabel } from "../ui/SpaceSwitcher";
 import { TabMenu, useClippedTabs } from "../ui/TabMenu";
@@ -325,6 +326,18 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
     await loadViews();
   }
 
+  /** The shown tab one place to the left or right (copies of another space's tabs are stored here first). */
+  async function moveActive(by: -1 | 1) {
+    if (!active) return;
+    const ids = views.map((v) => v.id);
+    if (movedId(ids, active.id, by) === ids) return;
+    const stored = views.some((v) => v.virtual) ? await repo.storeDashboardViews(dashboard.id, space.id) : new Map<string, string>();
+    const real = (id: string) => stored.get(id) ?? id;
+    await repo.orderDashboardViews(dashboard.id, space.id, movedId(ids, active.id, by).map(real));
+    if (stored.size > 0) setActiveId(real(active.id));
+    await loadViews();
+  }
+
   async function renameActive(name: string) {
     if (!active || !name || name === active.name) return;
     await storeNow({ name });
@@ -487,15 +500,23 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
             <ToolbarPopover label="Tab settings" icon={SettingsAdjust} width="narrow" openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
               <div className="view-settings">
                 {active && (
-                  <TextInput
-                    size="sm"
-                    key={active.id + active.name}
-                    id={`${uid}-tab-rename`}
-                    ref={nameInput}
-                    labelText="Tab name"
-                    defaultValue={active.name}
-                    onBlur={(e) => renameActive(e.target.value.trim()).catch(fail)}
-                    onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                  <ViewNameRow
+                    noun="tab"
+                    index={views.findIndex((v) => v.id === active.id)}
+                    count={views.length}
+                    onMove={(by) => moveActive(by).catch(fail)}
+                    input={
+                      <TextInput
+                        size="sm"
+                        key={active.id + active.name}
+                        id={`${uid}-tab-rename`}
+                        ref={nameInput}
+                        labelText="Tab name"
+                        defaultValue={active.name}
+                        onBlur={(e) => renameActive(e.target.value.trim()).catch(fail)}
+                        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                      />
+                    }
                   />
                 )}
                 <div className="view-options__checks">
