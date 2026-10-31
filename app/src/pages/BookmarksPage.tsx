@@ -164,6 +164,7 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
     >
       <LinkTargetInput
         id="bookmark-target"
+        primaryFocus
         labelText="Page"
         placeholder="A name, or a link: book/dune/details#author"
         invalidText={problem}

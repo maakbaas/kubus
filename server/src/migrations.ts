@@ -27,9 +27,13 @@ export const MIGRATIONS: ServerMigration[] = [
   {
     version: 1,
     description: "bookmarks hold a link instead of a kind and ids (SYNC_VERSION 4; the devices' migration 7)",
-    // The same text the devices make of their own rows, so both copies stay equal without sending anything.
-    up: `
-ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS link text;
+    // The same text the devices make of their own rows, so both copies stay equal without sending anything. A server from
+    // before bookmarks has none to convert (the schema makes the table after this, with its link); one from before
+    // dashboards (sync version 2) has no dashboard_id yet, and none of its bookmarks is of a dashboard.
+    up: async (client) => {
+      if ((await client.query<{ t: string | null }>("SELECT to_regclass('bookmarks') AS t")).rows[0].t === null) return;
+      await client.query(`
+ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS link text, ADD COLUMN IF NOT EXISTS dashboard_id text;
 UPDATE bookmarks SET link = CASE kind
     WHEN 'item' THEN '#/collections/' || collection_id || '/items/' || target_id
     WHEN 'view' THEN '#/collections/' || collection_id || '/items?view=' || target_id
@@ -37,7 +41,8 @@ UPDATE bookmarks SET link = CASE kind
   END
   WHERE link IS NULL;
 ALTER TABLE bookmarks DROP COLUMN IF EXISTS kind, DROP COLUMN IF EXISTS collection_id, DROP COLUMN IF EXISTS target_id, DROP COLUMN IF EXISTS dashboard_id;
-`,
+`);
+    },
   },
 ];
 

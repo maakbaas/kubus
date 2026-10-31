@@ -84,7 +84,8 @@ for (const vp of ["phone"]) {
       await t.settle(100);
       const panel = t.page.locator(KB_PANEL).last();
       if (!(await panel.count())) await t.openPanel(header, "Block settings");
-      await t.page.locator(KB_PANEL).last().locator(".cds--dropdown").first().locator("button").first().click();
+      // By its label: a block of a collection with list fields has a Collection dropdown before it.
+      await t.page.locator(KB_PANEL).last().locator(".cds--dropdown__wrapper", { hasText: "Show as" }).locator(".cds--dropdown button").first().click();
       await t.settle(100);
       await t.page.getByRole("option", { name: /Cards/ }).first().click();
       await t.settle();

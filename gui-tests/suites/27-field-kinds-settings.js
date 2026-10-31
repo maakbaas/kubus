@@ -92,7 +92,8 @@ test("editor: every kind with its settings is stored, and shown again after a re
   await t.open(`/collections/${c.id}/edit`);
   await t.audit("saved collection in the editor");
   const all = rows(t);
-  await t.check("one row per field", (await all.count()) === 14, `${await all.count()}`);
+  // Every type once, and AI (a Component field asking AI).
+  await t.check("one row per field", (await all.count()) === KINDS.length + 1, `${await all.count()}`);
   const rowOf = (name) => all.filter({ has: t.page.locator(`input[value="${name}"]`) });
   await t.check("types can't be changed any more", (await rowOf("F Number").locator(".cds--dropdown").first().getAttribute("class")).includes("cds--dropdown--disabled") || (await rowOf("F Number").locator(".cds--list-box__field").first().isDisabled()));
   await t.check("Item shows its collection", (await chosen(t, rowOf("F Item"), "Refers to")).includes("Authors"));

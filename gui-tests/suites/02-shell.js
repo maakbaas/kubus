@@ -215,8 +215,8 @@ test("tabs: new, middle click close, close all, history", async (t) => {
   await t.page.getByRole("button", { name: "New tab" }).first().click();
   await t.settle();
   await t.check("+ opens a new tab", (await t.count(".ws-pane__tabs .cds--tabs__nav-item")) === 2);
-  // Middle click closes a tab.
-  await t.page.locator(".ws-pane__tabs .cds--tabs__nav-item").first().click({ button: "middle" });
+  // Middle click closes a tab: the new one (it opened Home), the collections page stays.
+  await t.page.locator(".ws-pane__tabs .cds--tabs__nav-item").last().click({ button: "middle" });
   await t.settle();
   await t.check("middle click closes the tab", (await t.count(".ws-pane__tabs .cds--tabs__nav-item")) === 1);
   // Navigate within the tab, then back / forward with Alt+arrows.

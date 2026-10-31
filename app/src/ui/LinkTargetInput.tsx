@@ -27,6 +27,7 @@ export function LinkTargetInput({
   filter,
   onPick,
   onCommit,
+  primaryFocus,
 }: {
   id: string;
   value: string;
@@ -43,6 +44,8 @@ export function LinkTargetInput({
   onPick?(value: string, target: LinkTarget): void;
   /** The text typed is done: the field is left, or Enter pressed with no list open. */
   onCommit?(): void;
+  /** The field a dialog it is in focuses when it opens (Carbon's `data-modal-primary-focus`). */
+  primaryFocus?: boolean;
 }) {
   const { search, reset } = useLinkTargets();
   const [targets, setTargets] = useState<LinkTarget[]>([]);
@@ -93,6 +96,7 @@ export function LinkTargetInput({
         invalid={!!invalidText}
         invalidText={invalidText}
         autoComplete="off"
+        {...(primaryFocus && { "data-modal-primary-focus": true })}
         value={value}
         onBlur={() => onCommit?.()}
         onChange={(e) => {

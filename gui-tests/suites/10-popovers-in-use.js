@@ -155,7 +155,8 @@ for (const vp of POP_VPS) {
     const name = openPanel(t).getByRole("textbox", { name: "Name" });
     await typeSteps(t, "block name", name, "My table");
     await t.popoverStep("Enter stores the block name", () => t.page.keyboard.press("Enter"), { target: name, scope: BARS });
-    const showAs = openPanel(t).locator(".cds--dropdown").first().locator("button").first();
+    // By its label: a block of a collection with list fields has a Collection dropdown before it.
+    const showAs = openPanel(t).locator(".cds--dropdown__wrapper", { hasText: "Show as" }).locator(".cds--dropdown button").first();
     await t.popoverStep("open Show as", () => showAs.click(), { target: showAs, scope: BARS });
     await t.audit("Show as menu");
     await t.popoverStep("Show as → Cards", () => t.page.getByRole("option", { name: /Cards/ }).first().click(), { scope: BARS });

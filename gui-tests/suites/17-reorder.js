@@ -1,4 +1,4 @@
-// Reordering a collection's fields in its editor (ui/useReorder.tsx): by keyboard, by dragging the handle
+// Reordering a collection's fields in its editor's Fields popover (ui/useReorder.tsx): by keyboard, by dragging the handle
 // and as a selected group; Delete asks first.
 
 /** The rows of the reorderable list in `scope` (a selector), by their name: a first input's value, else their text. */
@@ -107,11 +107,18 @@ test("collection editor: reorder fields by keyboard, drag and as a group; Delete
   await t.boot();
   const ids = await t.seed(profileSpec("typical", { items: 2 }));
   await t.open(`/collections/${ids.collections.books}/edit`);
-  const scope = ".ws-pane--active form";
+  // The fields are ordered and removed in the header's Fields popover.
+  const header = t.page.locator(".ws-pane--active .page-header").first();
+  const scope = ".cds--popover--open .field-order";
+  const openFields = async () => {
+    if (!(await t.page.locator(scope).count())) await t.openPanel(header, "Fields");
+  };
+  await openFields();
   await keyboardReorder(t, "fields", scope);
   await dragReorder(t, "fields", scope);
   await groupReorder(t, "fields", scope);
-  // Delete with a row selected asks first; Cancel keeps it.
+  // Delete with a row selected asks first; Cancel keeps it. (Escape above closed the popover too.)
+  await openFields();
   const n = (await rowNames(t, scope)).length;
   await handleOf(t, scope, 0).click();
   await t.page.keyboard.press("Delete");
@@ -119,5 +126,6 @@ test("collection editor: reorder fields by keyboard, drag and as a group; Delete
   await t.audit("delete fields confirmation");
   await t.page.locator(".cds--modal.is-visible").getByRole("button", { name: /Cancel/ }).click();
   await t.settle();
+  await openFields();
   await t.check("Cancel keeps the field", (await rowNames(t, scope)).length === n);
 }, { viewport: "desktop", smoke: true });

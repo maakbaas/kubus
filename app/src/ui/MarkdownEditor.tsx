@@ -960,6 +960,7 @@ function EditorChrome(props: Props) {
       >
         <LinkTargetInput
           id={`${labelId}-href`}
+          primaryFocus
           value={linkEdit?.href ?? ""}
           onChange={(href) => setLinkEdit((d) => (d ? { ...d, href } : d))}
           toShown={links.toShown}

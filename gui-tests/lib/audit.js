@@ -242,8 +242,9 @@ function __audit(opts) {
   // ---- escapes-container ----------------------------------------------------------------------------
   // The nearest ancestor that clips (overflow other than visible) bounds an element: sticking out
   // of it sideways means it is cut off (hidden/clip) or makes that box scroll (auto/scroll),
-  // which is only fine for boxes meant to scroll sideways.
-  const H_SCROLLERS = ".cds--tab--list, .items-table .cds--data-table-content, pre, .milkdown pre, .code-editor, .cds--tabs__nav, .cm-scroller, .views-tabs";
+  // which is only fine for boxes meant to scroll sideways. A read-only Markdown table wider than its room scrolls
+  // inside itself (styles.css `.md-view table`), never the page.
+  const H_SCROLLERS = ".cds--tab--list, .items-table .cds--data-table-content, pre, .milkdown pre, .code-editor, .cds--tabs__nav, .cm-scroller, .views-tabs, .md-view table";
   function clipParent(el) {
     for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
       const s = cs(p);

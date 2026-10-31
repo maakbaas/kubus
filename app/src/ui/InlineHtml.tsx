@@ -42,8 +42,11 @@ export function sanitizeInline(html: string): string {
   });
 }
 
-/** Its box: the cell's font and colour; what doesn't fit the cell is cut off. */
-const HOST_STYLE = `<style>:host{display:block;min-inline-size:0;overflow:hidden;font:inherit;color:inherit;overflow-wrap:anywhere}img,svg{max-inline-size:100%}</style>`;
+/**
+ * Its box: the cell's font and colour; what doesn't fit the cell is cut off. A link in it that has focus marks the box
+ * (Carbon's focus ring, inside: the box clips), as the page sees focus on the box, not in its shadow root.
+ */
+const HOST_STYLE = `<style>:host{display:block;min-inline-size:0;overflow:hidden;font:inherit;color:inherit;overflow-wrap:anywhere}:host(:focus-within){outline:2px solid var(--cds-focus);outline-offset:-2px}:focus{outline:none}img,svg{max-inline-size:100%}</style>`;
 
 export function InlineHtml({ html }: { html: string }) {
   const host = useRef<HTMLSpanElement>(null);
