@@ -1425,10 +1425,27 @@ img[data-lightbox] {
 .md-view--excerpt img[data-lightbox] {
   cursor: inherit;
 }
-/* The lightbox: as wide as the image (up to the window), the image whole inside it. */
-.lightbox .cds--modal-container {
+/* The lightbox: as wide as the image (up to the window), the image whole inside it, centred both
+   ways at every width. On phones Carbon makes a dialog position: fixed at the top edge; a fixed box
+   sits at its static position, which iOS works out before the image has its width (it showed at the
+   right, then jumped to the centre): here it stays in the flex centre of the overlay, and appears
+   without Carbon's slide-in. */
+.cds--modal.lightbox {
+  align-items: center;
+  justify-content: center;
+}
+.lightbox .cds--modal-container,
+.lightbox.is-visible .cds--modal-container {
+  position: relative;
   inline-size: fit-content;
   max-inline-size: calc(100vw - 2 * var(--cds-spacing-05));
+  block-size: auto;
+  max-block-size: calc(100dvh - 2 * var(--cds-spacing-05));
+  margin: auto;
+  border: 1px solid var(--cds-border-subtle-01);
+  transform: none;
+  transition: none;
+  animation: none;
 }
 .lightbox .cds--modal-content {
   display: flex;
