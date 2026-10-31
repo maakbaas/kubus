@@ -11,8 +11,9 @@ const isExternal = (text: string) => (/^[a-z][a-z0-9+.-]*:/i.test(text) && !text
  * The link dialog's URL field with the link picker's options (LinkPicker) under it while a page of
  * the app is typed: ↑ ↓ move, Enter or Tab choose, Escape closes the list (not the dialog), a click
  * chooses. Choosing writes the page's link in its name form (`toShown`), stored by id on Apply.
- * The New bookmark dialog uses it too: only the pages it can bookmark (`filter`), and a pick is
- * also handed over (`onPick`).
+ * Used alike by the link dialog, the New bookmark dialog (only the pages it can bookmark: `filter`) and a linked
+ * block's link: a pick is handed over (`onPick`), and what was typed counts too (Apply, Add, or `onCommit`: the field
+ * left or Enter), a problem with it shown under the field (`invalidText`).
  */
 export function LinkTargetInput({
   id,
@@ -58,10 +59,10 @@ export function LinkTargetInput({
       return;
     }
     let current = true;
-    search(query, { items: true, limit: filter ? 100 : 30 }).then(
+    search(query, { items: true, limit: 30, filter }).then(
       (found) => {
         if (!current) return;
-        setTargets(filter ? found.filter(filter).slice(0, 30) : found);
+        setTargets(found);
         setActive(0);
       },
       () => current && setTargets([]),

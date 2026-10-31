@@ -69,7 +69,7 @@ describe("a list field's entries as a collection", () => {
   it("are filtered, sorted and grouped like any items: a checklist by Done, entries by their item", () => {
     const rows = entryItems(list("todo"), [item("dune", "book", { todo: ["[x] read", "[ ] reread"] }), item("emma", "book", { todo: ["[ ] start"] })], null);
     const result = applyQuery(list("todo"), rows, { filters: [], sort: [{ fieldId: LIST_POSITION, direction: "asc" }], groupBy: LIST_DONE }, { refLabel: (_f, id) => id });
-    expect(result.groups.map((g) => [g.label, g.items.map((i) => i.values[LIST_VALUE])])).toEqual([["Not checked", ["reread", "start"]], ["Checked", ["read"]]]);
+    expect(result.groups.map((g) => [g.label, g.items.map((i) => i.values[LIST_VALUE])])).toEqual([["Checked", ["read"]], ["Not checked", ["start", "reread"]]]);
     const ofDune = applyQuery(list("todo"), rows, { filters: [{ id: "r", fieldId: LIST_ITEM, operator: "is", value: "dune" }], sort: [], groupBy: null }, { refLabel: (_f, id) => id });
     expect(ofDune.total).toBe(2);
   });

@@ -104,6 +104,13 @@ describe("withoutShown", () => {
 });
 
 describe("searchLinkTargets", () => {
+  it("keeps only what a filter keeps, still up to the limit, and finds no page in another space by its link", async () => {
+    const all = await searchLinkTargets("", data, { items: false, limit: 3 });
+    const rest = await searchLinkTargets("", data, { items: false, limit: 3, filter: (t) => t.key !== all[0].key });
+    expect(names(rest)).toEqual(names((await searchLinkTargets("", data, { items: false, limit: 4 })).slice(1)));
+    expect(await searchLinkTargets("#/collections/c1/items/i3", data, { items: true })).toEqual([]);
+  });
+
   it("offers collections and views, and items when asked, of the shown space's native collections", async () => {
     expect(names(await searchLinkTargets("", data, { items: false }))).toEqual(["Books", "People", "Rows", "All", "Authors", "Reading list"]);
     const withItems = await searchLinkTargets("", data, { items: true });
@@ -196,7 +203,7 @@ describe("dashboards as link targets", () => {
     expect((await search("week")).map((t) => [t.name, t.context, t.href, t.link])).toEqual([["Weekly", "Health", "#/dashboards/d1?view=t2", "dashboards/health/weekly"]]);
   });
 
-  it("are listed part by part: dashboards/, a dashboard's tabs, a tab's blocks", async () => {
+  it("are listed part by part: dashboards/, a dashboard's views, a tab's blocks", async () => {
     expect(names(await search("dashboards/"))).toEqual(["Health", "Money"]);
     expect(names(await search("dashboards/health/"))).toEqual(["Daily", "Weekly"]);
     expect((await search("dashboards/health/weekly#")).map((t) => [t.name, t.href])).toEqual([["Notes", "#/dashboards/d1?view=t2&block=db2"]]);

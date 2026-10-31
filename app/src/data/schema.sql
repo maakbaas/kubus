@@ -318,7 +318,7 @@ CREATE TRIGGER item_links_update AFTER UPDATE ON field_values WHEN NOT EXISTS (S
       WHERE item_links.targets IS NOT excluded.targets OR item_links.updated_at IS NOT excluded.updated_at OR item_links.deleted_at IS NOT excluded.deleted_at;
 END;
 
--- Bookmarks in the side nav: a saved view of a collection's items, an item, or a dashboard's tab. `label` is a
+-- Bookmarks in the side nav: any page a link can name (a collection, a view, an item, a field, a block, a dashboard). `label` is a
 -- snapshot for the nav (refreshed when the bookmarked page is shown), so it reads without loading.
 CREATE TABLE bookmarks (
   id         TEXT PRIMARY KEY,

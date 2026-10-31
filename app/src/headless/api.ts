@@ -213,7 +213,7 @@ function paging(req: ApiRequest, fallback: number, max: number) {
   return { limit, offset };
 }
 
-/** Where a block is given: a collection view or an item view (`own`: its collection), or a dashboard's tab (none of its own). */
+/** Where a block is given: a collection view or an item view (`own`: its collection), or a dashboard view (none of its own). */
 type BlockPlace = { own: Collection } | { dashboard: true };
 
 function blockIn(world: World, place: BlockPlace, raw: unknown): ViewBlock {

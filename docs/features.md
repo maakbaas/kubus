@@ -361,7 +361,7 @@ What the app does, feature by feature (read the part you work on).
   away with the item view's `Collapsed` (field ids among the block ids). The layout's name toggle
   (tag icon, `hiddenLabels`) also covers blocks there: it hides the block's header (its menus move to a "⋮" beside it).
 - **Linked blocks** (`views/LinkedBlock.tsx`, `domain/linkedBlocks.ts`; Show as "Linked block"): a block that shows another
-  block, of a collection view, an item's page or a dashboard's tab, as it is set up there: its collection, filter, sort,
+  block, of a collection view, an item's page or a dashboard view, as it is set up there: its collection, filter, sort,
   fields, type and options, under that page's filter, and on an item page with that item as the page's item (its "this
   item" filters and `$item`). So a chart is made once and shown on any page; a change to the original shows everywhere
   it is linked. Its only setting is the link, written by name like any internal link and picked from the same list
@@ -448,7 +448,8 @@ What the app does, feature by feature (read the part you work on).
   branch (of the shown space); the item's stores the item view shown when it isn't the item's default (`book/dune/details`), else
   just the item (`book/dune`). A copied dashboard view or the virtual "All" view is stored first. The Bookmarks page's New bookmark
   is one field searched as a link is (`LinkTargetInput`, the link picker's list): a name, part of one, or a link typed or pasted
-  (`book/dune#author`); it offers every page not bookmarked yet. Its icon and "where" (`ui/bookmarkPlace.ts`: "Field of Dune",
+  (`book/dune#author`); it offers every page not bookmarked yet (`filter`, applied in `searchLinkTargets` so the list stays full),
+  and Add takes what was typed when nothing was picked (`linkTargetOf`, as the API does; "names no page" / "Already bookmarked" under the field). Its icon and "where" (`ui/bookmarkPlace.ts`: "Field of Dune",
   "View of Books", …) come from the link. Labels are snapshots, refreshed while the bookmarked page is shown. When what a link names
   is deleted (an item, a view of any kind, a collection, a dashboard, a field or block removed in its editor), its bookmarks are
   deleted with it (`bookmarkCondition` in `domain/bookmarks.ts`, SqliteRepository `bookmarksOf`); moving an item to another

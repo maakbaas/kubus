@@ -19,6 +19,7 @@ import { bookmarkPlace } from "../ui/bookmarkPlace";
 import { findTab, isVirtualTab } from "../domain/dashboards";
 import { parseStoredDashboardLink, type LinkTarget } from "../domain/linkTargets";
 import { useLinks } from "../app/useLinks";
+import { useLinkTargets } from "../app/useLinkTargets";
 import { LinkTargetInput } from "../ui/LinkTargetInput";
 import { NewButton } from "../ui/NewButton";
 import { CollectionIcon } from "../ui/collectionIcons";
@@ -111,18 +112,30 @@ export function BookmarksTable({ onError }: { onError(e: unknown): void }) {
 /**
  * New bookmark: one field, searched as a link is (the Markdown editor's link dialog, LinkTargetInput): a name, a
  * part of one, or a link typed or pasted; its options are every page a link can name that isn't bookmarked yet
- * (a collection, a view, an item under an item view, a field, a block, a dashboard).
+ * (a collection, a view, an item under an item view, a field, a block, a dashboard). What was typed is taken as it is
+ * when no option was picked (as the link dialog's Apply and a linked block's link take it), checked as the API checks it.
  */
 function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: unknown): void }) {
   const open = useMountedDialog();
   const { repo, bookmarks, space } = useStore();
   const links = useLinks();
+  const { targetOf } = useLinkTargets();
   const [text, setText] = useState("");
   const [picked, setPicked] = useState<LinkTarget | null>(null);
+  const [problem, setProblem] = useState<string>();
   const taken = useMemo(() => new Set(bookmarks.map((b) => b.link)), [bookmarks]);
   const offered = (t: LinkTarget) => !taken.has(t.href);
 
-  async function add(t: LinkTarget) {
+  /** The page to bookmark, or why there is none (the API's words). */
+  async function pageOf(): Promise<LinkTarget | string> {
+    const t = picked ?? (await targetOf(text.trim()));
+    if (!t) return `“${text.trim()}” names no page in this space`;
+    return taken.has(t.href) ? "Already bookmarked" : t;
+  }
+
+  async function add() {
+    const t = await pageOf();
+    if (typeof t === "string") return setProblem(t);
     let link = t.href;
     // A dashboard view copied from another space is stored in this space first: a bookmark needs a real one.
     const onDashboard = parseStoredDashboardLink(link);
@@ -134,6 +147,7 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
       }
     }
     await repo.addBookmark(link, bookmarkLabel(t), space.id);
+    onClose();
   }
 
   return (
@@ -144,20 +158,20 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
       className="modal--menus"
       primaryButtonText="Add"
       secondaryButtonText="Cancel"
-      primaryButtonDisabled={!picked}
+      primaryButtonDisabled={!text.trim()}
       onRequestClose={onClose}
-      onRequestSubmit={() => {
-        if (picked) add(picked).then(onClose, onError);
-      }}
+      onRequestSubmit={() => void add().catch(onError)}
     >
       <LinkTargetInput
         id="bookmark-target"
         labelText="Page"
         placeholder="A name, or a link: book/dune/details#author"
+        invalidText={problem}
         value={text}
         onChange={(next) => {
           setText(next);
           setPicked(null);
+          setProblem(undefined);
         }}
         toShown={links.toShown}
         filter={offered}

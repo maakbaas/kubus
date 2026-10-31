@@ -96,7 +96,7 @@ async function referencedLabels(repo: Repository, collections: Collection[], ite
 }
 
 /**
- * The Markdown blocks of these views (a collection view's or a dashboard's tab: one place each; an item view's text
+ * The Markdown blocks of these views (a collection view's or a dashboard view: one place each; an item view's text
  * is the same on all its items, so it is left out) whose text visibly contains the query.
  */
 function blockExcerpts<V extends { blocks: ViewBlock[] }>(views: V[], query: string, exactTag: boolean): { view: V; block: ViewBlock; markdown: MarkdownExcerpt }[] {

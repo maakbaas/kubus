@@ -3,7 +3,7 @@ import { IconButton } from "@carbon/react";
 import { ArrowLeft, ArrowRight } from "@carbon/icons-react";
 
 /**
- * A view's (or dashboard tab's) name input with "Move left" and "Move right" beside it: its place among the tabs, stored at
+ * A view's (a collection's or a dashboard's) name input with "Move left" and "Move right" beside it: its place among the tabs, stored at
  * once. A button at the end it can't move past is disabled. Settings only, no dragging of tabs.
  */
 export function ViewNameRow({ input, index, count, noun, onMove }: { input: ReactNode; index: number; count: number; noun: string; onMove(by: -1 | 1): void }) {

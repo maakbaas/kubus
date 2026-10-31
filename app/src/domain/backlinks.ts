@@ -10,6 +10,7 @@
 import { entryPath, findListCollection, isListCollectionId, listCollections } from "./listEntries";
 import { mergedPath } from "./mergedCollection";
 import { blankField, META_FIELDS, type Collection, type FieldKind, type Item } from "./model";
+import type { ViewBlock } from "./views";
 
 /** An item a value points at: a native item's id, or a remote row's item id (domain/sources.ts rowItemId). */
 export interface ItemLinkTarget {
@@ -110,6 +111,13 @@ export function virtualCollections(collections: Collection[], place: "item" | "d
 /** A collection by id among the stored ones and the virtual ones (Backlinks, a list field's entries). */
 export const findCollection = (collections: Collection[], id: string | null | undefined): Collection | undefined =>
   collections.find((c) => c.id === id) ?? VIRTUAL_COLLECTIONS.find((c) => c.id === id) ?? (isListCollectionId(id) ? findListCollection(collections, id) : undefined);
+
+/** The collections a block lists (`collectionIds`, else its one `collectionId`), those that still exist, virtual ones found too. */
+export const blockCollections = (block: Pick<ViewBlock, "collectionId" | "collectionIds">, collections: Collection[]): Collection[] =>
+  (block.collectionIds && block.collectionIds.length > 0 ? block.collectionIds : [block.collectionId]).flatMap((id) => {
+    const c = findCollection(collections, id);
+    return c ? [c] : [];
+  });
 
 /** One link to the page's item: where it is (read from item_links), joined with its source item. */
 export interface Backlink {

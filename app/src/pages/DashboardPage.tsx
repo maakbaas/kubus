@@ -6,7 +6,7 @@ import { useDashboard, useStore } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { useItemsLoaded } from "../app/useItems";
 import { useFreshLoads } from "../app/useFreshLoads";
-import { findCollection } from "../domain/backlinks";
+import { blockCollections, findCollection } from "../domain/backlinks";
 import { DASHBOARD_ICON, findTab, dashboardBlockCollection,
  dashboardIcon, dashboardScope, FIRST_TAB_NAME, newDashboardBlock, type Dashboard, type DashboardView } from "../domain/dashboards";
 
@@ -68,13 +68,6 @@ const SEARCH_DELAY_MS = 150;
 
 /** What a tab-less dashboard shows (it can lose its tabs only by sync): an empty tab, stored once it changes. */
 const EMPTY_TAB = "empty";
-
-/** The collections a block lists (those that still exist). */
-const blockCollections = (block: ViewBlock, collections: Collection[]): Collection[] =>
-  (block.collectionIds && block.collectionIds.length > 0 ? block.collectionIds : [block.collectionId]).flatMap((id) => {
-    const c = findCollection(collections, id);
-    return c ? [c] : [];
-  });
 
 function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   const uid = useId();
@@ -312,7 +305,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
       (next) => storeNow({ collapsed: next }).catch(fail),
     );
   const blockName = useBlockName();
-  /** Removing blocks (a dashboard's tab may be left without any): asked first, unless asked already. */
+  /** Removing blocks (a dashboard view may be left without any): asked first, unless asked already. */
   async function removeBlocks(ids: string[], asked = false) {
     const gone = view.blocks.filter((b) => ids.includes(b.id));
     if (gone.length === 0) return;

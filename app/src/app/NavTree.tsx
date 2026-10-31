@@ -33,7 +33,7 @@ function collectionIcon(name: string | null): ElementType {
 }
 
 /**
- * The side nav as a Carbon tree: Home (the start page, no children), Bookmarks (the space's bookmarked views, items and dashboard tabs), Collections
+ * The side nav as a Carbon tree: Home (the start page, no children), Bookmarks (the space's bookmarked pages), Collections
  * (its page, with the space's native collections below it), Remotes (while the server has a remote
  * connection or remote collections exist: its page, with the space's remote collections below it),
  * Dashboards (its page, with the space's dashboards below it) and Components. Choosing a node opens its page in the active tab

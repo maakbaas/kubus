@@ -60,7 +60,7 @@ describe("a dashboard's blocks", () => {
   });
 });
 
-describe("a dashboard's tabs", () => {
+describe("a dashboard's views", () => {
   const tab = (id: string, spaceId: string, position: number, createdAt: string, dashboardId = "d"): DashboardView => ({
     id, dashboardId, spaceId, name: id, position, isDefault: false, filters: [], blocks: [], editable: true, collapsed: NOTHING_COLLAPSED, createdAt, updatedAt: createdAt,
   });

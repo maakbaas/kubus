@@ -659,7 +659,7 @@ describe("dashboards", () => {
     expect(await refused(404, "DELETE", "/dashboards/Home/views/Nope")).toBe("Home has no view “Nope”");
     expect(await refused(404, "PUT", "/dashboards/Home/default-view", { view: "Nope" })).toBe("Home has no view “Nope”");
     expect(await refused(404, "GET", "/dashboards/Home/views/Nope/items")).toBe("Home has no view “Nope”");
-    expect(await refused(404, "GET", "/dashboards/Home/views/Dashboard/items")).toBe("The tab “Dashboard” has no blocks");
+    expect(await refused(404, "GET", "/dashboards/Home/views/Dashboard/items")).toBe("The view “Dashboard” has no blocks");
   });
 
   it("show a block's items through the tab's filter, its Date each block's own, several collections merged", async () => {
@@ -704,7 +704,7 @@ describe("dashboards", () => {
       ],
     });
     const pack = await ok("GET", "/dashboards/Gear/views/Packing/items?block=Pack");
-    expect(pack.groups.map((g: { label: string; items: { values: { Pack: string } }[] }) => [g.label, g.items.map((i) => i.values.Pack)])).toEqual([["Not checked", ["map"]], ["Checked", ["boots"]]]);
+    expect(pack.groups.map((g: { label: string; items: { values: { Pack: string } }[] }) => [g.label, g.items.map((i) => i.values.Pack)])).toEqual([["Checked", ["boots"]], ["Not checked", ["map"]]]);
     const km = await ok("GET", "/dashboards/Gear/views/Packing/items?block=Km");
     expect(km.items.map((i: { values: { Km: number } }) => i.values.Km)).toEqual([12, 7.5]);
     expect(await refused(400, "POST", "/dashboards/Gear/views", { name: "X", blocks: [{ kind: "table", collectionIds: ["Trip", `$list:${id("Km")}`] }] })).toBe("A list field's entries are listed by a block of their own");

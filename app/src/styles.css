@@ -2348,7 +2348,7 @@ img[data-lightbox] {
   flex: 1;
   min-inline-size: 0;
 }
-/* A view's or tab's name with "Move left" / "Move right" after it, on the input's line (ui/ViewMoveButtons.tsx). */
+/* A view's name (a collection's or a dashboard's) with "Move left" / "Move right" after it, on the input's line (ui/ViewMoveButtons.tsx). */
 .view-name-row {
   display: flex;
   align-items: flex-end;

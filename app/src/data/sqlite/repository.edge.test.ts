@@ -501,7 +501,8 @@ describe("components in use", () => {
     await collection("Thing", [field("Title"), field("Shown", "component", { componentId: plain.id })]);
     changes = [];
     await repo.deleteComponent(plain.id, { withFields: true });
-    expect(changes).toEqual([{ scope: "components" }, { scope: "collections" }]);
+    // Its fields go, and the bookmarks of them.
+    expect(changes).toEqual([{ scope: "components" }, { scope: "collections" }, { scope: "bookmarks" }]);
     changes = [];
     await repo.deleteComponent(shared.id);
     expect(changes).toEqual([{ scope: "components" }]);

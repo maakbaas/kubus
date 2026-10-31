@@ -143,7 +143,7 @@ function migrate(db: Db, version: number, plan: SchemaPlan) {
     }
     const triggers: string[] = db.selectValues("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'sync\\_%' ESCAPE '\\'");
     for (const t of triggers) db.exec(`DROP TRIGGER "${t}"`);
-    db.exec(plan.triggers);
+    if (plan.triggers) db.exec(plan.triggers);
     db.exec("DELETE FROM meta WHERE key = 'sync_applying'");
     if (foreignKeyProblems(db) > problems) throw new Error("Updating the database failed: a migration broke references between rows");
     db.exec(`PRAGMA user_version = ${latestVersion(plan)}`);

@@ -4,7 +4,7 @@ import { Launch, Link as LinkIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { useLinks } from "../app/useLinks";
-import { findCollection } from "../domain/backlinks";
+import { blockCollections, findCollection } from "../domain/backlinks";
 import { withComputed } from "../domain/components";
 import { findTab, type Dashboard, type DashboardView } from "../domain/dashboards";
 import { itemViewOf, type ItemView } from "../domain/fieldLayout";
@@ -22,6 +22,7 @@ import { LinkChain } from "./linkChain";
 import { BlockView } from "./BlockView";
 import { useBacklinkData } from "./useBacklinks";
 import { useCollectionData } from "./useCollectionData";
+import { ListData } from "./useListData";
 import { defineBlockType, type BlockOptionsProps, type BlockPlace, type BlockProps, type PageItem } from "./registry";
 
 // A linked block (domain/linkedBlocks.ts): shows another block as it is set up where it is (its collection, filter,
@@ -93,7 +94,7 @@ function FromView({ link, onName }: FromProps<"collection">) {
   return <Original home={collection} block={found.block} place="collection" page={null} viewFilters={found.view.filters} editable={found.view.editable} onName={onName} />;
 }
 
-/** A block of a dashboard's tab (in the shown space: its own tabs, or copies of another space's), under the tab's filter. */
+/** A block of a dashboard view (in the shown space: its own views, or copies of another space's), under the view's filter. */
 function FromDashboard({ link, onName }: FromProps<"dashboard">) {
   const { repo, space, dashboards, collections } = useStore();
   const dashboard: Dashboard | undefined = dashboards.find((d) => d.id === link.dashboardId);
@@ -108,7 +109,8 @@ function FromDashboard({ link, onName }: FromProps<"dashboard">) {
   if (!tabs) return null;
   const named = link.viewId ? findTab(tabs, link.viewId) : undefined;
   const found = dashboard && findLinkedBlock(tabs, (v) => v.blocks, named, tabs.find((v) => v.isDefault) ?? tabs[0], link.blockId);
-  const home = found && findCollection(collections, found.block.collectionIds?.[0] ?? found.block.collectionId);
+  // As the dashboard shows it: its first collection still there (several are merged by normalizeBlock).
+  const home = found && blockCollections(found.block, collections)[0];
   if (!found || !home) return <Notice text={GONE} />;
   return <Original home={home} block={found.block} place="dashboard" page={null} viewFilters={found.view.filters} editable={found.view.editable} onName={onName} />;
 }
@@ -168,7 +170,10 @@ function Original(props: OriginalProps) {
   const name = useBlockName()(props.block);
   const { onName } = props;
   useEffect(() => onName(name), [name, onName]);
-  return props.home.virtual === "backlinks" && props.page ? <BacklinksOriginal {...props} page={props.page} /> : <NativeOriginal {...props} />;
+  if (props.home.virtual === "backlinks" && props.page) return <BacklinksOriginal {...props} page={props.page} />;
+  // A list field's entries are made from the items in the shared cache, as on the original's page.
+  if (props.home.listOf) return <ListData list={props.home}>{(data) => <OriginalView {...props} data={data} />}</ListData>;
+  return <NativeOriginal {...props} />;
 }
 
 function NativeOriginal(props: OriginalProps) {

@@ -141,7 +141,7 @@ export const tabTarget = (d: Dashboard, v: DashboardView): LinkTarget => ({
   dashboardId: d.id,
 });
 
-/** The blocks of a dashboard's tab (`named`: the tab is named in the link, else it is the dashboard's default one). */
+/** The blocks of a dashboard view (`named`: the tab is named in the link, else it is the dashboard's default one). */
 export const tabBlockTargets = (d: Dashboard, v: DashboardView, named: boolean): LinkTarget[] =>
   v.blocks.map((b) => ({
     key: `block:${tabLinkId(v)}:${b.id}`,
@@ -245,7 +245,8 @@ export async function storedLinkTarget(link: StoredLink, data: LinkTargetData): 
   if (!c) return null;
   if (link.itemId) {
     const label = isRemote(c) ? undefined : (await data.labels(c, [link.itemId]))[0];
-    if (!label) return null;
+    // An item of another space is no page here (as the options offer only the shown space's items).
+    if (!label || label.spaceId !== data.spaceId) return null;
     const itemView = link.viewId ? c.itemViews.find((v) => v.id === link.viewId) : undefined;
     if (link.viewId && !itemView) return null;
     if (link.fieldId) return fieldTargets(c, label, itemView).find((t) => t.key === fieldKey(label.id, link.fieldId!, itemView?.id)) ?? null;
@@ -264,6 +265,16 @@ export async function storedLinkTarget(link: StoredLink, data: LinkTargetData): 
   }
   return v ? viewTarget(c, v) : collectionTarget(c);
 }
+
+/** How searchLinkTargets looks: `items` whether items are offered, at most `limit` options, only those `filter` keeps. */
+export interface LinkSearchOptions {
+  items: boolean;
+  limit?: number;
+  filter?(target: LinkTarget): boolean;
+}
+
+/** With a filter, this many times the limit is looked for before it is applied. */
+const FILTERED_POOL = 4;
 
 /** Whether a search text is (part of) a link's address, rather than words: it has a `/`, `?` or `=`, or a `#` after its first character. */
 export const isAddressQuery = (text: string): boolean => /[/?=]/.test(text.trim()) || text.trim().indexOf("#") > 0;
@@ -458,8 +469,13 @@ async function collectionNameTargets(query: string, data: LinkTargetData, limit:
  *    after the blocks matching `au` of a collection's default view when `book` names one;
  *  - otherwise the collections, views and (`items`) items whose name, or address, fits.
  */
-export async function searchLinkTargets(query: string, data: LinkTargetData, opts: { items: boolean; limit?: number }): Promise<LinkTarget[]> {
-  return withNameLinks(await findLinkTargets(query, data, opts), data);
+export async function searchLinkTargets(query: string, data: LinkTargetData, opts: LinkSearchOptions): Promise<LinkTarget[]> {
+  const { filter, ...find } = opts;
+  if (!filter) return withNameLinks(await findLinkTargets(query, data, find), data);
+  // Some are left out: more are looked for, so the list stays full; only those kept are described.
+  const limit = find.limit ?? 50;
+  const found = await findLinkTargets(query, data, { ...find, limit: limit * FILTERED_POOL });
+  return withNameLinks(found.filter(filter).slice(0, limit), data);
 }
 
 /** What domain/links.ts reads a link by name with, from what the options are made of. */
@@ -492,7 +508,7 @@ export async function linkTargetOf(link: string, data: LinkTargetData): Promise<
   return page ? storedLinkTarget(page, data) : null;
 }
 
-async function findLinkTargets(query: string, data: LinkTargetData, opts: { items: boolean; limit?: number }): Promise<LinkTarget[]> {
+async function findLinkTargets(query: string, data: LinkTargetData, opts: Omit<LinkSearchOptions, "filter">): Promise<LinkTarget[]> {
   const limit = opts.limit ?? 50;
   const dashboardLink = parseStoredDashboardLink(query);
   if (dashboardLink) {

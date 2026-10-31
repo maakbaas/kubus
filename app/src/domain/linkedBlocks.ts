@@ -1,5 +1,5 @@
 // Linked blocks: a block that shows another block, wherever that one is (a collection view, an item page, a
-// dashboard's tab), as it is set up there. It stores a link to it in the stored form of links (domain/links.ts),
+// dashboard view), as it is set up there. It stores a link to it in the stored form of links (domain/links.ts),
 // `#/collections/<id>/items?view=&block=`, `#/collections/<id>/items/<item>?view=&block=`, `#/dashboards/<id>?view=&block=`,
 // written by name in its settings like any link (`books/reading-list#chart`, `book/dune#chart`, `dashboards/health#chart`).
 // Nothing is copied: the original's changes show wherever it is linked.
@@ -57,7 +57,7 @@ export const blockLinkKey = (link: BlockLink): string =>
       : `d/${link.dashboardId}/${link.blockId}`;
 
 /**
- * The block a link names among a page's views (a collection's views, its item views, a dashboard's tabs): in the view it
+ * The block a link names among a page's views (a collection's views, its item views, a dashboard's views): in the view it
  * names, else in the view the page shows by default (`fallback`), else in any of them (a block moved to another view keeps
  * its id). null when it is gone.
  */
