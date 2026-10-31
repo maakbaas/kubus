@@ -129,6 +129,7 @@ describe("the MCP endpoint", () => {
         ["get_item", { id: "a/b" }, { method: "GET", path: "/api/v1/items/a%2Fb", query: {}, body: undefined }],
         ["view_items", { collection: "Book", view: "Unread", block: "Table" }, { method: "GET", path: "/api/v1/collections/Book/views/Unread/items", query: { block: "Table" }, body: undefined }],
         ["create_item", { collection: "Book", values: { Title: "Dune" } }, { method: "POST", path: "/api/v1/collections/Book/items", query: {}, body: { values: { Title: "Dune" } } }],
+        ["create_item", { collection: "Book", values: {}, createdAt: "2019-05-04" }, { method: "POST", path: "/api/v1/collections/Book/items", query: {}, body: { values: {}, createdAt: "2019-05-04" } }],
         ["update_item", { id: "x", values: { Pages: 1 } }, { method: "PATCH", path: "/api/v1/items/x", query: {}, body: { values: { Pages: 1 } } }],
         ["delete_item", { id: "x" }, { method: "DELETE", path: "/api/v1/items/x", query: {}, body: undefined }],
       ];

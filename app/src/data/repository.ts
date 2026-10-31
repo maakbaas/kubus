@@ -275,10 +275,14 @@ export interface Repository {
   releaseFiles(fileIds: string[]): Promise<void>;
 }
 
-/** An item to create: its values by field id, its space, and its id when the caller has one (else a new one). */
+/**
+ * An item to create: its values by field id, its space, its id when the caller has one (else a new one), and when it
+ * was created when that was earlier than now (an ISO time, e.g. moved from another app; else now).
+ */
 export interface NewItem {
   collection: Collection;
   values: Record<string, FieldValue>;
   spaceId: string;
   id?: string;
+  createdAt?: string;
 }

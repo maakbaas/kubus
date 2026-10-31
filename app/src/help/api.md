@@ -85,7 +85,7 @@ Component values run on the server, without Node's globals, and each section get
 | Method and address | What it does |
 |---|---|
 | `GET /collections/{c}/items` | list items, most recently changed first: `{ items, total, limit, offset }`. Optional: space, limit (up to 1000, default 100), offset, and filters and sort (each a JSON list, as in a block, see Views) |
-| `POST /collections/{c}/items` | create an item from `{ space?, values }`; answers with the new item (201) |
+| `POST /collections/{c}/items` | create an item from `{ space?, values, createdAt? }`; answers with the new item (201). `createdAt`, for moving items in from elsewhere, is when it was created: a date (`2019-05-04`) or a time (`2019-05-04T10:30:00`, UTC unless it ends with an offset such as `+02:00`), not in the future; its updated time is still now |
 | `GET /items/{id}` | one item |
 | `PATCH /items/{id}` | change only the fields given in `{ values }` |
 | `DELETE /items/{id}` | delete |
