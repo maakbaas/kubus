@@ -6,6 +6,7 @@
 
 import { HttpError, readJson, type ApiRequest, type ApiResponse } from "../../shared/router.ts";
 import type { Access } from "./tokens.ts";
+import { MAX_FILE_BYTES } from "../../shared/sync.ts";
 
 export type Api = (req: ApiRequest) => Promise<ApiResponse>;
 
@@ -13,7 +14,8 @@ export type Api = (req: ApiRequest) => Promise<ApiResponse>;
 export const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"];
 /** Assumed without an MCP-Protocol-Version header (the spec's rule). */
 const UNNAMED_VERSION = "2025-03-26";
-const MAX_BODY = 5 * 1024 * 1024;
+/** A message, room enough for the largest image upload_image takes (the API's limit) written in base64. */
+const MAX_BODY = Math.ceil((MAX_FILE_BYTES * 4) / 3) + 1024 * 1024;
 
 const INSTRUCTIONS = `Kubus is a personal knowledge base. Its data is in collections (such as Books or People), each with typed fields; an item is one entry of a collection (a particular book), its values listed by field name. Spaces keep items apart (default: the default space). Views list a collection's items through filters, sorts and grouping, in blocks.
 Start with list_collections to learn the collections and their fields; collections, fields, views and spaces can be named by name or id, in any case. Item and List-of-items fields hold item ids (labels: get_item or search). Component fields are worked out and read-only.`;
@@ -34,8 +36,8 @@ interface Tool {
   /** Whether it changes data (then it isn't offered to a token that only reads). */
   writes: boolean;
   destructive?: boolean;
-  /** The /api/v1 request it makes. */
-  request(args: Args): { method: string; path: string; query?: Record<string, string | undefined>; body?: unknown };
+  /** The /api/v1 request it makes: a JSON body, or raw bytes of a content type (an image). */
+  request(args: Args): { method: string; path: string; query?: Record<string, string | undefined>; body?: unknown; bytes?: Uint8Array; contentType?: string };
   /** The property a list answer is put under in structuredContent (which is an object). */
   listKey?: string;
 }
@@ -52,6 +54,12 @@ const filters = rules(
 );
 const sort = rules("Sort rules: { fieldId, direction } (asc or desc)", { properties: { fieldId: { type: "string" }, direction: { enum: ["asc", "desc"] } }, required: ["fieldId"] });
 const json = (v: unknown) => (v === undefined ? undefined : JSON.stringify(v));
+/** An image as upload_image takes it: base64, or a data: URL (whose type it gives). */
+function decodeImage(data: string): { bytes: Uint8Array; type: string | null } {
+  const url = /^data:([^;,]+)?(;base64)?,/i.exec(data.trim());
+  const text = url ? data.trim().slice(url[0].length) : data;
+  return { bytes: new Uint8Array(Buffer.from(text.replace(/\s+/g, ""), "base64")), type: url?.[1]?.toLowerCase() ?? null };
+}
 const num = (v: unknown) => (v === undefined ? undefined : String(v));
 const seg = (v: unknown) => encodeURIComponent(String(v));
 
@@ -175,6 +183,19 @@ export const TOOLS: Tool[] = [
     destructive: true,
     request: (a) => ({ method: "DELETE", path: `/api/v1/items/${seg(a.id)}` }),
   },
+  {
+    name: "upload_image",
+    title: "Upload an image",
+    description:
+      "Stores an image and answers its id and src. Put the id in an Image field (create_item or update_item values), or the src in Markdown as ![description](src). The bytes base64-encoded in data (a data: URL works too); mimeType image/png, image/jpeg, image/gif, image/webp, image/svg+xml or image/avif (from a data: URL when left out). The same bytes give the same id.",
+    properties: { data: str("The image's bytes, base64-encoded, or a data: URL"), mimeType: str("The image's type, such as image/png (from a data: URL when left out)") },
+    required: ["data"],
+    writes: true,
+    request: (a) => {
+      const { bytes, type } = decodeImage(String(a.data));
+      return { method: "POST", path: "/api/v1/files", bytes, contentType: typeof a.mimeType === "string" && a.mimeType ? a.mimeType : (type ?? "") };
+    },
+  },
 ];
 
 const toolsFor = (access: Access) => TOOLS.filter((t) => access !== "read" || !t.writes);
@@ -197,17 +218,17 @@ const answer = (status: number, body?: unknown, headers: Record<string, string> 
 async function callTool(tool: Tool, args: Args, api: Api): Promise<unknown> {
   const missing = (tool.required ?? []).filter((k) => args[k] === undefined || args[k] === null || args[k] === "");
   if (missing.length > 0) return { content: [{ type: "text", text: `Missing: ${missing.join(", ")}` }], isError: true };
-  const { method, path, query, body } = tool.request(args);
+  const { method, path, query, body, bytes: raw, contentType } = tool.request(args);
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(query ?? {})) if (v !== undefined && v !== null) params.set(k, v);
-  const bytes = new TextEncoder().encode(body === undefined ? "" : JSON.stringify(body));
+  const bytes = raw ?? new TextEncoder().encode(body === undefined ? "" : JSON.stringify(body));
   let response: ApiResponse;
   try {
     response = await api({
       method,
       path,
       query: params,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": contentType ?? "application/json" },
       body: async (limit) => {
         if (bytes.byteLength > limit) throw new HttpError(413, "Request too large");
         return bytes;

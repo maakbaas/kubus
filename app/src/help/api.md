@@ -221,6 +221,7 @@ Each tool does what one of the requests above does, so it follows the same rules
 | get_item | one item |
 | list_views, view_items | a collection's views, and the items one of them shows |
 | create_item, update_item, delete_item | add, change or delete an item |
+| upload_image | store an image (its bytes base64-encoded, or a data: URL) as `POST /files` does: its id goes in an image field, its src in Markdown |
 
 > The assistant can do whatever the token allows. Most MCP clients ask before a tool that changes something runs; keep that on.
 

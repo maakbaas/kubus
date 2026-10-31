@@ -138,6 +138,22 @@ describe("the MCP endpoint", () => {
       }
     });
 
+    it("uploads an image as its bytes, of the type given or a data: URL's", async () => {
+      const got: { path: string; type: string; bytes: number[] }[] = [];
+      const api = async (req: ApiRequest): Promise<ApiResponse> => {
+        got.push({ path: req.path, type: req.headers["content-type"] ?? "", bytes: [...(await req.body(1024))] });
+        return { status: 201, json: { id: "abc", src: "files/abc" } };
+      };
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+      const answer = await mcp(call("upload_image", { data: png, mimeType: "image/png" }), { api });
+      expect(answer.json.result.structuredContent).toEqual({ id: "abc", src: "files/abc" });
+      await mcp(call("upload_image", { data: `data:image/webp;base64,${png}` }), { api });
+      expect(got).toEqual([
+        { path: "/api/v1/files", type: "image/png", bytes: [0x89, 0x50, 0x4e, 0x47] },
+        { path: "/api/v1/files", type: "image/webp", bytes: [0x89, 0x50, 0x4e, 0x47] },
+      ]);
+    });
+
     it("gives the answer as JSON text and structured content, a list under its name", async () => {
       const { api } = fakeApi((req) => ({ status: 200, json: req.path.endsWith("/collections") ? [{ name: "Book" }] : { id: "x", label: "Dune" } }));
       const item = (await mcp(call("get_item", { id: "x" }), { api })).json.result;
