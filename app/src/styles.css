@@ -2217,9 +2217,6 @@ img[data-lightbox] {
   margin-bottom: var(--cds-spacing-03);
   overflow-wrap: anywhere;
 }
-/* Label and value side by side, labels in a column of 6rem, at most two fifths of a narrow card
-   (a label then wraps, readable whole, rather than stacking above its value: a card looks the same
-   at every width). */
 /* A card's fields one under another, each its name above its value (as on an item page), the value at the card's
    whole width; a field whose name is hidden (the block's Fields) is its value alone, nothing kept for the name. */
 .item-card__fields {
