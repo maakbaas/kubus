@@ -131,6 +131,11 @@ describe("searchLinkTargets", () => {
       expect(await searchLinkTargets(gone, data, { items: false })).toEqual([]);
     }
   });
+  it("searches the words after a leading #/ by name, a part inside a name too, and item#field after it", async () => {
+    expect(names(await searchLinkTargets("#/dune", data, { items: true }))).toContain("Dune");
+    expect(names(await searchLinkTargets("#/une", data, { items: true }))).toContain("Dune");
+    expect(names(await searchLinkTargets("#/dune#auth", data, { items: false }))).toEqual(["Author"]);
+  });
   it("storedLinkTarget does not look for the items of a remote collection", async () => {
     expect(await storedLinkTarget({ collectionId: "c3", itemId: "r1" }, data)).toBeNull();
   });

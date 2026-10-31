@@ -67,7 +67,7 @@ The stages, in order:
 - **Chart / dashboard block types** (Metabase side). The chart block is built (docs/views-and-workspace.md
   "Block types"), and so is reading several collections as one in a dashboard's block (native and remote mixed, fields merged by name or by hand,
   paging, groups, totals and charts over all of them: docs/features.md "Several collections in one block"), so one chart can total two
-  sources. Dashboards are built too (docs/features.md "Dashboards": pages of blocks of any collections, in tabs per space, with one
+  sources. Dashboards are built too (docs/features.md "Dashboards": pages of blocks of any collections, in views per space, with one
   filter whose Date steps every dated block), and their blocks stand side by side in rows (docs/features.md "Blocks side by
   side").
 

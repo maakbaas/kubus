@@ -1,8 +1,9 @@
 // Places on a map (the Map block, views/MapView.tsx): an item's location is read from its fields,
 // never stored in a field kind of its own. Either one text field (or a component giving text) holds
 // both coordinates, as typed or pasted ("52.37, 4.89", "geo:52.37,4.89", a map link with "@lat,lon"
-// or "q=lat,lon" in it), or two number fields hold the latitude and the longitude.
+// or "q=lat,lon" in it), or two number fields (or components / AI fields giving a number) hold the latitude and the longitude.
 
+import { outputOf, type Component } from "./components";
 import type { FieldDef, FieldValue } from "./model";
 
 export interface LngLat {
@@ -33,11 +34,20 @@ export function parseLocation(text: string): LngLat | null {
 /** The place in a field's value: a text with both coordinates; null if none. */
 export const locationOf = (value: FieldValue): LngLat | null => (typeof value === "string" ? parseLocation(value) : null);
 
-/** The place in two number values (latitude, longitude); null if either is missing. */
-export const locationOfPair = (lat: FieldValue, lng: FieldValue): LngLat | null =>
-  typeof lat === "number" && typeof lng === "number" ? lngLat(lat, lng) : null;
+/** A coordinate: a number, or a number written as text (a component's result can be either). */
+const coordinate = (v: FieldValue): number | null =>
+  typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v.trim()) : null;
 
-/** Fields that can hold a whole location as text (strings, and components giving text). */
-export const isLocationTextField = (field: FieldDef) => field.kind === "string" || field.kind === "component" || field.kind === "ai";
-/** Fields that can hold a latitude or a longitude (with the other in a second field). */
-export const isCoordinateField = (field: FieldDef) => field.kind === "number";
+/** The place in two number values (latitude, longitude); null if either is missing. */
+export const locationOfPair = (lat: FieldValue, lng: FieldValue): LngLat | null => {
+  const la = coordinate(lat);
+  const ln = coordinate(lng);
+  return la !== null && ln !== null ? lngLat(la, ln) : null;
+};
+
+/** Fields that can hold a latitude or a longitude (with the other in a second field): numbers, and components or AI fields giving a number. */
+export const isCoordinateField = (field: FieldDef, components: Component[]) =>
+  field.kind === "number" || (field.kind === "ai" && field.output === "number") || (field.kind === "component" && outputOf(field, components) === "number");
+/** Fields that can hold a whole location as text (strings, and components or AI fields giving text, not a number). */
+export const isLocationTextField = (field: FieldDef, components: Component[]) =>
+  field.kind === "string" || ((field.kind === "component" || field.kind === "ai") && !isCoordinateField(field, components));

@@ -11,6 +11,7 @@ import { defaultViewState, isFullWidth, newBlock, movedId, NOTHING_COLLAPSED, sa
 import { NotFound } from "../ui/NotFound";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { BookmarkButton } from "../ui/BookmarkButton";
+import { collectionViewLink } from "../domain/bookmarks";
 import { NewButton } from "../ui/NewButton";
 import { collectionsCrumb, PageHeader } from "../ui/PageHeader";
 import { ViewNameRow } from "../ui/ViewMoveButtons";
@@ -27,6 +28,9 @@ import { reordered, withCopy, withoutBlock } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
 import { useCollectionData } from "../views/useCollectionData";
+import { ListData } from "../views/useListData";
+import { isListCollectionId } from "../domain/listEntries";
+import { findCollection } from "../domain/backlinks";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 
 export function CollectionPage() {
@@ -36,8 +40,9 @@ export function CollectionPage() {
   return <CollectionContent key={collection.id} collection={collection} />;
 }
 
-/** A view state valid for this collection (stored blocks may be outdated). */
-const normalized = (collection: Collection, state: ViewState): ViewState => normalizeView(collection, { filters: state.filters, blocks: state.blocks, editable: state.editable });
+/** A view state valid for this collection (stored blocks may be outdated; a block of a list field's entries for those: `collections`). */
+const normalized = (collection: Collection, state: ViewState, collections: Collection[]): ViewState =>
+  normalizeView(collection, { filters: state.filters, blocks: state.blocks, editable: state.editable }, collections);
 
 /** A view with "Show filter bar" set or taken off (absent when off). */
 const withFilterBar = (view: CollectionView, on: boolean): CollectionView => {
@@ -57,7 +62,10 @@ const SEARCH_DELAY_MS = 150;
 function CollectionContent({ collection }: { collection: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
   const uid = useId();
-  const { repo, space, sources } = useStore();
+  const { repo, space, sources, collections } = useStore();
+  // What a block of a list field's entries is normalized for (read when a view is, not a reason to load views again).
+  const allCollections = useRef(collections);
+  allCollections.current = collections;
   const navigate = useNavigate();
   // A remote collection's rows are read from its source, read-only (domain/sources.ts).
   const remote = isRemote(collection);
@@ -74,7 +82,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // without one (the collection is shared from another space) shows `base` as a virtual "All"
   // view, stored once it is changed, renamed or joined by another view; a collection always has a view.
   const base = useMemo(
-    () => normalized(collection, defaultViewState(blockType("table").defaultOptions(collection), firstShownFields(collection), !readOnly, sourcePeriod(collection))),
+    () => normalized(collection, defaultViewState(blockType("table").defaultOptions(collection), firstShownFields(collection), !readOnly, sourcePeriod(collection)), allCollections.current),
     [collection, readOnly],
   );
   const virtualView = useMemo<CollectionView>(
@@ -122,7 +130,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
       // elsewhere, instead of turning into "changed".
       const cur = shown.current;
       const next = list.find((v) => v.id === (saved ?? cur?.activeId));
-      if (cur && next && (saved !== undefined || sameView(cur.view, cur.reference))) setView(normalized(collection, next));
+      if (cur && next && (saved !== undefined || sameView(cur.view, cur.reference))) setView(normalized(collection, next, allCollections.current));
     }, (e) => setError(errorMessage(e)));
   }, [repo, collection, space.id, fresh]);
   useEffect(() => {
@@ -140,7 +148,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
 
   const views = savedViews === null ? [] : withVirtual(savedViews);
   const active = views.find((v) => v.id === activeId) ?? null;
-  const reference = active ? normalized(collection, active) : base;
+  const reference = active ? normalized(collection, active, collections) : base;
   const changed = !sameView(view, reference);
   const viewsBar = useRef<HTMLDivElement>(null);
   const clippedTabs = useClippedTabs(viewsBar);
@@ -152,7 +160,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
     (id: string | null, list: CollectionView[] = savedViews ?? []) => {
       const next = withVirtual(list).find((v) => v.id === id);
       setActiveId(next ? next.id : null);
-      setView(next ? normalized(collection, next) : base);
+      setView(next ? normalized(collection, next, allCollections.current) : base);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [savedViews, collection, base, virtualView],
@@ -452,11 +460,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
           )}
           {active && (
             <BookmarkButton
-              kind="view"
-              ownerId={collection.id}
-              targetId={active.id}
+              link={collectionViewLink(collection.id, active.id)}
               // The virtual "All" view is stored first: a bookmark needs a real view.
-              prepare={active.id === VIRTUAL_VIEW ? storeVirtual : undefined}
+              prepare={active.id === VIRTUAL_VIEW ? () => storeVirtual().then((id) => (id ? collectionViewLink(collection.id, id) : undefined)) : undefined}
               label={`${collection.pluralName} / ${active.name}`}
               onError={(e) => setError(errorMessage(e))}
             />
@@ -568,14 +574,18 @@ function CollectionContent({ collection }: { collection: Collection }) {
             blockOf={(b) => b}
             onPlace={rowActions.place}
             onShares={rowActions.shares}
-            render={(block, placed) => (
+            render={(block, placed) => {
+              // A block of one of the collection's list fields' entries reads those (not the view's filter: it is over the items);
+              // its field gone, it lists the collection again.
+              const list = isListCollectionId(block.collectionId) ? findCollection(collections, block.collectionId) : undefined;
+              const shown = (listed: Collection, listedData: typeof data) => (
               <BlockView
                 // Keyed by the shown view too, so group collapse state isn't carried over to another view.
                 key={`${activeId ?? ""}-${block.id}`}
-                collection={collection}
-                data={data}
+                collection={listed}
+                data={listedData}
                 block={block}
-                viewFilters={view.filters}
+                viewFilters={listed === collection ? view.filters : null}
                 search={searched}
                 place="collection"
                 page={null}
@@ -599,7 +609,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
                 onDragStart={placed.onDragStart}
                 row={rowActions.controls(block)}
               />
-            )}
+              );
+              return list ? <ListData key={`${activeId ?? ""}-${block.id}`} list={list}>{(d) => shown(list, d)}</ListData> : shown(collection, data);
+            }}
           />
         )}
 

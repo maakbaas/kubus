@@ -2,7 +2,7 @@
 // (read back through window.kubus.repo).
 
 /** The types a new field can have, in the menu's order ("AI" is a Component field with Ask AI on). */
-const KINDS = ["String", "Markdown", "HTML", "Number", "Date", "Date & time", "Checkbox", "Image", "Item", "List of strings", "Checklist", "List of items", "Component"];
+const KINDS = ["String", "Markdown", "HTML", "Number", "Date", "Date & time", "Checkbox", "Image", "Item", "List of strings", "List of numbers", "Checklist", "List of items", "Component"];
 
 /** What a dropdown shows as chosen. */
 const chosen = async (t, scope, title) => (await dropdownOf(t, scope, title).locator(".cds--list-box__field").first().innerText()).trim();
@@ -78,7 +78,7 @@ test("editor: every kind with its settings is stored, and shown again after a re
   await saveEditor(t, "Create collection");
   const c = await stored(t, "Gadget");
   await t.require("the collection is stored", !!c);
-  const want = { "F Markdown": "markdown", "F HTML": "html", "F Number": "number", "F Date": "date", "F Date & time": "datetime", "F Checkbox": "checkbox", "F Image": "image", "F Item": "item", "F List of strings": "string_list", "F Checklist": "checklist", "F List of items": "item_list", "F Component": "component", "F AI": "ai" };
+  const want = { "F Markdown": "markdown", "F HTML": "html", "F Number": "number", "F Date": "date", "F Date & time": "datetime", "F Checkbox": "checkbox", "F Image": "image", "F Item": "item", "F List of strings": "string_list", "F List of numbers": "number_list", "F Checklist": "checklist", "F List of items": "item_list", "F Component": "component", "F AI": "ai" };
   for (const [name, kind] of Object.entries(want)) await t.check(`${name} is stored as ${kind}`, storedField(c, name)?.kind === kind, storedField(c, name)?.kind);
   await t.check("its description is stored", c.description === "Things with every field type.");
   await t.check("Item refers to Authors", storedField(c, "F Item")?.targetCollectionId === ids.collections.authors);

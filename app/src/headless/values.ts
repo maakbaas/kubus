@@ -82,6 +82,8 @@ async function valueIn(collection: Collection, field: FieldDef, raw: unknown, ex
       return typeof raw === "string" ? raw : bad("text");
     case "string_list":
       return Array.isArray(raw) && raw.every((x) => typeof x === "string") ? raw : bad("a list of texts");
+    case "number_list":
+      return Array.isArray(raw) && raw.every((x) => typeof x === "number" && Number.isFinite(x)) ? (raw as number[]) : bad("a list of numbers");
     case "checklist": {
       // "[x] text" / "[ ] text" as stored, or { text, done }.
       if (!Array.isArray(raw)) return bad("a list of { text, done } items");

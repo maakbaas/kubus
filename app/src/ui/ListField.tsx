@@ -3,7 +3,8 @@ import { IconButton, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { checklistItems, itemString, type ChecklistItem } from "../domain/checklist";
-import type { FieldDef, FieldValue } from "../domain/model";
+import { stringList, type FieldDef, type FieldValue } from "../domain/model";
+import { numberList } from "../domain/numberList";
 import { captureEditStart } from "./editStart";
 import { WrappedTextBox } from "./FieldInput";
 import { FieldLabel } from "./fieldKindIcons";
@@ -14,14 +15,18 @@ import { ToggleInput } from "./ToggleInput";
 import { labelOf, type RefOptions } from "./useReferenceOptions";
 import { moveBlock, useReorder } from "./useReorder";
 
-/** The items as stored (an item's text trimmed; empty items are kept). */
-function storedValue(items: ChecklistItem[], checklist: boolean): FieldValue {
+/** The items as stored (an item's text trimmed; empty items are kept, but in a list of numbers anything not a number is dropped). */
+function storedValue(items: ChecklistItem[], kind: FieldDef["kind"]): FieldValue {
   const kept = items.map((i) => ({ ...i, text: i.text.trim() }));
-  return kept.length ? kept.map((i) => (checklist ? itemString(i) : i.text)) : null;
+  if (kind === "number_list") {
+    const numbers = numberList(kept.map((i) => i.text));
+    return numbers.length ? numbers : null;
+  }
+  return kept.length ? kept.map((i) => (kind === "checklist" ? itemString(i) : i.text)) : null;
 }
 
 /**
- * A list field on an item page (list of strings, checklist, list of items), edited one item at a time like a
+ * A list field on an item page (list of strings or numbers, checklist, list of items), edited one item at a time like a
  * table cell: clicking an item's text turns just that item into an input, the caret where it was
  * clicked. Tab moves in the usual order (checkbox, text, remove icon, next item…): leaving the
  * input saves it, tabbing onto an item's text edits it. Enter saves and adds a new item below,
@@ -51,7 +56,7 @@ export function ListField({
   const options = refs?.[field.targetCollectionId ?? ""] ?? [];
   // Unique per instance (an item can be open in two tabs): its inputs are looked up by id.
   const uid = useId();
-  const fromValue = (v: FieldValue) => (checklist ? checklistItems(v) : (Array.isArray(v) ? v : []).map((text) => ({ text, done: false })));
+  const fromValue = (v: FieldValue) => (checklist ? checklistItems(v) : stringList(v).map((text) => ({ text, done: false })));
   const [items, setItems] = useState<ChecklistItem[]>(() => fromValue(value));
   /**
    * The item being edited, the caret / selection to start with (offsets in its text), and whether
@@ -71,7 +76,7 @@ export function ListField({
   /** Shows `next` and saves it (when it differs from what is stored). */
   const save = (next: ChecklistItem[]) => {
     setItems(next);
-    const stored = storedValue(next, checklist);
+    const stored = storedValue(next, field.kind);
     if (JSON.stringify(stored ?? null) !== valueKey) onSave(stored);
   };
   /** The item just added by "+" / Enter and not yet filled: dropped again when left empty. */

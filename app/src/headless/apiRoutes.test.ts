@@ -655,10 +655,10 @@ describe("dashboards", () => {
     expect(await refused(404, "POST", "/dashboards/Home/views", { name: "T", blocks: [{ kind: "table", collectionIds: ["Book", "Nope"] }] })).toBe("No collection “Nope”");
     expect(await refused(404, "POST", "/dashboards/Home/views", { name: "T", blocks: [{ kind: "table", collectionId: "Book", groupBy: "Nope" }] })).toBe("Book has no field “Nope”");
     expect(await refused(404, "POST", "/dashboards/Home/views", { name: "T", blocks: [{ kind: "table", collectionId: "Book" }], filters: [{ fieldId: "Nope", operator: "is", value: "" }] })).toBe("Dashboard has no field “Nope”");
-    expect(await refused(404, "PATCH", "/dashboards/Home/views/Nope", {})).toBe("Home has no tab “Nope”");
-    expect(await refused(404, "DELETE", "/dashboards/Home/views/Nope")).toBe("Home has no tab “Nope”");
-    expect(await refused(404, "PUT", "/dashboards/Home/default-view", { view: "Nope" })).toBe("Home has no tab “Nope”");
-    expect(await refused(404, "GET", "/dashboards/Home/views/Nope/items")).toBe("Home has no tab “Nope”");
+    expect(await refused(404, "PATCH", "/dashboards/Home/views/Nope", {})).toBe("Home has no view “Nope”");
+    expect(await refused(404, "DELETE", "/dashboards/Home/views/Nope")).toBe("Home has no view “Nope”");
+    expect(await refused(404, "PUT", "/dashboards/Home/default-view", { view: "Nope" })).toBe("Home has no view “Nope”");
+    expect(await refused(404, "GET", "/dashboards/Home/views/Nope/items")).toBe("Home has no view “Nope”");
     expect(await refused(404, "GET", "/dashboards/Home/views/Dashboard/items")).toBe("The tab “Dashboard” has no blocks");
   });
 
@@ -685,9 +685,30 @@ describe("dashboards", () => {
     const first = await ok("GET", "/dashboards/Home/views/This%20year/items?limit=1");
     expect(first).toMatchObject({ view: { name: "This year" }, block: { title: "Books" }, total: 1, limit: 1 });
     expect(first.blocks.map((b: { title: string }) => b.title)).toEqual(["Books", "Notes", "Both"]);
-    expect(await refused(404, "GET", "/dashboards/Home/views/This%20year/items?block=Nope")).toBe("The tab “This year” has no block “Nope”");
+    expect(await refused(404, "GET", "/dashboards/Home/views/This%20year/items?block=Nope")).toBe("The view “This year” has no block “Nope”");
     await ok("DELETE", "/collections/Note");
     expect(await refused(409, "GET", "/dashboards/Home/views/This%20year/items?block=Notes")).toBe("A collection this block lists was deleted");
+  });
+
+  it("list a list field's entries in a block of their own, grouped like items", async () => {
+    const trip = await ok("POST", "/collections", { name: "Trip", fields: [{ name: "Title", kind: "string" }, { name: "Pack", kind: "checklist" }, { name: "Km", kind: "number_list" }] });
+    const id = (name: string) => trip.fields.find((f: { name: string }) => f.name === name).id;
+    await ok("POST", "/collections/Trip/items", { values: { Title: "Alps", Pack: [{ text: "boots", done: true }, { text: "map", done: false }], Km: [12, 7.5] } });
+    expect(await refused(400, "POST", "/collections/Trip/items", { values: { Km: [1, "two"] } })).toBe("“Km” of Trip takes a list of numbers");
+    await ok("POST", "/dashboards", { name: "Gear" });
+    await ok("POST", "/dashboards/Gear/views", {
+      name: "Packing",
+      blocks: [
+        { kind: "table", title: "Pack", collectionId: `$list:${id("Pack")}`, groupBy: "Done" },
+        { kind: "table", title: "Km", collectionId: `$list:${id("Km")}`, sort: [{ fieldId: "Km", direction: "desc" }] },
+      ],
+    });
+    const pack = await ok("GET", "/dashboards/Gear/views/Packing/items?block=Pack");
+    expect(pack.groups.map((g: { label: string; items: { values: { Pack: string } }[] }) => [g.label, g.items.map((i) => i.values.Pack)])).toEqual([["Not checked", ["map"]], ["Checked", ["boots"]]]);
+    const km = await ok("GET", "/dashboards/Gear/views/Packing/items?block=Km");
+    expect(km.items.map((i: { values: { Km: number } }) => i.values.Km)).toEqual([12, 7.5]);
+    expect(await refused(400, "POST", "/dashboards/Gear/views", { name: "X", blocks: [{ kind: "table", collectionIds: ["Trip", `$list:${id("Km")}`] }] })).toBe("A list field's entries are listed by a block of their own");
+    expect(await refused(404, "POST", "/dashboards/Gear/views", { name: "X", blocks: [{ kind: "table", collectionId: `$list:${id("Title")}` }] })).toMatch(/No list field/);
   });
 });
 
@@ -699,47 +720,49 @@ describe("bookmarks", () => {
     itemId = (await ok("POST", "/collections/Book/items", { values: { Title: "Dune" } })).id;
   });
 
-  it("are made for an item or a view, listed per space, renamed and removed", async () => {
-    const item = await ok("POST", "/bookmarks", { kind: "item", target: itemId, label: "My book" });
-    expect(item).toMatchObject({ kind: "item", targetId: itemId, label: "My book", position: 0 });
-    const view = await ok("POST", "/bookmarks", { kind: "view", collection: "Book", target: "All" });
-    expect(view).toMatchObject({ kind: "view", label: "Books / All", position: 1 });
-    expect(await ok("GET", "/bookmarks")).toHaveLength(2);
+  it("are made for any page a link names, listed per space, renamed and removed by id", async () => {
+    const item = await ok("POST", "/bookmarks", { link: "book/dune", label: "My book" });
+    expect(item).toMatchObject({ link: `#/collections/${(await ok("GET", "/collections/Book")).id}/items/${itemId}`, label: "My book", position: 0 });
+    const view = await ok("POST", "/bookmarks", { link: "books/all" });
+    expect(view).toMatchObject({ label: "Books / All", position: 1 });
+    const field = await ok("POST", "/bookmarks", { link: "book/dune#title" });
+    expect(field.link).toMatch(/[?&]field=/);
+    // A stored link works as well as one by name.
+    expect(await refused(409, "POST", "/bookmarks", { link: item.link })).toBe("Already bookmarked");
+    expect(await ok("GET", "/bookmarks")).toHaveLength(3);
     expect(await ok("GET", "/bookmarks?space=Work")).toEqual([]);
-    expect(await ok("PATCH", `/bookmarks/${itemId}`, { label: "Renamed" })).toEqual({ ok: true });
+    expect(await ok("PATCH", `/bookmarks/${item.id}`, { label: "Renamed" })).toEqual({ ok: true });
     expect((await ok("GET", "/bookmarks"))[0].label).toBe("Renamed");
-    expect(await ok("DELETE", `/bookmarks/${itemId}`)).toEqual({ ok: true });
-    expect(await ok("DELETE", `/bookmarks/${view.targetId}?space=default`)).toEqual({ ok: true });
+    expect(await ok("DELETE", `/bookmarks/${item.id}`)).toEqual({ ok: true });
+    expect(await ok("DELETE", `/bookmarks/${view.id}?space=default`)).toEqual({ ok: true });
+    // Deleting what a bookmark leads to deletes the bookmark.
+    await ok("DELETE", `/items/${itemId}`);
     expect(await ok("GET", "/bookmarks")).toEqual([]);
   });
 
-  it("are made for a dashboard's tab, a copied one stored first, and go with their dashboard", async () => {
+  it("are made for a dashboard's view, a copied one stored first, and go with their dashboard", async () => {
     await ok("POST", "/dashboards", { name: "Home", spaces: null });
-    const mark = await ok("POST", "/bookmarks", { kind: "dashboard", dashboard: "Home", target: "Dashboard" });
-    expect(mark).toMatchObject({ kind: "dashboard", collectionId: null, dashboardId: expect.any(String), label: "Home / Dashboard" });
-    expect(await refused(409, "POST", "/bookmarks", { kind: "dashboard", dashboard: "Home", target: "Dashboard" })).toBe("Already bookmarked");
-    // In Work the tab is a copy of the default space's: bookmarking it stores it there.
-    const work = await ok("POST", "/bookmarks", { kind: "dashboard", dashboard: "Home", target: "Dashboard", space: "Work" });
-    expect(work.targetId).not.toBe(mark.targetId);
-    expect((await ok("GET", "/dashboards/Home/views?space=Work"))[0]).toMatchObject({ id: work.targetId });
-    expect(await refused(400, "POST", "/bookmarks", { kind: "dashboard", target: "Dashboard" })).toBe("`dashboard` is required");
-    expect(await refused(404, "POST", "/bookmarks", { kind: "dashboard", dashboard: "Home", target: "Nope" })).toBe("Home has no tab “Nope”");
+    const mark = await ok("POST", "/bookmarks", { link: "dashboards/home/dashboard" });
+    expect(mark).toMatchObject({ link: expect.stringMatching(/^#\/dashboards\/.+\?view=/), label: "Home / Dashboard" });
+    expect(await refused(409, "POST", "/bookmarks", { link: "dashboards/home/dashboard" })).toBe("Already bookmarked");
+    // In Work the view is a copy of the default space's: bookmarking it stores it there.
+    const work = await ok("POST", "/bookmarks", { link: "dashboards/home/dashboard", space: "Work" });
+    expect(work.link).not.toBe(mark.link);
+    const [stored] = await ok("GET", "/dashboards/Home/views?space=Work");
+    expect(work.link).toContain(`view=${stored.id}`);
+    expect(stored.virtual).toBeFalsy();
     await ok("DELETE", "/dashboards/Home");
     expect(await ok("GET", "/bookmarks")).toEqual([]);
     expect(await ok("GET", "/bookmarks?space=Work")).toEqual([]);
   });
 
   it("are refused for what can't be bookmarked", async () => {
-    await ok("POST", "/bookmarks", { kind: "item", target: itemId });
-    expect(await refused(409, "POST", "/bookmarks", { kind: "item", target: itemId })).toBe("Already bookmarked");
-    expect(await refused(409, "POST", "/bookmarks", { kind: "item", target: itemId, space: "Work" })).toBe("The item is in another space");
-    expect(await refused(404, "POST", "/bookmarks", { kind: "item", target: "ghost" })).toBe("No item ghost");
-    expect(await refused(400, "POST", "/bookmarks", { kind: "tab", target: itemId })).toBe("`kind` must be item, view or dashboard");
-    expect(await refused(400, "POST", "/bookmarks", { kind: "item" })).toBe("`target` is required");
-    expect(await refused(400, "POST", "/bookmarks", { kind: "view", target: "All" })).toBe("`collection` is required");
-    expect(await refused(404, "POST", "/bookmarks", { kind: "view", collection: "Book", target: "Nope" })).toBe("Book has no view “Nope”");
-    expect(await refused(404, "POST", "/bookmarks", { kind: "view", collection: "Nope", target: "All" })).toBe("No collection “Nope”");
-    expect(await refused(400, "PATCH", `/bookmarks/${itemId}`, {})).toBe("`label` is required");
+    expect(await refused(404, "POST", "/bookmarks", { link: "book/dune", space: "Work" })).toBe("“book/dune” names no page in this space");
+    expect(await refused(404, "POST", "/bookmarks", { link: "book/ghost" })).toBe("“book/ghost” names no page in this space");
+    expect(await refused(400, "POST", "/bookmarks", {})).toBe("`link` is required");
+    expect(await refused(404, "PATCH", "/bookmarks/nope", { label: "x" })).toBe("No bookmark “nope”");
+    const mark = await ok("POST", "/bookmarks", { link: "book/dune" });
+    expect(await refused(400, "PATCH", `/bookmarks/${mark.id}`, {})).toBe("`label` is required");
     expect(await refused(404, "GET", "/bookmarks?space=nope")).toMatch(/No space/);
   });
 });

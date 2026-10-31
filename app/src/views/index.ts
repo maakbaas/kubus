@@ -8,6 +8,7 @@ import type { BlockTypeDefinition } from "./registry";
 import { tableView } from "./TableView";
 import { pickableFields, type Collection } from "../domain/model";
 import { listedCollection, newBlock, type ViewBlock, type ViewState } from "../domain/views";
+import { findListCollection, isListCollectionId } from "../domain/listEntries";
 
 /** All block types, in the order the "Show as" menu lists them. Add new block types here. */
 export const BLOCK_TYPES: BlockTypeDefinition[] = [tableView, cardsView, chartBlock, mapView, markdownBlock, componentBlock, linkedBlock];
@@ -68,11 +69,15 @@ export function carryOptions(options: unknown, from: Collection, to: Collection)
   return walk(options);
 }
 
-/** A view state made valid for its collection (stored ones may be outdated); always at least one block. */
-export function normalizeView(collection: Collection, state: ViewState): ViewState {
+/**
+ * A view state made valid for its collection (stored ones may be outdated); always at least one block. A block of one of its
+ * list fields' entries is made valid for those (found among `collections`; gone: for the collection, which drops its fields).
+ */
+export function normalizeView(collection: Collection, state: ViewState, collections: Collection[] = []): ViewState {
   // A fixed id: normalizing the same state twice gives the same result.
   const blocks = state.blocks.length > 0 ? state.blocks : [newBlock("table", null, "main")];
-  return { filters: state.filters, blocks: blocks.map((b) => normalizeBlock(collection, b)), editable: state.editable };
+  const own = (b: ViewBlock) => (isListCollectionId(b.collectionId) ? (findListCollection(collections, b.collectionId) ?? collection) : collection);
+  return { filters: state.filters, blocks: blocks.map((b) => normalizeBlock(own(b), b)), editable: state.editable };
 }
 
 export type { BlockPlace, BlockTypeDefinition, PageItem } from "./registry";

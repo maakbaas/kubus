@@ -9,7 +9,7 @@ import { isAddressQuery, withoutShown, type LinkTarget } from "../domain/linkTar
 import { LinkTargetList } from "../ui/LinkTargetList";
 import type { Repository } from "../data/repository";
 import { markdownExcerpt, type MarkdownExcerpt } from "../domain/markdownExcerpt";
-import { editableField, isReferenceKind, itemLabel, labelField, type FieldDef, type Item, type Collection } from "../domain/model";
+import { editableField, isReferenceKind, itemLabel, labelField, stringList, type FieldDef, type Item, type Collection } from "../domain/model";
 import { containsQuery } from "../domain/tags";
 import { Highlight, matcher } from "../ui/Highlight";
 import type { CollectionView, ViewBlock } from "../domain/views";
@@ -45,7 +45,7 @@ function excerpts(collection: Collection, item: Item, query: string, exactTag: b
     const field = editableField(def);
     const v = item.values[field.id];
     if (isReferenceKind(field.kind)) {
-      const ids = Array.isArray(v) ? v : typeof v === "string" ? [v] : [];
+      const ids = Array.isArray(v) ? stringList(v) : typeof v === "string" ? [v] : [];
       const found = ids.flatMap((id) => labels.get(id) ?? []).filter(has);
       if (found.length > 0) return [{ field, text: found.map((label) => textExcerpt(label, query, exactTag)).join(", ") }];
     }
@@ -66,8 +66,8 @@ function excerpts(collection: Collection, item: Item, query: string, exactTag: b
       const items = checklistItems(v).filter((i) => has(i.text));
       if (items.length > 0) return [{ field, text: items.map((i) => textExcerpt(i.text, query, exactTag)).join(", ") }];
     }
-    if (field.kind === "string_list" && Array.isArray(v)) {
-      const items = v.filter(has);
+    if ((field.kind === "string_list" || field.kind === "number_list") && Array.isArray(v)) {
+      const items = stringList(v).filter(has);
       if (items.length > 0) return [{ field, text: items.map((s) => textExcerpt(s, query, exactTag)).join(", ") }];
     }
     return [];

@@ -113,7 +113,7 @@ CREATE TABLE fields (
   name           TEXT NOT NULL,
   kind           TEXT NOT NULL CHECK (kind IN (
                    'string', 'markdown', 'html', 'number', 'date', 'datetime', 'checkbox', 'image',
-                   'item', 'string_list', 'checklist', 'item_list', 'component', 'ai')),
+                   'item', 'string_list', 'number_list', 'checklist', 'item_list', 'component', 'ai')),
   -- for reference kinds: the collection whose items can be referenced
   target_collection_id TEXT REFERENCES collections(id),
   -- for 'component' / 'ai' fields: the shared component whose result the field shows (null: its own, in code)
@@ -322,18 +322,15 @@ END;
 -- snapshot for the nav (refreshed when the bookmarked page is shown), so it reads without loading.
 CREATE TABLE bookmarks (
   id         TEXT PRIMARY KEY,
-  kind       TEXT NOT NULL CHECK (kind IN ('view', 'item', 'dashboard')),
-  collection_id TEXT REFERENCES collections(id),  -- a view's or item's collection; null for a dashboard's tab
   space_id   TEXT NOT NULL,            -- the space it is listed in
-  target_id  TEXT NOT NULL,            -- views.id, items.id or dashboard_views.id
+  link       TEXT NOT NULL,            -- the page as a stored link, by id: #/collections/<id>/items/<id>?view=<id>&field=<id>, #/dashboards/<id>?view=<id>
   label      TEXT NOT NULL,
   position   INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  deleted_at TEXT,
-  dashboard_id TEXT REFERENCES dashboards(id)     -- a dashboard tab's dashboard; null for the others
+  deleted_at TEXT
 );
-CREATE INDEX idx_bookmarks_target ON bookmarks(target_id);
+CREATE INDEX idx_bookmarks_link ON bookmarks(link);
 
 -- Settings that are the user's rather than the device's (Settings → Display: the theme, how maps look), synced like
 -- content: one row per setting, its value JSON (app/src/app/settings.ts). Devices' own settings (where the server

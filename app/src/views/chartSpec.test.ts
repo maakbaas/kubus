@@ -218,6 +218,11 @@ describe("chartSpec", () => {
     expect(targets.options.meter).toEqual({ showLabels: true, status: { ranges: [{ range: [0, 20], status: "success" }, { range: [50, 100], status: "success" }] } });
     expect(parts.data).toEqual([{ group: "Pages", value: 580 }, { group: "Rating", value: 11 }]);
     expect((parts.options.meter as { proportional: { total: number } }).proportional.total).toBe(1000);
+    // A hidden legend (or one beside the bar) takes no height: Carbon would keep its row empty.
+    const height = (o: Record<string, unknown>) => spec({ chart: "meter", parts: "fields", fields: ["pages", "rating"], total: { from: "number", number: 1000, field: null }, ...o }).options.height;
+    expect(height({ legend: "auto" })).toBe("6rem");
+    expect(height({ legend: "hide" })).toBe("3.5rem");
+    expect(height({ legend: "show", legendPosition: "right" })).toBe("3.5rem");
   });
 
   it("gives a gauge its status by its thresholds (a % of the total or values), its % with the decimals", () => {

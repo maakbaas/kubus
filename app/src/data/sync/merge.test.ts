@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { collectionDraft, newId, type Collection, type FieldDef } from "../../domain/model";
 import { device, FakeServer, settled } from "../../test/fakeServer";
+import { dashboardViewLink, itemLink } from "../../domain/bookmarks";
 import type { DataChange } from "../repository";
 import { SYNC_VERSION } from "../../../../shared/sync";
 
@@ -126,7 +127,7 @@ describe("edits on two devices", () => {
     const n = await notes();
     await a.saveSpace({ id: "work", name: "Work", icon: "Briefcase" });
     const id = await a.createItem(n.a, {}, "work");
-    await a.addBookmark("item", n.id, id, "Remembered", "work");
+    await a.addBookmark(itemLink(n.id, id), "Remembered", "work");
     const ts = new Date().toISOString();
     await a.saveComponent({ id: "badge", name: "Badge", description: "", code: "{{ $item.Title }}", output: "markdown", frameRatio: null, ai: false, createdAt: ts, updatedAt: ts });
     const [all] = await a.listViews(n.id, "default");
@@ -158,13 +159,13 @@ describe("edits on two devices", () => {
     const ts = new Date().toISOString();
     const block = { id: "b", title: "", kind: "table", filters: null, sort: [], groupBy: null, layout: { fields: null, editable: true, hiddenLabels: [], hideEmpty: false }, collectionId: n.id, options: null };
     await a.saveDashboardView({ ...first, id: "second", name: "Second", position: 1, blocks: [block], createdAt: ts, updatedAt: ts });
-    await a.addBookmark("dashboard", "d", "second", "Home / Second", "default");
+    await a.addBookmark(dashboardViewLink("d", "second"), "Home / Second", "default");
     await settled(a);
     await settled(b);
     expect((await b.listDashboards()).map((d) => [d.name, d.icon])).toEqual([["Home", "Dashboard"]]);
     expect((await b.listDashboardViews("d", "default")).map((v) => [v.name, v.blocks.length])).toEqual([["Dashboard", 0], ["Second", 1]]);
     expect((await b.listDashboardViews("d", "work")).every((v) => v.virtual)).toBe(true);
-    expect((await b.listBookmarks("default")).map((x) => [x.kind, x.dashboardId, x.label])).toEqual([["dashboard", "d", "Home / Second"]]);
+    expect((await b.listBookmarks("default")).map((x) => [x.link, x.label])).toEqual([[dashboardViewLink("d", "second"), "Home / Second"]]);
     // Each tab is a row of its own: a rename on one device and a change of another tab on the other both stay.
     const onB = await b.listDashboardViews("d", "default");
     await a.saveDashboardView({ ...first, name: "Start" });
@@ -245,7 +246,7 @@ describe("what a sync reports to the app", () => {
     changes.length = 0;
     await a.saveSpace({ id: "work", name: "Work", icon: null });
     await a.saveComponent({ id: "c", name: "C", description: "", code: "", output: "markdown", frameRatio: null, ai: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
-    await a.addBookmark("item", n.id, id, "x", "default");
+    await a.addBookmark(itemLink(n.id, id), "x", "default");
     const [all] = await a.listViews(n.id, "default");
     await a.saveView({ ...all, name: "Renamed" });
     await a.saveCollection({ ...collectionDraft(n.a), name: "Memo" }, "default");

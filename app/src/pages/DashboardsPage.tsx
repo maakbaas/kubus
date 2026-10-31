@@ -40,7 +40,7 @@ export function DashboardsPage() {
   }
 
   async function remove(d: Dashboard) {
-    if (!(await confirm({ title: `Delete dashboard “${d.name}”?`, body: "Its tabs go too, in every space. Items are not affected." }))) return;
+    if (!(await confirm({ title: `Delete dashboard “${d.name}”?`, body: "Its views go too, in every space. Items are not affected." }))) return;
     await repo.deleteDashboard(d.id);
   }
 

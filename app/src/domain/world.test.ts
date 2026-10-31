@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Component } from "./components";
-import { bookmarkPath } from "./bookmarks";
+import { bookmarkPath, collectionViewLink, dashboardViewLink, itemLink } from "./bookmarks";
 import { fileIdFromSrc, fileSrc, fileIdsIn, filesUsedBy } from "./files";
 import { blankField, type Collection, type Item, type ItemLabel } from "./model";
 import { computeItems, loadWorld } from "./world";
@@ -50,9 +50,10 @@ describe("computeItems", () => {
 
 describe("bookmarks", () => {
   it("lead to a view of the collection or to the item", () => {
-    expect(bookmarkPath({ kind: "view", collectionId: "c", targetId: "v" })).toBe("/collections/c/items?view=v");
-    expect(bookmarkPath({ kind: "item", collectionId: "c", targetId: "i" })).toBe("/collections/c/items/i");
-    expect(bookmarkPath({ kind: "dashboard", collectionId: null, dashboardId: "d", targetId: "t" })).toBe("/dashboards/d?view=t");
+    expect(bookmarkPath({ link: collectionViewLink("c", "v") })).toBe("/collections/c/items?view=v");
+    expect(bookmarkPath({ link: itemLink("c", "i") })).toBe("/collections/c/items/i");
+    expect(bookmarkPath({ link: itemLink("c", "i", "iv") })).toBe("/collections/c/items/i?view=iv");
+    expect(bookmarkPath({ link: dashboardViewLink("d", "t") })).toBe("/dashboards/d?view=t");
   });
 });
 

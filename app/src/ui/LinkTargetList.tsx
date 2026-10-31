@@ -5,7 +5,7 @@ import type { LinkTarget, LinkTargetKind } from "../domain/linkTargets";
 import { Highlight } from "./Highlight";
 
 const ICONS: Record<LinkTargetKind, typeof View> = { collection: Catalog, view: View, item: Document, field: ListBulleted, dashboard: Dashboard, tab: View, block: Grid };
-const KIND_LABEL: Record<LinkTargetKind, string> = { collection: "Collection", view: "View", item: "Item", field: "Field", dashboard: "Dashboard", tab: "Tab", block: "Block" };
+const KIND_LABEL: Record<LinkTargetKind, string> = { collection: "Collection", view: "View", item: "Item", field: "Field", dashboard: "Dashboard", tab: "View", block: "Block" };
 
 /** One option: its kind's icon, its name (`query` marked) and where it is. */
 export function LinkTargetRow({ target, query }: { target: LinkTarget; query?: string }) {

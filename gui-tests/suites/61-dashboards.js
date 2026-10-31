@@ -205,7 +205,7 @@ test("dashboards: blocks of one collection and of several, added from the empty 
   await t.closeAll();
 
   // A second block of Notes, then Notes deleted: a warning instead of the block.
-  await t.openPanel(dViewsBar(t), "Tab settings");
+  await t.openPanel(dViewsBar(t), "View settings");
   await toolbarPanel(t).getByRole("button", { name: "Add block" }).click();
   await t.settle(100);
   await t.page.getByRole("menuitem", { name: "Cards" }).click();

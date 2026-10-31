@@ -47,15 +47,18 @@ Extension points are registries, not special cases in pages:
   checkbox, text for a number; `filterValueProblem`) is shown as invalid at its input and matches
   nothing, never the wrong items (so does a value from the page's item that it doesn't have: "Author is this Book's Mentor" on a Book without one). The value input is text for every kind (the braces must be typable);
   under it, what the code works out to ("= true").
-- **The collections a block lists** (`BlockMenus`, Block settings): a collection view's block lists the view's collection (no picker); an
-  item page's block one collection, picked in a single-select **Collection** dropdown (the store's collections and Backlinks); a
-  dashboard's block one or several (a **Collections** multi-select). `collectionIds` is read (merged, `listedCollection`) only for a
+- **The collections a block lists** (`BlockMenus`, Block settings): a collection view's block lists the view's collection, or the entries
+  of one of its list fields (a **Collection** dropdown, shown when it has one; normalized for those: `normalizeView` with the collections); an
+  item page's block one collection, picked in a single-select **Collection** dropdown (the store's collections, Backlinks and every list
+  field's entries); a dashboard's block one or several (a **Collections** multi-select; a list field's entries only alone: chosen with
+  others, the one chosen last stays). `collectionIds` is read (merged, `listedCollection`) only for a
   block on a dashboard (`BlockPlace` "dashboard").
 - **Several collections in one block** (dashboards only): the block's Collections picker (Block settings) reads them as one read-only collection, fields
   merged by name, Collection / Title / Created / Updated always there, Fields → Merge fields by hand, the dashboard's filter on its
   columns, a page at a time from every part, a chart over all rows: docs/features.md "Several collections in one block". Choosing other collections (more, fewer, another one) keeps the block's type and its type's options (field ids found again by name: `carryOptions`); filter, sort and fields start afresh (down to one: a plain block of it). The picker offers no Backlinks; the block always stores `collectionId` (its first), plus `collectionIds` when there are several.
-- **Virtual collections** (`domain/backlinks.ts` `VIRTUAL_COLLECTIONS`, `Collection.virtual`): a block on an item page may list a collection
-  that stores nothing, **Backlinks** (docs/features.md): offered in that block's Collection dropdown only (`BlockMenus`, when it has a
+- **Virtual collections** (`domain/backlinks.ts` `VIRTUAL_COLLECTIONS`, `virtualCollections`, `Collection.virtual`): a block may list a
+  collection that stores nothing: a list field's entries (`$list:<field id>`, `domain/listEntries.ts`, rows from `ListData` made from the
+  shared item cache; docs/features.md "A list field's entries in a block"), and on an item page **Backlinks** (docs/features.md): offered in that block's Collection dropdown only (`BlockMenus`, when it has a
   page), resolved by id next to the store's collections (`findCollection`, in `ItemPageBlock` and the page-wide filter's scope).
   Its rows come from `useBacklinkData` (the items linking to the page's item, current from the change feed) instead of the shared item
   cache or a remote source, then go through `applyQuery` like any collection's items, so every block type, filter, sort, group and
@@ -133,8 +136,8 @@ Extension points are registries, not special cases in pages:
   of the bar, on the right edge of the block's header buttons (design rule `progress-stop`). Stopping while every row loads
   keeps the pages in ("Load all rows" resumes); stopping the first page (which the source can't be told to abandon: no
   abort in the sources client) drops its answer, and "Load rows" asks again. A new progress bar must use `LoadingBar` with `onStop`.
-- **Dashboard filter** (a dashboard tab's Filter, `pages/DashboardPage.tsx`): like a collection view's (the same panel, the filter bar
-  with "Show filter bar", default off; unsaved until Save changes), edited over the fields of all the tab's blocks' collections
+- **Dashboard filter** (a dashboard view's Filter, `pages/DashboardPage.tsx`): like a collection view's (the same panel, the filter bar
+  with "Show filter bar", default off; unsaved until Save changes), edited over the fields of all the view's blocks' collections
   (`dashboardScope` in `domain/dashboards.ts`: `pageFilterScope` with the filter-only field "Date", `$date`, first, so the bar's period
   goes by it). Every block gets it whole and takes what applies (`dashboardFiltersFor`, in `BlockView` for `place="dashboard"`): a rule on
   Date as the same rule on its own first date or date & time field (none: dropped), a rule on a field only where that field's collection
@@ -176,9 +179,9 @@ Extension points are registries, not special cases in pages:
   "Linked blocks"),
   `map` (`views/MapView.tsx`: the items as dots on a vector map, MapLibre GL with OpenFreeMap's styles and tiles, the
   one thing the app loads from elsewhere; MapLibre is loaded on demand, `views/mapLibre.ts`, its worker bundled. An
-  item's place is read from its fields, `domain/geo.ts`: Location is a text field or a component giving text with both
-  coordinates, "52.37, 4.89", "geo:52.37,4.89" or a map link with "@lat,lon" / "q=lat,lon", or a number field
-  with the latitude, then Longitude a second number field; a first guess by field name. The block's grouping colours
+  item's place is read from its fields, `domain/geo.ts`: Location is a text field or a component / AI field giving text with both
+  coordinates, "52.37, 4.89", "geo:52.37,4.89" or a map link with "@lat,lon" / "q=lat,lon", or a number field (or a
+  component / AI field whose Output is Number) with the latitude, then Longitude a second such field; a first guess by field name. The block's grouping colours
   the dots as a chart colours its series: Carbon Charts' palette for that many groups (1 to 5, else 14; its own
   `--cds-charts-…` tokens for the theme, its stylesheet loaded with MapLibre: `chartPalette`), with a legend and how
   many items have no place; ungrouped they are a one-series chart's colour. Dots and route lines are drawn as a
@@ -315,7 +318,7 @@ Extension points are registries, not special cases in pages:
 - **Saved views** (`app/src/domain/views.ts`, table `views`, per space): name + JSON config
   `{ filters, blocks, editable, collapsed, filterBar?, fullWidth? }` (a block's `beside`, `width`, `rowFit`, `rowHeight`: its row,
   docs/features.md "Blocks side by side"; `parseViewConfig`; `fullWidth`: "Full width", absent =
-  on for a collection view and a dashboard tab, `isFullWidth`; off, the page is wrapped in `.view-page--narrow`, the item
+  on for a collection view and a dashboard view, `isFullWidth`; off, the page is wrapped in `.view-page--narrow`, the item
   page's 700px column; an item view's own is on the `ItemView`, absent = off, on = `.item-view--full`; docs/features.md "Full width").
   Every new collection gets an ordinary "All" view (table, all items, sorted by title) in the space it is made in, created
   with the collection in `saveCollection`; it can be renamed (view settings), edited, starred or deleted like

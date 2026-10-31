@@ -7,7 +7,7 @@
 // and `item#field` lists the fields of the items named (the item page is what a field link opens).
 
 import type { ItemView } from "./fieldLayout";
-import { blockName, DASHBOARDS, describeLink, slug, slugs, type LinkData } from "./links";
+import { blockName, DASHBOARDS, describeLink, resolveNameLink, slug, slugs, type LinkData } from "./links";
 import type { Collection, ItemLabel } from "./model";
 import { isRemote } from "./sources";
 import type { CollectionView } from "./views";
@@ -462,16 +462,34 @@ export async function searchLinkTargets(query: string, data: LinkTargetData, opt
   return withNameLinks(await findLinkTargets(query, data, opts), data);
 }
 
+/** What domain/links.ts reads a link by name with, from what the options are made of. */
+const linkDataOf = (data: LinkTargetData): LinkData => ({
+  collections: data.collections,
+  views: async (c) => data.views.filter((v) => v.collectionId === c.id),
+  items: (c) => (isRemote(c) ? Promise.resolve([]) : data.labels(c)),
+  dashboards: data.dashboards,
+  tabs: async (d) => tabsOf(data, d),
+});
+
 /** The options with their links by name (what typing it out would be), as the editor shows a stored link. */
 async function withNameLinks(targets: LinkTarget[], data: LinkTargetData): Promise<LinkTarget[]> {
-  const linkData: LinkData = {
-    collections: data.collections,
-    views: async (c) => data.views.filter((v) => v.collectionId === c.id),
-    items: (c) => (isRemote(c) ? Promise.resolve([]) : data.labels(c)),
-    dashboards: data.dashboards,
-    tabs: async (d) => tabsOf(data, d),
-  };
+  const linkData = linkDataOf(data);
   return Promise.all(targets.map(async (t) => ({ ...t, link: (await describeLink(t.href, linkData).catch(() => null)) ?? undefined })));
+}
+
+/**
+ * The page a link names, stored by id (`#/collections/…`, `#/dashboards/…`, with or without the address before its
+ * `#`) or written by name (`book/dune/details#author`); null when it names no page there (what a bookmark can't be of).
+ */
+export async function linkTargetOf(link: string, data: LinkTargetData): Promise<LinkTarget | null> {
+  const typed = link.trim();
+  const isStored = !!parseStoredDashboardLink(typed) || !!parseStoredLink(typed);
+  const stored = isStored ? typed : await resolveNameLink(typed, linkDataOf(data)).catch(() => null);
+  if (!stored) return null;
+  const dashboard = parseStoredDashboardLink(stored);
+  if (dashboard) return storedDashboardTarget(dashboard, data);
+  const page = parseStoredLink(stored);
+  return page ? storedLinkTarget(page, data) : null;
 }
 
 async function findLinkTargets(query: string, data: LinkTargetData, opts: { items: boolean; limit?: number }): Promise<LinkTarget[]> {
@@ -487,6 +505,9 @@ async function findLinkTargets(query: string, data: LinkTargetData, opts: { item
     return target ? [target] : [];
   }
   const named = await nameLinkTargets(query, data, limit);
+  // A leading `#/` (or `/`) only says a page of the app is meant: what follows is searched for as words too
+  // (`#/dune` finds Dune, `#/une` too, `#/dune#author` its fields), unless it is an address with a `/` in it.
+  const words = query.replace(/^#?\//, "");
   const nativeItems = async () => {
     const lists = await Promise.all(
       data.collections
@@ -495,14 +516,14 @@ async function findLinkTargets(query: string, data: LinkTargetData, opts: { item
     );
     return lists.flat();
   };
-  const hash = query.startsWith("#") ? -1 : query.indexOf("#");
+  const hash = words.startsWith("#") ? -1 : words.indexOf("#");
   if (hash >= 0) {
-    const items = rankTargets(await nativeItems(), query.slice(0, hash), 3, true);
+    const items = rankTargets(await nativeItems(), words.slice(0, hash), 3, true);
     const fields = items.flatMap((i) => {
       const c = data.collections.find((x) => x.id === i.collectionId)!;
       return fieldTargets(c, { id: i.itemId!, label: i.name, spaceId: data.spaceId });
     });
-    return withoutShown([...(named ?? []), ...rankTargets(fields, query.slice(hash + 1), limit, true)], []).slice(0, limit);
+    return withoutShown([...(named ?? []), ...rankTargets(fields, words.slice(hash + 1), limit, true)], []).slice(0, limit);
   }
   if (named) return named;
   const targets = [
@@ -514,6 +535,6 @@ async function findLinkTargets(query: string, data: LinkTargetData, opts: { item
     ...(data.dashboards ?? []).flatMap((d) => [dashboardTarget(d), ...tabsOf(data, d).map((v) => tabTarget(d, v))]),
     ...(opts.items ? await nativeItems() : []),
   ];
-  return rankTargets(targets, query, limit);
+  return rankTargets(targets, words.includes("/") ? query : words, limit);
 
 }

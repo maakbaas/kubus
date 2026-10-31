@@ -57,18 +57,21 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   `value_text | value_number | value_date | value_datetime | value_bool | value_ref | value_json`),
   `meta` (holds `replica_id`), `settings` (the user's synced settings, JSON by key: Settings → Display; docs/sync.md
   "Synced settings").
-- Dashboards (`domain/dashboards.ts`): `dashboards` (name, icon, description, `space_ids` like a collection's) and their tabs
-  `dashboard_views` (per space, `space_id`, a config as a collection view's, the starred tab per dashboard and space). A space the
-  dashboard is shown in without tabs of its own shows copies of the tabs of the space holding its oldest tab (`dashboardViewsIn`: worked
+- Dashboards (`domain/dashboards.ts`): `dashboards` (name, icon, description, `space_ids` like a collection's) and their views
+  `dashboard_views` (per space, `space_id`, a config as a collection view's, the starred view per dashboard and space). A space the
+  dashboard is shown in without views of its own shows copies of the views of the space holding its oldest view (`dashboardViewsIn`: worked
   out, not stored, so it holds after that space is deleted), stored there all at once (`Repository.storeDashboardViews`) before one
-  changes. `deleteSpace` deletes that space's tabs, `deleteDashboard` its tabs and their bookmarks. A bookmark of a tab has kind
-  `dashboard`, `dashboard_id` and no `collection_id`.
+  changes. `deleteSpace` deletes that space's views, `deleteDashboard` its views and their bookmarks.
+- Bookmarks (`bookmarks`: `space_id`, `link`, `label`, `position`): a bookmark is a stored link (`#/collections/…`,
+  `#/dashboards/…`, docs/features.md "Bookmarks"), indexed. No foreign keys: whatever deletes what a link names soft-deletes the
+  bookmarks naming it in the same transaction (`bookmarkCondition`: ids are UUIDs, so an id after `/items/`, `view=`, `field=` or
+  `block=` is matched as a substring).
 - Images live in `files` (content-addressed: id = SHA-256, immutable; the bytes in the local-only,
   nullable BLOB `data`: NULL until downloaded from the server) and are referenced from
   `field_values.value_file` (no foreign key: a file's row can arrive after its use) or from markdown
   as `files/<sha256>` (`file_uses`, kept by triggers, records which values name which files), or from a block: `files/<sha256>` anywhere in a
   live collection view's config or a live collection's item views (a Markdown block's images, a choropleth's downloaded map;
-  `block_file_uses`, local only, kept by triggers on `views`, `collections` and `dashboard_views`, one row per file and view, collection or dashboard tab id). `thumbnails` links an image to its small copy (another `files` row). Files are stored as soon as they're picked and
+  `block_file_uses`, local only, kept by triggers on `views`, `collections` and `dashboard_views`, one row per file and view, collection or dashboard view id). `thumbnails` links an image to its small copy (another `files` row). Files are stored as soon as they're picked and
   released (`releaseFile` in `SqliteRepository.ts`: marked `unused_since`, with their thumbnail) in the same transaction as any write that drops
   the last reference (changed/removed image, deleted item/field, a view or item views saved without it, a deleted view, collection or
   space), and after a sync that drops one; the item editor releases
@@ -98,7 +101,7 @@ app/src/pages, app/src/ui       app/src/data/repository.ts     app/src/data/sqli
   `fields.choice_filter` (JSON filter rules over the target, edited with the views' filter editor:
   `ui/ChoiceFilterEditor.tsx`): pickers offer only matching items (`choicesFor`); a value
   already chosen that no longer matches stays. Single references live
-  in `value_ref`; lists (`string_list`, `item_list`) are JSON arrays in `value_json`, which means a
+  in `value_ref`; lists (`string_list`, `number_list`, `checklist`, `item_list`) are JSON arrays in `value_json`, which means a
   list merges as one value during sync.
 - Component and AI fields keep their own (local) component in `fields.code` / `output` / `frame_ratio`, else
   `component_id` names a shared one; blocks keep theirs in their options. AI fields (`fields.output`:

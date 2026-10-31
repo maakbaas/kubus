@@ -7,6 +7,7 @@ import { collectionDraft, itemLabel, newId, NO_TITLE, type Collection, type Fiel
 import { NOTHING_COLLAPSED, type CollectionView } from "../../domain/views";
 import { isVirtualTab, type DashboardView } from "../../domain/dashboards";
 import { FULL_LAYOUT } from "../../domain/fieldLayout";
+import { dashboardViewLink, itemLink } from "../../domain/bookmarks";
 import type { DataChange } from "../repository";
 
 type Repo = Awaited<ReturnType<typeof device>>;
@@ -266,14 +267,14 @@ describe("views", () => {
 describe("bookmarks", () => {
   it("are kept per space in the order added, relabelled and removed", async () => {
     const book = await collection("Book", [field("Title")]);
-    const a = await repo.createItem(book, {}, "default");
-    const b = await repo.createItem(book, {}, "default");
-    await repo.addBookmark("item", book.id, a, "A", "default");
-    await repo.addBookmark("item", book.id, b, "B", "default");
+    const a = itemLink(book.id, await repo.createItem(book, {}, "default"));
+    const b = itemLink(book.id, await repo.createItem(book, {}, "default"));
+    await repo.addBookmark(a, "A", "default");
+    await repo.addBookmark(b, "B", "default");
     await repo.relabelBookmark(a, "A2");
-    expect((await repo.listBookmarks("default")).map((x) => [x.targetId, x.label])).toEqual([[a, "A2"], [b, "B"]]);
+    expect((await repo.listBookmarks("default")).map((x) => [x.link, x.label])).toEqual([[a, "A2"], [b, "B"]]);
     await repo.removeBookmark(a, "default");
-    expect((await repo.listBookmarks("default")).map((x) => x.targetId)).toEqual([b]);
+    expect((await repo.listBookmarks("default")).map((x) => x.link)).toEqual([b]);
   });
 });
 
@@ -344,13 +345,13 @@ describe("dashboards", () => {
     const extra = tabOf("d", "default", "Extra");
     await repo.saveDashboardView(extra);
     const [other] = await repo.listDashboardViews("e", "default");
-    await repo.addBookmark("dashboard", "d", tab.id, "Home / Dashboard", "default");
-    await repo.addBookmark("dashboard", "d", extra.id, "Home / Extra", "default");
-    await repo.addBookmark("item", book.id, item, "Item", "default");
-    await repo.addBookmark("dashboard", "e", other.id, "Other", "default");
+    await repo.addBookmark(dashboardViewLink("d", tab.id), "Home / Dashboard", "default");
+    await repo.addBookmark(dashboardViewLink("d", extra.id), "Home / Extra", "default");
+    await repo.addBookmark(itemLink(book.id, item), "Item", "default");
+    await repo.addBookmark(dashboardViewLink("e", other.id), "Other", "default");
     const marks = await repo.listBookmarks("default");
-    expect(marks.map((b) => [b.kind, b.collectionId, b.dashboardId, b.label])).toEqual([
-      ["dashboard", null, "d", "Home / Dashboard"], ["dashboard", null, "d", "Home / Extra"], ["item", book.id, undefined, "Item"], ["dashboard", null, "e", "Other"],
+    expect(marks.map((b) => [b.link, b.label])).toEqual([
+      [dashboardViewLink("d", tab.id), "Home / Dashboard"], [dashboardViewLink("d", extra.id), "Home / Extra"], [itemLink(book.id, item), "Item"], [dashboardViewLink("e", other.id), "Other"],
     ]);
     await repo.deleteDashboardView(extra.id);
     expect((await repo.listBookmarks("default")).map((b) => b.label)).toEqual(["Home / Dashboard", "Item", "Other"]);

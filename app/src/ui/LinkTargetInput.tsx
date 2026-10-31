@@ -11,6 +11,8 @@ const isExternal = (text: string) => (/^[a-z][a-z0-9+.-]*:/i.test(text) && !text
  * The link dialog's URL field with the link picker's options (LinkPicker) under it while a page of
  * the app is typed: ↑ ↓ move, Enter or Tab choose, Escape closes the list (not the dialog), a click
  * chooses. Choosing writes the page's link in its name form (`toShown`), stored by id on Apply.
+ * The New bookmark dialog uses it too: only the pages it can bookmark (`filter`), and a pick is
+ * also handed over (`onPick`).
  */
 export function LinkTargetInput({
   id,
@@ -21,6 +23,7 @@ export function LinkTargetInput({
   placeholder = "https:// or a page: books/reading-list, book/dune#author",
   helperText,
   invalidText,
+  filter,
   onPick,
   onCommit,
 }: {
@@ -33,8 +36,10 @@ export function LinkTargetInput({
   helperText?: string;
   /** Shown under the field, marking it invalid. */
   invalidText?: string;
-  /** A page was chosen from the list (after onChange with its name form). */
-  onPick?(value: string): void;
+  /** Only these options are offered. */
+  filter?(target: LinkTarget): boolean;
+  /** A page was chosen from the list (after onChange with its name form, `value`; `target` the option picked). */
+  onPick?(value: string, target: LinkTarget): void;
   /** The text typed is done: the field is left, or Enter pressed with no list open. */
   onCommit?(): void;
 }) {
@@ -53,10 +58,10 @@ export function LinkTargetInput({
       return;
     }
     let current = true;
-    search(query, { items: true, limit: 30 }).then(
+    search(query, { items: true, limit: filter ? 100 : 30 }).then(
       (found) => {
         if (!current) return;
-        setTargets(found);
+        setTargets(filter ? found.filter(filter).slice(0, 30) : found);
         setActive(0);
       },
       () => current && setTargets([]),
@@ -64,6 +69,7 @@ export function LinkTargetInput({
     return () => {
       current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, typing, search]);
   useEffect(() => reset, [reset]);
 
@@ -71,7 +77,7 @@ export function LinkTargetInput({
     setTyping(false);
     const chosen = (value: string) => {
       onChange(value);
-      onPick?.(value);
+      onPick?.(value, t);
     };
     toShown(t.href).then(chosen, () => chosen(t.href));
   };

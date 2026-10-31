@@ -3,7 +3,9 @@ import { Checkbox, IconButton, Link, Select, SelectItem } from "@carbon/react";
 import { CenterToFit, Earth, ZoomIn, ZoomOut } from "@carbon/icons-react";
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { itemPath } from "../domain/backlinks";
+import type { Component } from "../domain/components";
 import { isCoordinateField, isLocationTextField, locationOf, locationOfPair, type LngLat } from "../domain/geo";
+import { useStore } from "../app/store";
 import { fieldValue, isStruckThrough, itemLabel, pickableFields, type Collection, type FieldDef, type Item } from "../domain/model";
 import { fieldText, isEmptyValue, isGrouped, type QueryResult } from "../domain/query";
 import { BLOCK_HEIGHT, blockHeightCss, DEFAULT_ASPECT, normalizeAspect, normalizeBlockHeight, type AspectRatio } from "../domain/views";
@@ -20,7 +22,7 @@ import { defineBlockType, type BlockOptionsProps, type BlockProps } from "./regi
 
 // A block showing its items as dots on a vector map (MapLibre GL, OpenFreeMap's tiles). An item's
 // place is read from its fields (domain/geo.ts): one text field with both coordinates, or two
-// number fields. The block's grouping colours the dots (one colour per group, as a chart colours its
+// number fields (or components / AI fields giving a number). The block's grouping colours the dots (one colour per group, as a chart colours its
 // series: Carbon Charts' palette for so many, with a legend); dots and route lines are drawn as a
 // lollipop chart's dots and lines, so maps and charts look alike; hovering a dot shows the item's title and the
 // block's fields (the pointer can move onto it, to its title's link), clicking it opens the item
@@ -70,8 +72,12 @@ const ROUTE_LAYER = "kubus-route";
 const HIDE_DELAY = 200;
 
 /** Fields a location can be read from (Location), and those a longitude can (with a number latitude). */
-const locationFields = (collection: Collection) => pickableFields(collection).filter((f) => isLocationTextField(f) || isCoordinateField(f));
-const coordinateFields = (collection: Collection) => pickableFields(collection).filter(isCoordinateField);
+const locationFields = (collection: Collection, components: Component[]) =>
+  pickableFields(collection).filter((f) => isLocationTextField(f, components) || isCoordinateField(f, components));
+const coordinateFields = (collection: Collection, components: Component[]) => pickableFields(collection).filter((f) => isCoordinateField(f, components));
+/** Whether a stored field id may still be a location / a coordinate: a shared component's output isn't known where options are normalized, so a component field may be either (the map decides when it draws). */
+const mayLocate = (f: FieldDef) => f.kind === "string" || f.kind === "number" || f.kind === "component" || f.kind === "ai";
+const mayBeCoordinate = (f: FieldDef) => f.kind === "number" || f.kind === "component" || f.kind === "ai";
 
 interface Place {
   item: Item;
@@ -91,13 +97,14 @@ interface Legend {
  * The items with a place, each once (in the first group it is in), coloured by group as a chart's series
  * are (`palette`: the colours for so many groups); and the legend.
  */
-function placesOf(collection: Collection, result: QueryResult, options: MapOptions, palette: (count: number) => string[]) {
+function placesOf(collection: Collection, components: Component[], result: QueryResult, options: MapOptions, palette: (count: number) => string[]) {
   const fields = pickableFields(collection);
   const location = fields.find((f) => f.id === options.locationFieldId);
-  const longitude = location && isCoordinateField(location) ? fields.find((f) => f.id === options.longitudeFieldId) : undefined;
+  const pair = !!location && isCoordinateField(location, components);
+  const longitude = pair ? fields.find((f) => f.id === options.longitudeFieldId) : undefined;
   const placeOf = (item: Item): LngLat | null => {
     if (!location) return null;
-    if (isCoordinateField(location)) return longitude ? locationOfPair(fieldValue(item, location), fieldValue(item, longitude)) : null;
+    if (pair) return longitude ? locationOfPair(fieldValue(item, location), fieldValue(item, longitude)) : null;
     return locationOf(fieldValue(item, location));
   };
   const grouped = isGrouped(result);
@@ -124,7 +131,7 @@ function placesOf(collection: Collection, result: QueryResult, options: MapOptio
     for (const p of placed) places.push({ ...p, color, group: group.key });
     if (grouped) legend.push({ key: group.key, label: group.label, color });
   });
-  return { places, legend, missing, chosen: !!location && (!isCoordinateField(location) || !!longitude) };
+  return { places, legend, missing, chosen: !!location && (!pair || !!longitude) };
 }
 
 /** The route: the places in order, a line per group. */
@@ -193,7 +200,11 @@ export function MapView({ collection, result, fields, layout, options, refs, sea
     };
   }, [dark, stylesIn]);
 
-  const { places, legend, missing, chosen } = useMemo(() => placesOf(collection, result, options, palette), [collection, result, options, palette]);
+  const { components } = useStore();
+  const { places, legend, missing, chosen } = useMemo(
+    () => placesOf(collection, components, result, options, palette),
+    [collection, components, result, options, palette],
+  );
   // What a chart's dots sit on: the page's background (a theme token, read: the map can't read CSS variables).
   const under = useMemo(() => (box.current ? getComputedStyle(box.current).getPropertyValue("--cds-background").trim() : "") || (dark ? "#161616" : "#ffffff"), [dark]);
 
@@ -505,20 +516,21 @@ function MapOptionsEditor({ collection, options, inRow, onChange }: BlockOptions
   // Stored after a pause, not at every step of a drag: each store is a write, a sync change and a redraw (a map's
   // canvas resized each time, which could crash the page).
   const [height, setHeight] = useBuffered(options.height, (h) => onChange({ ...options, height: h }));
+  const { components } = useStore();
   const location = collection.fields.find((f) => f.id === options.locationFieldId);
-  const pair = !!location && isCoordinateField(location);
+  const pair = !!location && isCoordinateField(location, components);
   return (
     <div className="view-options">
       <Select
         size="sm"
         id={`${uid}-map-location`}
         labelText={pair ? "Latitude" : "Location"}
-        helperText={pair ? undefined : "Text with both coordinates (“52.37, 4.89”, a map link), or a number field with the latitude."}
+        helperText={pair ? undefined : "Text with both coordinates (“52.37, 4.89”, a map link), or a number field (or component / AI field giving a number) with the latitude."}
         value={options.locationFieldId ?? ""}
         onChange={(e) => onChange({ ...options, locationFieldId: e.target.value || null })}
       >
         <SelectItem value="" text="None" />
-        {locationFields(collection).map((f) => (
+        {locationFields(collection, components).map((f) => (
           <SelectItem key={f.id} value={f.id} text={f.name} />
         ))}
       </Select>
@@ -531,7 +543,7 @@ function MapOptionsEditor({ collection, options, inRow, onChange }: BlockOptions
           onChange={(e) => onChange({ ...options, longitudeFieldId: e.target.value || null })}
         >
           <SelectItem value="" text="None" />
-          {coordinateFields(collection)
+          {coordinateFields(collection, components)
             .filter((f) => f.id !== options.locationFieldId)
             .map((f) => (
               <SelectItem key={f.id} value={f.id} text={f.name} />
@@ -559,13 +571,16 @@ function MapOptionsEditor({ collection, options, inRow, onChange }: BlockOptions
 
 const NAMED = { location: /locat|coord|place|position|geo/i, lat: /^lat/i, lng: /^(lng|lon)/i };
 
-/** A first guess at the location: two number fields named latitude / longitude, else a text field named like a location. */
+/**
+ * A first guess at the location: two number fields named latitude / longitude, else a text field named like a location.
+ * Shared components aren't known here: a field's own component and an AI field count by their output.
+ */
 function guessLocation(collection: Collection): Pick<MapOptions, "locationFieldId" | "longitudeFieldId"> {
-  const numbers = coordinateFields(collection);
+  const numbers = coordinateFields(collection, []);
   const lat = numbers.find((f) => NAMED.lat.test(f.name));
   const lng = numbers.find((f) => NAMED.lng.test(f.name));
   if (lat && lng) return { locationFieldId: lat.id, longitudeFieldId: lng.id };
-  const text = pickableFields(collection).find((f) => isLocationTextField(f) && NAMED.location.test(f.name));
+  const text = pickableFields(collection).find((f) => isLocationTextField(f, []) && NAMED.location.test(f.name));
   return { locationFieldId: text?.id ?? null, longitudeFieldId: null };
 }
 
@@ -578,8 +593,8 @@ export const mapView = defineBlockType<MapOptions>({
   normalizeOptions(raw, collection) {
     const o = (raw ?? {}) as Partial<MapOptions>;
     const fields = pickableFields(collection);
-    const location = fields.find((f) => f.id === o.locationFieldId && (isLocationTextField(f) || isCoordinateField(f)));
-    const longitude = location && isCoordinateField(location) ? fields.find((f) => f.id === o.longitudeFieldId && isCoordinateField(f)) : undefined;
+    const location = fields.find((f) => f.id === o.locationFieldId && mayLocate(f));
+    const longitude = location && mayBeCoordinate(location) ? fields.find((f) => f.id === o.longitudeFieldId && mayBeCoordinate(f)) : undefined;
     return {
       locationFieldId: location?.id ?? null,
       longitudeFieldId: longitude?.id ?? null,

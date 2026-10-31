@@ -5,6 +5,7 @@
 // Part of the app's typecheck (it runs app code), not the server's.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { newId, type Collection } from "../../app/src/domain/model";
+import { dashboardViewLink } from "../../app/src/domain/bookmarks";
 import { bytes, device as fakeServerDevice, settled } from "../../app/src/test/fakeServer";
 import { SYNC_VERSION } from "../../shared/sync.ts";
 import { startServer, TOKEN, type RunningServer } from "./serve.ts";
@@ -82,14 +83,14 @@ describe.skipIf(!ADMIN)("devices syncing through the server", () => {
     await a.storeDashboardViews("board", "work");
     const [workTab] = await a.listDashboardViews("board", "work");
     await a.saveDashboardView({ ...workTab, name: "Work tab" });
-    await a.addBookmark("dashboard", "board", workTab.id, "Board / Work tab", "work");
+    await a.addBookmark(dashboardViewLink("board", workTab.id), "Board / Work tab", "work");
     await settled(a);
 
     const b = await device();
     expect((await b.listDashboards()).map((d) => [d.name, d.icon, d.spaceIds])).toEqual([["Board", "Dashboard", ["default", "work"]]]);
     expect(await b.listDashboardViews("board", "default")).toEqual([expect.objectContaining({ id: first.id, blocks: [block], filterBar: true, filters: [expect.objectContaining({ fieldId: "$date" })] })]);
     expect((await b.listDashboardViews("board", "work")).map((v) => [v.id, v.name, v.virtual])).toEqual([[workTab.id, "Work tab", undefined]]);
-    expect(await b.listBookmarks("work")).toEqual([expect.objectContaining({ kind: "dashboard", collectionId: null, dashboardId: "board", targetId: workTab.id })]);
+    expect(await b.listBookmarks("work")).toEqual([expect.objectContaining({ link: dashboardViewLink("board", workTab.id), label: "Board / Work tab" })]);
     await b.deleteDashboard("board");
     await settled(b);
     await settled(a);

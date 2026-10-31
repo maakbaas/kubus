@@ -58,6 +58,7 @@ An empty field is null. To show something else instead, add a fallback: `{{ $ite
 | Item | the title of the linked item |
 | List of items | a list of the linked items' titles |
 | List of strings | a list of texts |
+| List of numbers | a list of numbers |
 | Checklist | a list of entries, each with text and done |
 
 ## What a component shows
@@ -118,6 +119,23 @@ A table, cards, a chart or a Component block shows them like any items: filter, 
 
 ```component
 {{ $items.map((i) => `- ${i.Item} (${i.Collection}, ${i.Field})`).join("\n") }}
+```
+
+### A list field's entries
+
+A block can list the entries of a list field (a Checklist, List of strings, List of numbers or List of items) of every item of a collection: choose it as the block's Collection in Block settings, named like "Books › Todo" (on a collection view: its own list fields; on a dashboard: alone). Each entry is a row with these fields:
+
+| Field | What it is |
+|---|---|
+| the collection's name ("Book") | the item the entry is in (on that item's page a new block shows only its entries) |
+| the field's name ("Todo") | the entry: a checklist's text, a string or a number |
+| Done | a checklist's: whether it is ticked (tick it right in the block) |
+| Position | its place in the list: 1, 2, … |
+
+A List of items' rows are the linked items themselves, with their own fields, plus the item they are in and Position. Group a checklist by Done, chart a list of numbers, filter by the item: like any items. In a component they are `$items` as usual:
+
+```component
+{{ $items.filter((i) => !i.Done).map((i) => `- ${i.Todo} (${i.Book})`).join("\n") }}
 ```
 
 ## Examples

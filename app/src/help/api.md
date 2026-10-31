@@ -75,6 +75,7 @@ Its values are listed by field name. An empty field is null.
 | Item | the id of the linked item |
 | List of items | a list of ids |
 | List of strings | a list of texts |
+| List of numbers | a list of numbers |
 | Checklist | a list such as ["[x] done", "[ ] to do"]; entries with text and done are taken too |
 | Component | worked out as the app shows it; can't be written |
 | AI | text or a number; written with its own address (below) |
@@ -114,7 +115,7 @@ For spaces, give a list of spaces, or null for every space.
 
 ### Describing a field
 
-A field needs a **name** and a **kind**. The kinds are string, markdown, html, number, date, datetime, checkbox, image, item, string_list, checklist, item_list, component and ai. A field's kind and target can't change later.
+A field needs a **name** and a **kind**. The kinds are string, markdown, html, number, date, datetime, checkbox, image, item, string_list, number_list, checklist, item_list, component and ai. A field's kind and target can't change later.
 
 Some kinds need more:
 
@@ -137,9 +138,9 @@ Any field can also have a choiceFilter, a toggleIcon and strikeThrough.
 | `GET /collections/{c}/item-views` | the item views |
 | `PUT /collections/{c}/item-views` | replace the item views with a list of `{ name, isDefault?, fullWidth?, layout }` |
 
-"Full width" (`fullWidth`): whether the view uses the page's whole width (true) or the narrow column of an item page (false). Every view, item view and dashboard tab is answered with it; unless set, it is true for a collection view and a dashboard tab and false for an item view. A PATCH without it keeps it; null sets it back to that default.
+"Full width" (`fullWidth`): whether the view uses the page's whole width (true) or the narrow column of an item page (false). Every view, item view and dashboard view is answered with it; unless set, it is true for a collection view and a dashboard view and false for an item view. A PATCH without it keeps it; null sets it back to that default.
 
-A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, options?, beside?, width?, rowFit?, rowHeight? }` (its row: `beside` true puts it beside the block before it, at most 4 to a row; `width` its share of the row in percent; on a row's first block `rowFit`, absent for as tall as its tallest block or `shortest`, and `rowHeight` in rem, 4 to 96: at most that tall, or with `shortest` at least; side by side a chart, map or HTML component counts with its own height and fills the row). Its kind is table, cards, map, component, markdown or linked (another block shown as it is set up where it is: `options.href` is the link to it in the app's stored form, `#/collections/{id}/items?view={view}&block={block}`, `#/collections/{id}/items/{item}?block={block}` or `#/dashboards/{id}?view={tab}&block={block}`). In a view or item view a block lists one collection: the view's, or `collectionId` (a collection's id or name). Several collections in one block are for dashboards (see below): a view's or item view's block with more than one in `collectionIds` is refused (400). Fields in a block can be named by id or by name, in:
+A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, options?, beside?, width?, rowFit?, rowHeight? }` (its row: `beside` true puts it beside the block before it, at most 4 to a row; `width` its share of the row in percent; on a row's first block `rowFit`, absent for as tall as its tallest block or `shortest`, and `rowHeight` in rem, 4 to 96: at most that tall, or with `shortest` at least; side by side a chart, map or HTML component counts with its own height and fills the row). Its kind is table, cards, map, component, markdown or linked (another block shown as it is set up where it is: `options.href` is the link to it in the app's stored form, `#/collections/{id}/items?view={view}&block={block}`, `#/collections/{id}/items/{item}?block={block}` or `#/dashboards/{id}?view={view}&block={block}`). In a view or item view a block lists one collection: the view's, or `collectionId` (a collection's id or name). Several collections in one block are for dashboards (see below): a view's or item view's block with more than one in `collectionIds` is refused (400). Fields in a block can be named by id or by name, in:
 
 - filters, a list of `{ fieldId, operator, value, join? }`. `join` is `and` (the default) or `or`: how the rule joins the rules before it, read in order (`A or B and C` is `(A or B) and C`). A block always builds on its view's filter (on an item page, on the item view's `layout.filters`, whose fields can be of any of its blocks' collections, applied while it has more than one block listing items): its rules come after the view's, so `and` narrows the view's filter and `or` makes an exception to it. A date period frames its own filter: it is and-ed with that filter's other rules, wherever it is in the list; in a block's filter, a period with `join` `or` is or-ed with the view's filter instead, the block's other rules following on that (a date period: operator `between`, value `2026-10-01..2026-10-31`, both days included, or local minutes `2026-10-28T14:00..2026-10-28T14:59`, or counted from now: `hour`, `day`, `week`, `month` or `year` and an offset, `week+0` this week, `month-1` last month; `day-6..day+0` the last 7 days, likewise `hour-23..hour+0` and `minute-29..minute+0`; `year+0..day+0` this year so far, likewise `week` and `month`; such a period followed by `@$item.<fieldId>` is counted from that date field of the item page it is on instead of today);
 - sort, a list of `{ fieldId, direction }`, its levels: the first decides, each next one orders what those before leave equal (a chart or map block without one runs in time order, by its collection's first date field; a sort given is always followed);
@@ -147,25 +148,27 @@ A block is `{ kind, title?, filters?, sort?, groupBy?, layout?, collectionId?, o
 
 ## Dashboards
 
-A dashboard is a page of blocks of any collections, belonging to none: `{ id, name, icon, description, spaces, position, createdAt, updatedAt }` (`spaces`: the spaces it is shown in, null for every one). Its tabs are views as above, per space; a space it is shown in that has no tabs of its own shows copies of the tabs of the space it was first given tabs in (`virtual: true`), which are stored there (all of them, with new ids) once one is changed, deleted, starred or bookmarked through the API, as in the app.
+A dashboard is a page of blocks of any collections, belonging to none: `{ id, name, icon, description, spaces, position, createdAt, updatedAt }` (`spaces`: the spaces it is shown in, null for every one). Its views are as above, per space; a space it is shown in that has no views of its own shows copies of the views of the space it was first given views in (`virtual: true`), which are stored there (all of them, with new ids) once one is changed, deleted, starred or bookmarked through the API, as in the app.
 
 | Method and address | What it does |
 |---|---|
 | `GET /dashboards` | the dashboards (optional: space, only those shown there) |
 | `GET /dashboards/{d}` | one dashboard, by id or name |
-| `POST /dashboards` | create one from `{ name, icon?, description?, space?, spaces? }`, with a first tab "Dashboard" in that space; it is shown only there unless `spaces` is given |
+| `POST /dashboards` | create one from `{ name, icon?, description?, space?, spaces? }`, with a first view "Dashboard" in that space; it is shown only there unless `spaces` is given |
 | `PATCH /dashboards/{d}` | change it: `{ name?, icon?, description?, spaces? }` |
-| `DELETE /dashboards/{d}` | delete it, with its tabs and their bookmarks |
-| `GET /dashboards/{d}/views` | its tabs in a space (optional: space) |
+| `DELETE /dashboards/{d}` | delete it, with its views and their bookmarks |
+| `GET /dashboards/{d}/views` | its views in a space (optional: space) |
 | `GET /dashboards/{d}/views/{v}/items` | a block's result, as for a collection view. Optional: block, space, limit, offset. A block reading a remote collection is refused (400): its rows aren't items here |
-| `POST /dashboards/{d}/views` | create a tab from `{ name, space?, filters?, blocks?, editable?, filterBar?, fullWidth? }` in a space the dashboard is shown in (409 otherwise) |
-| `PATCH /dashboards/{d}/views/{v}` | change a tab (optional: space) |
-| `DELETE /dashboards/{d}/views/{v}` | delete a tab (optional: space) |
-| `PUT /dashboards/{d}/default-view` | star a tab in a space: `{ space?, view }` (null for none) |
+| `POST /dashboards/{d}/views` | create a view from `{ name, space?, filters?, blocks?, editable?, filterBar?, fullWidth? }` in a space the dashboard is shown in (409 otherwise) |
+| `PATCH /dashboards/{d}/views/{v}` | change a view (optional: space) |
+| `DELETE /dashboards/{d}/views/{v}` | delete a view (optional: space) |
+| `PUT /dashboards/{d}/default-view` | star a view in a space: `{ space?, view }` (null for none) |
 
-A dashboard's block names what it lists: `collectionId` (a collection's id or name), or `collectionIds`, several read as one (their fields merged by name; `merges` as the app stores them). Its fields are named against that: with several collections, the merged columns' names. A tab may have no blocks. The tab's filter names fields of its blocks' collections, each rule applied to the blocks of that field's collection, or `Date`: each block's own first date or date & time field (a block without one is left alone).
+A dashboard's block names what it lists: `collectionId` (a collection's id or name, or `$list:<field id>`: a list field's entries, never with others: 400), or `collectionIds`, several read as one (their fields merged by name; `merges` as the app stores them). Its fields are named against that: with several collections, the merged columns' names. A dashboard view may have no blocks. Its filter names fields of its blocks' collections, each rule applied to the blocks of that field's collection, or `Date`: each block's own first date or date & time field (a block without one is left alone).
 
 ## Spaces, bookmarks and components
+
+A bookmark is `{ id, link, label, position, createdAt }`: `link` is the page as a stored link (`#/collections/<id>/items/<id>?view=<id>&field=<id>`, `#/dashboards/<id>?view=<id>`). It is deleted with what it leads to (an item, a view, a field, a block, a collection, a dashboard).
 
 | Method and address | What it does |
 |---|---|
@@ -174,9 +177,9 @@ A dashboard's block names what it lists: `collectionId` (a collection's id or na
 | `PATCH /spaces/{s}` | rename: `{ name?, icon? }` |
 | `DELETE /spaces/{s}` | delete, with its items |
 | `GET /bookmarks` | the bookmarks (optional: space) |
-| `POST /bookmarks` | add one: `{ kind: "item", target }`, `{ kind: "view", collection, target }` or `{ kind: "dashboard", dashboard, target }` (a tab), with optional space and label |
-| `PATCH /bookmarks/{target}` | rename: `{ label }` |
-| `DELETE /bookmarks/{target}` | remove (optional: space) |
+| `POST /bookmarks` | add one: `{ link, label?, space? }`, the link to any page by name (`book/dune`, `book/dune/details#author`, `books/reading-list`, `dashboards/health/daily`) or stored (`#/collections/…`); 404 when it names nothing in the space, 409 when it is bookmarked already; the label defaults to the page's name |
+| `PATCH /bookmarks/{id}` | rename: `{ label }` (optional: space) |
+| `DELETE /bookmarks/{id}` | remove (optional: space) |
 | `GET /components`, `GET /components/{x}` | components, with their code |
 | `POST /components` | create one: `{ name, code, output?, ai?, description?, frameRatio? }`; with ai on it is a prompt for AI fields |
 | `PATCH /components/{x}` | change one |

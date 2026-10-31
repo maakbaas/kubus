@@ -8,7 +8,8 @@ import { HttpError, json, readJson, Router, type ApiRequest } from "../../../sha
 import { MAX_FILE_BYTES } from "../../../shared/sync";
 import type { Repository } from "../data/repository";
 import { aiRequest } from "../domain/ai";
-import type { Bookmark } from "../domain/bookmarks";
+import { bookmarkLabel, withViewId, type Bookmark } from "../domain/bookmarks";
+import { linkTargetOf, parseStoredDashboardLink, type LinkTargetData } from "../domain/linkTargets";
 import { isComponentOutput, placeProblem, type Component } from "../domain/components";
 import { fieldKinds } from "../domain/fieldKinds";
 import { fileSrc, IMAGE_TYPES } from "../domain/files";
@@ -17,7 +18,7 @@ import { canBeTitle, collectionDraft, isReferenceKind, newId, NO_TITLE, suggestP
 import { applyQuery, filterValueProblem, isGrouped, operatorsFor, type FilterRule, type QueryResult, type SortRule, type ViewQuery } from "../domain/query";
 import { refLabelForSpace } from "../domain/refOptions";
 import { DEFAULT_SPACE_ID, inSpace, type Space } from "../domain/spaces";
-import { dashboardFiltersFor, dashboardScope, type Dashboard, type DashboardView } from "../domain/dashboards";
+import { dashboardFiltersFor, dashboardScope, dashboardViewsIn, findTab, type Dashboard, type DashboardView } from "../domain/dashboards";
 import { resolveParts } from "../domain/mergedCollection";
 import { nativeItems } from "../domain/mergedRows";
 import { isRemote } from "../domain/sources";
@@ -25,6 +26,7 @@ import { blockSort } from "../domain/blockSort";
 import { blockQuery, defaultViewState, isFullWidth, listedCollection, NOTHING_COLLAPSED, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
 import { draftProblem } from "../domain/collectionDraft";
 import { computeItems, loadWorld, type World } from "../domain/world";
+import { entryItems, findListCollection, isListCollectionId } from "../domain/listEntries";
 import { fieldOf, itemOut, same, valuesIn, type ItemsExist } from "./values";
 import { errorMessage } from "../domain/errors";
 
@@ -69,6 +71,14 @@ const collectionOf = (world: World, name: string): Collection => {
     world.collections.find((x) => same(x.name, name) || same(x.pluralName, name));
   if (!c) throw new HttpError(404, `No collection “${name}”`);
   return c;
+};
+
+/** What a block lists: a collection (by id or name), or a list field's entries (`$list:<field id>`, domain/listEntries.ts). */
+const blockCollectionOf = (world: World, name: string): Collection => {
+  if (!isListCollectionId(name)) return collectionOf(world, name);
+  const list = findListCollection(world.collections, name);
+  if (!list) throw new HttpError(404, `No list field whose entries a block can list: “${name}”`);
+  return list;
 };
 
 const spaceOf = (world: World, name: string | null | undefined): Space => {
@@ -211,14 +221,15 @@ function blockIn(world: World, place: BlockPlace, raw: unknown): ViewBlock {
   const o = raw as Body;
   const own = "own" in place ? place.own : null;
   // On a dashboard a block names its collection, or several (read as one: their fields merged by name).
-  const several = Array.isArray(o.collectionIds) ? [...new Set(o.collectionIds.map((n) => collectionOf(world, String(n)).id))] : null;
+  const several = Array.isArray(o.collectionIds) ? [...new Set(o.collectionIds.map((n) => blockCollectionOf(world, String(n)).id))] : null;
   // Several collections in one block are a dashboard's: a view's or item view's block lists one.
   if (own && several && several.length > 1) throw new HttpError(400, "Several collections in one block are for dashboards");
+  if (several && several.length > 1 && several.some(isListCollectionId)) throw new HttpError(400, "A list field's entries are listed by a block of their own");
   if (!own && !several?.length && typeof o.collectionId !== "string") {
     throw new HttpError(400, "A dashboard's block needs `collectionId` (a collection's id or name) or `collectionIds`");
   }
   const collectionIds = several && several.length > 1 ? several : undefined;
-  const named = typeof o.collectionId === "string" && (own || !several?.length) ? collectionOf(world, o.collectionId) : several?.length ? collectionOf(world, several[0]) : own!;
+  const named = typeof o.collectionId === "string" && (own || !several?.length) ? blockCollectionOf(world, o.collectionId) : several?.length ? blockCollectionOf(world, several[0]) : own!;
   // Fields are named against what the block reads: with several collections, their merged columns.
   const merges = Array.isArray(o.merges) ? (o.merges as ViewBlock["merges"]) : undefined;
   const listed = collectionIds ? listedCollection(named, { collectionIds, merges }, world.collections).collection : named;
@@ -244,7 +255,7 @@ function blockIn(world: World, place: BlockPlace, raw: unknown): ViewBlock {
 /** The collections a dashboard tab's blocks list (those still there), each once. */
 const tabCollections = (world: World, blocks: ViewBlock[]): Collection[] => {
   const ids = new Set(blocks.flatMap((b) => b.collectionIds ?? (b.collectionId ? [b.collectionId] : [])));
-  return world.collections.filter((c) => ids.has(c.id));
+  return [...world.collections.filter((c) => ids.has(c.id)), ...[...ids].filter(isListCollectionId).flatMap((id) => findListCollection(world.collections, id) ?? [])];
 };
 
 /** A page of a query's result: its groups' items in order (an item in several groups is in each), and how many there are in all. */
@@ -263,6 +274,13 @@ function page(collection: Collection, result: QueryResult, limit: number, offset
 
 export function createApi(repo: Repository): Router {
   const world = () => loadWorld(repo);
+  /** A space's bookmark by its id. */
+  const bookmarkOf = async (id: string, spaceName: string | null): Promise<Bookmark> => {
+    const space = spaceOf(await world(), spaceName);
+    const found = (await repo.listBookmarks(space.id)).find((b) => b.id === id);
+    if (!found) throw new HttpError(404, `No bookmark “${id}”`);
+    return found;
+  };
   const computed = (w: World, collection: Collection, items: Item[], spaceId: string) => computeItems(repo, w, collection, items, spaceId);
 
   const exist =
@@ -414,7 +432,7 @@ export function createApi(repo: Repository): Router {
           hideEmpty: false,
           ...layout,
           fields: layout.fields === undefined || layout.fields === null ? null : ids(layout.fields),
-          filters: resolveRules<FilterRule>([collection, ...blocks.map((b) => (b.collectionId ? collectionOf(w, b.collectionId) : collection))], layout.filters, "layout.filters"),
+          filters: resolveRules<FilterRule>([collection, ...blocks.map((b) => (b.collectionId ? blockCollectionOf(w, b.collectionId) : collection))], layout.filters, "layout.filters"),
           hiddenLabels: ids(layout.hiddenLabels) ?? [],
           blocks,
         },
@@ -455,10 +473,23 @@ export function createApi(repo: Repository): Router {
    * groups' items in order (an item in several groups is in each), and how many there are in all.
    */
   const queried = async (w: World, collection: Collection, spaceId: string, query: ViewQuery, limit: number, offset: number) => {
+    if (collection.listOf) return entriesQueried(w, collection, spaceId, query, limit, offset);
     const labels = new Map<string, ItemLabel[]>();
     const all = await computeItems(repo, w, collection, await repo.listItems(collection, spaceId), spaceId, labels);
     const refLabel = await refLabelForSpace(repo, collection, spaceId, w, labels);
     return page(collection, applyQuery(collection, all, query, { refLabel }), limit, offset);
+  };
+
+  /** A list field's entries in a space (domain/listEntries.ts), through a query: rows made from its collection's items (a list of items: its items worked out). */
+  const entriesQueried = async (w: World, list: Collection, spaceId: string, query: ViewQuery, limit: number, offset: number) => {
+    const source = list.listOf!;
+    const owner = w.collections.find((c) => c.id === source.collectionId);
+    if (!owner) throw new HttpError(409, "The collection of this list field was deleted");
+    const target = source.targetCollectionId ? w.collections.find((c) => c.id === source.targetCollectionId) : undefined;
+    const targets = target ? new Map((await computed(w, target, await repo.listItems(target, spaceId), spaceId)).map((i) => [i.id, i])) : null;
+    const rows = entryItems(list, await repo.listItems(owner, spaceId), targets);
+    const refLabel = await refLabelForSpace(repo, list, spaceId, w);
+    return page(list, applyQuery(list, rows, query, { refLabel }), limit, offset);
   };
 
   /**
@@ -468,7 +499,7 @@ export function createApi(repo: Repository): Router {
    */
   const blockItems = async (w: World, tab: DashboardView, block: ViewBlock, limit: number, offset: number) => {
     const ids = block.collectionIds ?? (block.collectionId ? [block.collectionId] : []);
-    const parts = ids.map((id) => w.collections.find((c) => c.id === id));
+    const parts = ids.map((id) => (isListCollectionId(id) ? findListCollection(w.collections, id) : w.collections.find((c) => c.id === id)));
     if (parts.length === 0 || parts.some((c) => !c)) throw new HttpError(409, "A collection this block lists was deleted");
     const remote = parts.find((c) => isRemote(c!));
     if (remote) throw new HttpError(400, `The block reads ${remote.pluralName}, a remote collection: its rows aren't items in the API`);
@@ -501,7 +532,7 @@ export function createApi(repo: Repository): Router {
   const tabOf = async (w: World, dashboard: Dashboard, name: string, space?: string | null): Promise<DashboardView> => {
     const tabs = space ? await repo.listDashboardViews(dashboard.id, spaceOf(w, space).id) : (await repo.listAllDashboardViews()).filter((v) => v.dashboardId === dashboard.id);
     const tab = tabs.find((v) => v.id === name) ?? tabs.find((v) => same(v.name, name));
-    if (!tab) throw new HttpError(404, `${dashboard.name} has no tab “${name}”`);
+    if (!tab) throw new HttpError(404, `${dashboard.name} has no view “${name}”`);
     return tab;
   };
 
@@ -778,7 +809,9 @@ export function createApi(repo: Repository): Router {
         const block = name === null ? view.blocks[0] : (view.blocks.find((b) => b.id === name) ?? view.blocks.find((b) => same(b.title, name)));
         if (!block) throw new HttpError(404, `The view “${view.name}” has no block “${name}”`);
         const { limit, offset } = paging(req, 100, 1000);
-        const result = await queried(w, collection, view.spaceId, blockQuery(view.filters, block, blockSort(block, block.collectionId ? collectionOf(w, block.collectionId) : collection)), limit, offset);
+        // A block of a list field's entries lists those (not under the view's filter: it is over the items).
+        const listed = isListCollectionId(block.collectionId) ? blockCollectionOf(w, block.collectionId) : collection;
+        const result = await queried(w, listed, view.spaceId, blockQuery(listed === collection ? view.filters : null, block, blockSort(block, block.collectionId ? blockCollectionOf(w, block.collectionId) : collection)), limit, offset);
         return json(200, {
           view: { id: view.id, name: view.name },
           block: { id: block.id, title: block.title, kind: block.kind },
@@ -892,7 +925,7 @@ export function createApi(repo: Repository): Router {
         const tab = await tabOf(w, await dashboardOf(d), v, req.query.get("space") ?? DEFAULT_SPACE_ID);
         const name = req.query.get("block");
         const block = name === null ? tab.blocks[0] : (tab.blocks.find((b) => b.id === name) ?? tab.blocks.find((b) => same(b.title, name)));
-        if (!block) throw new HttpError(404, name === null ? `The tab “${tab.name}” has no blocks` : `The tab “${tab.name}” has no block “${name}”`);
+        if (!block) throw new HttpError(404, name === null ? `The view “${tab.name}” has no blocks` : `The view “${tab.name}” has no block “${name}”`);
         const { limit, offset } = paging(req, 100, 1000);
         const result = await blockItems(w, tab, block, limit, offset);
         return json(200, {
@@ -968,42 +1001,39 @@ export function createApi(repo: Repository): Router {
         const o = await body(req);
         const w = await world();
         const space = spaceOf(w, text(o, "space"));
-        const kind = o.kind;
-        const target = text(o, "target", true);
-        let ownerId: string;
-        let targetId: string;
-        let label: string;
-        if (kind === "item") {
-          const { collection, item } = await itemOf(w, target);
-          if (item.spaceId !== space.id) throw new HttpError(409, "The item is in another space");
-          ownerId = collection.id;
-          targetId = target;
-          label = itemOut(collection, item).label;
-        } else if (kind === "view") {
-          const collection = collectionOf(w, text(o, "collection", true));
-          const view = await viewOf(w, collection, target, space.id);
-          ownerId = collection.id;
-          targetId = view.id;
-          label = `${collection.pluralName} / ${view.name}`; // as the app labels it
-        } else if (kind === "dashboard") {
-          const dashboard = await dashboardOf(text(o, "dashboard", true));
-          // A tab copied from another space is stored in this one first: a bookmark needs a stored tab.
-          const tab = await storedTab(await tabOf(w, dashboard, target, space.id));
-          ownerId = dashboard.id;
-          targetId = tab.id;
-          label = `${dashboard.name} / ${tab.name}`; // as the app labels it
-        } else throw new HttpError(400, "`kind` must be item, view or dashboard");
-        if ((await repo.listBookmarks(space.id)).some((b) => b.targetId === targetId)) throw new HttpError(409, "Already bookmarked");
-        await repo.addBookmark(kind, ownerId, targetId, text(o, "label") ?? label, space.id);
-        return json(201, (await repo.listBookmarks(space.id)).find((b) => b.targetId === targetId));
+        // Any page a link names, stored by id or written by name (`book/dune/details#author`), as the app's New bookmark finds it.
+        const dashboards = (await repo.listDashboards()).filter((d) => inSpace(d, space.id));
+        const allTabs = await repo.listAllDashboardViews();
+        const data: LinkTargetData = {
+          collections: w.collections.filter((c) => inSpace(c, space.id)),
+          spaceId: space.id,
+          views: (await repo.listAllViews()).filter((v) => v.spaceId === space.id),
+          dashboards,
+          tabs: dashboards.flatMap((d) => dashboardViewsIn(allTabs, d.id, space.id)),
+          labels: (c, ids) => repo.listLabels(c, ids),
+        };
+        const typed = text(o, "link", true);
+        const target = await linkTargetOf(typed, data);
+        if (!target) throw new HttpError(404, `“${typed}” names no page in this space`);
+        let link = target.href;
+        // A dashboard view copied from another space is stored in this one first: a bookmark needs a stored one.
+        const onDashboard = parseStoredDashboardLink(link);
+        if (onDashboard?.viewId) {
+          const shown = findTab(await repo.listDashboardViews(onDashboard.dashboardId, space.id), onDashboard.viewId);
+          if (shown?.virtual) link = withViewId(link, onDashboard.viewId, (await storedTab(shown)).id);
+        }
+        if ((await repo.listBookmarks(space.id)).some((b) => b.link === link)) throw new HttpError(409, "Already bookmarked");
+        await repo.addBookmark(link, text(o, "label") ?? bookmarkLabel(target), space.id);
+        return json(201, (await repo.listBookmarks(space.id)).find((b) => b.link === link));
       })
-      .add("PATCH", "/api/v1/bookmarks/{target}", async (req, { target }) => {
+      .add("PATCH", "/api/v1/bookmarks/{id}", async (req, { id }) => {
         const o = await body(req);
-        await repo.relabelBookmark(target, text(o, "label", true));
+        await repo.relabelBookmark((await bookmarkOf(id, req.query.get("space"))).link, text(o, "label", true));
         return json(200, { ok: true });
       })
-      .add("DELETE", "/api/v1/bookmarks/{target}", async (req, { target }) => {
-        await repo.removeBookmark(target, spaceOf(await world(), req.query.get("space")).id);
+      .add("DELETE", "/api/v1/bookmarks/{id}", async (req, { id }) => {
+        const space = spaceOf(await world(), req.query.get("space"));
+        await repo.removeBookmark((await bookmarkOf(id, req.query.get("space"))).link, space.id);
         return json(200, { ok: true });
       })
 

@@ -138,10 +138,9 @@ export const SYNC_TABLES: SyncTable[] = [
     name: "bookmarks",
     key: ["id"],
     version: "updated_at",
-    columns: {
-      id: "text", kind: "text", collection_id: "text", space_id: "text", target_id: "text", label: "text", position: "int",
-      ...stamps, dashboard_id: "text",
-    },
+    columns: { id: "text", space_id: "text", link: "text", label: "text", position: "int", ...stamps },
+    // Every row has one (the migrations convert the old ones); never written without it.
+    defaults: { link: "" },
   },
   {
     name: "settings",

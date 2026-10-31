@@ -1178,25 +1178,11 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
 }
 .field-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 13rem auto; /* room for "List of items" with its icon */
+  grid-template-columns: minmax(0, 1fr) 13rem; /* room for "List of items" with its icon */
   gap: var(--cds-spacing-05);
   align-items: start;
-  /* Room beside the inputs, so a selected row's grey block reaches past them on both sides. */
-  padding: var(--cds-spacing-05) var(--cds-spacing-03);
-  margin-inline: -0.5rem;
+  padding-block: var(--cds-spacing-05);
   border-bottom: 1px solid var(--cds-border-subtle);
-}
-/* A selected field row holds controls (buttons with blue text, inputs): marked by an outline, not
-   the selected grey, on which a tertiary button's blue is below AA contrast. */
-.field-row[data-selected] {
-  background: none;
-  box-shadow: none;
-  outline: 2px solid var(--cds-border-interactive);
-  outline-offset: -2px;
-}
-.field-row__actions {
-  display: flex;
-  padding-top: var(--cds-spacing-06); /* align with inputs below their labels */
 }
 .add-field {
   margin-top: var(--cds-spacing-05);
@@ -1217,9 +1203,6 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
 @container form-page (max-width: 30rem) {
   .field-row {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .field-row__actions {
-    padding-top: 0;
   }
 }
 
@@ -1766,6 +1749,12 @@ img[data-lightbox] {
    within the room beside the caret (--popover-room), never making the page scroll. */
 .link-picker .cds--popover .cds--popover-content {
   inline-size: min(26rem, 90vw);
+}
+/* It hangs from the caret, which is being typed at: never out of sight, whatever autoAlign's `hide` makes of
+   it. On a phone the keyboard (and the visual viewport iOS pans for it) made `hide` think the caret's box was
+   covered, and the list never showed in the editor; the link dialog's field keeps it by the focus rule above. */
+.link-picker .cds--popover-content {
+  visibility: visible !important;
 }
 .link-target-list {
   max-block-size: min(16rem, var(--popover-room, 16rem));

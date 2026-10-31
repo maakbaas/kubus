@@ -7,6 +7,7 @@
 // the page it is on, one row per link, read-only like a remote collection. It is offered only in the
 // collection picker of item page blocks; every block type shows it like any collection's items.
 
+import { entryPath, findListCollection, isListCollectionId, listCollections } from "./listEntries";
 import { mergedPath } from "./mergedCollection";
 import { blankField, META_FIELDS, type Collection, type FieldKind, type Item } from "./model";
 
@@ -94,12 +95,21 @@ export const backlinksCollection: Collection = {
 /** The fields a new Backlinks block shows: the title already is the link, so not Item (Title column) again. */
 export const BACKLINKS_FIELDS = ["title", "collection", "field", META_FIELDS[1].id];
 
-/** The virtual collections, offered in the collection picker of item page blocks (they are not in the store's list). */
+/** The virtual collections that don't depend on the collections: offered in the collection picker of item page blocks (they are not in the store's list). */
 export const VIRTUAL_COLLECTIONS: Collection[] = [backlinksCollection];
 
-/** A collection by id among the stored ones and the virtual ones. */
+/**
+ * The virtual collections a block can list, besides the collections: on an item page Backlinks and every list field's entries
+ * (domain/listEntries.ts), elsewhere the list fields' entries (of `own` only: a collection view's, which lists its own collection).
+ */
+export function virtualCollections(collections: Collection[], place: "item" | "dashboard" | "collection", own?: Collection): Collection[] {
+  const lists = listCollections(place === "collection" && own ? collections.filter((c) => c.id === own.id) : collections);
+  return place === "item" ? [...VIRTUAL_COLLECTIONS, ...lists] : lists;
+}
+
+/** A collection by id among the stored ones and the virtual ones (Backlinks, a list field's entries). */
 export const findCollection = (collections: Collection[], id: string | null | undefined): Collection | undefined =>
-  collections.find((c) => c.id === id) ?? VIRTUAL_COLLECTIONS.find((c) => c.id === id);
+  collections.find((c) => c.id === id) ?? VIRTUAL_COLLECTIONS.find((c) => c.id === id) ?? (isListCollectionId(id) ? findListCollection(collections, id) : undefined);
 
 /** One link to the page's item: where it is (read from item_links), joined with its source item. */
 export interface Backlink {
@@ -119,9 +129,18 @@ export function backlinkPath(id: string): string {
   return `/collections/${collection}/items/${item}`;
 }
 
-/** Where an item opens: its own page, a backlink row the linking item's, a merged collection's row its part's item or row. */
-export const itemPath = (collection: Pick<Collection, "id" | "virtual" | "mergedFrom">, item: Pick<Item, "id">): string =>
-  collection.virtual === "backlinks" ? backlinkPath(item.id) : collection.mergedFrom ? mergedPath(item.id) : `/collections/${collection.id}/items/${item.id}`;
+/**
+ * Where an item opens: its own page, a backlink row the linking item's, a list entry its item's page at the field (a list of
+ * items' entry: that item), a merged collection's row its part's item or row.
+ */
+export const itemPath = (collection: Pick<Collection, "id" | "virtual" | "mergedFrom" | "listOf">, item: Pick<Item, "id">): string =>
+  collection.virtual === "backlinks"
+    ? backlinkPath(item.id)
+    : collection.listOf
+      ? entryPath(collection, item.id)
+      : collection.mergedFrom
+        ? mergedPath(item.id)
+        : `/collections/${collection.id}/items/${item.id}`;
 
 const escapeLabel = (text: string) => text.replace(/[\\[\]]/g, "\\$&");
 

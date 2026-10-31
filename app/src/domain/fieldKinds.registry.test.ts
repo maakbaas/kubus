@@ -63,6 +63,16 @@ describe("the storage of each kind", () => {
     }
   });
 
+  it("a list of numbers holds numbers only, in order", () => {
+    const spec = fieldKinds.number_list;
+    expect(spec.toDb([3, 1.5, 3])).toBe("[3,1.5,3]");
+    expect(spec.toDb([])).toBeNull();
+    expect(spec.fromDb('[2,"4","x",null]')).toEqual([2, 4]);
+    expect(spec.fromDb('["x"]')).toBeNull();
+    expect(spec.fromDb("{not json")).toBeNull();
+    expect(spec.format([1, 2.5])).toBe("1, 2.5");
+  });
+
   it("lists are shown joined; a checklist shows its progress", () => {
     expect(fieldKinds.string_list.format(["a", "b"])).toBe("a, b");
     expect(fieldKinds.string_list.format(null)).toBe("");

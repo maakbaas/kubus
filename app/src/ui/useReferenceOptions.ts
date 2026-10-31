@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import { useStore } from "../app/store";
 import { fieldKinds } from "../domain/fieldKinds";
-import { isReferenceKind, type FieldDef, type FieldValue, type Collection } from "../domain/model";
+import { isReferenceKind, stringList, type FieldDef, type FieldValue, type Collection } from "../domain/model";
 import { buildTargetOptions, isFullTarget, labelOf, referenceTargets, type RefOption, type RefOptions, type Target } from "../domain/refOptions";
 
 // Where these were first; the domain module owns them now.
@@ -107,6 +107,6 @@ export function formatValue(field: FieldDef, value: FieldValue | undefined, refs
   if (!options) return ""; // still loading
   const label = (id: string) => labelOf(options, id) ?? "(deleted)";
   if (typeof value === "string") return label(value);
-  if (Array.isArray(value)) return value.map(label).join(", ");
+  if (Array.isArray(value)) return stringList(value).map(label).join(", ");
   return "";
 }

@@ -21,6 +21,7 @@ export type FieldKind =
   | "image"
   | "item"
   | "string_list"
+  | "number_list"
   | "checklist"
   | "item_list"
   | "component"
@@ -31,10 +32,13 @@ export type FieldKind =
  * sandboxed frame, like a component's HTML output), number → number,
  * date → "YYYY-MM-DD", datetime → ISO 8601 UTC string, checkbox → boolean,
  * image → file id (see Repository.putFile), item → id of the referenced item,
- * string_list → string[], checklist → string[] of "[x] text" / "[ ] text" items (domain/checklist.ts),
- * item_list → item ids (string[])
+ * string_list → string[], number_list → number[], checklist → string[] of "[x] text" / "[ ] text" items
+ * (domain/checklist.ts), item_list → item ids (string[])
  */
-export type FieldValue = string | number | boolean | string[] | null;
+export type FieldValue = string | number | boolean | string[] | number[] | null;
+
+/** A list value's entries as text (a list of numbers' too); [] for anything else. */
+export const stringList = (value: FieldValue | undefined): string[] => (Array.isArray(value) ? value.map(String) : []);
 
 /** Kinds that reference items of `FieldDef.targetCollectionId`. */
 export const isReferenceKind = (kind: FieldKind) => kind === "item" || kind === "item_list";
@@ -105,10 +109,13 @@ export interface Collection {
    */
   source?: CollectionSource | null;
   /**
-   * A collection that stores nothing: its items are made from elsewhere and only shown, on item pages
-   * (domain/backlinks.ts). Not in the store's list of collections. null (or absent) = an ordinary one.
+   * A collection that stores nothing: its items are made from elsewhere and only shown: Backlinks on item pages
+   * (domain/backlinks.ts), a list field's entries (domain/listEntries.ts). Not in the store's list of collections.
+   * null (or absent) = an ordinary one.
    */
-  virtual?: "backlinks" | null;
+  virtual?: "backlinks" | "list" | null;
+  /** A list field's entries as a collection (domain/listEntries.ts, `virtual: "list"`): the field it is made from. Runtime only. */
+  listOf?: ListSource | null;
   /**
    * A merged collection: what a block listing several collections reads (domain/mergedCollection.ts `mergeCollections`), made when the
    * block is shown, never stored. Its fields (columns) are mapped to a field of each part. null (or absent) = an ordinary one.
@@ -120,6 +127,16 @@ export interface Collection {
   hiddenInNav?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/** What a list field's entries collection is made from (domain/listEntries.ts). */
+export interface ListSource {
+  /** The collection holding the list field. */
+  collectionId: string;
+  fieldId: string;
+  kind: "checklist" | "string_list" | "number_list" | "item_list";
+  /** A list of items: the collection its entries are items of. */
+  targetCollectionId: string | null;
 }
 
 export interface Item {

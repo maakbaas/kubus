@@ -9,7 +9,8 @@ import { formatDate, htmlPlainText } from "./fieldKinds";
 import { dateGroup, dateGroupValue, type GroupDate } from "./groupDate";
 import { filterTree, holds, requiredRules } from "./filterTree";
 import { markdownPlainText } from "./markdownExcerpt";
-import { fieldValue, itemLabel, pickableFields, selfField, type FieldDef, type FieldKind, type FieldValue, type Item, type Collection } from "./model";
+import { numberList } from "./numberList";
+import { fieldValue, itemLabel, pickableFields, selfField, stringList, type FieldDef, type FieldKind, type FieldValue, type Item, type Collection } from "./model";
 
 /** Pseudo fields that every item has, usable for sorting (and the default sort). */
 export const TITLE = "$title";
@@ -105,7 +106,7 @@ const EMPTY_OPS = [op("isEmpty", "is empty", false), op("isNotEmpty", "is not em
 const TEXT_OPS = [op("contains", "contains"), op("notContains", "does not contain"), op("is", "is"), op("isNot", "is not"), ...EMPTY_OPS];
 
 const str = (v: FieldValue) => (typeof v === "string" ? v : "");
-const list = (v: FieldValue) => (Array.isArray(v) ? v : []);
+const list = (v: FieldValue) => stringList(v);
 const single = (key: string, label = key) => [{ key, label }];
 /** A date & time's day as the user sees it (local "YYYY-MM-DD"; values are stored in UTC). */
 const localDay = (v: FieldValue) => {
@@ -188,6 +189,17 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     sortKey: (_, v) => list(v).join(", ").toLowerCase() || null,
     groupKeys: (_, v) => (list(v).length ? list(v).map((s) => ({ key: s, label: s })) : single("")),
     groupValue: (key) => [key],
+  },
+  // Matched by an entry; sorted by the sum of its entries; grouped by each entry (an item is in the group of each).
+  number_list: {
+    operators: [op("is", "includes"), op("isNot", "does not include"), ...EMPTY_OPS],
+    text: (_, v) => numberList(v).join(", "),
+    sortKey: (_, v) => {
+      const ns = numberList(v);
+      return ns.length ? ns.reduce((a, b) => a + b, 0) : null;
+    },
+    groupKeys: (_, v) => (numberList(v).length ? numberList(v).map((n) => ({ key: String(n), label: String(n) })) : single("")),
+    groupValue: (key) => [Number(key)],
   },
   // Items match by their text; sorted by how far along (share done), empty last.
   checklist: {
@@ -411,6 +423,7 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
       if (field.kind === "number") equal = typeof value === "number" && value === Number(arg);
       else if (field.kind === "item") equal = value === arg;
       else if (field.kind === "item_list") equal = list(value).includes(arg);
+      else if (field.kind === "number_list") equal = arg.trim() !== "" && numberList(value).includes(Number(arg));
       else if (field.kind === "datetime") equal = dayOf(field, value) === arg;
       else if (field.kind === "checkbox") equal = (value === true) === (arg.toLowerCase() === "true");
       else equal = text() === arg.toLowerCase();

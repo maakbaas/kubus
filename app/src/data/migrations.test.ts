@@ -135,29 +135,34 @@ describe("migrations", () => {
     expect(await client.select("SELECT id, targets, updated_at, deleted_at FROM item_links ORDER BY id")).toEqual(rows);
   });
 
-  it("rebuild the bookmarks for dashboards (migration 3), keeping theirs, queueing none, and the outbox triggers work after", async () => {
-    let queued: number[] = [];
-    const client = await openTestClient((db: Db) => {
-      db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
-      db.exec(firstRelease);
-      db.exec(firstReleaseData);
-      db.exec("PRAGMA user_version = 1");
-      queued = db.selectValues("SELECT id FROM sync_outbox ORDER BY id");
-    });
-    const marks = await client.select<{ kind: string; collection_id: string | null; dashboard_id: string | null }>("SELECT kind, collection_id, dashboard_id FROM bookmarks ORDER BY id");
-    expect(marks.length).toBeGreaterThan(0);
-    expect(marks.every((b) => b.collection_id !== null && b.dashboard_id === null)).toBe(true);
-    // What the first release had queued (its own writes), and nothing more (migration 2 queues item links).
-    expect((await client.select<{ id: number }>("SELECT id FROM sync_outbox WHERE tbl <> 'item_links' ORDER BY id")).map((r) => r.id)).toEqual(queued);
-    const repo = await SqliteRepository.open(client, memoryEnvironment());
-    await repo.saveDashboard({ id: "dash", name: "Home", icon: null, description: "", spaceIds: ["default"] }, "default");
-    const [tab] = await repo.listDashboardViews("dash", "default");
-    await repo.addBookmark("dashboard", "dash", tab.id, "Home / Dashboard", "default");
-    expect((await repo.listBookmarks("default")).map((b) => b.label)).toEqual(["Dune", "Unread books", "Home / Dashboard"]);
-    // Foreign keys hold: a dashboard bookmark names a dashboard, not a collection.
-    await expect(client.write([{ sql: "INSERT INTO bookmarks (id, kind, space_id, target_id, label, created_at, updated_at, dashboard_id) VALUES ('x', 'dashboard', 'default', 't', 'x', 'n', 'n', 'nope')" }])).rejects.toThrow(/FOREIGN KEY/);
-    const after = await client.select<{ tbl: string }>("SELECT DISTINCT tbl FROM sync_outbox WHERE id > ?1 AND tbl <> 'item_links' ORDER BY tbl", [Math.max(0, ...queued)]);
-    expect(after.map((r) => r.tbl)).toEqual(["bookmarks", "dashboard_views", "dashboards"]);
+  it("turn the bookmarks into links (migration 7) of every kind they had (3 added dashboards), queueing none, and the outbox triggers work after", async () => {
+    const open = await bareDatabases();
+    const db = open();
+    db.createFunction("file_ids", (_ctx: number, file: unknown, text: unknown) => fileIds(file, text), { arity: 2, deterministic: true });
+    db.exec(firstRelease);
+    db.exec(firstReleaseData);
+    db.exec("PRAGMA user_version = 1");
+    // Up to version 4 (the outbox triggers of the newest schema don't fit its bookmarks yet), then a dashboard view's bookmark.
+    ensureSchema(db, { schema, triggers: "", migrations: MIGRATIONS.filter((m) => m.version <= 4) });
+    db.exec(`INSERT INTO dashboards (id, name, created_at, updated_at) VALUES ('dash', 'Home', 'n', 'n');
+      INSERT INTO bookmarks (id, kind, space_id, target_id, label, position, created_at, updated_at, dashboard_id)
+      VALUES ('mark-dash', 'dashboard', 'default', 'tab', 'Home / Daily', 2, 'n', 'n', 'dash')`);
+    const queued: number[] = db.selectValues("SELECT id FROM sync_outbox ORDER BY id");
+    ensureSchema(db);
+    const marks = db.exec({ sql: "SELECT link, label, position FROM bookmarks ORDER BY position", rowMode: "object", returnValue: "resultRows" });
+    expect(marks).toEqual([
+      { link: "#/collections/collection-book/items/item-dune", label: "Dune", position: 0 },
+      { link: "#/collections/collection-book/items?view=view-unread", label: "Unread books", position: 1 },
+      { link: "#/dashboards/dash?view=tab", label: "Home / Daily", position: 2 },
+    ]);
+    expect(db.selectValues("SELECT name FROM pragma_table_info('bookmarks') ORDER BY cid")).toEqual(
+      ["id", "space_id", "link", "label", "position", "created_at", "updated_at", "deleted_at"],
+    );
+    expect(db.selectValues("SELECT id FROM sync_outbox ORDER BY id")).toEqual(queued);
+    // The outbox triggers fit the new table: a bookmark written now is queued.
+    db.exec("INSERT INTO bookmarks (id, space_id, link, label, created_at, updated_at) VALUES ('new', 'default', '#/dashboards/dash', 'Home', 'n', 'n')");
+    expect(db.selectValues("SELECT DISTINCT tbl FROM sync_outbox WHERE id > ?1", [Math.max(0, ...queued)])).toEqual(["bookmarks"]);
+    db.close();
   });
 
   it("record the files the blocks already there use (migration 4), of live views and collections only", async () => {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { locationOf, locationOfPair, parseLocation } from "./geo";
+import { isCoordinateField, isLocationTextField, locationOf, locationOfPair, parseLocation } from "./geo";
+import { blankField } from "./model";
+import type { Component } from "./components";
 
 describe("parseLocation", () => {
   it("reads two numbers as latitude and longitude", () => {
@@ -32,5 +34,22 @@ describe("locations from values", () => {
     expect(locationOfPair(1, 2)).toEqual({ lat: 1, lng: 2 });
     expect(locationOfPair(1, null)).toBeNull();
     expect(locationOfPair(100, 2)).toBeNull();
+    expect(locationOfPair("52.5", " 4.9 ")).toEqual({ lat: 52.5, lng: 4.9 });
+    expect(locationOfPair("north", 2)).toBeNull();
+  });
+});
+
+describe("coordinate fields", () => {
+  const shared = [{ id: "n", code: "{{ $item.A }}", output: "number" }] as Component[];
+  it("counts components and AI fields giving a number as coordinates, not as location text", () => {
+    const aiNumber = blankField("a", "Lat", "ai", { code: "Latitude of {{ $item.City }}", output: "number" });
+    const aiText = blankField("b", "Place", "ai", { code: "Coordinates of {{ $item.City }}", output: "string" });
+    const sharedNumber = blankField("c", "Lon", "component", { code: null, componentId: "n" });
+    for (const f of [aiNumber, sharedNumber, blankField("d", "N", "number")]) {
+      expect(isCoordinateField(f, shared)).toBe(true);
+      expect(isLocationTextField(f, shared)).toBe(false);
+    }
+    expect(isCoordinateField(aiText, shared)).toBe(false);
+    expect(isLocationTextField(aiText, shared)).toBe(true);
   });
 });

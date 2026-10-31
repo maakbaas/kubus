@@ -1,5 +1,5 @@
 import type { FieldDef, FieldValue, Item, ItemLabel, Collection, CollectionDraft } from "../domain/model";
-import type { Bookmark, BookmarkKind } from "../domain/bookmarks";
+import type { Bookmark } from "../domain/bookmarks";
 import type { ItemView } from "../domain/fieldLayout";
 import type { Backlink } from "../domain/backlinks";
 import type { Component } from "../domain/components";
@@ -245,14 +245,14 @@ export interface Repository {
   /** A space's side-nav bookmarks, in their order. */
   listBookmarks(spaceId: string): Promise<Bookmark[]>;
   /**
-   * Bookmarks the view, item or dashboard tab in a space (at the end of its list). `ownerId` is the view's or item's
-   * collection, or the tab's dashboard.
+   * Bookmarks a page in a space (at the end of its list): its stored link, by id (`#/collections/…`, `#/dashboards/…`,
+   * as domain/linkTargets.ts gives it). What it names is deleted, its bookmarks go with it.
    */
-  addBookmark(kind: BookmarkKind, ownerId: string, targetId: string, label: string, spaceId: string): Promise<void>;
-  /** Removes the space's bookmark of this view, item or dashboard tab, if any. */
-  removeBookmark(targetId: string, spaceId: string): Promise<void>;
-  /** Updates the label snapshot of a bookmarked view, item or dashboard tab (no-op when unchanged). */
-  relabelBookmark(targetId: string, label: string): Promise<void>;
+  addBookmark(link: string, label: string, spaceId: string): Promise<void>;
+  /** Removes the space's bookmark of this link, if any. */
+  removeBookmark(link: string, spaceId: string): Promise<void>;
+  /** Updates the label snapshot of the bookmarks of this link (no-op when unchanged). */
+  relabelBookmark(link: string, label: string): Promise<void>;
 
   /** All components, by name. */
   listComponents(): Promise<Component[]>;

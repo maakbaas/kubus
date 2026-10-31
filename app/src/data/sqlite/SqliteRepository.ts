@@ -18,7 +18,7 @@ import {
   valuesEqual,
 } from "../../domain/model";
 import type { FilterRule } from "../../domain/query";
-import type { Bookmark, BookmarkKind } from "../../domain/bookmarks";
+import { bookmarkCondition, type Bookmark, type BookmarkOwner } from "../../domain/bookmarks";
 import { parseItemViews, withDefaultItemView, type ItemView } from "../../domain/fieldLayout";
 import { isComponentOutput, type Component } from "../../domain/components";
 import { DEFAULT_SPACE_ID, withDefaultSpace, type Space } from "../../domain/spaces";
@@ -448,6 +448,8 @@ export class SqliteRepository implements Repository {
     for (const old of removed) {
       writes.push({ sql: "UPDATE fields SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, old.id] });
     }
+    // Links to a removed field (`book/dune#author`) lose their bookmarks.
+    writes.push(...bookmarksOf(removed.map((old) => ({ field: old.id })), ts));
 
     writes.push({
       sql: "UPDATE collections SET name = ?1, plural_name = ?2, icon = ?3, description = ?4, space_ids = ?7, source = ?8, title_field = ?9, hidden_in_nav = ?10, updated_at = ?5 WHERE id = ?6",
@@ -457,7 +459,7 @@ export class SqliteRepository implements Repository {
       writes.push(...(await this.releaseFilesWhere("field_id = ?1", [old.id])));
     }
     await this.db.write(writes);
-    this.emit({ scope: "collections" });
+    this.emit({ scope: "collections" }, ...(removed.length > 0 ? [{ scope: "bookmarks" } as const] : []));
   }
 
   async deleteCollection(collectionId: string): Promise<void> {
@@ -485,10 +487,11 @@ export class SqliteRepository implements Repository {
         bind: [ts, collectionId],
       },
       { sql: "UPDATE collections SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, collectionId] },
+      ...bookmarksOf([{ collection: collectionId }], ts),
       ...(await this.releaseFilesWhere("item_id IN (SELECT id FROM items WHERE collection_id = ?1)", [collectionId])),
       ...(await this.releaseBlockFiles("SELECT id FROM views WHERE collection_id = ?1 UNION SELECT ?1", [collectionId])),
     ]);
-    this.emit({ scope: "collections" }, { scope: "items", collectionId }, { scope: "views", collectionId });
+    this.emit({ scope: "collections" }, { scope: "items", collectionId }, { scope: "views", collectionId }, { scope: "bookmarks" });
   }
 
   async countItemsByCollection(spaceId: string | null): Promise<Record<string, number>> {
@@ -657,7 +660,10 @@ export class SqliteRepository implements Repository {
     await this.db.write([
       { sql: "UPDATE items SET space_id = ?1, updated_at = ?2 WHERE id = ?3 AND space_id <> ?1", bind: [spaceId, now(), itemId] },
       // Its bookmarks stay behind in the old space's list: they would lead nowhere there.
-      { sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE target_id = ?2 AND space_id <> ?3 AND deleted_at IS NULL", bind: [now(), itemId, spaceId] },
+      {
+        sql: `UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE ${bookmarkCondition({ item: itemId }, 2).sql} AND space_id <> ?3 AND deleted_at IS NULL`,
+        bind: [now(), itemId, spaceId],
+      },
     ]);
     const collectionId = await this.collectionOfItem(itemId);
     if (collectionId) this.emit({ scope: "items", collectionId, itemId }, { scope: "bookmarks" });
@@ -679,6 +685,9 @@ export class SqliteRepository implements Repository {
   async saveView(view: CollectionView): Promise<void> {
     const ts = now();
     const config = viewConfig(view);
+    // Links to a block taken out of it (`books/reading-list#table`) lose their bookmarks.
+    const before = (await this.db.select<{ config: string }>("SELECT config FROM views WHERE id = ?1", [view.id]))[0]?.config;
+    const removedBlocks = gone(blockIds(before), view.blocks.map((b) => b.id));
     await this.db.write([
       {
         sql: `INSERT INTO views (id, collection_id, space_id, name, config, position, created_at, updated_at)
@@ -688,9 +697,10 @@ export class SqliteRepository implements Repository {
                 position = excluded.position, updated_at = excluded.updated_at`,
         bind: [view.id, view.collectionId, view.name, config, view.position, ts, view.spaceId],
       },
+      ...bookmarksOf(removedBlocks.map((block) => ({ block })), ts),
       ...(await this.releaseBlockFiles("SELECT ?1", [view.id])),
     ]);
-    this.emit({ scope: "views", collectionId: view.collectionId });
+    this.emit({ scope: "views", collectionId: view.collectionId }, ...(removedBlocks.length > 0 ? [{ scope: "bookmarks" } as const] : []));
   }
 
   async orderViews(collectionId: string, spaceId: string, ids: string[]): Promise<void> {
@@ -716,11 +726,18 @@ export class SqliteRepository implements Repository {
   }
 
   async saveItemViews(collectionId: string, views: ItemView[]): Promise<void> {
+    const ts = now();
+    // Links to an item view or a block taken away (`book/dune/compact`, `book/dune#notes`) lose their bookmarks.
+    const json = JSON.stringify(views);
+    const before = itemViewParts((await this.db.select<{ item_views: string | null }>("SELECT item_views FROM collections WHERE id = ?1", [collectionId]))[0]?.item_views);
+    const after = itemViewParts(json);
+    const owners: BookmarkOwner[] = [...gone(before.views, after.views).map((view) => ({ view })), ...gone(before.blocks, after.blocks).map((block) => ({ block }))];
     await this.db.write([
-      { sql: "UPDATE collections SET item_views = ?1, updated_at = ?2 WHERE id = ?3", bind: [JSON.stringify(views), now(), collectionId] },
+      { sql: "UPDATE collections SET item_views = ?1, updated_at = ?2 WHERE id = ?3", bind: [json, ts, collectionId] },
+      ...bookmarksOf(owners, ts),
       ...(await this.releaseBlockFiles("SELECT ?1", [collectionId])),
     ]);
-    this.emit({ scope: "collections" });
+    this.emit({ scope: "collections" }, ...(owners.length > 0 ? [{ scope: "bookmarks" } as const] : []));
   }
 
   async pinItemView(itemId: string, viewId: string | null): Promise<void> {
@@ -771,7 +788,7 @@ export class SqliteRepository implements Repository {
   async deleteDashboard(dashboardId: string): Promise<void> {
     const ts = now();
     await this.db.write([
-      { sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE dashboard_id = ?2 AND deleted_at IS NULL", bind: [ts, dashboardId] },
+      ...bookmarksOf([{ dashboard: dashboardId }], ts),
       { sql: "UPDATE dashboard_views SET deleted_at = ?1, updated_at = ?1 WHERE dashboard_id = ?2 AND deleted_at IS NULL", bind: [ts, dashboardId] },
       { sql: "UPDATE dashboards SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, dashboardId] },
       ...(await this.releaseBlockFiles("SELECT id FROM dashboard_views WHERE dashboard_id = ?1", [dashboardId])),
@@ -809,7 +826,10 @@ export class SqliteRepository implements Repository {
   }
 
   async saveDashboardView(view: DashboardView): Promise<void> {
-    if (view.virtual || isVirtualTab(view.id)) throw new Error("A tab copied from another space is stored in this space first.");
+    if (view.virtual || isVirtualTab(view.id)) throw new Error("A dashboard view copied from another space is stored in this space first.");
+    const ts = now();
+    const before = (await this.db.select<{ config: string }>("SELECT config FROM dashboard_views WHERE id = ?1", [view.id]))[0]?.config;
+    const removedBlocks = gone(blockIds(before), view.blocks.map((b) => b.id));
     await this.db.write([
       {
         sql: `INSERT INTO dashboard_views (id, dashboard_id, space_id, name, config, position, created_at, updated_at)
@@ -817,20 +837,23 @@ export class SqliteRepository implements Repository {
               ON CONFLICT (id) DO UPDATE SET
                 name = excluded.name, config = excluded.config,
                 position = excluded.position, updated_at = excluded.updated_at`,
-        bind: [view.id, view.dashboardId, view.spaceId, view.name, viewConfig(view), view.position, now()],
+        bind: [view.id, view.dashboardId, view.spaceId, view.name, viewConfig(view), view.position, ts],
       },
+      ...bookmarksOf(removedBlocks.map((block) => ({ block })), ts),
       ...(await this.releaseBlockFiles("SELECT ?1", [view.id])),
     ]);
-    this.emit({ scope: "dashboardViews", dashboardId: view.dashboardId });
+    this.emit({ scope: "dashboardViews", dashboardId: view.dashboardId }, ...(removedBlocks.length > 0 ? [{ scope: "bookmarks" } as const] : []));
   }
 
   async deleteDashboardView(viewId: string): Promise<void> {
     const dashboardId = (await this.db.select<{ dashboard_id: string }>("SELECT dashboard_id FROM dashboard_views WHERE id = ?1", [viewId]))[0]?.dashboard_id;
+    const ts = now();
     await this.db.write([
-      { sql: "UPDATE dashboard_views SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [now(), viewId] },
+      { sql: "UPDATE dashboard_views SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, viewId] },
+      ...bookmarksOf([{ view: viewId }], ts),
       ...(await this.releaseBlockFiles("SELECT ?1", [viewId])),
     ]);
-    if (dashboardId) this.emit({ scope: "dashboardViews", dashboardId });
+    if (dashboardId) this.emit({ scope: "dashboardViews", dashboardId }, { scope: "bookmarks" });
   }
 
   async orderDashboardViews(dashboardId: string, spaceId: string, ids: string[]): Promise<void> {
@@ -856,37 +879,12 @@ export class SqliteRepository implements Repository {
   }
 
   async listBookmarks(spaceId: string): Promise<Bookmark[]> {
-    const rows = await this.db.select<{
-      id: string;
-      kind: BookmarkKind;
-      collection_id: string | null;
-      dashboard_id: string | null;
-      target_id: string;
-      label: string;
-      position: number;
-      created_at: string;
-    }>(
-      // Bookmarks of deleted views, items and dashboard tabs aren't shown (a remote collection's rows aren't stored: their ids are keys).
-      `SELECT b.* FROM bookmarks b LEFT JOIN collections t ON t.id = b.collection_id AND t.deleted_at IS NULL
-        WHERE b.deleted_at IS NULL AND b.space_id = ?1
-          AND (b.kind = 'dashboard' OR t.id IS NOT NULL)
-          AND (b.kind <> 'view' OR EXISTS (SELECT 1 FROM views v WHERE v.id = b.target_id AND v.deleted_at IS NULL))
-          AND (b.kind <> 'item' OR t.source IS NOT NULL OR EXISTS (SELECT 1 FROM items o WHERE o.id = b.target_id AND o.deleted_at IS NULL))
-          AND (b.kind <> 'dashboard' OR EXISTS (SELECT 1 FROM dashboard_views v JOIN dashboards d ON d.id = v.dashboard_id AND d.deleted_at IS NULL
-                                                 WHERE v.id = b.target_id AND v.dashboard_id = b.dashboard_id AND v.deleted_at IS NULL))
-        ORDER BY b.position, b.created_at`,
+    const rows = await this.db.select<{ id: string; link: string; label: string; position: number; created_at: string }>(
+      // What a bookmark names is never gone: its bookmarks are deleted with it (bookmarksOf).
+      "SELECT id, link, label, position, created_at FROM bookmarks WHERE deleted_at IS NULL AND space_id = ?1 ORDER BY position, created_at",
       [spaceId],
     );
-    return rows.map((r) => ({
-      id: r.id,
-      kind: r.kind,
-      collectionId: r.collection_id,
-      ...(r.dashboard_id !== null && { dashboardId: r.dashboard_id }),
-      targetId: r.target_id,
-      label: r.label,
-      position: r.position,
-      createdAt: r.created_at,
-    }));
+    return rows.map((r) => ({ id: r.id, link: r.link, label: r.label, position: r.position, createdAt: r.created_at }));
   }
 
   async getSettings(): Promise<Record<string, unknown>> {
@@ -914,37 +912,36 @@ export class SqliteRepository implements Repository {
     this.emit({ scope: "settings" });
   }
 
-  async addBookmark(kind: BookmarkKind, ownerId: string, targetId: string, label: string, spaceId: string): Promise<void> {
+  async addBookmark(link: string, label: string, spaceId: string): Promise<void> {
     const ts = now();
-    const dashboard = kind === "dashboard";
     await this.db.write([
       {
-        sql: `INSERT INTO bookmarks (id, kind, collection_id, dashboard_id, space_id, target_id, label, position, created_at, updated_at)
-              SELECT ?1, ?2, ?3, ?8, ?7, ?4, ?5, COALESCE(MAX(position), -1) + 1, ?6, ?6 FROM bookmarks WHERE deleted_at IS NULL AND space_id = ?7`,
-        bind: [newId(), kind, dashboard ? null : ownerId, targetId, label, ts, spaceId, dashboard ? ownerId : null],
+        sql: `INSERT INTO bookmarks (id, space_id, link, label, position, created_at, updated_at)
+              SELECT ?1, ?2, ?3, ?4, COALESCE(MAX(position), -1) + 1, ?5, ?5 FROM bookmarks WHERE deleted_at IS NULL AND space_id = ?2`,
+        bind: [newId(), spaceId, link, label, ts],
       },
     ]);
     this.emit({ scope: "bookmarks" });
   }
 
-  async removeBookmark(targetId: string, spaceId: string): Promise<void> {
+  async removeBookmark(link: string, spaceId: string): Promise<void> {
     await this.db.write([
       {
-        sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE target_id = ?2 AND space_id = ?3 AND deleted_at IS NULL",
-        bind: [now(), targetId, spaceId],
+        sql: "UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE link = ?2 AND space_id = ?3 AND deleted_at IS NULL",
+        bind: [now(), link, spaceId],
       },
     ]);
     this.emit({ scope: "bookmarks" });
   }
 
-  async relabelBookmark(targetId: string, label: string): Promise<void> {
+  async relabelBookmark(link: string, label: string): Promise<void> {
     const changed = await this.db.select<{ id: string }>(
-      "SELECT id FROM bookmarks WHERE target_id = ?1 AND deleted_at IS NULL AND label <> ?2",
-      [targetId, label],
+      "SELECT id FROM bookmarks WHERE link = ?1 AND deleted_at IS NULL AND label <> ?2",
+      [link, label],
     );
     if (changed.length === 0) return;
     await this.db.write([
-      { sql: "UPDATE bookmarks SET label = ?1, updated_at = ?2 WHERE target_id = ?3 AND deleted_at IS NULL", bind: [label, now(), targetId] },
+      { sql: "UPDATE bookmarks SET label = ?1, updated_at = ?2 WHERE link = ?3 AND deleted_at IS NULL", bind: [label, now(), link] },
     ]);
     this.emit({ scope: "bookmarks" });
   }
@@ -1000,27 +997,32 @@ export class SqliteRepository implements Repository {
     await this.db.write([
       // Its fields go first (soft delete, like removing them in the collection editor).
       ...users.map((u) => ({ sql: "UPDATE fields SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, u.id] })),
+      ...bookmarksOf(users.map((u) => ({ field: u.id })), ts),
       { sql: "UPDATE components SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, componentId] },
     ]);
-    this.emit({ scope: "components" }, ...(users.length > 0 ? [{ scope: "collections" } as const] : []));
+    this.emit({ scope: "components" }, ...(users.length > 0 ? [{ scope: "collections" } as const, { scope: "bookmarks" } as const] : []));
   }
 
   async deleteView(viewId: string): Promise<void> {
     const collectionId = (await this.db.select<{ collection_id: string }>("SELECT collection_id FROM views WHERE id = ?1", [viewId]))[0]?.collection_id;
+    const ts = now();
     await this.db.write([
-      { sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [now(), viewId] },
+      { sql: "UPDATE views SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, viewId] },
+      ...bookmarksOf([{ view: viewId }], ts),
       ...(await this.releaseBlockFiles("SELECT ?1", [viewId])),
     ]);
-    if (collectionId) this.emit({ scope: "views", collectionId });
+    if (collectionId) this.emit({ scope: "views", collectionId }, { scope: "bookmarks" });
   }
 
   async deleteItem(itemId: string): Promise<void> {
     const collectionId = await this.collectionOfItem(itemId);
+    const ts = now();
     await this.db.write([
-      { sql: "UPDATE items SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [now(), itemId] },
+      { sql: "UPDATE items SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2", bind: [ts, itemId] },
+      ...bookmarksOf([{ item: itemId }], ts),
       ...(await this.releaseFilesWhere("item_id = ?1", [itemId])),
     ]);
-    if (collectionId) this.emit({ scope: "items", collectionId, itemId });
+    if (collectionId) this.emit({ scope: "items", collectionId, itemId }, { scope: "bookmarks" });
   }
 
   async search(query: string, collections: Collection[], spaceId: string, limit = 50): Promise<Item[]> {
@@ -1041,7 +1043,7 @@ export class SqliteRepository implements Repository {
          JOIN fields f ON f.id = fv.field_id
         WHERE o.deleted_at IS NULL AND o.space_id = ?3 AND f.deleted_at IS NULL
           AND CASE
-            WHEN f.kind IN ('string', 'markdown', 'html', 'string_list', 'checklist', 'ai')
+            WHEN f.kind IN ('string', 'markdown', 'html', 'string_list', 'number_list', 'checklist', 'ai')
               THEN instr(lower(CASE WHEN f.kind = 'markdown' THEN replace(fv.value_text, '\\', '') ELSE coalesce(fv.value_text, fv.value_json) END), lower(?1)) > 0
             WHEN f.kind = 'item' THEN instr(lower(${label("fv.value_ref")}), lower(?1)) > 0
             WHEN f.kind = 'item_list' THEN EXISTS (SELECT 1 FROM json_each(fv.value_json) j WHERE instr(lower(${label("j.value")}), lower(?1)) > 0)
@@ -1205,6 +1207,33 @@ const FILE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
  * Marks a file (with its thumbnail) unused once no live item uses it; sweepFiles deletes it after
  * FILE_GRACE_MS. Runs after the statements that drop the use, in the same transaction.
  */
+/** Deletes the bookmarks of what is being deleted (domain/bookmarks.ts: those whose link names it), in the same write. */
+function bookmarksOf(owners: BookmarkOwner[], ts: string): Statement[] {
+  return owners.map((o) => {
+    const c = bookmarkCondition(o, 2);
+    return { sql: `UPDATE bookmarks SET deleted_at = ?1, updated_at = ?1 WHERE deleted_at IS NULL AND ${c.sql}`, bind: [ts, c.id] };
+  });
+}
+
+/** The ids of a view config's blocks (a collection view's or a dashboard view's config JSON). */
+function blockIds(config: string | null | undefined): string[] {
+  const blocks = parseJson<{ blocks?: { id?: unknown }[] }>(config ?? null, {}).blocks;
+  return Array.isArray(blocks) ? blocks.flatMap((b) => (typeof b?.id === "string" ? [b.id] : [])) : [];
+}
+
+/** The item views of a collection's `item_views` JSON and the blocks of their layouts. */
+function itemViewParts(json: string | null | undefined): { views: string[]; blocks: string[] } {
+  const views = parseJson<{ id?: unknown; layout?: { blocks?: { id?: unknown }[] } }[]>(json ?? null, []);
+  if (!Array.isArray(views)) return { views: [], blocks: [] };
+  return {
+    views: views.flatMap((v) => (typeof v?.id === "string" ? [v.id] : [])),
+    blocks: views.flatMap((v) => (Array.isArray(v?.layout?.blocks) ? v.layout.blocks.flatMap((b) => (typeof b?.id === "string" ? [b.id] : [])) : [])),
+  };
+}
+
+/** What was in `before` and is no longer in `after`. */
+const gone = (before: string[], after: string[]) => before.filter((id) => !after.includes(id));
+
 function releaseFile(fileId: string): Statement[] {
   return [
     {

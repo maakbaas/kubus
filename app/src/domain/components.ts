@@ -33,7 +33,7 @@
 
 import { checklistItems } from "./checklist";
 import { fileSrc } from "./files";
-import type { AiOutput, FieldDef, FieldKind, FieldValue, Item, Collection } from "./model";
+import { stringList, type AiOutput, type FieldDef, type FieldKind, type FieldValue, type Item, type Collection } from "./model";
 import { errorMessage } from "./errors";
 
 /**
@@ -392,7 +392,7 @@ function inputOf(field: FieldDef | undefined, value: FieldValue | undefined, ref
   if (field.kind === "image" && typeof value === "string") return fileSrc(value);
   if (field.kind === "checklist") return checklistItems(value);
   if (field.kind === "item" && typeof value === "string") return refLabel(field, value);
-  if (field.kind === "item_list" && Array.isArray(value)) return value.map((id) => refLabel(field, id));
+  if (field.kind === "item_list" && Array.isArray(value)) return stringList(value).map((id) => refLabel(field, id));
   return value;
 }
 

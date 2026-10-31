@@ -1,6 +1,7 @@
 import type { ItemCache } from "../app/itemCache";
 import type { Repository } from "../data";
 import { itemPath } from "../domain/backlinks";
+import { LIST_DONE, LIST_VALUE, parseEntryId, withEntryDone } from "../domain/listEntries";
 import { itemLabel, labelField, nextName, type Collection, type FieldValue, type Item } from "../domain/model";
 import { groupPreset, type ViewQuery } from "../domain/query";
 import type { OpenMode } from "../workspace/Workspace";
@@ -48,10 +49,39 @@ export function readOnlyActions(actions: ItemActions): ItemActions {
   };
 }
 
+/**
+ * What a block can do with a checklist's entries (domain/listEntries.ts): open and sort them, and tick one (Done), which
+ * writes the entry back into its item's checklist; nothing else of them is edited here.
+ */
+export function entryActions(actions: ItemActions, list: Collection, collections: Collection[], { repo, cache }: Pick<ItemActionsEnvironment, "repo" | "cache">, onError: (message: string) => void): ItemActions {
+  return {
+    ...readOnlyActions(actions),
+    async setValue(entry, field, value) {
+      const source = list.listOf;
+      const owner = collections.find((c) => c.id === source?.collectionId);
+      if (!source || !owner || field.id !== LIST_DONE) return;
+      const { itemId, index } = parseEntryId(entry.id);
+      const item = cache.items.snapshot(owner.id).items?.find((i) => i.id === itemId);
+      const next = item && withEntryDone(item.values[source.fieldId], index, String(entry.values[LIST_VALUE] ?? ""), value === true);
+      if (!next) return;
+      cache.items.patch(owner.id, itemId, (o) => ({ ...o, values: { ...o.values, [source.fieldId]: next } }));
+      try {
+        await repo.updateItem(owner, itemId, { [source.fieldId]: next });
+      } catch (e) {
+        onError(errorMessage(e));
+        void cache.items.reload(owner.id);
+      }
+    },
+  };
+}
+
 /** The handlers for the collection and query as they are now. */
 export function buildItemActions({ collection, stored, query, preset, onSort, confirm, onError }: ItemActionsOptions, { repo, cache, spaceId, openRelated }: ItemActionsEnvironment): ItemActions {
   return {
-    open: (item, mode, o) => openRelated(`${itemPath(collection, item)}${o?.edit ? "?edit=1" : ""}`, mode),
+    open: (item, mode, o) => {
+      const path = itemPath(collection, item);
+      openRelated(`${path}${o?.edit ? `${path.includes("?") ? "&" : "?"}edit=1` : ""}`, mode);
+    },
     async remove(item) {
       if (!(await confirm({ title: `Delete ${collection.name}?`, body: `This ${collection.name} will be removed.` }))) return;
       try {
@@ -113,7 +143,7 @@ export function buildItemActions({ collection, stored, query, preset, onSort, co
  * query, so it never changes (except between editable and read-only). A read-only one (a remote
  * collection) can only open and sort.
  */
-export function stableItemActions(latest: { current: ItemActions }, readOnly: boolean): ItemActions {
+export function stableItemActions(latest: { current: ItemActions }, readOnly: boolean, tickable = false): ItemActions {
   const actions: ItemActions = {
     open: (item, mode, options) => latest.current.open(item, mode, options),
     remove: (item) => latest.current.remove?.(item),
@@ -130,5 +160,5 @@ export function stableItemActions(latest: { current: ItemActions }, readOnly: bo
     },
     sortBy: (fieldId) => latest.current.sortBy!(fieldId),
   };
-  return readOnly ? readOnlyActions(actions) : actions;
+  return tickable ? { ...readOnlyActions(actions), setValue: actions.setValue } : readOnly ? readOnlyActions(actions) : actions;
 }
