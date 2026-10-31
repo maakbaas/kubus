@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "@carbon/react";
 import { useStore } from "../app/store";
 import { fileUrl } from "./images";
+import { useBackCloses } from "./backLayers";
 
 /**
  * The image lightbox: a click on any image marked `data-lightbox` (field images, images in
@@ -31,6 +32,8 @@ export function Lightbox() {
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
   }, [repo]);
+  // Back closes it (and forward does nothing) instead of changing the page behind it: ui/backLayers.ts.
+  useBackCloses(image !== null, () => setImage(null));
   return (
     <Modal
       open={image !== null}

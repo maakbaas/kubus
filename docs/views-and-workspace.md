@@ -371,9 +371,13 @@ Extension points are registries, not special cases in pages:
 - Each tab keeps its own history for its lifetime (outside navigation is pushed into it); mouse
   back/forward buttons, Alt+←/→, the browser-back key and, on touch screens, a swipe in from the
   left / right screen edge (the app's own touch listeners in `Workspace.tsx`) act on the active
-  tab. While swiping, a square arrow (`.swipe-hint`) comes out of that edge and follows the finger (moved
-  directly, no render per move): faint until the swipe is far enough, solid in the inverse colours once letting
-  go would go there, sliding away on release; none when the tab has no page in that direction. The browser's own history isn't used for this (no iOS-specific history handling).
+  tab. While swiping, a round arrow (`.swipe-hint`) comes out of that edge, at the middle of the screen's height, as far as
+  the finger has come (moved directly, no render per move), solid in the inverse colours all the way, stopping halfway
+  between the edge and the content, sliding away on release; none when the tab has no page in that direction. Once a
+  touch from the edge is clearly sideways, it is no press on the page (`html[data-swiping]`). The browser's own history
+  isn't used for this (no iOS-specific history handling). A layer over the page takes back and forward first
+  (`ui/backLayers.ts`): while the image lightbox is open, back (any of these) closes it and forward does nothing, so the
+  page behind it doesn't change.
 - Closing every tab leaves an empty workspace (no tab is reopened automatically); middle click
   on a tab closes it.
 - Phones show only the active pane.

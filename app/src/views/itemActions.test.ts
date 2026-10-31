@@ -222,10 +222,10 @@ describe("a checklist's entries", () => {
     const confirm = vi.fn(async () => true);
     const onError = vi.fn();
     const built = buildItemActions({ collection: list, stored: rows(), query: query(), preset: {}, onSort: vi.fn(), confirm, onError }, { repo, cache, spaceId: "default", openRelated: () => {} });
-    const actions = entryActions(built, list, [task], { repo, cache }, { onError, confirm, entriesOn: page ? { collection: task, item: owner(), refLabel: () => "" } : null });
+    const actions = entryActions(built, list, [task], { repo, cache }, { onError, entriesOn: page ? { collection: task, item: owner(), refLabel: () => "" } : null });
     const listField = (fid: string) => list.fields.find((f) => f.id === fid)!;
     const stored = async () => (await repo.getItem(task, itemId))!.values[subtasks.id];
-    return { actions, rows, field: listField, stored, onError };
+    return { actions, rows, field: listField, stored, onError, confirm };
   }
 
   it("on their item's page are edited, added to that item and deleted, each stored in its checklist", async () => {
@@ -234,8 +234,10 @@ describe("a checklist's entries", () => {
     await t.actions.setValue!(t.rows()[0], t.field(LIST_DONE), true);
     await t.actions.create!({ [LIST_VALUE]: "clean", [LIST_DONE]: true });
     expect(await t.stored()).toEqual(["[x] pack boxes", "[x] book van", "[x] clean"]);
+    // Deleted at once, not asked first (an entry is a line).
     await t.actions.remove!(t.rows()[1]);
     expect(await t.stored()).toEqual(["[x] pack boxes", "[x] clean"]);
+    expect(t.confirm).not.toHaveBeenCalled();
     expect(t.onError).not.toHaveBeenCalled();
   });
 

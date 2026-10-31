@@ -60,7 +60,7 @@ export function entryActions(
   list: Collection,
   collections: Collection[],
   { repo, cache }: Pick<ItemActionsEnvironment, "repo" | "cache">,
-  { onError, confirm, entriesOn }: Pick<ItemActionsOptions, "onError" | "confirm" | "entriesOn">,
+  { onError, entriesOn }: Pick<ItemActionsOptions, "onError" | "entriesOn">,
 ): ItemActions {
   const source = list.listOf;
   const owner = collections.find((c) => c.id === source?.collectionId);
@@ -98,11 +98,10 @@ export function entryActions(
       async create(values) {
         await write(page.item.id, (v) => withEntryAdded(source.kind, v, values[LIST_VALUE], values[LIST_DONE] === true));
       },
+      // At once, not asked first: an entry is a line, typed again in a moment (an item, with all it holds, is asked about).
       async remove(entry) {
         const { itemId, index } = parseEntryId(entry.id);
-        const shown = entry.values[LIST_VALUE];
-        if (!(await confirm({ title: `Delete “${String(shown ?? "")}”?`, body: `It is removed from ${owner.name}'s ${list.name.split(" / ").pop()}.` }))) return;
-        await write(itemId, (v) => withEntryRemoved(source.kind, v, index, shown));
+        await write(itemId, (v) => withEntryRemoved(source.kind, v, index, entry.values[LIST_VALUE]));
       },
     }),
   };

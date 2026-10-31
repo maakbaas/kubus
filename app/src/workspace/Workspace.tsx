@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import { MemoryRouter, useLocation, useNavigate, useNavigationType } from "react-router";
 import { IconButton, Link, Tab, TabList, Tabs } from "@carbon/react";
 import { ShownOnceProvider } from "../ui/useShownOnce";
+import { backLayerOpen, takeBackForward } from "../ui/backLayers";
 import { Add, ChevronLeft, ChevronRight } from "@carbon/icons-react";
 import { TabMenu, occupied, useClippedTabs } from "../ui/TabMenu";
 import { AppRoutes } from "../app/routes";
@@ -180,7 +181,8 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
       const tab = activeTab(current.current);
       return tab ? histories.current.get(tab.id) : undefined;
     };
-    const go = (direction: "back" | "forward") => activeHistory()?.[direction]();
+    // An open layer over the page (the lightbox) takes back and forward first: back closes it (ui/backLayers.ts).
+    const go = (direction: "back" | "forward") => takeBackForward(direction) || activeHistory()?.[direction]();
     const onMouseUp = (e: globalThis.MouseEvent) => {
       if (e.button === 3 || e.button === 4) {
         e.preventDefault();
@@ -252,7 +254,9 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
       if (e.touches.length !== 1) return;
       const direction = t.clientX <= SWIPE_EDGE ? "back" : t.clientX >= window.innerWidth - SWIPE_EDGE ? "forward" : null;
       const history = activeHistory();
-      if (!direction || !history || !(direction === "back" ? history.canGoBack() : history.canGoForward())) return;
+      // With a layer open (the lightbox), a swipe back closes it and there is no forward.
+      const layer = backLayerOpen();
+      if (!direction || (layer ? direction !== "back" : !history || !(direction === "back" ? history.canGoBack() : history.canGoForward()))) return;
       swipe = { x: t.clientX, y: t.clientY, direction, engaged: false };
       window.addEventListener("touchmove", blockMove, { passive: false });
     };

@@ -340,7 +340,7 @@ What the app does, feature by feature (read the part you work on).
   but for ticking a checklist's Done, which writes that entry back into its item's value (`entryActions`, `withEntryChanged`: found by its
   place, or by its text when the list changed; the value read from the database, not the cache). On an item page whose fields are editable,
   a checklist's, a list of strings' or numbers' entries (`entriesEditable`) are also edited in place (their text: the title column is then
-  no link), added with the table's add row (to the page's item, at the end; in a group, with its Done) and deleted (asked first):
+  no link), added with the table's add row (to the page's item, at the end; in a group, with its Done) and deleted (at once, not asked: an entry is a line; deleting an item is still asked):
   `withEntryAdded`, `withEntryRemoved`. Never where an entry is (its item, Position: `isEntryPlace`), and nowhere else: a collection view or
   dashboard would have no item to add an entry to. Nothing is stored: when the field goes, a collection view's block lists the collection again, an
   item page's or dashboard's block shows "Block without collection". The API takes `$list:<field id>` as a block's `collectionId` (Help → API).
