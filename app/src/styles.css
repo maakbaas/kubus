@@ -1761,6 +1761,18 @@ img[data-lightbox] {
   max-block-size: 12rem;
 }
 
+/* A linked block's link (views/LinkedBlock.tsx: its settings, and its body until it links a block): the field
+   across, its Open original button under it. */
+.linked-block-settings {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cds-spacing-05);
+}
+.linked-block-settings > .link-target-input {
+  align-self: stretch;
+}
+
 /* Code syntax coloring (prism/refractor tokens): Carbon's saturated steps, vivid on the code's
    subtle background (still AA on it: the 60s in light, the 30/40s in dark). */
 .cds--white {

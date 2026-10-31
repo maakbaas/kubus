@@ -277,6 +277,28 @@ describe("link targets", () => {
     expect(find.mock.calls.length).toBe(calls);
   });
 
+  it("is scrolled to again while blocks above it fill in, until the user scrolls", async () => {
+    const listeners = new Map<string, () => void>();
+    Object.assign(window, {
+      addEventListener: (e: string, f: () => void) => listeners.set(e, f),
+      removeEventListener: (e: string) => listeners.delete(e),
+    });
+    let top = 100;
+    const el = { ...target(), isConnected: true, parentElement: null, getBoundingClientRect: () => ({ top }) };
+    renderHook(() => useLinkTarget("b1", () => el as never));
+    expect(el.scrollIntoView).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(el.scrollIntoView).toHaveBeenCalledOnce(); // not moved: left alone
+    top = 600; // a block above got its items
+    await vi.advanceTimersByTimeAsync(100);
+    expect(el.scrollIntoView).toHaveBeenCalledTimes(2);
+    listeners.get("wheel")!();
+    top = 900;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(el.scrollIntoView).toHaveBeenCalledTimes(2);
+    expect(listeners.size).toBe(0);
+  });
+
   it("looks for the target again only when it changes", async () => {
     const find = vi.fn(() => target() as never);
     const h = renderHook(({ id }: { id: string }) => useLinkTarget(id, find), { props: { id: "a" } });

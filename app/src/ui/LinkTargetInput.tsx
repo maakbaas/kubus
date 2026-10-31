@@ -17,11 +17,26 @@ export function LinkTargetInput({
   value,
   onChange,
   toShown,
+  labelText = "URL",
+  placeholder = "https:// or a page: books/reading-list, book/dune#author",
+  helperText,
+  invalidText,
+  onPick,
+  onCommit,
 }: {
   id: string;
   value: string;
   onChange(value: string): void;
   toShown(href: string): Promise<string>;
+  labelText?: string;
+  placeholder?: string;
+  helperText?: string;
+  /** Shown under the field, marking it invalid. */
+  invalidText?: string;
+  /** A page was chosen from the list (after onChange with its name form). */
+  onPick?(value: string): void;
+  /** The text typed is done: the field is left, or Enter pressed with no list open. */
+  onCommit?(): void;
 }) {
   const { search, reset } = useLinkTargets();
   const [targets, setTargets] = useState<LinkTarget[]>([]);
@@ -54,23 +69,37 @@ export function LinkTargetInput({
 
   const pick = (t: LinkTarget) => {
     setTyping(false);
-    toShown(t.href).then(onChange, () => onChange(t.href));
+    const chosen = (value: string) => {
+      onChange(value);
+      onPick?.(value);
+    };
+    toShown(t.href).then(chosen, () => chosen(t.href));
   };
   return (
     <div className="link-target-input">
       <TextInput
         size="sm"
         id={id}
-        labelText="URL"
-        placeholder="https:// or a page: books/reading-list, book/dune#author"
+        labelText={labelText}
+        placeholder={placeholder}
+        helperText={helperText}
+        invalid={!!invalidText}
+        invalidText={invalidText}
         autoComplete="off"
         value={value}
+        onBlur={() => onCommit?.()}
         onChange={(e) => {
           setTyping(true);
           onChange(e.target.value);
         }}
         onKeyDown={(e) => {
-          if (!shown) return;
+          if (!shown) {
+            if (e.key === "Enter" && onCommit) {
+              e.preventDefault();
+              onCommit();
+            }
+            return;
+          }
           const key = e.key;
           if (key === "ArrowDown") setActive((active + 1) % targets.length);
           else if (key === "ArrowUp") setActive((active - 1 + targets.length) % targets.length);

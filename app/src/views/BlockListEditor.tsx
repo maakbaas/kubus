@@ -15,7 +15,9 @@ export function useBlockName() {
     const type = blockType(block.kind);
     const options = block.options as ComponentBlockOptions;
     const component = type.kind === "component" && !options.local ? components.find((c) => c.id === options.componentId) : undefined;
-    return component?.name ?? type.label;
+    // A linked block goes by the original's name (as last shown).
+    const linked = type.kind === "linked" ? (block.options as { name?: string }).name : undefined;
+    return component?.name ?? linked ?? type.label;
   };
 }
 

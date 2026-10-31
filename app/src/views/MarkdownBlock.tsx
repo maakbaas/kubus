@@ -5,6 +5,7 @@ import { blankField, type FieldDef } from "../domain/model";
 import { captureEditStart, type EditStart } from "../ui/editStart";
 import { ComponentValue } from "../ui/ComponentValue";
 import { FieldEditor } from "../ui/FieldEditor";
+import { useLinked } from "./linkChain";
 import { defineBlockType, type BlockProps } from "./registry";
 
 // A block with its own Markdown, kept in the view (or item view) it is in: its text is a local
@@ -26,6 +27,7 @@ const TEXT_FIELD: FieldDef = blankField("text", "Markdown", "markdown");
 function MarkdownBlockView({ options, refs, onOptions }: BlockProps<MarkdownBlockOptions>) {
   /** Being edited, and where the text was clicked. */
   const [editing, setEditing] = useState<{ start?: EditStart } | null>(null);
+  const linked = useLinked();
   // Its sections run as a static component's (only $now); text without any is shown as written.
   const rendered = useMemo(() => {
     if (!SECTION_START.test(options.text)) return options.text;
@@ -52,6 +54,18 @@ function MarkdownBlockView({ options, refs, onOptions }: BlockProps<MarkdownBloc
     );
   }
   const empty = !options.text.trim();
+  // Shown through a linked block: its text is the original's, edited there.
+  if (linked) {
+    return (
+      <div className="markdown-block">
+        <div className="view-field">
+          <div className={`view-field__value view-field__value--markdown${empty ? " view-field__value--empty" : ""}`}>
+            {!empty && <ComponentValue value={rendered} output="markdown" variant="page" />}
+          </div>
+        </div>
+      </div>
+    );
+  }
   const startEdit = (e: React.MouseEvent | React.KeyboardEvent) => {
     // Links keep working.
     if ((e.target as HTMLElement).closest("a")) return;
