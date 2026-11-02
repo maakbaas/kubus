@@ -2907,9 +2907,12 @@ img[data-lightbox] {
 }
 /* Small (2rem) controls fill a small row exactly: no vertical cell padding around them. */
 .items-table td.row-actions,
-.items-table .table-add-row td {
+.items-table .table-add-row td,
+.items-table td.cell--checkbox:has(.toggle-input) {
   padding-block: 0;
 }
+/* (A checkbox shown as a toggle icon is a 2rem button, as the row actions: with the cell's padding around it
+   its row was taller than the others; a plain checkbox fits inside the padding.) */
 /* Add row: inputs are laid over their cells (out of the flow), so opening the row never
    changes column widths. A small gap (spacing-02 per side) keeps neighbouring inputs apart;
    each input's text inset shrinks by the same amount, so typed text starts exactly below the
