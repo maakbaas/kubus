@@ -1,8 +1,8 @@
 import { isEmptyValue as isEmpty, type FilterRule } from "../domain/query";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
-import { Add, Checkmark, Code, Edit, Filter, Information, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Save } from "@carbon/icons-react";
+import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, TextInput } from "@carbon/react";
+import { Checkmark, Code, Edit, Filter, Information, Renew, SettingsAdjust, TrashCan } from "@carbon/icons-react";
 import { isFullWidth, movedId, NO_FILTERS, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
@@ -70,7 +70,7 @@ import { collectionsCrumb, PageHeader } from "../ui/PageHeader";
 import { ViewNameRow } from "../ui/ViewMoveButtons";
 import { OverflowBar } from "../ui/OverflowBar";
 import { FieldCollapse, SectionHeader } from "../ui/SectionHeader";
-import { TabMenu, useClippedTabs } from "../ui/TabMenu";
+import { ViewsBar } from "../ui/ViewsBar";
 import { findBlock, useLinkTarget } from "../ui/useLinkTarget";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
@@ -266,8 +266,6 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
     if (view && !showsField(collection, shown, view.layout, linkedField)) setStandard(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkedField, shown === null]);
-  const viewsBar = useRef<HTMLDivElement>(null);
-  const clippedTabs = useClippedTabs(viewsBar);
   // The same error as the page's blocks (the server can't be reached) shows once.
   const showError = useShownOnce(error);
   // Nothing until it is in (a fraction of a second): a spinner would only flash.
@@ -357,11 +355,6 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
     setRenameRequest((r) => r + 1);
     return saveViews([...itemViews, { id, name, layout, isDefault: false, collapsed }]);
   }
-  const addButton = (
-    <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Add view" onClick={addView}>
-      <Add />
-    </IconButton>
-  );
 
   /** Star the shown view as the default for the collection's items, or unstar it (then the first is). */
   const toggleDefault = (view: ItemView) => saveViews(itemViews.map((v) => ({ ...v, isDefault: v.id === view.id && !view.isDefault })));
@@ -565,80 +558,36 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
           Changes to what a block shows stay unsaved until saved with the icon buttons beside the tabs. */}
       {/* Always shown, also for a single view: its name, "+" and saving stay in one place. */}
       {item && (
-        <div className="views-bar" ref={viewsBar}>
-          <Tabs
-            selectedIndex={activeView ? itemViews.indexOf(activeView) : -1}
-            onChange={({ selectedIndex }) => showTab(itemViews[selectedIndex].id)}
-          >
-            <TabList aria-label="Page layouts" className="views-tabs">
-              {/* "*" marks unsaved layout changes to the shown view (switching views discards them). */}
-              {itemViews.map((t) => (
-                <Tab key={t.id}>
-                  {t.name}
-                  {changed && t.id === activeView?.id ? " *" : ""}
-                </Tab>
-              ))}
-            </TabList>
-          </Tabs>
-          {clippedTabs && (
-            <TabMenu
-              label="Page layouts"
-              items={itemViews.map((v) => ({ id: v.id, name: v.name + (changed && v.id === activeView?.id ? " *" : "") }))}
-              activeId={activeView?.id}
-              onSelect={showTab}
+        <ViewsBar
+          views={itemViews}
+          activeId={activeView?.id}
+          changed={changed}
+          label="Page layouts"
+          onSelect={showTab}
+          onAdd={addView}
+          // Held while a panel is open, so it appears once the panel closes, as on collection pages.
+          saveShown={panels.hold("changed", changed) && !!activeView}
+          onSave={() => activeView && saveViews(itemViews.map((v) => (v.id === activeView.id ? { ...v, layout: current } : v)))}
+          // The last view can't be deleted (a collection always keeps one, like its collection views); with one there's nothing to star.
+          onDelete={activeView && itemViews.length > 1 ? () => deleteView(activeView) : undefined}
+          star={
+            activeView && itemViews.length > 1
+              ? {
+                  isDefault: activeView.isDefault,
+                  label: activeView.isDefault ? "Revert default view" : `Star as default view for all ${collection.pluralName}`,
+                  onToggle: () => toggleDefault(activeView),
+                }
+              : undefined
+          }
+          bookmark={
+            // The item as this view shows it (`book/dune`, or `book/dune/details` under a view it doesn't open with by default).
+            <BookmarkButton
+              link={itemLink(collection.id, item.id, activeView && activeView.id !== itemViewOf(collection)?.id ? activeView.id : null)}
+              label={activeView && activeView.id !== itemViewOf(collection)?.id ? `${title} / ${activeView.name}` : title}
+              onError={(e) => setError(errorMessage(e))}
             />
-          )}
-          {/* "+" takes the menu arrow's place; with the arrow it joins the icons at the right edge. */}
-          {!clippedTabs && <span className="tab-menu">{addButton}</span>}
-          <span className="views-bar__spacer" />
-          {/* Save, always in the bar, left of the other buttons (never in the "⋮" menu), as on collection pages; held
-              while a panel is open, so it appears once the panel closes. No Discard, as on collection pages: a click on the
-              view's tab (or leaving the page) shows it as saved again. */}
-          {panels.hold("changed", changed) && activeView && (
-            <IconButton
-              autoAlign
-              kind="ghost"
-              size="sm"
-              align="bottom"
-              label="Save changes to view"
-              onClick={() => saveViews(itemViews.map((v) => (v.id === activeView.id ? { ...v, layout: current } : v)))}
-            >
-              <Save />
-            </IconButton>
-          )}
-          <OverflowBar>
-          {clippedTabs && addButton}
-          {activeView && (
-            <>
-              {/* The last view can't be deleted: a collection always keeps one (like its collection views). */}
-              {itemViews.length > 1 && (
-                <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Delete view" onClick={() => deleteView(activeView)}>
-                  <TrashCan />
-                </IconButton>
-              )}
-              {/* The star chooses between views: with one view it opens anyway. */}
-              {itemViews.length > 1 && (
-              <IconButton
-                autoAlign
-                kind="ghost"
-                size="sm"
-                align="bottom"
-                label={activeView.isDefault ? "Revert default view" : `Star as default view for all ${collection.pluralName}`}
-                aria-pressed={activeView.isDefault}
-                onClick={() => toggleDefault(activeView)}
-              >
-                {activeView.isDefault ? <StarFilled /> : <Star />}
-              </IconButton>
-              )}
-            </>
-          )}
-          {/* Beside the star, as on a collection page: the item as this view shows it (`book/dune`, or
-              `book/dune/details` under a view it doesn't open with by default). */}
-          <BookmarkButton
-            link={itemLink(collection.id, item.id, activeView && activeView.id !== itemViewOf(collection)?.id ? activeView.id : null)}
-            label={activeView && activeView.id !== itemViewOf(collection)?.id ? `${title} / ${activeView.name}` : title}
-            onError={(e) => setError(errorMessage(e))}
-          />
+          }
+        >
           {/* The view's own tools, as on a collection page: its filter (every block uses it unless it has its own) and its
               settings, last. The settings are always here, so the bar (and its "⋮" on a phone) is never empty. */}
           {/* Held while a panel is open: adding a block in the layout panel mustn't move its button. */}
@@ -659,8 +608,7 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
               onError={(e) => setError(errorMessage(e))}
             />
           </ToolbarPopover>
-          </OverflowBar>
-        </div>
+        </ViewsBar>
       )}
 
       {/* Hidden (in place) until its HTML frames know their height, so nothing below one jumps. */}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router";
-import { Checkbox, Heading, IconButton, InlineNotification, MultiSelect, Search, Tab, TabList, Tabs, TextArea, TextInput, Tile } from "@carbon/react";
-import { Add, Filter, Renew, Save, Search as SearchIcon, Settings, SettingsAdjust, Star, StarFilled, TrashCan } from "@carbon/icons-react";
+import { Heading, IconButton, InlineNotification, MultiSelect, TextArea, TextInput, Tile } from "@carbon/react";
+import { Filter, Renew, Settings, TrashCan } from "@carbon/icons-react";
 import { useDashboard, useStore } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { useItemsLoaded } from "../app/useItems";
@@ -19,11 +19,12 @@ import { dashboardViewLink } from "../domain/bookmarks";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { IconPicker } from "../ui/IconPicker";
 import { NotFound } from "../ui/NotFound";
-import { OverflowBar } from "../ui/OverflowBar";
-import { ViewNameRow } from "../ui/ViewMoveButtons";
+import { ViewsBar } from "../ui/ViewsBar";
+import { useBlockArrangement } from "../views/useBlockArrangement";
+import { ViewSettingsPanel } from "../ui/ViewSettingsPanel";
+import { useViewSearch, ViewSearchBar, ViewSearchButton } from "../ui/ViewSearch";
 import { PageHeader } from "../ui/PageHeader";
 import { SpaceLabel } from "../ui/SpaceSwitcher";
-import { TabMenu, useClippedTabs } from "../ui/TabMenu";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { findBlock, useLinkTarget } from "../ui/useLinkTarget";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
@@ -31,10 +32,10 @@ import { useReferenceOptions } from "../ui/useReferenceOptions";
 import { blockType, normalizeBlock } from "../views";
 import type { NewBlockSpec } from "../views/AddBlockButton";
 import { AddBlockButton } from "../views/AddBlockButton";
-import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
+import { BlockListEditor } from "../views/BlockListEditor";
 import { BlockView } from "../views/BlockView";
-import { BlockRows, besideOf, listRowActions, rowCollapse, type RowCollapse, type RowControls } from "../views/BlockRows";
-import { reordered, withCopy, withoutBlock } from "../domain/blockRows";
+import { BlockRows, besideOf, rowCollapse, type RowCollapse, type RowControls } from "../views/BlockRows";
+import { withCopy } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
 import { useCollectionData, type CollectionData } from "../views/useCollectionData";
@@ -63,9 +64,6 @@ const storedAs = (v: DashboardView, id: string): DashboardView => {
   return { ...rest, id };
 };
 
-/** The view's search box filters once typing pauses this long (as a collection view's). */
-const SEARCH_DELAY_MS = 150;
-
 /** What a tab-less dashboard shows (it can lose its tabs only by sync): an empty tab, stored once it changes. */
 const EMPTY_TAB = "empty";
 
@@ -86,14 +84,8 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   const withEmpty = useCallback((list: DashboardView[]) => (list.length > 0 ? list : [emptyTab]), [emptyTab]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>(stateOf(emptyTab));
-  const [search, setSearch] = useState("");
-  const [searched, setSearched] = useState("");
-  useEffect(() => {
-    if (!search) return setSearched("");
-    const timer = window.setTimeout(() => setSearched(search), SEARCH_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [search]);
-  const [searchOpen, setSearchOpen] = useState(false);
+  // Its search: the box below the views bar, what the blocks search for once typing pauses (ui/ViewSearch.tsx).
+  const viewSearch = useViewSearch();
   /** Set after "+": opens Tab settings with the new tab's name selected, to rename it. */
   const [renameRequest, setRenameRequest] = useState(0);
   const nameInput = useRef<HTMLInputElement>(null);
@@ -146,8 +138,6 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   const active = views.find((v) => v.id === activeId) ?? null;
   const reference = active ? stateOf(active) : stateOf(emptyTab);
   const changed = !sameView(view, reference);
-  const viewsBar = useRef<HTMLDivElement>(null);
-  const clippedTabs = useClippedTabs(viewsBar);
   shown.current = { activeId, view, reference };
 
   const selectView = useCallback(
@@ -246,11 +236,6 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
     selectView(id, next);
     setRenameRequest((r) => r + 1);
   }
-  const addButton = (
-    <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Add view" onClick={() => addView().catch(fail)}>
-      <Add />
-    </IconButton>
-  );
   const panels = usePanelsOpen();
   // As a collection view's: the Filter button moves to the filter bar, the width and a block put in a row change, once the panels close.
   const filterInBar = panels.hold("filterInBar", !!active?.filterBar);
@@ -264,16 +249,16 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
     await loadViews(tab.id);
   }
 
-  /** Arranging the tab (blocks added, removed, moved; a block's type, options, name, collections): stored right away. */
-  async function arrange(change: (blocks: ViewBlock[]) => ViewBlock[], storedChange: (blocks: ViewBlock[]) => ViewBlock[] = change) {
-    setView((v) => ({ ...v, blocks: change(v.blocks) }));
-    if (!active) return;
-    const blocks = storedChange(active.blocks);
-    if (JSON.stringify(blocks) === JSON.stringify(active.blocks)) return;
-    await storeNow({ blocks });
-  }
-  const arrangeNow = (change: (blocks: ViewBlock[]) => ViewBlock[], storedChange?: (blocks: ViewBlock[]) => ViewBlock[]) => arrange(change, storedChange).catch(fail);
-  const setBlockNow = (id: string, patch: Partial<ViewBlock>) => arrangeNow((blocks) => blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+  // Arranging the tab's blocks (a block's collections too) is stored right away (views/useBlockArrangement.ts); a tab may be left empty.
+  const { arrangeNow, setBlockNow, moveBlocks, rowActions, removeBlocks } = useBlockArrangement({
+    blocks: view.blocks,
+    storedBlocks: active?.blocks ?? null,
+    setBlocks: (change) => setView((v) => ({ ...v, blocks: change(v.blocks) })),
+    store: (blocks) => storeNow({ blocks }),
+    keepOne: false,
+    confirm,
+    onError: fail,
+  });
   const setBlock = (block: ViewBlock) => setView((v) => ({ ...v, blocks: v.blocks.map((b) => (b.id === block.id ? block : b)) }));
   // A new block lists the collection of the last block that has one (the next is often of the same), else the space's first.
   const lastCollection = [...view.blocks].reverse().map((b) => findCollection(collections, dashboardBlockCollection(b))).find((c) => c);
@@ -283,17 +268,6 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
     const block = normalizeBlock(newBlockCollection, newDashboardBlock(spec.kind, spec.options ?? blockType(spec.kind).defaultOptions(newBlockCollection), newBlockCollection));
     arrangeNow((blocks) => [...blocks, block]);
   };
-  const moveBlocks = (order: ViewBlock[]) => {
-    const at = (b: ViewBlock) => order.findIndex((o) => o.id === b.id) >>> 0;
-    const ids = (blocks: ViewBlock[]) => blocks.map((b) => b.id);
-    const sorted = (blocks: ViewBlock[]) => [...blocks].sort((a, b) => at(a) - at(b));
-    arrangeNow(
-      (blocks) => reordered(ids(blocks), ids(order), order),
-      (blocks) => reordered(ids(blocks), ids(sorted(blocks)), sorted(blocks)),
-    );
-  };
-  // Blocks side by side (rows: views/BlockRows.tsx), stored right away like the rest of the tab's arrangement.
-  const rowActions = listRowActions(view.blocks, (change) => arrangeNow(change));
   // Collapsed per block, a row side by side as one (views/BlockRows.tsx rowCollapse).
   const collapsedState = active?.collapsed ?? NOTHING_COLLAPSED;
   const collapseOf = (block: ViewBlock) =>
@@ -304,15 +278,6 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
       block,
       (next) => storeNow({ collapsed: next }).catch(fail),
     );
-  const blockName = useBlockName();
-  /** Removing blocks (a dashboard view may be left without any): asked first, unless asked already. */
-  async function removeBlocks(ids: string[], asked = false) {
-    const gone = view.blocks.filter((b) => ids.includes(b.id));
-    if (gone.length === 0) return;
-    const title = gone.length === 1 ? `Remove block “${blockName(gone[0])}”?` : `Remove ${gone.length} blocks?`;
-    if (!asked && !(await confirm({ title, body: "Items are not affected." }))) return;
-    await arrange((blocks) => ids.reduce((list, id) => withoutBlock(list.map((b) => b.id), list, id), blocks));
-  }
 
   async function toggleDefault() {
     const tab = await stored();
@@ -418,48 +383,19 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
 
       {savedViews !== null && (
-        <div className="views-bar" ref={viewsBar}>
-          <Tabs selectedIndex={active ? views.indexOf(active) : -1} onChange={({ selectedIndex }) => selectView(views[selectedIndex].id)}>
-            <TabList aria-label="Tabs" className="views-tabs">
-              {views.map((v) => (
-                <Tab key={v.id}>
-                  {v.name}
-                  {changed && v.id === active?.id ? " *" : ""}
-                </Tab>
-              ))}
-            </TabList>
-          </Tabs>
-          {clippedTabs && (
-            <TabMenu label="Views" items={views.map((v) => ({ id: v.id, name: v.name + (changed && v.id === active?.id ? " *" : "") }))} activeId={active?.id} onSelect={selectView} />
-          )}
-          {!clippedTabs && <span className="tab-menu">{addButton}</span>}
-          <span className="views-bar__spacer" />
-          {panels.hold("changed", changed) && active && (
-            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Save changes to view" onClick={() => updateActive().catch(fail)}>
-              <Save />
-            </IconButton>
-          )}
-          <OverflowBar>
-            {clippedTabs && addButton}
-            {active && views.length > 1 && (
-              <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Delete view" onClick={() => deleteActive().catch(fail)}>
-                <TrashCan />
-              </IconButton>
-            )}
-            {active && views.length > 1 && (
-              <IconButton
-                autoAlign
-                kind="ghost"
-                size="sm"
-                align="bottom"
-                label={active.isDefault ? "Revert default view" : "Star as default view"}
-                aria-pressed={active.isDefault}
-                onClick={() => toggleDefault().catch(fail)}
-              >
-                {active.isDefault ? <StarFilled /> : <Star />}
-              </IconButton>
-            )}
-            {active && (
+        <ViewsBar
+          views={views}
+          activeId={active?.id}
+          changed={changed}
+          label="Views"
+          onSelect={selectView}
+          onAdd={() => addView().catch(fail)}
+          saveShown={panels.hold("changed", changed) && !!active}
+          onSave={() => updateActive().catch(fail)}
+          onDelete={active && views.length > 1 ? () => deleteActive().catch(fail) : undefined}
+          star={active && views.length > 1 ? { isDefault: active.isDefault, label: active.isDefault ? "Revert default view" : "Star as default view", onToggle: () => toggleDefault().catch(fail) } : undefined}
+          bookmark={
+            active && (
               <BookmarkButton
                 link={dashboardViewLink(dashboard.id, active.id)}
                 // A view copied from another space is stored first: a bookmark needs a real one.
@@ -467,82 +403,42 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
                 label={`${dashboard.name} / ${active.name}`}
                 onError={fail}
               />
-            )}
+            )
+          }
+        >
             {readsSource && (
               <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Read the remote collections again" onClick={() => sources.refresh(null)}>
                 <Renew />
               </IconButton>
             )}
-            <IconButton
-              autoAlign
-              kind="ghost"
-              size="sm"
-              align="bottom"
-              label={searchOpen ? "Close search" : `Search ${dashboard.name}`}
-              isSelected={searchOpen}
-              data-active={search ? true : undefined}
-              aria-expanded={searchOpen}
-              onClick={() => {
-                if (searchOpen) setSearch("");
-                setSearchOpen(!searchOpen);
-              }}
-            >
-              <SearchIcon />
-            </IconButton>
+            <ViewSearchButton state={viewSearch} name={dashboard.name} />
             {!filterInBar && filterButton}
-            <ToolbarPopover label="View settings" icon={SettingsAdjust} width="narrow" openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
-              <div className="view-settings">
-                {active && (
-                  <ViewNameRow
-                    noun="view"
-                    index={views.findIndex((v) => v.id === active.id)}
-                    count={views.length}
-                    onMove={(by) => moveActive(by).catch(fail)}
-                    input={
-                      <TextInput
-                        size="sm"
-                        key={active.id + active.name}
-                        id={`${uid}-tab-rename`}
-                        ref={nameInput}
-                        labelText="View name"
-                        defaultValue={active.name}
-                        onBlur={(e) => renameActive(e.target.value.trim()).catch(fail)}
-                        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                      />
-                    }
-                  />
-                )}
-                <div className="view-options__checks">
-                  {active && (
-                    <Checkbox
-                      id={`${uid}-tab-filter-bar`}
-                      labelText="Show filter bar"
-                      checked={!!active.filterBar}
-                      onChange={(_, { checked }) => storeNow(checked ? { filterBar: true } : { filterBar: undefined }).catch(fail)}
-                    />
-                  )}
-                  {active && (
-                    <Checkbox id={`${uid}-tab-full-width`} labelText="Full width" checked={isFullWidth("dashboard", active.fullWidth)} onChange={(_, { checked }) => storeNow({ fullWidth: checked }).catch(fail)} />
-                  )}
-                  <Checkbox id={`${uid}-tab-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
-                </div>
-                <BlockListEditor
-                  blocks={view.blocks}
-                  keepOne={false}
-                  addDisabled={!newBlockCollection}
-                  onMove={moveBlocks}
-                  onRemove={(ids, asked) => removeBlocks(ids, asked).catch(fail)}
-                  onAdd={addBlock}
-                  onHeader={(id, shownHeader) => setBlockNow(id, { hideHeader: shownHeader ? undefined : true })}
-                  onDuplicate={(id) => {
-                    const copy = newId();
-                    arrangeNow((blocks) => withCopy(blocks, id, copy));
-                  }}
-                />
-              </div>
-            </ToolbarPopover>
-          </OverflowBar>
-        </div>
+            <ViewSettingsPanel
+              view={active && { id: active.id, name: active.name, index: views.findIndex((v) => v.id === active.id), count: views.length }}
+              nameInput={nameInput}
+              openRequest={renameRequest}
+              onOpenChange={panels.onOpenChange}
+              onMove={(by) => moveActive(by).catch(fail)}
+              onRename={(name) => renameActive(name).catch(fail)}
+              filterBar={active && { checked: !!active.filterBar, onChange: (on) => storeNow(on ? { filterBar: true } : { filterBar: undefined }).catch(fail) }}
+              fullWidth={active && { checked: isFullWidth("dashboard", active.fullWidth), onChange: (on) => storeNow({ fullWidth: on }).catch(fail) }}
+              editable={{ checked: view.editable, onChange: (on) => setView((v) => ({ ...v, editable: on })) }}
+            >
+              <BlockListEditor
+                blocks={view.blocks}
+                keepOne={false}
+                addDisabled={!newBlockCollection}
+                onMove={moveBlocks}
+                onRemove={(ids, asked) => removeBlocks(ids, asked).catch(fail)}
+                onAdd={addBlock}
+                onHeader={(id, shownHeader) => setBlockNow(id, { hideHeader: shownHeader ? undefined : true })}
+                onDuplicate={(id) => {
+                  const copy = newId();
+                  arrangeNow((blocks) => withCopy(blocks, id, copy));
+                }}
+              />
+            </ViewSettingsPanel>
+        </ViewsBar>
       )}
 
       {savedViews !== null && (active?.filterBar || filterInBar) && (
@@ -551,21 +447,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
         </FilterBar>
       )}
 
-      {searchOpen && (
-        <div className="items-search">
-          <Search
-            id={`${uid}-items-search`}
-            size="sm"
-            autoFocus
-            labelText={`Search ${dashboard.name}`}
-            placeholder={`Search ${dashboard.name}`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && !search && setSearchOpen(false)}
-            onBlur={() => !search && setSearchOpen(false)}
-          />
-        </div>
-      )}
+      <ViewSearchBar state={viewSearch} name={dashboard.name} id={`${uid}-items-search`} />
 
       {/* A tab without blocks says what it is for, with Add block (none without a collection to list). */}
       {savedViews !== null && viewChosen && view.blocks.length === 0 && (
@@ -587,7 +469,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
               key={`${activeId ?? ""}-${block.id}`}
               block={block}
               filters={view.filters}
-              search={searched}
+              search={viewSearch.searched}
               editable={view.editable}
               collapsed={collapsedState}
               onCollapse={(next) => storeNow({ collapsed: next }).catch(fail)}

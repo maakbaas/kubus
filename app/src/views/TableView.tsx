@@ -13,8 +13,6 @@ import {
   type SetStateAction,
 } from "react";
 import {
-  Accordion,
-  AccordionItem,
   Checkbox,
   IconButton,
   Link,
@@ -41,6 +39,7 @@ import { isGrouped } from "../domain/query";
 import { FieldEditor } from "../ui/FieldEditor";
 import { FieldInput, parseInputValue, toInputValue, type InputValue } from "../ui/FieldInput";
 import { Highlight } from "../ui/Highlight";
+import { GroupSections } from "./GroupSections";
 import { formatValue, type RefOptions } from "../ui/useReferenceOptions";
 import { errorMessage } from "../ui/useConfirm";
 import { itemLinkProps, FieldCell, isInlineEditable, isMetaField } from "./cells";
@@ -680,30 +679,19 @@ export function TableView(props: BlockProps<TableOptions>) {
   // stored with the view), each with its own add row.
   return (
     <div ref={groupsBox} className="table-groups">
-      <Accordion size="sm" align="start">
-        {result.groups.map((group) => (
-          <AccordionItem
-            key={group.key}
-            open={!collapsedGroups.includes(group.key)}
-            onHeadingClick={({ isOpen }) => onGroupCollapse(group.key, !isOpen)}
-            title={
-              <span className="table-group__title">
-                <Highlight text={group.label} query="" />
-              </span>
-            }
-          >
-            <FillTable style={imageStyle(options)}>
-              <Table size="sm">
-                {head}
-                <TableBody>
-                  {rows(group.items, group.key)}
-                  {addRows(group.key)}
-                </TableBody>
-              </Table>
-            </FillTable>
-          </AccordionItem>
-        ))}
-      </Accordion>
+      <GroupSections groups={result.groups} collapsed={collapsedGroups} onCollapse={onGroupCollapse}>
+        {(group) => (
+          <FillTable style={imageStyle(options)}>
+            <Table size="sm">
+              {head}
+              <TableBody>
+                {rows(group.items, group.key)}
+                {addRows(group.key)}
+              </TableBody>
+            </Table>
+          </FillTable>
+        )}
+      </GroupSections>
     </div>
   );
 }

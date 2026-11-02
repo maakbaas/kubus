@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { Checkbox, Heading, IconButton, InlineNotification, Search, Tab, TabList, Tabs, TextInput } from "@carbon/react";
-import { Add, Filter, Renew, Save, Search as SearchIcon, SettingsAdjust, Star, StarFilled, TrashCan } from "@carbon/icons-react";
+import { Heading, IconButton, InlineNotification } from "@carbon/react";
+import { Filter, Renew } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { useFreshLoads } from "../app/useFreshLoads";
@@ -14,17 +14,18 @@ import { BookmarkButton } from "../ui/BookmarkButton";
 import { collectionViewLink } from "../domain/bookmarks";
 import { NewButton } from "../ui/NewButton";
 import { collectionsCrumb, PageHeader } from "../ui/PageHeader";
-import { ViewNameRow } from "../ui/ViewMoveButtons";
-import { OverflowBar } from "../ui/OverflowBar";
-import { TabMenu, useClippedTabs } from "../ui/TabMenu";
+import { ViewsBar } from "../ui/ViewsBar";
+import { ViewSettingsPanel } from "../ui/ViewSettingsPanel";
+import { useViewSearch, ViewSearchBar, ViewSearchButton } from "../ui/ViewSearch";
 import { findBlock, useLinkTarget } from "../ui/useLinkTarget";
 import { errorMessage, useConfirm } from "../ui/useConfirm";
 import { blockType, normalizeBlock, normalizeView } from "../views";
-import { BlockListEditor, useBlockName } from "../views/BlockListEditor";
+import { BlockListEditor } from "../views/BlockListEditor";
 import type { NewBlockSpec } from "../views/AddBlockButton";
 import { BlockView } from "../views/BlockView";
-import { BlockRows, besideOf, listRowActions, rowCollapse } from "../views/BlockRows";
-import { reordered, withCopy, withoutBlock } from "../domain/blockRows";
+import { BlockRows, besideOf, rowCollapse } from "../views/BlockRows";
+import { useBlockArrangement } from "../views/useBlockArrangement";
+import { withCopy } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
 import { useCollectionData } from "../views/useCollectionData";
@@ -56,8 +57,6 @@ const withFullWidth = (view: CollectionView, on: boolean): CollectionView => ({ 
 /** Id of the virtual "All" view of a space that has no stored view of the collection. */
 const VIRTUAL_VIEW = "default";
 
-/** The view's search box filters once typing pauses this long. */
-const SEARCH_DELAY_MS = 150;
 
 function CollectionContent({ collection }: { collection: Collection }) {
   // Element ids unique per instance: the same page can be open in several tabs.
@@ -92,16 +91,8 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const withVirtual = (list: CollectionView[]) => (list.length > 0 ? list : [virtualView]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>(base);
-  const [search, setSearch] = useState("");
-  // What the blocks search for: the typed text once typing pauses (each search goes over every item), an emptied box at once.
-  const [searched, setSearched] = useState("");
-  useEffect(() => {
-    if (!search) return setSearched("");
-    const timer = window.setTimeout(() => setSearched(search), SEARCH_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [search]);
-  /** The search bar below the tab bar is shown (opened from its icon). */
-  const [searchOpen, setSearchOpen] = useState(false);
+  // Its search: the box below the views bar, what the blocks search for once typing pauses (ui/ViewSearch.tsx).
+  const viewSearch = useViewSearch();
   /** Set after "+": opens View settings with the new view's name selected, to rename it. */
   const [renameRequest, setRenameRequest] = useState(0);
   const nameInput = useRef<HTMLInputElement>(null);
@@ -150,8 +141,6 @@ function CollectionContent({ collection }: { collection: Collection }) {
   const active = views.find((v) => v.id === activeId) ?? null;
   const reference = active ? normalized(collection, active, collections) : base;
   const changed = !sameView(view, reference);
-  const viewsBar = useRef<HTMLDivElement>(null);
-  const clippedTabs = useClippedTabs(viewsBar);
   shown.current = { activeId, view, reference };
 
   /** A change to what a block shows (filter, sort, grouping, fields): unsaved until Save changes. */
@@ -230,11 +219,6 @@ function CollectionContent({ collection }: { collection: Collection }) {
     await saveAsNew(newName(views.map((v) => v.name)), view);
     setRenameRequest((r) => r + 1);
   }
-  const addButton = (
-    <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Add view" onClick={() => addView().catch((e) => setError(errorMessage(e)))}>
-      <Add />
-    </IconButton>
-  );
   const panels = usePanelsOpen();
   // The view's Filter button is on the filter bar while that is shown. It moves only once a panel
   // closes (View settings is where the bar is switched on): leaving the toolbar, it would move the
@@ -293,53 +277,29 @@ function CollectionContent({ collection }: { collection: Collection }) {
     await loadViews();
   }
 
-  /**
-   * Arranging the view (adding, removing and reordering blocks; a block's type, options and
-   * name) is stored right away, applied to the shown and the saved view alike, so it is no change
-   * to save; what changes the shown items (filters, sort, grouping, fields) waits for Save changes.
-   */
-  async function arrange(change: (blocks: ViewBlock[]) => ViewBlock[], stored: (blocks: ViewBlock[]) => ViewBlock[] = change) {
-    setView((v) => ({ ...v, blocks: change(v.blocks) }));
-    if (!active) return;
-    const blocks = stored(active.blocks);
-    if (JSON.stringify(blocks) === JSON.stringify(active.blocks)) return;
-    setSavedViews((list) => list && list.map((v) => (v.id === active.id ? { ...v, blocks } : v)));
-    await fresh.storing(async () => {
-      const id = (await storeVirtual()) ?? active.id;
-      await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), blocks });
-    });
-    await loadViews();
-  }
-  const arrangeNow = (change: (blocks: ViewBlock[]) => ViewBlock[], stored?: (blocks: ViewBlock[]) => ViewBlock[]) =>
-    arrange(change, stored).catch((e) => setError(errorMessage(e)));
-  /** A block's type, options or name (where the block is: shown, saved or both). */
-  const setBlockNow = (id: string, patch: Partial<ViewBlock>) => arrangeNow((blocks) => blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+  // Arranging the view's blocks is stored right away with the view (views/useBlockArrangement.ts); a view keeps one block.
+  const { arrangeNow, setBlockNow, moveBlocks, rowActions, removeBlocks } = useBlockArrangement({
+    blocks: view.blocks,
+    storedBlocks: active?.blocks ?? null,
+    setBlocks: (change) => setView((v) => ({ ...v, blocks: change(v.blocks) })),
+    async store(blocks) {
+      if (!active) return;
+      setSavedViews((list) => list && list.map((v) => (v.id === active.id ? { ...v, blocks } : v)));
+      await fresh.storing(async () => {
+        const id = (await storeVirtual()) ?? active.id;
+        await repo.saveView({ ...active, id, createdAt: active.createdAt || now(), blocks });
+      });
+      await loadViews();
+    },
+    keepOne: true,
+    confirm,
+    onError: (e) => setError(errorMessage(e)),
+  });
   /** "Add block": a new one of a type / component, with the view's filter. */
   const addBlock = (spec: NewBlockSpec) => {
     const block = normalizeBlock(collection, newBlock(spec.kind, spec.options ?? blockType(spec.kind).defaultOptions(collection)));
     arrangeNow((blocks) => [...blocks, block]);
   };
-  /** Reordered blocks; the saved view's blocks follow the same order (a block no longer under the one it was beside leaves its row). */
-  const moveBlocks = (order: ViewBlock[]) => {
-    const at = (b: ViewBlock) => order.findIndex((o) => o.id === b.id) >>> 0; // not shown: last
-    const ids = (blocks: ViewBlock[]) => blocks.map((b) => b.id);
-    const sorted = (blocks: ViewBlock[]) => [...blocks].sort((a, b) => at(a) - at(b));
-    arrangeNow(
-      (blocks) => reordered(ids(blocks), ids(order), order),
-      (blocks) => reordered(ids(blocks), ids(sorted(blocks)), sorted(blocks)),
-    );
-  };
-  // Blocks side by side (rows: views/BlockRows.tsx), arranged like the rest: stored right away.
-  const rowActions = listRowActions(view.blocks, (change) => arrangeNow(change));
-  const blockName = useBlockName();
-  /** Removing blocks (a view keeps one): asked first, unless asked already. */
-  async function removeBlocks(ids: string[], asked = false) {
-    const gone = view.blocks.filter((b) => ids.includes(b.id));
-    if (gone.length === 0 || gone.length >= view.blocks.length) return;
-    const title = gone.length === 1 ? `Remove block “${blockName(gone[0])}”?` : `Remove ${gone.length} blocks?`;
-    if (!asked && !(await confirm({ title, body: "Items are not affected." }))) return;
-    await arrange((blocks) => ids.reduce((list, id) => withoutBlock(list.map((b) => b.id), list, id), blocks));
-  }
 
   /** Star the active view as the default, or unstar it (then the first view opens by default). */
   async function toggleDefault() {
@@ -419,69 +379,34 @@ function CollectionContent({ collection }: { collection: Collection }) {
           Unsaved changes to the shown view surface as icon buttons beside its star. */}
       {/* Always shown, also for a single view: its name, "+", bookmark and saving stay in one place. */}
       {savedViews !== null && (
-        <div className="views-bar" ref={viewsBar}>
-          {views.length > 0 && (
-            <Tabs selectedIndex={active ? views.indexOf(active) : -1} onChange={({ selectedIndex }) => selectView(views[selectedIndex].id)}>
-              <TabList aria-label="Views" className="views-tabs">
-                {/* "*" marks unsaved changes to the shown view (switching views discards them). */}
-                {views.map((v) => (
-                  <Tab key={v.id}>
-                    {v.name}
-                    {changed && v.id === active?.id ? " *" : ""}
-                  </Tab>
-                ))}
-              </TabList>
-            </Tabs>
-          )}
-          {clippedTabs && (
-            <TabMenu
-              label="Views"
-              items={views.map((v) => ({ id: v.id, name: v.name + (changed && v.id === active?.id ? " *" : "") }))}
-              activeId={active?.id}
-              onSelect={selectView}
-            />
-          )}
-          {/* "+" takes the menu arrow's place; with the arrow it joins the icons at the right edge. */}
-          {!clippedTabs && <span className="tab-menu">{addButton}</span>}
-          <span className="views-bar__spacer" />
-          {/* Always in the bar, left of the other buttons (never in the "⋮" menu); held while a panel
-              is open, so it appears once the panel closes. Unsaved changes are dropped by opening
-              the view again (its tab) or another one. */}
-          {panels.hold("changed", changed) && active && (
-            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Save changes to view" onClick={() => updateActive().catch((e) => setError(errorMessage(e)))}>
-              <Save />
-            </IconButton>
-          )}
-          <OverflowBar>
-          {clippedTabs && addButton}
-          {/* The last view can't be deleted: a collection always keeps one. */}
-          {active && views.length > 1 && (
-            <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Delete view" onClick={() => deleteActive().catch((e) => setError(errorMessage(e)))}>
-              <TrashCan />
-            </IconButton>
-          )}
-          {/* With one view there's nothing to choose: it opens anyway. */}
-          {active && views.length > 1 && (
-            <IconButton autoAlign
-              kind="ghost"
-              size="sm"
-              align="bottom"
-              label={active.isDefault ? "Revert default view" : "Star as default view"}
-              aria-pressed={active.isDefault}
-              onClick={() => toggleDefault().catch((e) => setError(errorMessage(e)))}
-            >
-              {active.isDefault ? <StarFilled /> : <Star />}
-            </IconButton>
-          )}
-          {active && (
-            <BookmarkButton
-              link={collectionViewLink(collection.id, active.id)}
-              // The virtual "All" view is stored first: a bookmark needs a real view.
-              prepare={active.id === VIRTUAL_VIEW ? () => storeVirtual().then((id) => (id ? collectionViewLink(collection.id, id) : undefined)) : undefined}
-              label={`${collection.pluralName} / ${active.name}`}
-              onError={(e) => setError(errorMessage(e))}
-            />
-          )}
+        <ViewsBar
+          views={views}
+          activeId={active?.id}
+          changed={changed}
+          label="Views"
+          onSelect={selectView}
+          onAdd={() => addView().catch((e) => setError(errorMessage(e)))}
+          saveShown={panels.hold("changed", changed) && !!active}
+          onSave={() => updateActive().catch((e) => setError(errorMessage(e)))}
+          // The last view can't be deleted (a collection always keeps one); with one there's nothing to star.
+          onDelete={active && views.length > 1 ? () => deleteActive().catch((e) => setError(errorMessage(e))) : undefined}
+          star={
+            active && views.length > 1
+              ? { isDefault: active.isDefault, label: active.isDefault ? "Revert default view" : "Star as default view", onToggle: () => toggleDefault().catch((e) => setError(errorMessage(e))) }
+              : undefined
+          }
+          bookmark={
+            active && (
+              <BookmarkButton
+                link={collectionViewLink(collection.id, active.id)}
+                // The virtual "All" view is stored first: a bookmark needs a real view.
+                prepare={active.id === VIRTUAL_VIEW ? () => storeVirtual().then((id) => (id ? collectionViewLink(collection.id, id) : undefined)) : undefined}
+                label={`${collection.pluralName} / ${active.name}`}
+                onError={(e) => setError(errorMessage(e))}
+              />
+            )
+          }
+        >
           {/* A remote collection's rows, read again from its source (they aren't kept current by themselves). */}
           {remote && (
             <IconButton autoAlign kind="ghost" size="sm" align="bottom" label={`Read again from ${collection.source!.name}`} onClick={() => sources.refresh(collection.id)}>
@@ -490,67 +415,32 @@ function CollectionContent({ collection }: { collection: Collection }) {
           )}
           {/* The view's own tools: search in it (a bar below), its filter (every block uses it
               unless it has its own) and its settings. A blue icon = in effect. */}
-          <IconButton
-            autoAlign
-            kind="ghost"
-            size="sm"
-            align="bottom"
-            label={searchOpen ? "Close search" : `Search ${collection.pluralName}`}
-            isSelected={searchOpen}
-            data-active={search ? true : undefined}
-            aria-expanded={searchOpen}
-            onClick={() => {
-              if (searchOpen) setSearch("");
-              setSearchOpen(!searchOpen);
-            }}
-          >
-            <SearchIcon />
-          </IconButton>
+          <ViewSearchButton state={viewSearch} name={collection.pluralName} />
           {!filterInBar && filterButton}
-          <ToolbarPopover label="View settings" icon={SettingsAdjust} width="narrow" openRequest={renameRequest} onOpenChange={panels.onOpenChange}>
-            <div className="view-settings">
-              {active && (
-                <ViewNameRow
-                  noun="view"
-                  index={savedViews?.findIndex((v) => v.id === active.id) ?? -1}
-                  count={savedViews?.length ?? 0}
-                  onMove={(by) => moveActive(by).catch((e) => setError(errorMessage(e)))}
-                  input={
-                    <TextInput
-                      size="sm"
-                      key={active.id + active.name}
-                      id={`${uid}-view-rename`}
-                      ref={nameInput}
-                      labelText="View name"
-                      defaultValue={active.name}
-                      onBlur={(e) => renameActive(e.target.value.trim()).catch((err) => setError(errorMessage(err)))}
-                      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                    />
-                  }
-                />
-              )}
-              <div className="view-options__checks">
-                {active && <Checkbox id={`${uid}-view-filter-bar`} labelText="Show filter bar" checked={!!active.filterBar} onChange={(_, { checked }) => setFilterBar(checked).catch((e) => setError(errorMessage(e)))} />}
-                {active && <Checkbox id={`${uid}-view-full-width`} labelText="Full width" checked={isFullWidth("collection", active.fullWidth)} onChange={(_, { checked }) => setFullWidth(checked).catch((e) => setError(errorMessage(e)))} />}
-                {!readOnly && (
-                  <Checkbox id={`${uid}-view-editable`} labelText="Fields are editable" checked={view.editable} onChange={(_, { checked }) => setView((v) => ({ ...v, editable: checked }))} />
-                )}
-              </div>
-              <BlockListEditor
-                blocks={view.blocks}
-                onMove={moveBlocks}
-                onRemove={(ids, asked) => removeBlocks(ids, asked).catch((e) => setError(errorMessage(e)))}
-                onAdd={addBlock}
-                onHeader={(id, shown) => setBlockNow(id, { hideHeader: shown ? undefined : true })}
-                onDuplicate={(id) => {
-                  const copy = newId();
-                  arrangeNow((blocks) => withCopy(blocks, id, copy));
-                }}
-              />
-            </div>
-          </ToolbarPopover>
-          </OverflowBar>
-        </div>
+          <ViewSettingsPanel
+            view={active && { id: active.id, name: active.name, index: savedViews?.findIndex((v) => v.id === active.id) ?? -1, count: savedViews?.length ?? 0 }}
+            nameInput={nameInput}
+            openRequest={renameRequest}
+            onOpenChange={panels.onOpenChange}
+            onMove={(by) => moveActive(by).catch((e) => setError(errorMessage(e)))}
+            onRename={(name) => renameActive(name).catch((e) => setError(errorMessage(e)))}
+            filterBar={active && { checked: !!active.filterBar, onChange: (on) => setFilterBar(on).catch((e) => setError(errorMessage(e))) }}
+            fullWidth={active && { checked: isFullWidth("collection", active.fullWidth), onChange: (on) => setFullWidth(on).catch((e) => setError(errorMessage(e))) }}
+            editable={readOnly ? null : { checked: view.editable, onChange: (on) => setView((v) => ({ ...v, editable: on })) }}
+          >
+            <BlockListEditor
+              blocks={view.blocks}
+              onMove={moveBlocks}
+              onRemove={(ids, asked) => removeBlocks(ids, asked).catch((e) => setError(errorMessage(e)))}
+              onAdd={addBlock}
+              onHeader={(id, shown) => setBlockNow(id, { hideHeader: shown ? undefined : true })}
+              onDuplicate={(id) => {
+                const copy = newId();
+                arrangeNow((blocks) => withCopy(blocks, id, copy));
+              }}
+            />
+          </ViewSettingsPanel>
+        </ViewsBar>
       )}
 
       {/* The filter bar ("Show filter bar" in View settings): the view's Filter button and date period. */}
@@ -562,21 +452,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
 
       {/* Search in the view (all its blocks), opened from its icon; never saved. Escape on an
           empty box, or leaving it empty, closes it. */}
-      {searchOpen && (
-        <div className="items-search">
-          <Search
-            id={`${uid}-items-search`}
-            size="sm"
-            autoFocus
-            labelText={`Search ${collection.pluralName}`}
-            placeholder={`Search ${collection.pluralName}`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && !search && setSearchOpen(false)}
-            onBlur={() => !search && setSearchOpen(false)}
-          />
-        </div>
-      )}
+      <ViewSearchBar state={viewSearch} name={collection.pluralName} id={`${uid}-items-search`} />
 
       {/* The blocks once the items are in (a fraction of a second), all at once: shown before, each
           block's header would stand alone and be pushed down as the blocks above it fill. */}
@@ -601,7 +477,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
                 data={listedData}
                 block={block}
                 viewFilters={listed === collection ? view.filters : null}
-                search={searched}
+                search={viewSearch.searched}
                 place="collection"
                 page={null}
                 editable={view.editable && !readOnly}

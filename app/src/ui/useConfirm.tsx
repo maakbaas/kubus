@@ -3,7 +3,7 @@ import { Modal } from "@carbon/react";
 import { returnFocus } from "./useMountedDialog";
 export { errorMessage } from "../domain/errors";
 
-interface ConfirmOptions {
+export interface ConfirmOptions {
   title: string;
   body: ReactNode;
   confirmLabel?: string;

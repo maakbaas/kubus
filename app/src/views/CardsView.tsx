@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { Accordion, AccordionItem, Checkbox, Link, Select, SelectItem, Tile } from "@carbon/react";
+import { Checkbox, Link, Select, SelectItem, Tile } from "@carbon/react";
 import { Grid as GridIcon } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { itemPath } from "../domain/backlinks";
@@ -9,6 +9,7 @@ import type { FieldLayout } from "../domain/fieldLayout";
 import { outputOf, type Component } from "../domain/components";
 import { HtmlFrame } from "../ui/ComponentValue";
 import { Highlight } from "../ui/Highlight";
+import { GroupSections } from "./GroupSections";
 import { MarkdownView } from "../ui/MarkdownView";
 import { useFileUrl } from "../ui/images";
 import { isEmptyValue, isGrouped } from "../domain/query";
@@ -315,22 +316,9 @@ export function CardsView({ collection, result, fields, layout, options, refs, s
     <div ref={grid} className={grouped ? "view-groups" : undefined}>
       {grouped ? (
         // Same collapsible group lines as grouped tables (open by default, collapsing is stored with the view).
-        <Accordion size="sm" align="start">
-          {result.groups.map((group) => (
-            <AccordionItem
-              key={group.key}
-              open={!collapsedGroups.includes(group.key)}
-              onHeadingClick={({ isOpen }) => onGroupCollapse(group.key, !isOpen)}
-              title={
-                <span className="table-group__title">
-                  <Highlight text={group.label} query="" />
-                </span>
-              }
-            >
-              {cards(group)}
-            </AccordionItem>
-          ))}
-        </Accordion>
+        <GroupSections groups={result.groups} collapsed={collapsedGroups} onCollapse={onGroupCollapse}>
+          {cards}
+        </GroupSections>
       ) : (
         result.groups.map((group) => <div key={group.key}>{cards(group)}</div>)
       )}
