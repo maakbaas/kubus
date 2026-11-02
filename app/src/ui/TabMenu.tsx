@@ -32,7 +32,12 @@ export function useClippedTabs(bar: RefObject<HTMLElement | null>, widthOf?: (it
       // Without their own sizing the tabs mustn't shrink in the narrowed list: that would unclip.
       if (!widthOf) items.forEach((item) => (item.style.flexShrink = "0"));
       const total = items.reduce((sum, item) => sum + (widthOf ? widthOf(item) : item.offsetWidth), 0);
-      const over = total > el.clientWidth - occupied(el, tabs) + 1;
+      // While clipped, the menu arrow's own width counts as free: it goes once the tabs fit (judged
+      // with it, two tabs that fit without it would stay clipped). Its margin still counts: no
+      // flipping back and forth when the tabs fit by less than that.
+      const menu = el.querySelector<HTMLElement>(".tab-menu--arrow");
+      const free = clipped && menu ? menu.offsetWidth : 0;
+      const over = total > el.clientWidth - occupied(el, tabs) + free + 1;
       setClipped(over);
       const shown = list.querySelector<HTMLElement>(".cds--tabs__nav-item--selected");
       if (over && shown) {
@@ -82,7 +87,7 @@ export interface TabMenuItem {
 /** A down arrow beside tabs that don't all fit: it lists all of them in a toolbar popover (the shown one checked). */
 export function TabMenu({ items, activeId, label, onSelect }: { items: TabMenuItem[]; activeId: string | undefined; label: string; onSelect(id: string): void }) {
   return (
-    <ToolbarPopover label={label} icon={ChevronDown} fit className="tab-menu">
+    <ToolbarPopover label={label} icon={ChevronDown} fit className="tab-menu tab-menu--arrow">
       {(close) => (
         <div className="tab-menu__list">
           {items.map((t) => (
