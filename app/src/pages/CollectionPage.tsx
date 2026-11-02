@@ -180,7 +180,9 @@ function CollectionContent({ collection }: { collection: Collection }) {
     setViewChosen(true);
   }, [savedViews, selectView, wanted]);
   useEffect(() => {
-    if (openedDefault.current && wanted && savedViews?.some((v) => v.id === wanted)) selectView(wanted);
+    // Not the view already shown: choosing a tab writes its id into the address (below), and selecting it again
+    // then reset it to its stored state, undoing a change made in the meantime (a setting just ticked in View settings).
+    if (openedDefault.current && wanted && wanted !== shown.current?.activeId && savedViews?.some((v) => v.id === wanted)) selectView(wanted);
     // Only when the requested view changes, not on every edit of the views.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wanted]);
