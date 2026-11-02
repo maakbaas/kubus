@@ -941,9 +941,10 @@ body {
   max-height: var(--cds-spacing-09);
   vertical-align: middle;
 }
+/* Links in Markdown look like every other link in the app (Carbon's Link): no underline but on hover. */
 .md-view__link {
   color: var(--cds-link-primary);
-  text-decoration: underline;
+  text-decoration: none;
 }
 /* Links in the full view are Carbon Links: inline-flex in their own compact type, which made a
    wrapped link's lines shorter than the paragraph's (the editor's links are plain text in it), so
@@ -1539,7 +1540,10 @@ img[data-lightbox] {
 .md-editor__content h6 { font-size: 1rem; font-weight: 600; }
 .md-editor__content strong { font-weight: 600; }
 .md-editor__content em { font-style: italic; }
-.md-editor__content a { color: var(--cds-link-primary); text-decoration: underline; }
+.md-editor__content a { color: var(--cds-link-primary); text-decoration: none; }
+@media (any-hover: hover) {
+  .md-editor__content a:hover { text-decoration: underline; }
+}
 .md-editor__content ul { list-style: disc; padding-left: 1.5rem; }
 .md-editor__content ol { list-style: decimal; padding-left: 1.5rem; }
 /* Task items: a Carbon-style checkbox drawn on the <li>, in the gutter left of
@@ -1651,9 +1655,14 @@ img[data-lightbox] {
 .md-code-block:focus-within .md-code-block__language {
   opacity: 1;
 }
+/* A touch screen has no hover: the select shows in the block being edited, above its code (laid over it, it covered
+   the first line's end on a phone's narrow block). */
 @media (hover: none) {
-  .md-code-block__language {
-    opacity: 1;
+  .md-code-block:focus-within pre {
+    padding-top: calc(2 * var(--inset-top, 0px) + 2rem);
+  }
+  .md-code-block:focus-within {
+    --inset-top: calc((2 * 0.75rem + var(--cds-code-02-line-height) * var(--cds-code-02-font-size) - 2rem) / 2);
   }
 }
 /* Carbon's inline select is transparent and full width (made for toolbars); over code it

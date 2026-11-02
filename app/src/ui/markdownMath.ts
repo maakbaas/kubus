@@ -6,6 +6,17 @@ import remarkMath from "remark-math";
 import { markRule } from "@milkdown/kit/prose";
 import { textblockTypeInputRule } from "@milkdown/kit/prose/inputrules";
 import { $inputRule, $markSchema, $nodeSchema, $remark } from "@milkdown/kit/utils";
+import { Fragment, type Schema } from "@milkdown/kit/prose/model";
+
+// Parse rules (what is pasted, and every paste: the clipboard plugin parses even plain text through the DOM) come before
+// code's own (`pre`, and `code` at 100: Milkdown gives a mark's rules its schema priority), or a formula pasted would come back as code. A formula KaTeX rendered (copied
+// from a read-only view) is read back from its TeX source, which KaTeX keeps in its MathML.
+const MATH_PRIORITY = 110;
+const texOf = (dom: HTMLElement) => dom.querySelector('annotation[encoding="application/x-tex"]')?.textContent ?? dom.textContent ?? "";
+const texContent = (dom: HTMLElement, schema: Schema) => {
+  const tex = texOf(dom).trim();
+  return tex ? Fragment.from(schema.text(tex)) : Fragment.empty;
+};
 
 const remarkMathPlugin = $remark("remarkMath", () => remarkMath);
 
@@ -14,7 +25,10 @@ const mathInlineSchema = $markSchema("math_inline", () => ({
   priority: 100,
   code: true,
   inclusive: false,
-  parseDOM: [{ tag: "code.md-math" }],
+  parseDOM: [
+    { tag: "code.md-math", priority: MATH_PRIORITY },
+    { tag: "span.katex", priority: MATH_PRIORITY, getContent: (dom, schema) => texContent(dom as HTMLElement, schema) },
+  ],
   toDOM: () => ["code", { class: "md-math" }],
   parseMarkdown: {
     match: (node) => node.type === "inlineMath",
@@ -40,7 +54,10 @@ const mathBlockSchema = $nodeSchema("math_block", () => ({
   marks: "",
   defining: true,
   code: true,
-  parseDOM: [{ tag: "pre.md-math-block", preserveWhitespace: "full" }],
+  parseDOM: [
+    { tag: "pre.md-math-block", preserveWhitespace: "full", priority: MATH_PRIORITY },
+    { tag: "span.katex-display", priority: MATH_PRIORITY + 1, getContent: (dom, schema) => texContent(dom as HTMLElement, schema) },
+  ],
   toDOM: () => ["pre", { class: "md-math-block" }, ["code", 0]],
   parseMarkdown: {
     match: (node) => node.type === "math",
