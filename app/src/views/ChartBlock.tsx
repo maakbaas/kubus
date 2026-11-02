@@ -710,6 +710,13 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
         }),
       )}
       {first.value !== "count" && !fieldsParts && <FieldSelect id={`${uid}-value-field`} label="Of" fields={numbers} value={first.field} onChange={(field) => setFirst({ field })} />}
+      {/* Along a date, the number can be of the step now is in alone (today): the sparkline's window can be wider. */}
+      {o.chart === "stat" && fieldMode && isDate(xField) && (
+        <Select size="sm" id={`${uid}-value-of`} labelText="Value of" value={o.valueScope} onChange={(e) => set({ valueScope: e.target.value as ChartOptions["valueScope"] })}>
+          <SelectItem value="all" text="All items" />
+          <SelectItem value="step" text="The current step (today, this week, …)" />
+        </Select>
+      )}
       {o.chart === "stat" && check("showLabel", "Show the name above the number")}
       {o.chart === "meter" && check("showLabel", "Show the label above the meter (its name and total)")}
       {labelShown && ((o.chart !== "stat" && o.chart !== "meter") || o.showLabel) && <TextInput size="sm" id={`${uid}-value-label`} labelText="Label" placeholder={seriesLabel({ ...first, label: "" }, collection)} value={first.label} onChange={(e) => setFirst({ label: e.target.value })} />}
