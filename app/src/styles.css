@@ -1833,7 +1833,8 @@ img[data-lightbox] {
 .link-picker .cds--popover-content {
   visibility: visible !important;
 }
-.link-target-list {
+/* Capped and scrolling inside only in a dropdown (compact); the search page's link results run the page's length. */
+.link-target-list--compact {
   max-block-size: min(16rem, var(--popover-room, 16rem));
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1894,7 +1895,8 @@ img[data-lightbox] {
   inline-size: max(var(--link-field-width), 16rem);
   max-inline-size: 90vw;
 }
-.link-target-input .link-target-list {
+.link-target-input /* Capped and scrolling inside only in a dropdown (compact); the search page's link results run the page's length. */
+.link-target-list--compact {
   max-block-size: min(16rem, var(--popover-room, 16rem));
 }
 

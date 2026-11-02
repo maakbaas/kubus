@@ -701,6 +701,21 @@ describe("statOf", () => {
     // "Previous value" only after a last value.
     expect(statOf(input(), options({ chart: "stat", series: [sumPages], compare: "prev" })).baseline).toBeNull();
   });
+
+  it("of the current step only: the items of the X axis's date step that now is in, none: no value", () => {
+    const at = (y: number, m: number, d: number) => local(y, m, d) + 12 * 3_600_000;
+    const stat = (dateStep: ChartX["dateStep"], now: number, patch: Partial<ChartOptions> = {}) =>
+      statOf(input(), options({ chart: "stat", series: [last], valueScope: "step", ...patch }, { ...byRead, dateStep }), now);
+    expect(stat("day", at(2026, 3, 2)).value).toBe(80);
+    // Nothing today: no value (not the day before's), whatever is aggregated; the baseline is of all the items still.
+    expect(stat("day", at(2026, 3, 3), { compare: "avg" })).toMatchObject({ value: null, baseline: 175, change: null });
+    expect(stat("day", at(2026, 3, 3), { series: [sumPages] }).value).toBeNull();
+    expect(stat("week", at(2026, 3, 4)).value).toBe(80);
+    expect(stat("month", at(2026, 1, 31)).value).toBe(200);
+    // All items, or no X axis along a date: the value of all of them.
+    expect(stat("day", at(2026, 3, 3), { valueScope: "all" }).value).toBe(120);
+    expect(statOf(input(), options({ chart: "stat", series: [last], valueScope: "step" }), at(2026, 3, 3)).value).toBe(120);
+  });
 });
 
 describe("scatterPoints", () => {

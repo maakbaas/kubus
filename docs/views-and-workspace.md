@@ -250,7 +250,11 @@ Extension points are registries, not special cases in pages:
     average (79.2 kg)" below), as a % or the difference ("Change
     shown as"), green or red by which way is better ("Better": higher, lower, neither: grey), and a sparkline across the block below (4rem, as a compact chart; full width by default, Width narrows it). Its Height and Aspect ratio apply as to any chart (10rem when a chart is turned into a stat): the number centred in what the sparkline leaves, the sparkline growing with the height (40% of it, 4 to 16rem); never less tall than its text and a 4rem sparkline (StatView sets that as its least height, and as `data-row-min`: a row side by side, where it counts and fills like a chart, is never less tall). A meter keeps Carbon's own fixed height: the value along its X axis ("Sparkline along") as Carbon's compact area
     or line chart (`chartSpec` of a stat is it; in its tag's colour, Carbon's `color.scale`: support-success,
-    support-error, grey for neither), or none (`statOf`, `baselineOf` in domain/chart.ts).
+    support-error, grey for neither), or none (`statOf`, `baselineOf` in domain/chart.ts). Along a date field, "Value of" "The current step"
+    (`valueScope: "step"`) makes the number of only the items in the step now falls in (today with Day steps, this week, this hour, …:
+    `currentStepItems`, by each date category's `at`..`end`), none there: no number (not the day before's last value); the sparkline and
+    what it is compared with still take all the items. For a daily dashboard whose filter is a week wide to feed the sparkline. (Worked out
+    when the block renders: like a date filter, an open page doesn't roll over at midnight on its own.)
   - **Spread**: a histogram's field (a number or a date: dates on a time axis), bins and Split by; a box plot's field (a
     box per X category); a heatmap's columns (the X axis) × rows (Split by), or with a date X axis and not split a
     calendar (weeks × weekdays; empty cells left undrawn).
