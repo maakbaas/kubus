@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <!-- iOS home-screen icon (apple-touch-icon.png, icon-1024.png, desktop/icons/ios): the app icon's cube (favicon.svg) at 78% of
+       the height, with narrower seams between the faces (0.7 of the 16-unit grid, favicon.svg's are 1.5: they are drawn small),
+       on Carbon Blue 100 filling the square (iOS rounds the corners). Rendered by scripts/render-ios-icons.mjs. -->
+  <mask id="seams" maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16">
+    <rect width="16" height="16" fill="#fff"/>
+    <path d="M1 4 8 8 15 4M8 8V16" fill="none" stroke="#000" stroke-width="0.7"/>
+  </mask>
+  <rect width="16" height="16" fill="#001141"/>
+  <g transform="translate(8 8) scale(0.9176) translate(-8 -8)" mask="url(#seams)">
+    <path d="M8 1.2 13.95 4.6 8 8 2.05 4.6Z" fill="#0f62fe"/>
+    <path d="M2.05 4.6 8 8V14.8L2.05 11.4Z" fill="#78a9ff"/>
+    <path d="M13.95 4.6 8 8V14.8L13.95 11.4Z" fill="#4589ff"/>
+  </g>
+</svg>

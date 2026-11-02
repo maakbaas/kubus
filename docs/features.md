@@ -72,7 +72,7 @@ What the app does, feature by feature (read the part you work on).
 - **Collections have an icon** from the full Carbon set (`collections.icon`, an `@carbon/icons-react`
   export name). The icon module is lazy-loaded (`app/src/ui/collectionIcons.tsx`); the picker is a search
   box over a grid of matches. App icon: `app/public/favicon.svg` (isometric cube, three shades of Carbon blue, transparent background),
-  rendered to `desktop/icons` with `tauri icon` (`--ios-color '#d0e2ff'`); the PWA's icon-1024, the apple-touch-icon (iOS home screen) and the Tauri iOS icons are the cube at 70% on #d0e2ff (a blue lighter than the cube's lightest), rendered from `favicon.svg`. Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
+  rendered to `desktop/icons` with `tauri icon`; the iOS home-screen icon (the PWA's icon-1024 and apple-touch-icon, and the Tauri iOS icons in `desktop/icons/ios`) has its own drawing, `desktop/icons/home-screen.svg`: the cube at 78% with narrower seams (0.7 of the 16-unit grid, as it's drawn large) on Carbon Blue 100 (`#001141`), rendered to every size by `node scripts/render-ios-icons.mjs` (after `tauri icon`, which would overwrite the iOS ones). Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
   names, the lock or the `kubus.*` storage keys, orphans existing data).
 - The Milkdown editor reports changes synchronously (`changes` plugin); don't use Milkdown's
   debounced listener plugin: it loses text typed right before saving.
