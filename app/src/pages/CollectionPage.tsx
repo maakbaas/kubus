@@ -180,18 +180,21 @@ function CollectionContent({ collection }: { collection: Collection }) {
     setViewChosen(true);
   }, [savedViews, selectView, wanted]);
   useEffect(() => {
-    // Not the view already shown: choosing a tab writes its id into the address (below), and selecting it again
-    // then reset it to its stored state, undoing a change made in the meantime (a setting just ticked in View settings).
+    // Not the address this page wrote itself (below): that one arrives a moment after the tab was chosen, maybe
+    // after another tab was chosen too, and selecting it would switch back (or reset the view just changed).
+    if (wanted === written.current) return;
     if (openedDefault.current && wanted && wanted !== shown.current?.activeId && savedViews?.some((v) => v.id === wanted)) selectView(wanted);
     // Only when the requested view changes, not on every edit of the views.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wanted]);
   // The shown view goes into the address (replacing it: choosing a view is no step back), so coming
   // back to this page (back from an item, a restored tab) shows that view, not the starred one.
+  const written = useRef<string | null>(null);
   useEffect(() => {
     if (!viewChosen || !activeId || activeId === VIRTUAL_VIEW || activeId === wanted) return;
     const next = new URLSearchParams(params);
     next.set("view", activeId);
+    written.current = activeId;
     navigate({ search: `?${next}` }, { replace: true });
     // Only when the shown view changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
