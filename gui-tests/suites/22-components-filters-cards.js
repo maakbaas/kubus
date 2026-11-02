@@ -18,7 +18,9 @@ function componentSpec() {
 test("collection editor: a field's settings under it, one per line; local components @ desktop", async (t) => {
   await t.boot();
   const ids = await t.seed(componentSpec());
-  await t.open(`/collections/${ids.collections.books}/edit`);
+  // Opened from the collection's page, which Save goes back to.
+  await t.open(`/collections/${ids.collections.books}/items`);
+  await t.go(`/collections/${ids.collections.books}/edit`);
   await t.audit("collection editor with field settings");
   // Every field's settings sit inside its row, under its name and type, each control on its own line.
   const layout = await t.page.evaluate(() =>
@@ -57,7 +59,7 @@ test("collection editor: a field's settings under it, one per line; local compon
   await t.audit("a new component field, local");
   await row.getByRole("textbox", { name: "Code" }).fill("{{ ($item.Count ?? 0) / 40 }}");
   await t.page.getByRole("button", { name: "Save changes" }).click();
-  await t.until("saved: the collection's page", async () => (await t.page.locator(".ws-pane--active .page-header__title").innerText().catch(() => "")).includes("Books"));
+  await t.until("saved: back on the collection's page", async () => (await t.page.locator(".ws-pane--active .page-header__title").innerText().catch(() => "")).includes("Books"));
   await t.open(t.itemPath(ids.collections.books, ids.items["books/i0"]));
   const hoursField = t.page.locator(".ws-pane--active .item-fields > *", { hasText: "Hours" }).first();
   await t.check("the edited local component computes the value", /\d+ h/.test(await hoursField.innerText()), await hoursField.innerText());
