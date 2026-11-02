@@ -57,8 +57,14 @@ What the app does, feature by feature (read the part you work on).
   every other column is hidden (`ui/listTable.ts`: `LIST_TABLE` on the table, `LIST_MAIN` on the kept column).
 - **Markdown editor has no toolbar**: formatting is typed, images pasted/dropped, links edited from
   their hover popover (on a touch screen a tap on a link shows it instead of opening the link; its Open link opens it). Its height follows the content (no inner scrolling, no resize handle).
-  Backspace at the start of a styled block makes it plain in one press (`backspaceUnstyles`): a heading of any level
-  or a code block (its lines kept as line breaks) becomes a paragraph, a paragraph in a quote comes out of it.
+  Backspace at the front of anything styled makes it plain text in one press (`unstyleAtCaret`, `ui/markdownKeys.ts`): bold,
+  italic, strikethrough, code, a formula or a link starting at the caret loses that style to where it ends (a second press
+  deletes as usual); at a block's start a heading of any level, a code block or a formula block (its lines kept as line
+  breaks, a formula as its source) becomes a paragraph, a paragraph in a quote comes out of it. Down or Right at the end
+  of a code or formula block that ends the text adds a paragraph after it to type in. Copy and paste keep every syntax,
+  formulas too (also a formula copied from a read-only view, KaTeX's HTML: read back from its TeX source):
+  `ui/markdownEditing.test.ts` copies and pastes a text with every syntax. Links have no underline but on hover, as
+  everywhere in the app. Not GFM, so not here: `==highlight==` (GitHub doesn't render it either).
 - **Collection editor header is the editor** for the collection's icon (button + popover picker) and name
   (heading-sized input). Its Fields popover (beside them) orders the fields (drag handles, keyboard) and removes
   them (a remote collection's column fields are hidden); the rows below hold each field's name, type and settings only.

@@ -71,7 +71,7 @@ at a local Chromium; then `source tests/env.sh`.
 | `sync` | the device's side of sync (outbox, merge, files, first connection, versions, the engine) against `FakeServer` (`app/src/test/fakeServer.ts`); the remote sources' client; `shared/` | `app/src/data/sync/`, `app/src/data/remote/` |
 | `api` | `/api/v1` on the headless device: every route and its errors (checked against `help/api.md`), the component compiler, webhooks, its data directory | `app/src/headless/*.test.ts` |
 | `nodesqlite` | `storage`, `sync` and `api` again on `node:sqlite` files (`KUBUS_TEST_ENGINE=node`, `app/src/test/engine.ts`), except the wasm-only worker, client, lock and backup tests | same globs |
-| `app` | app logic outside the UI: AI service and backfill, item cache, workspace layout, item actions, remote paging, platform adapters, hooks (`renderHook` in `app/src/test/hooks.ts`, no DOM) | `app/src/{app,platform,ui,views,pages,workspace,test}/` |
+| `app` | app logic outside the UI: AI service and backfill, item cache, workspace layout, item actions, remote paging, platform adapters, hooks (`renderHook` in `app/src/test/hooks.ts`, no DOM); the Markdown editor's syntax through copy and paste and its keys (`ui/markdownEditing.test.ts`, a real Milkdown editor on jsdom: the one test with a DOM) | `app/src/{app,platform,ui,views,pages,workspace,test}/` |
 | `connectors` | the remote-source connectors: the shared contract (`contract.ts`, each answer compared with `applyQuery`'s on the same rows), each service's own errors, and that it only reads | `server/test/connectors/*.test.ts` |
 | `server` | the server in-process and as a real process (`serve.ts`), and devices syncing through it (`devices.test.ts`, so device and server can't drift apart) | `server/test/*.test.ts` |
 
