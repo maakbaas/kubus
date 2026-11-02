@@ -14,9 +14,11 @@ export interface HomeLayout {
   shown: HomeBlockId[] | null;
   /** The blocks collapsed to their header. */
   collapsed: HomeBlockId[];
+  /** "Hide empty cards": the Pages block shows only the cards of pages holding something (not "0 dashboards"). */
+  hideEmpty: boolean;
 }
 
-export const DEFAULT_HOME: HomeLayout = { shown: null, collapsed: [] };
+export const DEFAULT_HOME: HomeLayout = { shown: null, collapsed: [], hideEmpty: false };
 
 const isBlock = (v: unknown): v is HomeBlockId => (HOME_BLOCKS as readonly unknown[]).includes(v);
 /** The known block ids of a list, each once. */
@@ -25,7 +27,7 @@ const blocksOf = (v: unknown): HomeBlockId[] => (Array.isArray(v) ? [...new Set(
 /** The layout a stored value says (unknown blocks dropped, anything unreadable the default). */
 export function parseHomeLayout(raw: unknown): HomeLayout {
   const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  return { shown: Array.isArray(o.shown) ? blocksOf(o.shown) : null, collapsed: blocksOf(o.collapsed) };
+  return { shown: Array.isArray(o.shown) ? blocksOf(o.shown) : null, collapsed: blocksOf(o.collapsed), hideEmpty: o.hideEmpty === true };
 }
 
 /** The blocks the page shows, in order. */

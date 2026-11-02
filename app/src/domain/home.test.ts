@@ -5,7 +5,9 @@ describe("the Home page's layout", () => {
   it("is read leniently: unknown blocks and repeats dropped, anything unreadable the default", () => {
     expect(parseHomeLayout(undefined)).toEqual(DEFAULT_HOME);
     expect(parseHomeLayout("x")).toEqual(DEFAULT_HOME);
-    expect(parseHomeLayout({ shown: ["bookmarks", "gone", "bookmarks"], collapsed: ["pages", 3] })).toEqual({ shown: ["bookmarks"], collapsed: ["pages"] });
+    expect(parseHomeLayout({ shown: ["bookmarks", "gone", "bookmarks"], collapsed: ["pages", 3] })).toEqual({ shown: ["bookmarks"], collapsed: ["pages"], hideEmpty: false });
+    expect(parseHomeLayout({ hideEmpty: true }).hideEmpty).toBe(true);
+    expect(parseHomeLayout({ hideEmpty: "yes" }).hideEmpty).toBe(false);
     // Every block hidden is a choice, not the default.
     expect(shownHomeBlocks(parseHomeLayout({ shown: [] }))).toEqual([]);
     expect(shownHomeBlocks(DEFAULT_HOME)).toEqual(["pages", "bookmarks"]);
