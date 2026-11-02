@@ -527,10 +527,13 @@ all data on this device?"), then `restoreBackup`; the app reloads after it. In t
 Tests: `data/sqlite/backup.test.ts` (round trip incl. the first release's fixture, migration, every refusal, sync state),
 `worker.test.ts`, `client.test.ts`, `platform/platform.test.ts`, and GUI suite 28 (the Backup tab: a real download, restore, cancel).
 
-**iOS / home-screen app.** The same web build. Links to web pages open in Safari itself, never in iOS's in-app browser over the app (which is what
-`window.open` and a plain link do in a home-screen app): `openExternal` hands them over with Safari's own link scheme
-(`safariUrl`: `x-safari-https://…` from iOS 17, `com-apple-mobilesafari-tab:` before; `platform/shell.ts` `iosHomeScreenVersion`
-tells the home-screen app by `navigator.standalone`), and `openWebLinksInSafari` (`main.tsx`) sends any link click nothing else
+**iOS / home-screen app.** The same web build. Links to web pages open in a browser, never in iOS's in-app browser over the app (which is what
+`window.open` and a plain link do in a home-screen app). iOS gives a web app no link to "the default browser" and no way to
+learn which it is, so the browser is chosen in Settings → Display (shown only in the home-screen app; kept on the device,
+`kubus.browser`, not synced; Safari until chosen): `openExternal` hands a page over with that browser's own link scheme
+(`browserUrl`: Safari `x-safari-https://…` from iOS 17, `com-apple-mobilesafari-tab:` before; Chrome `googlechromes://`;
+Edge `microsoft-edge-https://`; Firefox and Brave `…://open-url?url=`; `platform/shell.ts` `iosHomeScreenVersion` tells the
+home-screen app by `navigator.standalone`), and `openWebLinksOutside` (`main.tsx`) sends any link click nothing else
 handled (an HTML field's links) the same way. Status bar: no style meta (`default`); iOS
 colours the bar from the top tab strip (sticky, solid, full width; see Conventions). `body` is
 fixed and only pane bodies scroll, no bounce or zoom; the workspace is `position: fixed; inset: 0`.
