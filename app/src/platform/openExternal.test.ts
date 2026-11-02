@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isOpenableUrl, safeUrl } from "./openExternal";
+import { isOpenableUrl, safariUrl, safeUrl } from "./openExternal";
 
 describe("links to other apps", () => {
   it("opens any scheme but the blocked ones", () => {
@@ -14,5 +14,13 @@ describe("links to other apps", () => {
     expect(safeUrl("spotify:album:1")).toBe("spotify:album:1");
     expect(safeUrl("files/abc")).toBe("files/abc");
     expect(safeUrl("javascript:alert(1)")).toBe("");
+  });
+});
+
+describe("the iOS home-screen app", () => {
+  it("hands a web page to Safari, never its in-app browser", () => {
+    expect(safariUrl(" https://x.org/a?b=1 ", 18)).toBe("x-safari-https://x.org/a?b=1");
+    expect(safariUrl("http://x.org", 17)).toBe("x-safari-http://x.org");
+    expect(safariUrl("https://x.org", 16)).toBe("com-apple-mobilesafari-tab:https://x.org");
   });
 });

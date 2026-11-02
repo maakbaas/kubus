@@ -206,6 +206,8 @@ stale peer range.
   - The top tab strip stays `position: sticky; top: 0` with a solid background, and nothing fixed
     sits above it: iOS takes the status bar colour from it (and blurs the bar otherwise).
   - No `apple-mobile-web-app-status-bar-style: black-translucent` (an unremovable fade on iOS 26.1+).
+  - Web links never open in iOS's in-app browser: in the home-screen app they go to Safari (`openExternal`, `safariUrl`;
+    `openWebLinksInSafari` catches plain links). Open every outside link through `openExternal`, never `window.open` or a bare `target="_blank"`.
   - No `-webkit-overflow-scrolling: touch` (a stacking context on iOS: dialogs fell under the strip).
   - While a field has focus nothing scrolls the window, hides, blurs or re-creates it: iOS shows a field
     near the bottom by panning the visual viewport (by up to the keyboard's height, the pan reported
