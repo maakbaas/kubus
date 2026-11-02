@@ -260,7 +260,7 @@ What the app does, feature by feature (read the part you work on).
   "Books by this Author" is a table on the Author's pages. A block of the page's own collection
   can also be filtered on the item itself: "Item is This Book" (`SELF_FIELD` `$id`, a filter-only
   field, `filterFields`; a remote row by its key), e.g. a gauge of the page's book's pages read; a new item added there gets the
-  filter's references (`filterPreset`). On item pages the same split holds: arranging the page
+  filter's references and checkbox values (`filterPreset`). On item pages the same split holds: arranging the page
   (its layout: fields and blocks and their order, names shown, editable, hide empty) is stored
   right away too; only what a block shows waits for Save changes.
 - **Several collections in one block** (merged collections: `domain/mergedCollection.ts` `mergeCollections`, `domain/mergedRows.ts`,

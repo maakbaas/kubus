@@ -337,6 +337,14 @@ describe("presets from a filter", () => {
     expect(filterPreset(c, [rule("ref", "is", "$item"), rule("gone", "is", "x"), rule("ref", "is", "")])).toEqual({});
     expect(filterPreset(c, [], [rule("ref", "is", "a2")])).toEqual({ ref: "a2" });
   });
+
+  it("a checkbox rule ticks the box (or leaves it unticked), from the page's filter too", () => {
+    const c = collection();
+    expect(filterPreset(c, [], [rule("cb", "isChecked", "")])).toEqual({ cb: true });
+    expect(filterPreset(c, [rule("cb", "isNotChecked", "")])).toEqual({ cb: false });
+    expect(filterPreset(c, [rule("cb", "is", "True")])).toEqual({ cb: true });
+    expect(filterPreset(c, [rule("cb", "is", "$item.done")])).toEqual({});
+  });
 });
 
 describe("the lists a query works from", () => {

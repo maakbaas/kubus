@@ -341,14 +341,20 @@ export function filterValueProblem(field: FieldDef, operator: FilterOperator, va
 }
 
 /**
- * The values a new item needs to pass the reference rules of a filter ("Author is X" sets X), so
- * an item added to a filtered list shows up in it.
+ * The values a new item needs to pass the reference and checkbox rules of a filter ("Author is X"
+ * sets X, "Done is checked" ticks it), so an item added to a filtered list shows up in it.
  */
 export function filterPreset(collection: Collection, filters: FilterRule[], inherited: FilterRule[] = []): Record<string, FieldValue> {
   const preset: Record<string, FieldValue> = {};
   // Only rules every listed item meets (an Or rule's alternatives aren't required).
   for (const rule of requiredRules(filterTree([inherited, filters]))) {
     const field = collection.fields.find((f) => f.id === rule.fieldId);
+    if (field?.kind === "checkbox") {
+      const v = rule.value.trim().toLowerCase();
+      if (rule.operator === "isChecked" || rule.operator === "isNotChecked") preset[field.id] = rule.operator === "isChecked";
+      else if (rule.operator === "is" && (v === "true" || v === "false")) preset[field.id] = v === "true";
+      continue;
+    }
     if (!field || rule.operator !== "is" || !rule.value || rule.value.startsWith(PAGE_ITEM)) continue;
     if (field.kind === "item") preset[field.id] = rule.value;
     if (field.kind === "item_list") preset[field.id] = [...((preset[field.id] as string[] | undefined) ?? []), rule.value];
