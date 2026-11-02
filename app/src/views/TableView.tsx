@@ -516,8 +516,9 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
   const restricted = !isReadOnly(collection) && isRestricted(collection, item, itemViewOf(collection)?.layout ?? FULL_LAYOUT);
   const rowButtons = (
     <>
-      {/* Without the title column (its link opens the item), each row gets an open button. */}
-      {!titleShown && (
+      {/* Without the title column (its link opens the item), each row gets an open button. Not a
+          list field's entry: it is no item of its own. */}
+      {!titleShown && !collection.listOf && (
         <RowIconButton {...ROW_BUTTON} label={`Open ${collection.name}`} onClick={(e) => actions.open(item, openModeOf(e))}>
           <ArrowRight />
         </RowIconButton>
