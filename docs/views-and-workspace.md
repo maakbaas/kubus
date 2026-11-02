@@ -132,7 +132,10 @@ Extension points are registries, not special cases in pages:
   that needs every item (a chart: `BlockUses.all`; `blockLimit`). A remote collection is asked that many rows a page
   (all: every page, one after the other). The Filter button is blue while a Limit is set.
   **Loading bars**: the only progress bar in the app is `ui/LoadingBar.tsx` (a remote block's rows), shown from the request on
-  (table, cards, chart, map alike). Its stop control is always a small "×" ghost icon button ("Stop loading", 32px) at the right
+  (table, cards, chart, map alike). It moves while a request is out: the request on its way fills its share of the bar (the whole
+  bar while the total isn't known, then the next page's) in about 3 s (`REQUEST_MS`), quickly at first and ever slower towards
+  97% (`requestShare`), only its answer filling it; it never moves back (once the total is known the rest is measured from
+  where it got to). Its stop control is always a small "×" ghost icon button ("Stop loading", 32px) at the right
   of the bar, on the right edge of the block's header buttons (design rule `progress-stop`). Stopping while every row loads
   keeps the pages in ("Load all rows" resumes); stopping the first page (which the source can't be told to abandon: no
   abort in the sources client) drops its answer, and "Load rows" asks again. A new progress bar must use `LoadingBar` with `onStop`.

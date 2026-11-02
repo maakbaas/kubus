@@ -16,6 +16,7 @@ import { BLOCK_HEIGHT, blockLimit, blockQuery, DEFAULT_ASPECT, ownBlockHeightCss
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { LoadingBar } from "../ui/LoadingBar";
+import { MAX_SOURCE_PAGE } from "../../../shared/sources";
 import { ToolbarPopover } from "../ui/ToolbarPopover";
 import { SectionHeader } from "../ui/SectionHeader";
 import { useConfirm } from "../ui/useConfirm";
@@ -556,14 +557,16 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
               />
             )}
             {/* A remote collection's rows come a page at a time, or (a chart, no Limit) all of them, which can be
-                stopped. One bar from the request on: empty until the first page brings the total (rows yet to come, not
-                none), then filling as the rows come in; it doesn't change shape when the total arrives. */}
+                stopped. One bar from the request on: it moves while each request is out (LoadingBar: the first one fills the bar
+                as if it brought every row, the next ones their page's share), then on as the rows come in; it never moves back
+                and doesn't change shape when the total arrives. */}
             {remote && (remote.waiting || remote.progress) && (
               <div className="block-more">
                 <LoadingBar
                   label={remote.progress ? `Loading rows: ${remote.progress.loaded} of ${remote.progress.total}` : "Loading rows"}
                   value={remote.progress?.loaded}
                   max={remote.progress?.total}
+                  step={MAX_SOURCE_PAGE}
                   onStop={remote.progress?.cancel ?? remote.stop}
                 />
               </div>
