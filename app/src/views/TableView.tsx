@@ -322,8 +322,8 @@ export function FillTable({ children, style }: { children: ReactNode; /** E.g. a
   }, []);
   // A table that scrolls sideways shows where more of it is: a fade at that edge (styles.css).
   // Touch screens hide scrollbars until scrolling, and they can't be made to stay.
-  // While the pane scrolls down past a table's top, its header row stays at the pane's top edge, until the
-  // table's end. Not `position: sticky`: a table that scrolls sideways has its scroller as its scroll
+  // While the pane scrolls down past a table's top, its header row stays at the pane's top edge, until just
+  // above the table's last row. Not `position: sticky`: a table that scrolls sideways has its scroller as its scroll
   // container (overflow-x makes overflow-y auto too), which never scrolls down. The header cells are moved
   // instead, inside the scroller, so they keep scrolling sideways with their columns: by the browser as it
   // scrolls where it can (`data-head-follow`: a CSS scroll-driven animation along the table's place in the
@@ -346,12 +346,20 @@ export function FillTable({ children, style }: { children: ReactNode; /** E.g. a
     const scrollDriven = typeof CSS !== "undefined" && CSS.supports("animation-timeline: --a");
     let follow = false;
     let shown = 0;
+    // How far down the table its header can move: to just above its last row, so a whole row always shows
+    // below it (it never sits alone at the table's end, nor comes into view before a row when scrolling up).
+    const travel = () => {
+      const head = table.tHead;
+      const last = table.rows[table.rows.length - 1];
+      const lastRow = last && last.parentElement !== head ? last.offsetHeight : 0;
+      return Math.max(0, table.offsetHeight - (head?.offsetHeight ?? 0) - lastRow);
+    };
     const shift = () => {
       const head = table.tHead;
       const rect = table.getBoundingClientRect();
       // Below the pane's top edge by the gap (styles.css), which it covers once it moved.
       const gap = parseFloat(getComputedStyle(el).getPropertyValue("--table-head-gap")) * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) || 0;
-      const by = pane && head && !follow ? Math.max(0, Math.min(pane.getBoundingClientRect().top + gap - rect.top, rect.height - head.offsetHeight)) : 0;
+      const by = pane && head && !follow ? Math.max(0, Math.min(pane.getBoundingClientRect().top + gap - rect.top, travel())) : 0;
       if (by === shown) return;
       shown = by;
       el.toggleAttribute("data-head-shift", by > 0);
@@ -367,7 +375,7 @@ export function FillTable({ children, style }: { children: ReactNode; /** E.g. a
       if (el.hasAttribute("data-head-follow") !== follow) el.toggleAttribute("data-head-follow", follow);
       // Where the table starts in its wrap (the animation's timeline), and how far its header can go down it.
       set("--table-head-start", `${Math.round(table.getBoundingClientRect().top - el.getBoundingClientRect().top)}px`);
-      set("--table-head-travel", `${Math.max(0, table.offsetHeight - (table.tHead?.offsetHeight ?? 0))}px`);
+      set("--table-head-travel", `${travel()}px`);
       el.toggleAttribute("data-more-start", scroller.scrollLeft > 1);
       el.toggleAttribute("data-more-end", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
       shift();

@@ -4179,7 +4179,7 @@ img[data-lightbox] {
   backface-visibility: hidden;
   animation-timeline: --table-wrap;
   /* From the table's top (below the wrap's by --table-head-start) passing the pane's top edge, as far as the
-     table's height less its header's (--table-head-travel). */
+     table's height less its header's and its last row's (--table-head-travel: a whole row always shows below it). */
   animation-range: exit-crossing var(--table-head-start, 0px) exit-crossing calc(var(--table-head-start, 0px) + var(--table-head-travel, 0px));
 }
 @keyframes table-head-follow {
