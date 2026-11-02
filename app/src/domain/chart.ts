@@ -237,6 +237,11 @@ export interface ChartOptions {
   showLabel: boolean;
   /** Below its number: the value along the X axis, a compact area or line chart (Carbon's), or none. */
   sparkline: "area" | "line" | "none";
+  /**
+   * Stat: its number made of all the items, or ("step") only of those in the X axis's date step that now falls
+   * in (today, this week, …; nothing in it: no number). The sparkline and what it is compared with keep all.
+   */
+  valueScope: "all" | "step";
   /** Which way of the change is good (green) and which bad (red); "neither": both grey. */
   better: "higher" | "lower" | "neither";
   /** The change shown as a % of the baseline or as the difference itself. */
@@ -384,6 +389,7 @@ export function defaultChartOptions(collection: Collection, components: Componen
     baseline: null,
     showLabel: true,
     sparkline: "area",
+    valueScope: "all",
     better: "higher",
     changeAs: "percent",
     spreadField: number,
@@ -480,6 +486,7 @@ export function normalizeChartOptions(raw: unknown, collection: Collection): Cha
     baseline: typeof o.baseline === "number" && Number.isFinite(o.baseline) ? o.baseline : null,
     showLabel: flag(o.showLabel, d.showLabel),
     sparkline: oneOf<ChartOptions["sparkline"]>(["area", "line", "none"], o.sparkline, d.sparkline),
+    valueScope: o.valueScope === "step" ? "step" : "all",
     better: oneOf<ChartOptions["better"]>(["higher", "lower", "neither"], o.better, d.better),
     changeAs: oneOf<ChartOptions["changeAs"]>(["percent", "value"], o.changeAs, d.changeAs),
     spreadField: field(o.spreadField, o.spreadField === null ? null : d.spreadField),
@@ -587,6 +594,8 @@ export interface Category {
   day?: string;
   /** On a time axis: its time (ms; a day's local midnight). */
   at?: number;
+  /** A date or time step's end (ms, local; the next step's start). */
+  end?: number;
   /** On a number axis: that number. */
   number?: number;
 }
@@ -695,7 +704,7 @@ export function chartCategories(input: ChartInput, x: ChartX, timeline = false):
     if (lists) lists.push(g.items);
     else {
       gathered.set(day, [g.items]);
-      steps.set(day, { key: day, label, items: g.items, day, at: dayTime(day) });
+      steps.set(day, { key: day, label, items: g.items, day, at: dayTime(day), end: dayTime(nextStep(day, step)) });
     }
   }
   for (const [day, lists] of gathered) if (lists.length > 1) steps.set(day, { ...steps.get(day)!, items: inOrder(lists.flat()) });
@@ -708,7 +717,7 @@ export function chartCategories(input: ChartInput, x: ChartX, timeline = false):
   const last = dateStepOf(days[days.length - 1], step, input.locale).day;
   merged = [];
   for (let day = first, n = 0; day <= last && n < MAX_STEPS; day = nextStep(day, step), n++) {
-    merged.push(byDay.get(day) ?? { key: day, label: dateStepOf(day, step, input.locale).label, items: [], day, at: dayTime(day) });
+    merged.push(byDay.get(day) ?? { key: day, label: dateStepOf(day, step, input.locale).label, items: [], day, at: dayTime(day), end: dayTime(nextStep(day, step)) });
   }
   return merged;
 }
@@ -760,7 +769,7 @@ function timeCategories(input: ChartInput, field: FieldDef, x: ChartX, groups: C
   const format: Intl.DateTimeFormatOptions = oneDay ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
   const category = (at: number): Category => {
     const d = new Date(at);
-    return { key: `${formatDate(d)}T${formatTime(d)}`, label: d.toLocaleString(input.locale, format), items: [], at };
+    return { key: `${formatDate(d)}T${formatTime(d)}`, label: d.toLocaleString(input.locale, format), items: [], at, end: nextTimeStep(at, step) };
   };
   // Items in the block's order within their step.
   const steps = new Map<number, Category>();
@@ -1021,8 +1030,23 @@ export interface SingleValue {
   label: string;
 }
 
-export function singleValue(input: ChartInput, options: ChartOptions): SingleValue {
-  const { collection, items } = input;
+/**
+ * The items in the step of the X axis's date that `now` (ms) falls in (today, this week, this hour, … as the
+ * axis steps; none when nothing is in it), or null when the X axis isn't along a date field.
+ */
+export function currentStepItems(input: ChartInput, x: ChartX, now: number): Item[] | null {
+  if (x.by !== "field" || !isDateField(xField(input.collection, x))) return null;
+  const step = chartCategories(input, x).find((c) => c.at !== undefined && c.end !== undefined && c.at <= now && now < c.end);
+  return step?.items ?? [];
+}
+
+/** The items a stat's number is made of: all, or (Value of "The current step") those of the step now falls in. */
+const valueItems = (input: ChartInput, options: ChartOptions, now: number): Item[] =>
+  (options.chart === "stat" && options.valueScope === "step" && currentStepItems(input, options.x, now)) || input.items;
+
+export function singleValue(input: ChartInput, options: ChartOptions, now = Date.now()): SingleValue {
+  const { collection } = input;
+  const items = valueItems(input, options, now);
   const first = options.series[0] ?? newSeries();
   const field = first.field ? fieldsOf(collection).get(first.field) : undefined;
   return { value: aggregate(items, first.value, field), max: totalOf(collection, items, options), label: seriesLabel(first, collection) };
@@ -1052,8 +1076,8 @@ export interface Stat {
   trend: "good" | "bad" | "neutral" | null;
 }
 
-export function statOf(input: ChartInput, options: ChartOptions): Stat {
-  const { value, label } = singleValue(input, options);
+export function statOf(input: ChartInput, options: ChartOptions, now = Date.now()): Stat {
+  const { value, label } = singleValue(input, options, now);
   const baseline = baselineOf(input, options);
   const change = value === null || baseline === null ? null : value - baseline;
   const percent = change === null || !baseline ? null : (change / Math.abs(baseline)) * 100;
