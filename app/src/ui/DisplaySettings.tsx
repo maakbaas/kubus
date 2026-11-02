@@ -5,8 +5,6 @@ import { setDisplaySetting, useDisplaySettings, type DisplaySettings as Settings
 import { useStore } from "../app/store";
 import { MAP_STYLES } from "../views/mapLibre";
 import { errorMessage } from "./useConfirm";
-import { chooseBrowser, chosenBrowser, WEB_BROWSERS, type WebBrowser } from "../platform/openExternal";
-import { iosHomeScreenVersion } from "../platform/shell";
 
 const THEMES: { value: Settings["theme"]; text: string }[] = [
   { value: "auto", text: "Automatic (like the system)" },
@@ -23,9 +21,6 @@ export function DisplaySettings() {
   const { repo } = useStore();
   const settings = useDisplaySettings();
   const [error, setError] = useState<string>();
-  // The iOS home-screen app only: the browser web links open in, on this device (platform/openExternal.ts).
-  const homeScreen = iosHomeScreenVersion() !== null;
-  const [browser, setBrowser] = useState(chosenBrowser);
   const change = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     setError(undefined);
     setDisplaySetting(repo, key, value).catch((e) => setError(errorMessage(e)));
@@ -51,24 +46,6 @@ export function DisplaySettings() {
             <SelectItem key={s.value} value={s.value} text={s.text} />
           ))}
         </Select>
-        {homeScreen && (
-          <Select
-            size="sm"
-            id={`${uid}-browser`}
-            labelText="Open web links in"
-            helperText="This device only. iOS lets an app open a link in a chosen browser, not in the default one."
-            value={browser}
-            onChange={(e) => {
-              const next = e.target.value as WebBrowser;
-              chooseBrowser(next);
-              setBrowser(next);
-            }}
-          >
-            {WEB_BROWSERS.map((b) => (
-              <SelectItem key={b.value} value={b.value} text={b.text} />
-            ))}
-          </Select>
-        )}
         {error && <InlineNotification kind="error" lowContrast hideCloseButton title="Not saved" subtitle={error} />}
       </Stack>
     </>

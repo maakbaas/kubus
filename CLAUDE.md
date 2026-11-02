@@ -206,9 +206,9 @@ stale peer range.
   - The top tab strip stays `position: sticky; top: 0` with a solid background, and nothing fixed
     sits above it: iOS takes the status bar colour from it (and blurs the bar otherwise).
   - No `apple-mobile-web-app-status-bar-style: black-translucent` (an unremovable fade on iOS 26.1+).
-  - Web links never open in iOS's in-app browser: in the home-screen app they go to the browser chosen in Settings → Display
-    (device-only `kubus.browser`; `openExternal`, `browserUrl`;
-    `openWebLinksOutside` catches plain links). Open every outside link through `openExternal`, never `window.open` or a bare `target="_blank"`.
+  - Web links never open in iOS's in-app browser: in the home-screen app a tap on an http(s) link opens nothing (it still
+    looks like a link; its text is selected and opened from iOS's menu, in the browser): `openExternal` skips them there and
+    `keepWebLinksInHomeScreenApp` stops plain ones. Open every outside link through `openExternal`, never `window.open` or a bare `target="_blank"`.
   - No `-webkit-overflow-scrolling: touch` (a stacking context on iOS: dialogs fell under the strip).
   - While a field has focus nothing scrolls the window, hides, blurs or re-creates it: iOS shows a field
     near the bottom by panning the visual viewport (by up to the keyboard's height, the pan reported
