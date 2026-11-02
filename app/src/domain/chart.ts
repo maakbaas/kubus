@@ -16,7 +16,7 @@
 
 import type { Component } from "./components";
 import { outputOf } from "./components";
-import { periodAround, resolveRange, weekNumber } from "./datePeriod";
+import { dateFormat, formatMinute, periodAround, resolveRange, toMoment, weekNumber } from "./datePeriod";
 import { filterTree, requiredRules } from "./filterTree";
 import { formatDate, formatTime } from "./fieldKinds";
 import { fieldValue, itemLabel, newId, pickableFields, type Collection, type FieldDef, type Item } from "./model";
@@ -628,7 +628,7 @@ export function dateStepOf(day: string, step: DayStep, locale?: string): { day: 
   }
   if (step === "year") return { day: start, label: start.slice(0, 4) };
   const [y, m] = start.split("-").map(Number);
-  return { day: start, label: new Date(y, m - 1, 1).toLocaleDateString(locale, { month: "short", year: "numeric" }) };
+  return { day: start, label: dateFormat(locale, { month: "short", year: "numeric" })(new Date(y, m - 1, 1)) };
 }
 
 /** The step after one (its first day): the next day, week, month or year. */
@@ -671,6 +671,20 @@ export function xLabel(collection: Collection, options: Pick<ChartOptions, "x" |
  * a value of its field, in that field's order (without a field: in the block's order).
  */
 export function chartCategories(input: ChartInput, x: ChartX, timeline = false): Category[] {
+  // One chart asks for the same categories more than once (a stat's current step and its sparkline, a map's regions):
+  // remembered per item list, for the same collection, labels, locale and axis. Callers don't change what they get.
+  const key = JSON.stringify([x, timeline, input.locale ?? null]);
+  let byKey = categoryCache.get(input.items);
+  if (!byKey) categoryCache.set(input.items, (byKey = new Map()));
+  const cached = byKey.get(key);
+  if (cached && cached.collection === input.collection && cached.ctx === input.ctx) return cached.categories;
+  const categories = makeCategories(input, x, timeline);
+  byKey.set(key, { collection: input.collection, ctx: input.ctx, categories });
+  return categories;
+}
+const categoryCache = new WeakMap<Item[], Map<string, { collection: Collection; ctx: QueryContext; categories: Category[] }>>();
+
+function makeCategories(input: ChartInput, x: ChartX, timeline: boolean): Category[] {
   const { collection, items, ctx } = input;
   if (x.by === "item") return itemCategories(input, x);
   const field = xField(collection, x);
@@ -770,7 +784,7 @@ function timeCategories(input: ChartInput, field: FieldDef, x: ChartX, groups: C
   const format: Intl.DateTimeFormatOptions = oneDay ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
   const category = (at: number): Category => {
     const d = new Date(at);
-    return { key: `${formatDate(d)}T${formatTime(d)}`, label: d.toLocaleString(input.locale, format), items: [], at, end: nextTimeStep(at, step) };
+    return { key: `${formatDate(d)}T${formatTime(d)}`, label: dateFormat(input.locale, format)(d), items: [], at, end: nextTimeStep(at, step) };
   };
   // Items in the block's order within their step.
   const steps = new Map<number, Category>();
@@ -1041,12 +1055,12 @@ export function currentStepItems(input: ChartInput, x: ChartX, now: number): Ite
   return step?.items ?? [];
 }
 
-/** The last moment (ms, local) of a period's last day or minute. */
+/** The last moment (ms, local) of a period's last day or minute: the next day's or minute's start, less 1 ms. */
 function periodEndTime(end: string): number {
-  const [y, m, d] = end.slice(0, 10).split("-").map(Number);
-  if (end.length === 10) return new Date(y, m - 1, d + 1).getTime() - 1;
-  const [h, min] = end.slice(11).split(":").map(Number);
-  return new Date(y, m - 1, d, h, min).getTime() + 59_999;
+  const next = toMoment(end);
+  if (end.length === 10) next.setDate(next.getDate() + 1);
+  else next.setMinutes(next.getMinutes() + 1);
+  return next.getTime() - 1;
 }
 
 /**
@@ -1057,8 +1071,7 @@ function periodEndTime(end: string): number {
  */
 export function stepMoment(filters: FilterRule[][], xFieldId: string | null, now: number): number {
   if (!xFieldId) return now;
-  const d = new Date(now);
-  const at = `${formatDate(d)}T${formatTime(d)}`;
+  const at = formatMinute(new Date(now));
   let moment = now;
   for (const rule of requiredRules(filterTree(filters))) {
     if (rule.fieldId !== xFieldId || rule.operator !== "between") continue;
@@ -1241,7 +1254,7 @@ export function heatmapCells(input: ChartInput, options: ChartOptions): { x: str
     const value = d.items.length === 0 ? (first.value === "count" || first.value === "sum" ? 0 : null) : aggregate(d.items, first.value, valueField);
     return {
       // A week by its Sunday ("4 Jan"), a day by its name.
-      x: new Date(y, m - 1, day).toLocaleDateString(input.locale, { day: "numeric", month: "short" }),
+      x: dateFormat(input.locale, { day: "numeric", month: "short" })(new Date(y, m - 1, day)),
       y: names[new Date(dayTime(d.day!)).getDay()],
       value,
     };
@@ -1250,7 +1263,7 @@ export function heatmapCells(input: ChartInput, options: ChartOptions): { x: str
 
 /** The weekdays' short names, Sunday first (a calendar heatmap's rows). */
 export const weekdays = (locale?: string): string[] =>
-  Array.from({ length: 7 }, (_, i) => new Date(2026, 0, 4 + i).toLocaleDateString(locale, { weekday: "short" })); // 4 January 2026 was a Sunday
+  Array.from({ length: 7 }, (_, i) => dateFormat(locale, { weekday: "short" })(new Date(2026, 0, 4 + i))); // 4 January 2026 was a Sunday
 
 /** A choropleth's values: a region's, which categories each region is (with its items' number), and the categories that are no region of the map. */
 export interface RegionValues {

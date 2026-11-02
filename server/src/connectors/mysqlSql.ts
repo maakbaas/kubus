@@ -1,6 +1,7 @@
 import { betweenBounds, conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
-import { dayStart, zoneOffsets } from "./d1Sql.ts";
+import { dayStart } from "./d1Sql.ts";
+import { zoneOffsets } from "./timeZones.ts";
 
 // The MySQL / MariaDB connector's SQL: how a column of each type is read, and the statements a
 // query (shared/sources.ts) becomes. Pure (no connection), so it is tested without a database

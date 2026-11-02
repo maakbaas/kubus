@@ -9,6 +9,7 @@
 import { listsField, type ItemView } from "./fieldLayout";
 import { blockName, DASHBOARDS, describeLink, resolveNameLink, slug, slugs, type LinkData } from "./links";
 import { titleFields, type Collection, type ItemLabel } from "./model";
+import { looseCompare } from "./query";
 import { isRemote } from "./sources";
 import type { CollectionView } from "./views";
 import { findTab, tabLinkId, type Dashboard, type DashboardView } from "./dashboards";
@@ -312,7 +313,7 @@ export function rankTargets(targets: LinkTarget[], query: string, limit = 50, na
   }
   scored.sort(
     (a, b) =>
-      a.score - b.score || KIND_ORDER[a.t.kind] - KIND_ORDER[b.t.kind] || a.t.name.localeCompare(b.t.name, undefined, { sensitivity: "base" }),
+      a.score - b.score || KIND_ORDER[a.t.kind] - KIND_ORDER[b.t.kind] || looseCompare(a.t.name, b.t.name),
   );
   return scored.slice(0, limit).map((s) => s.t);
 }

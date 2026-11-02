@@ -3,6 +3,7 @@ import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import type { List, Node, Nodes, Paragraph, PhrasingContent, RootContent, Table } from "mdast";
 import { containsQuery } from "./tags";
+import { memoText } from "./memoText";
 
 // Search excerpts for markdown fields. Rules:
 //  1. The document is split into top-level blocks by the GFM parser (headings,
@@ -30,8 +31,19 @@ const parse = (source: string) => (parser ??= makeParser()).parse(source);
 /** Inline containers whose children run together; other containers get spaces between children. */
 const PHRASING = new Set(["paragraph", "heading", "emphasis", "strong", "delete", "link", "linkReference", "tableCell"]);
 
-/** The text a reader sees: text and code values and image alt text, no URLs or HTML. */
-function visibleText(node: Nodes): string {
+/**
+ * The text a reader sees: text and code values and image alt text, no URLs or HTML. `seen`: texts already worked out,
+ * by node (an excerpt asks for a list's and then each of its items', a table's and then each row's).
+ */
+function visibleText(node: Nodes, seen?: WeakMap<Node, string>): string {
+  const known = seen?.get(node);
+  if (known !== undefined) return known;
+  const text = textOf(node, seen);
+  seen?.set(node, text);
+  return text;
+}
+
+function textOf(node: Nodes, seen?: WeakMap<Node, string>): string {
   switch (node.type) {
     case "text":
     case "inlineCode":
@@ -44,29 +56,13 @@ function visibleText(node: Nodes): string {
       return "";
   }
   if ("children" in node) {
-    return (node.children as Nodes[]).map(visibleText).join(PHRASING.has(node.type) ? "" : " ");
+    return (node.children as Nodes[]).map((child) => visibleText(child, seen)).join(PHRASING.has(node.type) ? "" : " ");
   }
   return "";
 }
 
-/**
- * Plain texts by source: searching and sorting ask for the same documents over and over (a view's search
- * each keystroke, over every value). The least recently used go first, and there is room for a large
- * collection's values: a pass over more than the cache holds would find none of them in it.
- */
-const plainTexts = new Map<string, string>();
-const PLAIN_TEXTS_MAX = 20_000;
-
-/** Visible text of a whole markdown document, for matching (e.g. table search). */
-export function markdownPlainText(source: string): string {
-  let text = plainTexts.get(source);
-  if (text === undefined) {
-    text = visibleText(parse(source));
-    if (plainTexts.size >= PLAIN_TEXTS_MAX) plainTexts.delete(plainTexts.keys().next().value!);
-  } else plainTexts.delete(source);
-  plainTexts.set(source, text);
-  return text;
-}
+/** Visible text of a whole markdown document, for matching (e.g. table search); remembered by source (memoText). */
+export const markdownPlainText = memoText((source) => visibleText(parse(source)));
 
 export interface MarkdownExcerpt {
   /** Markdown to render: the selected blocks, separated by blank lines. */
@@ -77,7 +73,8 @@ export interface MarkdownExcerpt {
 
 export function markdownExcerpt(source: string, query: string, exactTag = false): MarkdownExcerpt {
   const slice = (n: Node) => source.slice(n.position?.start.offset ?? 0, n.position?.end.offset ?? 0);
-  const matches = (n: Node) => containsQuery(visibleText(n as Nodes), query, exactTag);
+  const seen = new WeakMap<Node, string>();
+  const matches = (n: Node) => containsQuery(visibleText(n as Nodes, seen), query, exactTag);
   /** A list reduced to its matching items, as source text. */
   const matchingItems = (list: List) =>
     list.children

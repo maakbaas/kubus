@@ -1,8 +1,9 @@
 import { betweenBounds, type SourceColumn, type SourceDescription, type SourceFilter, type SourceQuery, type SourceResult, type SourceRow, type SourceRowRequest, type SourceTable, type SourceTarget } from "../../../shared/sources.ts";
 import { SourceError, type Connector, type SourceConfig } from "./connector.ts";
 import { addressOf } from "./kinds.ts";
-import { dayStart, requiredRules } from "./influxFlux.ts";
+import { requiredRules } from "./influxFlux.ts";
 import { findRow, queryRows, type MemoryRow } from "./memory.ts";
+import { dayStart } from "./timeZones.ts";
 
 // n8n's data tables, read-only, through n8n's public API (/api/v1/data-tables, header
 // X-N8N-API-KEY). Its field is n8n's address (https://host[:port][/path], or

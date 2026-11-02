@@ -206,6 +206,15 @@ const titleFieldOf = (draft: CollectionDraft) =>
 const hiddenInNavOf = (draft: CollectionDraft) => (draft.hiddenInNav ? 1 : null);
 /** Whether a label field (lf) is one its collection's titles come from (titleFields). */
 const IS_TITLE_FIELD = "coalesce((SELECT tc.title_field FROM collections tc WHERE tc.id = lf.collection_id), lf.id) = lf.id";
+/**
+ * The text title of the item `ref` (an SQL expression of its id): its first non-blank text value among the title
+ * fields (`titleFields`), in field order. One place, so labels and search show the same title.
+ */
+const titleLabelSql = (ref: string) =>
+  `(SELECT lv.value_text FROM field_values lv JOIN fields lf ON lf.id = lv.field_id
+     WHERE lv.item_id = ${ref} AND lf.kind = 'string' AND lf.deleted_at IS NULL AND ${IS_TITLE_FIELD}
+       AND trim(lv.value_text, ' ' || char(9, 10, 13)) <> ''
+     ORDER BY lf.position, lf.created_at LIMIT 1)`;
 /** A remote collection's source, as stored (null: a native collection). */
 const sourceJson = (draft: CollectionDraft) => (draft.source ? JSON.stringify(draft.source) : null);
 /** The column a field shows: only in a remote collection. */
@@ -551,11 +560,7 @@ export class SqliteRepository implements Repository {
       return rows.map((r) => ({ id: r.id, spaceId: r.spaceId, label: titleText(field, field.kind === "number" ? r.number : r.text) || null }));
     }
     return this.db.select<ItemLabel>(
-      `SELECT o.id AS id, o.space_id AS spaceId,
-              (SELECT fv.value_text FROM field_values fv JOIN fields lf ON lf.id = fv.field_id
-                WHERE fv.item_id = o.id AND lf.kind = 'string' AND lf.deleted_at IS NULL AND ${IS_TITLE_FIELD}
-                  AND trim(fv.value_text, ' ' || char(9, 10, 13)) <> ''
-                ORDER BY lf.position, lf.created_at LIMIT 1) AS label
+      `SELECT o.id AS id, o.space_id AS spaceId, ${titleLabelSql("o.id")} AS label
          FROM items o
         WHERE o.collection_id = ?1 AND o.deleted_at IS NULL
           AND (?2 IS NULL OR o.id IN (SELECT value FROM json_each(?2)))`,
@@ -1024,11 +1029,7 @@ export class SqliteRepository implements Repository {
     // Markdown is matched without its backslash escapes: the editor stores a typed "[[" as
     // "\[\[" (and "*" as "\*", …), which a search for what was typed must still find. Item and
     // list-of-items fields match on the labels of the items they point to (as listLabels).
-    const label = (ref: string) =>
-      `(SELECT lv.value_text FROM field_values lv JOIN fields lf ON lf.id = lv.field_id
-         WHERE lv.item_id = ${ref} AND lf.kind = 'string' AND lf.deleted_at IS NULL AND ${IS_TITLE_FIELD}
-           AND trim(lv.value_text, ' ' || char(9, 10, 13)) <> ''
-         ORDER BY lf.position, lf.created_at LIMIT 1)`;
+    const label = titleLabelSql;
     const hits = await this.db.select<{ id: string }>(
       `SELECT o.id FROM field_values fv
          JOIN items o ON o.id = fv.item_id

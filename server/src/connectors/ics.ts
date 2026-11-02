@@ -5,6 +5,7 @@ import { SourceError, type Connector, type SourceConfig } from "./connector.ts";
 import { documentAddress, fetchDocument, hasSecretPlace, withSecret, type HttpDocument } from "./httpDocument.ts";
 import { requiredRules } from "./influxFlux.ts";
 import { findRow, queryRows, type MemoryRow } from "./memory.ts";
+import { zoned, zoneFormat } from "./timeZones.ts";
 
 // A calendar subscription (an ICS file: webcal://, webcals:// or https://), read-only, as one table
 // `events` (schema null). Its field is the address; the secret fills `{secret}` in it (a calendar's
@@ -100,38 +101,13 @@ export function windowOf(filter: SourceCondition, now = Date.now()): Window {
   return { from: from - DAY_MS, to: Math.max(from, to) + DAY_MS };
 }
 
-const knownZones = new Map<string, Intl.DateTimeFormat | null>();
-/** An IANA time zone's format, or null when it isn't one. */
-function zoneFormat(tz: string): Intl.DateTimeFormat | null {
-  if (!knownZones.has(tz)) {
-    let format: Intl.DateTimeFormat | null = null;
-    try {
-      format = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" });
-    } catch {
-      // Not an IANA zone ("W. Europe Standard Time" without its VTIMEZONE).
-    }
-    knownZones.set(tz, format);
-  }
-  return knownZones.get(tz)!;
-}
-
-/** The moment a wall-clock time (as UTC ms) is in an IANA zone. */
-function zoned(wall: number, format: Intl.DateTimeFormat): number {
-  const offset = (at: number) => {
-    const p = Object.fromEntries(format.formatToParts(at).map((x) => [x.type, Number(x.value)]));
-    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(at / 1000) * 1000;
-  };
-  return wall - offset(wall - offset(wall));
-}
-
 /** A time's wall clock, as if UTC. */
 const wallOf = (t: Time) => Date.UTC(t.year, t.month - 1, t.day, t.isDate ? 0 : t.hour, t.isDate ? 0 : t.minute, t.isDate ? 0 : t.second);
 
 /** A time's moment: in its zone (UTC, a VTIMEZONE), else its TZID as an IANA zone, else its wall clock as UTC. */
 function momentOf(t: Time, tzid: string | null): number {
   if (t.zone && t.zone.tzid !== "floating") return t.toUnixTime() * 1000;
-  const format = tzid ? zoneFormat(tzid) : null;
-  return format ? zoned(wallOf(t), format) : wallOf(t);
+  return tzid && zoneFormat(tzid) ? zoned(wallOf(t), tzid) : wallOf(t);
 }
 
 const dayText = (ms: number) => new Date(ms).toISOString().slice(0, 10);

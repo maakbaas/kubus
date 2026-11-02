@@ -29,12 +29,24 @@ const MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 /** Whether a period's bounds are minutes (not days). */
 export const inMinutes = (period: Period) => period.start.length > 10;
 
+/**
+ * A date's text in a locale (`toLocaleDateString` with these options), its formatter made once: building one is the
+ * costly part, and charts format a label per day, step or point.
+ */
+export function dateFormat(locale: string | undefined, options: Intl.DateTimeFormatOptions): (d: Date) => string {
+  const key = `${locale ?? ""}|${JSON.stringify(options)}`;
+  let format = dateFormats.get(key);
+  if (!format) dateFormats.set(key, (format = new Intl.DateTimeFormat(locale, options).format));
+  return format;
+}
+const dateFormats = new Map<string, (d: Date) => string>();
+
 /** A local moment as its minute ("yyyy-mm-ddTHH:MM"). */
 export const formatMinute = (d: Date) => `${formatDate(d)}T${formatTime(d)}`;
 /** Now, as its minute. */
 export const nowMinute = () => formatMinute(new Date());
 /** A day or minute as a local date (a day: its midnight). */
-const toMoment = (at: string) => {
+export const toMoment = (at: string) => {
   const [y, m, d] = at.slice(0, 10).split("-").map(Number);
   return at.length > 10 ? new Date(y, m - 1, d, Number(at.slice(11, 13)), Number(at.slice(14, 16))) : new Date(y, m - 1, d);
 };
@@ -271,15 +283,15 @@ export function periodLabel(period: Period, kind: PeriodKind, locale?: string): 
     // Up to the end of its last minute (an hour: 14:00 – 15:00).
     const start = toMoment(period.start);
     const end = toMoment(addMinutes(period.end, 1));
-    const time = (d: Date) => d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
-    const day = (d: Date) => d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    const time = dateFormat(locale, { hour: "2-digit", minute: "2-digit" });
+    const day = dateFormat(locale, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
     if (kind === "hour" || formatDate(start) === formatDate(toMoment(period.end))) return `${day(start)}, ${time(start)} – ${time(end)}`;
-    const short = (d: Date) => `${d.toLocaleDateString(locale, { day: "numeric", month: "short" })} ${time(d)}`;
+    const short = (d: Date) => `${dateFormat(locale, { day: "numeric", month: "short" })(d)} ${time(d)}`;
     return `${short(start)} – ${short(end)}`;
   }
   const start = toDate(period.start);
   const end = toDate(period.end);
-  const fmt = (d: Date, o: Intl.DateTimeFormatOptions) => d.toLocaleDateString(locale, o);
+  const fmt = (d: Date, o: Intl.DateTimeFormatOptions) => dateFormat(locale, o)(d);
   switch (kind) {
     case "day":
       return fmt(start, { weekday: "short", day: "numeric", month: "short", year: "numeric" });

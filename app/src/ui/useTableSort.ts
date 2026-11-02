@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { looseNaturalCompare } from "../domain/query";
 
 type Direction = "asc" | "desc";
 
@@ -18,7 +19,7 @@ export function useTableSort<T, C extends string>(keys: Record<C, (row: T) => st
     return [...rows].sort((a, b) => {
       const x = key(a);
       const y = key(b);
-      const order = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: "base" });
+      const order = typeof x === "number" && typeof y === "number" ? x - y : looseNaturalCompare(String(x), String(y));
       return sign * order;
     });
   };

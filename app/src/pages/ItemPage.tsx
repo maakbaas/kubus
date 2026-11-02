@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Checkbox, Dropdown, Heading, IconButton, InlineNotification, Stack, Tab, TabList, Tabs, TextInput } from "@carbon/react";
 import { Add, Checkmark, Code, Edit, Filter, Information, Renew, SettingsAdjust, Star, StarFilled, TrashCan, Save } from "@carbon/icons-react";
-import { isFullWidth, movedId, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
+import { isFullWidth, movedId, NO_FILTERS, NOTHING_COLLAPSED, pageFilterScope, pageFiltersFor, withBlockCollapsed, type Collapsed, type ViewBlock } from "../domain/views";
 import { blockType, normalizeBlock, type PageItem } from "../views";
 import { BlockView, newPageBlock } from "../views/BlockView";
 import { BlockRows, besideOf, draggedEntry, dragStart, isEntryDrag, rowCollapse, rowControls, shownRows, zoneAt, type RowCollapse, type RowControls } from "../views/BlockRows";
@@ -239,7 +239,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   // second's change through as if it came from elsewhere.
   const saving = useRef(0);
   useDataChanges((change) => {
-    if (!remote && change.scope === "items" && change.itemId === itemId && saving.current === 0) {
+    // Its own item, or its collection's items as a whole (an import, a sync of many).
+    if (!remote && change.scope === "items" && change.collectionId === collection.id && (!change.itemId || change.itemId === itemId) && saving.current === 0) {
       repo.getItem(collection, itemId).then(setItem, (e) => setError(errorMessage(e)));
     }
   });
@@ -297,7 +298,8 @@ function ItemContent({ collection, itemId }: { collection: Collection; itemId: s
   const pageScope = [...new Set(listing.map((b) => b.collectionId ?? collection.id))]
     .map((id) => findCollection(collections, id))
     .filter((c): c is Collection => !!c);
-  const pageFilters = listing.length > 1 ? layout.filters : [];
+  // NO_FILTERS, not a new []: the blocks' queries are memoized on it (a new one re-ran every block on each render).
+  const pageFilters = listing.length > 1 ? layout.filters : NO_FILTERS;
   const showTab = (id: string | null) => {
     setTab(id);
     setDraft(null);

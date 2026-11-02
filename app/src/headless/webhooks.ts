@@ -55,7 +55,10 @@ export async function buildEvents(repo: Repository, changes: WireChanges, known:
   const byCollection = new Map<string, string[]>();
   for (const [id, row] of rows) {
     const collectionId = row.collection_id ? String(row.collection_id) : collectionOf.get(id);
-    if (collectionId) byCollection.set(collectionId, [...(byCollection.get(collectionId) ?? []), id]);
+    if (!collectionId) continue;
+    const ids = byCollection.get(collectionId);
+    if (ids) ids.push(id);
+    else byCollection.set(collectionId, [id]);
   }
 
   const shown = new Map<string, { collection: Collection; item: Item }>();

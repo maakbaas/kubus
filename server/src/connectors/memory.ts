@@ -1,5 +1,6 @@
 import { betweenBounds, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceResult, type SourceRow, type SourceShape, type SourceValue } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
+import { minuteIn } from "./timeZones.ts";
 
 // Queries answered in memory, for connectors whose source can't run them itself (an API with a
 // flat filter, one sort and no counts: n8n's data tables). The connector reads a table's rows (as
@@ -20,22 +21,6 @@ function column(columns: Map<string, SourceColumn>, name: string): SourceColumn 
   const c = columns.get(name);
   if (!c) throw new SourceError(`There is no column “${name}” (refresh the collection's columns)`);
   return c;
-}
-
-/** The minute (yyyy-mm-ddTHH:MM) a date & time is at in a time zone (its first 10: its day). */
-function minuteIn(timeZone: string): (iso: string) => string | null {
-  let format: Intl.DateTimeFormat;
-  try {
-    format = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-  } catch {
-    throw new SourceError(`Unknown time zone “${timeZone}”`);
-  }
-  return (iso) => {
-    const t = Date.parse(iso);
-    if (Number.isNaN(t)) return null;
-    const p = Object.fromEntries(format.formatToParts(t).map((x) => [x.type, x.value]));
-    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
-  };
 }
 
 /** A value's text, as filters and search compare it ("" for none). */

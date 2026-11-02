@@ -1,5 +1,8 @@
-import { betweenBounds, conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget, type SourceValue, wallTime } from "../../../shared/sources.ts";
+import { betweenBounds, conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget, type SourceValue } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
+import { dayIn, dayStart, formatIn } from "./timeZones.ts";
+
+export { dayIn, dayStart }; // (the tests' import)
 
 // The InfluxDB 2 connector's Flux: how a column of each type is read, the scripts a query
 // (shared/sources.ts) becomes, and the annotated CSV InfluxDB answers with. Pure (no connection),
@@ -210,49 +213,6 @@ export function parseAnnotatedCsv(text: string): CsvTable[] {
     table.rows.push(row);
   }
   return tables;
-}
-
-// --- Days in a time zone ---
-
-const formats = new Map<string, Intl.DateTimeFormat>();
-function formatIn(tz: string): Intl.DateTimeFormat {
-  let format = formats.get(tz);
-  if (!format) {
-    try {
-      format = new Intl.DateTimeFormat("en-US", {
-        timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
-      });
-    } catch {
-      throw new SourceError(`Unknown time zone “${tz}”`);
-    }
-    formats.set(tz, format);
-  }
-  return format;
-}
-
-function partsIn(at: number, tz: string) {
-  const parts = formatIn(tz).formatToParts(new Date(at));
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour"), minute: get("minute"), second: get("second") };
-}
-
-/** How far the time zone is ahead of UTC at a moment, in milliseconds. */
-function offsetAt(at: number, tz: string): number {
-  const p = partsIn(at, tz);
-  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(at / 1000) * 1000;
-}
-
-/** The moment a day (yyyy-mm-dd) or minute (yyyy-mm-ddTHH:MM) starts in the time zone, `days` days (minutes) later than it, in ms since 1970. */
-export function dayStart(day: string, tz: string, days = 0): number {
-  const wall = wallTime(day, days);
-  const guess = wall - offsetAt(wall, tz);
-  return wall - offsetAt(guess, tz);
-}
-
-/** The day (yyyy-mm-dd) a moment is on in the time zone. */
-export function dayIn(at: number, tz: string): string {
-  const p = partsIn(at, tz);
-  return `${String(p.year).padStart(4, "0")}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
 }
 
 /** A moment as a Flux time literal. */

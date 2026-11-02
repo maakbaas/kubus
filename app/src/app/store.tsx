@@ -7,6 +7,7 @@ import type { Collection } from "../domain/model";
 import { DEFAULT_SPACE_ID, inSpace, withDefaultSpace, type Space } from "../domain/spaces";
 import { readPref, writePref } from "../ui/localPrefs";
 import { AiService } from "./ai";
+import { keepUnchanged } from "../domain/unchanged";
 import { ItemCache } from "./itemCache";
 import { SourcesClient } from "../data/remote/client";
 
@@ -72,7 +73,10 @@ export function StoreProvider({
   const collectionsRef = useRef<Collection[]>([]);
   const spaceRef = useRef(space.id);
   spaceRef.current = space.id;
-  const applyCollections = useCallback((list: Collection[], cache?: ItemCache) => {
+  const applyCollections = useCallback((read: Collection[], cache?: ItemCache) => {
+    // The unchanged ones stay the same objects: a change to one collection doesn't recompute every other one's items.
+    const list = keepUnchanged(collectionsRef.current, read);
+    if (list === collectionsRef.current) return;
     collectionsRef.current = list;
     setCollections(list);
     cache?.collectionsChanged();
@@ -91,11 +95,12 @@ export function StoreProvider({
         setComponents(components);
         setDashboards(dashboards);
         const unsubscribe = repo.subscribe((change) => {
-          if (change.scope === "spaces") repo.listSpaces().then(setSpaces, (e) => console.error("Reloading spaces failed", e));
+          // Each list keeps its unchanged objects (and itself, when nothing changed): see domain/unchanged.ts.
+          if (change.scope === "spaces") repo.listSpaces().then((list) => setSpaces((prev) => keepUnchanged(prev, list)), (e) => console.error("Reloading spaces failed", e));
           // Collection definitions changed anywhere: refresh them for every view (side nav, pages).
           if (change.scope === "collections") repo.listCollections().then((list) => applyCollections(list, cache), (e) => console.error("Reloading collections failed", e));
-          if (change.scope === "components") repo.listComponents().then(setComponents, (e) => console.error("Reloading components failed", e));
-          if (change.scope === "dashboards") repo.listDashboards().then(setDashboards, (e) => console.error("Reloading dashboards failed", e));
+          if (change.scope === "components") repo.listComponents().then((list) => setComponents((prev) => keepUnchanged(prev, list)), (e) => console.error("Reloading components failed", e));
+          if (change.scope === "dashboards") repo.listDashboards().then((list) => setDashboards((prev) => keepUnchanged(prev, list)), (e) => console.error("Reloading dashboards failed", e));
         });
         cleanup = () => {
           unsubscribe();

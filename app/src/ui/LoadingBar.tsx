@@ -6,6 +6,8 @@ import { Close } from "@carbon/icons-react";
 export const REQUEST_MS = 3000;
 /** How often the bar moves while a request is out (Carbon's bar eases each step). */
 const TICK_MS = 100;
+/** After this long the request's share hardly grows any more (over 96% of where it stops): the bar rests. */
+const SETTLED_MS = 3 * REQUEST_MS;
 
 /**
  * How much of a request's share of the bar is shown `ms` after it was sent: quickly at first, about
@@ -55,11 +57,16 @@ export function LoadingBar({
     if (!known) shown.current = 0;
   }
 
+  // Moves while the request's share still visibly grows; then it rests until the next rows arrive (`at`), not redrawn for nothing.
   const [, tick] = useState(0);
   useEffect(() => {
-    const timer = window.setInterval(() => tick((n) => n + 1), TICK_MS);
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      if (Date.now() - started > SETTLED_MS) window.clearInterval(timer);
+      tick((n) => n + 1);
+    }, TICK_MS);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [at]);
 
   const target = Math.min(1, real + share * requestShare(Date.now() - sent.current.time));
   const { base } = from.current;

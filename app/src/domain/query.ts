@@ -99,7 +99,15 @@ interface KindRules {
   groupKeys?(field: FieldDef, value: FieldValue, ctx: QueryContext, by?: GroupDate): { key: string; label: string }[];
   /** The value a new item gets to land in the group with this (non-empty) key; omit when none does. */
   groupValue?(key: string): FieldValue;
+  /**
+   * The value a new item needs to pass this rule of a filter it is added under (`filterPreset`), given what earlier rules
+   * set (`current`); undefined: none is needed or it can't be told. Omit for kinds no rule presets.
+   */
+  preset?(rule: FilterRule, current: FieldValue | undefined): FieldValue | undefined;
 }
+
+/** A reference rule's item ("Author is X"), not one from the page's item (filled in when the rule runs). */
+const presetRef = (rule: FilterRule) => (rule.operator === "is" && rule.value && !rule.value.startsWith(PAGE_ITEM) ? rule.value : undefined);
 
 const op = (id: FilterOperator, label: string, needsValue = true): OperatorSpec => ({ id, label, needsValue });
 const EMPTY_OPS = [op("isEmpty", "is empty", false), op("isNotEmpty", "is not empty", false)];
@@ -164,6 +172,11 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     },
   },
   checkbox: {
+    preset: (rule) => {
+      if (rule.operator === "isChecked" || rule.operator === "isNotChecked") return rule.operator === "isChecked";
+      const v = rule.value.trim().toLowerCase();
+      return rule.operator === "is" && (v === "true" || v === "false") ? v === "true" : undefined;
+    },
     // "is" takes true or false, so a value from the page's item can choose.
     operators: [op("isChecked", "is checked", false), op("isNotChecked", "is not checked", false), op("is", "is")],
     text: (_, v) => (v === true ? "yes" : "no"),
@@ -177,6 +190,7 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     sortKey: (_, v) => (v ? 1 : 0),
   },
   item: {
+    preset: presetRef,
     operators: [op("is", "is"), op("isNot", "is not"), ...EMPTY_OPS],
     text: (f, v, ctx) => (typeof v === "string" && v ? ctx.refLabel(f, v) : ""),
     sortKey: (f, v, ctx) => (typeof v === "string" && v ? ctx.refLabel(f, v).toLowerCase() : null),
@@ -211,6 +225,10 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     },
   },
   item_list: {
+    preset: (rule, current) => {
+      const id = presetRef(rule);
+      return id === undefined ? undefined : [...((current as string[] | undefined) ?? []), id];
+    },
     operators: [op("is", "includes"), op("isNot", "does not include"), ...EMPTY_OPS],
     text: (f, v, ctx) => list(v).map((id) => ctx.refLabel(f, id)).join(", "),
     sortKey: (f, v, ctx) => list(v).map((id) => ctx.refLabel(f, id)).join(", ").toLowerCase() || null,
@@ -349,15 +367,8 @@ export function filterPreset(collection: Collection, filters: FilterRule[], inhe
   // Only rules every listed item meets (an Or rule's alternatives aren't required).
   for (const rule of requiredRules(filterTree([inherited, filters]))) {
     const field = collection.fields.find((f) => f.id === rule.fieldId);
-    if (field?.kind === "checkbox") {
-      const v = rule.value.trim().toLowerCase();
-      if (rule.operator === "isChecked" || rule.operator === "isNotChecked") preset[field.id] = rule.operator === "isChecked";
-      else if (rule.operator === "is" && (v === "true" || v === "false")) preset[field.id] = v === "true";
-      continue;
-    }
-    if (!field || rule.operator !== "is" || !rule.value || rule.value.startsWith(PAGE_ITEM)) continue;
-    if (field.kind === "item") preset[field.id] = rule.value;
-    if (field.kind === "item_list") preset[field.id] = [...((preset[field.id] as string[] | undefined) ?? []), rule.value];
+    const value = field && KIND_RULES[field.kind].preset?.(rule, preset[field.id]);
+    if (field && value !== undefined) preset[field.id] = value;
   }
   return preset;
 }
@@ -392,9 +403,14 @@ export function defaultQuery(): ViewQuery {
 
 /** Time order: the collection's first date or date & time field, ascending (the last row is the latest); null without one. */
 export function timeSort(collection: Collection): SortRule[] | null {
+  // The same array each time for a collection: a block's query is memoized on its sort (a new one re-ran a chart or map).
+  if (timeSorts.has(collection)) return timeSorts.get(collection)!;
   const field = collection.fields.find((f) => f.kind === "date" || f.kind === "datetime");
-  return field ? [{ fieldId: field.id, direction: "asc" }] : null;
+  const sort: SortRule[] | null = field ? [{ fieldId: field.id, direction: "asc" }] : null;
+  timeSorts.set(collection, sort);
+  return sort;
 }
+const timeSorts = new WeakMap<Collection, SortRule[] | null>();
 
 // --- Evaluation -----------------------------------------------------------------------
 
@@ -473,6 +489,10 @@ function sortKey(collection: Collection, item: Item, field: FieldDef | string | 
  * `numeric`, but with one collator: localeCompare with options builds one for each comparison.
  */
 export const naturalCompare = new Intl.Collator(undefined, { numeric: true }).compare;
+/** Text by its letters alone, case and accents aside (names in pickers and lists), with one collator as naturalCompare. */
+export const looseCompare = new Intl.Collator(undefined, { sensitivity: "base" }).compare;
+/** looseCompare, numbers by their value ("9" before "10"): sortable tables of names and counts. */
+export const looseNaturalCompare = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }).compare;
 
 function compareKeys(a: string | number | null, b: string | number | null): number {
   if (a === b) return 0;

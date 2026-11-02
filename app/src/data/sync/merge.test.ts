@@ -228,6 +228,23 @@ describe("what a sync reports to the app", () => {
     return changes;
   };
 
+  it("many items of one collection in a sync: one change for the collection, a few: one per item", async () => {
+    const n = await notes();
+    const changes = collect(b);
+    const title = n.a.fields[0].id;
+    await a.createItems(Array.from({ length: 25 }, (_, i) => ({ collection: n.a, values: { [title]: `n${i}` }, spaceId: "default" })));
+    await settled(a);
+    await settled(b);
+    expect(changes.filter((c) => c.scope === "items")).toEqual([{ scope: "items", collectionId: n.id }]);
+    changes.length = 0;
+    const ids = await a.createItems(["one", "two"].map((t) => ({ collection: n.a, values: { [title]: t }, spaceId: "default" })));
+    await settled(a);
+    await settled(b);
+    const items = changes.filter((c) => c.scope === "items");
+    expect(items).toHaveLength(2);
+    expect(items).toEqual(expect.arrayContaining(ids.map((itemId) => ({ scope: "items", collectionId: n.id, itemId }))));
+  });
+
   it("tells which item, collection, view or list changed, as a local write would", async () => {
     const n = await notes();
     const changes = collect(b);

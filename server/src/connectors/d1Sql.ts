@@ -1,5 +1,8 @@
 import { betweenBounds, conditionText, MAX_SOURCE_GROUPS, MAX_SOURCE_PAGE, TITLE_COLUMN, type SourceColumn, type SourceFilter, type SourceQuery, type SourceShape, type SourceTarget, wallTime } from "../../../shared/sources.ts";
 import { SourceError } from "./connector.ts";
+import { zoneOffsets } from "./timeZones.ts";
+
+export { zoneOffsets }; // (the tests' import)
 
 // The Cloudflare D1 connector's SQL (SQLite): how a column is read, and the statements a query
 // (shared/sources.ts) becomes. Pure (no connection), so it is tested without a database
@@ -144,50 +147,6 @@ const textSql = (c: D1Column) => `COALESCE(CAST(${ref(c)} AS TEXT), '')`;
 const containing = (text: string) => `%${text.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 const like = (p: Params, text: string) => `LIKE ${p.add(containing(text))} ESCAPE '\\'`;
 
-/** The offset (minutes) of a time zone at an instant (ms). */
-function offsetAt(format: Intl.DateTimeFormat, at: number): number {
-  const parts = Object.fromEntries(format.formatToParts(at).map((x) => [x.type, x.value]));
-  const local = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour) % 24, Number(parts.minute));
-  return Math.round((local - Math.floor(at / 60_000) * 60_000) / 60_000);
-}
-
-const FIRST_YEAR = 1990;
-const LAST_YEAR = 2060;
-const zones = new Map<string, { from: number; minutes: number }[]>();
-
-/**
- * A time zone's offsets from 1990 to 2060: each from when (Unix seconds) and how many minutes
- * (outside those years the nearest applies). Unknown zones are refused.
- */
-export function zoneOffsets(tz: string): { from: number; minutes: number }[] {
-  const known = zones.get(tz);
-  if (known) return known;
-  let format: Intl.DateTimeFormat;
-  try {
-    format = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric" });
-  } catch {
-    throw new SourceError(`Unknown time zone “${tz}”`);
-  }
-  const week = 7 * 86_400_000;
-  let at = Date.UTC(FIRST_YEAR, 0, 1);
-  const end = Date.UTC(LAST_YEAR, 0, 1);
-  const offsets = [{ from: -Infinity, minutes: offsetAt(format, at) }];
-  for (; at < end; at += week) {
-    const next = offsetAt(format, at + week);
-    if (next === offsets[offsets.length - 1].minutes) continue;
-    // The change is within the week: found to the minute.
-    let [lo, hi] = [at, at + week];
-    while (hi - lo > 60_000) {
-      const mid = lo + Math.floor((hi - lo) / 120_000) * 60_000;
-      if (offsetAt(format, mid) === next) hi = mid;
-      else lo = mid;
-    }
-    offsets.push({ from: hi / 1000, minutes: next });
-  }
-  zones.set(tz, offsets);
-  return offsets;
-}
-
 /** The day (yyyy-mm-dd) a date & time is on in the time zone. */
 function daySql(c: D1Column, tz: string): string {
   const unix = unixSql(ref(c));
@@ -198,7 +157,10 @@ function daySql(c: D1Column, tz: string): string {
   return `date(${unix} + ${offset} * 60, 'unixepoch')`;
 }
 
-/** The start of a day (yyyy-mm-dd) or minute (yyyy-mm-ddTHH:MM) in the time zone as Unix seconds: `days` days (minutes) later than it. */
+/**
+ * The start of a day (yyyy-mm-dd) or minute (yyyy-mm-ddTHH:MM) in the time zone as Unix seconds: `days` days (minutes) later than it.
+ * From the offsets table, not timeZones.ts's dayStart, so it agrees with daySql (outside 1990–2060 the table's nearest offset).
+ */
 export function dayStart(day: string, tz: string, days = 0): number {
   const midnight = wallTime(day, days) / 1000; // as if UTC; then less the zone's offset there
   const offsets = zoneOffsets(tz);

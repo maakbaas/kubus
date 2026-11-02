@@ -1,4 +1,5 @@
 import { checklistProgress } from "./checklist";
+import { memoText } from "./memoText";
 import { numberList } from "./numberList";
 import type { FieldKind, FieldValue } from "./model";
 
@@ -111,10 +112,10 @@ export function markdownPreviewParts(md: string): PreviewPart[] {
 
 /**
  * The text an HTML value shows (tags, scripts and styles left out, common entities decoded),
- * on one line: for table cells, cards, filters and sorting.
+ * on one line: for table cells, cards, filters and sorting. Remembered by value (memoText), as Markdown's is.
  */
-export function htmlPlainText(html: string): string {
-  return html
+export const htmlPlainText = memoText((html: string): string =>
+  html
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<(script|style|template|head)\b[\s\S]*?<\/\1\s*>/gi, " ")
     // Block-level tags separate words; inline ones (a, em, span, …) don't.
@@ -127,8 +128,8 @@ export function htmlPlainText(html: string): string {
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&amp;/gi, "&")
     .replace(/\s+/g, " ")
-    .trim();
-}
+    .trim(),
+);
 
 /** An HTML value's text as a preview, truncated with "…" like Markdown previews. */
 export function htmlPreview(html: string): string {

@@ -57,6 +57,8 @@ const SERVER_KEY = "kubus.syncServer";
 /** `SyncStatus.replaced`, kept across reloads (sync stays paused until the user acts). */
 const REPLACED_KEY = "kubus.syncReplaced";
 const POLL_MS = 30_000;
+/** Up to this many items of one collection in a sync are announced one by one; more as one change of the collection. */
+const ITEMS_ONE_BY_ONE = 20;
 const DEBOUNCE_MS = 2_000;
 /** How much one sync uploads at most (it goes on with the next file while under both). */
 const UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -721,7 +723,18 @@ export class SyncEngine implements SyncControl {
     }
     for (const collectionId of new Set((changes.views ?? []).map((r) => String(r.collection_id)))) out.push({ scope: "views", collectionId });
     for (const dashboardId of new Set((changes.dashboard_views ?? []).map((r) => String(r.dashboard_id)))) out.push({ scope: "dashboardViews", dashboardId });
-    for (const [itemId, collectionId] of items) out.push({ scope: "items", collectionId, itemId });
+    // Item by item, but many of one collection as one change for it: the cache then reads the collection once
+    // (unchanged items keeping their objects) instead of each item on its own, and what shows it renders once.
+    const byCollection = new Map<string, string[]>();
+    for (const [itemId, collectionId] of items) {
+      const ids = byCollection.get(collectionId);
+      if (ids) ids.push(itemId);
+      else byCollection.set(collectionId, [itemId]);
+    }
+    for (const [collectionId, ids] of byCollection) {
+      if (ids.length > ITEMS_ONE_BY_ONE) out.push({ scope: "items", collectionId });
+      else for (const itemId of ids) out.push({ scope: "items", collectionId, itemId });
+    }
 
     for (const t of SYNC_TABLES) for (const r of changes[t.name] ?? []) if (typeof r.updated_at === "string") observeStamp(r.updated_at);
     this.applying = true;
