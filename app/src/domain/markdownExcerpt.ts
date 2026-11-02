@@ -1,7 +1,7 @@
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
-import type { List, Node, Nodes, RootContent } from "mdast";
+import type { List, Node, Nodes, RootContent, Table } from "mdast";
 import { containsQuery } from "./tags";
 
 // Search excerpts for markdown fields. Rules:
@@ -12,7 +12,9 @@ import { containsQuery } from "./tags";
 //  3. A heading is a block of its own: a match in a heading shows just that heading.
 //  4. A match in any other block shows that block, preceded by its section heading
 //     (the nearest heading above it) unless that heading is already shown.
-//  5. For lists only the matching items are shown (nested items included).
+//  5. For lists only the matching items are shown (nested items included); for tables
+//     the header and the matching rows (a long table would fill the excerpt with rows
+//     around the match, or leave the match below its cut-off).
 
 const MAX_BLOCKS = 3;
 
@@ -78,6 +80,12 @@ export function markdownExcerpt(source: string, query: string, exactTag = false)
       .filter(matches)
       .map(slice)
       .join(list.spread ? "\n\n" : "\n");
+  /** A table reduced to its header (with the delimiter row under it) and its matching rows, as source text. */
+  const matchingRows = (table: Table) => {
+    const [header, ...rows] = table.children;
+    const delimiter = slice(table).split("\n")[1] ?? "";
+    return [slice(header), delimiter, ...rows.filter(matches).map(slice)].join("\n");
+  };
 
   const parts: string[] = [];
   let shown = 0;
@@ -101,7 +109,7 @@ export function markdownExcerpt(source: string, query: string, exactTag = false)
       parts.push(slice(section));
       sectionShown = true;
     }
-    parts.push(node.type === "list" ? matchingItems(node) : slice(node));
+    parts.push(node.type === "list" ? matchingItems(node) : node.type === "table" ? matchingRows(node) : slice(node));
     shown++;
   }
 

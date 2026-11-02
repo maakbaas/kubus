@@ -68,6 +68,13 @@ describe("markdownExcerpt", () => {
     expect(markdownExcerpt("- a dune\n\n- b\n\n- c dune", "dune").markdown).toBe("- a dune\n\n- c dune");
   });
 
+  it("a table is cut down to its header and matching rows", () => {
+    const table = "| Book | Year |\n| :--- | ---: |\n| Dune | 1965 |\n| Emma | 1815 |\n| Dune Messiah | 1969 |";
+    expect(markdownExcerpt(table, "dune").markdown).toBe("| Book | Year |\n| :--- | ---: |\n| Dune | 1965 |\n| Dune Messiah | 1969 |");
+    expect(markdownExcerpt(table, "year").markdown).toBe("| Book | Year |\n| :--- | ---: |");
+    expect(markdownExcerpt("Book | Year\n--- | ---\nDune | 1965\nEmma | 1815", "emma").markdown).toBe("Book | Year\n--- | ---\nEmma | 1815");
+  });
+
   it("shows three blocks at most and counts the rest", () => {
     const many = Array.from({ length: 6 }, (_, i) => `dune ${i}`).join("\n\n");
     const out = markdownExcerpt(many, "dune");

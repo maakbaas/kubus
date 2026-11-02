@@ -934,6 +934,13 @@ body {
 .md-view--excerpt img {
   max-height: 8rem;
 }
+/* In a search result an image is a thumbnail on the line's middle: at 8rem it made its whole line
+   that tall (a band of empty space above the text beside it) and pushed the match out of the
+   height-capped excerpt. */
+.search-hit .md-view--excerpt img {
+  max-height: var(--cds-spacing-09);
+  vertical-align: middle;
+}
 .md-view__link {
   color: var(--cds-link-primary);
   text-decoration: underline;
