@@ -184,6 +184,16 @@ function CollectionContent({ collection }: { collection: Collection }) {
     // Only when the requested view changes, not on every edit of the views.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wanted]);
+  // The shown view goes into the address (replacing it: choosing a view is no step back), so coming
+  // back to this page (back from an item, a restored tab) shows that view, not the starred one.
+  useEffect(() => {
+    if (!viewChosen || !activeId || activeId === VIRTUAL_VIEW || activeId === wanted) return;
+    const next = new URLSearchParams(params);
+    next.set("view", activeId);
+    navigate({ search: `?${next}` }, { replace: true });
+    // Only when the shown view changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, viewChosen]);
 
   /** Stores the virtual "All" view (as shown without changes) before something else needs a real one. */
   async function storeVirtual() {

@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
-import { Navigate, useNavigate, useParams, useSearchParams } from "react-router";
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { Button, Checkbox, Dropdown, FilterableMultiSelect, Form, FormGroup, IconButton, InlineNotification, MultiSelect, Stack, TextArea, TextInput } from "@carbon/react";
 import { Add, SettingsAdjust, TrashCan, ViewOff } from "@carbon/icons-react";
 import { useStore, useCollection } from "../app/store";
@@ -91,6 +91,10 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
   const uid = useId();
   const { repo, collections, reloadCollections, components, spaces, space } = useStore();
   const navigate = useNavigate();
+  // Saved or cancelled, the editor goes back to where it was opened from (the Collections list, the
+  // collection's page at its view, …); opened as the tab's first page, to `fallback`.
+  const location = useLocation();
+  const leave = (fallback: string) => (location.key !== "default" ? navigate(-1) : navigate(fallback));
   const { confirm, dialog } = useConfirm();
   const [draft, setDraft] = useState(() => initialDraft(existing, newRemote, space.id));
   const remote = isRemote(draft);
@@ -201,7 +205,9 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
         })),
       }, space.id);
       await reloadCollections();
-      navigate(`/collections/${draft.id}/items`);
+      // A new collection opens; changes to one return to where its editor was opened.
+      if (existing) leave(`/collections/${draft.id}/items`);
+      else navigate(`/collections/${draft.id}/items`);
     } catch (e) {
       setError(errorMessage(e));
       setSaving(false);
@@ -418,7 +424,7 @@ function CollectionEditor({ existing, remote: newRemote = false }: { existing?: 
           />
 
           <div className="form-actions">
-            <Button size="sm" kind="secondary" onClick={() => navigate(existing ? `/collections/${existing.id}/items` : remote ? "/remotes" : "/collections")}>
+            <Button size="sm" kind="secondary" onClick={() => leave(existing ? `/collections/${existing.id}/items` : remote ? "/remotes" : "/collections")}>
               Cancel
             </Button>
             <Button size="sm" type="submit" disabled={saving}>

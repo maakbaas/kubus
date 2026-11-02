@@ -331,7 +331,8 @@ Extension points are registries, not special cases in pages:
   or with Escape on an empty box; the blocks filter once typing pauses 150 ms, an emptied box at once; while it has text, a block listing items with none matching is
   left out, `BlockView`), Filter (the view's; on the filter bar instead while "Show filter bar" is on) and View settings (name, Show filter bar, Full width, Fields are editable, blocks);
   each block's own menus (Filter, Sort and group, Fields, Block settings: name, show as, type options) are in its header. The collection page opens the starred view (`views.is_default`, at most one per collection and space,
-  set via `setDefaultView`), else the first; a space without stored views shows a virtual "All" table (id `default`; stored when
+  set via `setDefaultView`), else the first, unless the address names one (`?view=`): the shown view is written into the
+  tab's address (replacing it, no history step), so back from an item, or a restored tab, shows the view that was shown; a space without stored views shows a virtual "All" table (id `default`; stored when
   changed, renamed or joined by another view), so a collection always has a view and the last can't be
   deleted. Changes are ephemeral: while the shown view differs from
   its saved version, a Save changes to view icon button stands left of the bar's buttons, never in
