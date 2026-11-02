@@ -13,7 +13,7 @@ import type { CarbonIconType } from "@carbon/icons-react";
 import type { Component } from "../domain/components";
 import type { FieldLayout } from "../domain/fieldLayout";
 import type { FieldDef, FieldValue, Item, Collection } from "../domain/model";
-import type { QueryResult, SortRule } from "../domain/query";
+import type { QueryResult, SortRule, ViewQuery } from "../domain/query";
 import type { AspectRatio } from "../domain/views";
 import type { RefLabel } from "../domain/components";
 import type { RefOptions } from "../ui/useReferenceOptions";
@@ -71,6 +71,8 @@ export interface BlockProps<O> {
   all: Item[];
   /** On an item page: its item; null in a collection view. */
   page: PageItem | null;
+  /** The block's query: its own filter and the one it inherits (the view's, page's or dashboard's: its period). */
+  query: ViewQuery;
   /** Keys of the groups shown collapsed (stored with the view), and collapsing / expanding one. */
   collapsedGroups: string[];
   onGroupCollapse(key: string, collapsed: boolean): void;

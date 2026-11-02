@@ -16,11 +16,12 @@
 
 import type { Component } from "./components";
 import { outputOf } from "./components";
-import { periodAround, weekNumber } from "./datePeriod";
+import { periodAround, resolveRange, weekNumber } from "./datePeriod";
+import { filterTree, requiredRules } from "./filterTree";
 import { formatDate, formatTime } from "./fieldKinds";
 import { fieldValue, itemLabel, newId, pickableFields, type Collection, type FieldDef, type Item } from "./model";
 import { BLOCK_HEIGHT, DEFAULT_ASPECT, normalizeAspect, normalizeBlockHeight, type AspectRatio } from "./views";
-import { applyQuery, defaultQuery, groupKeysOf, isGroupable, naturalCompare, type GroupOrder, type QueryContext, type QueryResult } from "./query";
+import { applyQuery, defaultQuery, groupKeysOf, isGroupable, naturalCompare, type FilterRule, type GroupOrder, type QueryContext, type QueryResult } from "./query";
 import { defaultRegions, normalizeRegions, regionFinder, type ChartRegions, type Region } from "./regions";
 
 export type ChartKind =
@@ -1038,6 +1039,33 @@ export function currentStepItems(input: ChartInput, x: ChartX, now: number): Ite
   if (x.by !== "field" || !isDateField(xField(input.collection, x))) return null;
   const step = chartCategories(input, x).find((c) => c.at !== undefined && c.end !== undefined && c.at <= now && now < c.end);
   return step?.items ?? [];
+}
+
+/** The last moment (ms, local) of a period's last day or minute. */
+function periodEndTime(end: string): number {
+  const [y, m, d] = end.slice(0, 10).split("-").map(Number);
+  if (end.length === 10) return new Date(y, m - 1, d + 1).getTime() - 1;
+  const [h, min] = end.slice(11).split(":").map(Number);
+  return new Date(y, m - 1, d, h, min).getTime() + 59_999;
+}
+
+/**
+ * The moment whose step a stat's "The current step" is (`currentStepItems`): now, or, when the block's filters keep the X
+ * axis's date field to a period that ends before now (the dashboard's period moved back to last week), that period's last
+ * moment: its last step, empty when nothing is in it. Only rules every item meets count (`filters`: the inherited and
+ * the block's own); a period on another field leaves it now.
+ */
+export function stepMoment(filters: FilterRule[][], xFieldId: string | null, now: number): number {
+  if (!xFieldId) return now;
+  const d = new Date(now);
+  const at = `${formatDate(d)}T${formatTime(d)}`;
+  let moment = now;
+  for (const rule of requiredRules(filterTree(filters))) {
+    if (rule.fieldId !== xFieldId || rule.operator !== "between") continue;
+    const period = resolveRange(rule.value, at);
+    if (period) moment = Math.min(moment, periodEndTime(period.end));
+  }
+  return moment;
 }
 
 /** The items a stat's number is made of: all, or (Value of "The current step") those of the step now falls in. */

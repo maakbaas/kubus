@@ -30,6 +30,7 @@ import {
   splitFields,
   regionValues,
   statOf,
+  stepMoment,
   styleOf,
   drawsTimeline,
   SCALE_COLORS,
@@ -94,7 +95,7 @@ function useRegionMap(repo: Repository, options: ChartOptions): { map: RegionMap
   return shown && state?.key === key ? state : { map: null, error: null };
 }
 
-function ChartView({ collection, result, options, refs, actions, page }: BlockProps<ChartOptions>) {
+function ChartView({ collection, result, options, refs, actions, page, query }: BlockProps<ChartOptions>) {
   const dark = useDark();
   const { repo } = useStore();
   const regionMap = useRegionMap(repo, options);
@@ -105,11 +106,12 @@ function ChartView({ collection, result, options, refs, actions, page }: BlockPr
   const { spec, stat, unmatched } = useMemo(() => {
     const input = { collection, items, ctx: { refLabel: refLabelOf(refs, "(deleted)") } };
     // A stat's spec is its sparkline, coloured by the stat's trend.
-    const stat = options.chart === "stat" ? statOf(input, options) : null;
+    // "The current step": now's, or the last of the period the block's filters keep its X axis's date to.
+    const stat = options.chart === "stat" ? statOf(input, options, stepMoment([query.inherited ?? [], query.filters], options.x.field, Date.now())) : null;
     const regions = regionMap.map?.regions;
     const unmatched = regions ? regionValues(input, options, regions).unmatched : [];
     return { spec: chartSpec(input, options, dark ? "g100" : "white", regions), stat, unmatched };
-  }, [collection, items, refs, options, dark, regionMap.map]);
+  }, [collection, items, refs, options, dark, regionMap.map, query.inherited, query.filters]);
   if (wrongPage) return <p className="helper chart-block__problem">“Of this item” charts the page's item: the block lists {collection.pluralName}, not the page's collection.</p>;
   if (regionMap.error) return <p className="helper chart-block__problem">{regionMap.error}</p>;
   // Values that are no region of the map, with their items' number: what to correct in the data.

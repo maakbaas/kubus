@@ -21,6 +21,7 @@ import {
   seriesLabel,
   singleValue,
   statOf,
+  stepMoment,
   spreadValues,
   statusOf,
   statusRanges,
@@ -715,6 +716,24 @@ describe("statOf", () => {
     // All items, or no X axis along a date: the value of all of them.
     expect(stat("day", at(2026, 3, 3), { valueScope: "all" }).value).toBe(120);
     expect(statOf(input(), options({ chart: "stat", series: [last], valueScope: "step" }), at(2026, 3, 3)).value).toBe(120);
+  });
+
+  it("of the period's last step when the block's filters keep the X axis's date to a period ended before now", () => {
+    const at = (y: number, m: number, d: number) => local(y, m, d) + 12 * 3_600_000;
+    const rule = (fieldId: string, value: string) => ({ id: "r", fieldId, operator: "between" as const, value });
+    const stat = (dateStep: ChartX["dateStep"], value: string, now = at(2026, 3, 20), fieldId = "read") =>
+      statOf(input(), options({ chart: "stat", series: [last], valueScope: "step" }, { ...byRead, dateStep }), stepMoment([[rule(fieldId, value)], []], "read", now)).value;
+    // Its last day had an item: that one's value, not now's step (which has none).
+    expect(stat("day", "2026-01-01..2026-03-02")).toBe(80);
+    // Its last day is empty: no value, not the day before's.
+    expect(stat("day", "2026-01-01..2026-03-03")).toBeNull();
+    // The step is the X axis's: the period's last week, month.
+    expect(stat("week", "2026-02-01..2026-03-04")).toBe(80);
+    // A period still going on (or on another field): now's step.
+    expect(stepMoment([[rule("read", "2026-01-01..2026-12-31")]], "read", at(2026, 3, 2))).toBe(at(2026, 3, 2));
+    expect(stepMoment([[rule("other", "2026-01-01..2026-01-31")]], "read", at(2026, 3, 2))).toBe(at(2026, 3, 2));
+    // A rolling period moves with now: last week (weeks run Sunday to Saturday) ends on its Saturday.
+    expect(new Date(stepMoment([[rule("read", "week-1")]], "read", at(2026, 3, 4))).getDate()).toBe(28);
   });
 });
 

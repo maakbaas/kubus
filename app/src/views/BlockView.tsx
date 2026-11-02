@@ -552,6 +552,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
                 actions={actions}
                 all={items}
                 page={page}
+                query={query}
                 collapsedGroups={groups}
                 onGroupCollapse={(key, on) => block.groupBy && onCollapse(withGroupCollapsed(state, block.id, block.groupBy, key, on))}
               />

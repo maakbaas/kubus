@@ -252,7 +252,9 @@ Extension points are registries, not special cases in pages:
     or line chart (`chartSpec` of a stat is it; in its tag's colour, Carbon's `color.scale`: support-success,
     support-error, grey for neither), or none (`statOf`, `baselineOf` in domain/chart.ts). Along a date field, "Value of" "The current step"
     (`valueScope: "step"`) makes the number of only the items in the step now falls in (today with Day steps, this week, this hour, …:
-    `currentStepItems`, by each date category's `at`..`end`), none there: no number (not the day before's last value); the sparkline and
+    `currentStepItems`, by each date category's `at`..`end`), none there: no number (not the day before's last value). When the block's filters keep the X axis's date field to a period
+    that ended before now (a dashboard's period moved back to last week), it is that period's last step instead (`stepMoment`, from the
+    `between` rules every item meets; `BlockProps.query` gives a block its filters), again empty when nothing is in it; the sparkline and
     what it is compared with still take all the items. For a daily dashboard whose filter is a week wide to feed the sparkline. (Worked out
     when the block renders: like a date filter, an open page doesn't roll over at midnight on its own.)
   - **Spread**: a histogram's field (a number or a date: dates on a time axis), bins and Split by; a box plot's field (a
