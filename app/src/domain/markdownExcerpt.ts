@@ -1,7 +1,7 @@
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
-import type { List, Node, Nodes, RootContent, Table } from "mdast";
+import type { List, Node, Nodes, Paragraph, PhrasingContent, RootContent, Table } from "mdast";
 import { containsQuery } from "./tags";
 
 // Search excerpts for markdown fields. Rules:
@@ -15,6 +15,10 @@ import { containsQuery } from "./tags";
 //  5. For lists only the matching items are shown (nested items included); for tables
 //     the header and the matching rows (a long table would fill the excerpt with rows
 //     around the match, or leave the match below its cut-off).
+//  6. A paragraph is shown without its images and without the line breaks they leave at
+//     its start or end (an image after Shift+Enter is part of the paragraph above it, but
+//     reads as a block of its own: in a result it was a tall line, or blank space while
+//     not loaded). A paragraph with nothing else left is not shown.
 
 const MAX_BLOCKS = 3;
 
@@ -87,6 +91,23 @@ export function markdownExcerpt(source: string, query: string, exactTag = false)
     return [slice(header), delimiter, ...rows.filter(matches).map(slice)].join("\n");
   };
 
+  /** A paragraph without its images (and the editor's `<br />` lines), its outer and doubled line breaks dropped, as source text. */
+  const withoutImages = (paragraph: Paragraph) => {
+    const isBreak = (n: PhrasingContent) => n.type === "break" || (n.type === "html" && /^<br\s*\/?>$/i.test(n.value.trim()));
+    const blank = (n: PhrasingContent) => isBreak(n) || (n.type === "text" && !n.value.trim());
+    const kept: PhrasingContent[] = [];
+    for (const n of paragraph.children) {
+      if (n.type === "image" || n.type === "imageReference" || (n.type === "html" && !isBreak(n))) continue;
+      const last = kept[kept.length - 1];
+      if (isBreak(n) && last && isBreak(last)) continue;
+      kept.push(n);
+    }
+    while (kept.length && blank(kept[0])) kept.shift();
+    while (kept.length && blank(kept[kept.length - 1])) kept.pop();
+    if (kept.length === paragraph.children.length) return slice(paragraph);
+    return kept.map((n) => (isBreak(n) ? "\\\n" : slice(n))).join("").trim();
+  };
+
   const parts: string[] = [];
   let shown = 0;
   let more = 0;
@@ -99,6 +120,8 @@ export function markdownExcerpt(source: string, query: string, exactTag = false)
       sectionShown = false;
     }
     if (!matches(node)) continue;
+    const text = node.type === "list" ? matchingItems(node) : node.type === "table" ? matchingRows(node) : node.type === "paragraph" ? withoutImages(node) : slice(node);
+    if (!text) continue;
     if (shown >= MAX_BLOCKS) {
       more++;
       continue;
@@ -109,7 +132,7 @@ export function markdownExcerpt(source: string, query: string, exactTag = false)
       parts.push(slice(section));
       sectionShown = true;
     }
-    parts.push(node.type === "list" ? matchingItems(node) : node.type === "table" ? matchingRows(node) : slice(node));
+    parts.push(text);
     shown++;
   }
 

@@ -75,6 +75,16 @@ describe("markdownExcerpt", () => {
     expect(markdownExcerpt("Book | Year\n--- | ---\nDune | 1965\nEmma | 1815", "emma").markdown).toBe("Book | Year\n--- | ---\nEmma | 1815");
   });
 
+  it("a paragraph is shown without its images and the line breaks they leave", () => {
+    // Shift+Enter, then an image: one paragraph in Markdown, two blocks to the reader.
+    expect(markdownExcerpt("para dune\\\n![shot.png](files/x)", "dune").markdown).toBe("para dune");
+    expect(markdownExcerpt("![a](files/x)  \nfirst dune\\\n![b](files/y)\\\nsecond line", "dune").markdown).toBe("first dune\\\nsecond line");
+    expect(markdownExcerpt("para dune\n<br />", "dune").markdown).toBe("para dune");
+    expect(markdownExcerpt("Some **dune** text", "dune").markdown).toBe("Some **dune** text");
+    // Only an image (its description matched): nothing to show.
+    expect(markdownExcerpt("![dune.png](files/x)\n\ndune text", "dune")).toEqual({ markdown: "dune text", more: 0 });
+  });
+
   it("shows three blocks at most and counts the rest", () => {
     const many = Array.from({ length: 6 }, (_, i) => `dune ${i}`).join("\n\n");
     const out = markdownExcerpt(many, "dune");

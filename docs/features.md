@@ -539,7 +539,7 @@ What the app does, feature by feature (read the part you work on).
 
   searched; a result opens the view at the block) and its items, substring match over string, markdown, HTML, AI,
   list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; a full-text index is roadmap #1).
-  Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`; of a Markdown one its matching blocks, a list cut to its matching items and a table to its header and matching rows, `domain/markdownExcerpt.ts`; images as small thumbnails); a result with no visible match is left out.
+  Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`; of a Markdown one its matching blocks, a list cut to its matching items and a table to its header and matching rows, a paragraph shown without its images and the line breaks they leave, `domain/markdownExcerpt.ts`; other images as small thumbnails); a result with no visible match is left out.
   An item opens at the first field that matched (`?field=`; at the top when its title matched), a Markdown block at the block.
   A text that looks like a link address (`/`, `?`, `=` or `a#b`: `isAddressQuery`) also lists the pages whose link it fits
   (a link list: `LinkTargetList`, the picker's matching: a whole link by name such as `book/dune/compact#author` or
