@@ -83,6 +83,7 @@ html.fonts-pending body{visibility:hidden;}
 :where(img,svg,canvas,video){max-width:100%;}
 :where(.kubus-tag){padding:0.0625rem 0.5rem;-webkit-box-decoration-break:clone;box-decoration-break:clone;border-radius:1rem;background:var(--tag-bg);color:var(--tag-fg);font-size:0.75rem;line-height:1rem;letter-spacing:0.32px;cursor:pointer;}
 :where(.kubus-tag:hover){background:var(--tag-hover);}
+:where(.kubus-tag::selection,.kubus-tag ::selection){background:var(--tag-hover);color:inherit;}
 ${[...TAG_COLORS, NEW_TAG_COLOR].map((c) => `:where(.kubus-tag[data-color="${c}"]){--tag-bg:var(--cds-tag-background-${c});--tag-fg:var(--cds-tag-color-${c});--tag-hover:var(--cds-tag-hover-${c});}`).join("\n")}`;
 }
 

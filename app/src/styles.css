@@ -870,17 +870,24 @@ body {
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-/* Its colour's hover (Carbon gives only an interactive tag one). */
-.inline-tag.cds--tag--blue { --tag-hover: var(--cds-tag-hover-blue); }
-.inline-tag.cds--tag--magenta { --tag-hover: var(--cds-tag-hover-magenta); }
-.inline-tag.cds--tag--green { --tag-hover: var(--cds-tag-hover-green); }
-.inline-tag.cds--tag--purple { --tag-hover: var(--cds-tag-hover-purple); }
-.inline-tag.cds--tag--teal { --tag-hover: var(--cds-tag-hover-teal); }
-.inline-tag.cds--tag--red { --tag-hover: var(--cds-tag-hover-red); }
-.inline-tag.cds--tag--cyan { --tag-hover: var(--cds-tag-hover-cyan); }
-.inline-tag.cds--tag--warm-gray { --tag-hover: var(--cds-tag-hover-warm-gray); }
-.inline-tag.cds--tag--cool-gray { --tag-hover: var(--cds-tag-hover-cool-gray); }
-.inline-tag.cds--tag--gray { --tag-hover: var(--cds-tag-hover-gray); }
+/* Its colour and its hover (Carbon gives only an interactive tag one). */
+.inline-tag.cds--tag--blue { --tag-bg: var(--cds-tag-background-blue); --tag-hover: var(--cds-tag-hover-blue); }
+.inline-tag.cds--tag--magenta { --tag-bg: var(--cds-tag-background-magenta); --tag-hover: var(--cds-tag-hover-magenta); }
+.inline-tag.cds--tag--green { --tag-bg: var(--cds-tag-background-green); --tag-hover: var(--cds-tag-hover-green); }
+.inline-tag.cds--tag--purple { --tag-bg: var(--cds-tag-background-purple); --tag-hover: var(--cds-tag-hover-purple); }
+.inline-tag.cds--tag--teal { --tag-bg: var(--cds-tag-background-teal); --tag-hover: var(--cds-tag-hover-teal); }
+.inline-tag.cds--tag--red { --tag-bg: var(--cds-tag-background-red); --tag-hover: var(--cds-tag-hover-red); }
+.inline-tag.cds--tag--cyan { --tag-bg: var(--cds-tag-background-cyan); --tag-hover: var(--cds-tag-hover-cyan); }
+.inline-tag.cds--tag--warm-gray { --tag-bg: var(--cds-tag-background-warm-gray); --tag-hover: var(--cds-tag-hover-warm-gray); }
+.inline-tag.cds--tag--gray { --tag-bg: var(--cds-tag-background-gray); --tag-hover: var(--cds-tag-hover-gray); }
+/* A search match or a text selection in a tag: its colour's hover shade, a step darker (lighter on dark) of the
+   tag's own colour, the tag's text colour kept; not the highlight's blue, the same on every tag. */
+.inline-tag .search-mark,
+.inline-tag ::selection,
+.inline-tag::selection {
+  background: var(--tag-hover);
+  color: inherit;
+}
 .inline-tag .cds--tag__label {
   display: inline;
   overflow: visible;
@@ -901,6 +908,10 @@ body {
 @media (any-hover: hover) {
   .cds--tag.inline-tag:hover {
     background-color: var(--tag-hover);
+  }
+  /* Hovered, the tag takes the shade its match had: the match the tag's own colour then, still apart. */
+  .cds--tag.inline-tag:hover .search-mark {
+    background: var(--tag-bg);
   }
   /* A hovered tag is its own link: what it sits in (a linked title, a search result) doesn't
      show its hover. */

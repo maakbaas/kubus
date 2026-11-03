@@ -52,10 +52,10 @@ export function containsQuery(text: string, query: string, exactTag = false): bo
 export const TAG_QUERY_END = String.raw`(?![\p{L}\p{N}_-])`;
 
 /**
- * Carbon's tag colours, in the order tags get them (neighbours far apart). A tag's colour is its number in the tag index
+ * Carbon's tag colours, in the order tags get them (neighbours far apart; no grey ones but the beige warm grey: grey is a new tag's). A tag's colour is its number in the tag index
  * (`TagIndex`) cycling through these: every tag the same colour everywhere, the tags around it others.
  */
-export const TAG_COLORS = ["blue", "magenta", "green", "purple", "teal", "red", "cyan", "warm-gray", "cool-gray"] as const;
+export const TAG_COLORS = ["blue", "magenta", "green", "purple", "teal", "red", "cyan", "warm-gray"] as const;
 /** A tag not in the index yet (being typed): grey, which no indexed tag gets. */
 export const NEW_TAG_COLOR = "gray";
 export type TagColor = (typeof TAG_COLORS)[number] | typeof NEW_TAG_COLOR;
