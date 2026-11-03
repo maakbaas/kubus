@@ -192,7 +192,7 @@ export interface Repository {
   search(query: string, collections: Collection[], spaceId: string, limit?: number): Promise<Item[]>;
   /**
    * Every tag in items' values (text, Markdown, AI text, lists, checklists; of every space, not deleted ones), lower case,
-   * with how many items use it: in the order they were first used (by the items' creation), for the tag index.
+   * with how many items use it: the tags' colours and the `#` dropdown (app/tagIndex.tsx).
    */
   listTags(): Promise<{ tag: string; count: number }[]>;
 

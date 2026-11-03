@@ -52,7 +52,7 @@ export function containsQuery(text: string, query: string, exactTag = false): bo
 export const TAG_QUERY_END = String.raw`(?![\p{L}\p{N}_-])`;
 
 /**
- * Carbon's tag colours, in the order tags get them (neighbours far apart; no grey ones but the beige warm grey: grey is a new tag's). A tag's colour is its number in the tag index
+ * Carbon's tag colours, in the order tags get them (neighbours far apart; no grey ones but the beige warm grey: grey is a new tag's). A tag's colour is its place among the tags in use A to Z
  * (`TagIndex`) cycling through these: every tag the same colour everywhere, the tags around it others.
  */
 export const TAG_COLORS = ["blue", "magenta", "green", "purple", "teal", "red", "cyan", "warm-gray"] as const;
@@ -60,36 +60,10 @@ export const TAG_COLORS = ["blue", "magenta", "green", "purple", "teal", "red", 
 export const NEW_TAG_COLOR = "gray";
 export type TagColor = (typeof TAG_COLORS)[number] | typeof NEW_TAG_COLOR;
 
-/**
- * The tag index: every tag (lower case, with its `#`) and its number, in the order tags were first seen. A synced setting
- * (`TAG_INDEX_SETTING`, docs/sync.md "Synced settings"): numbers are only added, never changed, so a tag keeps its colour
- * on every device; a tag no longer used keeps its number.
- */
+/** Each tag in use (lower case, with its `#`) and its place among them A to Z (app/tagIndex.tsx): its colour. */
 export type TagIndex = Record<string, number>;
-export const TAG_INDEX_SETTING = "tagIndex";
 
-/** The stored index as read (anything else left out: not an object, a number that isn't a whole number ≥ 0). */
-export function parseTagIndex(raw: unknown): TagIndex {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  const out: TagIndex = {};
-  for (const [tag, n] of Object.entries(raw)) if (isTag(tag) && Number.isInteger(n) && (n as number) >= 0) out[tag.toLowerCase()] = n as number;
-  return out;
-}
-
-/** The index with these tags (in this order) added after the others; the same object when it has them all. */
-export function withTags(index: TagIndex, tags: string[]): TagIndex {
-  let next = index;
-  let n = Math.max(-1, ...Object.values(index)) + 1;
-  for (const raw of tags) {
-    const tag = raw.toLowerCase();
-    if (tag in next) continue;
-    if (next === index) next = { ...index };
-    next[tag] = n++;
-  }
-  return next;
-}
-
-/** A tag's colour: its number's, cycling through TAG_COLORS; grey while it isn't in the index (being typed). */
+/** A tag's colour: its place's, cycling through TAG_COLORS; grey while it isn't in use yet (being typed, or only in a remote source). */
 export function tagColor(index: TagIndex, tag: string): TagColor {
   const n = index[tag.toLowerCase()];
   return n === undefined ? NEW_TAG_COLOR : TAG_COLORS[n % TAG_COLORS.length];
@@ -103,7 +77,7 @@ export const tagBeingTyped = (before: string): string | null => TAG_BEGIN.exec(b
 const MAX_TAGS = 30;
 
 /**
- * The tags in use that fit what is typed (`#boo`): those starting with it first (the most used first), then those
+ * The tags in use that fit what is typed (`#boo`), in their order (A to Z): those starting with it first, then those
  * containing it. `#` alone offers them all.
  */
 export function matchingTags(used: { tag: string; count: number }[], query: string): { tag: string; count: number }[] {
