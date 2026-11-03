@@ -55,8 +55,10 @@ export const TAG_QUERY_END = String.raw`(?![\p{L}\p{N}_-])`;
  * Carbon's tag colours, in the order tags get them (neighbours far apart). A tag's colour is its number in the tag index
  * (`TagIndex`) cycling through these: every tag the same colour everywhere, the tags around it others.
  */
-export const TAG_COLORS = ["blue", "magenta", "green", "purple", "teal", "red", "cyan", "warm-gray", "cool-gray", "gray"] as const;
-export type TagColor = (typeof TAG_COLORS)[number];
+export const TAG_COLORS = ["blue", "magenta", "green", "purple", "teal", "red", "cyan", "warm-gray", "cool-gray"] as const;
+/** A tag not in the index yet (being typed): grey, which no indexed tag gets. */
+export const NEW_TAG_COLOR = "gray";
+export type TagColor = (typeof TAG_COLORS)[number] | typeof NEW_TAG_COLOR;
 
 /**
  * The tag index: every tag (lower case, with its `#`) and its number, in the order tags were first seen. A synced setting
@@ -87,13 +89,10 @@ export function withTags(index: TagIndex, tags: string[]): TagIndex {
   return next;
 }
 
-/**
- * A tag's colour: its number's, cycling through TAG_COLORS. A tag not in the index yet (typed a moment ago) gets the
- * colour it will most likely get: the next number's.
- */
+/** A tag's colour: its number's, cycling through TAG_COLORS; grey while it isn't in the index (being typed). */
 export function tagColor(index: TagIndex, tag: string): TagColor {
-  const n = index[tag.toLowerCase()] ?? Math.max(-1, ...Object.values(index)) + 1;
-  return TAG_COLORS[n % TAG_COLORS.length];
+  const n = index[tag.toLowerCase()];
+  return n === undefined ? NEW_TAG_COLOR : TAG_COLORS[n % TAG_COLORS.length];
 }
 
 /** A tag being typed at the end of `before` (the text before the caret): `#` where a tag can start, then what a tag may hold. */

@@ -54,12 +54,13 @@ describe("the tag index", () => {
     expect(parseTagIndex([1])).toEqual({});
   });
 
-  it("gives a tag its number's colour, cycling; one not in the index the next number's", () => {
+  it("gives a tag its number's colour, cycling; one not in the index grey", () => {
     const index = { "#a": 0, "#b": 1, "#c": TAG_COLORS.length };
     expect(tagColor(index, "#A")).toBe(TAG_COLORS[0]);
     expect(tagColor(index, "#b")).toBe(TAG_COLORS[1]);
     expect(tagColor(index, "#c")).toBe(TAG_COLORS[0]);
-    expect(tagColor(index, "#new")).toBe(TAG_COLORS[(TAG_COLORS.length + 1) % TAG_COLORS.length]);
+    expect(tagColor(index, "#new")).toBe("gray");
+    expect(TAG_COLORS).not.toContain("gray");
   });
 
   it("finds the tag being typed and the tags that fit it", () => {

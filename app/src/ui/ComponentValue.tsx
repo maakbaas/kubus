@@ -4,7 +4,7 @@ import { useStore } from "../app/store";
 import { fileSrc, fileIdsIn } from "../domain/files";
 import { isComponentError, type ComponentOutput } from "../domain/components";
 import { BLOCK_HEIGHT, blockHeightCss, type AspectRatio } from "../domain/views";
-import { TAG_COLORS, TAG_SOURCE, tagColor, tagsIn, type TagIndex } from "../domain/tags";
+import { NEW_TAG_COLOR, TAG_COLORS, TAG_SOURCE, tagColor, tagsIn, type TagIndex } from "../domain/tags";
 import { useTags } from "../app/tagIndex";
 import { openModeOf } from "../workspace/Workspace";
 import { Highlight } from "./Highlight";
@@ -36,7 +36,7 @@ const FRAME_TOKENS = [
   "--cds-layer-01",
   "--cds-layer-accent-01",
   // Every tag colour's (domain/tags.ts TAG_COLORS).
-  ...TAG_COLORS.flatMap((c) => [`--cds-tag-background-${c}`, `--cds-tag-color-${c}`, `--cds-tag-hover-${c}`]),
+  ...[...TAG_COLORS, NEW_TAG_COLOR].flatMap((c) => [`--cds-tag-background-${c}`, `--cds-tag-color-${c}`, `--cds-tag-hover-${c}`]),
   "--cds-code-02-font-family",
   "--font-sans",
 ];
@@ -83,7 +83,7 @@ html.fonts-pending body{visibility:hidden;}
 :where(img,svg,canvas,video){max-width:100%;}
 :where(.kubus-tag){padding:0.0625rem 0.5rem;-webkit-box-decoration-break:clone;box-decoration-break:clone;border-radius:1rem;background:var(--tag-bg);color:var(--tag-fg);font-size:0.75rem;line-height:1rem;letter-spacing:0.32px;cursor:pointer;}
 :where(.kubus-tag:hover){background:var(--tag-hover);}
-${TAG_COLORS.map((c) => `:where(.kubus-tag[data-color="${c}"]){--tag-bg:var(--cds-tag-background-${c});--tag-fg:var(--cds-tag-color-${c});--tag-hover:var(--cds-tag-hover-${c});}`).join("\n")}`;
+${[...TAG_COLORS, NEW_TAG_COLOR].map((c) => `:where(.kubus-tag[data-color="${c}"]){--tag-bg:var(--cds-tag-background-${c});--tag-fg:var(--cds-tag-color-${c});--tag-hover:var(--cds-tag-hover-${c});}`).join("\n")}`;
 }
 
 /** The colours of the tags in a frame's HTML (the tag index), by tag in lower case. */
@@ -181,7 +181,7 @@ ${frameBaseStyles(tokens, dark)}
       if (i % 2 === 0) return document.createTextNode(part);
       const tag = document.createElement("span");
       tag.className = "kubus-tag";
-      tag.dataset.color = tagColors[part.toLowerCase()] ?? "blue";
+      tag.dataset.color = tagColors[part.toLowerCase()] ?? "gray";
       tag.setAttribute("role", "link");
       tag.tabIndex = 0;
       tag.title = "Search for " + part;

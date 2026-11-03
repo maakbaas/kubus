@@ -1889,6 +1889,15 @@ img[data-lightbox] {
 .link-target-list--compact .search-hit__title .cds--tag__label {
   white-space: nowrap;
 }
+/* The tag pickers' list has no heading (its name stays for screen readers): only the tags. */
+.tag-list .cds--contained-list__header {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 /* A tag the tag pickers offer (TagPicker): the tag in its colour, never cut off. */
 .tag-option {
   display: flex;

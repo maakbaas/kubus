@@ -87,7 +87,7 @@ export function TagPopover({ style, fixed, tags, active, onPick }: { style: CSSP
       <Popover autoAlign open align="bottom-start" className="md-link-popover__popover">
         <span className="md-link-popover__anchor" />
         <PopoverContent>
-          <div ref={list} className="link-target-list link-target-list--compact" onMouseDown={(e) => e.preventDefault()}>
+          <div ref={list} className="link-target-list link-target-list--compact tag-list" onMouseDown={(e) => e.preventDefault()}>
             <ContainedList label="Tags" kind="on-page" size="sm">
               {tags.map((t, i) => (
                 <ContainedListItem key={t.tag} onClick={() => onPick(t.tag)} data-active={active === i} aria-current={active === i ? "true" : undefined}>
