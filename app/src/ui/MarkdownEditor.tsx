@@ -350,6 +350,16 @@ const codeBlockLanguage = $prose(
   () =>
     new Plugin({
       props: {
+        // The block the caret is in is marked (styles.css shows its select there): focus stays on the editor's root, so
+        // `:focus-within` never matches a block being typed in, and a touch screen has no hover.
+        decorations: (state) => {
+          const { $from } = state.selection;
+          for (let d = $from.depth; d > 0; d--) {
+            if ($from.node(d).type.name !== "code_block") continue;
+            return DecorationSet.create(state.doc, [Decoration.node($from.before(d), $from.after(d), { class: "md-code-block--active" })]);
+          }
+          return null;
+        },
         nodeViews: {
           code_block: (node, view, getPos) => {
             const dom = document.createElement("div");

@@ -155,7 +155,10 @@ Extension points are registries, not special cases in pages:
   it carries over when the type is switched. The types: `table` (title column links to the item; string,
   number, date(time) and item cells edit in place via the shared `ui/FieldEditor` (the view’s "Fields are editable" in View settings, `ViewState.editable`, a view change like its filter; an item view’s own for blocks on item pages; it also gives the add row; checkboxes toggle either way, in every block type); the last row is empty but for a "+" in the title column, which turns it into an add row
   with inputs per editable column (text aligned with the column); header sorting; grouping = one table per
-  group in a collapsible Carbon Accordion; columns as wide as their content on one line while
+  group in a collapsible Carbon Accordion (Block settings' "Show empty groups", `TableOptions.emptyGroups`: also the groups
+  without items, to add to, such as a to-do list's "Not checked" when all are checked: `withEmptyGroups` in `domain/query.ts`,
+  every group the kind can make, `allGroups`, and every group of the collection's unfiltered items; not for a remote
+  collection); the add row's Save and Close have room in the actions column whatever the other rows' buttons; columns as wide as their content on one line while
   there's room, the actions column widened by `FillTable` so the table spans the pane; an editing
   cell overlays its input on the invisibly kept value so the column never resizes; columns are
   selectable per view, the title column too (rows then get an open button); the Fields popover

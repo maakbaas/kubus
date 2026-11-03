@@ -99,6 +99,8 @@ interface KindRules {
   groupKeys?(field: FieldDef, value: FieldValue, ctx: QueryContext, by?: GroupDate): { key: string; label: string }[];
   /** The value a new item gets to land in the group with this (non-empty) key; omit when none does. */
   groupValue?(key: string): FieldValue;
+  /** Every group a field of this kind can make, whether any item is in it or not (a checkbox: both); omit when open-ended. */
+  allGroups?(field: FieldDef): { key: string; label: string }[];
   /**
    * The value a new item needs to pass this rule of a filter it is added under (`filterPreset`), given what earlier rules
    * set (`current`); undefined: none is needed or it can't be told. Omit for kinds no rule presets.
@@ -183,6 +185,7 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     sortKey: (_, v) => (v === true ? 1 : 0),
     groupKeys: (_, v) => (v === true ? single("yes", "Checked") : single("no", "Not checked")),
     groupValue: (key) => key === "yes",
+    allGroups: () => [...single("yes", "Checked"), ...single("no", "Not checked")],
   },
   image: {
     operators: EMPTY_OPS,
@@ -615,4 +618,26 @@ export function groupItems(collection: Collection, sorted: Item[], query: ViewQu
   const isDate = groupField.kind === "date" || groupField.kind === "datetime";
   const ordered = [...groups.values()].sort((a, b) => compareGroups({ ...a, count: a.items.length }, { ...b, count: b.items.length }, order, isDate));
   return ordered;
+}
+
+/**
+ * A grouped result with its empty groups too (a table's "Show empty groups": a to-do list keeps its "Not checked" group,
+ * to add to, when everything is checked): every group the field's kind can make (`allGroups`) and every group some item of
+ * `all` (the collection's items, unfiltered) is in, without items, in the query's order of groups. The "(empty)" group
+ * only when it has items. A result not grouped by a field is returned as it is.
+ */
+export function withEmptyGroups(collection: Collection, result: QueryResult, all: Item[], query: ViewQuery, ctx: QueryContext): QueryResult {
+  const field = query.groupBy ? pickableFields(collection).find((f) => f.id === query.groupBy) : undefined;
+  const rules = field && KIND_RULES[field.kind];
+  if (!field || !rules?.groupKeys) return result;
+  const shown = new Set(result.groups.map((g) => g.key));
+  const extra = new Map<string, ItemGroup>();
+  const add = (key: string, label: string) => key !== "" && !shown.has(key) && !extra.has(key) && extra.set(key, { key, label, items: [] });
+  for (const g of rules.allGroups?.(field) ?? []) add(g.key, g.label);
+  for (const g of groupItems(collection, all, { ...query, groupOrder: "asc" }, ctx)) add(g.key, g.label);
+  if (extra.size === 0) return result;
+  const order = query.groupOrder ?? "asc";
+  const isDate = field.kind === "date" || field.kind === "datetime";
+  const groups = [...result.groups, ...extra.values()].sort((a, b) => compareGroups({ ...a, count: a.items.length }, { ...b, count: b.items.length }, order, isDate));
+  return { ...result, groups };
 }

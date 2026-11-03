@@ -3,6 +3,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -35,7 +36,9 @@ import { cellEditStart, type EditStart } from "../ui/editStart";
 import { itemViewOf, FULL_LAYOUT, isRestricted } from "../domain/fieldLayout";
 import { isReadOnly } from "../domain/sources";
 import { entriesEditable, isEntryPlace } from "../domain/listEntries";
-import { isGrouped } from "../domain/query";
+import { isGrouped, withEmptyGroups } from "../domain/query";
+import { isRemote } from "../domain/sources";
+import { refLabelOf } from "../ui/useReferenceOptions";
 import { FieldEditor } from "../ui/FieldEditor";
 import { FieldInput, parseInputValue, toInputValue, type InputValue } from "../ui/FieldInput";
 import { Highlight } from "../ui/Highlight";
@@ -52,6 +55,8 @@ export interface TableOptions {
   titleLink: boolean;
   /** How tall images are in their cells, in rem (IMAGE_HEIGHT: a row's own 2rem up to 8rem); rows grow with them. */
   imageHeight: number;
+  /** Grouped, every group is shown, also those without items (to add to: a to-do list's "Not checked"; withEmptyGroups). */
+  emptyGroups: boolean;
 }
 
 /** An image's height in a table cell, in rem: from a row's standard height up. */
@@ -571,7 +576,12 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
 });
 
 export function TableView(props: BlockProps<TableOptions>) {
-  const { collection, result, fields: shown, options, editable, refs, search, actions, collapsedGroups, onGroupCollapse } = props;
+  const { collection, fields: shown, options, editable, refs, search, actions, collapsedGroups, onGroupCollapse } = props;
+  // Its empty groups too, where asked (a remote collection's groups are its source's: not made up here).
+  const result = useMemo(
+    () => (options.emptyGroups && !isRemote(collection) ? withEmptyGroups(collection, props.result, props.all, props.query, { refLabel: refLabelOf(refs, "(deleted)") }) : props.result),
+    [options.emptyGroups, collection, props.result, props.all, props.query, refs],
+  );
   // Without the title link the title is an ordinary column (and rows get an open button). A list field's entries edited
   // on their item's page (domain/listEntries.ts entriesEditable): their text is edited, not a link to the page shown.
   const entriesEdited = editable && !!collection.listOf && entriesEditable(collection);
@@ -582,7 +592,7 @@ export function TableView(props: BlockProps<TableOptions>) {
   const [adding, setAdding] = useState<string | null>(null);
   const groupsBox = useRef<HTMLDivElement>(null);
   const grouped = isGrouped(result);
-  useSharedColumns(groupsBox, grouped && result.total > 0);
+  useSharedColumns(groupsBox, grouped && result.groups.length > 0);
 
   const head = (
     <TableHead>
@@ -657,11 +667,13 @@ export function TableView(props: BlockProps<TableOptions>) {
             )}
           </TableCell>
         ))}
-        <TableCell className="row-actions" />
+        {/* Room for the add row's Save and Close, laid over this column when it opens: rows with fewer actions made
+            the column too narrow, and the buttons crossed the column before it. */}
+        <TableCell className="row-actions">{inlineAdd && <span className="table-add-row__room" aria-hidden="true" />}</TableCell>
       </TableRow>
     ));
 
-  if (!grouped || result.total === 0) {
+  if (!grouped || (result.total === 0 && result.groups.length < 2)) {
     return (
       <FillTable style={imageStyle(options)}>
         <Table size="sm">
@@ -708,6 +720,12 @@ function TableOptionsEditor({ collection, options, onChange }: BlockOptionsProps
           checked={options.titleLink}
           onChange={(_, { checked }) => onChange({ ...options, titleLink: checked })}
         />
+        <Checkbox
+          id={`${uid}-table-empty-groups`}
+          labelText="Show empty groups"
+          checked={options.emptyGroups}
+          onChange={(_, { checked }) => onChange({ ...options, emptyGroups: checked })}
+        />
       </div>
       {/* Only where there are images to size (as the cards' cover is offered where there are covers). */}
       {hasImages(collection, components) && (
@@ -731,13 +749,14 @@ export const tableView = defineBlockType<TableOptions>({
   kind: "table",
   label: "Table",
   icon: TableIcon,
-  defaultOptions: () => ({ titleLink: true, imageHeight: IMAGE_HEIGHT.min }),
+  defaultOptions: () => ({ titleLink: true, imageHeight: IMAGE_HEIGHT.min, emptyGroups: false }),
   normalizeOptions(raw) {
     const o = (raw ?? {}) as Partial<TableOptions>;
     const height = typeof o.imageHeight === "number" && Number.isFinite(o.imageHeight) ? o.imageHeight : IMAGE_HEIGHT.min;
     // (Older versions also stored `stackNarrow`: restacking rows as cards when narrow, now gone.)
     return {
       titleLink: o.titleLink !== false,
+      emptyGroups: o.emptyGroups === true,
       imageHeight: Math.min(IMAGE_HEIGHT.max, Math.max(IMAGE_HEIGHT.min, Math.round(height / IMAGE_HEIGHT.step) * IMAGE_HEIGHT.step)),
     };
   },

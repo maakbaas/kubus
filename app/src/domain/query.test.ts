@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FieldDef, Item, Collection } from "./model";
-import { applyQuery, defaultQuery, filterCodeValue, filterPreset, filterValueProblem, naturalCompare, PAGE_ITEM, resolveFilterValues, timeSort, type FilterRule, type QueryContext } from "./query";
+import { applyQuery, defaultQuery, filterCodeValue, filterPreset, filterValueProblem, naturalCompare, PAGE_ITEM, resolveFilterValues, timeSort, withEmptyGroups, type FilterRule, type QueryContext } from "./query";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], position: number): FieldDef => ({
   id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position,
@@ -193,5 +193,25 @@ describe("timeSort", () => {
 
   it("is null without one", () => {
     expect(timeSort(collection)).toBeNull();
+  });
+});
+
+describe("withEmptyGroups", () => {
+  const withDone: Collection = { ...collection, fields: [...collection.fields, field("done", "Done", "checkbox", 2)] };
+  const todo = (id: string, title: string, done: boolean): Item => ({ ...book(id, title, null), values: { title, done } });
+  const keys = (r: ReturnType<typeof applyQuery>) => r.groups.map((g) => `${g.key}:${g.items.length}`);
+
+  it("keeps a checkbox's group without items, and groups of items filtered out, in the groups' order", () => {
+    const all = [todo("1", "A", true), todo("2", "B", true)];
+    const byDone = { ...defaultQuery(), groupBy: "done" };
+    expect(keys(withEmptyGroups(withDone, applyQuery(withDone, all, byDone, ctx), all, byDone, ctx))).toEqual(["yes:2", "no:0"]);
+    const byPages = { ...defaultQuery(), groupBy: "pages", filters: [{ id: "f", fieldId: "pages", operator: "gt" as const, value: "200" }] };
+    // Bravo (120) is filtered out but keeps its group; Alpha has no value: no "(empty)" group made up.
+    expect(keys(withEmptyGroups(collection, applyQuery(collection, books, byPages, ctx), books, byPages, ctx))).toEqual(["120:0", "300:1"]);
+  });
+
+  it("leaves a result not grouped as it is", () => {
+    const r = applyQuery(collection, books, defaultQuery(), ctx);
+    expect(withEmptyGroups(collection, r, books, defaultQuery(), ctx)).toBe(r);
   });
 });

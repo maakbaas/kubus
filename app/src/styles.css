@@ -1651,18 +1651,21 @@ img[data-lightbox] {
   opacity: 0;
   transition: opacity 70ms;
 }
+/* Shown while hovered, and in the block being edited: the caret in it (`--active`, MarkdownEditor: focus stays on the
+   editor's root, so `:focus-within` doesn't tell) or the select itself in use. */
 .md-code-block:hover .md-code-block__language,
+.ProseMirror:focus .md-code-block--active .md-code-block__language,
 .md-code-block:focus-within .md-code-block__language {
   opacity: 1;
 }
 /* A touch screen has no hover: the select shows in the block being edited, above its code (laid over it, it covered
    the first line's end on a phone's narrow block). */
 @media (hover: none) {
-  .md-code-block:focus-within pre {
-    padding-top: calc(2 * var(--inset-top, 0px) + 2rem);
-  }
-  .md-code-block:focus-within {
+  :is(.ProseMirror:focus .md-code-block--active, .md-code-block:focus-within) {
     --inset-top: calc((2 * 0.75rem + var(--cds-code-02-line-height) * var(--cds-code-02-font-size) - 2rem) / 2);
+  }
+  :is(.ProseMirror:focus .md-code-block--active, .md-code-block:focus-within) pre {
+    padding-top: calc(2 * var(--inset-top, 0px) + 2rem);
   }
 }
 /* Carbon's inline select is transparent and full width (made for toolbars); over code it
@@ -1678,10 +1681,10 @@ img[data-lightbox] {
 }
 .md-editor__content hr { border: 0; border-top: 1px solid var(--cds-border-subtle); }
 .md-editor__content table { border-collapse: collapse; max-inline-size: 100%; }
-/* While editing too, a table is as wide as its content, like in the view (ProseMirror's table
-   styles make it full width with fixed columns). */
+/* While editing too, a table is as wide as the text, like in the view, its columns sized by their content (ProseMirror's
+   table styles make them fixed). */
 .md-editor .ProseMirror table {
-  inline-size: auto;
+  inline-size: 100%;
   table-layout: auto;
 }
 /* ProseMirror's own `word-wrap: break-word` (loaded after this file) beats .md-editor__content's
@@ -1753,13 +1756,14 @@ img[data-lightbox] {
 .md-view :is(td, th):empty::before { content: "\200b"; }
 /* Read-only, a cell wraps between words only: with `anywhere` (the editor's) every cell may shrink to one letter,
    and a narrow screen squeezed a short column ("$item") down to a letter a line. A table wider than the room
-   then scrolls sideways inside itself (as a block; its rows still lay out as a table), never the page. */
+   then scrolls sideways in its box (MarkdownView's `.md-view__table`), never the page; else it is as wide as the text. */
 .md-view :is(td, th) {
   overflow-wrap: break-word;
 }
 .md-view table {
-  display: block;
-  inline-size: max-content;
+  inline-size: 100%;
+}
+.md-view__table {
   max-inline-size: 100%;
   overflow-x: auto;
 }
@@ -2928,6 +2932,11 @@ img[data-lightbox] {
   flex-direction: column;
   justify-content: center;
 }
+/* The actions column keeps room for the add row's two buttons (TableView), so they never reach over the column before. */
+.table-add-row__room {
+  display: block;
+  inline-size: calc(2 * 2rem);
+}
 /* Right-aligned with the trash icons above (inside the cell's 1rem end padding). */
 .add-cell--actions {
   inset: 0 var(--cds-spacing-05) 0 auto;
@@ -3410,6 +3419,11 @@ img[data-lightbox] {
    and a stat, meter or compact chart (the row is at least as tall) never scroll.
    Its scroll box reaches 1rem into the room left of it, so what a block hangs there (a Markdown block's box, as on the
    page) isn't cut off: the padding puts it back. */
+/* Side by side a block's content is measured for its row (scrollHeight): its first and last child's margins stay inside
+   it, else a block of only a loading bar (its margin above) was measured 1rem short and cut off. */
+.block-row--side .block__content {
+  display: flow-root;
+}
 .block-row--side.block-row--fit .block-cell > .block > .block__body {
   block-size: var(--row-body);
   overflow: auto;

@@ -255,6 +255,12 @@ const common: Components = {
     ),
   img: ({ src, alt }) => <StoredImage src={typeof src === "string" ? src : undefined} alt={alt} />,
   input: ({ checked }) => <TaskBox checked={checked} />,
+  // As wide as the text; a wider one scrolls sideways in its box, never the page (styles.css .md-view table).
+  table: ({ node: _node, ...props }) => (
+    <div className="md-view__table">
+      <table {...props} />
+    </div>
+  ),
 };
 
 const excerptComponents: Components = {
