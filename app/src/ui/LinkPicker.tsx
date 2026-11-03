@@ -12,8 +12,10 @@ export const LINK_KEY = "kubus-link-key";
 /** Set on the editor's box (`data-link-picker`) while the picker has options: the editor then hands it ↑ ↓ Enter Tab Escape. */
 export const LINK_PICKER_OPEN = "open";
 
-/** A local link being typed: `[text](query` (text may be empty), or `#/query` (text empty). */
+/** A local link being typed: `[text](query` (text may be empty), or `#/query` (text empty); or a tag (`kind`). */
 export interface LinkTrigger {
+  /** A tag being typed (`#books`; TagPicker), not a link. */
+  kind?: "tag";
   /** Where it starts and where the caret is, in the document. */
   from: number;
   to: number;

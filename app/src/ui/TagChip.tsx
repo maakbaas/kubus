@@ -1,15 +1,15 @@
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useInRouterContext } from "react-router";
 import { Tag } from "@carbon/react";
-import { tagSearchPath } from "../domain/tags";
+import { tagSearchPath, type TagColor } from "../domain/tags";
+import { useTagColor } from "../app/tagIndex";
 import { openModeOf, useOpenRelated, type OpenMode } from "../workspace/Workspace";
 
 /**
- * Carbon's look for a tag in text (domain/tags.ts): the same classes are put on tags in the
- * Markdown editor (decorations) and HTML frames, which can't render this component.
+ * Carbon's look for a tag in text (domain/tags.ts), in the tag's colour (the tag index: `useTagColor`): the same classes
+ * are put on tags in the Markdown editor (decorations), which can't render this component.
  */
-export const TAG_TYPE = "blue";
-export const TAG_CLASSES = `cds--tag cds--tag--sm cds--layout--size-sm cds--tag--${TAG_TYPE} inline-tag`;
+export const tagClasses = (color: TagColor) => `cds--tag cds--tag--sm cds--layout--size-sm cds--tag--${color} inline-tag`;
 
 /**
  * A `#tag` in text, rendered as a Carbon tag: clicking it opens the search for it (here,
@@ -23,7 +23,7 @@ export function TagChip({ tag, children }: { tag: string; children?: ReactNode }
 
 function InlineTag({ tag, children, ...props }: { tag: string; children?: ReactNode } & Record<string, unknown>) {
   return (
-    <Tag as="span" size="sm" type={TAG_TYPE} className="inline-tag" title={tag} {...props}>
+    <Tag as="span" size="sm" type={useTagColor(tag)} className="inline-tag" title={tag} {...props}>
       {children ?? tag}
     </Tag>
   );

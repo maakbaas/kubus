@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { markdownPreview, markdownPreviewParts } from "./fieldKinds";
 import { markdownExcerpt } from "./markdownExcerpt";
-import { containsQuery, isTag, splitTags, tagSearchPath, tagsIn } from "./tags";
+import { containsQuery, isTag, matchingTags, parseTagIndex, splitTags, TAG_COLORS, tagBeingTyped, tagColor, tagSearchPath, tagsIn, withTags } from "./tags";
 
 describe("tags", () => {
   it("finds tags where a word doesn't continue", () => {
@@ -41,5 +41,35 @@ describe("tags", () => {
     // Inline code is its own part in a preview: shown without tags, as rendered Markdown does.
     expect(markdownPreviewParts("a `#x` b")).toEqual(["a ", { text: "#x", href: "" }, " b"]);
     expect(markdownExcerpt("Para\n\n\\#books here\n\n#bookshelf", "#books", true).markdown).toBe("\\#books here");
+  });
+});
+
+describe("the tag index", () => {
+  it("adds new tags after the others, never renumbering, and reads only what is valid", () => {
+    const index = withTags({}, ["#Books", "#todo", "#books"]);
+    expect(index).toEqual({ "#books": 0, "#todo": 1 });
+    expect(withTags(index, ["#todo"])).toBe(index);
+    expect(withTags({ "#a": 4 }, ["#b"])).toEqual({ "#a": 4, "#b": 5 });
+    expect(parseTagIndex({ "#Books": 2, "#x": -1, nope: 3, "#y": 1.5 })).toEqual({ "#books": 2 });
+    expect(parseTagIndex([1])).toEqual({});
+  });
+
+  it("gives a tag its number's colour, cycling; one not in the index the next number's", () => {
+    const index = { "#a": 0, "#b": 1, "#c": TAG_COLORS.length };
+    expect(tagColor(index, "#A")).toBe(TAG_COLORS[0]);
+    expect(tagColor(index, "#b")).toBe(TAG_COLORS[1]);
+    expect(tagColor(index, "#c")).toBe(TAG_COLORS[0]);
+    expect(tagColor(index, "#new")).toBe(TAG_COLORS[(TAG_COLORS.length + 1) % TAG_COLORS.length]);
+  });
+
+  it("finds the tag being typed and the tags that fit it", () => {
+    expect(tagBeingTyped("read #boo")).toBe("#boo");
+    expect(tagBeingTyped("#")).toBe("#");
+    expect(tagBeingTyped("a#b")).toBeNull();
+    expect(tagBeingTyped("##")).toBeNull();
+    expect(tagBeingTyped("#boo ")).toBeNull();
+    const used = [{ tag: "#ebooks", count: 5 }, { tag: "#books", count: 3 }, { tag: "#todo", count: 1 }];
+    expect(matchingTags(used, "#boo").map((t) => t.tag)).toEqual(["#books", "#ebooks"]);
+    expect(matchingTags(used, "#").length).toBe(3);
   });
 });

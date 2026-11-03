@@ -184,7 +184,9 @@ are the synced table `settings` (one row per key, its value JSON; `Repository.ge
 `settings`), since `SYNC_VERSION` 4: local first, they work without a server and sync like any row (newest
 `updated_at` wins). `app/settings.ts` holds them for the UI, with a copy on the device (`kubus.theme`, `kubus.mapStyle`)
 for the first paint before the database opens. The Home page's layout is one too (key `home`: its blocks shown, their order,
-the collapsed ones; `domain/home.ts`, `app/homeLayout.ts`). A database without a map style yet starts from the one in use: the
+the collapsed ones; `domain/home.ts`, `app/homeLayout.ts`). So is the tag index (key `tagIndex`: every tag and its number, which gives its colour;
+`domain/tags.ts`, `app/tagIndex.tsx`): numbers are only added, so a tag has the same colour on every device; two devices adding
+tags at once keep the newest write, and the other's tags are added again at its next look (a new number, a colour that changes once). A database without a map style yet starts from the one in use: the
 server's `map` setting when connected, else the device's own copy. Nothing secret is ever a setting here: a language
 model's key stays where it is set (Settings → AI: the device's own in `kubus.ai`, the server's in `server_settings`).
 

@@ -28,6 +28,7 @@ import type { DataChange, NewItem, Repository } from "../repository";
 import { SyncEngine } from "../sync/SyncEngine";
 import type { SyncEnvironment } from "../sync/environment";
 import { acceptedStatement, editedStatement, generatedStatement } from "./generated";
+import { tagsIn } from "../../domain/tags";
 import { decodeAiInput } from "../../domain/ai";
 import { draftProblem } from "../../domain/collectionDraft";
 import { firstShownFields, isRemote, sourcePeriod } from "../../domain/sources";
@@ -566,6 +567,26 @@ export class SqliteRepository implements Repository {
           AND (?2 IS NULL OR o.id IN (SELECT value FROM json_each(?2)))`,
       [collection.id, itemIds ? JSON.stringify(itemIds) : null],
     );
+  }
+
+  async listTags(): Promise<{ tag: string; count: number }[]> {
+    // instr() narrows to the values with a "#" at all; the tags themselves are found as everywhere (domain/tags.ts).
+    const rows = await this.db.select<{ id: string; text: string | null; json: string | null }>(
+      `SELECT o.id AS id, fv.value_text AS text, fv.value_json AS json
+         FROM field_values fv JOIN items o ON o.id = fv.item_id
+        WHERE o.deleted_at IS NULL AND (instr(fv.value_text, '#') > 0 OR instr(fv.value_json, '#') > 0)
+        ORDER BY o.created_at, o.id`,
+      [],
+    );
+    const items = new Map<string, Set<string>>();
+    for (const r of rows) {
+      for (const tag of tagsIn(`${r.text ?? ""} ${r.json ?? ""}`)) {
+        const users = items.get(tag) ?? new Set<string>();
+        users.add(r.id);
+        items.set(tag, users);
+      }
+    }
+    return [...items].map(([tag, users]) => ({ tag, count: users.size }));
   }
 
   async listBacklinks(collectionId: string, itemId: string, spaceId: string): Promise<Backlink[]> {

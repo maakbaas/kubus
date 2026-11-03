@@ -196,6 +196,8 @@ function AddRow({ collection, columns, refs, preset, groupBy, bare, create, onCl
         </TableCell>
       ))}
       <TableCell className="row-actions">
+        {/* The idle row's room for these buttons, kept: the columns don't move when the row opens. */}
+        <span className="table-add-row__room" aria-hidden="true" />
         <span className="add-cell add-cell--actions">
           <IconButton autoAlign label="Save" kind="ghost" size="sm" align="top-end" disabled={busy} onClick={submit}>
             <Save />

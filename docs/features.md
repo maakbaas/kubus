@@ -537,11 +537,19 @@ What the app does, feature by feature (read the part you work on).
   titles or search results.
 - **Tags** (`domain/tags.ts`): `#name` anywhere in text (letters, digits, `_`, `-`, `/` for nested
   `#books/to-read`; at least one letter; not inside a word, `##`, `&#1;` or a URL). Not Markdown syntax: a value stays
-  plain GFM and a tag is text in it. Every place that shows text renders it as a Carbon tag (blue, shaped like the collection pills in search; hovering it shows no hover on the link or result it sits in; `ui/TagChip.tsx`):
+  plain GFM and a tag is text in it. Every place that shows text renders it as a Carbon tag (shaped like the collection pills in search; hovering it shows no hover on the link or result it sits in; `ui/TagChip.tsx`)
+  in the tag's colour: the tag index (`app/tagIndex.tsx`, a synced setting, docs/sync.md "Synced settings") numbers every tag in
+  the order first used (`Repository.listTags`: the tags in items' values, read at start and a moment after items change), and the
+  number cycles through Carbon's tag colours (`TAG_COLORS`), so a tag looks the same everywhere and the tags around it differ:
   plain text through `Highlight` (cells, cards, titles, lists, checklists, AI text, component text, group titles,
   search results), rendered Markdown (`rehypeTags` in `MarkdownView`; not in code or a link's text), the Markdown
   editor (decorations: the text stays as typed), HTML in its frame (the frame's script wraps the tags in the HTML as
   written, not what its scripts draw, and reports clicks). Inline, so view and editor have the same geometry.
+  Typing `#` and a tag's start offers the tags in use (the most used first, those starting with what is typed before those
+  containing it; `matchingTags`), each in its colour, at the caret: in the Markdown editor (`ui/TagPicker.tsx`,
+  beside the link picker) and in every plain text field, cells, item pages, list entries, the add row, the search box
+  (`ui/TextTagComplete.tsx`, one for the app, watching what is typed; not a number, date, picker or code field, nor one
+  marked `data-no-tags`); ↑ ↓ move, Enter or Tab choose (before the field's own Enter), Escape closes it.
   Clicking one opens `/search?q=%23name&tag=1` (Ctrl/Cmd beside, middle click a new tab): exactly that tag and the
   tags nested in it; the same text typed in the search box is a text search (`#books` also finds `#bookshelf`).
 - **Global search** (`/search?q=`, a bar over the tab strip opened by the search icon, `ui/SearchBar.tsx`; the icon sits in the right-most pane's strip but doesn't activate that pane, so the results open in the pane that was active when it was clicked): the shown space's collections

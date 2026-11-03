@@ -399,3 +399,20 @@ describe("settings", () => {
     expect(changes.filter((c) => c.scope === "settings")).toHaveLength(3);
   });
 });
+
+describe("listTags", () => {
+  it("lists the tags of items' values in the order first used, with how many items have each; not deleted items'", async () => {
+    const note = await collection("Note", [field("Title"), field("Body", "markdown"), field("Labels", "string_list")]);
+    const [title, body, labels] = note.fields.map((f) => f.id);
+    await repo.createItem(note, { [title]: "First #Todo", [body]: "about #todo again" }, "default");
+    await new Promise((r) => setTimeout(r, 5)); // created later
+    await repo.createItem(note, { [title]: "Second", [labels]: ["#books", "plain"] }, "work");
+    await repo.createItem(note, { [title]: "Third", [body]: "#books #TODO" }, "default");
+    const gone = await repo.createItem(note, { [title]: "Gone #trash" }, "default");
+    await repo.deleteItem(gone);
+    expect(await repo.listTags()).toEqual([
+      { tag: "#todo", count: 2 },
+      { tag: "#books", count: 2 },
+    ]);
+  });
+});

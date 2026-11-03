@@ -13,6 +13,8 @@ import { AiBackfillRunner } from "./AiBackfillRunner";
 import { NavFooter, NavTree } from "./NavTree";
 import { StoreProvider, useStore } from "./store";
 import { DisplaySettingsSync } from "./settings";
+import { TagIndexProvider } from "./tagIndex";
+import { TextTagComplete } from "../ui/TextTagComplete";
 
 export function App() {
   return (
@@ -28,7 +30,10 @@ export function App() {
         </main>
       )}
     >
-      <SpaceWorkspace />
+      <TagIndexProvider>
+        <SpaceWorkspace />
+        <TextTagComplete />
+      </TagIndexProvider>
       <Lightbox />
       <AiBackfillRunner />
       <DisplaySettingsSync />

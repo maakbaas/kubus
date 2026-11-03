@@ -31,13 +31,15 @@ import type { Repository } from "../data";
 import { fileIdFromSrc, fileSrc } from "../domain/files";
 import { useLinks } from "../app/useLinks";
 import { parseNameLink } from "../domain/links";
-import { tagPattern, tagSearchPath } from "../domain/tags";
+import { tagBeingTyped, tagColor, tagPattern, tagSearchPath, type TagIndex } from "../domain/tags";
 import { openModeOf, type OpenMode } from "../workspace/Workspace";
 import type { EditStart } from "./editStart";
 import { cachedFileUrl, fileUrl, IMAGE_TYPES, storeImageFile } from "./images";
 import { errorMessage } from "./useConfirm";
-import { TAG_CLASSES } from "./TagChip";
+import { tagClasses } from "./TagChip";
+import { useTags } from "../app/tagIndex";
 import { LINK_KEY, LINK_PICKER_OPEN, LINK_TRIGGER, LinkPicker, type LinkTrigger } from "./LinkPicker";
+import { TagPicker } from "./TagPicker";
 import { LinkTargetInput } from "./LinkTargetInput";
 import { markdownMath } from "./markdownMath";
 import { caretInText, markdownKeys } from "./markdownKeys";
@@ -132,7 +134,10 @@ function linkBeingTyped(view: EditorView): Omit<LinkTrigger, "caret"> | null {
   const link = LINK_BEGIN.exec(before);
   if (link && before[link.index - 1] !== "!") return { from: $from.pos - link[0].length, to: $from.pos, text: link[1], query: link[2] };
   const hash = LINK_BEGIN_HASH.exec(before);
-  return hash ? { from: $from.pos - hash[1].length, to: $from.pos, text: "", query: hash[1] } : null;
+  if (hash) return { from: $from.pos - hash[1].length, to: $from.pos, text: "", query: hash[1] };
+  // A tag begun (`#`, then what a tag may hold): TagPicker offers the tags in use.
+  const tag = tagBeingTyped(before);
+  return tag ? { kind: "tag", from: $from.pos - tag.length, to: $from.pos, text: "", query: tag } : null;
 }
 
 /**
@@ -205,8 +210,8 @@ const linkClick = $prose(
     }),
 );
 
-/** The `#tags` of a document (domain/tags.ts) as decorations: not in code or a link's text. */
-function tagDecorations(doc: ProseNode): DecorationSet {
+/** The `#tags` of a document (domain/tags.ts) as decorations, each in its colour: not in code or a link's text. */
+function tagDecorations(doc: ProseNode, index: TagIndex): DecorationSet {
   const decorations: Decoration[] = [];
   doc.descendants((node, pos) => {
     if (node.type.spec.code) return false;
@@ -219,7 +224,7 @@ function tagDecorations(doc: ProseNode): DecorationSet {
     });
     for (const m of text.matchAll(tagPattern())) {
       const from = pos + 1 + m.index;
-      decorations.push(Decoration.inline(from, from + m[0].length, { class: `${TAG_CLASSES} inline-tag--editor`, "data-tag": m[0] }));
+      decorations.push(Decoration.inline(from, from + m[0].length, { class: `${tagClasses(tagColor(index, m[0]))} inline-tag--editor`, "data-tag": m[0] }));
     }
     return false;
   });
@@ -230,12 +235,15 @@ function tagDecorations(doc: ProseNode): DecorationSet {
  * `#tags` look like tags here too, as in all rendered text: decorations only, the text stays as
  * typed (a tag is not Markdown syntax). A plain click on one searches for it, as a link opens.
  */
-const tags = $prose(
+/** A transaction's meta: the tag index changed (the colours are drawn again). */
+const TAG_INDEX_CHANGED = "kubus-tag-index";
+
+const tags = (index: () => TagIndex) => $prose(
   () =>
     new Plugin<DecorationSet>({
       state: {
-        init: (_, state) => tagDecorations(state.doc),
-        apply: (tr, set) => (tr.docChanged ? tagDecorations(tr.doc) : set),
+        init: (_, state) => tagDecorations(state.doc, index()),
+        apply: (tr, set) => (tr.docChanged || tr.getMeta(TAG_INDEX_CHANGED) ? tagDecorations(tr.doc, index()) : set),
       },
       props: {
         decorations(state) {
@@ -520,6 +528,15 @@ function EditorChrome(props: Props) {
       const text = typing.text || target.name || "Link";
       const tr = view.state.tr.replaceWith(typing.from, typing.to, view.state.schema.text(text, [type.create({ href: target.href })]));
       view.dispatch(tr.setStoredMarks([]));
+    });
+    setTrigger(null);
+  };
+  /** Writes the chosen tag over what was typed of it, a space after it unless one follows. */
+  const pickTag = (tag: string, typing: LinkTrigger) => {
+    withView((view) => {
+      if (typing.to > view.state.doc.content.size) return;
+      const next = view.state.doc.textBetween(typing.to, Math.min(typing.to + 1, view.state.doc.content.size), undefined, "￼");
+      view.dispatch(view.state.tr.insertText(/^\s/.test(next) ? tag : `${tag} `, typing.from, typing.to));
     });
     setTrigger(null);
   };
@@ -863,7 +880,8 @@ function EditorChrome(props: Props) {
           );
         })()}
 
-        <LinkPicker box={editorBox} trigger={trigger} onPick={pickLink} />
+        <LinkPicker box={editorBox} trigger={trigger?.kind === "tag" ? null : trigger} onPick={pickLink} />
+        <TagPicker box={editorBox} trigger={trigger?.kind === "tag" ? trigger : null} onPick={pickTag} />
 
         {hovered && (
           // Positioned box exactly over the link; the Carbon Popover anchors to it.
@@ -991,6 +1009,10 @@ function EditorSurface({
   labelId,
 }: Props & { labelId: string; onError(message: string): void }) {
   const { repo } = useStore();
+  // The tags' colours (the tag index): drawn again when it changes.
+  const tagIndex = useTags().index;
+  const tagIndexRef = useRef(tagIndex);
+  tagIndexRef.current = tagIndex;
   const callbacks = useRef({ onChange, onFileStored, onError });
   useEffect(() => {
     callbacks.current = { onChange, onFileStored, onError };
@@ -1014,7 +1036,7 @@ function EditorSurface({
   };
 
   // Uncontrolled: `value` seeds the editor once; changes flow out via onChange.
-  useEditor(
+  const editor = useEditor(
     (root) =>
       Editor.make()
         .config((ctx) => {
@@ -1042,7 +1064,7 @@ function EditorSurface({
         .use(linkInputRule)
         .use(linkClick)
         .use(linkTrigger)
-        .use(tags)
+        .use(tags(() => tagIndexRef.current))
         .use(storedImages(repo))
         .use(codeBlockLanguage)
         .use(changes((markdown) => callbacks.current.onChange(markdown)))
@@ -1052,6 +1074,13 @@ function EditorSurface({
         .use(clipboard),
     [],
   );
+  useEffect(() => {
+    if (editor.loading) return;
+    editor.get()?.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      view.dispatch(view.state.tr.setMeta(TAG_INDEX_CHANGED, true));
+    });
+  }, [tagIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <Milkdown />;
 }

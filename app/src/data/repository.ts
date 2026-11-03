@@ -190,6 +190,11 @@ export interface Repository {
    * (string, markdown, list of strings) contains `query`. Most recent first.
    */
   search(query: string, collections: Collection[], spaceId: string, limit?: number): Promise<Item[]>;
+  /**
+   * Every tag in items' values (text, Markdown, AI text, lists, checklists; of every space, not deleted ones), lower case,
+   * with how many items use it: in the order they were first used (by the items' creation), for the tag index.
+   */
+  listTags(): Promise<{ tag: string; count: number }[]>;
 
   /** Saved views of a collection's items in one space, in their display order. */
   listViews(collectionId: string, spaceId: string): Promise<CollectionView[]>;

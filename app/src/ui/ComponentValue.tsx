@@ -4,7 +4,8 @@ import { useStore } from "../app/store";
 import { fileSrc, fileIdsIn } from "../domain/files";
 import { isComponentError, type ComponentOutput } from "../domain/components";
 import { BLOCK_HEIGHT, blockHeightCss, type AspectRatio } from "../domain/views";
-import { TAG_SOURCE } from "../domain/tags";
+import { TAG_COLORS, TAG_SOURCE, tagColor, tagsIn, type TagIndex } from "../domain/tags";
+import { useTags } from "../app/tagIndex";
 import { openModeOf } from "../workspace/Workspace";
 import { Highlight } from "./Highlight";
 import { useDark } from "../app/settings";
@@ -34,9 +35,8 @@ const FRAME_TOKENS = [
   "--cds-border-strong",
   "--cds-layer-01",
   "--cds-layer-accent-01",
-  "--cds-tag-background-blue",
-  "--cds-tag-color-blue",
-  "--cds-tag-hover-blue",
+  // Every tag colour's (domain/tags.ts TAG_COLORS).
+  ...TAG_COLORS.flatMap((c) => [`--cds-tag-background-${c}`, `--cds-tag-color-${c}`, `--cds-tag-hover-${c}`]),
   "--cds-code-02-font-family",
   "--font-sans",
 ];
@@ -81,11 +81,15 @@ html.fonts-pending body{visibility:hidden;}
 :where(th,td){border:1px solid var(--cds-border-subtle);padding:0.25rem 0.5rem;text-align:left;}
 :where(th){background:var(--cds-layer-accent-01);}
 :where(img,svg,canvas,video){max-width:100%;}
-:where(.kubus-tag){padding:0.0625rem 0.5rem;-webkit-box-decoration-break:clone;box-decoration-break:clone;border-radius:1rem;background:var(--cds-tag-background-blue);color:var(--cds-tag-color-blue);font-size:0.75rem;line-height:1rem;letter-spacing:0.32px;cursor:pointer;}
-:where(.kubus-tag:hover){background:var(--cds-tag-hover-blue);}`;
+:where(.kubus-tag){padding:0.0625rem 0.5rem;-webkit-box-decoration-break:clone;box-decoration-break:clone;border-radius:1rem;background:var(--tag-bg);color:var(--tag-fg);font-size:0.75rem;line-height:1rem;letter-spacing:0.32px;cursor:pointer;}
+:where(.kubus-tag:hover){background:var(--tag-hover);}
+${TAG_COLORS.map((c) => `:where(.kubus-tag[data-color="${c}"]){--tag-bg:var(--cds-tag-background-${c});--tag-fg:var(--cds-tag-color-${c});--tag-hover:var(--cds-tag-hover-${c});}`).join("\n")}`;
 }
 
-function frameDocument(html: string, fill: boolean, dark: boolean, tokens: string): string {
+/** The colours of the tags in a frame's HTML (the tag index), by tag in lower case. */
+const frameTagColors = (html: string, index: TagIndex) => Object.fromEntries(tagsIn(html).map((t) => [t, tagColor(index, t)]));
+
+function frameDocument(html: string, fill: boolean, dark: boolean, tokens: string, tagColors: string): string {
   // Hidden (laid out, not shown) until the page has handed over the app's fonts: no flash of
   // another font, and the height it reports is measured in the fonts it shows.
   return `<!doctype html><html class="${fill ? "in-card" : "in-page"} fonts-pending"><head><meta charset="utf-8"><style>
@@ -163,6 +167,7 @@ ${frameBaseStyles(tokens, dark)}
   watch();
   // #tags in the text (domain/tags.ts) become tags, as everywhere in the app; a click on one is
   // the page's (it searches for the tag). Only the HTML as written: what a script draws is its own.
+  const tagColors = ${tagColors.replace(/</g, "\\u003c")};
   const tagSplit = new RegExp("(" + ${JSON.stringify(TAG_SOURCE).replace(/</g, "\\u003c")} + ")", "u");
   const skip = "a,code,pre,kbd,samp,script,style,textarea,select,option,button,svg,canvas,template,[contenteditable],.kubus-tag";
   const texts = [];
@@ -176,6 +181,7 @@ ${frameBaseStyles(tokens, dark)}
       if (i % 2 === 0) return document.createTextNode(part);
       const tag = document.createElement("span");
       tag.className = "kubus-tag";
+      tag.dataset.color = tagColors[part.toLowerCase()] ?? "blue";
       tag.setAttribute("role", "link");
       tag.tabIndex = 0;
       tag.title = "Search for " + part;
@@ -407,7 +413,13 @@ export function HtmlFrame({
     const place = frame.current?.parentElement;
     if (place) setTokens(frameTokens(place));
   }, [dark]);
-  const doc = useMemo(() => (html === undefined || tokens === undefined ? undefined : frameDocument(html, fill, dark, tokens)), [html, fill, dark, tokens]);
+  // Its tags' colours (the tag index), as text: rebuilt only when one of them changes, not for every new tag elsewhere.
+  const tagIndex = useTags().index;
+  const tagColors = useMemo(() => JSON.stringify(html ? frameTagColors(html, tagIndex) : {}), [html, tagIndex]);
+  const doc = useMemo(
+    () => (html === undefined || tokens === undefined ? undefined : frameDocument(html, fill, dark, tokens, tagColors)),
+    [html, fill, dark, tokens, tagColors],
+  );
   const fills = !!size && size.natural < FILL_THRESHOLD;
   // A size asked for in the HTML wins; else its own height (flow), else the block's height (fill). Never more than the block's height.
   const max = blockHeightCss(maxHeight ?? BLOCK_HEIGHT.initial, maxHeight === null ? "none" : aspect);

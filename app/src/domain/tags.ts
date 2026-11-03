@@ -50,3 +50,67 @@ export function containsQuery(text: string, query: string, exactTag = false): bo
 
 /** The end of a tag query's match: no further tag characters but a nested tag's `/`. */
 export const TAG_QUERY_END = String.raw`(?![\p{L}\p{N}_-])`;
+
+/**
+ * Carbon's tag colours, in the order tags get them (neighbours far apart). A tag's colour is its number in the tag index
+ * (`TagIndex`) cycling through these: every tag the same colour everywhere, the tags around it others.
+ */
+export const TAG_COLORS = ["blue", "magenta", "green", "purple", "teal", "red", "cyan", "warm-gray", "cool-gray", "gray"] as const;
+export type TagColor = (typeof TAG_COLORS)[number];
+
+/**
+ * The tag index: every tag (lower case, with its `#`) and its number, in the order tags were first seen. A synced setting
+ * (`TAG_INDEX_SETTING`, docs/sync.md "Synced settings"): numbers are only added, never changed, so a tag keeps its colour
+ * on every device; a tag no longer used keeps its number.
+ */
+export type TagIndex = Record<string, number>;
+export const TAG_INDEX_SETTING = "tagIndex";
+
+/** The stored index as read (anything else left out: not an object, a number that isn't a whole number ≥ 0). */
+export function parseTagIndex(raw: unknown): TagIndex {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: TagIndex = {};
+  for (const [tag, n] of Object.entries(raw)) if (isTag(tag) && Number.isInteger(n) && (n as number) >= 0) out[tag.toLowerCase()] = n as number;
+  return out;
+}
+
+/** The index with these tags (in this order) added after the others; the same object when it has them all. */
+export function withTags(index: TagIndex, tags: string[]): TagIndex {
+  let next = index;
+  let n = Math.max(-1, ...Object.values(index)) + 1;
+  for (const raw of tags) {
+    const tag = raw.toLowerCase();
+    if (tag in next) continue;
+    if (next === index) next = { ...index };
+    next[tag] = n++;
+  }
+  return next;
+}
+
+/**
+ * A tag's colour: its number's, cycling through TAG_COLORS. A tag not in the index yet (typed a moment ago) gets the
+ * colour it will most likely get: the next number's.
+ */
+export function tagColor(index: TagIndex, tag: string): TagColor {
+  const n = index[tag.toLowerCase()] ?? Math.max(-1, ...Object.values(index)) + 1;
+  return TAG_COLORS[n % TAG_COLORS.length];
+}
+
+/** A tag being typed at the end of `before` (the text before the caret): `#` where a tag can start, then what a tag may hold. */
+const TAG_BEGIN = /(?<![\p{L}\p{N}_&#/\\])#(?:[\p{L}\p{N}_][\p{L}\p{N}_/-]*)?$/u;
+export const tagBeingTyped = (before: string): string | null => TAG_BEGIN.exec(before)?.[0] ?? null;
+
+/** The most tags offered at once. */
+const MAX_TAGS = 30;
+
+/**
+ * The tags in use that fit what is typed (`#boo`): those starting with it first (the most used first), then those
+ * containing it. `#` alone offers them all.
+ */
+export function matchingTags(used: { tag: string; count: number }[], query: string): { tag: string; count: number }[] {
+  const q = query.toLowerCase();
+  const starting = used.filter((t) => t.tag.startsWith(q));
+  const containing = q.length > 1 ? used.filter((t) => !t.tag.startsWith(q) && t.tag.includes(q.slice(1))) : [];
+  return [...starting, ...containing].slice(0, MAX_TAGS);
+}
+
