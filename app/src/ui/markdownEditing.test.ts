@@ -12,7 +12,7 @@ import { AllSelection, TextSelection } from "@milkdown/kit/prose/state";
 import * as proseView from "@milkdown/kit/prose/view";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { markdownMath } from "./markdownMath";
-import { exitSourceBlockAtEnd, unstyleAtCaret } from "./markdownKeys";
+import { caretInText, exitSourceBlockAtEnd, tableFromTypedRows, unstyleAtCaret } from "./markdownKeys";
 
 /** Every syntax the editor knows, written as the editor writes it (so a round trip gives it back unchanged). */
 const EVERY_SYNTAX = `# Heading 1
@@ -85,6 +85,7 @@ async function makeEditor(markdown: string) {
     .use(commonmark)
     .use(gfm)
     .use(markdownMath)
+    .use(caretInText)
     .use(clipboard)
     .create();
   editors.push(editor);
@@ -204,4 +205,40 @@ test("Down at the end of a formula block that ends the text makes a paragraph af
   expect(view.state.selection.$from.parent.type.name).toBe("paragraph");
   view.dispatch(view.state.tr.insertText("after"));
   expect(markdownOf()).toBe("$$\nE\n$$\n\nafter\n");
+});
+
+describe("Enter after a table's header and delimiter rows typed as text makes the table", () => {
+  /** Enter with the caret at the end of the text. */
+  async function enterAtEnd(markdown: string) {
+    const { view, markdownOf } = await makeEditor(markdown);
+    view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+    const tr = tableFromTypedRows(view.state);
+    if (tr) view.dispatch(tr);
+    const { $from } = view.state.selection;
+    return { handled: !!tr, markdown: markdownOf(), inCell: $from.parent.type.name === "paragraph" && $from.node(-1).type.name === "table_cell" };
+  }
+
+  test.each([
+    // As typed: each row a paragraph, or lines of one (Shift+Enter); the editor saves typed pipes escaped.
+    ["\\|a\\|b\\|\n\n\\|-\\|-\\|", "| a | b |\n| - | - |\n|   |   |\n"],
+    ["intro\\\n\\| a \\| b \\|\\\n\\| :-- \\| --: \\|", "intro\n\n| a  |  b |\n| :- | -: |\n|    |    |\n"],
+  ])("%j", async (markdown, expected) => {
+    expect(await enterAtEnd(markdown)).toEqual({ handled: true, markdown: expected, inCell: true });
+  });
+
+  test("not without a header row of as many cells", async () => {
+    expect((await enterAtEnd("\\|-\\|-\\|")).handled).toBe(false);
+    expect((await enterAtEnd("\\|a\\|\n\n\\|-\\|-\\|")).handled).toBe(false);
+    expect((await enterAtEnd("\\|a\\|b\\|\n\nnot a delimiter")).handled).toBe(false);
+  });
+});
+
+test("a change leaving the caret where no text goes puts it in text (a new table's first cell)", async () => {
+  const { view } = await makeEditor("\\|a\\|b\\|\n\n\\|-\\|-\\|");
+  view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+  const tr = tableFromTypedRows(view.state)!;
+  // As Milkdown's |2x2| rule does: the table's first cell, before its paragraph.
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, 3)));
+  expect(view.state.selection.$from.parent.type.name).toBe("paragraph");
+  expect(view.state.selection.from).toBe(4);
 });

@@ -40,7 +40,7 @@ import { TAG_CLASSES } from "./TagChip";
 import { LINK_KEY, LINK_PICKER_OPEN, LINK_TRIGGER, LinkPicker, type LinkTrigger } from "./LinkPicker";
 import { LinkTargetInput } from "./LinkTargetInput";
 import { markdownMath } from "./markdownMath";
-import { markdownKeys } from "./markdownKeys";
+import { caretInText, markdownKeys } from "./markdownKeys";
 import type { LinkTarget } from "../domain/linkTargets";
 
 // Strictly GitHub Flavored Markdown: the CommonMark preset plus the GFM preset
@@ -1036,6 +1036,7 @@ function EditorSurface({
         .use(gfm)
         .use(markdownMath)
         .use(markdownKeys)
+        .use(caretInText)
         .use(taskToggle)
         .use(tabAddsRow)
         .use(linkInputRule)

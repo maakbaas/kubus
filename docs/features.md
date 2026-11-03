@@ -65,8 +65,9 @@ What the app does, feature by feature (read the part you work on).
   formulas too (also a formula copied from a read-only view, KaTeX's HTML: read back from its TeX source):
   `ui/markdownEditing.test.ts` copies and pastes a text with every syntax. Links have no underline but on hover, as
   everywhere in the app. Not GFM, so not here: `==highlight==` (GitHub doesn't render it either). A table is as wide as the text (editor and view), its columns sized by their content; a wider one scrolls
-  sideways in its box. It is made by typing `|3x2|` and a space, or by pasting GFM table text (typed pipe lines stay text,
-  saved with `\|`). A code block's language select shows while hovered and in the block holding the caret (marked
+  sideways in its box. It is made by typing `|3x2|` and a space (the caret then in its first cell: `caretInText`), by typing
+  its header and delimiter rows (`|a|b|`, then `|-|-|` and Enter: `tableFromTypedRows`, `ui/markdownKeys.ts`; before
+  that they are text, saved with `\|`), or by pasting GFM table text. A code block's language select shows while hovered and in the block holding the caret (marked
   `md-code-block--active`: focus stays on the editor's root), on a touch screen above its code.
 - **Collection editor header is the editor** for the collection's icon (button + popover picker) and name
   (heading-sized input). Its Fields popover (beside them) orders the fields (drag handles, keyboard) and removes
