@@ -871,22 +871,26 @@ body {
   box-decoration-break: clone;
 }
 /* Its colour and its hover (Carbon gives only an interactive tag one). */
-.inline-tag.cds--tag--blue { --tag-bg: var(--cds-tag-background-blue); --tag-hover: var(--cds-tag-hover-blue); }
-.inline-tag.cds--tag--magenta { --tag-bg: var(--cds-tag-background-magenta); --tag-hover: var(--cds-tag-hover-magenta); }
-.inline-tag.cds--tag--green { --tag-bg: var(--cds-tag-background-green); --tag-hover: var(--cds-tag-hover-green); }
-.inline-tag.cds--tag--purple { --tag-bg: var(--cds-tag-background-purple); --tag-hover: var(--cds-tag-hover-purple); }
-.inline-tag.cds--tag--teal { --tag-bg: var(--cds-tag-background-teal); --tag-hover: var(--cds-tag-hover-teal); }
-.inline-tag.cds--tag--red { --tag-bg: var(--cds-tag-background-red); --tag-hover: var(--cds-tag-hover-red); }
-.inline-tag.cds--tag--cyan { --tag-bg: var(--cds-tag-background-cyan); --tag-hover: var(--cds-tag-hover-cyan); }
-.inline-tag.cds--tag--warm-gray { --tag-bg: var(--cds-tag-background-warm-gray); --tag-hover: var(--cds-tag-hover-warm-gray); }
-.inline-tag.cds--tag--gray { --tag-bg: var(--cds-tag-background-gray); --tag-hover: var(--cds-tag-hover-gray); }
-/* A search match or a text selection in a tag: its colour's hover shade, a step darker (lighter on dark) of the
-   tag's own colour, the tag's text colour kept; not the highlight's blue, the same on every tag. */
+.inline-tag.cds--tag--blue { --tag-bg: var(--cds-tag-background-blue); --tag-hover: var(--cds-tag-hover-blue); --tag-mark: var(--cds-tag-border-blue); }
+.inline-tag.cds--tag--magenta { --tag-bg: var(--cds-tag-background-magenta); --tag-hover: var(--cds-tag-hover-magenta); --tag-mark: var(--cds-tag-border-magenta); }
+.inline-tag.cds--tag--green { --tag-bg: var(--cds-tag-background-green); --tag-hover: var(--cds-tag-hover-green); --tag-mark: var(--cds-tag-border-green); }
+.inline-tag.cds--tag--purple { --tag-bg: var(--cds-tag-background-purple); --tag-hover: var(--cds-tag-hover-purple); --tag-mark: var(--cds-tag-border-purple); }
+.inline-tag.cds--tag--teal { --tag-bg: var(--cds-tag-background-teal); --tag-hover: var(--cds-tag-hover-teal); --tag-mark: var(--cds-tag-border-teal); }
+.inline-tag.cds--tag--red { --tag-bg: var(--cds-tag-background-red); --tag-hover: var(--cds-tag-hover-red); --tag-mark: var(--cds-tag-border-red); }
+.inline-tag.cds--tag--cyan { --tag-bg: var(--cds-tag-background-cyan); --tag-hover: var(--cds-tag-hover-cyan); --tag-mark: var(--cds-tag-border-cyan); }
+.inline-tag.cds--tag--warm-gray { --tag-bg: var(--cds-tag-background-warm-gray); --tag-hover: var(--cds-tag-hover-warm-gray); --tag-mark: var(--cds-tag-border-warm-gray); }
+.inline-tag.cds--tag--gray { --tag-bg: var(--cds-tag-background-gray); --tag-hover: var(--cds-tag-hover-gray); --tag-mark: var(--cds-tag-border-gray); }
+/* A search match or a text selection in a tag: a darker shade of the tag's own colour (its 40 step, Carbon's tag
+   border token; on dark, where that is too light for the tag's text, its hover shade), the tag's text colour kept;
+   not the highlight's blue, the same on every tag. */
 .inline-tag .search-mark,
 .inline-tag ::selection,
 .inline-tag::selection {
-  background: var(--tag-hover);
+  background: var(--tag-mark);
   color: inherit;
+}
+.cds--g100 .inline-tag {
+  --tag-mark: var(--tag-hover);
 }
 .inline-tag .cds--tag__label {
   display: inline;
