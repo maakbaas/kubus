@@ -1,6 +1,6 @@
 import { useId, useRef, type ReactNode } from "react";
 import { Dropdown, IconButton } from "@carbon/react";
-import { Calendar, ChevronLeft, ChevronRight } from "@carbon/icons-react";
+import { ChevronLeft, ChevronRight, PageLast } from "@carbon/icons-react";
 import type { Collection } from "../domain/model";
 import type { FilterRule } from "../domain/query";
 import { KINDS, steps } from "./DatePeriodFilter";
@@ -28,7 +28,7 @@ const UNITS: UnitChoice[] = KINDS.filter((k): k is { kind: Unit; text: string } 
 /**
  * A collection view's filter bar ("Show filter bar" in View settings), below its tabs: the date period
  * (domain/datePeriod.ts) as a line of words at the left, and at the right ‹ › stepping it (a rolling one
- * stays rolling), "this one" (the most recent one of its kind: rolling, this week, not literally these
+ * stays rolling), >| "this one" (the most recent one of its kind: rolling, this week, not literally these
  * days) and the view's Filter button (`children`: it leaves the toolbar while the bar is shown), touching
  * and ending where the toolbar's icon buttons end. The unit word of the line is the dropdown that
  * switches the kind (Hourly … Yearly): "This [week]", "7 [weeks] ago", "Last 7 [days]". In a period with no
@@ -106,7 +106,7 @@ export function FilterBar({ collection, filters, onChange, children }: { collect
         <ChevronRight />
       </IconButton>
       <IconButton autoAlign kind="ghost" size="sm" align="bottom" label={latest} disabled={!state || state.kind === "range"} onClick={() => value && set(latestValue(value.value, now))}>
-        <Calendar />
+        <PageLast />
       </IconButton>
       {children}
     </div>

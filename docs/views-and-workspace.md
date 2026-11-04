@@ -89,7 +89,7 @@ Extension points are registries, not special cases in pages:
   tag while it moves on with time, "by <field>" (the first date or date & time field, none: Updated; Created and
   Updated can be picked) and, once a period is set, ‹ › (the one before / after: a rolling one stays rolling, `week-1`
   "Last week"; a chosen one by its length; the last n by n, still rolling: `day-6..day+0` → `day-13..day-7`, "7 days up
-  to 7 days ago"; off only for a so far), the calendar button (the current one) and × (any date). "Which" says which
+  to 7 days ago"; off only for a so far), the >| button (the current one) and × (any date). "Which" says which
   one of its kind: counted from now (`hour+0`, `week+0`, `month-1`: `resolveRange` works it out when the filter runs,
   so a saved "this week" stays this week), so far for a week, month or year (`year+0..day+0`, "Year to date"), the last
   n up to now with n beside it (`day-6..day+0` the last 7 days, `hour-23..hour+0`, `month-11..month+0` the last 12
@@ -109,7 +109,7 @@ Extension points are registries, not special cases in pages:
   period line, separated by " - ": "This week - Week 44 - 25 Oct – 31 Oct 2026", "Last 7 days - …", "Any date" while there
   is none); at the RIGHT, touching at the 32px pitch and ending where the toolbar's icon buttons end, from left to right
   ‹ › (step as the panel's do: a rolling one stays rolling, a chosen one by its kind, a range by its length, the last n by n, off for a
-  so far), the "most recent" button (the calendar: this hour / today / this week / month / year as a rolling
+  so far), the "most recent" button (>|: this hour / today / this week / month / year as a rolling
   `kind+0`, whatever the period was; off for a range or no period) and the view's Filter button (it leaves the toolbar for
   the bar while the bar is shown; same states: grey while open, blue while rules are in effect, same panel). There is no
   separate kind control: the UNIT WORD of the words is a Carbon inline Dropdown (`type="inline"`, sm, autoAlign) whose menu

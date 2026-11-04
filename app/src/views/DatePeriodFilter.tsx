@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { ContentSwitcher, DatePicker, DatePickerInput, IconButton, NumberInput, Select, SelectItem, Switch, Tag } from "@carbon/react";
-import { Calendar, ChevronLeft, ChevronRight, Close } from "@carbon/icons-react";
+import { ChevronLeft, ChevronRight, Close, PageLast } from "@carbon/icons-react";
 import { formatDate } from "../domain/fieldKinds";
 import type { Collection } from "../domain/model";
 import type { FilterRule } from "../domain/query";
@@ -203,7 +203,7 @@ export function DatePeriodFilter({
               disabled={!unit}
               onClick={() => unit && (window === "fixed" ? fixed(periodAround(unit, now)) : choose(unit, "current"))}
             >
-              <Calendar />
+              <PageLast />
             </IconButton>
             <IconButton autoAlign label="Any date" kind="ghost" size="sm" align="left" onClick={clear}>
               <Close />
