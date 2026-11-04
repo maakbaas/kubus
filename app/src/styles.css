@@ -2772,11 +2772,56 @@ img[data-lightbox] {
 .cds--content-switcher-btn::after {
   border-radius: 0 !important;
 }
+/* The period on the rules' columns (.query-editor__rule), in two rows, nothing in them wrapping or cut: its words
+   (and Rolling) across the first four columns (after a block's And / Or: three), its pin and × in the buttons column;
+   then "by" where the rules have "Where", the field it goes by in the field column, ‹ › >| in the condition column. */
 .date-period__nav {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--cds-spacing-03);
+  align-items: center;
+}
+.date-period__join {
+  grid-row: 1;
+  grid-column: 1;
+}
+/* One 2rem line: Rolling beside the words when it fits there, else (a phone's narrow panel) on the line below it, which
+   isn't shown: the words ("This week", "Last 7 days") say it as well. */
+.date-period__head {
+  grid-row: 1;
+  grid-column: 2 / 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   column-gap: var(--cds-spacing-03);
+  row-gap: var(--cds-spacing-03);
+  block-size: var(--cds-spacing-07);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.date-period__head > .date-period__label {
+  line-height: var(--cds-spacing-07);
+}
+.date-period__nav > .date-period__head:first-child {
+  grid-column: 1 / 5;
+}
+.date-period__nav > .query-editor__actions {
+  grid-row: 1;
+  grid-column: 5;
+}
+.date-period__by {
+  grid-row: 2;
+  grid-column: 1;
+  padding-inline-start: var(--cds-spacing-05);
+}
+.date-period__field {
+  grid-row: 2;
+  grid-column: 2;
+}
+.date-period__steps {
+  grid-row: 2;
+  grid-column: 3;
+  display: flex;
 }
 /* A block's period joining its view's filter: as wide as the rules' And / Or. */
 .date-period__join {
@@ -2784,20 +2829,19 @@ img[data-lightbox] {
   inline-size: 6.5rem;
 }
 .date-period__rolling {
+  flex: none;
   margin: 0;
 }
 /* "by Read": the field it goes by, a small inline choice. */
-.date-period__field .cds--select--inline .cds--label {
-  margin-inline-end: var(--cds-spacing-02);
-}
-.date-period__field .cds--select-input {
-  inline-size: auto;
-}
-/* Wraps on a phone rather than hiding the week's last day; narrower than 14rem it has its own line
-   and the rest goes below it. */
+
+/* Wraps in its columns rather than hiding the week's last day. */
 .date-period__label {
-  flex: 1 1 auto;
-  min-inline-size: min(100%, 14rem);
+  flex: 0 1 auto;
+  min-inline-size: 0;
+}
+/* Starting the row (no And / Or before it): indented as the rules' "Where" below it, on their dropdowns' text. */
+.date-period__nav > .date-period__head:first-child {
+  padding-inline-start: var(--cds-spacing-05);
 }
 /* Going straight to a day, week, month or year: its calendar, or its month and year, on the range's columns. */
 .date-period__pick {
@@ -2843,6 +2887,25 @@ img[data-lightbox] {
   .query-editor__pair,
   .view-options {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* The rules are one column: the period's words on a row of their own, then "by", the field filling the row, ‹ › >|,
+     pin and ×. */
+  .date-period__nav {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  .date-period__head,
+  .date-period__nav > .date-period__head:first-child {
+    grid-column: 1 / -1;
+  }
+  .date-period__join + .date-period__head {
+    grid-row: 2;
+  }
+  .date-period__nav > .query-editor__actions {
+    grid-row: 2;
+    grid-column: 4;
+  }
+  .date-period__join ~ :is(.date-period__by, .date-period__field, .date-period__steps, .query-editor__actions) {
+    grid-row: 3;
   }
 }
 /* Group headings (table rows / card sections): a step smaller than a block's name, and lined up
@@ -3565,6 +3628,23 @@ img[data-lightbox] {
   inset-inline: 0;
   border-block-start: 1px solid var(--cds-border-subtle);
   pointer-events: none;
+}
+/* Below a filter bar the first row has its line too, the bar and it apart as two rows are: the line sets the blocks off
+   from the bar's boxes, which would otherwise run into the first block's header. */
+.view-page:has(> .filter-bar) > .block-row:has(.block) {
+  position: relative;
+  margin-block-start: var(--cds-spacing-07);
+}
+.view-page:has(> .filter-bar) > .block-row:has(.block)::before {
+  content: "";
+  position: absolute;
+  inset-block-start: calc(var(--cds-spacing-07) / -2);
+  inset-inline: 0;
+  border-block-start: 1px solid var(--cds-border-subtle);
+  pointer-events: none;
+}
+.view-page > .filter-bar:has(~ .block-row .block) {
+  margin-block-end: 0;
 }
 /* An item page's rows are spaced and lined like its fields (the stack's gap, a line between any two entries). */
 .item-fields > .block-row:has(.block) ~ .block-row:has(.block) {

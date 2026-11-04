@@ -165,20 +165,27 @@ export function DatePeriodFilter({
             <SelectItem value="or" text="Or" />
           </Select>
         )}
-        <span className="date-period__label" title={label}>
-          {label}
+        {/* Two rows on the rules' columns below (styles.css): the period's words, then pin and × in the buttons column;
+            "by" (as "Where"), the field it goes by in the field column, ‹ › >| in the condition column. */}
+        <span className="date-period__head">
+          <span className="date-period__label" title={label}>
+            {label}
+          </span>
+          {/* Moves on with time (this week, the last 7 days, year to date), unlike chosen days. */}
+          {period && counted && (
+            <Tag size="sm" type="blue" className="date-period__rolling">
+              Rolling
+            </Tag>
+          )}
         </span>
-        {/* Moves on with time (this week, the last 7 days, year to date), unlike chosen days. */}
-        {period && counted && (
-          <Tag size="sm" type="blue" className="date-period__rolling">
-            Rolling
-          </Tag>
-        )}
+        <span className="date-period__by" aria-hidden="true">
+          by
+        </span>
         <Select
           id={`${uid}-date-field`}
           className="date-period__field"
-          labelText="by"
-          inline
+          labelText="By field"
+          hideLabel
           size="sm"
           value={fieldId}
           onChange={(e) => {
@@ -191,7 +198,7 @@ export function DatePeriodFilter({
           ))}
         </Select>
         {(rule || rangeChosen) && (
-          <>
+          <span className="date-period__steps">
             <IconButton autoAlign label="Previous" kind="ghost" size="sm" disabled={!steps(state, !!anchor)} onClick={() => step(-1)}>
               <ChevronLeft />
             </IconButton>
@@ -208,20 +215,25 @@ export function DatePeriodFilter({
             >
               <PageLast />
             </IconButton>
-          </>
+          </span>
         )}
-        {pin && (
-          <IconButton autoAlign label={pin.on ? "Remove from filter bar" : "Show on filter bar"} kind="ghost" size="sm" align="left" onClick={() => pin.set(!pin.on)}>
-            {pin.on ? <PinFilled /> : <Pin />}
-          </IconButton>
-        )}
-        {rule || rangeChosen ? (
-          <IconButton autoAlign label="Any date" kind="ghost" size="sm" align="left" onClick={clear}>
-            <Close />
-          </IconButton>
-        ) : (
-          // Where × goes, so the pin lines up with the rules' pins below.
-          pin && <span className="date-period__gap" />
+        {/* Pin and × touching, as a rule's pin and remove below them (query-editor__actions). */}
+        {(pin || rule || rangeChosen) && (
+          <span className="query-editor__actions">
+            {pin && (
+              <IconButton autoAlign label={pin.on ? "Remove from filter bar" : "Show on filter bar"} kind="ghost" size="sm" align="left" onClick={() => pin.set(!pin.on)}>
+                {pin.on ? <PinFilled /> : <Pin />}
+              </IconButton>
+            )}
+            {rule || rangeChosen ? (
+              <IconButton autoAlign label="Any date" kind="ghost" size="sm" align="left" onClick={clear}>
+                <Close />
+              </IconButton>
+            ) : (
+              // Where × goes, so the pin lines up with the rules' pins below.
+              pin && <span className="date-period__gap" />
+            )}
+          </span>
         )}
       </div>
       {unit && window && period && (

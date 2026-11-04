@@ -85,7 +85,9 @@ Extension points are registries, not special cases in pages:
   listed item meets (`requiredRules`).
 - **Date period** (`app/src/domain/datePeriod.ts`, `views/DatePeriodFilter.tsx`): the top of every
   filter panel (no heading above it: the panel's button says "Filter"). A content switcher (Hour, Day, Week, Month,
-  Year, Range) picks the kind; the line under it shows the period ("Any date" while there is none), a blue "Rolling"
+  Year, Range) picks the kind; under it, on the rules' columns (`.date-period__nav`, two rows, nothing wrapped or cut: its words
+  across the first four with Rolling beside them when it fits, pin and × in the buttons column; "by" where the rules have "Where",
+  the field in the field column, ‹ › >| in the condition column; on a phone the words alone, then by, field, ‹ › >|, pin, ×), the line shows the period ("Any date" while there is none), a blue "Rolling"
   tag while it moves on with time, "by <field>" (the first date or date & time field, none: Updated; Created and
   Updated can be picked) and, once a period is set, ‹ › (the one before / after: a rolling one stays rolling, `week-1`
   "Last week"; a chosen one by its length; the last n by n, still rolling: `day-6..day+0` → `day-13..day-7`, "7 days up
@@ -127,7 +129,7 @@ Extension points are registries, not special cases in pages:
   each with a 10rem box; when they don't (FilterBar measures the texts against the bar's width, again on every resize)
   they all go below the line, in a grid of as many columns as fit (one on a phone), every rule's words as wide as the
   longest (`--bar-words`, at most 40% of a column, then ellipsized) and its value filling the rest of its column, so
-  the boxes line up down the columns. **The period's pin**: the filter panel's period line has a pin too (after ‹ › >|, before ×) while the bar is
+  the boxes line up down the columns. Below a filter bar the first row of blocks has its top line too (as between two rows: `.view-page:has(> .filter-bar)`). **The period's pin**: the filter panel's period has a pin too (beside its ×, above the rules' pins) while the bar is
   shown: off, the bar leaves out the period's words and ‹ › >| (`filterBarPeriod: false` on the view or dashboard
   view, stored right away like "Show filter bar"; absent = on), leaving the rules and the Filter button at the right.
   Then, with the rules below the line (they didn't fit on it: `onBelow`), the bar is their grid alone and the Filter
