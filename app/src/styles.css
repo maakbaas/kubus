@@ -1814,6 +1814,11 @@ img[data-lightbox] {
 .md-editor .ProseMirror :is(td, th, pre) {
   overflow-wrap: anywhere;
 }
+/* ProseMirror's table styles (loaded after this file) set cells to `vertical-align: top`: the 3rem header cells' text
+   then sat at their top while editing. Centred, as in the view. */
+.md-editor .ProseMirror :is(td, th) {
+  vertical-align: middle;
+}
 /* Row and column handles of the hovered table cell, on the table's edges (MarkdownEditor). */
 .md-table-handle {
   position: absolute;
