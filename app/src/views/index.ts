@@ -52,6 +52,7 @@ export function normalizeBlock(base: Collection, block: ViewBlock, all?: Collect
   if (all && block.collectionIds) normalized.collectionIds = block.collectionIds;
   if (all && block.merges) normalized.merges = block.merges;
   if (block.groupDate) normalized.groupDate = block.groupDate;
+  if (block.groupOrder === "custom") return { ...normalized, groupOrder: "custom", groupCustom: block.groupCustom ?? [] };
   return block.groupOrder ? { ...normalized, groupOrder: block.groupOrder } : normalized;
 }
 

@@ -54,6 +54,13 @@ describe("normalizeBlock", () => {
     expect(JSON.stringify(normalizeBlock(collection, n))).toBe(JSON.stringify(n));
   });
 
+  it("keeps a custom group order's keys (Save view stored them, then showed the block without them)", () => {
+    const n = normalizeBlock(collection, block({ groupBy: "a", groupOrder: "custom", groupCustom: ["Horror", "Poetry", "Fantasy"] }));
+    expect(n.groupOrder).toBe("custom");
+    expect(n.groupCustom).toEqual(["Horror", "Poetry", "Fantasy"]);
+    expect(normalizeBlock(collection, block({ groupOrder: "desc", groupCustom: ["x"] })).groupCustom).toBeUndefined();
+  });
+
   it("keeps a date grouping before the group order", () => {
     const n = normalizeBlock(collection, block({ groupDate: "month", groupOrder: "desc" }));
     expect(Object.keys(n).slice(-2)).toEqual(["groupDate", "groupOrder"]);
