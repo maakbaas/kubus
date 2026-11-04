@@ -120,9 +120,25 @@ Extension points are registries, not special cases in pages:
   from its saved period; all blocks follow. The setting itself is stored with the view right away (like arranging blocks;
   no *), as `filterBar: true` in the view's config JSON (absent = off; an optional key). One row down to 320 px, no
   horizontal scroll: the line takes the room that is left (ellipsized, whole in the tooltip), the buttons never
-  shrink or move while stepping. Switching the setting while a panel (View settings) is open moves
+  shrink or move while stepping. **Rules on the bar**: while the bar is shown, each rule in the view's filter panel that
+  takes a value has a pin ("Show on filter bar", `FilterRule.onBar: true`, saved with the view's filter like any edit of
+  it); below the bar's line each such rule is a row of its own at every width, its words at the left ("Genre is", "Pages
+  below": field and comparison, changed only in the panel; one column as wide as the longest, at most 40%, then ellipsized)
+  and its value filling the rest of the line (`RuleValue`, the panel's own value box). A rule whose comparison takes no
+  value ("is empty") or whose field is gone shows no row. Switching the setting while a panel (View settings) is open moves
   the Filter button only when it closes (`panels.hold`), so the buttons after it don't jump under the open panel; the
   bar itself shows at once.
+- **A rule's value box** (`views/RuleValue.tsx`, the filter panel's and the filter bar's): where the rule compares with a value
+  (`offersValues` in domain/query.ts: text by contains / is and their nots, a list of text by contains, a number or list of
+  numbers by is / is not; not below / above, whose threshold is typed; item fields pick from items already) it is a Carbon
+  ComboBox offering the field's existing values with how many items have each, most common first, any other text typed
+  as well (custom values allowed; code with {{ }} is always plain text). A native collection's from its items in the
+  cache (this space's; `valueOptions`, a list's each entry, as grouping makes them); a remote one's from its source, one
+  grouped query (`groupBy` the column, `counts`, `limit: 1`: the groups, at most `MAX_SOURCE_GROUPS`) asked once a session
+  per source and column, not for a column the source can't group (text-only); none for Backlinks, a list's entries or
+  several collections merged. None either when the values hardly repeat (more than 20 and more than half the items with
+  a value: titles, notes; `chosenOptions`) or there are more than `MAX_VALUE_OPTIONS`: then a plain input. Numbers are
+  compared in words: is, is not, below, above.
 - **Limit** (a block's Filter panel, beside Add filter: "Show [100] items at a time"; `ViewBlock.limit`, saved with the
   view): how many items it shows at first and each "Show more" adds; empty is all. Unset it is 100, or all for a block
   that needs every item (a chart: `BlockUses.all`; `blockLimit`). A remote collection is asked that many rows a page

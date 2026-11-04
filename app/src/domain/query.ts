@@ -40,6 +40,8 @@ export interface FilterRule {
   value: string;
   /** How it joins the rules before it (and the filter it builds on): "or" lets more items in; absent = and, narrowing (domain/filterTree.ts). */
   join?: "or";
+  /** Shown on the filter bar (a view's filter while its bar is shown): its value edited there, in a row of its own. */
+  onBar?: true;
 }
 
 export interface SortRule {
@@ -128,6 +130,9 @@ const localDay = (v: FieldValue) => {
 /** The day a date or date & time value falls on, "" for none. */
 const dayOf = (field: FieldDef, v: FieldValue) => (!str(v) ? "" : field.kind === "datetime" ? localDay(v) : str(v));
 
+/** A number compared with another, in words: below (<), above (>). */
+const NUMBER_OPS = [op("lt", "below"), op("gt", "above")];
+
 const KIND_RULES: Record<FieldKind, KindRules> = {
   string: {
     operators: TEXT_OPS,
@@ -147,7 +152,7 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     sortKey: (_, v) => (typeof v === "string" ? htmlPlainText(v).toLowerCase() || null : null),
   },
   number: {
-    operators: [op("is", "="), op("isNot", "≠"), op("gt", ">"), op("lt", "<"), ...EMPTY_OPS],
+    operators: [op("is", "is"), op("isNot", "is not"), ...NUMBER_OPS, ...EMPTY_OPS],
     text: (_, v) => (typeof v === "number" ? String(v) : ""),
     sortKey: (_, v) => (typeof v === "number" ? v : null),
     groupKeys: (_, v) => single(typeof v === "number" ? String(v) : ""),
@@ -248,9 +253,9 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     groupKeys: (_f, v) => single(v == null ? "" : String(v)),
   },
   // Generated text, Markdown or a number (the field says which): compared as text, or as a number
-  // by > and < (numbers sort as numbers).
+  // by below / above (numbers sort as numbers).
   ai: {
-    operators: [...TEXT_OPS.slice(0, 4), op("gt", ">"), op("lt", "<"), ...EMPTY_OPS],
+    operators: [...TEXT_OPS.slice(0, 4), ...NUMBER_OPS, ...EMPTY_OPS],
     text: (_f, v) => (typeof v === "string" ? markdownPlainText(v) : v == null ? "" : String(v)),
     sortKey: (_f, v) => (typeof v === "number" ? v : typeof v === "string" && v ? markdownPlainText(v).toLowerCase() : null),
     groupKeys: (_f, v) => single(v == null ? "" : String(v)),
@@ -655,4 +660,56 @@ export function withEmptyGroups(collection: Collection, result: QueryResult, all
   const isDate = field.kind === "date" || field.kind === "datetime";
   const groups = [...result.groups, ...extra.values()].sort((a, b) => compareGroups({ ...a, count: a.items.length }, { ...b, count: b.items.length }, order, isDate, query.groupCustom));
   return { ...result, groups };
+}
+
+/** A value a filter rule's box offers, as the items have it, and how many items have it. */
+export interface ValueOption {
+  value: string;
+  count: number;
+}
+
+/**
+ * Whether a rule's value box offers the field's existing values: text and lists of text compared with
+ * a value ("Genre is ▾", "Tags contains ▾"), and numbers or lists of numbers by is / is not (not below / above:
+ * a threshold is typed). Item fields pick from items already; long text, dates and checkboxes offer none.
+ */
+export function offersValues(field: FieldDef, operator: FilterOperator): boolean {
+  switch (field.kind) {
+    case "string":
+      return operator === "contains" || operator === "notContains" || operator === "is" || operator === "isNot";
+    case "string_list":
+      return operator === "contains" || operator === "notContains";
+    case "number":
+    case "number_list":
+      return operator === "is" || operator === "isNot";
+    default:
+      return false;
+  }
+}
+
+/** The most values a box offers. */
+export const MAX_VALUE_OPTIONS = 1000;
+
+/**
+ * The existing values a rule's box offers (`offersValues`), from these items: each distinct value
+ * (a list's each entry, as grouping makes them), most common first, then A–Z. None when almost every
+ * value is different (titles, notes: no help in picking) or there are too many.
+ */
+export function valueOptions(field: FieldDef, items: readonly Item[]): ValueOption[] {
+  const keys = KIND_RULES[field.kind].groupKeys;
+  if (!keys) return [];
+  const counts = new Map<string, number>();
+  let valued = 0;
+  for (const item of items) {
+    const found = keys(field, fieldValue(item, field), { refLabel: () => "" }).filter((k) => k.key !== "");
+    if (found.length) valued += 1;
+    for (const { key } of found) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return chosenOptions([...counts].map(([value, count]) => ({ value, count })), valued);
+}
+
+/** Values as offered: most common first, then A–Z; none when they hardly repeat (more than 20 and more than half the valued items) or are too many. */
+export function chosenOptions(options: ValueOption[], valued: number): ValueOption[] {
+  if (options.length > MAX_VALUE_OPTIONS || (options.length > 20 && options.length * 2 > valued)) return [];
+  return [...options].sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
 }

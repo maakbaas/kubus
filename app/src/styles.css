@@ -2529,6 +2529,48 @@ img[data-lightbox] {
   line-height: var(--cds-body-compact-01-line-height);
   letter-spacing: var(--cds-body-compact-01-letter-spacing);
 }
+/* With rules on the bar: the line, then a row for each (at every width), the rules' words in one column
+   (as wide as the longest, at most 40%: then ellipsized, whole in their tooltip) and each value filling the
+   rest of its line. */
+.filter-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-03);
+  margin-bottom: var(--cds-spacing-05);
+}
+.filter-bar-wrap > .filter-bar {
+  margin-bottom: 0;
+}
+.filter-bar__rules {
+  display: grid;
+  grid-template-columns: fit-content(40%) minmax(0, 1fr);
+  gap: var(--cds-spacing-03) var(--cds-spacing-05);
+  align-items: start;
+}
+.filter-bar__rule {
+  display: contents;
+}
+.filter-bar__words {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* On the value's 2rem line, not its helper text's. */
+  line-height: var(--cds-spacing-07);
+  font-size: var(--cds-body-compact-01-font-size);
+  letter-spacing: var(--cds-body-compact-01-letter-spacing);
+  color: var(--cds-text-secondary);
+}
+/* A filter value's offered value: the value, and at the right how many items have it. */
+.value-option {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--cds-spacing-05);
+  inline-size: 100%;
+}
+.value-option__count {
+  color: var(--cds-text-secondary);
+}
 .view-kind {
   display: inline-flex;
   align-items: center;
@@ -2664,7 +2706,7 @@ img[data-lightbox] {
 .query-editor__rule {
   align-self: stretch;
   display: grid;
-  /* How it joins the rules before it (And / Or, "Where" for the first), field, condition, value, remove. */
+  /* How it joins the rules before it (And / Or, "Where" for the first), field, condition, value, its buttons (on the filter bar, remove). */
   grid-template-columns: 6.5rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: var(--cds-spacing-03);
   align-items: center;
@@ -2672,6 +2714,11 @@ img[data-lightbox] {
 /* A sort level: "Sort by" / "Then by", field, direction, remove (in the filter rules' columns, without a value). */
 .query-editor__rule--sort {
   grid-template-columns: 6.5rem minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+/* A rule's buttons (on the filter bar, remove), touching, at the right. */
+.query-editor__actions {
+  display: flex;
+  justify-self: end;
 }
 .query-editor__join {
   padding-inline-start: var(--cds-spacing-05);

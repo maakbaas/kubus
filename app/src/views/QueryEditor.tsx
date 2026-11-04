@@ -1,16 +1,9 @@
 import { useId, type ReactNode } from "react";
-import { Button, Heading, IconButton, Select, SelectItem, TextInput } from "@carbon/react";
-import { Add, TrashCan } from "@carbon/icons-react";
-import { isMetaField, newId, pickableFields, selfField, type FieldDef, type FieldKind, type Collection } from "../domain/model";
+import { Button, Heading, IconButton, Select, SelectItem } from "@carbon/react";
+import { Add, Pin, PinFilled, TrashCan } from "@carbon/icons-react";
+import { isMetaField, newId, pickableFields, selfField, type FieldDef, type Collection } from "../domain/model";
 import { canFilter, canGroup, canSort, fieldOperators, isRemote } from "../domain/sources";
-import { dollarNames } from "../domain/components";
 import {
-  filterCodeValue,
-  filterValueProblem,
-  hasSections,
-  isPageValue,
-  PAGE_ITEM,
-  pageItemField,
   sortableFields,
   type FilterOperator,
   type FilterRule,
@@ -23,6 +16,7 @@ import { DEFAULT_GROUP_DATE, GROUP_DATES, type GroupDate } from "../domain/group
 import { dateFields, periodRule } from "../domain/datePeriod";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { DatePeriodFilter } from "./DatePeriodFilter";
+import { RuleValue } from "./RuleValue";
 import { GroupOrderList } from "./GroupOrderList";
 import { useStore } from "../app/store";
 import { hasRemotePart } from "../domain/mergedCollection";
@@ -54,95 +48,9 @@ interface Props {
   footer?: ReactNode;
   /** A page-wide filter over several collections (`collection` holds all their fields): each field's operators are its own collection's (a remote one's, what its column supports). */
   owners?: Collection[];
+  /** Filter part of a view whose filter bar is shown: a rule can be put on the bar (`FilterRule.onBar`), its value edited there. */
+  bar?: boolean;
   onChange(query: ViewQuery): void;
-}
-
-/** The page's fields whose values a rule on a field of this kind compares with (same kind; text with text). */
-const TEXT_KINDS: FieldKind[] = ["string", "markdown", "html", "ai", "string_list", "checklist"];
-function comparablePageFields(kind: FieldKind, page: Collection): FieldDef[] {
-  const kinds: FieldKind[] = TEXT_KINDS.includes(kind) ? ["string", "ai"] : kind === "number_list" ? ["number"] : kind === "number" || kind === "date" || kind === "datetime" || kind === "checkbox" ? [kind] : [];
-  return page.fields.filter((f) => kinds.includes(f.kind));
-}
-
-/** A rule's value as typed (not taken from the page's item). */
-const FIXED = "fixed";
-
-/**
- * What a typed value says under its input: what its {{ }} code works out to now ("= true"), or why
- * it can't be compared (failing code, "maybe" for a checkbox), shown as invalid.
- */
-function valueNote(field: FieldDef, rule: FilterRule, page?: Collection): { helper?: string; problem?: string } {
-  const code = hasSections(rule.value);
-  // On an item page, code reading $item is worked out for each page's item, not here.
-  if (code && page && dollarNames(rule.value).includes("item")) return { helper: `Worked out for each ${page.name}'s page` };
-  const value = code ? filterCodeValue(rule.value, null) : rule.value;
-  const problem = filterValueProblem(field, rule.operator, value);
-  if (problem) return { problem };
-  return code ? { helper: `= ${value || "(empty)"}` } : {};
-}
-
-/**
- * Value input for a filter rule, by field kind (an item picker, text otherwise). The text may hold
- * {{ }} code, worked out when the filter runs ($now; on an item page also $item, the page's item).
- * On an item page the value can also be one of the page's item's values, picked by name ("This
- * Book's Year").
- */
-function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; field: FieldDef; rule: FilterRule; refs: RefOptions; page?: Collection; onChange(value: string): void }) {
-  if (field.kind === "item" || field.kind === "item_list") {
-    // On an item page: the page's item itself, or what one of its reference fields points to.
-    const pageFields = page ? page.fields.filter((f) => f.kind === "item" && f.targetCollectionId === field.targetCollectionId) : [];
-    return (
-      <Select id={id} labelText="Value" hideLabel size="sm" value={rule.value} onChange={(e) => onChange(e.target.value)}>
-        <SelectItem value="" text="Choose…" disabled hidden />
-        {page && field.targetCollectionId === page.id && <SelectItem value={PAGE_ITEM} text={`This ${page.name}`} />}
-        {pageFields.map((f) => (
-          <SelectItem key={f.id} value={pageItemField(f.id)} text={`This ${page!.name}’s ${f.name}`} />
-        ))}
-        {(refs[field.targetCollectionId ?? ""] ?? []).filter((o) => !o.elsewhere || o.id === rule.value).map((o) => (
-          <SelectItem key={o.id} value={o.id} text={o.label} />
-        ))}
-      </Select>
-    );
-  }
-  // Text for every kind, so {{ }} code can be typed (a number or date input would refuse the braces).
-  const date = field.kind === "date" || field.kind === "datetime";
-  const note = valueNote(field, rule, page);
-  const input = (
-    <TextInput
-      id={id}
-      labelText="Value"
-      hideLabel
-      size="sm"
-      inputMode={field.kind === "number" || field.kind === "number_list" ? "decimal" : undefined}
-      placeholder={field.kind === "checkbox" ? "true or false" : date ? "yyyy-mm-dd" : "Value"}
-      value={rule.value}
-      helperText={note.helper}
-      invalid={!!note.problem}
-      invalidText={note.problem}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  );
-  const pageFields = page ? comparablePageFields(field.kind, page) : [];
-  if (pageFields.length === 0) return input;
-  const fromPage = isPageValue(rule.value);
-  return (
-    <div className="query-editor__value">
-      <Select
-        id={`${id}-from`}
-        labelText="Value from"
-        hideLabel
-        size="sm"
-        value={fromPage ? rule.value : FIXED}
-        onChange={(e) => onChange(e.target.value === FIXED ? "" : e.target.value)}
-      >
-        <SelectItem value={FIXED} text="A value" />
-        {pageFields.map((f) => (
-          <SelectItem key={f.id} value={pageItemField(f.id)} text={`This ${page!.name}’s ${f.name}`} />
-        ))}
-      </Select>
-      {!fromPage && input}
-    </div>
-  );
 }
 
 /**
@@ -151,7 +59,7 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
  */
 const SHOWING_ALL = "Showing all items.";
 
-export function QueryEditor({ collection, query, refs, part, noGroup, page, groups, title, emptyText = SHOWING_ALL, footer, owners, onChange }: Props) {
+export function QueryEditor({ collection, query, refs, part, noGroup, page, groups, title, emptyText = SHOWING_ALL, footer, owners, bar, onChange }: Props) {
   // Element ids unique per editor: several item lists (tabs, panes) can be open at once.
   const uid = useId();
   // On an item page, a block of its own collection can also be filtered on the item itself
@@ -248,19 +156,33 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, grou
                 ))}
               </Select>
               {operator.needsValue ? (
-                <RuleValue id={`${uid}-filter-value-${rule.id}`} field={field} rule={rule} refs={refs} page={page} onChange={(value) => setFilter(rule.id, { value })} />
+                <RuleValue id={`${uid}-filter-value-${rule.id}`} owner={ownerOf(field)} field={field} rule={rule} refs={refs} page={page} onChange={(value) => setFilter(rule.id, { value })} />
               ) : (
                 <span />
               )}
-              <IconButton autoAlign
-                label="Remove filter"
-                kind="ghost"
-                size="sm"
-                align="left"
-                onClick={() => onChange({ ...query, filters: query.filters.filter((r) => r.id !== rule.id) })}
-              >
-                <TrashCan />
-              </IconButton>
+              <span className="query-editor__actions">
+                {bar && operator.needsValue && (
+                  <IconButton
+                    autoAlign
+                    label={rule.onBar ? "Remove from filter bar" : "Show on filter bar"}
+                    kind="ghost"
+                    size="sm"
+                    align="left"
+                    onClick={() => setFilter(rule.id, { onBar: rule.onBar ? undefined : true })}
+                  >
+                    {rule.onBar ? <PinFilled /> : <Pin />}
+                  </IconButton>
+                )}
+                <IconButton autoAlign
+                  label="Remove filter"
+                  kind="ghost"
+                  size="sm"
+                  align="left"
+                  onClick={() => onChange({ ...query, filters: query.filters.filter((r) => r.id !== rule.id) })}
+                >
+                  <TrashCan />
+                </IconButton>
+              </span>
             </div>
           );
         })}

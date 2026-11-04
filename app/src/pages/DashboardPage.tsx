@@ -348,6 +348,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
         query={{ filters: view.filters, sort: [], groupBy: null }}
         refs={refs}
         part="filter"
+        bar={!!active?.filterBar}
         emptyText="No filter: every block shows what its own filter lets through. A rule on Date applies to each block's first date field, a rule on a field to the blocks listing it."
         owners={listed}
         onChange={(q) => setView((v) => ({ ...v, filters: q.filters }))}
@@ -442,7 +443,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
       )}
 
       {savedViews !== null && (active?.filterBar || filterInBar) && (
-        <FilterBar collection={scope} filters={view.filters} onChange={(filters) => setView((v) => ({ ...v, filters }))}>
+        <FilterBar collection={scope} filters={view.filters} refs={refs} owners={listed} onChange={(filters) => setView((v) => ({ ...v, filters }))}>
           {filterInBar && filterButton}
         </FilterBar>
       )}

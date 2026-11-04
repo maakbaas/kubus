@@ -349,6 +349,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
         query={{ filters: view.filters, sort: [], groupBy: null }}
         refs={data.refs}
         part="filter"
+        bar={!!active?.filterBar}
         onChange={(q) => setView((v) => ({ ...v, filters: q.filters }))}
       />
     </ToolbarPopover>
@@ -445,7 +446,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
 
       {/* The filter bar ("Show filter bar" in View settings): the view's Filter button and date period. */}
       {savedViews !== null && (active?.filterBar || filterInBar) && (
-        <FilterBar collection={collection} filters={view.filters} onChange={(filters) => setView((v) => ({ ...v, filters }))}>
+        <FilterBar collection={collection} filters={view.filters} refs={data.refs} onChange={(filters) => setView((v) => ({ ...v, filters }))}>
           {filterInBar && filterButton}
         </FilterBar>
       )}

@@ -13,7 +13,10 @@ import {
   isEmptyValue,
   isGroupable,
   isGrouped,
+  chosenOptions,
+  offersValues,
   operatorsFor,
+  valueOptions,
   sortableFields,
   type FilterRule,
   type QueryContext,
@@ -54,13 +57,13 @@ describe("operators per kind", () => {
   });
 
   it("each kind its own", () => {
-    expect(operatorsFor("number").map((o) => o.label)).toEqual(["=", "≠", ">", "<", "is empty", "is not empty"]);
+    expect(operatorsFor("number").map((o) => o.label)).toEqual(["is", "is not", "below", "above", "is empty", "is not empty"]);
     expect(operatorsFor("checkbox").map((o) => o.id)).toEqual(["isChecked", "isNotChecked", "is"]);
     expect(operatorsFor("date").map((o) => o.id)).toContain("before");
     expect(operatorsFor("datetime").find((o) => o.id === "is")?.label).toBe("is on");
     expect(operatorsFor("item_list").find((o) => o.id === "is")?.label).toBe("includes");
     expect(operatorsFor("image").map((o) => o.id)).toEqual(["isEmpty", "isNotEmpty"]);
-    expect(operatorsFor("ai").map((o) => o.id)).toEqual(["contains", "notContains", "is", "isNot", "gt", "lt", "isEmpty", "isNotEmpty"]);
+    expect(operatorsFor("ai").map((o) => o.id)).toEqual(["contains", "notContains", "is", "isNot", "lt", "gt", "isEmpty", "isNotEmpty"]);
     expect(operatorsFor("string").find((o) => o.id === "isEmpty")?.needsValue).toBe(false);
   });
 });
@@ -378,5 +381,25 @@ describe("a list of numbers", () => {
     expect(titles({ filters: [{ id: "r", fieldId: "sc", operator: "isNot", value: "4" }] })).toEqual([["", ["B", "E"]]]);
     expect(titles({ sort: [{ fieldId: "sc", direction: "desc" }] })[0][1].slice(0, 2)).toEqual(["B", "A"]);
     expect(groupKeysOf(scores, rows[0], ctx).map((k) => k.key)).toEqual(["3", "4"]);
+  });
+});
+
+describe("existing values a rule's box offers", () => {
+  it("for text, lists of text and numbers compared with a value, not for thresholds or other kinds", () => {
+    expect(offersValues(fields.s, "is")).toBe(true);
+    expect(offersValues(fields.s, "contains")).toBe(true);
+    expect(offersValues(fields.tags, "contains")).toBe(true);
+    expect(offersValues(fields.n, "is")).toBe(true);
+    expect(offersValues(fields.n, "lt")).toBe(false);
+    for (const f of [fields.md, fields.d, fields.cb, fields.ref, fields.chk]) expect(offersValues(f, "is"), f.kind).toBe(false);
+  });
+
+  it("each distinct value (a list's each entry), most common first, then A to Z; none when they hardly repeat", () => {
+    const items = [item("1", { s: "Fantasy", tags: ["classic", "long"] }), item("2", { s: "Sci-fi", tags: ["classic"] }), item("3", { s: "Fantasy" }), item("4", {})];
+    expect(valueOptions(fields.s, items)).toEqual([{ value: "Fantasy", count: 2 }, { value: "Sci-fi", count: 1 }]);
+    expect(valueOptions(fields.tags, items)).toEqual([{ value: "classic", count: 2 }, { value: "long", count: 1 }]);
+    const unique = Array.from({ length: 30 }, (_, i) => ({ value: `Title ${i}`, count: 1 }));
+    expect(chosenOptions(unique, 30)).toEqual([]);
+    expect(chosenOptions(unique.slice(0, 20), 20)).toHaveLength(20);
   });
 });

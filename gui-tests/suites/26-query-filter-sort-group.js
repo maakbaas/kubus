@@ -137,7 +137,7 @@ const OPERATORS = {
   Title: ["contains", "does not contain", "is", "is not", "is empty", "is not empty"],
   Notes: ["contains", "does not contain", "is empty", "is not empty"],
   Snippet: ["contains", "does not contain", "is empty", "is not empty"],
-  Pages: ["=", "≠", ">", "<", "is empty", "is not empty"],
+  Pages: ["is", "is not", "below", "above", "is empty", "is not empty"],
   Published: ["is", "is before", "is after", "is empty", "is not empty"],
   Logged: ["is on", "is before", "is after", "is empty", "is not empty"],
   Read: ["is checked", "is not checked", "is"],
@@ -232,11 +232,11 @@ for (const [label, fieldNames] of CONDITION_GROUPS) {
     }
     if (fieldNames[0] !== "Title") return;
     // A number that isn't one matches nothing and says so; a rule still without its value filters nothing yet.
-    await setRule(t, rule, { field: "Pages", cond: ">", value: "lots" });
+    await setRule(t, rule, { field: "Pages", cond: "above", value: "lots" });
     await expectRows(t, "an invalid number matches nothing", []);
     await t.check("and the input says why", (await panel.innerText()).includes("Not a number"));
     await t.audit("invalid value", { shotOnFail: true });
-    await setRule(t, rule, { field: "Pages", cond: ">", value: "" });
+    await setRule(t, rule, { field: "Pages", cond: "above", value: "" });
     await expectRows(t, "a rule without its value filters nothing yet", TITLES);
     // Remove filter.
     await setRule(t, rule, { field: "Read", cond: "is checked" });

@@ -193,8 +193,10 @@ function resolveRules<R extends { fieldId: string }>(collections: Collection | C
     }
     const join = (r as { join?: unknown }).join;
     if (join !== undefined && join !== "and" && join !== "or") throw new HttpError(400, "A filter's `join` is and or or");
-    const { join: _join, ...rest } = r as { join?: unknown };
-    return { id: newId(), ...rest, ...(join === "or" && { join }), fieldId: fieldIdOf((r as { fieldId: string }).fieldId) } as unknown as R;
+    const onBar = (r as { onBar?: unknown }).onBar;
+    if (onBar !== undefined && typeof onBar !== "boolean") throw new HttpError(400, "A filter's `onBar` is true or false");
+    const { join: _join, onBar: _onBar, ...rest } = r as { join?: unknown; onBar?: unknown };
+    return { id: newId(), ...rest, ...(join === "or" && { join }), ...(onBar === true && { onBar }), fieldId: fieldIdOf((r as { fieldId: string }).fieldId) } as unknown as R;
   });
 }
 
