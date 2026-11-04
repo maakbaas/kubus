@@ -76,6 +76,19 @@ export default defineConfig({
   // sqlite-wasm locates its .wasm via import.meta.url; pre-bundling breaks that.
   optimizeDeps: { exclude: ["@sqlite.org/sqlite-wasm"] },
   worker: { format: "es" },
+  build: {
+    rollupOptions: {
+      output: {
+        // What the ~2,700 lazily loaded Carbon icons (ui/collectionIcons.tsx) import (React, its JSX runtime, Carbon's
+        // Icon) in a chunk of its own: in the app's main chunk, every app change renamed (rehashed) every icon too, and
+        // the service worker had to download them all, one by one, before a new build could take over (on an iPhone it
+        // then hardly ever finished). This chunk changes only with those packages.
+        manualChunks(id) {
+          if (/node_modules\/(react|react-dom|scheduler|prop-types|@carbon\/icon-helpers)\/|node_modules\/@carbon\/icons-react\/es\/(Icon|iconPropTypes-[^/]*)\.js$/.test(id)) return "vendor";
+        },
+      },
+    },
+  },
   server: {
     port: 1420,
     strictPort: true,

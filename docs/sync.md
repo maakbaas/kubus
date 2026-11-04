@@ -539,10 +539,13 @@ meta tags in `app/index.html`, safe-area padding in `styles.css`, and a service 
 emitted by the build with a version stamp; `platform/serviceWorker.ts` registers it in production
 web builds only) that caches the app shell and serves it cache first, so it starts at once offline and on a
 weak connection the phone still counts as online (one bar never delays the start). A new build is downloaded whole
-in the background (also checked when the app is shown again: iOS resumes it without loading the page). Once it has
+(8 files at a time; what didn't change comes from the old cache: React and Carbon's `Icon` are a `vendor` chunk of their own,
+`vite.config.ts`, so an app change doesn't rename the ~2,700 lazily loaded icons, which made every update thousands of
+downloads that iOS never let finish) in the background (also checked when the app is shown again: iOS resumes it without loading the page). Once it has
 taken over, the page reloads the next time it is shown again, or at once when that was just now (`platform/serviceWorker.ts`):
 iOS hardly ever starts a home-screen app afresh, so "the next start" left it on the old build for good. That reload is from
-the cache too (instant, offline), and never while the app is in use. The previous build's cache is kept for a page still running it. iOS needs HTTPS for OPFS and
+the cache too (instant, offline), and never while the app is in use. Settings → Display's "Reload app" (web and home-screen app, not the desktop app) loads the newest build at once
+(`updateAndReload`, as "Reload to update" does), for when iOS keeps the old one a while after the server was updated. The previous build's cache is kept for a page still running it. iOS needs HTTPS for OPFS and
 service workers: put the container behind a TLS proxy or tunnel (Caddy, Tailscale serve, Cloudflare
 tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 

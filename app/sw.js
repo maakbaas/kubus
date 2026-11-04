@@ -1,7 +1,8 @@
 // Service worker: the installed app starts from its cache, never waiting for the network (the data is
 // local anyway). A weak connection the phone still counts as online (one bar) must not slow the start.
 //  * Installing downloads the app shell: index.html and every file it leads to (found by scanning the
-//    build output for asset names), so the very first visit is enough.
+//    build output for asset names), so the very first visit is enough; PARALLEL at a time. A new build's
+//    unchanged files come from the old cache (vite.config.ts keeps the icons' names from changing).
 //  * Pages: the cached shell, always (cache first). Only without one (never installed) the network.
 //  * Everything else of this origin: from the caches, else the network (hashed build files never change).
 //  * /api (the sync server) is never cached.
@@ -16,23 +17,25 @@ const CACHE = `${PREFIX}__BUILD__`;
 const SHELL = ["./", "manifest.webmanifest", "favicon.svg", "apple-touch-icon.png"];
 const ASSET = /(?:\.\/|\/assets\/|assets\/)([\w.-]+\.(?:js|css|wasm|woff2?|svg|png|json))/g;
 
+/** How many files are downloaded at once while installing: a first install is thousands of small files (the icons). */
+const PARALLEL = 8;
+
 async function precache() {
   const cache = await caches.open(CACHE);
   const base = self.registration.scope;
   const queue = SHELL.map((p) => new URL(p, base).href);
   const seen = new Set(queue);
-  while (queue.length > 0) {
-    const url = queue.shift();
+  const one = async (url) => {
     // Unchanged hashed files come from the previous build's cache instead of the (slow) network.
     const known = url.includes("/assets/") ? await caches.match(url) : undefined;
     const response = known ?? (await fetch(url, { cache: "reload" }));
     if (!response.ok) {
       if (SHELL.some((p) => new URL(p, base).href === url)) throw new Error(`Cannot cache ${url}`);
-      continue; // a guessed name that doesn't exist
+      return; // a guessed name that doesn't exist
     }
     await cache.put(url, response.clone());
     const type = response.headers.get("content-type") ?? "";
-    if (!/html|javascript|css/.test(type)) continue;
+    if (!/html|javascript|css/.test(type)) return;
     for (const [, name] of (await response.text()).matchAll(ASSET)) {
       const next = new URL(`assets/${name}`, base).href;
       if (!seen.has(next)) {
@@ -40,7 +43,30 @@ async function precache() {
         queue.push(next);
       }
     }
-  }
+  };
+  // PARALLEL at a time; done when nothing is queued or downloading. One failure fails the install.
+  await new Promise((resolve, reject) => {
+    let active = 0;
+    let failed = false;
+    const pump = () => {
+      if (failed) return;
+      if (queue.length === 0 && active === 0) return resolve();
+      while (active < PARALLEL && queue.length > 0) {
+        active += 1;
+        one(queue.shift()).then(
+          () => {
+            active -= 1;
+            pump();
+          },
+          (e) => {
+            failed = true;
+            reject(e);
+          },
+        );
+      }
+    };
+    pump();
+  });
 }
 
 /** The build stamp of a cache's name (base 36 of its build time), for keeping the newest. */
