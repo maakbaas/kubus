@@ -85,7 +85,7 @@ Extension points are registries, not special cases in pages:
   listed item meets (`requiredRules`).
 - **Filter panel layout** (`QueryEditor`, `DatePeriodFilter`, `views/JoinSelect.tsx`): every group of a filter, the date period
   and each rule (`.filter-group`), starts with its top row: how it joins what is before it, And / Or as an inline choice with
-  no box (`JoinSelect`; the date period's only in a block's filter, a rule's always but for a view's first), else "During"
+  no box (`JoinSelect`; the date period's in a block's filter, also before a period is set (kept in the panel, stored with the period), a rule's always but for a view's first), else "During"
   (the date) or "Where" (the first rule), at the left; its buttons (pin while the filter bar is shown, × / remove) at the far
   right. Then what is edited in it: the date's Hour … Range switcher, its period in short at the left as the filter bar says
   it ("This week", "Last 7 days", "October 2026"; whole, with its days, in the tooltip) with ‹ › >| at the far right, the

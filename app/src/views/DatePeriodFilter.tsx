@@ -117,7 +117,14 @@ export function DatePeriodFilter({
   const window: Window | null = kind === "range" ? null : (state?.window ?? null);
 
   // Counted from the page's item's date stays so while the period is counted from a day (a fixed one has its days).
-  const store = (next: string, from = anchor) => onChange(withPeriod(filters, fieldId, next, from));
+  // A block's period joins its view's filter (And / Or), shown before there is a period too: chosen then, kept here and
+  // stored with the period once one is set.
+  const [joinChosen, setJoinChosen] = useState<"and" | "or">("and");
+  const join = rule ? (rule.join ?? "and") : joinChosen;
+  const store = (next: string, from = anchor) => {
+    const written = withPeriod(filters, fieldId, next, from);
+    onChange(!rule && joins && joinChosen === "or" ? written.map((r) => (r.operator === "between" && !filters.includes(r) ? { ...r, join: "or" as const } : r)) : written);
+  };
   const clear = () => {
     setRangeChosen(false);
     onChange(filters.filter((r) => r !== rule));
@@ -155,11 +162,13 @@ export function DatePeriodFilter({
     <div className="date-period filter-group">
       {/* As every group of the filter (QueryEditor's rules): a top row, its And / Or (else "During") and its buttons. */}
       <div className="filter-group__head">
-        {joins && rule ? (
+        {joins ? (
           <JoinSelect
             id={`${uid}-date-join`}
-            value={rule.join ?? "and"}
-            onChange={(join) => onChange(filters.map((r) => (r === rule ? { ...withoutJoin(r), ...(join === "or" && { join: "or" as const }) } : r)))}
+            value={join}
+            onChange={(next) =>
+              rule ? onChange(filters.map((r) => (r === rule ? { ...withoutJoin(r), ...(next === "or" && { join: "or" as const }) } : r))) : setJoinChosen(next)
+            }
           />
         ) : (
           <span className="filter-group__word">During</span>
