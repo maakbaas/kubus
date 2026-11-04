@@ -186,7 +186,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, grou
           );
         })}
         {(filterable.some((f) => !isMetaField(f)) || footer) && (
-          <div className="query-editor__foot">
+          <div className="query-editor__foot query-editor__foot--filter">
             {filterable.some((f) => !isMetaField(f)) ? (
               <Button kind="tertiary" size="sm" renderIcon={Add} iconDescription="Add filter" onClick={addFilter}>
                 Add filter

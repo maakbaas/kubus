@@ -2705,7 +2705,29 @@ img[data-lightbox] {
   display: flex;
   align-items: center;
   gap: var(--cds-spacing-03);
-  color: var(--cds-text-secondary);
+}
+/* A filter's foot: "Add filter" as wide as one of the rules' three columns, what goes beside it (a block's "Show [100]
+   items at a time") at the far right of its row; on a phone "Add filter" the panel's width and that below it. */
+.query-editor__foot--filter {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: var(--cds-spacing-05);
+}
+/* (Beats the panels' full-width buttons, `:is(.view-settings, .toolbar-popover__panel) .cds--btn`.) */
+.query-editor__foot--filter > .cds--btn.cds--btn--tertiary:not(.cds--btn--icon-only) {
+  flex: none;
+  inline-size: calc((100% - 2 * var(--cds-spacing-03)) / 3);
+  max-inline-size: none;
+}
+@media (max-width: 42rem) {
+  .query-editor__foot--filter {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--cds-spacing-06);
+  }
+  .query-editor__foot--filter > .cds--btn.cds--btn--tertiary:not(.cds--btn--icon-only) {
+    inline-size: 100%;
+  }
 }
 /* A number of a few digits: Carbon's input is at least 9.375rem wide. */
 .block-limit .cds--form-item {
@@ -2788,12 +2810,9 @@ img[data-lightbox] {
   justify-content: space-between;
   min-block-size: var(--cds-spacing-07);
 }
-.filter-group__word {
-  line-height: var(--cds-spacing-07);
-}
+/* (The row's 2rem centre the words; its space-between puts the buttons at the far right.) */
 .filter-group__buttons {
   display: flex;
-  margin-inline-start: auto;
 }
 /* And / Or inline: no box, its word on the row's left edge, its arrow right after it. */
 .filter-join .cds--select-input {
@@ -2818,12 +2837,10 @@ img[data-lightbox] {
   min-block-size: var(--cds-spacing-07);
 }
 .date-period__label {
-  line-height: var(--cds-spacing-07);
   white-space: nowrap;
 }
 .date-period__steps {
   display: flex;
-  margin-inline-start: auto;
 }
 /* The field it goes by across the rules' field and condition columns, Which in their value column. */
 .date-period__by {

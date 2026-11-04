@@ -91,7 +91,9 @@ Extension points are registries, not special cases in pages:
   it ("This week", "Last 7 days", "October 2026"; whole, with its days, in the tooltip) with ‹ › >| at the far right, the
   field it goes by across two of the rules' three columns and Which ("Counted from today") in the third; a rule's field,
   condition and value in three equal columns. Groups are a step further apart than their rows. On a phone a rule's field
-  has its row, condition and value beside each other below it, and the date's field and Which are stacked.
+  has its row, condition and value beside each other below it, and the date's field and Which are stacked. "Add filter" is one
+  column wide, what goes beside it (a block's "Show [100] items at a time") at the far right of its row; on a phone it is
+  the panel's width with that below it.
 - **Date period** (`app/src/domain/datePeriod.ts`, `views/DatePeriodFilter.tsx`): the top of every
   filter panel (no heading above it: the panel's button says "Filter"). A content switcher (Hour, Day, Week, Month,
   Year, Range) picks the kind; the line shows the period ("Any date" while there is none), a blue "Rolling"

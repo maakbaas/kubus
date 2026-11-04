@@ -17,7 +17,7 @@ import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { LoadingBar } from "../ui/LoadingBar";
 import { MAX_SOURCE_PAGE } from "../../../shared/sources";
-import { ToolbarPopover } from "../ui/ToolbarPopover";
+import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { SectionHeader } from "../ui/SectionHeader";
 import { useConfirm } from "../ui/useConfirm";
 import type { RefOptions } from "../ui/useReferenceOptions";
@@ -171,8 +171,11 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
     const { limit: _old, ...rest } = block;
     onChange(n === blockLimit({}, !!uses.all) ? rest : { ...rest, limit: n });
   };
-  // A row's height and its limit: only where they apply, a row of several blocks side by side (blockRows.ts).
-  const rowHeight = row?.inRow ? <RowHeightSettings id={`${uid}-row`} row={row} /> : null;
+  // A row's height and its limit: only where they apply, a row of several blocks side by side (blockRows.ts). Held while
+  // Block settings is open (ticking Beside the block above changes it): its Display section would move what is clicked.
+  const settingsPanel = usePanelsOpen();
+  const inRow = settingsPanel.hold("inRow", !!row?.inRow);
+  const rowHeight = row && inRow ? <RowHeightSettings id={`${uid}-row`} row={row} /> : null;
   return (
     <>
       {uses.query && (
@@ -252,7 +255,16 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
       )}
       {/* A gear, not the type's icon: this is also where the type is switched. */}
       {/* Opened by itself while the block's settings are still to be made (a new linked block's link). */}
-      <ToolbarPopover label="Block settings" icon={Settings} width="narrow" openRequest={type.unset?.(block.options) ? 1 : undefined} onOpenChange={onOpenChange}>
+      <ToolbarPopover
+        label="Block settings"
+        icon={Settings}
+        width="narrow"
+        openRequest={type.unset?.(block.options) ? 1 : undefined}
+        onOpenChange={(open) => {
+          settingsPanel.onOpenChange(open);
+          onOpenChange?.(open);
+        }}
+      >
         <div className="view-settings">
           {/* Its name first, then where it stands, then what it shows and how. */}
           {/* Empty: named after its component, or its type ("Table", "Cards"). Stored when left
