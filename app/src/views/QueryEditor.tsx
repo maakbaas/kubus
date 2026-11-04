@@ -45,6 +45,9 @@ interface Props {
    * beside "Add filter" (a block's limit).
    */
   title?: string;
+  /** A block's filter: it builds on its view's (page's, dashboard's) filter, even one without rules, so its date period and
+   * first rule always say how they join it (And / Or), never "During" / "Where". */
+  builds?: boolean;
   emptyText?: string;
   footer?: ReactNode;
   /** A page-wide filter over several collections (`collection` holds all their fields): each field's operators are its own collection's (a remote one's, what its column supports). */
@@ -62,7 +65,7 @@ interface Props {
  */
 const SHOWING_ALL = "Showing all items.";
 
-export function QueryEditor({ collection, query, refs, part, noGroup, page, groups, title, emptyText = SHOWING_ALL, footer, owners, bar, periodPin, onChange }: Props) {
+export function QueryEditor({ collection, query, refs, part, noGroup, page, groups, title, builds, emptyText = SHOWING_ALL, footer, owners, bar, periodPin, onChange }: Props) {
   // Element ids unique per editor: several item lists (tabs, panes) can be open at once.
   const uid = useId();
   // On an item page, a block of its own collection can also be filtered on the item itself
@@ -87,7 +90,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, grou
   // Each rule says how it joins what comes before it (the filter it builds on, the rules above):
   // And narrows, Or lets more items in. The first rule of a filter building on nothing has nothing to join.
   const listed = query.filters.filter((r) => r !== period);
-  const joinsFirst = (query.inherited?.length ?? 0) > 0;
+  const joinsFirst = !!builds || (query.inherited?.length ?? 0) > 0;
   // Sort levels: what a remote collection's source can sort by; a field is in one level at most.
   const sortable = sortableFields(collection).filter((f) => canSort(collection, f.id));
   const unsorted = sortable.filter((f) => !query.sort.some((s) => s.fieldId === f.id));

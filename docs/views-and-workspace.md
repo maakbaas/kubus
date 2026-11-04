@@ -84,7 +84,8 @@ Extension points are registries, not special cases in pages:
   `SourceCondition`), so every connector filters the same way; a new item is preset only from rules every
   listed item meets (`requiredRules`).
 - **Filter panel layout** (`QueryEditor`, `DatePeriodFilter`, `views/JoinSelect.tsx`): every group of a filter, the date period
-  and each rule (`.filter-group`), starts with its top row: how it joins what is before it, And / Or as an inline choice with
+  and each rule (`.filter-group`), starts with its top row (a block's filter is headed "Block filters combine with view filters",
+  page / dashboard filters elsewhere, and its groups always show their And / Or, `builds`, view filter or not): how it joins what is before it, And / Or as an inline choice with
   no box (`JoinSelect`; the date period's in a block's filter, also before a period is set (kept in the panel, stored with the period), a rule's always but for a view's first), else "During"
   (the date) or "Where" (the first rule), at the left; its buttons (pin while the filter bar is shown, × / remove) at the far
   right. Then what is edited in it: the date's Hour … Range switcher, its period in short at the left as the filter bar says

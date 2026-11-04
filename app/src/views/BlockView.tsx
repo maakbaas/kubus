@@ -191,8 +191,10 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
             refs={refs}
             part="filter"
             page={page}
-            // Building on another filter, no rules of its own say nothing (not "Showing all items").
-            emptyText={query.inherited?.length ? "" : undefined}
+            // It always builds on its place's filter (even one without rules): said above it, its groups joining it.
+            title={place === "item" ? "Block filters combine with page filters" : place === "dashboard" ? "Block filters combine with dashboard filters" : "Block filters combine with view filters"}
+            builds
+            emptyText=""
             onChange={(q) => onChange({ ...block, filters: q.filters.length > 0 ? q.filters : null })}
             footer={
               // How many items it shows at first and each Show more adds (empty: all).
