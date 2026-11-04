@@ -65,7 +65,8 @@ What the app does, feature by feature (read the part you work on).
   formulas too (also a formula copied from a read-only view, KaTeX's HTML: read back from its TeX source):
   `ui/markdownEditing.test.ts` copies and pastes a text with every syntax. Links have no underline but on hover, as
   everywhere in the app. Not GFM, so not here: `==highlight==` (GitHub doesn't render it either). A table is as wide as the text (editor and view) and looks exactly like a block's table (Carbon's small data table:
-  header row, 2rem rows, a line under each, the same cell padding and type; no row hover), its columns sized by their content; a wider one scrolls
+  header row 3rem tall in heading-compact-01 as a block's sortable headers, not sortable; 2rem rows, a line under each,
+  the same cell padding and type, Carbon's own size also in an item page's larger-type fields; no row hover), its columns sized by their content; a wider one scrolls
   sideways in its box. It is made by typing `|3x2|` and a space (the caret then in its first cell: `caretInText`), by typing
   its header and delimiter rows (`|a|b|`, then `|-|-|` and Enter: `tableFromTypedRows`, `ui/markdownKeys.ts`; before
   that they are text, saved with `\|`), or by pasting GFM table text. A code block's language select shows while hovered and in the block holding the caret (marked

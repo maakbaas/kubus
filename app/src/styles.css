@@ -1817,24 +1817,29 @@ img[data-lightbox] {
 .md-editor__content :is(th, td):last-child {
   padding-inline-end: var(--cds-spacing-05);
 }
+/* The header row as a block's (whose headers are sort buttons, 3rem tall): the same height, Carbon's heading-compact-01
+   as written (as the cells below); not sortable. */
 .md-editor__content th {
-  padding-block: 0.4375rem;
-  font-size: var(--cds-heading-compact-01-font-size);
-  font-weight: var(--cds-heading-compact-01-font-weight);
-  line-height: var(--cds-heading-compact-01-line-height);
-  letter-spacing: var(--cds-heading-compact-01-letter-spacing);
+  block-size: 3rem;
+  padding-block: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.28572;
+  letter-spacing: 0.16px;
   color: var(--cds-text-primary);
   background: var(--cds-layer-accent);
 }
+/* Its cells in Carbon's body-compact-01 as written, not the token: an item page's fields read a step larger (.item-fields)
+   while its blocks' tables keep Carbon's own size, so a table in a field would be larger than one in a block. */
 .md-editor__content td {
-  font-size: var(--cds-body-compact-01-font-size);
-  font-weight: var(--cds-body-compact-01-font-weight);
-  line-height: var(--cds-body-compact-01-line-height);
-  letter-spacing: var(--cds-body-compact-01-letter-spacing);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.28572;
+  letter-spacing: 0.16px;
   color: var(--cds-text-secondary);
   background: var(--cds-layer);
   border-block-start: 1px solid var(--cds-layer);
-  border-block-end: 1px solid var(--cds-border-subtle);
+  border-block-end: 1px solid var(--cds-border-subtle-01);
 }
 /* A cell's paragraph (the editor wraps its text in one) takes the cell's type, no margins of its own. */
 .md-editor__content :is(th, td) > p {
