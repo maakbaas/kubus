@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { IconButton } from "@carbon/react";
 import { ChevronLeft, ChevronRight, PageLast } from "@carbon/icons-react";
 import { pickableFields, type Collection } from "../domain/model";
@@ -19,10 +19,11 @@ import { defaultDateField, latestValue, nowMinute, periodParts, periodRule, peri
  * none yet "Any date", the same at every width; the whole line with its days is the tooltip. The kind and
  * everything else is changed in the filter panel (DatePeriodFilter); every change here is an edit of the
  * view's filter as there. The line takes what room is left and is ellipsized, so stepping never moves the buttons.
- * The rules put on the bar (`FilterRule.onBar`, the pin in the filter panel) follow the period on its line, each
- * the rule in words ("Genre is", "Pages below") and its value (RuleValue: the field's existing values offered),
- * wrapping onto more lines of the bar when they don't fit; on a phone each is a row of its own below the line,
- * its value filling it. Their field and comparison are changed in the panel.
+ * The rules put on the bar (`FilterRule.onBar`, the pin in the filter panel), each the rule in words ("Genre is",
+ * "Pages below") and its value (RuleValue: the field's existing values offered), follow the period on its line
+ * while they all fit there; else they all go below it in a grid of as many columns as fit (one on a phone), the
+ * words of each as wide as the longest and its value filling its column. Their field and comparison are changed
+ * in the panel.
  */
 export function FilterBar({
   collection,
@@ -58,9 +59,41 @@ export function FilterBar({
     const operator = f && fieldOperators(ownerOf(f.id), f).find((o) => o.id === rule.operator);
     return f && operator?.needsValue ? [{ rule, field: f, words: `${f.name} ${operator.label}` }] : [];
   });
+  // The rules go on the bar's line while they all fit there (each its words and a 10rem box); else they all go
+  // below it, in as many columns as fit, each rule its words (as wide as the longest: `--bar-words`) and a box
+  // filling its column: one column on a phone. Measured on each change of the rules or of the bar's width.
+  const barRef = useRef<HTMLDivElement>(null);
+  const [below, setBelow] = useState(false);
+  const allWords = pinned.map((p) => p.words).join("\n");
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    if (!bar || !allWords) return;
+    const measure = () => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      // Text by its own width, whatever the room its element has now.
+      const textWidth = (el: Element | null) => {
+        if (!el) return 0;
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return Math.ceil(range.getBoundingClientRect().width);
+      };
+      const words = [...bar.querySelectorAll(".filter-bar__words")].map(textWidth);
+      const label = bar.querySelector<HTMLElement>(".filter-bar__label");
+      const rules = bar.querySelector<HTMLElement>(".filter-bar__rules");
+      const others = [...bar.children].filter((c) => c !== label && c !== rules).reduce((sum, c) => sum + c.getBoundingClientRect().width, 0);
+      // The period, a gap, each rule (words, gap, box) with gaps between, a gap, the buttons.
+      const need = textWidth(label) + rem + words.reduce((sum, w) => sum + w + 0.5 * rem + 10 * rem, 0) + rem * (words.length - 1) + rem + others;
+      bar.style.setProperty("--bar-words", `${Math.max(0, ...words)}px`);
+      setBelow(need > bar.clientWidth + 0.5);
+    };
+    measure();
+    const seen = new ResizeObserver(measure);
+    seen.observe(bar);
+    return () => seen.disconnect();
+  }, [allWords]);
   const setValue = (id: string, value: string) => onChange(filters.map((r) => (r.id === id ? { ...r, value } : r)));
   return (
-    <div className={pinned.length ? "filter-bar filter-bar--rules" : "filter-bar"}>
+    <div ref={barRef} className={!pinned.length ? "filter-bar" : below ? "filter-bar filter-bar--rules filter-bar--below" : "filter-bar filter-bar--rules"}>
       <span className="filter-bar__label" title={state ? periodText(state) : text}>
         {text}
       </span>

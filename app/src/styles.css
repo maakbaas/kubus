@@ -2529,32 +2529,45 @@ img[data-lightbox] {
   line-height: var(--cds-body-compact-01-line-height);
   letter-spacing: var(--cds-body-compact-01-letter-spacing);
 }
-/* With rules on the bar: they follow the period on its line (the period as wide as its words), each its words
-   and a value box of a fixed width, wrapping onto more lines of the bar between the period and the buttons when
-   they don't fit (the period and the buttons stay on the first). */
-.filter-bar--rules {
-  align-items: flex-start;
-}
+/* With rules on the bar: while they all fit they follow the period on its line (the period as wide as its
+   words), each its words and a 10rem box. */
 .filter-bar--rules .filter-bar__label {
   flex: 0 1 auto;
-  line-height: var(--cds-spacing-07);
 }
 .filter-bar__rules {
   flex: 1 1 0;
   min-inline-size: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--cds-spacing-03) var(--cds-spacing-05);
+  gap: var(--cds-spacing-05);
   margin-inline: var(--cds-spacing-05);
 }
 .filter-bar__rule {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: max-content 10rem;
+  align-items: start;
   gap: var(--cds-spacing-03);
   min-inline-size: 0;
 }
-.filter-bar__rule > :last-child {
-  inline-size: 10rem;
+/* When they don't (FilterBar measures): all below the line, in as many columns as fit (one on a phone), every
+   rule's words as wide as the longest (`--bar-words`, at most 40% of its column: then ellipsized, whole in
+   their tooltip) and its box filling the rest of its column, so the boxes line up down the columns. */
+.filter-bar--below {
+  flex-wrap: wrap;
+  row-gap: var(--cds-spacing-03);
+}
+.filter-bar--below .filter-bar__label {
+  flex: 1 1 0;
+}
+.filter-bar--below .filter-bar__rules {
+  order: 1;
+  flex-basis: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--bar-words, 6rem) + var(--cds-spacing-03) + 15rem)), 1fr));
+  gap: var(--cds-spacing-03) var(--cds-spacing-05);
+  margin-inline: 0;
+}
+.filter-bar--below .filter-bar__rule {
+  grid-template-columns: min(var(--bar-words, max-content), 40%) minmax(0, 1fr);
 }
 .filter-bar__words {
   min-inline-size: 0;
@@ -2566,31 +2579,6 @@ img[data-lightbox] {
   font-size: var(--cds-body-compact-01-font-size);
   letter-spacing: var(--cds-body-compact-01-letter-spacing);
   color: var(--cds-text-secondary);
-}
-/* On a phone each rule is a row of its own below the line, its words in one column (as wide as the longest, at most
-   40%: then ellipsized, whole in their tooltip) and its value filling the rest. */
-@media (max-width: 42rem) {
-  .filter-bar--rules {
-    flex-wrap: wrap;
-    row-gap: var(--cds-spacing-03);
-  }
-  .filter-bar--rules .filter-bar__label {
-    flex: 1 1 0;
-  }
-  .filter-bar__rules {
-    order: 1;
-    flex-basis: 100%;
-    display: grid;
-    grid-template-columns: fit-content(40%) minmax(0, 1fr);
-    gap: var(--cds-spacing-03) var(--cds-spacing-05);
-    margin-inline: 0;
-  }
-  .filter-bar__rule {
-    display: contents;
-  }
-  .filter-bar__rule > :last-child {
-    inline-size: auto;
-  }
 }
 /* A filter value's offered value: the value, and at the right how many items have it. */
 .value-option {
