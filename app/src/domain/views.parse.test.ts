@@ -83,6 +83,11 @@ describe("parseViewConfig", () => {
     expect("filterBar" in parseViewConfig(JSON.stringify({ filters: [], blocks: [] }))).toBe(false);
   });
 
+  it("reads the date period's place on the filter bar only when it is off", () => {
+    expect(parseViewConfig(JSON.stringify({ filters: [], blocks: [], filterBarPeriod: false })).filterBarPeriod).toBe(false);
+    for (const filterBarPeriod of [true, "no", 0, null]) expect("filterBarPeriod" in parseViewConfig(JSON.stringify({ filters: [], blocks: [], filterBarPeriod }))).toBe(false);
+  });
+
   it("reads \"Full width\" when it is set, either way; absent is the place's default", () => {
     expect(parseViewConfig(JSON.stringify({ filters: [], blocks: [], fullWidth: false })).fullWidth).toBe(false);
     expect(parseViewConfig(JSON.stringify({ filters: [], blocks: [], fullWidth: true })).fullWidth).toBe(true);

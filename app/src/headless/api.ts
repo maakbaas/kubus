@@ -136,7 +136,14 @@ const collectionOut = (c: Collection, itemCount?: number) => ({
 const filterBarIn = (o: Body, existing: CollectionView): { filterBar?: true } =>
   o.filterBar === undefined ? (existing.filterBar ? { filterBar: true } : {}) : o.filterBar === true ? { filterBar: true } : {};
 
-const withoutFilterBar = ({ filterBar: _bar, ...view }: CollectionView): CollectionView => view;
+/** The view's filterBarPeriod as sent (absent: as it is; false leaves the period off the bar), without the key when on. */
+const barPeriodIn = (o: Body, existing: { filterBarPeriod?: false }): { filterBarPeriod?: false } => {
+  if (o.filterBarPeriod !== undefined && typeof o.filterBarPeriod !== "boolean") throw new HttpError(400, "`filterBarPeriod` is true or false");
+  const off = o.filterBarPeriod === undefined ? existing.filterBarPeriod === false : o.filterBarPeriod === false;
+  return off ? { filterBarPeriod: false } : {};
+};
+
+const withoutFilterBar = ({ filterBar: _bar, filterBarPeriod: _period, ...view }: CollectionView): CollectionView => view;
 const withoutFullWidth = ({ fullWidth: _width, ...view }: CollectionView): CollectionView => view;
 
 /**
@@ -432,6 +439,7 @@ export function createApi(repo: Repository): Router {
             })(),
     editable: o.editable === undefined ? existing.editable : o.editable !== false,
     ...filterBarIn(o, existing),
+    ...barPeriodIn(o, existing),
     ...fullWidthIn(o, existing.fullWidth),
   });
 
@@ -574,7 +582,7 @@ export function createApi(repo: Repository): Router {
           : (() => {
               throw new HttpError(400, "`blocks` must be a list of blocks");
             })();
-    const { filterBar: _bar, fullWidth: _width, ...rest } = existing;
+    const { filterBar: _bar, filterBarPeriod: _period, fullWidth: _width, ...rest } = existing;
     const filterBar = o.filterBar === undefined ? existing.filterBar : o.filterBar === true;
     return {
       ...rest,
@@ -584,6 +592,7 @@ export function createApi(repo: Repository): Router {
       blocks,
       editable: o.editable === undefined ? existing.editable : o.editable !== false,
       ...(filterBar && { filterBar: true as const }),
+      ...barPeriodIn(o, existing),
       ...fullWidthIn(o, existing.fullWidth),
     };
   };

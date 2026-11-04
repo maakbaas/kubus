@@ -227,6 +227,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
       isDefault: false,
       collapsed: base?.collapsed ?? NOTHING_COLLAPSED,
       ...(base?.filterBar && { filterBar: true as const }),
+      ...(base?.filterBarPeriod === false && { filterBarPeriod: false as const }),
       ...(base?.fullWidth !== undefined && { fullWidth: base.fullWidth }),
       createdAt: ts,
       updatedAt: ts,
@@ -238,7 +239,10 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   }
   const panels = usePanelsOpen();
   // As a collection view's: the Filter button moves to the filter bar, the width and a block put in a row change, once the panels close.
-  const filterInBar = panels.hold("filterInBar", !!active?.filterBar);
+  // As a collection view's: without the date period and with the rules below the bar's line, Filter stays in the toolbar.
+  const periodOnBar = active?.filterBarPeriod !== false;
+  const [barBelow, setBarBelow] = useState(false);
+  const filterInBar = panels.hold("filterInBar", !!active?.filterBar && (periodOnBar || !barBelow));
   const fullWidth = panels.hold("fullWidth", isFullWidth("dashboard", active?.fullWidth));
   const beside = panels.hold("beside", besideOf(view.blocks));
 
@@ -349,6 +353,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
         refs={refs}
         part="filter"
         bar={!!active?.filterBar}
+        periodPin={{ on: periodOnBar, set: (on) => storeNow({ filterBarPeriod: on ? undefined : false }).catch(fail) }}
         emptyText="No filter: every block shows what its own filter lets through. A rule on Date applies to each block's first date field, a rule on a field to the blocks listing it."
         owners={listed}
         onChange={(q) => setView((v) => ({ ...v, filters: q.filters }))}
@@ -443,7 +448,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
       )}
 
       {savedViews !== null && (active?.filterBar || filterInBar) && (
-        <FilterBar collection={scope} filters={view.filters} refs={refs} owners={listed} onChange={(filters) => setView((v) => ({ ...v, filters }))}>
+        <FilterBar collection={scope} filters={view.filters} refs={refs} owners={listed} period={periodOnBar} onBelow={setBarBelow} onChange={(filters) => setView((v) => ({ ...v, filters }))}>
           {filterInBar && filterButton}
         </FilterBar>
       )}

@@ -223,7 +223,11 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // The view's Filter button is on the filter bar while that is shown. It moves only once a panel
   // closes (View settings is where the bar is switched on): leaving the toolbar, it would move the
   // buttons after it, and their open panels with them. The bar itself shows at once, and stays until then when switched off.
-  const filterInBar = panels.hold("filterInBar", !!active?.filterBar);
+  // Without the date period on the bar (its pin in the filter panel) and with its rules below its line (they didn't
+  // fit on it), the bar is a grid of rules alone: the Filter button stays in the toolbar.
+  const periodOnBar = active?.filterBarPeriod !== false;
+  const [barBelow, setBarBelow] = useState(false);
+  const filterInBar = panels.hold("filterInBar", !!active?.filterBar && (periodOnBar || !barBelow));
   // "Full width" (View settings): off, the view is the narrow column of an item page. Held while a panel is
   // open, like the filter bar: the width moves the toolbar's buttons, and the open panel with them.
   const fullWidth = panels.hold("fullWidth", isFullWidth("collection", active?.fullWidth));
@@ -248,6 +252,21 @@ function CollectionContent({ collection }: { collection: Collection }) {
     await fresh.storing(async () => {
       const id = (await storeVirtual()) ?? active.id;
       await repo.saveView({ ...withFilterBar(active, on), id, createdAt: active.createdAt || now() });
+    });
+    await loadViews();
+  }
+
+  /** The date period on the filter bar (its pin): stored with the shown view right away, as "Show filter bar". */
+  async function setBarPeriod(on: boolean) {
+    if (!active) return;
+    const withPeriod = (v: CollectionView): CollectionView => {
+      const { filterBarPeriod: _old, ...rest } = v;
+      return on ? rest : { ...rest, filterBarPeriod: false };
+    };
+    setSavedViews((list) => list && list.map((v) => (v.id === active.id ? withPeriod(v) : v)));
+    await fresh.storing(async () => {
+      const id = (await storeVirtual()) ?? active.id;
+      await repo.saveView({ ...withPeriod(active), id, createdAt: active.createdAt || now() });
     });
     await loadViews();
   }
@@ -350,6 +369,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
         refs={data.refs}
         part="filter"
         bar={!!active?.filterBar}
+        periodPin={{ on: periodOnBar, set: (on) => setBarPeriod(on).catch((e) => setError(errorMessage(e))) }}
         onChange={(q) => setView((v) => ({ ...v, filters: q.filters }))}
       />
     </ToolbarPopover>
@@ -446,7 +466,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
 
       {/* The filter bar ("Show filter bar" in View settings): the view's Filter button and date period. */}
       {savedViews !== null && (active?.filterBar || filterInBar) && (
-        <FilterBar collection={collection} filters={view.filters} refs={data.refs} onChange={(filters) => setView((v) => ({ ...v, filters }))}>
+        <FilterBar collection={collection} filters={view.filters} refs={data.refs} period={periodOnBar} onBelow={setBarBelow} onChange={(filters) => setView((v) => ({ ...v, filters }))}>
           {filterInBar && filterButton}
         </FilterBar>
       )}

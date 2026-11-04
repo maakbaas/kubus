@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { IconButton } from "@carbon/react";
 import { ChevronLeft, ChevronRight, PageLast } from "@carbon/icons-react";
 import { pickableFields, type Collection } from "../domain/model";
@@ -30,6 +30,8 @@ export function FilterBar({
   filters,
   refs,
   owners,
+  period = true,
+  onBelow,
   onChange,
   children,
 }: {
@@ -38,6 +40,10 @@ export function FilterBar({
   refs: RefOptions;
   /** A page-wide filter over several collections (a dashboard's): each field's own collection. */
   owners?: Collection[];
+  /** The date period on the bar (its words, ‹ › >|); false: the bar is the rules and the Filter button alone (`filterBarPeriod`). */
+  period?: boolean;
+  /** Told whether the rules are below the line (they didn't fit on it): without the period the page then keeps its Filter button in the toolbar. */
+  onBelow?(below: boolean): void;
   onChange(filters: FilterRule[]): void;
   children: ReactNode;
 }) {
@@ -78,11 +84,12 @@ export function FilterBar({
         return Math.ceil(range.getBoundingClientRect().width);
       };
       const words = [...bar.querySelectorAll(".filter-bar__words")].map(textWidth);
-      const label = bar.querySelector<HTMLElement>(".filter-bar__label");
-      const rules = bar.querySelector<HTMLElement>(".filter-bar__rules");
-      const others = [...bar.children].filter((c) => c !== label && c !== rules).reduce((sum, c) => sum + c.getBoundingClientRect().width, 0);
-      // The period, a gap, each rule (words, gap, box) with gaps between, a gap, the buttons.
-      const need = textWidth(label) + rem + words.reduce((sum, w) => sum + w + 0.5 * rem + 10 * rem, 0) + rem * (words.length - 1) + rem + others;
+      // The period and its gap (none without it), each rule (words, gap, box) with gaps between, a gap, the buttons:
+      // ‹ › >| (with the period) and Filter, 2rem each, counted whether the Filter button is here or (below the line,
+      // without the period) back in the toolbar, so its moving never changes what fits.
+      const label = bar.querySelector(".filter-bar__label");
+      const others = ((period ? 3 : 0) + 1) * 2 * rem;
+      const need = (label ? textWidth(label) + rem : 0) + words.reduce((sum, w) => sum + w + 0.5 * rem + 10 * rem, 0) + rem * (words.length - 1) + rem + others;
       bar.style.setProperty("--bar-words", `${Math.max(0, ...words)}px`);
       setBelow(need > bar.clientWidth + 0.5);
     };
@@ -90,13 +97,19 @@ export function FilterBar({
     const seen = new ResizeObserver(measure);
     seen.observe(bar);
     return () => seen.disconnect();
-  }, [allWords]);
+  }, [allWords, period]);
+  useEffect(() => onBelow?.(below && pinned.length > 0), [below, pinned.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
   const setValue = (id: string, value: string) => onChange(filters.map((r) => (r.id === id ? { ...r, value } : r)));
   return (
-    <div ref={barRef} className={!pinned.length ? "filter-bar" : below ? "filter-bar filter-bar--rules filter-bar--below" : "filter-bar filter-bar--rules"}>
-      <span className="filter-bar__label" title={state ? periodText(state) : text}>
-        {text}
-      </span>
+    <div
+      ref={barRef}
+      className={["filter-bar", pinned.length > 0 && "filter-bar--rules", pinned.length > 0 && below && "filter-bar--below", !period && "filter-bar--no-period"].filter(Boolean).join(" ")}
+    >
+      {period && (
+        <span className="filter-bar__label" title={state ? periodText(state) : text}>
+          {text}
+        </span>
+      )}
       {pinned.length > 0 && (
         <div className="filter-bar__rules">
           {pinned.map(({ rule, field, words }) => (
@@ -109,15 +122,19 @@ export function FilterBar({
           ))}
         </div>
       )}
-      <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Previous" disabled={still} onClick={() => value && set(stepValue(value.value, -1, now))}>
-        <ChevronLeft />
-      </IconButton>
-      <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Next" disabled={still} onClick={() => value && set(stepValue(value.value, 1, now))}>
-        <ChevronRight />
-      </IconButton>
-      <IconButton autoAlign kind="ghost" size="sm" align="bottom" label={latest} disabled={!state || state.kind === "range"} onClick={() => value && set(latestValue(value.value, now))}>
-        <PageLast />
-      </IconButton>
+      {period && (
+        <>
+          <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Previous" disabled={still} onClick={() => value && set(stepValue(value.value, -1, now))}>
+            <ChevronLeft />
+          </IconButton>
+          <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Next" disabled={still} onClick={() => value && set(stepValue(value.value, 1, now))}>
+            <ChevronRight />
+          </IconButton>
+          <IconButton autoAlign kind="ghost" size="sm" align="bottom" label={latest} disabled={!state || state.kind === "range"} onClick={() => value && set(latestValue(value.value, now))}>
+            <PageLast />
+          </IconButton>
+        </>
+      )}
       {children}
     </div>
   );

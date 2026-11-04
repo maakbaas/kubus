@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { ContentSwitcher, DatePicker, DatePickerInput, IconButton, NumberInput, Select, SelectItem, Switch, Tag } from "@carbon/react";
-import { ChevronLeft, ChevronRight, Close, PageLast } from "@carbon/icons-react";
+import { ChevronLeft, ChevronRight, Close, PageLast, Pin, PinFilled } from "@carbon/icons-react";
 import { formatDate } from "../domain/fieldKinds";
 import type { Collection } from "../domain/model";
 import type { FilterRule } from "../domain/query";
@@ -79,6 +79,7 @@ export function DatePeriodFilter({
   filters,
   page,
   joins,
+  pin,
   onChange,
 }: {
   collection: Collection;
@@ -86,6 +87,8 @@ export function DatePeriodFilter({
   page?: Collection;
   /** It builds on another filter (a block's on its view's): the period says how it joins it (And / Or, domain/filterTree.ts). */
   joins?: boolean;
+  /** A view's filter while its filter bar is shown: whether the period is on the bar (`filterBarPeriod`), and its pin. */
+  pin?: { on: boolean; set(on: boolean): void };
   onChange(filters: FilterRule[]): void;
 }) {
   const uid = useId();
@@ -205,10 +208,20 @@ export function DatePeriodFilter({
             >
               <PageLast />
             </IconButton>
-            <IconButton autoAlign label="Any date" kind="ghost" size="sm" align="left" onClick={clear}>
-              <Close />
-            </IconButton>
           </>
+        )}
+        {pin && (
+          <IconButton autoAlign label={pin.on ? "Remove from filter bar" : "Show on filter bar"} kind="ghost" size="sm" align="left" onClick={() => pin.set(!pin.on)}>
+            {pin.on ? <PinFilled /> : <Pin />}
+          </IconButton>
+        )}
+        {rule || rangeChosen ? (
+          <IconButton autoAlign label="Any date" kind="ghost" size="sm" align="left" onClick={clear}>
+            <Close />
+          </IconButton>
+        ) : (
+          // Where × goes, so the pin lines up with the rules' pins below.
+          pin && <span className="date-period__gap" />
         )}
       </div>
       {unit && window && period && (

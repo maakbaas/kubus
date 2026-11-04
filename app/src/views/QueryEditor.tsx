@@ -50,6 +50,8 @@ interface Props {
   owners?: Collection[];
   /** Filter part of a view whose filter bar is shown: a rule can be put on the bar (`FilterRule.onBar`), its value edited there. */
   bar?: boolean;
+  /** With `bar`: whether the date period is on the bar, and its pin (DatePeriodFilter). */
+  periodPin?: { on: boolean; set(on: boolean): void };
   onChange(query: ViewQuery): void;
 }
 
@@ -59,7 +61,7 @@ interface Props {
  */
 const SHOWING_ALL = "Showing all items.";
 
-export function QueryEditor({ collection, query, refs, part, noGroup, page, groups, title, emptyText = SHOWING_ALL, footer, owners, bar, onChange }: Props) {
+export function QueryEditor({ collection, query, refs, part, noGroup, page, groups, title, emptyText = SHOWING_ALL, footer, owners, bar, periodPin, onChange }: Props) {
   // Element ids unique per editor: several item lists (tabs, panes) can be open at once.
   const uid = useId();
   // On an item page, a block of its own collection can also be filtered on the item itself
@@ -102,7 +104,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, grou
       <section>
         {title && <Heading className="query-editor__title">{title}</Heading>}
         {/* Not for a remote collection without dates (its rows have no Created or Updated). */}
-        {dated && <DatePeriodFilter collection={collection} filters={query.filters} page={page} joins={joinsFirst} onChange={(filters) => onChange({ ...query, filters })} />}
+        {dated && <DatePeriodFilter collection={collection} filters={query.filters} page={page} joins={joinsFirst} pin={bar ? periodPin : undefined} onChange={(filters) => onChange({ ...query, filters })} />}
         {query.filters.length === 0 && (emptyText !== SHOWING_ALL || !dated) && <p className="helper">{emptyText}</p>}
         {query.filters.map((rule) => {
           if (rule === period) return null;

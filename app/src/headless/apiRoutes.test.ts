@@ -467,6 +467,10 @@ describe("views", () => {
     expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filterBar: true })).filterBar).toBe(true);
     expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { name: "Plainer" })).filterBar).toBe(true);
     expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filterBar: false })).filterBar).toBeUndefined();
+    // The date period off the filter bar: set, kept when not sent, back on with true.
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filterBarPeriod: false })).filterBarPeriod).toBe(false);
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { name: "Plainer" })).filterBarPeriod).toBe(false);
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filterBarPeriod: true })).filterBarPeriod).toBeUndefined();
     // A rule on the filter bar keeps its onBar; only true or false is taken.
     const pinned = await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filters: [{ fieldId: "Pages", operator: "lt", value: "9", onBar: true }, { fieldId: "Pages", operator: "gt", value: "1", onBar: false }] });
     expect(pinned.filters.map((r: { onBar?: boolean }) => r.onBar)).toEqual([true, undefined]);

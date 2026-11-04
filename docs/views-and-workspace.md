@@ -127,7 +127,12 @@ Extension points are registries, not special cases in pages:
   each with a 10rem box; when they don't (FilterBar measures the texts against the bar's width, again on every resize)
   they all go below the line, in a grid of as many columns as fit (one on a phone), every rule's words as wide as the
   longest (`--bar-words`, at most 40% of a column, then ellipsized) and its value filling the rest of its column, so
-  the boxes line up down the columns. A rule whose comparison takes no
+  the boxes line up down the columns. **The period's pin**: the filter panel's period line has a pin too (after ‹ › >|, before ×) while the bar is
+  shown: off, the bar leaves out the period's words and ‹ › >| (`filterBarPeriod: false` on the view or dashboard
+  view, stored right away like "Show filter bar"; absent = on), leaving the rules and the Filter button at the right.
+  Then, with the rules below the line (they didn't fit on it: `onBelow`), the bar is their grid alone and the Filter
+  button stays in the toolbar (held while a panel is open, `panels.hold`); what fits counts the Filter button
+  either way, so its moving never changes it. A rule whose comparison takes no
   value ("is empty") or whose field is gone shows no row. Switching the setting while a panel (View settings) is open moves
   the Filter button only when it closes (`panels.hold`), so the buttons after it don't jump under the open panel; the
   bar itself shows at once.

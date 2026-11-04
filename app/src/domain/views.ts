@@ -145,6 +145,11 @@ export interface CollectionView extends ViewState {
    */
   filterBar?: true;
   /**
+   * The date period on the filter bar (its words and ‹ › >|; the pin of the filter panel's period): false leaves it
+   * off, the bar then the rules put on it and the Filter button. Stored as soon as it is set; absent = on.
+   */
+  filterBarPeriod?: false;
+  /**
    * "Full width": the view uses the pane's whole width (on) or the item page's narrow column (off). Stored with
    * the view as soon as it is set, like "Show filter bar"; absent = the place's default (`isFullWidth`).
    */
@@ -296,8 +301,8 @@ export function parseBlock(raw: unknown): ViewBlock | null {
   return o.groupOrder === "desc" || o.groupOrder === "count" ? { ...block, groupOrder: o.groupOrder } : block;
 }
 
-/** A view's stored config (JSON `{ filters, blocks, editable, collapsed, filterBar?, fullWidth? }`); unreadable: no filter, no blocks. */
-export function parseViewConfig(json: string): ViewState & { collapsed: Collapsed; filterBar?: true; fullWidth?: boolean } {
+/** A view's stored config (JSON `{ filters, blocks, editable, collapsed, filterBar?, filterBarPeriod?, fullWidth? }`); unreadable: no filter, no blocks. */
+export function parseViewConfig(json: string): ViewState & { collapsed: Collapsed; filterBar?: true; filterBarPeriod?: false; fullWidth?: boolean } {
   let o: Record<string, unknown> = {};
   try {
     o = (JSON.parse(json) ?? {}) as Record<string, unknown>;
@@ -310,6 +315,7 @@ export function parseViewConfig(json: string): ViewState & { collapsed: Collapse
     editable: o.editable !== false,
     collapsed: parseCollapsed(o.collapsed),
     ...(o.filterBar === true && { filterBar: true as const }),
+    ...(o.filterBarPeriod === false && { filterBarPeriod: false as const }),
     ...(typeof o.fullWidth === "boolean" && { fullWidth: o.fullWidth }),
   };
 }

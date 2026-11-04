@@ -37,6 +37,8 @@ export interface DashboardView extends ViewState {
   collapsed: Collapsed;
   /** "Show filter bar", as a collection view's: stored as soon as it is set. Absent = off. */
   filterBar?: true;
+  /** The date period on the filter bar, as a collection view's (`filterBarPeriod`): false leaves it off. Absent = on. */
+  filterBarPeriod?: false;
   /** "Full width", as a collection view's: stored as soon as it is set. Absent = on (`isFullWidth("dashboard", …)`). */
   fullWidth?: boolean;
   /**

@@ -2548,6 +2548,18 @@ img[data-lightbox] {
   gap: var(--cds-spacing-03);
   min-inline-size: 0;
 }
+/* Without the date period (its pin off): the rules, and the Filter button at the right. */
+/* In the filter panel's period line without a period: the room of its × (so its pin is above the rules' pins). */
+.date-period__gap {
+  flex: none;
+  inline-size: var(--cds-spacing-07);
+}
+.filter-bar--no-period {
+  justify-content: flex-end;
+}
+.filter-bar--no-period .filter-bar__rules {
+  margin-inline-start: 0;
+}
 /* When they don't (FilterBar measures): all below the line, in as many columns as fit (one on a phone), every
    rule's words as wide as the longest (`--bar-words`, at most 40% of its column: then ellipsized, whole in
    their tooltip) and its box filling the rest of its column, so the boxes line up down the columns. */
