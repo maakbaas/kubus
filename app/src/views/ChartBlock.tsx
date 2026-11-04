@@ -777,7 +777,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
       {has.xy && (
         <>
           {/* First: what it hides comes after it. */}
-          {check("compact", "Compact (a sparkline: no axes, legend or grid)")}
+          {/* A sparkline: no axes, legend or grid. */}
+          {check("compact", "Sparkline")}
           {stackable && (
             <Select size="sm" id={`${uid}-stack`} labelText="Bars and areas" value={o.stack} onChange={(e) => set({ stack: e.target.value as ChartOptions["stack"] })}>
               <SelectItem value="none" text="Side by side" />
@@ -944,16 +945,14 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
   const maySeveral = has.xy || o.chart === "scatter" ? o.series.length > 1 || !!o.splitBy : o.chart === "histogram" ? !!o.splitBy : true;
   const valuesSection = (
     <Section key="values" title={has.legend ? "Values and legend" : "Values"}>
-      <div className="chart-options__pair">
-        {/* A gauge shows a % (Carbon's): no unit. */}
-        {o.chart !== "gauge" && <TextInput size="sm" id={`${uid}-unit`} labelText="Unit" placeholder="kg, €, h" value={o.unit} onChange={(e) => set({ unit: e.target.value })} />}
-        <Select size="sm" id={`${uid}-decimals`} labelText="Decimals" value={o.decimals === null ? "" : String(o.decimals)} onChange={(e) => set({ decimals: e.target.value === "" ? null : Number(e.target.value) })}>
-          <SelectItem value="" text="As they are" />
-          {Array.from({ length: MAX_DECIMALS + 1 }, (_, n) => (
-            <SelectItem key={n} value={String(n)} text={String(n)} />
-          ))}
-        </Select>
-      </div>
+      {/* A gauge shows a % (Carbon's): no unit. Each on a line of its own. */}
+      {o.chart !== "gauge" && <TextInput size="sm" id={`${uid}-unit`} labelText="Unit" placeholder="kg, €, h" value={o.unit} onChange={(e) => set({ unit: e.target.value })} />}
+      <Select size="sm" id={`${uid}-decimals`} labelText="Decimals" value={o.decimals === null ? "" : String(o.decimals)} onChange={(e) => set({ decimals: e.target.value === "" ? null : Number(e.target.value) })}>
+        <SelectItem value="" text="As they are" />
+        {Array.from({ length: MAX_DECIMALS + 1 }, (_, n) => (
+          <SelectItem key={n} value={String(n)} text={String(n)} />
+        ))}
+      </Select>
       {/* A compact chart has no legend. */}
       {has.legend && !compact && (
         <>

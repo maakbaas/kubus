@@ -226,10 +226,10 @@ const KINDS = [
 const LEGEND = "Values and legend";
 
 const OFFERS = {
-  Bar: { sections: ["Data", "Series", "Display", "Axes", "Thresholds", LEGEND, "Size"], has: ["X axis", "Order", "Show", "Draw as", "Axis", "Split by", "Compact (a sparkline: no axes, legend or grid)", "Horizontal", "Logarithmic", "Aspect ratio"], not: ["Parts from", "Bins", "Compare with", "Measured against", "Lines", "Donut (the total in the middle)"] },
+  Bar: { sections: ["Data", "Series", "Display", "Axes", "Thresholds", LEGEND, "Size"], has: ["X axis", "Order", "Show", "Draw as", "Axis", "Split by", "Sparkline", "Horizontal", "Logarithmic", "Aspect ratio"], not: ["Parts from", "Bins", "Compare with", "Measured against", "Lines", "Donut (the total in the middle)"] },
   Line: { sections: ["Data", "Series", "Display", "Axes", "Thresholds", LEGEND, "Size"], has: ["Draw as", "Lines", "A dot on each value", "Missing values"], not: ["Horizontal", "Parts from", "Bins"] },
   Area: { sections: ["Data", "Series", "Display", "Axes", "Thresholds", LEGEND, "Size"], has: ["Lines", "A dot on each value", "Missing values", "Split by"], not: ["Horizontal", "Spokes"] },
-  Radar: { sections: ["Data", "Spokes", LEGEND, "Size"], has: ["A shape per", "Spokes", "Value", "Unit", "Decimals", "Legend", "Height"], not: ["Draw as", "Logarithmic", "Compact (a sparkline: no axes, legend or grid)", "Parts from", "Measured against"] },
+  Radar: { sections: ["Data", "Spokes", LEGEND, "Size"], has: ["A shape per", "Spokes", "Value", "Unit", "Decimals", "Legend", "Height"], not: ["Draw as", "Logarithmic", "Sparkline", "Parts from", "Measured against"] },
   Pie: { sections: ["Data", "Value", "Total", "Display", LEGEND, "Size"], has: ["Parts from", "Parts", "Measured against", "Donut (the total in the middle)", "Label", "Legend"], not: ["Draw as", "Horizontal", "Compare with", "Full circle", "Bins", "Spokes"] },
   Meter: { sections: ["Data", "Value", "Total", LEGEND, "Size"], has: ["Parts from", "Parts", "Measured against", "Legend", "Width"], not: ["Donut (the total in the middle)", "Height", "Aspect ratio", "Compare with"] },
   Treemap: { sections: ["Data", "Value", LEGEND, "Size"], has: ["Parts from", "Parts", "Height"], not: ["Measured against", "Donut (the total in the middle)", "Draw as", "Full circle"] },
