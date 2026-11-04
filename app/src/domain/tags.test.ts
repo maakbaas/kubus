@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { markdownPreview, markdownPreviewParts } from "./fieldKinds";
 import { markdownExcerpt } from "./markdownExcerpt";
-import { containsQuery, isTag, matchingTags, splitTags, TAG_COLORS, tagBeingTyped, tagColor, tagSearchPath, tagsIn } from "./tags";
+import { containsQuery, isTag, isTagSearchLink, matchingTags, splitTags, TAG_COLORS, tagBeingTyped, tagColor, tagSearchPath, tagsIn } from "./tags";
 
 describe("tags", () => {
   it("finds tags where a word doesn't continue", () => {
@@ -64,4 +64,11 @@ describe("tag colours and the tag picker", () => {
     expect(matchingTags(used, "#boo").map((t) => t.tag)).toEqual(["#books", "#ebooks"]); // starting first
     expect(matchingTags(used, "#").length).toBe(3);
   });
+});
+
+it("tells a tag's search page from other links", () => {
+  expect(isTagSearchLink(`#${tagSearchPath("#books")}`)).toBe(true);
+  expect(isTagSearchLink("#/search?q=books&tag=1")).toBe(false);
+  expect(isTagSearchLink("#/search?q=%23books")).toBe(false);
+  expect(isTagSearchLink("#/collections/x/items")).toBe(false);
 });

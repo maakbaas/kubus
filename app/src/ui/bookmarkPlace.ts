@@ -1,3 +1,4 @@
+import { isTagSearchLink } from "../domain/tags";
 import { dashboardIcon, type Dashboard } from "../domain/dashboards";
 import { parseStoredDashboardLink, parseStoredLink } from "../domain/linkTargets";
 import type { Collection } from "../domain/model";
@@ -8,6 +9,8 @@ import type { Collection } from "../domain/model";
  * "View of Health"). Null when the link names neither (it is then deleted with what it named, so this is rare).
  */
 export function bookmarkPlace(link: string, collections: Collection[], dashboards: Dashboard[]): { icon: string | null; text: string } | null {
+  // A tag's search page (New bookmark with a #tag): "Tag".
+  if (isTagSearchLink(link)) return { icon: "Tag", text: "Tag" };
   const onDashboard = parseStoredDashboardLink(link);
   if (onDashboard) {
     const d = dashboards.find((x) => x.id === onDashboard.dashboardId);

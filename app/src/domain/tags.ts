@@ -37,6 +37,14 @@ export const tagsIn = (text: string) => [...new Set([...text.matchAll(tagPattern
  */
 export const tagSearchPath = (tag: string) => `/search?q=${encodeURIComponent(tag)}&tag=1`;
 
+/** Whether a stored link (`#/search?…`) is a tag's search page (a bookmark of it), e.g. to show it as "Tag". */
+export function isTagSearchLink(link: string): boolean {
+  const path = link.startsWith("#") ? link.slice(1) : link;
+  if (!path.startsWith("/search?")) return false;
+  const params = new URLSearchParams(path.slice("/search?".length));
+  return params.get("tag") === "1" && isTag(params.get("q") ?? "");
+}
+
 /**
  * Whether `text` contains `query`, case-insensitively. With `exactTag` a tag query (`#books`)
  * matches only that tag: not `#bookshelf` (but `#books/to-read`, a tag nested in it).

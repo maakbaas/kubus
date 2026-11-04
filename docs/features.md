@@ -552,7 +552,7 @@ What the app does, feature by feature (read the part you work on).
   editor (decorations: the text stays as typed), HTML in its frame (the frame's script wraps the tags in the HTML as
   written, not what its scripts draw, and reports clicks). Inline, so view and editor have the same geometry.
   Typing `#` and a tag's start offers the tags in use (the list hangs from the `#`, so it doesn't move as the tag is typed; in
-  New bookmark a tag bookmarks its search page) (A to Z, those starting with what is typed before those
+  New bookmark a tag bookmarks its search page, listed with Where "Tag": `isTagSearchLink`) (A to Z, those starting with what is typed before those
   containing it; `matchingTags`), each in its colour, at the caret (no heading, only the tags): in the Markdown editor (`ui/TagPicker.tsx`,
   beside the link picker) and in every plain text field, cells, item pages, list entries, the add row, the search box
   (`ui/TextTagComplete.tsx`, one for the app, watching what is typed; not a number, date, picker or code field, nor one
