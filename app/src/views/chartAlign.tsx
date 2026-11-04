@@ -99,29 +99,32 @@ const PLOT = "rect.chart-grid-backdrop";
  * A Carbon chart's family, how it is moved (domain/chartAlign.ts `mode`) and the marks whose box is its box; null for
  * one that isn't aligned. Every chart with axes is of one family (a bar chart lines up with a line chart).
  */
-export function alignFamily(chart: CarbonChart, compact: boolean): { family: string; mode: "pad" | "shift"; marks: string } | null {
-  if (compact) return { family: "sparkline", mode: "shift", marks: PLOT };
+export function alignFamily(chart: CarbonChart, compact: boolean): { family: string; mode: "pad" | "shift"; marks: string; fit: boolean } | null {
+  if (compact) return { family: "sparkline", mode: "shift", marks: PLOT, fit: false };
   switch (chart) {
     case "HeatmapChart":
-      return { family: "axis", mode: "pad", marks: "rect.heat" };
+      return { family: "axis", mode: "pad", marks: "rect.heat", fit: false };
+    // Drawn centred in their box, so their box is made as wide as what they draw (`fit`, ChartCanvas): at the block's
+    // left, then padded like the charts that fill their box (padding would otherwise move them by half of it).
     case "PieChart":
     case "DonutChart":
-      return { family: "round", mode: "shift", marks: "path.slice" };
+      return { family: "round", mode: "pad", marks: "path.slice", fit: true };
     case "GaugeChart":
-      return { family: "gauge", mode: "shift", marks: "path.arc-background, path.arc-foreground" };
+      return { family: "gauge", mode: "pad", marks: "path.arc-background, path.arc-foreground", fit: true };
     case "RadarChart":
       // Its web: the rings and spokes, not the shapes on it.
-      return { family: "radar", mode: "shift", marks: ".cds--cc--radar path:not(.blob), .cds--cc--radar line" };
-    case "MeterChart":
-      return { family: "meter", mode: "shift", marks: "rect.container" };
-    case "TreemapChart":
-      return { family: "treemap", mode: "pad", marks: "rect.leaf" };
-    case "WordCloudChart":
-      return { family: "wordcloud", mode: "shift", marks: "text.word" };
+      return { family: "radar", mode: "pad", marks: ".cds--cc--radar path:not(.blob), .cds--cc--radar line", fit: true };
     case "ChoroplethChart":
-      return { family: "map", mode: "shift", marks: "g.geo path" };
+      return { family: "map", mode: "pad", marks: "g.geo path", fit: true };
+    case "MeterChart":
+      return { family: "meter", mode: "shift", marks: "rect.container", fit: false };
+    case "TreemapChart":
+      return { family: "treemap", mode: "pad", marks: "rect.leaf", fit: false };
+    // Carbon lays its words out anew in whatever room it gets: its box can't be fitted to them. Its top only, side by side.
+    case "WordCloudChart":
+      return { family: "wordcloud", mode: "shift", marks: "text.word", fit: false };
     default:
-      return { family: "axis", mode: "pad", marks: PLOT };
+      return { family: "axis", mode: "pad", marks: PLOT, fit: false };
   }
 }
 

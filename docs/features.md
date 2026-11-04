@@ -449,9 +449,12 @@ What the app does, feature by feature (read the part you work on).
   of each filling its block its own way (a legend, a right axis or wider tick labels moved the box): side by side (one line
   of a row: the same height there) the tops and bottoms; above / below, charts with the same left edge (after their Width)
   the left side, those with the same right edge too the right side. Charts that fill their box are padded inside it (drawn
-  that much smaller: the block keeps its size, nothing around moves); those with a height of their own (a meter, a
-  sparkline) or centred (pie, gauge, radar, word cloud, map) line up only their tops side by side, moved down within the
-  room they have, and not sideways. Always on. A chart is drawn as soon as its data is in; when one arrives or is drawn
+  that much smaller: the block keeps its size, nothing around moves). Those Carbon draws centred (pie and donut, gauge,
+  radar, map) get a box as wide as what they draw (`fit`, ChartCanvas: measured at the block's width, then at its left
+  like every part of a page) and are then padded the same way: side by side they are drawn at the smallest diameter of
+  the line (tops and bottoms matching), above / below their left (and right) sides line up. Those with a height of their
+  own (a meter, a sparkline) and a word cloud (Carbon lays its words out anew in any room: its box can't be fitted to
+  them) line up only their tops side by side, moved down within the room they have, and not sideways. Always on. A chart is drawn as soon as its data is in; when one arrives or is drawn
   again (a remote block's rows, a new legend), the page works the padding out again a frame later (and measures once more
   after 250ms and 1s: an axis's labels settle without telling) and redraws only the charts whose padding changed (a pixel
   or more; one changed more than six times in two seconds is left as it is for a while: no swinging between layouts).

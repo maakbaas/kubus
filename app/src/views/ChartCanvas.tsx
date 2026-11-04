@@ -26,7 +26,7 @@ import "@carbon/charts-react/styles.css";
 import { geoMercator, geoNaturalEarth1, geoPath, type GeoPermissibleObjects } from "d3-geo";
 import type { GeometryCollection, Topology } from "topojson-specification";
 import type { CarbonChart, ChartSpec } from "./chartSpec";
-import { useChartAlign } from "./chartAlign";
+import { alignFamily, useChartAlign } from "./chartAlign";
 import { wholeMap } from "./regionMaps";
 
 // The Carbon Charts part of a chart block, in its own chunk: loaded (with d3) the first time a
@@ -74,6 +74,21 @@ const ROUND: Partial<Record<CarbonChart, string>> = {
 };
 /** Room kept around a round chart's drawing (a slice grows a little on hover). */
 const FIT_PADDING = 8;
+
+/** How wide a chart's drawing is (px): its shapes, texts and legend items, from the leftmost to the rightmost; 0 = none. */
+function drawnWidth(holder: HTMLElement): number {
+  let left = Infinity;
+  let right = -Infinity;
+  // What is drawn: its shapes and texts (not the groups and svgs around them, as wide as the box), and the legend's items.
+  const parts = [...holder.querySelectorAll("svg :is(path, rect, circle, line, polygon, polyline, text), .legend-item")];
+  for (const part of parts) {
+    const r = part.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    left = Math.min(left, r.left);
+    right = Math.max(right, r.right);
+  }
+  return right > left ? right - left : 0;
+}
 
 /** How much less tall than its box a chart's drawing is (px), or 0. */
 function unusedHeight(holder: HTMLElement, part: string): number {
@@ -176,6 +191,15 @@ export default function ChartCanvas({
   const box = useRef<HTMLDivElement>(null);
   // Lined up with the page's other charts of its family (views/chartAlign.tsx): padded and shifted in its box.
   const { align, drawn } = useChartAlign(box, latest.chart, compact);
+  // Drawn centred in its box (a pie, a gauge, a radar, a map): the box as wide as what it draws (`fittedWidth`, px;
+  // null = the block's width), at the block's left, as every other part of a page. Measured anew at the full width
+  // whenever the chart, its height or the block's width changes (fitted, it can't show it would draw wider).
+  const fitWidth = !!alignFamily(latest.chart, compact)?.fit;
+  const [fittedWidth, setFittedWidth] = useState<number | null>(null);
+  const fittedWidthRef = useRef(fittedWidth);
+  fittedWidthRef.current = fittedWidth;
+  const padY = align.pad.top + align.pad.bottom;
+  useEffect(() => setFittedWidth(null), [latest, padY]);
   const onItemRef = useRef(onItem);
   onItemRef.current = onItem;
   // The fitted height (px) of a round chart; null = the spec's. Measured anew at the full height
@@ -184,18 +208,20 @@ export default function ChartCanvas({
   const part = ROUND[spec.chart];
   useEffect(() => setFitted(null), [spec]);
   useEffect(() => {
-    const el = box.current;
-    if (!el || !part) return;
+    // The block's width (not the box's: a fitted width changes that), measured on.
+    const el = box.current?.parentElement;
+    if (!el || (!part && !fitWidth)) return;
     let width = el.getBoundingClientRect().width;
     const observer = new ResizeObserver(() => {
       const now = el.getBoundingClientRect().width;
       if (Math.abs(now - width) < 1) return;
       width = now;
       setFitted(null);
+      setFittedWidth(null);
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [part]);
+  }, [part, fitWidth]);
   useEffect(() => {
     const events = ref.current?.chart?.services?.events;
     if (!events) return;
@@ -209,9 +235,16 @@ export default function ChartCanvas({
       drawn();
       // Before the browser paints Carbon's framing.
       if (el && geoRef.current && spec.chart === "ChoroplethChart") frameWholeMap(el, geoRef.current, String((spec.options.thematic as { projection?: string })?.projection));
-      if (!part || !el) return;
+      if ((!part && !fitWidth) || !el) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
+        if (fitWidth && fittedWidthRef.current === null) {
+          const style = getComputedStyle(el);
+          const room = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+          const width = drawnWidth(el);
+          if (width > 0 && room - width > 2) setFittedWidth(Math.ceil(width + FIT_PADDING));
+        }
+        if (!part) return;
         const unused = unusedHeight(el, part);
         if (unused < 2) return;
         setFitted(Math.round(el.getBoundingClientRect().height - unused));
@@ -226,21 +259,27 @@ export default function ChartCanvas({
       events.removeEventListener("scatter-click", click);
       events.removeEventListener("render-finished", rendered);
     };
-  }, [drawing, part, drawn]);
+  }, [drawing, part, drawn, fitWidth]);
   const map = useMemo(() => (geoData ? copyOfMap(geoData) : null), [geoData, drawing]); // eslint-disable-line react-hooks/exhaustive-deps
   const geoRef = useRef(geoData);
   geoRef.current = geoData;
-  // Padded above and below (lined up with its neighbours): drawn that much less tall, so its box keeps its height.
-  const padY = align.pad.top + align.pad.bottom;
+  // Padded above and below (lined up with its neighbours, `padY`): drawn that much less tall, so its box keeps its height.
   const options = useMemo(() => {
     const height = fitted === null ? String(spec.options.height) : `${fitted}px`;
     const sized = fitted === null && padY === 0 ? spec.options : { ...spec.options, height: padY > 0 ? `calc(${height} - ${padY}px)` : height };
     return map ? { ...sized, geoData: map } : sized;
   }, [spec, fitted, map, padY]);
   const { pad, shift } = align;
+  const padded = !!(pad.top || pad.right || pad.bottom || pad.left || shift);
   const style =
-    pad.top || pad.right || pad.bottom || pad.left || shift
-      ? { padding: `${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px`, ...(shift ? { position: "relative" as const, top: `${shift}px` } : {}) }
+    padded || fittedWidth !== null
+      ? {
+          boxSizing: "border-box" as const,
+          padding: `${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px`,
+          ...(shift ? { position: "relative" as const, top: `${shift}px` } : {}),
+          // Its drawing's width, the padding around it; never wider than the block.
+          ...(fittedWidth !== null ? { inlineSize: `${fittedWidth + pad.left + pad.right}px`, maxInlineSize: "100%" } : {}),
+        }
       : undefined;
   // New options (or a new chart type) are a new chart: Carbon merges new options into its old ones,
   // so whatever was taken out (a threshold, an axis's min, a title) would stay drawn. New data alone
