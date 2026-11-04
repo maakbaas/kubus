@@ -1798,7 +1798,8 @@ img[data-lightbox] {
 }
 /* A table looks exactly like a block's table (Carbon's small data table, as `.items-table`): the header row in
    heading-compact-01 on layer-accent, rows of 2rem in body-compact-01 secondary text on the layer, a line below each
-   row and none between columns; cells 1.5rem apart (--table-cell-pad), 1rem at the table's edges; a row's hover. */
+   row and none between columns; cells 1.5rem apart (--table-cell-pad), 1rem at the table's edges. No row hover: its rows
+   aren't clickable, as a block's are. */
 .md-editor__content tr {
   block-size: 2rem;
 }
@@ -1834,7 +1835,6 @@ img[data-lightbox] {
   background: var(--cds-layer);
   border-block-start: 1px solid var(--cds-layer);
   border-block-end: 1px solid var(--cds-border-subtle);
-  transition: background-color 70ms cubic-bezier(0, 0, 0.38, 0.9);
 }
 /* A cell's paragraph (the editor wraps its text in one) takes the cell's type, no margins of its own. */
 .md-editor__content :is(th, td) > p {
@@ -1842,14 +1842,6 @@ img[data-lightbox] {
   font: inherit;
   letter-spacing: inherit;
   color: inherit;
-}
-@media (any-hover: hover) {
-  .md-editor__content tr:hover > td {
-    background: var(--cds-layer-hover);
-    border-block-start-color: var(--cds-layer-hover);
-    border-block-end-color: var(--cds-layer-hover);
-    color: var(--cds-text-primary);
-  }
 }
 /* An empty cell keeps one line's height in the view, as in the editor (whose cells always hold
    a paragraph): an invisible character gives it its line. */

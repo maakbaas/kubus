@@ -551,3 +551,49 @@ export function localComponents(collections: Collection[], views: ViewLike[]): L
   }
   return out;
 }
+
+/** What `componentsUsedIn` reads: the parts of collections, views, dashboards and their tabs it needs. */
+interface SpaceLike {
+  collections: Pick<Collection, "id" | "fields" | "itemViews" | "spaceIds">[];
+  views: (ViewLike & { spaceId: string })[];
+  dashboards: { id: string; spaceIds: string[] | null }[];
+  dashboardViews: { dashboardId: string; spaceId: string; blocks: ViewLike["blocks"] }[];
+}
+
+const shownIn = (x: { spaceIds: string[] | null }, spaceId: string) => x.spaceIds === null || x.spaceIds.includes(spaceId);
+
+/**
+ * The shared components used in a space (the Components page's "Used in this space"): by a field of a collection shown
+ * there, or a component block of one of its collection views (of that space), item views, or dashboard tabs (a dashboard
+ * shown there: its tabs of that space, or the copies of another space's it shows while it has none of its own).
+ */
+export function componentsUsedIn(spaceId: string, { collections, views, dashboards, dashboardViews }: SpaceLike): Set<string> {
+  const used = new Set<string>();
+  const fromBlocks = (blocks: ViewLike["blocks"]) => {
+    for (const b of blocks) {
+      const id = b.kind === "component" ? (b.options as { componentId?: unknown } | null)?.componentId : null;
+      if (typeof id === "string") used.add(id);
+    }
+  };
+  const here = collections.filter((c) => shownIn(c, spaceId));
+  const ids = new Set(here.map((c) => c.id));
+  for (const c of here) {
+    for (const f of c.fields) if (f.componentId && f.code === null) used.add(f.componentId);
+    for (const v of c.itemViews) fromBlocks(v.layout.blocks);
+  }
+  for (const v of views) if (v.spaceId === spaceId && ids.has(v.collectionId)) fromBlocks(v.blocks);
+  for (const d of dashboards) {
+    if (!shownIn(d, spaceId)) continue;
+    const tabs = dashboardViews.filter((v) => v.dashboardId === d.id);
+    const own = tabs.filter((v) => v.spaceId === spaceId);
+    for (const v of own.length > 0 ? own : tabs) fromBlocks(v.blocks);
+  }
+  return used;
+}
+
+/** Whether a local component is used in a space: its collection is shown there, and a collection view's is of that space. */
+export function localUsedIn(local: LocalComponent, spaceId: string, collections: Pick<Collection, "id" | "spaceIds">[], views: { id: string; spaceId: string }[]): boolean {
+  const c = collections.find((x) => x.id === local.owner.collectionId);
+  if (!c || !shownIn(c, spaceId)) return false;
+  return local.owner.type !== "view" || views.find((v) => v.id === (local.owner as { viewId: string }).viewId)?.spaceId === spaceId;
+}

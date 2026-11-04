@@ -65,7 +65,7 @@ What the app does, feature by feature (read the part you work on).
   formulas too (also a formula copied from a read-only view, KaTeX's HTML: read back from its TeX source):
   `ui/markdownEditing.test.ts` copies and pastes a text with every syntax. Links have no underline but on hover, as
   everywhere in the app. Not GFM, so not here: `==highlight==` (GitHub doesn't render it either). A table is as wide as the text (editor and view) and looks exactly like a block's table (Carbon's small data table:
-  header row, 2rem rows, a line under each, the same cell padding and type), its columns sized by their content; a wider one scrolls
+  header row, 2rem rows, a line under each, the same cell padding and type; no row hover), its columns sized by their content; a wider one scrolls
   sideways in its box. It is made by typing `|3x2|` and a space (the caret then in its first cell: `caretInText`), by typing
   its header and delimiter rows (`|a|b|`, then `|-|-|` and Enter: `tableFromTypedRows`, `ui/markdownKeys.ts`; before
   that they are text, saved with `\|`), or by pasting GFM table text. A code block's language select shows while hovered and in the block holding the caret (marked
@@ -101,7 +101,11 @@ What the app does, feature by feature (read the part you work on).
     a popover; "New component" in Block settings or "Add block" names one and opens its page beside);
     a block's own `options.local`, written by earlier versions, still shows and can only be saved as
     shared. A Markdown block's text is local too (static only: `$now`, nothing about items). `fieldComponent` / `blockComponent`
-    resolve either. Deleting the place deletes it; nothing else refers to it. The Components page
+    resolve either. Deleting the place deletes it; nothing else refers to it. Components belong to no space: the
+    Components page lists them all, grouped (as the Collections page's "In this space") into "Used in this space" and
+    "Not used in this space" (`componentsUsedIn`: a field of a collection shown there, a block of its collection views,
+    item views or dashboard tabs, a dashboard without its own tabs there counting the ones it copies; a local one by
+    where it is written, `localUsedIn`). The Components page
     lists local ones too (`localComponents`: by where they are used, "Books / Reading time", linked
     to their place; Markdown blocks only when their text has `{{ }}` sections), with "Save as shared
     component" (`PromoteComponentModal`, `ui/promoteLocal.ts`: a shared copy is saved, then the place

@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { Checkbox, Dropdown, IconButton, InlineNotification, Link, Modal, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Tile } from "@carbon/react";
+import { Accordion, AccordionItem, Checkbox, Dropdown, IconButton, InlineNotification, Link, Modal, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Tile } from "@carbon/react";
 import { Copy, Share, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { useDataChanges } from "../app/useDataChanges";
 import { newId, nextName, now } from "../domain/model";
-import { COMPONENT_KINDS, componentUses, localComponents, type Component, type ComponentCode, type LocalComponent } from "../domain/components";
+import { COMPONENT_KINDS, componentsUsedIn, componentUses, localComponents, localUsedIn, type Component, type ComponentCode, type LocalComponent } from "../domain/components";
 import type { CollectionView } from "../domain/views";
+import type { DashboardView } from "../domain/dashboards";
 import { NewButton } from "../ui/NewButton";
 import { PageHeader } from "../ui/PageHeader";
 import { PromoteComponentModal } from "../ui/PromoteComponentModal";
@@ -15,7 +16,7 @@ import { errorMessage } from "../ui/useConfirm";
 import { useTableSort } from "../ui/useTableSort";
 import { LIST_MAIN, LIST_TABLE } from "../ui/listTable";
 import { RowActions, ROW_BUTTON } from "../ui/RowActions";
-import { FillTable } from "../views/TableView";
+import { FillTable, useSharedColumns } from "../views/TableView";
 
 /** A component's kind as the list shows it (Field, Block, Static), from what its code uses. */
 /** Its kind; asking AI makes it a kind of its own ("AI field": only a field can ask AI). */
@@ -63,10 +64,11 @@ const nameOf = (r: Row) => (r.shared ? r.shared.name : r.local.where);
  * The list of components as a table: shared ones (name opens the editor) and local ones, written
  * in place in a field or block (named by where they are used, which the name links to; "Save as
  * shared component" promotes one). Kind ("AI" for those that ask AI), and the component's start.
- * Shared ones are created and edited on their own page (ComponentEditorPage).
+ * Shared ones are created and edited on their own page (ComponentEditorPage). Components belong to no space: all are
+ * listed, grouped by whether this space uses them ("Used in this space", `componentsUsedIn`), like the Collections page.
  */
 export function ComponentsPage() {
-  const { repo, collections, components, space } = useStore();
+  const { repo, collections, components, dashboards, space } = useStore();
   const navigate = useNavigate();
   // null while loading: the list shows once complete, so the local ones of views don't shift it.
   const [views, setViews] = useState<CollectionView[] | null>(null);
@@ -76,6 +78,13 @@ export function ComponentsPage() {
   }, [repo]);
   useEffect(loadViews, [loadViews]);
   useDataChanges((change) => change.scope === "views" && loadViews());
+  // Dashboard tabs, for which components this space's dashboards use.
+  const [dashboardViews, setDashboardViews] = useState<DashboardView[] | null>(null);
+  const loadDashboardViews = useCallback(() => {
+    repo.listAllDashboardViews().then(setDashboardViews, (e) => console.error("Loading dashboard views failed", e));
+  }, [repo]);
+  useEffect(loadDashboardViews, [loadDashboardViews]);
+  useDataChanges((change) => (change.scope === "dashboardViews" || change.scope === "dashboards") && loadDashboardViews());
   const rows = useMemo<Row[]>(
     () => [...components.map((shared) => ({ shared })), ...localComponents(collections, views ?? []).map((local) => ({ local }))],
     [components, collections, views],
@@ -88,6 +97,23 @@ export function ComponentsPage() {
     code: (r) => codeOf(r).code.split("\n")[0],
   });
   const [scope, setScope] = useState<Scope>("all");
+  // Every component is listed (they belong to no space), split by whether this space uses it (like the Collections
+  // page's "In this space"): a shared one by a field, a block of a view or an item view, or a dashboard tab here; a local
+  // one where it is written.
+  const used = useMemo(
+    () => componentsUsedIn(space.id, { collections, views: views ?? [], dashboards, dashboardViews: dashboardViews ?? [] }),
+    [space.id, collections, views, dashboards, dashboardViews],
+  );
+  const scoped = rows.filter((r) => scope === "all" || (scope === "shared") === !!r.shared);
+  const isUsed = (r: Row) => (r.shared ? used.has(r.shared.id) : localUsedIn(r.local, space.id, collections, views ?? []));
+  const here = scoped.filter(isUsed);
+  const elsewhere = scoped.filter((r) => !isUsed(r));
+  const groups = [
+    { label: "Used in this space", list: here },
+    { label: "Not used in this space", list: elsewhere },
+  ].filter((g) => g.list.length > 0);
+  const groupsBox = useRef<HTMLDivElement>(null);
+  useSharedColumns(groupsBox, elsewhere.length > 0);
   const [error, setError] = useState<string>();
   // The component being deleted, and whether the fields using it go too.
   const [deleting, setDeleting] = useState<Component | null>(null);
@@ -109,6 +135,88 @@ export function ComponentsPage() {
     }
   }
 
+  const table = (list: Row[]) => (
+    <FillTable>
+      <Table size="sm" className={LIST_TABLE}>
+        <TableHead>
+          <TableRow>
+            <TableHeader className={LIST_MAIN} {...header("name")}>Name</TableHeader>
+            <TableHeader {...header("kind")}>Kind</TableHeader>
+            <TableHeader {...header("place")}>Where</TableHeader>
+            <TableHeader {...header("description")}>Description</TableHeader>
+            <TableHeader {...header("code")}>Component</TableHeader>
+            <TableHeader aria-label="Actions" />
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {sort(list).map((r) => {
+            const code = codeOf(r);
+            return (
+              <TableRow key={r.shared ? r.shared.id : r.local.key}>
+                <TableCell className={LIST_MAIN}>
+                  {r.shared ? (
+                    <Link href={`#/components/${r.shared.id}`}>{r.shared.name}</Link>
+                  ) : r.local.href ? (
+                    <Link href={r.local.href}>{r.local.where}</Link>
+                  ) : (
+                    r.local.where
+                  )}
+                </TableCell>
+                <TableCell>
+                  <span className="component-choice">
+                    <span className="component-choice__name">{kindLabel(code)}</span>
+                  </span>
+                </TableCell>
+                <TableCell>{r.shared ? "Shared" : "Local"}</TableCell>
+                <TableCell>{r.shared?.description ?? ""}</TableCell>
+                {/* Its first line; the whole component is edited on its page (or in its place). */}
+                <TableCell className="components-table__code">
+                  {/* At most two lines of it (cut off with …). */}
+                  <span className="components-table__excerpt">
+                    {code.code.split("\n")[0]}
+                    {code.code.includes("\n") ? " …" : ""}
+                  </span>
+                </TableCell>
+                <RowActions>
+                  {r.shared ? (
+                    <>
+                      <IconButton {...ROW_BUTTON}
+                        label={`Duplicate ${r.shared.name}`}
+                        onClick={() => {
+                          // A copy named "Name 2" (then "Name 3", …), like new views.
+                          const x = r.shared;
+                          const ts = now();
+                          repo
+                            .saveComponent({ ...x, id: newId(), name: nextName(x.name, components.map((t) => t.name)), createdAt: ts, updatedAt: ts })
+                            .catch((e) => setError(errorMessage(e)));
+                        }}
+                      >
+                        <Copy />
+                      </IconButton>
+                      <IconButton {...ROW_BUTTON}
+                        label={`Delete ${r.shared.name}`}
+                        onClick={() => {
+                          setWithFields(false);
+                          setDeleting(r.shared);
+                        }}
+                      >
+                        <TrashCan />
+                      </IconButton>
+                    </>
+                  ) : (
+                    <IconButton {...ROW_BUTTON} label={`Save ${r.local.where} as a shared component`} onClick={() => setPromoting(r.local)}>
+                      <Share />
+                    </IconButton>
+                  )}
+                </RowActions>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </FillTable>
+  );
+
   return (
     <>
       <PageHeader
@@ -118,7 +226,7 @@ export function ComponentsPage() {
       />
       {error && <InlineNotification kind="error" title="Error" subtitle={error} onClose={() => setError(undefined)} />}
       {/* Shared ones, those written in place, or both. */}
-      {views !== null && rows.length > 0 && (
+      {views !== null && dashboardViews !== null && rows.length > 0 && (
         <div className="components-scope" ref={scopeBox}>
           <Dropdown<Scope>
             autoAlign
@@ -134,90 +242,32 @@ export function ComponentsPage() {
           />
         </div>
       )}
-      {views === null ? null : rows.length === 0 ? (
+      {views === null || dashboardViews === null ? null : rows.length === 0 ? (
         <Tile className="empty-state">
           <p>No components yet.</p>
         </Tile>
       ) : (
-        <FillTable>
-          <Table size="sm" className={LIST_TABLE}>
-            <TableHead>
-              <TableRow>
-                <TableHeader className={LIST_MAIN} {...header("name")}>Name</TableHeader>
-                <TableHeader {...header("kind")}>Kind</TableHeader>
-                <TableHeader {...header("place")}>Where</TableHeader>
-                <TableHeader {...header("description")}>Description</TableHeader>
-                <TableHeader {...header("code")}>Component</TableHeader>
-                <TableHeader aria-label="Actions" />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sort(rows.filter((r) => scope === "all" || (scope === "shared") === !!r.shared)).map((r) => {
-                const code = codeOf(r);
-                return (
-                  <TableRow key={r.shared ? r.shared.id : r.local.key}>
-                    <TableCell className={LIST_MAIN}>
-                      {r.shared ? (
-                        <Link href={`#/components/${r.shared.id}`}>{r.shared.name}</Link>
-                      ) : r.local.href ? (
-                        <Link href={r.local.href}>{r.local.where}</Link>
-                      ) : (
-                        r.local.where
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="component-choice">
-                        <span className="component-choice__name">{kindLabel(code)}</span>
-                      </span>
-                    </TableCell>
-                    <TableCell>{r.shared ? "Shared" : "Local"}</TableCell>
-                    <TableCell>{r.shared?.description ?? ""}</TableCell>
-                    {/* Its first line; the whole component is edited on its page (or in its place). */}
-                    <TableCell className="components-table__code">
-                      {/* At most two lines of it (cut off with …). */}
-                      <span className="components-table__excerpt">
-                        {code.code.split("\n")[0]}
-                        {code.code.includes("\n") ? " …" : ""}
-                      </span>
-                    </TableCell>
-                    <RowActions>
-                      {r.shared ? (
-                        <>
-                          <IconButton {...ROW_BUTTON}
-                            label={`Duplicate ${r.shared.name}`}
-                            onClick={() => {
-                              // A copy named "Name 2" (then "Name 3", …), like new views.
-                              const x = r.shared;
-                              const ts = now();
-                              repo
-                                .saveComponent({ ...x, id: newId(), name: nextName(x.name, components.map((t) => t.name)), createdAt: ts, updatedAt: ts })
-                                .catch((e) => setError(errorMessage(e)));
-                            }}
-                          >
-                            <Copy />
-                          </IconButton>
-                          <IconButton {...ROW_BUTTON}
-                            label={`Delete ${r.shared.name}`}
-                            onClick={() => {
-                              setWithFields(false);
-                              setDeleting(r.shared);
-                            }}
-                          >
-                            <TrashCan />
-                          </IconButton>
-                        </>
-                      ) : (
-                        <IconButton {...ROW_BUTTON} label={`Save ${r.local.where} as a shared component`} onClick={() => setPromoting(r.local)}>
-                          <Share />
-                        </IconButton>
-                      )}
-                    </RowActions>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </FillTable>
+        <div ref={groupsBox} className={elsewhere.length > 0 ? "table-groups" : undefined}>
+          {elsewhere.length === 0 ? (
+            table(here)
+          ) : (
+            <Accordion size="sm" align="start">
+              {groups.map(({ label, list }) => (
+                <AccordionItem
+                  key={label}
+                  open
+                  title={
+                    <span className="table-group__title">
+                      {label} <span className="view-group__count">{list.length}</span>
+                    </span>
+                  }
+                >
+                  {table(list)}
+                </AccordionItem>
+              ))}
+            </Accordion>
+          )}
+        </div>
       )}
       {promoting && (
         <PromoteComponentModal
