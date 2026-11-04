@@ -8,7 +8,7 @@
 // so it carries over when the type is switched. A type whose default sort isn't by title (a chart, a map: time
 // order) says so in DEFAULT_SORTS (domain/blockSort.ts), which the headless API reads without loading block types.
 
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { CarbonIconType } from "@carbon/icons-react";
 import type { Component } from "../domain/components";
 import type { FieldLayout } from "../domain/fieldLayout";
@@ -114,6 +114,8 @@ export interface BlockOptionsProps<O> {
   refs?: RefOptions;
   /** It stands in a row of blocks side by side: its Height counts toward the row's, and it fills the row (a note says so). */
   inRow?: boolean;
+  /** With `displaySection`: the settings of the block's row (its height and limit), for the editor's Display section. */
+  display?: ReactNode;
   onChange(options: O): void;
 }
 
@@ -129,6 +131,8 @@ export interface BlockTypeDefinition<O = unknown> {
   View: ComponentType<BlockProps<O>>;
   /** Settings specific to this block type, in its own menu. */
   OptionsEditor?: ComponentType<BlockOptionsProps<O>>;
+  /** Its editor has a Display section and shows `display` (the row's height) there; else Block settings adds one. */
+  displaySection?: true;
   /** Its settings are still to be made (a linked block without its link): its Block settings open by themselves. */
   unset?(options: O): boolean;
 }

@@ -1,5 +1,5 @@
 import { useContext, useEffect, useId, useMemo, useRef, useState, type DragEvent } from "react";
-import { Button, Checkbox, Dropdown, InlineNotification, MultiSelect, NumberInput, Select, SelectItem, TextInput } from "@carbon/react";
+import { Accordion, AccordionItem, Button, Checkbox, Dropdown, InlineNotification, MultiSelect, NumberInput, Select, SelectItem, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { groupsInApp, isReadOnly } from "../domain/sources";
@@ -171,6 +171,8 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
     const { limit: _old, ...rest } = block;
     onChange(n === blockLimit({}, !!uses.all) ? rest : { ...rest, limit: n });
   };
+  // A row's height and its limit: only where they apply, a row of several blocks side by side (blockRows.ts).
+  const rowHeight = row?.inRow ? <RowHeightSettings id={`${uid}-row`} row={row} /> : null;
   return (
     <>
       {uses.query && (
@@ -252,6 +254,21 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
       {/* Opened by itself while the block's settings are still to be made (a new linked block's link). */}
       <ToolbarPopover label="Block settings" icon={Settings} width="narrow" openRequest={type.unset?.(block.options) ? 1 : undefined} onOpenChange={onOpenChange}>
         <div className="view-settings">
+          {/* Its name first, then where it stands, then what it shows and how. */}
+          {/* Empty: named after its component, or its type ("Table", "Cards"). Stored when left
+              (Enter), like a view's name. */}
+          <TextInput
+            size="sm"
+            key={block.title}
+            id={`${uid}-title`}
+            labelText="Name"
+            placeholder={blockName({ ...block, title: "" })}
+            defaultValue={block.title}
+            onBlur={(e) => e.target.value.trim() !== block.title && onSet({ title: e.target.value.trim() })}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          />
+          {/* Then where it stands: beside the block above (its row's height and limit are in Display, in a row of several). */}
+          {row && (row.beside || row.canBeside) && <BesideSetting id={`${uid}-row`} row={row} />}
           {/* On a dashboard: one collection, or several read as one (native and remote ones mixed; their fields of one name
               are one column), or a list field's entries. An item page's block picks one (Backlinks, a list field's entries too); a
               collection view's lists the view's own, or the entries of one of its list fields. */}
@@ -318,20 +335,29 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
               onSet({ kind: next.kind, options, ...(fields && { layout: { ...block.layout, fields } }) });
             }}
           />
-          {/* Empty: named after its component, or its type ("Table", "Cards"). Stored when left
-              (Enter), like a view's name. */}
-          <TextInput
-            size="sm"
-            key={block.title}
-            id={`${uid}-title`}
-            labelText="Name"
-            placeholder={blockName({ ...block, title: "" })}
-            defaultValue={block.title}
-            onBlur={(e) => e.target.value.trim() !== block.title && onSet({ title: e.target.value.trim() })}
-            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-          />
-          {row && <RowSettings id={`${uid}-row`} row={row} />}
-          {type.OptionsEditor && <type.OptionsEditor collection={collection} options={block.options} place={place} pageCollectionId={page?.id} result={result} refs={refs} inRow={row?.inRow} onChange={(options) => onSet({ options })} />}
+          {type.OptionsEditor && (
+            <type.OptionsEditor
+              collection={collection}
+              options={block.options}
+              place={place}
+              pageCollectionId={page?.id}
+              result={result}
+              refs={refs}
+              inRow={row?.inRow}
+              display={type.displaySection ? rowHeight : undefined}
+              onChange={(options) => onSet({ options })}
+            />
+          )}
+          {rowHeight && !(type.OptionsEditor && type.displaySection) && (
+            // A section as a chart's (its styles: .chart-options), closed when the settings open.
+            <div className="chart-options">
+              <Accordion size="sm" className="chart-options__sections">
+                <AccordionItem title="Display">
+                  <div className="chart-options__section">{rowHeight}</div>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          )}
           {/* Offered while the text can be one (not empty, nothing a static component can't read). */}
           {markdownLocal && markdownLocal.code.trim() && !placeProblem(markdownLocal, "static") && (
             <Button kind="tertiary" size="sm" renderIcon={Save} onClick={() => setPromoting(true)}>
@@ -607,20 +633,23 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   );
 }
 
+/** Beside the block above (Block settings): only where it can be, a block right above it with room in its row. */
+function BesideSetting({ id, row }: { id: string; row: RowControls }) {
+  return (
+    <div className="view-options__checks">
+      <Checkbox id={`${id}-beside`} labelText="Beside the block above" checked={row.beside} onChange={(_, { checked }) => row.onBeside(checked)} />
+    </div>
+  );
+}
+
 /**
- * A block's place in its row (Block settings): beside the block above (in that block's row), and the row's height: as its
- * tallest block, at most a max height, or as its shortest, at least a min height; what is taller scrolls inside (where the
- * row's blocks stand side by side; stacked on a phone, never). Stored on the row's first block.
+ * The height of a block's row (Block settings → Display, in a row of several): as its tallest block, at most a max height,
+ * or as its shortest, at least a min height; what is taller scrolls inside (where the row's blocks stand side by side;
+ * stacked on a phone, never). Stored on the row's first block.
  */
-function RowSettings({ id, row }: { id: string; row: RowControls }) {
+function RowHeightSettings({ id, row }: { id: string; row: RowControls }) {
   return (
     <>
-      {/* Only where it can be: a block right above it, with room in its row. */}
-      {(row.beside || row.canBeside) && (
-        <div className="view-options__checks">
-          <Checkbox id={`${id}-beside`} labelText="Beside the block above" checked={row.beside} onChange={(_, { checked }) => row.onBeside(checked)} />
-        </div>
-      )}
       <Select
         size="sm"
         id={`${id}-fit`}

@@ -428,9 +428,10 @@ What the app does, feature by feature (read the part you work on).
   own above or below that block's row (the top or bottom half of the whole row highlighted); the divider between two blocks moves their shares in 5%
   steps (drag it, or focus it and use the arrow keys; each block keeps at least 15rem, `MIN_COLUMN_REM`, and a share
   stored on a wider screen squeezes none below it). In a row of several, what is wider than its
-  share scrolls sideways inside the block, never the page. Block settings has "Beside the block above" (only where a block
-  is right above it with room in its row), Row height (As its tallest / shortest block) and Max / Min height (rem; empty:
-  none). All of it is arranging: stored at once, no " *"; a block put beside another in Block settings moves once the panel
+  share scrolls sideways inside the block, never the page. Block settings opens with Name, then "Beside the block above" (only where a block
+  is right above it with room in its row), then Show as and the type's own settings; in a row of several blocks (only there
+  they apply) its Display section (a chart's own, else one of its own: `BlockTypeDefinition.displaySection`, the `display`
+  prop) has Row height (As its tallest / shortest block) and Max / Min height (rem; empty: none). All of it is arranging: stored at once, no " *"; a block put beside another in Block settings moves once the panel
   closes (held with `usePanelsOpen().hold`: it would move its open panel). A row stays sound when it changes (`Arrangement` in
   `blockRows.ts`): the next block takes over a removed or moved first block's settings, a changed row gets equal shares
   again, and a block reordered in the block list (or a Fields list) away from the block it was beside starts a row of its

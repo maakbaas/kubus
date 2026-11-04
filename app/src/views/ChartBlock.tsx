@@ -459,7 +459,7 @@ function RegionsSelect({ id, value, onChange }: { id: string; value: ChartRegion
   );
 }
 
-function ChartOptionsEditor({ collection, options, place, pageCollectionId, result, refs, inRow, onChange }: BlockOptionsProps<ChartOptions>) {
+function ChartOptionsEditor({ collection, options, place, pageCollectionId, result, refs, inRow, display, onChange }: BlockOptionsProps<ChartOptions>) {
   const uid = useId();
   const openings = usePanelOpenings();
   const [showRegions, setShowRegions] = useState(false);
@@ -772,7 +772,8 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
   const across = o.series.every((s, i) => (styles[i] === "bar" || styles[i] === "lollipop") && s.axis === "left");
   // Bars or areas stack with another of their style on their axis: two such series, or one split.
   const stackable = o.series.some((s, i) => (styles[i] === "bar" || styles[i] === "area") && (!!o.splitBy || o.series.some((t, j) => j !== i && styles[j] === styles[i] && t.axis === s.axis)));
-  const displaySection = has.display && (
+  // With the row's height (in a row of several) last, also for a kind without settings of its own here.
+  const displaySection = (has.display || display) && (
     <Section key="display" title="Display">
       {has.xy && (
         <>
@@ -852,6 +853,7 @@ function ChartOptionsEditor({ collection, options, place, pageCollectionId, resu
           ))}
         </Select>
       )}
+      {display}
     </Section>
   );
 
@@ -1056,4 +1058,5 @@ export const chartBlock = defineBlockType<ChartOptions>({
   }),
   View: ChartView,
   OptionsEditor: ChartOptionsEditor,
+  displaySection: true,
 });

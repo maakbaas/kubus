@@ -117,6 +117,8 @@ test("dashboard rows: Beside the block above and the row's height in Block setti
   await t.until("closed: Last stands beside More", async () => sideBySide(await rRect(t, "r-more"), await rRect(t, "r-last")));
 
   await blockSettings(t, "r-last");
+  // The row's height is in Display (only in a row of several blocks).
+  await toolbarPanel(t).getByRole("button", { name: "Display" }).click();
   await toolbarPanel(t).getByRole("combobox", { name: "Row height" }).selectOption("shortest");
   await t.until("the row's fit is stored on its first block (More)", async () => (await rStoredBlock(t, ids, "r-more"))?.rowFit === "shortest");
   const min = toolbarPanel(t).getByRole("spinbutton", { name: "Min height (rem)" });
