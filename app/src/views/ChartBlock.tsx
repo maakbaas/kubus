@@ -145,6 +145,7 @@ function ChartView({ collection, result, options, refs, actions, page, query }: 
       <Suspense fallback={<div className="chart-block__loading" style={{ blockSize: String(spec.options.height) }} />}>
         <ChartCanvas
           spec={spec}
+          compact={isXY(options.chart) && !!options.compact}
           geoData={spec.map ? regionMap.map?.topology : undefined}
           onItem={(id, event) => {
             const item = items.find((i) => i.id === id);

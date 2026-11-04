@@ -441,6 +441,20 @@ What the app does, feature by feature (read the part you work on).
   expanded row collapses the block it belongs to. Where a row's blocks stack (a phone, a narrow pane: `RowSideBySide`) each
   collapses on its own, and a block dragged out of its row keeps its own state. The block list (View settings, Tab settings)
   has **Duplicate block**: the same block with all its settings, in a row of its own after the original's (`withCopy`).
+- **Charts line up** (`domain/chartAlign.ts` the rule, `views/chartAlign.tsx` measuring and applying, around a page's
+  blocks in `BlockRows`): a chart's drawn box (an axis chart's plot area, a meter's bar, a pie's circle, a gauge's arc, a
+  radar's web, a treemap's tiles, a word cloud's words, a map's shape, a sparkline's line) lines up with those of its
+  neighbours of the same family (every axis chart is one family, heatmaps included; a meter only with meters, …), instead
+  of each filling its block its own way (a legend, a right axis or wider tick labels moved the box): side by side (one line
+  of a row: the same height there) the tops and bottoms; above / below, charts with the same left edge (after their Width)
+  the left side, those with the same right edge too the right side. Charts that fill their box are padded inside it (drawn
+  that much smaller: the block keeps its size, nothing around moves); those with a height of their own (a meter, a
+  sparkline) or centred (pie, gauge, radar, word cloud, map) line up only their tops side by side, moved down within the
+  room they have, and not sideways. Always on. A chart is drawn as soon as its data is in; when one arrives or is drawn
+  again (a remote block's rows, a new legend), the page works the padding out again a frame later (and measures once more
+  after 250ms and 1s: an axis's labels settle without telling) and redraws only the charts whose padding changed (a pixel
+  or more; one changed more than six times in two seconds is left as it is for a while: no swinging between layouts).
+  A stat's sparkline isn't lined up.
 - **Full width** (a checkbox in a collection view's View settings, an item view's Page layout popover and a dashboard view's
   settings): on, the page uses the pane's whole width (as collection views always did); off, it keeps to the narrow
   700px column of an item page, centred. Defaults (absent): collection views and dashboard views on, item views off, so

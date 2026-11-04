@@ -1,6 +1,7 @@
 import { createContext, Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { blockRows, blockWidths, canBeside, MIN_COLUMN_REM, moveDivider, rowLines, placeBlock, rowHeightPx, rowOf, rowShares, rowStart, setBeside, setRowSettings, setRowShares, SHARE_STEP, type RowSettings, type RowZone } from "../domain/blockRows";
 import { type Collapsed, type ViewBlock } from "../domain/views";
+import { ChartAlignment, ChartLine } from "./chartAlign";
 
 // A page's blocks in rows (domain/blockRows.ts): a row's blocks side by side, on lines by their widths (`rowLines`: each
 // its share of the row, 15rem at least; a line takes them while they fit; measured here, so the narrow column of a page
@@ -152,7 +153,8 @@ export function BlockRows<T extends { id: string }>({ entries, blockOf, beside, 
   const [drop, setDrop] = useState<{ id: string; zone: RowZone } | null>(null);
   const rows = shownRows(entries, blockOf, beside);
   return (
-    <>
+    // Its charts line up with each other (views/chartAlign.tsx).
+    <ChartAlignment>
       {rows.map((row) => {
         const first = row[0];
         if (!blockOf(first)) return <Fragment key={first.id}>{render(first, {})}</Fragment>;
@@ -196,7 +198,7 @@ export function BlockRows<T extends { id: string }>({ entries, blockOf, beside, 
           />
         );
       })}
-    </>
+    </ChartAlignment>
   );
 }
 
@@ -346,6 +348,8 @@ function Row<T extends { id: string }>({
           <Fragment key={l}>
             {l > 0 && <div className="block-row__break" aria-hidden="true" />}
             <div className="block-row__cells">
+              {/* Side by side, the line's charts line up their tops and bottoms (views/chartAlign.tsx). */}
+              <ChartLine.Provider value={side && several ? `${ids[0]}:${l}` : null}>
               {line.map((e, k) => {
                 const i = first + k;
                 return (
@@ -369,6 +373,7 @@ function Row<T extends { id: string }>({
                   </Fragment>
                 );
               })}
+              </ChartLine.Provider>
             </div>
           </Fragment>
         );

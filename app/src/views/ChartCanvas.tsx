@@ -26,6 +26,7 @@ import "@carbon/charts-react/styles.css";
 import { geoMercator, geoNaturalEarth1, geoPath, type GeoPermissibleObjects } from "d3-geo";
 import type { GeometryCollection, Topology } from "topojson-specification";
 import type { CarbonChart, ChartSpec } from "./chartSpec";
+import { useChartAlign } from "./chartAlign";
 import { wholeMap } from "./regionMaps";
 
 // The Carbon Charts part of a chart block, in its own chunk: loaded (with d3) the first time a
@@ -160,16 +161,21 @@ function frameWholeMap(holder: HTMLElement, map: Topology, projection: string) {
 export default function ChartCanvas({
   spec: latest,
   geoData,
+  compact = false,
   onItem,
 }: {
   spec: ChartSpec;
   geoData?: Topology;
+  /** A compact chart (a sparkline): of its own family when charts line up (views/chartAlign.tsx). */
+  compact?: boolean;
   onItem?(itemId: string, event: MouseEvent | undefined): void;
 }) {
   const { spec, drawing } = useStableSpec(latest);
   const Chart = CHARTS[spec.chart] as React.ComponentType<{ data: unknown; options: unknown; ref: React.Ref<Instance> }>;
   const ref = useRef<Instance>(null);
   const box = useRef<HTMLDivElement>(null);
+  // Lined up with the page's other charts of its family (views/chartAlign.tsx): padded and shifted in its box.
+  const { align, drawn } = useChartAlign(box, latest.chart, compact);
   const onItemRef = useRef(onItem);
   onItemRef.current = onItem;
   // The fitted height (px) of a round chart; null = the spec's. Measured anew at the full height
@@ -200,6 +206,7 @@ export default function ChartCanvas({
     let frame = 0;
     const rendered = () => {
       const el = box.current;
+      drawn();
       // Before the browser paints Carbon's framing.
       if (el && geoRef.current && spec.chart === "ChoroplethChart") frameWholeMap(el, geoRef.current, String((spec.options.thematic as { projection?: string })?.projection));
       if (!part || !el) return;
@@ -219,19 +226,27 @@ export default function ChartCanvas({
       events.removeEventListener("scatter-click", click);
       events.removeEventListener("render-finished", rendered);
     };
-  }, [drawing, part]);
+  }, [drawing, part, drawn]);
   const map = useMemo(() => (geoData ? copyOfMap(geoData) : null), [geoData, drawing]); // eslint-disable-line react-hooks/exhaustive-deps
   const geoRef = useRef(geoData);
   geoRef.current = geoData;
+  // Padded above and below (lined up with its neighbours): drawn that much less tall, so its box keeps its height.
+  const padY = align.pad.top + align.pad.bottom;
   const options = useMemo(() => {
-    const sized = fitted === null ? spec.options : { ...spec.options, height: `${fitted}px` };
+    const height = fitted === null ? String(spec.options.height) : `${fitted}px`;
+    const sized = fitted === null && padY === 0 ? spec.options : { ...spec.options, height: padY > 0 ? `calc(${height} - ${padY}px)` : height };
     return map ? { ...sized, geoData: map } : sized;
-  }, [spec, fitted, map]);
+  }, [spec, fitted, map, padY]);
+  const { pad, shift } = align;
+  const style =
+    pad.top || pad.right || pad.bottom || pad.left || shift
+      ? { padding: `${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px`, ...(shift ? { position: "relative" as const, top: `${shift}px` } : {}) }
+      : undefined;
   // New options (or a new chart type) are a new chart: Carbon merges new options into its old ones,
   // so whatever was taken out (a threshold, an axis's min, a title) would stay drawn. New data alone
   // is drawn in place.
   return (
-    <div ref={box}>
+    <div ref={box} style={style}>
       <Chart key={drawing} ref={ref} data={spec.data} options={options} />
     </div>
   );
