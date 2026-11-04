@@ -209,7 +209,7 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
   },
   // Contains: any part of one entry ("las" in "classic", never across two); includes: a whole entry, whatever its case.
   string_list: {
-    operators: [op("contains", "contains"), op("notContains", "does not contain"), op("is", "include"), op("isNot", "do not include"), ...EMPTY_OPS],
+    operators: [op("contains", "contain"), op("notContains", "do not contain"), op("is", "include"), op("isNot", "do not include"), ...EMPTY_OPS],
     text: (_, v) => list(v).join(", "),
     sortKey: (_, v) => list(v).join(", ").toLowerCase() || null,
     groupKeys: (_, v) => (list(v).length ? list(v).map((s) => ({ key: s, label: s })) : single("")),
@@ -229,7 +229,7 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
   // Items match by their text; sorted by how far along (share done), empty last.
   // As a list of text, by its entries' text: contains any part, includes a whole entry.
   checklist: {
-    operators: [op("contains", "contains"), op("notContains", "does not contain"), op("is", "include"), op("isNot", "do not include"), ...EMPTY_OPS],
+    operators: [op("contains", "contain"), op("notContains", "do not contain"), op("is", "include"), op("isNot", "do not include"), ...EMPTY_OPS],
     text: (_, v) => checklistItems(v).map((i) => i.text).join(", "),
     sortKey: (_, v) => {
       const items = checklistItems(v);
