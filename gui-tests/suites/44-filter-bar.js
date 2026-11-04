@@ -82,7 +82,7 @@ test("Show filter bar: stored with the view, kept after a reload, the Filter but
   await t.check("the bar sits just below the tab strip, the Filter button last on its right edge", await t.page.evaluate(() => {
     const bar = document.querySelector(".ws-pane--active .filter-bar");
     const views = document.querySelector(".ws-pane--active .views-bar");
-    const buttons = [...bar.querySelectorAll("button")].filter((b) => !b.closest(".filter-bar__kind"));
+    const buttons = [...bar.querySelectorAll("button")];
     const last = buttons[buttons.length - 1];
     return !!bar && views.getBoundingClientRect().bottom <= bar.getBoundingClientRect().top + 1 && bar.getBoundingClientRect().top - views.getBoundingClientRect().bottom < 40 && Math.abs(last.getBoundingClientRect().right - bar.getBoundingClientRect().right) < 1;
   }));
