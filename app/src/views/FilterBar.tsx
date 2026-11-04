@@ -5,6 +5,7 @@ import { pickableFields, type Collection } from "../domain/model";
 import { fieldOperators } from "../domain/sources";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { RuleValue } from "./RuleValue";
+import { RollingMark } from "./RollingMark";
 import type { FilterRule } from "../domain/query";
 import { steps } from "./DatePeriodFilter";
 import { defaultDateField, latestValue, nowMinute, periodParts, periodRule, periodState, periodText, rollingLabel, splitAnchor, stepValue, withPeriod } from "../domain/datePeriod";
@@ -69,6 +70,7 @@ export function FilterBar({
   // below it, in as many columns as fit, each rule its words (as wide as the longest: `--bar-words`) and a box
   // filling its column: one column on a phone. Measured on each change of the rules or of the bar's width.
   const barRef = useRef<HTMLDivElement>(null);
+  const rolling = !!state?.counted;
   const [below, setBelow] = useState(false);
   const allWords = pinned.map((p) => p.words).join("\n");
   useLayoutEffect(() => {
@@ -88,7 +90,7 @@ export function FilterBar({
       // ‹ › >| (with the period) and Filter, 2rem each, counted whether the Filter button is here or (below the line,
       // without the period) back in the toolbar, so its moving never changes what fits.
       const label = bar.querySelector(".filter-bar__label");
-      const others = ((period ? 3 : 0) + 1) * 2 * rem;
+      const others = ((period ? 3 : 0) + 1 + (period && rolling ? 1 : 0)) * 2 * rem;
       const need = (label ? textWidth(label) + rem : 0) + words.reduce((sum, w) => sum + w + 0.5 * rem + 10 * rem, 0) + rem * (words.length - 1) + rem + others;
       bar.style.setProperty("--bar-words", `${Math.max(0, ...words)}px`);
       setBelow(need > bar.clientWidth + 0.5);
@@ -97,7 +99,7 @@ export function FilterBar({
     const seen = new ResizeObserver(measure);
     seen.observe(bar);
     return () => seen.disconnect();
-  }, [allWords, period]);
+  }, [allWords, period, rolling]);
   useEffect(() => onBelow?.(below && pinned.length > 0), [below, pinned.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
   const setValue = (id: string, value: string) => onChange(filters.map((r) => (r.id === id ? { ...r, value } : r)));
   return (
@@ -105,6 +107,7 @@ export function FilterBar({
       ref={barRef}
       className={["filter-bar", pinned.length > 0 && "filter-bar--rules", pinned.length > 0 && below && "filter-bar--below", !period && "filter-bar--no-period"].filter(Boolean).join(" ")}
     >
+      {period && state?.counted && <RollingMark />}
       {period && (
         <span className="filter-bar__label" title={state ? periodText(state) : text}>
           {text}

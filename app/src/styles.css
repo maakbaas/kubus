@@ -2754,17 +2754,10 @@ img[data-lightbox] {
   gap: var(--cds-spacing-03);
   align-items: center;
 }
-/* A sort level: "Sort by" / "Then by", field, direction, remove (in the filter rules' columns, without a value). */
-.query-editor__rule--sort {
-  grid-template-columns: 6.5rem minmax(0, 1fr) minmax(0, 1fr) auto;
-}
 /* A rule's buttons (on the filter bar, remove), touching, at the right. */
 .query-editor__actions {
   display: flex;
   justify-self: end;
-}
-.query-editor__join {
-  padding-inline-start: var(--cds-spacing-05);
 }
 /* A rule's value on an item page: where it comes from (a value, or one of the page's item's), and the value. */
 /* The date period above the filter's rules: the switcher, then the period shown with the field it goes
@@ -2828,6 +2821,34 @@ img[data-lightbox] {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--cds-spacing-03);
+}
+/* A sort level's or the grouping's field across two of the three columns, its direction or order in the third. */
+.query-editor__pick {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--cds-spacing-03);
+}
+.query-editor__pick > :first-child {
+  grid-column: 1 / 3;
+}
+/* "Group by" and a date's part after it ("Group by month"). */
+.filter-group__lead {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+}
+/* A rolling period's mark (RollingMark): an icon with its tooltip, no button look (no hover or active background). */
+.rolling-mark.cds--btn--ghost:is(:hover, :active, .cds--btn--selected) {
+  background: transparent;
+}
+.rolling-mark.cds--btn--ghost {
+  cursor: default;
+}
+/* A rolling period's mark (RollingMark) and its words, touching. */
+.date-period__lead {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
 }
 /* The period in short at the left, ‹ › >| at the far right. */
 .date-period__now {
@@ -2906,8 +2927,12 @@ img[data-lightbox] {
   .query-editor__fields > :first-child {
     grid-column: 1 / -1;
   }
-  .date-period__by {
+  .date-period__by,
+  .query-editor__pick {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .query-editor__pick > :first-child {
+    grid-column: 1;
   }
   .date-period__field,
   .date-period__window {

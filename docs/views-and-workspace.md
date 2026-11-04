@@ -91,7 +91,12 @@ Extension points are registries, not special cases in pages:
   it ("This week", "Last 7 days", "October 2026"; whole, with its days, in the tooltip) with ‹ › >| at the far right, the
   field it goes by across two of the rules' three columns and Which ("Counted from today") in the third; a rule's field,
   condition and value in three equal columns. Groups are a step further apart than their rows. On a phone a rule's field
-  has its row, condition and value beside each other below it, and the date's field and Which are stacked. "Add filter" is one
+  has its row, condition and value beside each other below it, and the date's field and Which are stacked. A rolling period (counted from now:
+  "This week", "Last 7 days") has Carbon's Activity icon before its words, here and on the filter bar (`RollingMark`, its
+  tooltip "Updates automatically"; no button look). **Sort and group** (the same layout): each sort level a group, "Sort
+  by" / "Then by" and its trash, then its field across two columns and its direction in the third; then "Group by" (a
+  date's part inline after it, "Group by month ▾"; its trash: No grouping), its field across two columns and the group
+  order in the third (only with a grouping); "Add sort level" one column wide; a wide panel, as Filter's. "Add filter" is one
   column wide, what goes beside it (a block's "Show [100] items at a time") at the far right of its row; on a phone it is
   the panel's width with that below it.
 - **Date period** (`app/src/domain/datePeriod.ts`, `views/DatePeriodFilter.tsx`): the top of every

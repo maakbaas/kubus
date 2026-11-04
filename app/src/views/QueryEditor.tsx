@@ -202,49 +202,56 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, grou
 
       {part === "sortGroup" && (
       <>
+      {/* As the filter's groups: each level, then the grouping, a group with its top row (its words at the left, its
+          remove at the far right), then its field across two of three columns and its direction or order in the third. */}
       <section>
-        <Heading className="query-editor__title">Sort</Heading>
         {/* Levels: the first sorts, each next one orders what the ones above leave equal ("by date, then by name"). */}
         {query.sort.length === 0 && <p className="helper">Not sorted.</p>}
         {query.sort.map((rule, i) => (
-          <div key={i} className="query-editor__rule query-editor__rule--sort">
-            <span className="query-editor__join">{i === 0 ? "Sort by" : "Then by"}</span>
-            <Select
-              id={`${uid}-sort-field-${i}`}
-              labelText={i === 0 ? "Sort by" : "Then by"}
-              hideLabel
-              size="sm"
-              value={rule.fieldId}
-              onChange={(e) => setSort(i, { ...rule, fieldId: e.target.value })}
-            >
-              {sortable.filter((f) => f.id === rule.fieldId || !query.sort.some((s) => s.fieldId === f.id)).map((f) => (
-                <SelectItem key={f.id} value={f.id} text={f.name} />
-              ))}
-            </Select>
-            <Select
-              id={`${uid}-sort-direction-${i}`}
-              labelText="Direction"
-              hideLabel
-              size="sm"
-              value={rule.direction}
-              onChange={(e) => setSort(i, { ...rule, direction: e.target.value as "asc" | "desc" })}
-            >
-              <SelectItem value="asc" text="Ascending" />
-              <SelectItem value="desc" text="Descending" />
-            </Select>
-            <IconButton autoAlign
-              label="Remove sort level"
-              kind="ghost"
-              size="sm"
-              align="left"
-              onClick={() => onChange({ ...query, sort: query.sort.filter((_, j) => j !== i) })}
-            >
-              <TrashCan />
-            </IconButton>
+          <div key={i} className="query-editor__rule filter-group">
+            <div className="filter-group__head">
+              <span className="filter-group__word">{i === 0 ? "Sort by" : "Then by"}</span>
+              <span className="filter-group__buttons">
+                <IconButton autoAlign
+                  label="Remove sort level"
+                  kind="ghost"
+                  size="sm"
+                  align="left"
+                  onClick={() => onChange({ ...query, sort: query.sort.filter((_, j) => j !== i) })}
+                >
+                  <TrashCan />
+                </IconButton>
+              </span>
+            </div>
+            <div className="query-editor__pick">
+              <Select
+                id={`${uid}-sort-field-${i}`}
+                labelText={i === 0 ? "Sort by" : "Then by"}
+                hideLabel
+                size="sm"
+                value={rule.fieldId}
+                onChange={(e) => setSort(i, { ...rule, fieldId: e.target.value })}
+              >
+                {sortable.filter((f) => f.id === rule.fieldId || !query.sort.some((s) => s.fieldId === f.id)).map((f) => (
+                  <SelectItem key={f.id} value={f.id} text={f.name} />
+                ))}
+              </Select>
+              <Select
+                id={`${uid}-sort-direction-${i}`}
+                labelText="Direction"
+                hideLabel
+                size="sm"
+                value={rule.direction}
+                onChange={(e) => setSort(i, { ...rule, direction: e.target.value as "asc" | "desc" })}
+              >
+                <SelectItem value="asc" text="Ascending" />
+                <SelectItem value="desc" text="Descending" />
+              </Select>
+            </div>
           </div>
         ))}
         {unsorted.length > 0 && (
-          <div className="query-editor__foot">
+          <div className="query-editor__foot query-editor__foot--filter">
             <Button
               kind="tertiary"
               size="sm"
@@ -260,66 +267,96 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, grou
 
       {!noGroup && (
       <section>
-        <Heading className="query-editor__title">Group</Heading>
-        <div className="query-editor__pair">
-          <Select
-            id={`${uid}-group-by`}
-            labelText="Group by"
-            size="sm"
-            value={query.groupBy ?? ""}
-            onChange={(e) => {
-              const groupBy = e.target.value || null;
-              // A date grouping goes with a date field (an hour only with a date & time one).
-              const next = groupBy ? fieldsById.get(groupBy) : undefined;
-              const { groupDate: _old, ...rest } = query;
-              const keep = query.groupDate && dateParts(next, remoteMerged).some((p) => p.value === query.groupDate);
-              onChange({ ...rest, groupBy, ...(keep && { groupDate: query.groupDate }) });
-            }}
-          >
-            <SelectItem value="" text="No grouping" />
-            {groupable.map((f) => (
-              <SelectItem key={f.id} value={f.id} text={f.name} />
-            ))}
-          </Select>
-          {groupDates.length > 0 && (
+        <div className="query-editor__rule filter-group">
+          {/* "Group by", a date's part inline after it ("Group by month"), and No grouping at the far right. */}
+          <div className="filter-group__head">
+            <span className="filter-group__lead">
+              <span className="filter-group__word">Group by</span>
+              {groupDates.length > 0 && (
+                <Select
+                  id={`${uid}-group-date`}
+                  className="filter-join"
+                  inline
+                  labelText="Group dates by"
+                  hideLabel
+                  size="sm"
+                  value={query.groupDate ?? DEFAULT_GROUP_DATE}
+                  onChange={(e) => {
+                    const groupDate = e.target.value as GroupDate;
+                    // The default isn't stored, so views saved before the option compare equal.
+                    const { groupDate: _old, ...rest } = query;
+                    onChange(groupDate === DEFAULT_GROUP_DATE ? rest : { ...rest, groupDate });
+                  }}
+                >
+                  {groupDates.map((p) => (
+                    <SelectItem key={p.value} value={p.value} text={p.text.toLowerCase()} />
+                  ))}
+                </Select>
+              )}
+            </span>
+            {query.groupBy && (
+              <span className="filter-group__buttons">
+                <IconButton
+                  autoAlign
+                  label="No grouping"
+                  kind="ghost"
+                  size="sm"
+                  align="left"
+                  onClick={() => {
+                    const { groupDate: _date, groupOrder: _order, groupCustom: _custom, ...rest } = query;
+                    onChange({ ...rest, groupBy: null });
+                  }}
+                >
+                  <TrashCan />
+                </IconButton>
+              </span>
+            )}
+          </div>
+          <div className="query-editor__pick">
             <Select
-              id={`${uid}-group-date`}
-              labelText="Group dates by"
+              id={`${uid}-group-by`}
+              labelText="Group by"
+              hideLabel
               size="sm"
-              value={query.groupDate ?? DEFAULT_GROUP_DATE}
+              value={query.groupBy ?? ""}
               onChange={(e) => {
-                const groupDate = e.target.value as GroupDate;
-                // The default isn't stored, so views saved before the option compare equal.
+                const groupBy = e.target.value || null;
+                // A date grouping goes with a date field (an hour only with a date & time one).
+                const next = groupBy ? fieldsById.get(groupBy) : undefined;
                 const { groupDate: _old, ...rest } = query;
-                onChange(groupDate === DEFAULT_GROUP_DATE ? rest : { ...rest, groupDate });
+                const keep = query.groupDate && dateParts(next, remoteMerged).some((p) => p.value === query.groupDate);
+                onChange({ ...rest, groupBy, ...(keep && { groupDate: query.groupDate }) });
               }}
             >
-              {groupDates.map((p) => (
-                <SelectItem key={p.value} value={p.value} text={p.text} />
+              <SelectItem value="" text="No grouping" />
+              {groupable.map((f) => (
+                <SelectItem key={f.id} value={f.id} text={f.name} />
               ))}
             </Select>
-          )}
-          <Select
-            id={`${uid}-group-order`}
-            labelText="Group order"
-            size="sm"
-            disabled={!query.groupBy}
-            value={query.groupOrder ?? "asc"}
-            onChange={(e) => {
-              const groupOrder = e.target.value as GroupOrder;
-              // The default isn't stored, so views saved before the option compare equal.
-              const { groupOrder: _old, groupCustom: _oldCustom, ...rest } = query;
-              // Custom starts as the order shown now (then dragged).
-              const shownKeys = (groups ?? []).filter((g) => g.key !== "").map((g) => g.key);
-              onChange(groupOrder === "asc" ? rest : groupOrder === "custom" ? { ...rest, groupOrder, groupCustom: shownKeys } : { ...rest, groupOrder });
-            }}
-          >
-            <SelectItem value="asc" text="Ascending" />
-            <SelectItem value="desc" text="Descending" />
-            <SelectItem value="count" text="Most items first" />
-            {/* A remote collection's source orders its groups: no custom order there. */}
-            {(customOffered || query.groupOrder === "custom") && <SelectItem value="custom" text="Custom" />}
-          </Select>
+            {query.groupBy && (
+              <Select
+                id={`${uid}-group-order`}
+                labelText="Group order"
+                hideLabel
+                size="sm"
+                value={query.groupOrder ?? "asc"}
+                onChange={(e) => {
+                  const groupOrder = e.target.value as GroupOrder;
+                  // The default isn't stored, so views saved before the option compare equal.
+                  const { groupOrder: _old, groupCustom: _oldCustom, ...rest } = query;
+                  // Custom starts as the order shown now (then dragged).
+                  const shownKeys = (groups ?? []).filter((g) => g.key !== "").map((g) => g.key);
+                  onChange(groupOrder === "asc" ? rest : groupOrder === "custom" ? { ...rest, groupOrder, groupCustom: shownKeys } : { ...rest, groupOrder });
+                }}
+              >
+                <SelectItem value="asc" text="Ascending" />
+                <SelectItem value="desc" text="Descending" />
+                <SelectItem value="count" text="Most items first" />
+                {/* A remote collection's source orders its groups: no custom order there. */}
+                {(customOffered || query.groupOrder === "custom") && <SelectItem value="custom" text="Custom" />}
+              </Select>
+            )}
+          </div>
           {query.groupBy && query.groupOrder === "custom" && groups && (
             <GroupOrderList
               groups={groups}

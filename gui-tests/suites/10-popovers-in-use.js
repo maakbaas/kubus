@@ -122,8 +122,9 @@ for (const vp of POP_VPS) {
     await openPopover(t, header(), "Sort and group");
     await t.audit("sort and group open");
     const selects = openPanel(t).locator("select");
-    for (let i = 0; i < 4; i++) for (const k of [1, 2, 0]) await pickSelect(t, `sort and group select ${i + 1} → option ${k + 1}`, selects.nth(i), k);
-    await pickSelect(t, "group by the second groupable field", selects.nth(2), 1);
+    // As many as there are now (the group's order and a date's part show only with a grouping).
+    for (let i = 0; i < (await selects.count()); i++) for (const k of [1, 2, 0]) if (i < (await selects.count())) await pickSelect(t, `sort and group select ${i + 1} → option ${k + 1}`, selects.nth(i), k);
+    await pickSelect(t, "group by the second groupable field", openPanel(t).getByLabel("Group by", { exact: true }), 1);
     await t.audit("sort and group, grouped");
     await t.escapeCloses("sort and group");
     // Fields: hide and show each field.

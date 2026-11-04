@@ -5,6 +5,7 @@ import { formatDate } from "../domain/fieldKinds";
 import type { Collection } from "../domain/model";
 import type { FilterRule } from "../domain/query";
 import { JoinSelect } from "./JoinSelect";
+import { RollingMark } from "./RollingMark";
 import {
   dateFields,
   defaultDateField,
@@ -182,8 +183,11 @@ export function DatePeriodFilter({
         ))}
       </ContentSwitcher>
       <div className="date-period__now">
-        <span className="date-period__label" title={label}>
-          {short}
+        <span className="date-period__lead">
+          {counted && <RollingMark />}
+          <span className="date-period__label" title={label}>
+            {short}
+          </span>
         </span>
         {set && (
           <span className="date-period__steps">
