@@ -3071,6 +3071,12 @@ img[data-lightbox] {
   font: inherit;
   color: var(--cds-text-primary);
 }
+/* A chart's legend at its side: Carbon gives its slot (`.layout-child.legend`) the width it measures there, a few px less
+   than its items end up (their words drawn wider than measured), so they ran past the block: cut off in a row of blocks.
+   A step of room inside the slot at the right, measured with it, takes the difference. */
+:is(.cds--cc--layout-row, .cds--cc--layout-row-reverse) > .layout-child.legend {
+  padding-inline-end: var(--cds-spacing-03);
+}
 .map-block__legend {
   display: flex;
   flex-wrap: wrap;
