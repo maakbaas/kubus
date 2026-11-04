@@ -106,7 +106,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, grou
         {title && <Heading className="query-editor__title">{title}</Heading>}
         {/* Not for a remote collection without dates (its rows have no Created or Updated). */}
         {dated && <DatePeriodFilter collection={collection} filters={query.filters} page={page} joins={joinsFirst} pin={bar ? periodPin : undefined} onChange={(filters) => onChange({ ...query, filters })} />}
-        {query.filters.length === 0 && (emptyText !== SHOWING_ALL || !dated) && <p className="helper">{emptyText}</p>}
+        {query.filters.length === 0 && emptyText !== "" && (emptyText !== SHOWING_ALL || !dated) && <p className="helper">{emptyText}</p>}
         {query.filters.map((rule) => {
           if (rule === period) return null;
           const field = fieldsById.get(rule.fieldId);
@@ -251,7 +251,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, grou
           </div>
         ))}
         {unsorted.length > 0 && (
-          <div className="query-editor__foot query-editor__foot--filter">
+          <div className="query-editor__foot query-editor__foot--filter query-editor__foot--sort">
             <Button
               kind="tertiary"
               size="sm"

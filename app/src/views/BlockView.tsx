@@ -139,7 +139,6 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
   const query = blockQuery(viewFilters, block, blockSort(block, collection));
   // A block always builds on its view's (or item page's) filter; its own rules are marked blue.
   const filterCount = query.filters.length;
-  const inherits = place === "item" ? "the page's" : place === "dashboard" ? "the dashboard's" : "the view's";
   /**
    * The collections the block lists now (an item page's block: one, Backlinks too; a dashboard's: one or several): other
    * collections' fields and filter don't apply, so it starts afresh (linked to the page's item where it can be).
@@ -192,7 +191,8 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
             refs={refs}
             part="filter"
             page={page}
-            emptyText={query.inherited?.length ? `Only ${inherits} filter. A rule joined with And narrows it, with Or lets more items in.` : undefined}
+            // Building on another filter, no rules of its own say nothing (not "Showing all items").
+            emptyText={query.inherited?.length ? "" : undefined}
             onChange={(q) => onChange({ ...block, filters: q.filters.length > 0 ? q.filters : null })}
             footer={
               // How many items it shows at first and each Show more adds (empty: all).
@@ -220,7 +220,7 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
         </ToolbarPopover>
       )}
       {uses.query && (
-        <ToolbarPopover label={uses.groups ? "Sort and group" : "Sort"} icon={ArrowsVertical} width="wide" active={!isDefaultSort(block, collection, uses.groups)} onOpenChange={onOpenChange}>
+        <ToolbarPopover label={uses.groups ? "Sort and group" : "Sort"} icon={ArrowsVertical} active={!isDefaultSort(block, collection, uses.groups)} onOpenChange={onOpenChange}>
           <QueryEditor collection={collection} query={query} refs={refs} part="sortGroup" noGroup={!uses.groups} groups={result?.groups} onChange={(q) => onChange(withQuery(block, q, query.sort))} />
         </ToolbarPopover>
       )}
