@@ -145,7 +145,11 @@ describe.each([
       expect(await keys([{ column: "score", operator: "is", value: "7.25" }])).toEqual(["2"]);
       expect(await keys([{ column: "active", operator: "isNotChecked", value: "" }])).toEqual(["2", "6", "5", "3"]);
       expect(await keys([{ column: "tags", operator: "contains", value: "math" }])).toEqual(["1", "4"]);
-      expect(await keys([{ column: "tags", operator: "contains", value: "math, poetry" }])).toEqual(["1"]);
+      // In one member alone, never across two; includes (is) a whole member, whatever its case.
+      expect(await keys([{ column: "tags", operator: "contains", value: "math, poetry" }])).toEqual([]);
+      expect(await keys([{ column: "tags", operator: "contains", value: "h,p" }])).toEqual([]);
+      expect(await keys([{ column: "tags", operator: "is", value: "MATH" }])).toEqual(["1", "4"]);
+      expect(await keys([{ column: "tags", operator: "is", value: "mat" }])).toEqual([]);
       expect(await keys([{ column: "tags", operator: "isEmpty", value: "" }])).toEqual(["6", "5", "3"]);
       expect(await keys([{ column: "feeling", operator: "is", value: "Sad" }])).toEqual(["2"]);
       expect(await keys([{ column: "born", operator: "before", value: "1990-01-01" }])).toEqual(["1", "2"]);

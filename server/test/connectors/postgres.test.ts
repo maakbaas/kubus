@@ -130,6 +130,10 @@ describe.skipIf(!ADMIN)("Postgres connector", () => {
     expect(await keys([{ column: "age", operator: "is", value: "abc" }])).toEqual([]);
     expect(await keys([{ column: "active", operator: "isNotChecked", value: "" }])).toEqual(["2", "3"]);
     expect(await keys([{ column: "tags", operator: "contains", value: "math" }])).toEqual(["1", "4"]);
+    // In one entry alone, never across two; includes (is) a whole entry, whatever its case.
+    expect(await keys([{ column: "tags", operator: "contains", value: "h, p" }])).toEqual([]);
+    expect(await keys([{ column: "tags", operator: "is", value: "MATH" }])).toEqual(["1", "4"]);
+    expect(await keys([{ column: "tags", operator: "isNot", value: "math" }])).not.toContain("1");
     expect(await keys([{ column: "tags", operator: "isEmpty", value: "" }])).toEqual(["3"]);
     expect(await keys([{ column: "born", operator: "before", value: "1990-01-01" }])).toEqual(["1", "2"]);
     expect(await keys([{ column: "data", operator: "contains", value: '"a"' }])).toEqual(["1"]);
