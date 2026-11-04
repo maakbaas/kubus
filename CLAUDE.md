@@ -189,6 +189,17 @@ stale peer range.
   all declared at the root of `styles.css`), a page's parts on its breadcrumb's left edge, equal gaps between fields and
   between blocks, icon buttons touching (32px pitch), text in Carbon's type styles (weights 300/400/600), square corners,
   shadows only on floating layers, 1–2px borders, ellipsized text readable whole (a title or tooltip), 24px touch targets.
+- **Layout rules** (not all checked; judge them yourself before showing a change):
+  - Edges line up: left edges and gaps on the columns of the rows around them, right edges (inputs, buttons, arrows) on the
+    panel's right edge; one column grid per panel, a fixed-width buttons column, no 50/50 split that falls between columns.
+  - No ellipsis or wrapping inside a control or a line of text where it can be avoided: shorter words (the short form, the
+    full one in a tooltip), or a long thing on a row of its own.
+  - A group (a filter's rule, its date period) starts with a top row: its join (an inline And / Or, else a word) at the left,
+    its buttons at the far right; then what is edited in it. Groups further apart than their rows.
+  - Labels only where a control can't speak for itself; no filler words ("by", "Which").
+  - Inline text with no indent of its own: on the left edge like the rest.
+  - Before showing any UI change (or mockup): render it at full width and at phone width, with short and long content
+    (a long field name), and look at it.
 - **Nothing moves under the pointer while a panel or dialog is used** (the GUI suite checks it):
   what a change in a toolbar panel would add to the bar or header around its button (Save /
   Discard, a switch) is held with `usePanelsOpen().hold` until the panel closes; dialogs hang from a
