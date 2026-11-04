@@ -26,6 +26,11 @@ Extension points are registries, not special cases in pages:
   ambiguity of old data; picking the sort again marks them). The Sort button is marked (blue) only when the sort in effect
   differs from the block type's default (an explicit Title on a chart is marked), and the Sort panel shows the sort in effect.
   A remote collection gets the default like any sort (it goes to the source when the date column can be sorted).
+  **Group order** (Sort and group): Ascending, Descending, Most items first, or **Custom** (`groupOrder` "custom", the keys
+  in order in `ViewQuery.groupCustom`, stored on the block): the block's groups as a list to drag into order
+  (`views/GroupOrderList.tsx`, `useReorder`), starting as the order shown; a group it doesn't list yet (a new value) comes
+  after the listed ones, A to Z, until it is moved; "(empty)" stays last (`compareGroups`). Not for a remote collection (its
+  source orders the groups: sent as Ascending).
   **Group by a date or date & time field** (`domain/groupDate.ts`, `ViewQuery.groupDate`, stored on the block as
   `groupDate`, absent = day): by year, month, week (Sunday to Saturday, week 1 holds 1 January: the date filter's `weekNumber`, one implementation), day or
   hour (date & time only; a date falls back to day), chosen in "Group dates by" beside Group by. A group's key sorts as time

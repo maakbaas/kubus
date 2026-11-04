@@ -104,6 +104,8 @@ export function DatePeriodFilter({
   // that is also a whole month (say), so the switcher doesn't jump to "Month" while start and end are chosen.
   const [chosenField, setChosenField] = useState<string>();
   const [rangeChosen, setRangeChosen] = useState(false);
+  /** The Last n field's text while it is typed in (null: the stored number). */
+  const [lastDraft, setLastDraft] = useState<string | null>(null);
   const fieldId = rule?.fieldId ?? (fields.some((f) => f.id === chosenField) ? chosenField! : defaultDateField(collection));
   const kind: PeriodKind | null = rangeChosen ? "range" : (state?.kind ?? null);
   const window: Window | null = kind === "range" ? null : (state?.window ?? null);
@@ -224,11 +226,15 @@ export function DatePeriodFilter({
               min={1}
               hideSteppers
               allowEmpty
-              value={last.to - last.from + 1}
+              // While typing it may be empty (Backspace on "1" to type "2"): shown as typed, the period kept until it is a
+              // whole number again; left empty, it shows the stored number when the field is left.
+              value={lastDraft ?? last.to - last.from + 1}
               onChange={(_, { value: n }) => {
+                setLastDraft(String(n ?? ""));
                 const count = Number(n);
-                if (Number.isInteger(count) && count >= 1) choose(unit, window, now, count);
+                if (String(n ?? "").trim() !== "" && Number.isInteger(count) && count >= 1) choose(unit, window, now, count);
               }}
+              onBlur={() => setLastDraft(null)}
             />
           )}
           {window === "fixed" && (unit === "hour" || unit === "day" || unit === "week") && (

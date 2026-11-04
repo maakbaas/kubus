@@ -957,6 +957,12 @@ body {
   max-height: 12rem;
   color: var(--cds-text-secondary);
 }
+/* In a search result it is never cut: its parts are already short (whole sentences around the match, at most three
+   blocks: domain/markdownExcerpt.ts), and a height cap cut its last line in half or, when narrow, hid the match. */
+.search-hit .md-editor__content.md-view--excerpt {
+  overflow: visible;
+  max-height: none;
+}
 /* Only search excerpts shrink images; the item view shows them like the editor does. */
 .md-view--excerpt img {
   max-height: 8rem;
@@ -1147,12 +1153,16 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
 .cds--list-box__menu-item:has(.space-manage) .cds--list-box__menu-item__option {
   border-block-start-color: transparent;
 }
+/* A result spans its row. A long unbroken name or value wraps instead of leaving the pane: `break-word`, not
+   `anywhere`, which also shrinks the content's narrowest width to a letter; Safari on iOS sized a result's button
+   by that and left a tall white area under it. */
 .search-hit {
   display: flex;
   flex-direction: column;
   gap: var(--cds-spacing-04); /* between title and each matched field */
+  inline-size: 100%;
   min-inline-size: 0;
-  overflow-wrap: anywhere; /* a long unbroken name or value wraps instead of leaving the pane */
+  overflow-wrap: break-word;
 }
 .search-hit__title {
   display: flex;
@@ -1292,6 +1302,23 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
 .list-input__row {
   display: flex;
   align-items: center;
+}
+/* A custom group order (GroupOrderList): each group's name, its drag handle at the row's end. */
+.group-order {
+  display: flex;
+  flex-direction: column;
+}
+.group-order__row {
+  justify-content: space-between;
+  gap: var(--cds-spacing-03);
+  min-block-size: 2rem;
+  border-block-end: 1px solid var(--cds-border-subtle);
+}
+.group-order__label {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .list-input__row .cds--form-item {
   flex: 1;
@@ -1769,15 +1796,61 @@ img[data-lightbox] {
   background: var(--cds-highlight);
   opacity: 0.5;
 }
+/* A table looks exactly like a block's table (Carbon's small data table, as `.items-table`): the header row in
+   heading-compact-01 on layer-accent, rows of 2rem in body-compact-01 secondary text on the layer, a line below each
+   row and none between columns; cells 1.5rem apart (--table-cell-pad), 1rem at the table's edges; a row's hover. */
+.md-editor__content tr {
+  block-size: 2rem;
+}
 .md-editor__content th,
 .md-editor__content td {
-  border: 1px solid var(--cds-border-subtle);
-  padding: var(--cds-spacing-02) var(--cds-spacing-03);
-  text-align: left;
+  border: 0;
+  padding-block: 0.4375rem 0.375rem;
+  padding-inline: var(--cds-spacing-04);
+  text-align: start;
+  vertical-align: middle;
 }
-.md-editor__content th { font-weight: 600; background: var(--cds-layer-accent-01); }
-/* The editor wraps a cell's text in a <p>, which Carbon sets to weight 400: let it inherit. */
-.md-editor__content th > p { font-weight: inherit; }
+.md-editor__content :is(th, td):first-child {
+  padding-inline-start: var(--cds-spacing-05);
+}
+.md-editor__content :is(th, td):last-child {
+  padding-inline-end: var(--cds-spacing-05);
+}
+.md-editor__content th {
+  padding-block: 0.4375rem;
+  font-size: var(--cds-heading-compact-01-font-size);
+  font-weight: var(--cds-heading-compact-01-font-weight);
+  line-height: var(--cds-heading-compact-01-line-height);
+  letter-spacing: var(--cds-heading-compact-01-letter-spacing);
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-accent);
+}
+.md-editor__content td {
+  font-size: var(--cds-body-compact-01-font-size);
+  font-weight: var(--cds-body-compact-01-font-weight);
+  line-height: var(--cds-body-compact-01-line-height);
+  letter-spacing: var(--cds-body-compact-01-letter-spacing);
+  color: var(--cds-text-secondary);
+  background: var(--cds-layer);
+  border-block-start: 1px solid var(--cds-layer);
+  border-block-end: 1px solid var(--cds-border-subtle);
+  transition: background-color 70ms cubic-bezier(0, 0, 0.38, 0.9);
+}
+/* A cell's paragraph (the editor wraps its text in one) takes the cell's type, no margins of its own. */
+.md-editor__content :is(th, td) > p {
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+@media (any-hover: hover) {
+  .md-editor__content tr:hover > td {
+    background: var(--cds-layer-hover);
+    border-block-start-color: var(--cds-layer-hover);
+    border-block-end-color: var(--cds-layer-hover);
+    color: var(--cds-text-primary);
+  }
+}
 /* An empty cell keeps one line's height in the view, as in the editor (whose cells always hold
    a paragraph): an invisible character gives it its line. */
 .md-view :is(td, th):empty::before { content: "\200b"; }
@@ -3561,16 +3634,16 @@ img[data-lightbox] {
 .section-header__title--drag {
   cursor: grab;
 }
-/* A settings panel's own actions (Save as shared component, Remove block) span the panel, as its
-   fields do; the pair in a component block's settings stays side by side. */
-.view-settings .cds--btn:not(.cds--btn--icon-only, .block-component__actions > .cds--btn) {
+/* Every button with a label in a popover panel (Save as shared component, Edit component, New component, Remove
+   block) spans the panel, as its fields do; icon buttons keep their size. */
+:is(.view-settings, .toolbar-popover__panel) .cds--btn:not(.cds--btn--icon-only) {
   inline-size: 100%;
   max-inline-size: none;
 }
-/* A component block's settings: Edit component and New component side by side, wrapping when narrow. */
+/* A component block's settings: Edit component above New component, each the panel's width. */
 .block-component__actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: var(--cds-spacing-03);
 }
 .block-list__name {

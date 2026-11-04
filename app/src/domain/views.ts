@@ -31,6 +31,8 @@ export interface ViewBlock {
   /** Field to group by, or null. */
   groupBy: string | null;
   groupOrder?: GroupOrder;
+  /** A custom group order's keys, in order (`groupOrder` "custom"). */
+  groupCustom?: string[];
   /** A date field's groups by year, month, week, day or hour (absent: day). */
   groupDate?: GroupDate;
   /** Which fields it shows, in which order, and how. */
@@ -210,15 +212,20 @@ export const NO_FILTERS = Object.freeze([]) as unknown as FilterRule[];
 /** The query a block runs: its own filter on top of the one it inherits (its view's or item page's). */
 export function blockQuery(inherited: FilterRule[] | null, block: ViewBlock, sort: SortRule[] = block.sort): ViewQuery {
   const query: ViewQuery = { filters: block.filters ?? NO_FILTERS, inherited: inherited ?? NO_FILTERS, sort, groupBy: block.groupBy };
-  return { ...query, ...(block.groupOrder && { groupOrder: block.groupOrder }), ...(block.groupDate && { groupDate: block.groupDate }) };
+  return {
+    ...query,
+    ...(block.groupOrder && { groupOrder: block.groupOrder }),
+    ...(block.groupOrder === "custom" && { groupCustom: block.groupCustom ?? [] }),
+    ...(block.groupDate && { groupDate: block.groupDate }),
+  };
 }
 
 /** A block with a changed sort / grouping (the query editor edits a whole query). */
 export function withQuery(block: ViewBlock, query: ViewQuery, shownSort: SortRule[] = block.sort): ViewBlock {
-  const { groupOrder: _old, groupDate: _oldDate, ...rest } = block;
+  const { groupOrder: _old, groupDate: _oldDate, groupCustom: _oldCustom, ...rest } = block;
   // A sort other than the one the editor showed was picked (a grouping change alone leaves it unmarked).
   const sortChosen = block.sortChosen || JSON.stringify(query.sort) !== JSON.stringify(shownSort);
-  return { ...rest, ...(sortChosen && { sortChosen: true as const }), sort: query.sort, groupBy: query.groupBy, ...(query.groupDate && { groupDate: query.groupDate }), ...(query.groupOrder && { groupOrder: query.groupOrder }) };
+  return { ...rest, ...(sortChosen && { sortChosen: true as const }), sort: query.sort, groupBy: query.groupBy, ...(query.groupDate && { groupDate: query.groupDate }), ...(query.groupOrder && { groupOrder: query.groupOrder }), ...(query.groupOrder === "custom" && { groupCustom: query.groupCustom ?? [] }) };
 }
 
 /** Whether two view states show the same thing (used to tell if a saved view was changed). */
@@ -282,6 +289,10 @@ export function parseBlock(raw: unknown): ViewBlock | null {
   if (block.collectionIds && merges.length > 0) block.merges = merges;
   const groupDate = parseGroupDate(o.groupDate);
   if (groupDate) block.groupDate = groupDate;
+  if (o.groupOrder === "custom") {
+    const keys = array<unknown>(o.groupCustom).filter((k): k is string => typeof k === "string");
+    return { ...block, groupOrder: "custom", groupCustom: keys };
+  }
   return o.groupOrder === "desc" || o.groupOrder === "count" ? { ...block, groupOrder: o.groupOrder } : block;
 }
 

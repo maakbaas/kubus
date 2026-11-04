@@ -54,13 +54,15 @@ export interface ViewQuery {
   sort: SortRule[];
   /** Field to group by, or null. */
   groupBy: string | null;
-  /** Order of the groups: by their value (A to Z / Z to A), or the largest first. Default "asc". */
+  /** Order of the groups: by their value (A to Z / Z to A), the largest first, or custom (`groupCustom`). Default "asc". */
   groupOrder?: GroupOrder;
+  /** A custom order's group keys, in order (dragged in Sort and group); groups not in it follow, A to Z. */
+  groupCustom?: string[];
   /** A date or date & time field's groups: by its year, month, week, day or hour (date & time only). Absent = day. */
   groupDate?: GroupDate;
 }
 
-export type GroupOrder = "asc" | "desc" | "count";
+export type GroupOrder = "asc" | "desc" | "count" | "custom";
 
 /** Resolves things the query needs but doesn't own (e.g. labels of referenced items). */
 export interface QueryContext {
@@ -507,11 +509,24 @@ function compareKeys(a: string | number | null, b: string | number | null): numb
 
 /**
  * Two groups in the order a query lists them: by their value (either way; dates by their keys, which sort as time does, the
- * rest by their labels) or the largest first; the "(empty)" group (key "") always last.
+ * rest by their labels), the largest first, or a custom order (`custom`: their keys); the "(empty)" group (key "") always last.
  */
-export function compareGroups(a: { key: string; label: string; count: number }, b: { key: string; label: string; count: number }, order: GroupOrder, isDate: boolean): number {
+export function compareGroups(
+  a: { key: string; label: string; count: number },
+  b: { key: string; label: string; count: number },
+  order: GroupOrder,
+  isDate: boolean,
+  custom: string[] = [],
+): number {
   if (a.key === "" || b.key === "") return a.key === "" ? 1 : -1;
   if (order === "count" && a.count !== b.count) return b.count - a.count;
+  // Custom: in the order chosen; groups it doesn't list yet (new values) after them, A to Z.
+  if (order === "custom") {
+    const ia = custom.indexOf(a.key);
+    const ib = custom.indexOf(b.key);
+    if (ia >= 0 || ib >= 0) return ia < 0 ? 1 : ib < 0 ? -1 : ia - ib;
+    return isDate ? compareKeys(a.key, b.key) : compareKeys(a.label, b.label);
+  }
   return (isDate ? compareKeys(a.key, b.key) : compareKeys(a.label, b.label)) * (order === "desc" ? -1 : 1);
 }
 
@@ -616,7 +631,7 @@ export function groupItems(collection: Collection, sorted: Item[], query: ViewQu
   // Groups by value (either direction) or size, the "(empty)" group always last.
   const order = query.groupOrder ?? "asc";
   const isDate = groupField.kind === "date" || groupField.kind === "datetime";
-  const ordered = [...groups.values()].sort((a, b) => compareGroups({ ...a, count: a.items.length }, { ...b, count: b.items.length }, order, isDate));
+  const ordered = [...groups.values()].sort((a, b) => compareGroups({ ...a, count: a.items.length }, { ...b, count: b.items.length }, order, isDate, query.groupCustom));
   return ordered;
 }
 
@@ -638,6 +653,6 @@ export function withEmptyGroups(collection: Collection, result: QueryResult, all
   if (extra.size === 0) return result;
   const order = query.groupOrder ?? "asc";
   const isDate = field.kind === "date" || field.kind === "datetime";
-  const groups = [...result.groups, ...extra.values()].sort((a, b) => compareGroups({ ...a, count: a.items.length }, { ...b, count: b.items.length }, order, isDate));
+  const groups = [...result.groups, ...extra.values()].sort((a, b) => compareGroups({ ...a, count: a.items.length }, { ...b, count: b.items.length }, order, isDate, query.groupCustom));
   return { ...result, groups };
 }

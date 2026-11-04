@@ -64,7 +64,8 @@ What the app does, feature by feature (read the part you work on).
   of a code or formula block that ends the text adds a paragraph after it to type in. Copy and paste keep every syntax,
   formulas too (also a formula copied from a read-only view, KaTeX's HTML: read back from its TeX source):
   `ui/markdownEditing.test.ts` copies and pastes a text with every syntax. Links have no underline but on hover, as
-  everywhere in the app. Not GFM, so not here: `==highlight==` (GitHub doesn't render it either). A table is as wide as the text (editor and view), its columns sized by their content; a wider one scrolls
+  everywhere in the app. Not GFM, so not here: `==highlight==` (GitHub doesn't render it either). A table is as wide as the text (editor and view) and looks exactly like a block's table (Carbon's small data table:
+  header row, 2rem rows, a line under each, the same cell padding and type), its columns sized by their content; a wider one scrolls
   sideways in its box. It is made by typing `|3x2|` and a space (the caret then in its first cell: `caretInText`), by typing
   its header and delimiter rows (`|a|b|`, then `|-|-|` and Enter: `tableFromTypedRows`, `ui/markdownKeys.ts`; before
   that they are text, saved with `\|`), or by pasting GFM table text. A code block's language select shows while hovered and in the block holding the caret (marked
@@ -546,7 +547,8 @@ What the app does, feature by feature (read the part you work on).
   search results), rendered Markdown (`rehypeTags` in `MarkdownView`; not in code or a link's text), the Markdown
   editor (decorations: the text stays as typed), HTML in its frame (the frame's script wraps the tags in the HTML as
   written, not what its scripts draw, and reports clicks). Inline, so view and editor have the same geometry.
-  Typing `#` and a tag's start offers the tags in use (A to Z, those starting with what is typed before those
+  Typing `#` and a tag's start offers the tags in use (the list hangs from the `#`, so it doesn't move as the tag is typed; in
+  New bookmark a tag bookmarks its search page) (A to Z, those starting with what is typed before those
   containing it; `matchingTags`), each in its colour, at the caret (no heading, only the tags): in the Markdown editor (`ui/TagPicker.tsx`,
   beside the link picker) and in every plain text field, cells, item pages, list entries, the add row, the search box
   (`ui/TextTagComplete.tsx`, one for the app, watching what is typed; not a number, date, picker or code field, nor one
@@ -560,7 +562,7 @@ What the app does, feature by feature (read the part you work on).
 
   searched; a result opens the view at the block) and its items, substring match over string, markdown, HTML, AI,
   list-of-strings and checklist values, and the labels of the items an item or list-of-items field points to (ASCII case-insensitive; a full-text index is roadmap #1).
-  Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`; of a Markdown one its matching blocks, a list cut to its matching items and a table to its header and matching rows, a paragraph shown without its images and the line breaks they leave, `domain/markdownExcerpt.ts`; other images as small thumbnails); a result with no visible match is left out.
+  Each result shows an excerpt of every field that matched (`pages/SearchPage.tsx`; of a Markdown one its matching blocks, a list cut to its matching items and a table to its header and matching rows, a paragraph shown without its images and the line breaks they leave and, when long, cut to the whole sentences around its match (`aroundMatch`: the match always shows, no sentence cut in half; the excerpt has no height cap), `domain/markdownExcerpt.ts`; other images as small thumbnails); a result with no visible match is left out.
   An item opens at the first field that matched (`?field=`; at the top when its title matched), a Markdown block at the block.
   A text that looks like a link address (`/`, `?`, `=` or `a#b`: `isAddressQuery`) also lists the pages whose link it fits
   (a link list: `LinkTargetList`, the picker's matching: a whole link by name such as `book/dune/compact#author` or

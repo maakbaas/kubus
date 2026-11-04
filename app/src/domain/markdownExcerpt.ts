@@ -20,8 +20,55 @@ import { memoText } from "./memoText";
 //     its start or end (an image after Shift+Enter is part of the paragraph above it, but
 //     reads as a block of its own: in a result it was a tall line, or blank space while
 //     not loaded). A paragraph with nothing else left is not shown.
+//  7. A long paragraph (over MAX_PARAGRAPH characters of visible text) is cut to the sentences around its first
+//     match (`aroundMatch`), with "…" where text was left out: the match is always in what is shown, however
+//     narrow the result, and no sentence is cut in half. Cuts are only between sentences in plain text, never
+//     inside a link, emphasis or code, so the Markdown stays whole.
 
 const MAX_BLOCKS = 3;
+/** A paragraph longer than this (visible characters) is cut to the sentences around its match. */
+const MAX_PARAGRAPH = 240;
+
+/**
+ * A long paragraph's Markdown (`text`, one paragraph) cut to the sentences around its first match: from the start of
+ * the sentence holding it, on while the excerpt stays within MAX_PARAGRAPH characters (at least to that sentence's
+ * end). Cuts are made only after a sentence's end (". ", "! ", "? ") inside the paragraph's plain text, so no syntax
+ * is cut through; "…" marks text left out. Text that is short enough, or has no match, is returned as it is.
+ */
+export function aroundMatch(text: string, query: string, exactTag = false): string {
+  const tree = parse(text).children[0];
+  if (!tree || tree.type !== "paragraph" || visibleText(tree).length <= MAX_PARAGRAPH) return text;
+  const children = tree.children;
+  const at = (n: Node, end = false) => (end ? n.position?.end.offset : n.position?.start.offset) ?? 0;
+  const hit = children.find((c) => containsQuery(visibleText(c as Nodes), query, exactTag));
+  if (!hit) return text;
+  // Where the match is in the source: its place in a plain text, else the whole of the node holding it.
+  let matchFrom = at(hit);
+  let matchTo = at(hit, true);
+  if (hit.type === "text") {
+    const i = hit.value.toLowerCase().indexOf(query.trim().toLowerCase());
+    if (i >= 0) {
+      matchFrom = at(hit) + i;
+      matchTo = matchFrom + query.trim().length;
+    }
+  }
+  // Safe cuts: right after a sentence's end and the space after it, in plain text.
+  const cuts: number[] = [];
+  for (const c of children) {
+    if (c.type !== "text") continue;
+    const source = text.slice(at(c), at(c, true));
+    for (const m of source.matchAll(/[.!?…]["')\]]*\s+/g)) cuts.push(at(c) + m.index + m[0].length);
+  }
+  const start = Math.max(0, ...cuts.filter((p) => p <= matchFrom));
+  const after = cuts.filter((p) => p >= matchTo).sort((a, b) => a - b);
+  let end = after[0] ?? text.length;
+  for (const p of after.slice(1)) {
+    if (p - start > MAX_PARAGRAPH) break;
+    end = p;
+  }
+  if (start === 0 && end >= text.length) return text;
+  return `${start > 0 ? "… " : ""}${text.slice(start, end).trim()}${end < text.length ? " …" : ""}`;
+}
 
 /** The GFM parser, made on first use (a module that only imports this file, like the database worker, never builds it). */
 let parser: ReturnType<typeof makeParser> | undefined;
@@ -117,7 +164,7 @@ export function markdownExcerpt(source: string, query: string, exactTag = false)
       sectionShown = false;
     }
     if (!matches(node)) continue;
-    const text = node.type === "list" ? matchingItems(node) : node.type === "table" ? matchingRows(node) : node.type === "paragraph" ? withoutImages(node) : slice(node);
+    const text = node.type === "list" ? matchingItems(node) : node.type === "table" ? matchingRows(node) : node.type === "paragraph" ? aroundMatch(withoutImages(node), query, exactTag) : slice(node);
     if (!text) continue;
     if (shown >= MAX_BLOCKS) {
       more++;

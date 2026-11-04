@@ -208,7 +208,7 @@ export function sourceQuery(
   });
   const groupField = query.groupBy ? byId.get(query.groupBy) : undefined;
   const groupBy = groupField?.column && canGroup(collection, groupField) && !groupsInApp(collection, query) ? groupField.column : null;
-  return { ...shape, filter, search: search.trim(), sort, groupBy, groupOrder: groupsInApp(collection, query) ? "asc" : (query.groupOrder ?? "asc"), timeZone };
+  return { ...shape, filter, search: search.trim(), sort, groupBy, groupOrder: groupsInApp(collection, query) || query.groupOrder === "custom" ? "asc" : (query.groupOrder ?? "asc"), timeZone };
 }
 
 /** The device's time zone (its days: dates are compared and grouped by them). */

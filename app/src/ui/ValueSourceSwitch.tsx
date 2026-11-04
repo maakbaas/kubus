@@ -17,7 +17,8 @@ export function ValueSourceSwitch({ id, ai, locked, onChange }: { id: string; ai
         <Switch name="code" text="Code" disabled={locked} />
         <Switch name="ai" text="AI prompt" disabled={locked} />
       </ContentSwitcher>
-      <p className="helper field-settings__note">{ai ? "The language model writes the value from a prompt." : "{{ }} code works out the value."}</p>
+      {/* Carbon's helper text under its control (the gap above it, its type), as the Component dropdown's below. */}
+      <div className="cds--form__helper-text">{ai ? "The language model writes the value from a prompt." : "{{ }} code works out the value."}</div>
     </div>
   );
 }

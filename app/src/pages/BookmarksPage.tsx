@@ -14,7 +14,8 @@ import {
 } from "@carbon/react";
 import { TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
-import { bookmarkLabel, bookmarkPath, withViewId, type Bookmark } from "../domain/bookmarks";
+import { bookmarkLabel, bookmarkPath, linkOfPath, withViewId, type Bookmark } from "../domain/bookmarks";
+import { isTag, tagSearchPath } from "../domain/tags";
 import { bookmarkPlace } from "../ui/bookmarkPlace";
 import { findTab, isVirtualTab } from "../domain/dashboards";
 import { parseStoredDashboardLink, type LinkTarget } from "../domain/linkTargets";
@@ -114,6 +115,7 @@ export function BookmarksTable({ onError }: { onError(e: unknown): void }) {
  * part of one, or a link typed or pasted; its options are every page a link can name that isn't bookmarked yet
  * (a collection, a view, an item under an item view, a field, a block, a dashboard). What was typed is taken as it is
  * when no option was picked (as the link dialog's Apply and a linked block's link take it), checked as the API checks it.
+ * A tag (`#books`, the tags offered as it is typed: TextTagComplete) bookmarks its search page.
  */
 function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: unknown): void }) {
   const open = useMountedDialog();
@@ -134,6 +136,14 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
   }
 
   async function add() {
+    // A tag (`#books`, typed or picked from the tags offered): its search page (the tag and the tags nested in it).
+    const tag = text.trim();
+    if (isTag(tag)) {
+      const link = linkOfPath(tagSearchPath(tag.toLowerCase()));
+      if (taken.has(link)) return setProblem("Already bookmarked");
+      await repo.addBookmark(link, tag.toLowerCase(), space.id);
+      return onClose();
+    }
     const t = await pageOf();
     if (typeof t === "string") return setProblem(t);
     let link = t.href;
@@ -166,7 +176,7 @@ function NewBookmarkModal({ onClose, onError }: { onClose(): void; onError(e: un
         id="bookmark-target"
         primaryFocus
         labelText="Page"
-        placeholder="A name, or a link: book/dune/details#author"
+        placeholder="A name, a link (book/dune/details#author) or a #tag"
         invalidText={problem}
         value={text}
         onChange={(next) => {

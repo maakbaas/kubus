@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FieldDef, Item, Collection } from "./model";
 import { applyQuery, defaultQuery, filterCodeValue, filterPreset, filterValueProblem, naturalCompare, PAGE_ITEM, resolveFilterValues, timeSort, withEmptyGroups, type FilterRule, type QueryContext } from "./query";
+import { blockQuery, parseBlock, withQuery } from "./views";
 
 const field = (id: string, name: string, kind: FieldDef["kind"], position: number): FieldDef => ({
   id, collectionId: "t", name, kind, targetCollectionId: null, componentId: null, code: null, output: null, frameRatio: null, choiceFilter: [], toggleIcon: null, strikeThrough: false, position,
@@ -213,5 +214,18 @@ describe("withEmptyGroups", () => {
   it("leaves a result not grouped as it is", () => {
     const r = applyQuery(collection, books, defaultQuery(), ctx);
     expect(withEmptyGroups(collection, r, books, defaultQuery(), ctx)).toBe(r);
+  });
+});
+
+describe("a custom group order", () => {
+  it("lists the groups as chosen, new ones after them A to Z, the empty group last; and is stored with the block", () => {
+    const withShelf: Collection = { ...collection, fields: [...collection.fields, field("shelf", "Shelf", "string", 2)] };
+    const on = (id: string, shelf: string) => ({ ...book(id, id, null), values: { title: id, shelf } });
+    const items = [on("1", "b"), on("2", "a"), on("3", "c"), on("4", "d"), on("5", "")];
+    const q = { ...defaultQuery(), groupBy: "shelf", groupOrder: "custom" as const, groupCustom: ["c", "a"] };
+    expect(applyQuery(withShelf, items, q, ctx).groups.map((g) => g.key)).toEqual(["c", "a", "b", "d", ""]);
+    const block = withQuery(parseBlock({ id: "b", kind: "table" })!, q);
+    const back = parseBlock(JSON.parse(JSON.stringify(block)))!;
+    expect(blockQuery(null, back)).toMatchObject({ groupOrder: "custom", groupCustom: ["c", "a"] });
   });
 });

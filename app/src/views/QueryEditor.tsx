@@ -2,7 +2,7 @@ import { useId, type ReactNode } from "react";
 import { Button, Heading, IconButton, Select, SelectItem, TextInput } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import { isMetaField, newId, pickableFields, selfField, type FieldDef, type FieldKind, type Collection } from "../domain/model";
-import { canFilter, canGroup, canSort, fieldOperators } from "../domain/sources";
+import { canFilter, canGroup, canSort, fieldOperators, isRemote } from "../domain/sources";
 import { dollarNames } from "../domain/components";
 import {
   filterCodeValue,
@@ -15,6 +15,7 @@ import {
   type FilterOperator,
   type FilterRule,
   type GroupOrder,
+  type ItemGroup,
   type SortRule,
   type ViewQuery,
 } from "../domain/query";
@@ -22,6 +23,7 @@ import { DEFAULT_GROUP_DATE, GROUP_DATES, type GroupDate } from "../domain/group
 import { dateFields, periodRule } from "../domain/datePeriod";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { DatePeriodFilter } from "./DatePeriodFilter";
+import { GroupOrderList } from "./GroupOrderList";
 import { useStore } from "../app/store";
 import { hasRemotePart } from "../domain/mergedCollection";
 
@@ -40,6 +42,8 @@ interface Props {
   noGroup?: boolean;
   /** On an item page: its collection, so reference rules can compare with the page's item. */
   page?: Collection;
+  /** Sort part: the block's groups now, for a custom group order to drag (none: Custom isn't offered). */
+  groups?: ItemGroup[];
   /**
    * Filter part: its heading (none where its button says it: "Filter"), what an empty filter means
    * (default: a view's, left out under a date period, whose "Any date" says it), and what goes
@@ -147,7 +151,7 @@ function RuleValue({ id, field, rule, refs, page, onChange }: { id: string; fiel
  */
 const SHOWING_ALL = "Showing all items.";
 
-export function QueryEditor({ collection, query, refs, part, noGroup, page, title, emptyText = SHOWING_ALL, footer, owners, onChange }: Props) {
+export function QueryEditor({ collection, query, refs, part, noGroup, page, groups, title, emptyText = SHOWING_ALL, footer, owners, onChange }: Props) {
   // Element ids unique per editor: several item lists (tabs, panes) can be open at once.
   const uid = useId();
   // On an item page, a block of its own collection can also be filtered on the item itself
@@ -181,6 +185,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
   const dated = dateFields(collection).length > 0;
   const { collections } = useStore();
   const remoteMerged = hasRemotePart(collection, collections);
+  const customOffered = !!groups && !isRemote(collection) && !remoteMerged;
   const groupDates = dateParts(query.groupBy ? fieldsById.get(query.groupBy) : undefined, remoteMerged);
 
   return (
@@ -382,14 +387,26 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, titl
             onChange={(e) => {
               const groupOrder = e.target.value as GroupOrder;
               // The default isn't stored, so views saved before the option compare equal.
-              const { groupOrder: _old, ...rest } = query;
-              onChange(groupOrder === "asc" ? rest : { ...rest, groupOrder });
+              const { groupOrder: _old, groupCustom: _oldCustom, ...rest } = query;
+              // Custom starts as the order shown now (then dragged).
+              const shownKeys = (groups ?? []).filter((g) => g.key !== "").map((g) => g.key);
+              onChange(groupOrder === "asc" ? rest : groupOrder === "custom" ? { ...rest, groupOrder, groupCustom: shownKeys } : { ...rest, groupOrder });
             }}
           >
             <SelectItem value="asc" text="Ascending" />
             <SelectItem value="desc" text="Descending" />
             <SelectItem value="count" text="Most items first" />
+            {/* A remote collection's source orders its groups: no custom order there. */}
+            {(customOffered || query.groupOrder === "custom") && <SelectItem value="custom" text="Custom" />}
           </Select>
+          {query.groupBy && query.groupOrder === "custom" && groups && (
+            <GroupOrderList
+              groups={groups}
+              order={query.groupCustom ?? []}
+              isDate={["date", "datetime"].includes(fieldsById.get(query.groupBy)?.kind ?? "")}
+              onChange={(groupCustom) => onChange({ ...query, groupCustom })}
+            />
+          )}
         </div>
       </section>
       )}

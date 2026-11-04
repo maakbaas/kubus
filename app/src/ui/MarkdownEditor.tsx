@@ -166,7 +166,8 @@ const linkTrigger = $prose(
             const typing = view.hasFocus() ? linkBeingTyped(view) : null;
             let trigger: LinkTrigger | null = null;
             if (typing) {
-              const c = view.coordsAtPos(typing.to);
+              // A tag's options hang from its "#" (they don't move along as it is typed); a link's from the caret.
+              const c = view.coordsAtPos(typing.kind === "tag" ? typing.from : typing.to);
               trigger = { ...typing, caret: { left: c.left, top: c.top, bottom: c.bottom } };
             }
             const key = JSON.stringify(trigger);

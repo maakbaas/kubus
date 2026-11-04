@@ -148,7 +148,7 @@ export class MergedCursor {
   constructor(
     streams: PartStream[],
     private compare: (a: Item, b: Item) => number,
-    private query: Pick<ViewQuery, "groupOrder">,
+    private query: Pick<ViewQuery, "groupOrder" | "groupCustom">,
     private groupField: Pick<FieldDef, "kind"> | undefined,
     private pageSize: number,
   ) {
@@ -188,7 +188,7 @@ export class MergedCursor {
     });
     const order = this.query.groupOrder ?? "asc";
     const isDate = this.groupField?.kind === "date" || this.groupField?.kind === "datetime";
-    this.groups = [...groups.values()].sort((a, b) => compareGroups(a, b, order, isDate));
+    this.groups = [...groups.values()].sort((a, b) => compareGroups(a, b, order, isDate, this.query.groupCustom));
     this.opened = true;
     this.advance();
   }

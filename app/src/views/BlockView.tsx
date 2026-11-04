@@ -216,7 +216,7 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
       )}
       {uses.query && (
         <ToolbarPopover label={uses.groups ? "Sort and group" : "Sort"} icon={ArrowsVertical} active={!isDefaultSort(block, collection, uses.groups)} onOpenChange={onOpenChange}>
-          <QueryEditor collection={collection} query={query} refs={refs} part="sortGroup" noGroup={!uses.groups} onChange={(q) => onChange(withQuery(block, q, query.sort))} />
+          <QueryEditor collection={collection} query={query} refs={refs} part="sortGroup" noGroup={!uses.groups} groups={result?.groups} onChange={(q) => onChange(withQuery(block, q, query.sort))} />
         </ToolbarPopover>
       )}
       {uses.fields && (

@@ -55,7 +55,8 @@ function typingIn(field: TextField): Typing | null {
     const at = field.selectionStart;
     if (at === null || at !== field.selectionEnd) return null;
     const query = tagBeingTyped(field.value.slice(0, at));
-    return query ? { field, query, from: at - query.length, to: at, caret: inputCaret(field, at) } : null;
+    // The options hang from the tag's "#": they don't move along as it is typed.
+    return query ? { field, query, from: at - query.length, to: at, caret: inputCaret(field, at - query.length) } : null;
   }
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0 || !sel.isCollapsed || !field.contains(sel.anchorNode)) return null;
@@ -66,7 +67,11 @@ function typingIn(field: TextField): Typing | null {
   const text = before.toString();
   const query = tagBeingTyped(text);
   if (!query) return null;
-  const r = range.getBoundingClientRect();
+  // At the tag's "#" (the options don't move along as it is typed).
+  const atHash = range.cloneRange();
+  atHash.setStart(range.startContainer, Math.max(0, range.startOffset - query.length));
+  atHash.collapse(true);
+  const r = atHash.getBoundingClientRect();
   const box = r.height > 0 ? r : field.getBoundingClientRect();
   return { field, query, from: text.length - query.length, to: text.length, caret: { left: box.left, top: box.top, bottom: box.bottom } };
 }

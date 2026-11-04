@@ -3,6 +3,7 @@ import { Popover, PopoverContent, TextInput } from "@carbon/react";
 import { useLinkTargets } from "../app/useLinkTargets";
 import type { LinkTarget } from "../domain/linkTargets";
 import { LinkTargetList } from "./LinkTargetList";
+import { tagBeingTyped } from "../domain/tags";
 import { onViewportChange, panelRoom } from "./panelRoom";
 
 /** Text that is a link with a scheme or a site (`https://…`, `mailto:…`, `//host`): no pages of the app to offer. */
@@ -71,7 +72,8 @@ export function LinkTargetInput({
 
   useEffect(() => {
     const query = value.trim();
-    if (!typing || !query || isExternal(query)) {
+    // A tag being typed: the tags are offered instead (TextTagComplete).
+    if (!typing || !query || isExternal(query) || tagBeingTyped(query) === query) {
       setTargets([]);
       return;
     }

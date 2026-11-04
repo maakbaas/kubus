@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markdownExcerpt, markdownPlainText } from "./markdownExcerpt";
+import { markdownExcerpt, markdownPlainText, aroundMatch } from "./markdownExcerpt";
 
 describe("markdownPlainText", () => {
   it("is what a reader sees: text, code and image descriptions, no syntax, URLs or HTML", () => {
@@ -102,5 +102,24 @@ describe("markdownExcerpt", () => {
     expect(markdownExcerpt(doc, "")).toEqual({ markdown: "", more: 0 });
     expect(markdownExcerpt(doc, "   ")).toEqual({ markdown: "", more: 0 });
     expect(markdownExcerpt("", "x")).toEqual({ markdown: "", more: 0 });
+  });
+});
+
+describe("aroundMatch", () => {
+  const filler = (n: number) => Array.from({ length: n }, (_, i) => `Sentence number ${i} says **little** here.`).join(" ");
+
+  it("cuts a long paragraph to whole sentences around the match, never through syntax", () => {
+    const text = `${filler(6)} The *dune* sea is where the needle is. ${filler(6)}`;
+    const out = aroundMatch(text, "needle");
+    expect(out.startsWith("… The *dune* sea is where the needle is.")).toBe(true);
+    expect(out.endsWith(" …")).toBe(true);
+    expect(out.length).toBeLessThan(text.length);
+    expect((out.match(/\*\*/g) ?? []).length % 2).toBe(0); // no bold left open
+  });
+
+  it("leaves a short paragraph, or one without the match, as it is", () => {
+    expect(aroundMatch("Short. With a needle.", "needle")).toBe("Short. With a needle.");
+    const long = filler(12);
+    expect(aroundMatch(long, "absent")).toBe(long);
   });
 });
