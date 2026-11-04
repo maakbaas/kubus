@@ -143,8 +143,8 @@ const OPERATORS = {
   Read: ["is checked", "is not checked", "is"],
   Cover: ["is empty", "is not empty"],
   Author: ["is", "is not", "is empty", "is not empty"],
-  Tags: ["contains", "does not contain", "is empty", "is not empty"],
-  Todo: ["contains", "does not contain", "is empty", "is not empty"],
+  Tags: ["contains", "does not contain", "includes", "does not include", "is empty", "is not empty"],
+  Todo: ["contains", "does not contain", "includes", "does not include", "is empty", "is not empty"],
   "Co-authors": ["includes", "does not include", "is empty", "is not empty"],
 };
 
@@ -188,8 +188,11 @@ const CASES = [
   ["Author", "is not", "Ada", (b) => b.author !== "ada"],
   ["Author", "is empty", undefined, (b) => !b.author],
   ["Author", "is not empty", undefined, (b) => !!b.author],
-  ["Tags", "contains", "classic", (b) => b.tags.includes("classic")],
-  ["Tags", "does not contain", "classic", (b) => !b.tags.includes("classic")],
+  // Contains: in one entry alone (never across two); includes: a whole entry, whatever its case.
+  ["Tags", "contains", "lassic", (b) => b.tags.some((t) => t.toLowerCase().includes("lassic"))],
+  ["Tags", "does not contain", "lassic", (b) => !b.tags.some((t) => t.toLowerCase().includes("lassic"))],
+  ["Tags", "includes", "classic", (b) => b.tags.some((t) => t.toLowerCase() === "classic")],
+  ["Tags", "does not include", "classic", (b) => !b.tags.some((t) => t.toLowerCase() === "classic")],
   ["Tags", "is empty", undefined, (b) => b.tags.length === 0],
   ["Tags", "is not empty", undefined, (b) => b.tags.length > 0],
   ["Todo", "contains", "sail", (b) => b.todo.some((x) => x.includes("sail"))],

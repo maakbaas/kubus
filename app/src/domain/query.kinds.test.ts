@@ -385,19 +385,38 @@ describe("a list of numbers", () => {
 });
 
 describe("existing values a rule's box offers", () => {
-  it("for text, lists of text and numbers compared with a value, not for thresholds or other kinds", () => {
+  it("only where picking a value means just that value: is / is not, a list's includes / does not include", () => {
     expect(offersValues(fields.s, "is")).toBe(true);
-    expect(offersValues(fields.s, "contains")).toBe(true);
-    expect(offersValues(fields.tags, "contains")).toBe(true);
+    expect(offersValues(fields.s, "isNot")).toBe(true);
+    expect(offersValues(fields.s, "contains")).toBe(false);
+    expect(offersValues(fields.tags, "is")).toBe(true);
+    expect(offersValues(fields.tags, "contains")).toBe(false);
+    expect(offersValues(fields.chk, "is")).toBe(true);
     expect(offersValues(fields.n, "is")).toBe(true);
     expect(offersValues(fields.n, "lt")).toBe(false);
-    for (const f of [fields.md, fields.d, fields.cb, fields.ref, fields.chk]) expect(offersValues(f, "is"), f.kind).toBe(false);
+    for (const f of [fields.md, fields.d, fields.cb, fields.ref]) expect(offersValues(f, "is"), f.kind).toBe(false);
+  });
+
+  it("a list's (and a checklist's) contains looks in each entry alone, includes takes a whole entry whatever its case", () => {
+    const c = collection();
+    const items = [item("1", { tags: ["aap", "boot"], chk: ["[ ] aap", "[x] boot"] }), item("2", { tags: ["Classic"], chk: ["[ ] Classic"] })];
+    const match = (r: FilterRule) => ids(applyQuery(c, items, { filters: [r], sort: [{ fieldId: "$created", direction: "asc" }], groupBy: null }, ctx).groups[0].items);
+    for (const f of ["tags", "chk"]) {
+      expect(match(rule(f, "contains", "p,b")), f).toEqual([]);
+      expect(match(rule(f, "contains", "p, b")), f).toEqual([]);
+      expect(match(rule(f, "contains", "oo")), f).toEqual(["1"]);
+      expect(match(rule(f, "notContains", "oo")), f).toEqual(["2"]);
+      expect(match(rule(f, "is", "classic")), f).toEqual(["2"]);
+      expect(match(rule(f, "is", "class")), f).toEqual([]);
+      expect(match(rule(f, "isNot", "aap")), f).toEqual(["2"]);
+    }
   });
 
   it("each distinct value (a list's each entry), most common first, then A to Z; none when they hardly repeat", () => {
     const items = [item("1", { s: "Fantasy", tags: ["classic", "long"] }), item("2", { s: "Sci-fi", tags: ["classic"] }), item("3", { s: "Fantasy" }), item("4", {})];
     expect(valueOptions(fields.s, items)).toEqual([{ value: "Fantasy", count: 2 }, { value: "Sci-fi", count: 1 }]);
     expect(valueOptions(fields.tags, items)).toEqual([{ value: "classic", count: 2 }, { value: "long", count: 1 }]);
+    expect(valueOptions(fields.chk, [item("1", { chk: ["[x] Milk"] }), item("2", { chk: ["[ ] Milk", "[ ] Eggs"] })])).toEqual([{ value: "Milk", count: 2 }, { value: "Eggs", count: 1 }]);
     const unique = Array.from({ length: 30 }, (_, i) => ({ value: `Title ${i}`, count: 1 }));
     expect(chosenOptions(unique, 30)).toEqual([]);
     expect(chosenOptions(unique.slice(0, 20), 20)).toHaveLength(20);

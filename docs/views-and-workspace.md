@@ -137,8 +137,9 @@ Extension points are registries, not special cases in pages:
   the Filter button only when it closes (`panels.hold`), so the buttons after it don't jump under the open panel; the
   bar itself shows at once.
 - **A rule's value box** (`views/RuleValue.tsx`, the filter panel's and the filter bar's): where the rule compares with a value
-  (`offersValues` in domain/query.ts: text by contains / is and their nots, a list of text by contains, a number or list of
-  numbers by is / is not; not below / above, whose threshold is typed; item fields pick from items already) it is a Carbon
+  (`offersValues` in domain/query.ts) only where picking a value means just that value: is / is not of text and numbers,
+  includes / does not include of a list of text, a checklist or a list of numbers (contains, any part, and below / above,
+  a threshold, are typed; item fields pick from items already) it is a Carbon
   ComboBox offering the field's existing values with how many items have each, most common first, any other text typed
   as well (custom values allowed; code with {{ }} is always plain text). A native collection's from its items in the
   cache (this space's; `valueOptions`, a list's each entry, as grouping makes them); a remote one's from its source, one
@@ -146,7 +147,10 @@ Extension points are registries, not special cases in pages:
   per source and column, not for a column the source can't group (text-only); none for Backlinks, a list's entries or
   several collections merged. None either when the values hardly repeat (more than 20 and more than half the items with
   a value: titles, notes; `chosenOptions`) or there are more than `MAX_VALUE_OPTIONS`: then a plain input. Numbers are
-  compared in words: is, is not, below, above.
+  compared in words: is, is not, below, above. **Lists of text and checklists** (and their remote columns): contains /
+  does not contain look in each entry alone, never across two ("p,b" is in no entry of aap, boot; a MySQL SET's members
+  hold no commas), and includes / does not include (operators `is` / `isNot`, as a list of numbers' or items') take a
+  whole entry, whatever its case (Postgres `unnest`, MySQL `FIND_IN_SET`, the memory connector).
 - **Limit** (a block's Filter panel, beside Add filter: "Show [100] items at a time"; `ViewBlock.limit`, saved with the
   view): how many items it shows at first and each "Show more" adds; empty is all. Unset it is 100, or all for a block
   that needs every item (a chart: `BlockUses.all`; `blockLimit`). A remote collection is asked that many rows a page

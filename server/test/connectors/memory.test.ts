@@ -98,6 +98,7 @@ describe("queryRows", () => {
     const tagged = new Map<string, SourceColumn>([...columns, ["tags", { name: "tags", type: "list", kind: "string_list" }]]);
     const list: MemoryRow[] = [
       { id: 1, name: "a", tags: ["Work", "home"] },
+      { id: 5, name: "e", tags: ["aap", "boot"] },
       { id: 2, name: "b", tags: [] },
       { id: 3, name: "c", tags: ["home"] },
       { id: 4, name: "d", tags: null },
@@ -105,12 +106,16 @@ describe("queryRows", () => {
     const q = (over: Partial<SourceQuery>) => queryRows(list, tagged, base({ columns: ["tags"], ...over }));
     const keys = (over: Partial<SourceQuery>) => q(over).rows.map((r) => Number(r.key));
     expect(keys({ filter: { column: "tags", operator: "contains", value: "WORK" } })).toEqual([1]);
+    // Contains looks in each entry alone, never across two; includes (is) takes a whole entry, whatever its case.
+    expect(keys({ filter: { column: "tags", operator: "contains", value: "p, b" } })).toEqual([]);
+    expect(keys({ filter: { column: "tags", operator: "contains", value: "oo" } })).toEqual([5]);
+    expect(keys({ filter: { column: "tags", operator: "is", value: "HOME" } })).toEqual([1, 3]);
+    expect(keys({ filter: { column: "tags", operator: "is", value: "hom" } })).toEqual([]);
+    expect(keys({ filter: { column: "tags", operator: "isNot", value: "home" } })).toEqual([2, 4, 5]);
     expect(keys({ filter: { column: "tags", operator: "isEmpty", value: "" } })).toEqual([2, 4]);
-    expect(() => q({ filter: { column: "tags", operator: "is", value: "home" } })).toThrow();
-    expect(keys({ sort: [{ column: "tags", direction: "desc" }] })).toEqual([1, 3, 2, 4]);
+    expect(keys({ sort: [{ column: "tags", direction: "desc" }] })).toEqual([1, 3, 5, 2, 4]);
     const grouped = q({ groupBy: "tags", sort: [] });
-    expect(grouped.groups).toEqual([{ key: "home", count: 2 }, { key: "Work", count: 1 }, { key: "", count: 2 }]);
-    expect(grouped.total).toBe(4);
-    expect(grouped.rows.map((r) => `${r.key}:${r.group}`)).toEqual(["1:home", "3:home", "1:Work", "2:", "4:"]);
+    expect(grouped.groups).toEqual([{ key: "aap", count: 1 }, { key: "boot", count: 1 }, { key: "home", count: 2 }, { key: "Work", count: 1 }, { key: "", count: 2 }]);
+    expect(grouped.total).toBe(5);
   });
 });

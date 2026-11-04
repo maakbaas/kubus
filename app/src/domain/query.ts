@@ -207,8 +207,9 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     groupKeys: (f, v, ctx) => (typeof v === "string" && v ? single(v, ctx.refLabel(f, v)) : single("")),
     groupValue: (key) => key,
   },
+  // Contains: any part of one entry ("las" in "classic", never across two); includes: a whole entry, whatever its case.
   string_list: {
-    operators: [op("contains", "contains"), op("notContains", "does not contain"), ...EMPTY_OPS],
+    operators: [op("contains", "contains"), op("notContains", "does not contain"), op("is", "includes"), op("isNot", "does not include"), ...EMPTY_OPS],
     text: (_, v) => list(v).join(", "),
     sortKey: (_, v) => list(v).join(", ").toLowerCase() || null,
     groupKeys: (_, v) => (list(v).length ? list(v).map((s) => ({ key: s, label: s })) : single("")),
@@ -226,8 +227,9 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     groupValue: (key) => [Number(key)],
   },
   // Items match by their text; sorted by how far along (share done), empty last.
+  // As a list of text, by its entries' text: contains any part, includes a whole entry.
   checklist: {
-    operators: [op("contains", "contains"), op("notContains", "does not contain"), ...EMPTY_OPS],
+    operators: [op("contains", "contains"), op("notContains", "does not contain"), op("is", "includes"), op("isNot", "does not include"), ...EMPTY_OPS],
     text: (_, v) => checklistItems(v).map((i) => i.text).join(", "),
     sortKey: (_, v) => {
       const items = checklistItems(v);
@@ -446,9 +448,17 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
     case "isNotChecked":
       return value !== true;
     case "contains":
-      return text().includes(arg.toLowerCase());
-    case "notContains":
-      return !text().includes(arg.toLowerCase());
+    case "notContains": {
+      // A list by each entry alone: "p,b" is in no entry of aap, boot.
+      const needle = arg.toLowerCase();
+      const found =
+        field.kind === "string_list"
+          ? list(value).some((s) => s.toLowerCase().includes(needle))
+          : field.kind === "checklist"
+            ? checklistItems(value).some((i) => i.text.toLowerCase().includes(needle))
+            : text().includes(needle);
+      return rule.operator === "contains" ? found : !found;
+    }
     case "is":
     case "isNot": {
       let equal: boolean;
@@ -456,6 +466,8 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
       else if (field.kind === "item") equal = value === arg;
       else if (field.kind === "item_list") equal = list(value).includes(arg);
       else if (field.kind === "number_list") equal = arg.trim() !== "" && numberList(value).includes(Number(arg));
+      else if (field.kind === "string_list") equal = list(value).some((s) => s.trim().toLowerCase() === arg.trim().toLowerCase());
+      else if (field.kind === "checklist") equal = checklistItems(value).some((i) => i.text.trim().toLowerCase() === arg.trim().toLowerCase());
       else if (field.kind === "datetime") equal = dayOf(field, value) === arg;
       else if (field.kind === "checkbox") equal = (value === true) === (arg.toLowerCase() === "true");
       else equal = text() === arg.toLowerCase();
@@ -669,16 +681,16 @@ export interface ValueOption {
 }
 
 /**
- * Whether a rule's value box offers the field's existing values: text and lists of text compared with
- * a value ("Genre is ▾", "Tags contains ▾"), and numbers or lists of numbers by is / is not (not below / above:
- * a threshold is typed). Item fields pick from items already; long text, dates and checkboxes offer none.
+ * Whether a rule's value box offers the field's existing values: only where picking one means just that
+ * value, is / is not ("Genre is ▾"; for a list, includes / does not include: "Tags includes ▾"). Contains
+ * (any part) and below / above (a threshold) are typed. Item fields pick from items already; long text,
+ * dates and checkboxes offer none.
  */
 export function offersValues(field: FieldDef, operator: FilterOperator): boolean {
   switch (field.kind) {
     case "string":
-      return operator === "contains" || operator === "notContains" || operator === "is" || operator === "isNot";
     case "string_list":
-      return operator === "contains" || operator === "notContains";
+    case "checklist":
     case "number":
     case "number_list":
       return operator === "is" || operator === "isNot";
@@ -696,7 +708,9 @@ export const MAX_VALUE_OPTIONS = 1000;
  * value is different (titles, notes: no help in picking) or there are too many.
  */
 export function valueOptions(field: FieldDef, items: readonly Item[]): ValueOption[] {
-  const keys = KIND_RULES[field.kind].groupKeys;
+  // A checklist isn't grouped, but offers its entries' text as a list of text does.
+  const keys: KindRules["groupKeys"] =
+    field.kind === "checklist" ? (_f, v) => checklistItems(v).map((i) => ({ key: i.text.trim(), label: i.text })) : KIND_RULES[field.kind].groupKeys;
   if (!keys) return [];
   const counts = new Map<string, number>();
   let valued = 0;

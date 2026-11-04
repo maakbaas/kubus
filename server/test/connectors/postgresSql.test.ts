@@ -88,6 +88,11 @@ describe("query SQL", () => {
     expect(s.total?.text).toMatch(/^SELECT count\(\*\)::float8 AS n FROM/);
     expect(s.groups?.text).toContain("GROUP BY gx.g");
   });
+  it("compares a list by each entry alone: contains in one (never across two), includes (is) a whole one whatever its case", () => {
+    const p = new Params();
+    expect(filterSql(columns.get("tags")!, { column: "tags", operator: "contains", value: "p,b" }, p, "UTC")).toBe('EXISTS (SELECT 1 FROM unnest(q."tags") AS x WHERE x::text ILIKE $1)');
+    expect(filterSql(columns.get("tags")!, { column: "tags", operator: "isNot", value: "Home" }, p, "UTC")).toBe('NOT EXISTS (SELECT 1 FROM unnest(q."tags") AS x WHERE lower(x::text) = lower($2))');
+  });
   it("refuses unknown columns and pages out of range", () => {
     expect(() => querySql(query({ columns: ["nope"] }), columns)).toThrow(/no column “nope”/);
     expect(() => querySql(query({ limit: 100_000 }), columns)).toThrow(/limit/);

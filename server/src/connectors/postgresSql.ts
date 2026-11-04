@@ -159,18 +159,22 @@ export function filterSql(c: PgColumn, rule: SourceFilter, p: Params, tz: string
   if (c.kind === "string" || c.kind === "string_list") {
     const list = c.kind === "string_list";
     const empty = list ? `COALESCE(cardinality(${r}), 0) = 0` : `(${r} IS NULL OR ${r}::text = '')`;
+    // A list by each entry alone (never across two: "p,b" is in no entry of aap, boot).
+    const inEntry = () => `EXISTS (SELECT 1 FROM unnest(${r}) AS x WHERE x::text ILIKE ${p.add(containing(value))})`;
     switch (op) {
       case "contains":
-        return `${textSql(c)} ILIKE ${p.add(containing(value))}`;
+        return list ? inEntry() : `${textSql(c)} ILIKE ${p.add(containing(value))}`;
       case "notContains":
-        return `NOT (${textSql(c)} ILIKE ${p.add(containing(value))})`;
+        return list ? `NOT ${inEntry()}` : `NOT (${textSql(c)} ILIKE ${p.add(containing(value))})`;
       case "isEmpty":
         return empty;
       case "isNotEmpty":
         return `NOT ${empty}`;
       case "is":
       case "isNot":
-        if (list || c.plain) return refuse();
+        if (c.plain) return refuse();
+        // A list includes the value: one of its entries is it, whatever its case.
+        if (list) return `${op === "is" ? "" : "NOT "}EXISTS (SELECT 1 FROM unnest(${r}) AS x WHERE lower(x::text) = lower(${p.add(value)}))`;
         return `lower(${textSql(c)}) ${op === "is" ? "=" : "<>"} lower(${p.add(value)})`;
       default:
         return refuse();

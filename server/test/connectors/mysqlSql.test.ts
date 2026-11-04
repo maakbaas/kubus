@@ -88,7 +88,10 @@ describe("query SQL", () => {
     const p = new Params();
     expect(filterSql(columns.get("id")!, { column: "id", operator: "is", value: "abc" }, p, "UTC")).toBe("FALSE");
     expect(filterSql(columns.get("born")!, { column: "born", operator: "before", value: "soon" }, p, "UTC")).toBe("FALSE");
-    expect(() => filterSql(columns.get("tags")!, { column: "tags", operator: "is", value: "a" }, p, "UTC")).toThrow(/can't be filtered/);
+    // A SET: includes a member whatever its case; text with a comma is in no member (never across two).
+    expect(filterSql(columns.get("tags")!, { column: "tags", operator: "is", value: "a" }, p, "UTC")).toMatch(/^COALESCE\(FIND_IN_SET\(LOWER\(.+\), LOWER\(q\.`tags`\)\), 0\) > 0$/);
+    expect(filterSql(columns.get("tags")!, { column: "tags", operator: "contains", value: "p,b" }, p, "UTC")).toBe("FALSE");
+    expect(filterSql(columns.get("tags")!, { column: "tags", operator: "notContains", value: "p,b" }, p, "UTC")).toBe("TRUE");
   });
   it("groups a date & time by its day in the time zone", () => {
     const { groups } = querySql(query({ groupBy: "seen", counts: true, timeZone: "Europe/Amsterdam" }), columns, "mysql");

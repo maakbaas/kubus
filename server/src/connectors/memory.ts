@@ -39,18 +39,31 @@ export function ruleTest(c: SourceColumn, rule: SourceFilter, day: (iso: string)
     const list = c.kind === "string_list";
     const needle = value.toLowerCase();
     const text = (row: MemoryRow) => textOf(get(row)).toLowerCase();
+    // A list by each entry alone (never across two: "p,b" is in no entry of aap, boot).
+    const contains = (row: MemoryRow) => {
+      const v = get(row);
+      return list && Array.isArray(v) ? v.some((x) => String(x).toLowerCase().includes(needle)) : text(row).includes(needle);
+    };
     switch (op) {
       case "contains":
-        return (row) => text(row).includes(needle);
+        return contains;
       case "notContains":
-        return (row) => !text(row).includes(needle);
+        return (row) => !contains(row);
       case "isEmpty":
         return (row) => text(row) === "";
       case "isNotEmpty":
         return (row) => text(row) !== "";
       case "is":
       case "isNot":
-        if (list || c.plain) return refuse();
+        if (c.plain) return refuse();
+        if (list) {
+          // A list includes the value: one of its entries is it, whatever its case.
+          const has = (row: MemoryRow) => {
+            const v = get(row);
+            return Array.isArray(v) && v.some((x) => String(x).trim().toLowerCase() === needle);
+          };
+          return op === "is" ? has : (row) => !has(row);
+        }
         return op === "is" ? (row) => text(row) === needle : (row) => text(row) !== needle;
       default:
         return refuse();

@@ -187,17 +187,20 @@ export function filterSql(c: MyColumn, rule: SourceFilter, p: Params, tz: string
   if (c.kind === "string" || c.kind === "string_list") {
     const empty = `(${r} IS NULL OR ${cast(r)} = '')`;
     switch (op) {
+      // A SET by each member alone: its members hold no commas, so text with one is in none of them (never across two).
       case "contains":
-        return like(c, p, value);
+        return c.kind === "string_list" && value.includes(",") ? "FALSE" : like(c, p, value);
       case "notContains":
-        return `NOT (${like(c, p, value)})`;
+        return c.kind === "string_list" && value.includes(",") ? "TRUE" : `NOT (${like(c, p, value)})`;
       case "isEmpty":
         return empty;
       case "isNotEmpty":
         return `NOT ${empty}`;
       case "is":
       case "isNot":
-        if (c.kind === "string_list" || c.plain) return refuse();
+        if (c.plain) return refuse();
+        // A SET includes the value: one of its members is it, whatever its case (members hold no commas).
+        if (c.kind === "string_list") return `${op === "is" ? "" : "NOT "}COALESCE(FIND_IN_SET(LOWER(${p.add(value)}), LOWER(${r})), 0) > 0`;
         return `${folded(textSql(c))} ${op === "is" ? "=" : "<>"} LOWER(${p.add(value)})`;
       default:
         return refuse();
