@@ -150,6 +150,8 @@ async function hitReport(t) {
       scrollX: window.scrollX, scrollY: window.scrollY,
       workspace: ws ? { top: Math.round(ws.top), left: Math.round(ws.left), width: Math.round(ws.width), height: Math.round(ws.height) } : null,
       inner: { w: innerWidth, h: innerHeight },
+      // A phone's bottom bar (App.tsx) takes the window's foot: the workspace ends on its top edge.
+      bar: Math.round(document.querySelector(".bottom-bar")?.getBoundingClientRect().height ?? 0),
       inset: document.documentElement.style.getPropertyValue("--keyboard-inset"),
       // What the inset must be right now: the part of the window the visual viewport leaves uncovered.
       expectedInset: vv ? Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop)) + "px" : "0px",
@@ -166,7 +168,7 @@ async function judgeHits(t, label) {
   if (r.tested < 3) problems.push(`only ${r.tested} controls tested`);
   if (r.bad.length) problems.push(`touch misses: ${r.bad.slice(0, 4).join("; ")}`);
   if (s.scrollX || s.scrollY || s.vvPageTop) problems.push(`window scrolled (${s.scrollX}, ${s.scrollY}; page top ${s.vvPageTop})`);
-  if (!s.workspace || s.workspace.top !== 0 || s.workspace.left !== 0 || s.workspace.height !== s.inner.h) problems.push(`workspace ${JSON.stringify(s.workspace)} is not the window ${JSON.stringify(s.inner)}`);
+  if (!s.workspace || s.workspace.top !== 0 || s.workspace.left !== 0 || s.workspace.height + s.bar !== s.inner.h) problems.push(`workspace ${JSON.stringify(s.workspace)} (bottom bar ${s.bar}px) is not the window ${JSON.stringify(s.inner)}`);
   if (s.inset !== s.expectedInset) problems.push(`keyboard inset "${s.inset}" is stale (the window leaves ${s.expectedInset} covered)`);
   await t.check(`${label}: touch hits the control drawn there`, problems.length === 0, problems.join("; "));
 }

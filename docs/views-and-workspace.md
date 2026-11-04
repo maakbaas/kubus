@@ -401,6 +401,11 @@ Extension points are registries, not special cases in pages:
 - Closing every tab leaves an empty workspace (no tab is reopened automatically); middle click
   on a tab closes it.
 - Phones show only the active pane.
+- **Bottom bar** (phones held upright: a touch screen at most 30rem wide, `BOTTOM_BAR` in `app/App.tsx`; not a narrow
+  window with a mouse, a phone on its side or a tablet): Menu, Back (`WorkspaceActions.back`, as the swipe does), Home and
+  Search in reach of the thumb, at the bottom; the menu toggle and Search leave the tab strip then. The tab strip's colour,
+  the page fading out above it as below the strip; Carbon's small icon buttons spread across it; 53px high, 66px with the home indicator (iOS),
+  the icons midway between the bar's top and the indicator's. While a field is typed in it makes way for the keyboard (styles.css `:has`).
 - Pressing a pane makes it active (`Workspace.tsx`), except on an element marked `data-keeps-active-pane`: the strip's Search button (it ends the right-most pane's strip) acts on the pane that was active, so the results open there.
 - **Tab width** (`fit` in `PaneView`, `Workspace.tsx`, plus `.ws-pane__tabs` in `styles.css`): a
   tab's natural width is its text plus padding and close button. Cap = min(16rem, 80% of the room

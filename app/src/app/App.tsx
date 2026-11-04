@@ -1,6 +1,6 @@
 import { useEffect, useState, type PointerEvent } from "react";
 import { IconButton, InlineNotification, Layer, Loading, SideNav } from "@carbon/react";
-import { OpenPanelFilledLeft, OpenPanelLeft, Search as SearchIcon } from "@carbon/icons-react";
+import { ArrowLeft, Home, OpenPanelFilledLeft, OpenPanelLeft, Search as SearchIcon } from "@carbon/icons-react";
 import { SearchBar } from "../ui/SearchBar";
 import { SpaceSwitcher } from "../ui/SpaceSwitcher";
 import { SyncStatusButton } from "../ui/SyncStatusButton";
@@ -52,6 +52,11 @@ function SpaceWorkspace() {
 }
 
 const NAV_DOCKED_KEY = "kubus.navDocked";
+/**
+ * Phones held upright (a touch screen at most 30rem wide): the menu, back, home and search are in a bar at the bottom,
+ * in reach of the thumb, instead of in the top tab strip. Not a narrow window with a mouse, a phone on its side or a tablet.
+ */
+const BOTTOM_BAR = "(pointer: coarse) and (max-width: 30rem)";
 const NAV_WIDTH_KEY = "kubus.navWidth";
 /** Docked side nav width limits in rem (Carbon's default width is 16rem). */
 const NAV_WIDTH = { min: 12, max: 32, initial: 16 };
@@ -77,6 +82,7 @@ function Shell() {
     });
   };
   const navShown = desktop ? docked : navOpen;
+  const bottomBar = useMediaQuery(BOTTOM_BAR);
 
   // Docked side nav width (rem), resized by dragging the gutter at its edge.
   const [navWidth, setNavWidth] = useState(readNavWidth);
@@ -175,7 +181,7 @@ function Shell() {
           onDoubleClick={resetNavWidth}
         />
       )}
-      <main id="main-content" className={`app-content app-content--workspace${desktop && docked ? " app-content--nav-docked" : ""}`}>
+      <main id="main-content" className={`app-content app-content--workspace${desktop && docked ? " app-content--nav-docked" : ""}${bottomBar ? " app-content--bottom-bar" : ""}`}>
         {!repo.storage.persistent && (
           <InlineNotification
             kind="warning"
@@ -185,12 +191,14 @@ function Shell() {
           />
         )}
         <WorkspaceView
-          tabStripStart={navShown ? null : navToggle}
+          tabStripStart={navShown || bottomBar ? null : navToggle}
           tabStripEnd={
             <>
-              <IconButton autoAlign label="Search" kind="ghost" size="sm" align="bottom-end" data-keeps-active-pane onClick={() => setSearchOpen(true)}>
-                <SearchIcon />
-              </IconButton>
+              {!bottomBar && (
+                <IconButton autoAlign label="Search" kind="ghost" size="sm" align="bottom-end" data-keeps-active-pane onClick={() => setSearchOpen(true)}>
+                  <SearchIcon />
+                </IconButton>
+              )}
               <AiStatusButton onSetup={() => ws.navigate("/settings?section=ai")} />
               <SyncStatusButton onConfigure={() => ws.navigate("/settings?section=sync")} />
             </>
@@ -198,6 +206,23 @@ function Shell() {
         />
         <AiDialogs />
       </main>
+      {bottomBar && (
+        // The phone's bottom bar (BOTTOM_BAR). Hidden while a field is typed in (styles.css), the keyboard's room.
+        <nav className="bottom-bar" aria-label="Navigation">
+          <IconButton autoAlign kind="ghost" size="sm" align="top-start" label={navShown ? "Hide menu" : "Show menu"} aria-expanded={navShown} onClick={toggleNav}>
+            {navShown ? <OpenPanelFilledLeft /> : <OpenPanelLeft />}
+          </IconButton>
+          <IconButton autoAlign kind="ghost" size="sm" align="top" label="Back" onClick={() => ws.back()}>
+            <ArrowLeft />
+          </IconButton>
+          <IconButton autoAlign kind="ghost" size="sm" align="top" label="Home" onClick={() => ws.navigate("/")}>
+            <Home />
+          </IconButton>
+          <IconButton autoAlign kind="ghost" size="sm" align="top-end" label="Search" data-keeps-active-pane onClick={() => setSearchOpen(true)}>
+            <SearchIcon />
+          </IconButton>
+        </nav>
+      )}
       {searchOpen && (
         <SearchBar
           value={query}

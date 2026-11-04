@@ -67,6 +67,8 @@ interface WorkspaceActions {
   setTitle(tabId: string, title: string): void;
   /** A tab's back/forward; returns an unregister function. */
   registerHistory(tabId: string, history: TabHistory): () => void;
+  /** Back in the active tab (an open layer, the lightbox, closes first), as the swipe and the mouse button do. */
+  back(): void;
 }
 
 interface WorkspaceApi extends WorkspaceActions {
@@ -176,13 +178,13 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
   const current = useRef(workspace);
   current.current = workspace;
   const hint = useRef<HTMLDivElement>(null);
+  const activeHistory = useCallback(() => {
+    const tab = activeTab(current.current);
+    return tab ? histories.current.get(tab.id) : undefined;
+  }, []);
+  // An open layer over the page (the lightbox) takes back and forward first: back closes it (ui/backLayers.ts).
+  const go = useCallback((direction: "back" | "forward") => takeBackForward(direction) || activeHistory()?.[direction](), [activeHistory]);
   useEffect(() => {
-    const activeHistory = () => {
-      const tab = activeTab(current.current);
-      return tab ? histories.current.get(tab.id) : undefined;
-    };
-    // An open layer over the page (the lightbox) takes back and forward first: back closes it (ui/backLayers.ts).
-    const go = (direction: "back" | "forward") => takeBackForward(direction) || activeHistory()?.[direction]();
     const onMouseUp = (e: globalThis.MouseEvent) => {
       if (e.button === 3 || e.button === 4) {
         e.preventDefault();
@@ -298,7 +300,7 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
       window.removeEventListener("mouseup", onMouseUp);
       window.removeEventListener("keydown", onKeyDown, true);
     };
-  }, []);
+  }, [activeHistory, go]);
   const setTitle = useCallback(
     (tabId: string, title: string) => setTitles((t) => (t[tabId] === title ? t : { ...t, [tabId]: title })),
     [],
@@ -310,8 +312,9 @@ export function WorkspaceProvider({ spaceId, children }: { spaceId: string; chil
       update,
       setTitle,
       registerHistory,
+      back: () => go("back"),
     }),
-    [update, setTitle, registerHistory],
+    [update, setTitle, registerHistory, go],
   );
   const api = useMemo<WorkspaceApi>(
     () => ({ ...actions, workspace, activePath: activeTab(workspace)?.path ?? "", titles }),

@@ -150,6 +150,57 @@ body {
     linear-gradient(var(--cds-layer-accent), var(--cds-layer-accent)) top / 100% calc(3rem + var(--cds-spacing-02) + env(safe-area-inset-top)) no-repeat,
     var(--cds-background);
 }
+/* The phone's bottom bar (App.tsx BOTTOM_BAR: a touch screen at most 30rem wide): menu, back, home and search in reach
+   of the thumb, Carbon's small icon buttons spread across it. The workspace ends on its top edge. It is the tab strip's
+   colour, and the page fades out above it as it does below the strip (.ws-pane__frame::before). Its icons sit midway
+   between its top and the home indicator (the top of which is 13px from the screen's bottom): 53px of bar plus, where
+   there is an indicator, 13px under that, 66px in all. */
+:root {
+  --bottom-bar-pad: min(env(safe-area-inset-bottom, 0px), 13px);
+  --bottom-bar-height: calc(53px + var(--bottom-bar-pad));
+}
+.bottom-bar {
+  position: fixed;
+  inset: auto 0 0 0;
+  /* Under the side nav and its overlay (a tap on the bar's part of the overlay closes the menu), dialogs and panels. */
+  z-index: 5000;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  box-sizing: border-box;
+  block-size: var(--bottom-bar-height);
+  padding: 0 env(safe-area-inset-right) var(--bottom-bar-pad) env(safe-area-inset-left);
+  background: var(--cds-layer-accent);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.bottom-bar::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 100% 0;
+  block-size: 0.75rem;
+  pointer-events: none;
+  background: linear-gradient(to top, var(--cds-background), transparent);
+}
+.app-content.app-content--bottom-bar {
+  inset-block-end: var(--bottom-bar-height);
+}
+/* The bar takes the home indicator's room: a page ends a page padding above the bar (the keyboard's room too). */
+.app-content--bottom-bar .ws-tab-content {
+  padding-block-end: calc(var(--cds-spacing-05) + var(--keyboard-inset, 0px));
+}
+/* While a field is typed in (keyboardInset.ts TEXT_FIELD) the bar makes way for the keyboard: on Android the window
+   shrinks to above it and the bar would sit on top of it. The page grows downwards only, so the field stays put. */
+:root:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=color]):not([type=image]):not([type=hidden]), textarea, select, [contenteditable]:not([contenteditable=false])):focus) .bottom-bar {
+  display: none;
+}
+:root:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=color]):not([type=image]):not([type=hidden]), textarea, select, [contenteditable]:not([contenteditable=false])):focus) .app-content.app-content--bottom-bar {
+  inset-block-end: 0;
+}
+:root:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=color]):not([type=image]):not([type=hidden]), textarea, select, [contenteditable]:not([contenteditable=false])):focus) .app-content--bottom-bar .ws-tab-content {
+  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
+}
 .ws-pane__spacer {
   flex: 1;
 }
