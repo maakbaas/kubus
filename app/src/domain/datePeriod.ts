@@ -360,21 +360,27 @@ export function periodParts(state: PeriodState, kind: PeriodKind = state.kind): 
   return { counting, days: periodLabel(period, counting && (toDate || rollingRange) ? "range" : kind) };
 }
 
-const UNIT_WORD = /\b(minutes?|hours?|days?|weeks?|months?|years?)\b/i;
+const UNIT_WORD = /^(minutes?|hours?|days?|weeks?|months?|years?)$/i;
 
 /**
- * A period's words with the unit word marked, for the filter bar (where it is a dropdown switching the
- * kind): `before + unit + after` is how it is counted ("This week": "This ", "week", ""; "7 weeks ago":
- * "7 ", "weeks", " ago"; "Last 7 days"; "Year to date": "", "Year", " to date"), `days` its days ("Week 44 · …").
- * A period with no unit word in its counting (a chosen one: "October 2026", a range, "Today") has `unit`
- * null, and `before` holds its counting whole (empty for a chosen one).
+ * A period's words for the filter bar, where the dropdown switching the kind is the counting's unit
+ * word with its number ("Last [7 days]", "[7 weeks] ago", "In [3 months]", "This [week]"): `before` is
+ * one word or nothing (more would go into the dropdown too), `after` whatever follows ("[Year] to date",
+ * "[8 days] up to 3 days ago"). `days` are the
+ * period's days ("Week 44 - …"), its tooltip. A period with no unit word in its counting (a chosen one:
+ * "October 2026", a range, "Today") has `unit` null, and `before` holds its counting whole (empty for a
+ * chosen one). Put back together with single spaces it is the counting.
  */
 export function periodWords(state: PeriodState): { before: string; unit: string | null; after: string; days: string } {
   const { counting, days } = periodParts(state);
+  const words = counting.split(" ");
   // A range is no kind of the switch, whatever its counting says ("3 days").
-  const found = state.kind === "range" ? null : UNIT_WORD.exec(counting);
-  if (!found) return { before: counting, unit: null, after: "", days };
-  return { before: counting.slice(0, found.index), unit: found[0], after: counting.slice(found.index + found[0].length), days };
+  const at = state.kind === "range" ? -1 : words.findIndex((w) => UNIT_WORD.test(w));
+  if (at < 0) return { before: counting, unit: null, after: "", days };
+  // The number goes with its unit; then words before it, if more than one, go in as well.
+  let from = at > 0 && /^\d+$/.test(words[at - 1]) ? at - 1 : at;
+  if (from > 1) from = 0;
+  return { before: words.slice(0, from).join(" "), unit: words.slice(from, at + 1).join(" "), after: words.slice(at + 1).join(" "), days };
 }
 
 /** A period in words as the date filter's line shows it: "October 2026", "Last week - Week 43 - …", "Last 7 days - 23 Oct – 29 Oct 2026". */

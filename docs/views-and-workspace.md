@@ -105,31 +105,29 @@ Extension points are registries, not special cases in pages:
   elsewhere, or for an item without that date, it matches nothing). A period that ends now ("Last 2 months", "Last 7 days", a year to date) then ends at that date or time (`resolveAnchored`: with a time, the period is in minutes), not at the end of its month, so a historical weigh-in's page counts only what came up to it; "This month" alone stays the whole month. `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.
 - **Filter bar** (View settings → "Show filter bar", `CollectionView.filterBar`, `views/FilterBar.tsx`): a bar just below the
-  view tab strip with the view filter's date period without opening the panel. At the LEFT the period in words (the panel's
-  period line, separated by " - ": "This week - Week 44 - 25 Oct – 31 Oct 2026", "Last 7 days - …", "Any date" while there
-  is none); at the RIGHT, touching at the 32px pitch and ending where the toolbar's icon buttons end, from left to right
+  view tab strip with the view filter's date period without opening the panel. At the LEFT the period in words, its counting only
+  (the panel's period line without its days, at every width: "This [week]", "Last [7 days]", "[Any date]" while there is none;
+  the whole line with the days is the tooltip); at the RIGHT, touching at the 32px pitch and ending where the toolbar's icon buttons end, from left to right
   ‹ › (step as the panel's do: a rolling one stays rolling, a chosen one by its kind, a range by its length, the last n by n, off for a
   so far), the "most recent" button (>|: this hour / today / this week / month / year as a rolling
   `kind+0`, whatever the period was; off for a range or no period) and the view's Filter button (it leaves the toolbar for
   the bar while the bar is shown; same states: grey while open, blue while rules are in effect, same panel). There is no
   separate kind control: the UNIT WORD of the words is a Carbon inline Dropdown (`type="inline"`, sm, autoAlign) whose menu
-  reads Hourly, Daily, Weekly, Monthly, Yearly (no Range). "This [week]", "7 [weeks] ago", "In 3 [months]", "Last 7 [days]",
-  "[Year] to date": `periodWords` (domain/datePeriod.ts) splits the counting into before / unit word / after, so the
-  trigger shows the word in the sentence's own number ("week" / "weeks") and follows the new kind after a pick
+  reads Hourly, Daily, Weekly, Monthly, Yearly (no Range). "This [week]", "[7 weeks] ago", "In [3 months]", "Last [7 days]",
+  "[Year] to date", "[8 days] up to 3 days ago": `periodWords` (domain/datePeriod.ts) splits the counting into before / unit
+  word with its number / after, and BEFORE IS ONE WORD AT MOST (more go into the dropdown; after may be several), so the gap
+  beside the dropdown is the only gap there: its padding, 8px before the word and 7px after the arrow's glyph (the arrow's
+  24px box ends the field). The trigger shows the word in the sentence's own number ("week" / "weeks") and follows the new kind after a pick
   (`kindValue`: the same window in the other kind, as the panel's switcher does; a rolling one starts at the current one;
   with no period it creates one on the default field, the first date or date & time field, else Updated). In a period with
-  no unit word its first words are the dropdown instead: "[Today]", "[Yesterday]", "[October 2026]", "[Week 43] - 18 Oct – 24
-  Oct 2026", a range "[4 Oct – 13 Oct 2026]" (no kind chosen in the menu), none yet "[Any date]". The trigger has room on both
-  sides and a gap before its arrow; its menu, wider than the word, is moved left as far as it would run past the window's
+  no unit word its first words are the dropdown instead: "[Today]", "[Yesterday]", "[October 2026]", "[Week 43]", a range "[4 Oct – 13 Oct 2026]" (no kind chosen in the menu), none yet "[Any date]". Its menu, wider than the word, is moved left as far as it would run past the window's
   right edge (`keepMenuOnPage`). The "by <field>", Which, × and Range stay in the panel. The pure steps are `periodState`, `stepValue`,
   `kindValue`, `latestValue`, `withPeriod` (domain/datePeriod.ts), shared with `DatePeriodFilter`. Every change is an
   edit of the view's filter (`view.filters`): the tab gets its * and Save appears, which is how the view shows it deviates
   from its saved period; all blocks follow. The setting itself is stored with the view right away (like arranging blocks;
   no *), as `filterBar: true` in the view's config JSON (absent = off; an optional key). One row down to 320 px, no
   horizontal scroll: the words take the room that is left (ellipsized, the whole line in the tooltip), the buttons never
-  shrink or move while stepping. The line is built in parts: the head (up to the first " - ", or for a period with no unit
-  word the kind and its first words) and the rest (`.filter-bar__more`), which a phone (the window under 42rem, the app's narrow
-  breakpoint) leaves out; the tooltip keeps all. Switching the setting while a panel (View settings) is open moves
+  shrink or move while stepping. Switching the setting while a panel (View settings) is open moves
   the Filter button only when it closes (`panels.hold`), so the buttons after it don't jump under the open panel; the
   bar itself shows at once.
 - **Limit** (a block's Filter panel, beside Add filter: "Show [100] items at a time"; `ViewBlock.limit`, saved with the

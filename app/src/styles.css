@@ -2511,9 +2511,10 @@ img[data-lightbox] {
   margin-bottom: var(--cds-spacing-05);
 }
 /* The filter bar below the tabs ("Show filter bar"), one row on a phone too: the period in words at the
-   left (its unit word the kind dropdown), at the right ‹ › "this one" and the view's Filter button, touching
-   at the toolbar's right edge. The words take the room that is left (and are ellipsized, whole in their
-   tooltip), so the buttons stay where they are as they change while stepping. */
+   left (the kind dropdown with at most one word before it, the same at every width; its days only in
+   the tooltip), at the right ‹ › >| and the view's Filter button, touching at the toolbar's right edge. The
+   words take the room that is left (and are ellipsized, whole in their tooltip), so the buttons stay where
+   they are as they change while stepping. */
 .filter-bar {
   display: flex;
   align-items: center;
@@ -2525,33 +2526,21 @@ img[data-lightbox] {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  white-space: pre;
+  white-space: nowrap;
   font-size: var(--cds-body-compact-01-font-size);
   line-height: var(--cds-body-compact-01-line-height);
   letter-spacing: var(--cds-body-compact-01-letter-spacing);
 }
-/* The head (before the first " - ") keeps what room there is; what follows gives way first. */
 .filter-bar__head {
   display: flex;
   align-items: center;
   flex: 0 1 auto;
   min-inline-size: 0;
 }
-.filter-bar__text,
-.filter-bar__more {
+.filter-bar__text {
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.filter-bar__more {
-  flex: 0 100 auto;
-}
-/* On a phone only the head is shown: the rest is the tooltip, and the filter panel's line. (Not a container query:
-   containment would make the label the containing block of the dropdown's menu.) */
-@media (max-width: 42rem) {
-  .filter-bar__more {
-    display: none;
-  }
 }
 /* The unit word as an inline dropdown inside the sentence: as wide as its word and arrow. */
 .filter-bar__kind,
@@ -2560,12 +2549,17 @@ img[data-lightbox] {
   inline-size: auto;
   min-inline-size: 0;
 }
-/* In a sentence the word has room on both sides (its hover background around it), and a gap before the arrow. */
+/* In a sentence the word has room on both sides (its hover background around it): the arrow's box (24px, its
+   glyph 7px in from each side) ends the field, so the words before and after are as far from it (8px / 7px). */
 .filter-bar__kind .cds--list-box__field {
-  padding-inline: var(--cds-spacing-03) var(--cds-spacing-07);
+  padding-inline: var(--cds-spacing-03) var(--cds-spacing-06);
 }
 .filter-bar__kind .cds--list-box__menu-icon {
-  inset-inline-end: var(--cds-spacing-03);
+  inset-inline-end: 0;
+}
+/* The dropdown first on the line: its word on the bar's left edge, like a word before it would be. */
+.filter-bar__head > .filter-bar__kind:first-child .cds--list-box__field {
+  padding-inline-start: 0;
 }
 /* Carbon's inline menu is 18rem wide at least (wider than a phone's room beside the word): as wide as its words. */
 .filter-bar .cds--dropdown--inline .cds--list-box__menu {

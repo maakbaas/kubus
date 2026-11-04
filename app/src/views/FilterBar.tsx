@@ -31,11 +31,11 @@ const UNITS: UnitChoice[] = KINDS.filter((k): k is { kind: Unit; text: string } 
  * stays rolling), >| "this one" (the most recent one of its kind: rolling, this week, not literally these
  * days) and the view's Filter button (`children`: it leaves the toolbar while the bar is shown), touching
  * and ending where the toolbar's icon buttons end. The unit word of the line is the dropdown that
- * switches the kind (Hourly … Yearly): "This [week]", "7 [weeks] ago", "Last 7 [days]". In a period with no
- * unit word its first words are the dropdown ("[Today]", "[October 2026]", "[1 Oct – 15 Nov 2026]"), and none
- * yet is "[Any date]". The words are separated by " - ", and on
- * a narrow bar everything from the second separator on is left out (CSS: the head is what stays; the
- * whole line is the tooltip). Every change is an edit of the view's filter, as in the filter panel
+ * switches the kind (Hourly … Yearly), with its number, and at most one word stands before it:
+ * "This [week]", "[7 weeks] ago", "Last [7 days]", "[Year] to date" (periodWords). In a period with no
+ * unit word its first words are the dropdown ("[Today]", "[October 2026]", "[Week 44]", "[1 Oct – 15 Nov 2026]"),
+ * and none yet is "[Any date]". The period's days are not shown (on any width): the whole line with them is
+ * the tooltip. Every change is an edit of the view's filter, as in the filter panel
  * (DatePeriodFilter), which keeps what only it has: a range, the window (last n, so far) and the field the
  * period goes by. The line takes what room is left and is ellipsized, so stepping never moves the buttons.
  */
@@ -51,16 +51,16 @@ export function FilterBar({ collection, filters, onChange, children }: { collect
   const kind = state && state.kind !== "range" ? UNITS.find((u) => u.kind === state.kind) : undefined;
   const latest = state && state.kind !== "range" ? rollingLabel({ kind: state.kind, offset: 0 }) : "Most recent";
   const still = !steps(state, !!value?.fieldId);
-  // What the dropdown shows: the unit word ("Last 7 [days]"), else the words that stand first: the counting
-  // ("[Today]"), else the period's first part ("[October 2026]", "[Week 44] - 26 Oct – 1 Nov 2026"); none: "Any date".
+  // What the dropdown shows: the unit word with its number ("Last [7 days]"), else the words that stand first:
+  // the counting ("[Today]"), else the period's first part ("[October 2026]", "[Week 44]"); none: "Any date".
+  // At most one word before it; the days are only in the tooltip.
   const dayParts = words ? words.days.split(" - ") : [];
   const shown = words?.unit ?? (words ? words.before || dayParts[0] : "Any date");
-  // The rest of the head after the dropdown (" ago"), then the days, or what of them the dropdown doesn't show:
-  // what a narrow bar drops.
-  const headText = words?.unit ? words.after : "";
+  const before = words?.unit ? words.before : "";
+  const after = words?.unit ? words.after : "";
+  // The whole line, with the days: the tooltip.
   const more = words ? (words.unit || words.before ? dayParts : dayParts.slice(1)) : [];
-  // The whole line as shown (a narrow bar drops its end): the tooltip.
-  const label = `${words?.unit ? words.before : ""}${shown}${headText}${more.length ? ` - ${more.join(" - ")}` : ""}`;
+  const label = [before, shown, after].filter(Boolean).join(" ") + (more.length ? ` - ${more.join(" - ")}` : "");
   // The menu hangs from the dropdown's left edge and is wider than its word: moved left as far as it would
   // run past the window's right edge (Carbon's floating placement only flips it up or down). Once placed.
   const keepMenuOnPage = () =>
@@ -78,7 +78,7 @@ export function FilterBar({ collection, filters, onChange, children }: { collect
     <div className="filter-bar">
       <span className="filter-bar__label" title={label}>
         <span className="filter-bar__head" ref={head} onClickCapture={keepMenuOnPage} onKeyDownCapture={keepMenuOnPage}>
-          {words?.unit && words.before && <span className="filter-bar__text">{words.before}</span>}
+          {before && <span className="filter-bar__text">{before}</span>}
           <Dropdown<UnitChoice | null>
             autoAlign
             type="inline"
@@ -95,9 +95,8 @@ export function FilterBar({ collection, filters, onChange, children }: { collect
             // The same window in the other kind; with no period yet, the current one (kindValue).
             onChange={({ selectedItem }) => selectedItem && set(kindValue(value ? value.value : null, selectedItem.kind, now))}
           />
-          {headText && <span className="filter-bar__text">{headText}</span>}
+          {after && <span className="filter-bar__text">{after}</span>}
         </span>
-        {more.length > 0 && <span className="filter-bar__more">{` - ${more.join(" - ")}`}</span>}
       </span>
       <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Previous" disabled={still} onClick={() => value && set(stepValue(value.value, -1, now))}>
         <ChevronLeft />
