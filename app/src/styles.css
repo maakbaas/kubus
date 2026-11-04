@@ -2888,24 +2888,35 @@ img[data-lightbox] {
   .view-options {
     grid-template-columns: minmax(0, 1fr);
   }
-  /* The rules are one column: the period's words on a row of their own, then "by", the field filling the row, ‹ › >|,
-     pin and ×. */
+  /* The rules are one column: the period's words on a row of their own, then "by" and the field filling its row (a long
+     field name whole), then ‹ › >| under the field and pin and × at the right, where the rules have theirs. */
   .date-period__nav {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
   .date-period__head,
   .date-period__nav > .date-period__head:first-child {
     grid-column: 1 / -1;
   }
+  .date-period__field {
+    grid-column: 2 / -1;
+  }
+  .date-period__steps {
+    grid-row: 3;
+    grid-column: 2;
+  }
+  .date-period__nav > .query-editor__actions {
+    grid-row: 3;
+    grid-column: 3;
+  }
+  /* After a block's And / Or (its own row first): one row further down. */
   .date-period__join + .date-period__head {
     grid-row: 2;
   }
-  .date-period__nav > .query-editor__actions {
-    grid-row: 2;
-    grid-column: 4;
-  }
-  .date-period__join ~ :is(.date-period__by, .date-period__field, .date-period__steps, .query-editor__actions) {
+  .date-period__join ~ :is(.date-period__by, .date-period__field) {
     grid-row: 3;
+  }
+  .date-period__join ~ :is(.date-period__steps, .query-editor__actions) {
+    grid-row: 4;
   }
 }
 /* Group headings (table rows / card sections): a step smaller than a block's name, and lined up

@@ -87,7 +87,7 @@ Extension points are registries, not special cases in pages:
   filter panel (no heading above it: the panel's button says "Filter"). A content switcher (Hour, Day, Week, Month,
   Year, Range) picks the kind; under it, on the rules' columns (`.date-period__nav`, two rows, nothing wrapped or cut: its words
   across the first four with Rolling beside them when it fits, pin and × in the buttons column; "by" where the rules have "Where",
-  the field in the field column, ‹ › >| in the condition column; on a phone the words alone, then by, field, ‹ › >|, pin, ×), the line shows the period ("Any date" while there is none), a blue "Rolling"
+  the field in the field column, ‹ › >| in the condition column; on a phone the words, then by and the field filling its row, then ‹ › >| under it and pin, × at the right), the line shows the period ("Any date" while there is none), a blue "Rolling"
   tag while it moves on with time, "by <field>" (the first date or date & time field, none: Updated; Created and
   Updated can be picked) and, once a period is set, ‹ › (the one before / after: a rolling one stays rolling, `week-1`
   "Last week"; a chosen one by its length; the last n by n, still rolling: `day-6..day+0` → `day-13..day-7`, "7 days up
