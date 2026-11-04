@@ -4851,8 +4851,8 @@ body[data-reordering] [data-reorder-row] {
 .helper.field-settings__note {
   margin-bottom: 0;
 }
-/* Settings → Display's "Reload app": its note right under it. */
-.settings-reload .helper {
+/* Settings → Display's "Reload app": its note a step under it (.settings-panel clears helpers' margins). */
+.settings-panel .settings-reload .helper {
   margin: var(--cds-spacing-03) 0 0;
 }
 /* The Components page's "Show: all / shared / local": on the page's left edge, its label

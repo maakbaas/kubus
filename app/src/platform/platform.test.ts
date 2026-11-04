@@ -297,7 +297,8 @@ describe("the service worker", () => {
     vi.resetModules();
     vi.stubEnv("PROD", env.prod);
     const update = vi.fn(async () => {});
-    const register = vi.fn(async (): Promise<unknown> => ({ update }));
+    const found: (() => void)[] = [];
+    const register = vi.fn(async (): Promise<unknown> => ({ update, addEventListener: (_: string, l: () => void) => found.push(l) }));
     const loads: (() => void)[] = [];
     const shown: (() => void)[] = [];
     const doc = { visibilityState: "visible", addEventListener: (_: string, l: () => void) => shown.push(l) };
@@ -312,9 +313,9 @@ describe("the service worker", () => {
     vi.stubGlobal("performance", { now: () => now });
     const later = (ms: number) => (now += ms);
     vi.stubGlobal("addEventListener", (_: string, l: () => void) => loads.push(l));
-    const { registerServiceWorker } = await import("./serviceWorker");
-    registerServiceWorker();
-    return { register, update, loads, shown, doc, takeOver, reload, later };
+    const sw = await import("./serviceWorker");
+    sw.registerServiceWorker();
+    return { register, update, loads, shown, doc, takeOver, reload, later, found, sw };
   }
   afterEach(() => vi.unstubAllEnvs());
 
@@ -362,6 +363,31 @@ describe("the service worker", () => {
     const first = await load({ prod: true, worker: true, controlled: false });
     first.takeOver[0]();
     expect(first.reload).not.toHaveBeenCalled();
+  });
+
+  it("tells when a newer build is there to load: a new worker found, or one that took over", async () => {
+    const t = await load({ prod: true, worker: true });
+    const told = vi.fn();
+    t.sw.onUpdateAvailable(told);
+    t.loads[0]();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(t.sw.updateAvailable()).toBe(false);
+    t.found[0]();
+    expect(t.sw.updateAvailable()).toBe(true);
+    expect(told).toHaveBeenCalledOnce();
+    const u = await load({ prod: true, worker: true });
+    u.later(60_000);
+    u.takeOver[0]();
+    expect(u.sw.updateAvailable()).toBe(true);
+    // A page's very first worker is no newer build.
+    const first = await load({ prod: true, worker: true, controlled: false });
+    first.loads[0]();
+    await Promise.resolve();
+    await Promise.resolve();
+    first.found[0]();
+    first.takeOver[0]();
+    expect(first.sw.updateAvailable()).toBe(false);
   });
 
   it("warns instead of failing when it can't register", async () => {

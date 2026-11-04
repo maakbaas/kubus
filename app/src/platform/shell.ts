@@ -9,3 +9,11 @@ export const inDesktopShell = (): boolean => typeof window !== "undefined" && "_
  */
 export const inIosHomeScreenApp = (): boolean =>
   typeof navigator !== "undefined" && (navigator as { standalone?: boolean }).standalone === true;
+
+/**
+ * Whether the app runs installed from the web (an iOS home-screen app, or an installed web app elsewhere: it has
+ * no address bar, so no reload button of the browser's), not in a browser tab nor the desktop window.
+ */
+export const inInstalledWebApp = (): boolean =>
+  !inDesktopShell() &&
+  (inIosHomeScreenApp() || (typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches));

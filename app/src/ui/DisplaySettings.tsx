@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { Button, InlineNotification, Select, SelectItem, Stack } from "@carbon/react";
 import { Renew } from "@carbon/icons-react";
 import type { MapStyleId } from "../../../shared/settings";
@@ -6,8 +6,8 @@ import { setDisplaySetting, useDisplaySettings, type DisplaySettings as Settings
 import { useStore } from "../app/store";
 import { MAP_STYLES } from "../views/mapLibre";
 import { errorMessage } from "./useConfirm";
-import { updateAndReload } from "../platform/serviceWorker";
-import { inDesktopShell } from "../platform/shell";
+import { checkForUpdate, onUpdateAvailable, updateAndReload, updateAvailable } from "../platform/serviceWorker";
+import { inInstalledWebApp } from "../platform/shell";
 
 const THEMES: { value: Settings["theme"]; text: string }[] = [
   { value: "auto", text: "Automatic (like the system)" },
@@ -15,8 +15,8 @@ const THEMES: { value: Settings["theme"]; text: string }[] = [
   { value: "dark", text: "Dark" },
 ];
 
-/** The installed desktop app bundles its build (only a new install updates it); the web and home-screen app load a new one. */
-const reloads = !inDesktopShell();
+/** Only an installed web app (a home-screen app) has no reload of its own; the desktop app bundles its build. */
+const reloads = inInstalledWebApp();
 
 /**
  * How the app looks: its theme and how the maps of Map blocks look. Synced like content (app/settings.ts):
@@ -28,6 +28,11 @@ export function DisplaySettings() {
   const settings = useDisplaySettings();
   const [error, setError] = useState<string>();
   const [updating, setUpdating] = useState(false);
+  // Shown only while a newer build is there to load: asked for when the settings open.
+  const update = useSyncExternalStore(onUpdateAvailable, updateAvailable);
+  useEffect(() => {
+    if (reloads) checkForUpdate();
+  }, []);
   const change = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     setError(undefined);
     setDisplaySetting(repo, key, value).catch((e) => setError(errorMessage(e)));
@@ -54,9 +59,9 @@ export function DisplaySettings() {
           ))}
         </Select>
         {error && <InlineNotification kind="error" lowContrast hideCloseButton title="Not saved" subtitle={error} />}
-        {/* The app starts from its cache and takes a new build in the background; iOS can keep a home-screen app on the
-            old one a while after the server was updated. This loads the newest build now (platform/serviceWorker.ts). */}
-        {reloads && (
+        {/* The app starts from its cache and takes a new build in the background, shown the next time it is opened;
+            this loads it now (platform/serviceWorker.ts). Only in a home-screen app, and only with a newer build there. */}
+        {reloads && update && (
           <div className="settings-reload">
             <Button
               size="sm"
@@ -68,7 +73,7 @@ export function DisplaySettings() {
                 void updateAndReload();
               }}
             >
-              {updating ? "Updating…" : "Reload app"}
+              {updating ? "Updating…" : "Reload to update"}
             </Button>
             <p className="helper">Loads the newest version of Kubus, e.g.    right after the server was updated. It updates itself too, but a home-screen app can take a while.</p>
           </div>

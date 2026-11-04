@@ -5,6 +5,29 @@ const enabled = () => import.meta.env.PROD && "serviceWorker" in navigator && !i
 /** A page shown again this recently (ms) is still "coming back": a new build that takes over now reloads it. */
 const RESUMING = 3000;
 
+/** Whether a newer build than the running one is being downloaded or has taken over (Settings → Display's "Reload app"). */
+let updateFound = false;
+const updateListeners = new Set<() => void>();
+function foundUpdate() {
+  if (updateFound) return;
+  updateFound = true;
+  for (const listener of updateListeners) listener();
+}
+export const updateAvailable = (): boolean => updateFound;
+/** Called once a newer build is found (for useSyncExternalStore); returns the unsubscribe. */
+export function onUpdateAvailable(listener: () => void): () => void {
+  updateListeners.add(listener);
+  return () => updateListeners.delete(listener);
+}
+/** Asks the server for a newer build now (it is downloaded in the background; `updateAvailable` turns true). */
+export function checkForUpdate() {
+  if (!enabled()) return;
+  navigator.serviceWorker
+    .getRegistration()
+    .then((registration) => registration?.update())
+    .catch(() => undefined);
+}
+
 /**
  * Registers the service worker (app/sw.js) that makes the web and home-screen app start from its cache, offline
  * or on a weak connection alike. Only in a production build on the web: not in development, and not in the Tauri
@@ -25,12 +48,17 @@ export function registerServiceWorker() {
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (!hadWorker) return;
     newBuild = true;
+    foundUpdate();
     if (document.visibilityState === "visible" && performance.now() - shownAt < RESUMING) location.reload();
   });
   addEventListener("load", () => {
     navigator.serviceWorker
       .register("sw.js", { updateViaCache: "none" })
       .then((registration) => {
+        // A new worker on a page that already had one: a newer build (a page's very first one is none).
+        const found = () => hadWorker && foundUpdate();
+        if (registration.installing || registration.waiting) found();
+        registration.addEventListener?.("updatefound", found);
         document.addEventListener("visibilitychange", () => {
           if (document.visibilityState !== "visible") return;
           shownAt = performance.now();
