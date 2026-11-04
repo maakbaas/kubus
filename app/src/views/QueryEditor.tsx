@@ -17,6 +17,7 @@ import { dateFields, periodRule } from "../domain/datePeriod";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { DatePeriodFilter } from "./DatePeriodFilter";
 import { RuleValue } from "./RuleValue";
+import { JoinSelect } from "./JoinSelect";
 import { GroupOrderList } from "./GroupOrderList";
 import { useStore } from "../app/store";
 import { hasRemotePart } from "../domain/mergedCollection";
@@ -114,77 +115,73 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, grou
           if (offered.length === 0) return null;
           const operator = offered.find((o) => o.id === rule.operator) ?? offered[0];
           return (
-            <div key={rule.id} className="query-editor__rule">
-              {rule === listed[0] && !joinsFirst ? (
-                <span className="query-editor__join">Where</span>
-              ) : (
-                <Select
-                  id={`${uid}-filter-join-${rule.id}`}
-                  labelText="Join"
-                  hideLabel
-                  size="sm"
-                  value={rule.join ?? "and"}
-                  onChange={(e) => setFilter(rule.id, { join: e.target.value === "or" ? "or" : undefined })}
-                >
-                  <SelectItem value="and" text="And" />
-                  <SelectItem value="or" text="Or" />
-                </Select>
-              )}
-              <Select
-                id={`${uid}-filter-field-${rule.id}`}
-                labelText="Field"
-                hideLabel
-                size="sm"
-                value={rule.fieldId}
-                onChange={(e) => {
-                  const next = fieldsById.get(e.target.value)!;
-                  setFilter(rule.id, { fieldId: next.id, operator: operators(next)[0].id, value: "" });
-                }}
-              >
-                {filterable.map((f) => (
-                  <SelectItem key={f.id} value={f.id} text={f.name} />
-                ))}
-              </Select>
-              <Select
-                id={`${uid}-filter-op-${rule.id}`}
-                labelText="Condition"
-                hideLabel
-                size="sm"
-                value={operator.id}
-                onChange={(e) => setFilter(rule.id, { operator: e.target.value as FilterOperator })}
-              >
-                {offered.map((o) => (
-                  <SelectItem key={o.id} value={o.id} text={o.label} />
-                ))}
-              </Select>
-              {operator.needsValue ? (
-                <RuleValue id={`${uid}-filter-value-${rule.id}`} owner={ownerOf(field)} field={field} rule={rule} refs={refs} page={page} onChange={(value) => setFilter(rule.id, { value })} />
-              ) : (
-                <span />
-              )}
-              <span className="query-editor__actions">
-                {bar && operator.needsValue && (
-                  <IconButton
-                    autoAlign
-                    label={rule.onBar ? "Remove from filter bar" : "Show on filter bar"}
+            <div key={rule.id} className="query-editor__rule filter-group">
+              {/* Its top row: how it joins the rules before it (And / Or; "Where" for a view's first), and its buttons. */}
+              <div className="filter-group__head">
+                {rule === listed[0] && !joinsFirst ? (
+                  <span className="filter-group__word">Where</span>
+                ) : (
+                  <JoinSelect id={`${uid}-filter-join-${rule.id}`} value={rule.join ?? "and"} onChange={(join) => setFilter(rule.id, { join: join === "or" ? "or" : undefined })} />
+                )}
+                <span className="filter-group__buttons">
+                  {bar && operator.needsValue && (
+                    <IconButton
+                      autoAlign
+                      label={rule.onBar ? "Remove from filter bar" : "Show on filter bar"}
+                      kind="ghost"
+                      size="sm"
+                      align="left"
+                      onClick={() => setFilter(rule.id, { onBar: rule.onBar ? undefined : true })}
+                    >
+                      {rule.onBar ? <PinFilled /> : <Pin />}
+                    </IconButton>
+                  )}
+                  <IconButton autoAlign
+                    label="Remove filter"
                     kind="ghost"
                     size="sm"
                     align="left"
-                    onClick={() => setFilter(rule.id, { onBar: rule.onBar ? undefined : true })}
+                    onClick={() => onChange({ ...query, filters: query.filters.filter((r) => r.id !== rule.id) })}
                   >
-                    {rule.onBar ? <PinFilled /> : <Pin />}
+                    <TrashCan />
                   </IconButton>
-                )}
-                <IconButton autoAlign
-                  label="Remove filter"
-                  kind="ghost"
+                </span>
+              </div>
+              {/* Field, condition and value: three columns (on a phone the field on a row of its own). */}
+              <div className="query-editor__fields">
+                <Select
+                  id={`${uid}-filter-field-${rule.id}`}
+                  labelText="Field"
+                  hideLabel
                   size="sm"
-                  align="left"
-                  onClick={() => onChange({ ...query, filters: query.filters.filter((r) => r.id !== rule.id) })}
+                  value={rule.fieldId}
+                  onChange={(e) => {
+                    const next = fieldsById.get(e.target.value)!;
+                    setFilter(rule.id, { fieldId: next.id, operator: operators(next)[0].id, value: "" });
+                  }}
                 >
-                  <TrashCan />
-                </IconButton>
-              </span>
+                  {filterable.map((f) => (
+                    <SelectItem key={f.id} value={f.id} text={f.name} />
+                  ))}
+                </Select>
+                <Select
+                  id={`${uid}-filter-op-${rule.id}`}
+                  labelText="Condition"
+                  hideLabel
+                  size="sm"
+                  value={operator.id}
+                  onChange={(e) => setFilter(rule.id, { operator: e.target.value as FilterOperator })}
+                >
+                  {offered.map((o) => (
+                    <SelectItem key={o.id} value={o.id} text={o.label} />
+                  ))}
+                </Select>
+                {operator.needsValue ? (
+                  <RuleValue id={`${uid}-filter-value-${rule.id}`} owner={ownerOf(field)} field={field} rule={rule} refs={refs} page={page} onChange={(value) => setFilter(rule.id, { value })} />
+                ) : (
+                  <span />
+                )}
+              </div>
             </div>
           );
         })}

@@ -2554,11 +2554,6 @@ img[data-lightbox] {
   min-inline-size: 0;
 }
 /* Without the date period (its pin off): the rules, and the Filter button at the right. */
-/* In the filter panel's period line without a period: the room of its × (so its pin is above the rules' pins). */
-.date-period__gap {
-  flex: none;
-  inline-size: var(--cds-spacing-07);
-}
 .filter-bar--no-period {
   justify-content: flex-end;
 }
@@ -2772,78 +2767,76 @@ img[data-lightbox] {
 .cds--content-switcher-btn::after {
   border-radius: 0 !important;
 }
-/* The period on the rules' columns (.query-editor__rule), in two rows, nothing in them wrapping or cut: its words
-   (and Rolling) across the first four columns (after a block's And / Or: three), its pin and × in the buttons column;
-   then "by" where the rules have "Where", the field it goes by in the field column, ‹ › >| in the condition column. */
-.date-period__nav {
-  display: grid;
-  grid-template-columns: 6.5rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: var(--cds-spacing-03);
-  align-items: center;
-}
-.date-period__join {
-  grid-row: 1;
-  grid-column: 1;
-}
-/* One 2rem line: Rolling beside the words when it fits there, else (a phone's narrow panel) on the line below it, which
-   isn't shown: the words ("This week", "Last 7 days") say it as well. */
-.date-period__head {
-  grid-row: 1;
-  grid-column: 2 / 5;
+/* Every group of a filter (the date period, each rule: `.filter-group`) starts with its top row: how it joins what is
+   before it (And / Or, an inline choice; else "During" / "Where") at the left, its buttons (pin, × / remove) at the far
+   right; then what is edited in it. Groups are the panel's gap apart (.query-editor), their rows a step apart. */
+.query-editor__rule.filter-group,
+.filter-group {
+  align-self: stretch;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: var(--cds-spacing-03);
-  row-gap: var(--cds-spacing-03);
-  block-size: var(--cds-spacing-07);
-  overflow: hidden;
-  white-space: nowrap;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--cds-spacing-03);
 }
-.date-period__head > .date-period__label {
+/* Groups apart by more than their rows: a group's top row reads as its start. */
+.filter-group + .filter-group {
+  margin-block-start: var(--cds-spacing-05);
+}
+.filter-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-block-size: var(--cds-spacing-07);
+}
+.filter-group__word {
   line-height: var(--cds-spacing-07);
 }
-.date-period__nav > .date-period__head:first-child {
-  grid-column: 1 / 5;
+.filter-group__buttons {
+  display: flex;
+  margin-inline-start: auto;
 }
-.date-period__nav > .query-editor__actions {
-  grid-row: 1;
-  grid-column: 5;
+/* And / Or inline: no box, its word on the row's left edge, its arrow right after it. */
+.filter-join .cds--select-input {
+  padding-inline: 0 var(--cds-spacing-07);
+  background: transparent;
+  border-block-end: 0;
 }
-.date-period__by {
-  grid-row: 2;
-  grid-column: 1;
-  padding-inline-start: var(--cds-spacing-05);
+.filter-join .cds--select__arrow {
+  inset-inline-end: var(--cds-spacing-03);
 }
-.date-period__field {
-  grid-row: 2;
-  grid-column: 2;
+/* A rule's field, condition and value: three equal columns (on a phone, the field on a row of its own). */
+.query-editor__fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--cds-spacing-03);
+}
+/* The period in short at the left, ‹ › >| at the far right. */
+.date-period__now {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-block-size: var(--cds-spacing-07);
+}
+.date-period__label {
+  line-height: var(--cds-spacing-07);
+  white-space: nowrap;
 }
 .date-period__steps {
-  grid-row: 2;
-  grid-column: 3;
   display: flex;
+  margin-inline-start: auto;
 }
-/* A block's period joining its view's filter: as wide as the rules' And / Or. */
-.date-period__join {
-  flex: none;
-  inline-size: 6.5rem;
+/* The field it goes by across the rules' field and condition columns, Which in their value column. */
+.date-period__by {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--cds-spacing-03);
 }
-.date-period__rolling {
-  flex: none;
-  margin: 0;
+.date-period__field {
+  grid-column: 1 / 3;
 }
-/* "by Read": the field it goes by, a small inline choice. */
-
-/* Wraps in its columns rather than hiding the week's last day. */
-.date-period__label {
-  flex: 0 1 auto;
-  min-inline-size: 0;
+.date-period__window {
+  grid-column: 3;
 }
-/* Starting the row (no And / Or before it): indented as the rules' "Where" below it, on their dropdowns' text. */
-.date-period__nav > .date-period__head:first-child {
-  padding-inline-start: var(--cds-spacing-05);
-}
-/* Going straight to a day, week, month or year: its calendar, or its month and year, on the range's columns. */
 .date-period__pick {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
@@ -2888,35 +2881,20 @@ img[data-lightbox] {
   .view-options {
     grid-template-columns: minmax(0, 1fr);
   }
-  /* The rules are one column: the period's words on a row of their own, then "by" and the field filling its row (a long
-     field name whole), then ‹ › >| under the field and pin and × at the right, where the rules have theirs. */
-  .date-period__nav {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+  /* A rule's field on a row of its own, its condition and value side by side below it; the period's field and Which
+     stacked, each the row's width (a long field name whole). */
+  .query-editor__fields {
+    grid-template-columns: 7.5rem minmax(0, 1fr);
   }
-  .date-period__head,
-  .date-period__nav > .date-period__head:first-child {
+  .query-editor__fields > :first-child {
     grid-column: 1 / -1;
   }
-  .date-period__field {
-    grid-column: 2 / -1;
+  .date-period__by {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .date-period__steps {
-    grid-row: 3;
-    grid-column: 2;
-  }
-  .date-period__nav > .query-editor__actions {
-    grid-row: 3;
-    grid-column: 3;
-  }
-  /* After a block's And / Or (its own row first): one row further down. */
-  .date-period__join + .date-period__head {
-    grid-row: 2;
-  }
-  .date-period__join ~ :is(.date-period__by, .date-period__field) {
-    grid-row: 3;
-  }
-  .date-period__join ~ :is(.date-period__steps, .query-editor__actions) {
-    grid-row: 4;
+  .date-period__field,
+  .date-period__window {
+    grid-column: 1;
   }
 }
 /* Group headings (table rows / card sections): a step smaller than a block's name, and lined up

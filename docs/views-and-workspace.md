@@ -83,11 +83,18 @@ Extension points are registries, not special cases in pages:
   (`filterTree`), checked locally (`filterOf`) and sent as is to remote sources (`sourceQuery`,
   `SourceCondition`), so every connector filters the same way; a new item is preset only from rules every
   listed item meets (`requiredRules`).
+- **Filter panel layout** (`QueryEditor`, `DatePeriodFilter`, `views/JoinSelect.tsx`): every group of a filter, the date period
+  and each rule (`.filter-group`), starts with its top row: how it joins what is before it, And / Or as an inline choice with
+  no box (`JoinSelect`; the date period's only in a block's filter, a rule's always but for a view's first), else "During"
+  (the date) or "Where" (the first rule), at the left; its buttons (pin while the filter bar is shown, × / remove) at the far
+  right. Then what is edited in it: the date's Hour … Range switcher, its period in short at the left as the filter bar says
+  it ("This week", "Last 7 days", "October 2026"; whole, with its days, in the tooltip) with ‹ › >| at the far right, the
+  field it goes by across two of the rules' three columns and Which ("Counted from today") in the third; a rule's field,
+  condition and value in three equal columns. Groups are a step further apart than their rows. On a phone a rule's field
+  has its row, condition and value beside each other below it, and the date's field and Which are stacked.
 - **Date period** (`app/src/domain/datePeriod.ts`, `views/DatePeriodFilter.tsx`): the top of every
   filter panel (no heading above it: the panel's button says "Filter"). A content switcher (Hour, Day, Week, Month,
-  Year, Range) picks the kind; under it, on the rules' columns (`.date-period__nav`, two rows, nothing wrapped or cut: its words
-  across the first four with Rolling beside them when it fits, pin and × in the buttons column; "by" where the rules have "Where",
-  the field in the field column, ‹ › >| in the condition column; on a phone the words, then by and the field filling its row, then ‹ › >| under it and pin, × at the right), the line shows the period ("Any date" while there is none), a blue "Rolling"
+  Year, Range) picks the kind; the line shows the period ("Any date" while there is none), a blue "Rolling"
   tag while it moves on with time, "by <field>" (the first date or date & time field, none: Updated; Created and
   Updated can be picked) and, once a period is set, ‹ › (the one before / after: a rolling one stays rolling, `week-1`
   "Last week"; a chosen one by its length; the last n by n, still rolling: `day-6..day+0` → `day-13..day-7`, "7 days up

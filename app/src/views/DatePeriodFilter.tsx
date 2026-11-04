@@ -1,9 +1,10 @@
 import { useId, useState } from "react";
-import { ContentSwitcher, DatePicker, DatePickerInput, IconButton, NumberInput, Select, SelectItem, Switch, Tag } from "@carbon/react";
+import { ContentSwitcher, DatePicker, DatePickerInput, IconButton, NumberInput, Select, SelectItem, Switch } from "@carbon/react";
 import { ChevronLeft, ChevronRight, Close, PageLast, Pin, PinFilled } from "@carbon/icons-react";
 import { formatDate } from "../domain/fieldKinds";
 import type { Collection } from "../domain/model";
 import type { FilterRule } from "../domain/query";
+import { JoinSelect } from "./JoinSelect";
 import {
   dateFields,
   defaultDateField,
@@ -11,6 +12,7 @@ import {
   nowMinute,
   periodAround,
   periodRule,
+  periodParts,
   periodState,
   periodText,
   rangeValue,
@@ -143,61 +145,47 @@ export function DatePeriodFilter({
       : periodText(state, kind);
   const unit = kind && kind !== "range" ? kind : null;
 
+  // The period in short, as the filter bar says it ("This week", "Last 7 days", "October 2026"); whole in its tooltip.
+  const parts = state && kind ? periodParts(state, kind) : null;
+  const short = parts ? parts.counting || parts.days.split(" - ")[0] : label;
+  const set = !!(rule || rangeChosen);
+
   return (
-    <div className="date-period">
+    <div className="date-period filter-group">
+      {/* As every group of the filter (QueryEditor's rules): a top row, its And / Or (else "During") and its buttons. */}
+      <div className="filter-group__head">
+        {joins && rule ? (
+          <JoinSelect
+            id={`${uid}-date-join`}
+            value={rule.join ?? "and"}
+            onChange={(join) => onChange(filters.map((r) => (r === rule ? { ...withoutJoin(r), ...(join === "or" && { join: "or" as const }) } : r)))}
+          />
+        ) : (
+          <span className="filter-group__word">During</span>
+        )}
+        <span className="filter-group__buttons">
+          {pin && (
+            <IconButton autoAlign label={pin.on ? "Remove from filter bar" : "Show on filter bar"} kind="ghost" size="sm" align="left" onClick={() => pin.set(!pin.on)}>
+              {pin.on ? <PinFilled /> : <Pin />}
+            </IconButton>
+          )}
+          {set && (
+            <IconButton autoAlign label="Any date" kind="ghost" size="sm" align="left" onClick={clear}>
+              <Close />
+            </IconButton>
+          )}
+        </span>
+      </div>
       <ContentSwitcher size="sm" selectedIndex={KINDS.findIndex((k) => k.kind === kind)} onChange={({ index }) => index !== undefined && pick(KINDS[index].kind)}>
         {KINDS.map((k) => (
           <Switch key={k.kind} name={k.kind} text={k.text} />
         ))}
       </ContentSwitcher>
-      <div className="date-period__nav">
-        {joins && rule && (
-          <Select
-            id={`${uid}-date-join`}
-            className="date-period__join"
-            labelText="Join"
-            hideLabel
-            size="sm"
-            value={rule.join ?? "and"}
-            onChange={(e) => onChange(filters.map((r) => (r === rule ? { ...withoutJoin(r), ...(e.target.value === "or" && { join: "or" as const }) } : r)))}
-          >
-            <SelectItem value="and" text="And" />
-            <SelectItem value="or" text="Or" />
-          </Select>
-        )}
-        {/* Two rows on the rules' columns below (styles.css): the period's words, then pin and × in the buttons column;
-            "by" (as "Where"), the field it goes by in the field column, ‹ › >| in the condition column. */}
-        <span className="date-period__head">
-          <span className="date-period__label" title={label}>
-            {label}
-          </span>
-          {/* Moves on with time (this week, the last 7 days, year to date), unlike chosen days. */}
-          {period && counted && (
-            <Tag size="sm" type="blue" className="date-period__rolling">
-              Rolling
-            </Tag>
-          )}
+      <div className="date-period__now">
+        <span className="date-period__label" title={label}>
+          {short}
         </span>
-        <span className="date-period__by" aria-hidden="true">
-          by
-        </span>
-        <Select
-          id={`${uid}-date-field`}
-          className="date-period__field"
-          labelText="By field"
-          hideLabel
-          size="sm"
-          value={fieldId}
-          onChange={(e) => {
-            setChosenField(e.target.value);
-            if (rule) onChange(filters.map((r) => (r === rule ? { ...r, fieldId: e.target.value } : r)));
-          }}
-        >
-          {fields.map((f) => (
-            <SelectItem key={f.id} value={f.id} text={f.name} />
-          ))}
-        </Select>
-        {(rule || rangeChosen) && (
+        {set && (
           <span className="date-period__steps">
             <IconButton autoAlign label="Previous" kind="ghost" size="sm" disabled={!steps(state, !!anchor)} onClick={() => step(-1)}>
               <ChevronLeft />
@@ -210,6 +198,7 @@ export function DatePeriodFilter({
               label={unit ? rollingLabel({ kind: unit, offset: 0 }) : "Now"}
               kind="ghost"
               size="sm"
+              align="left"
               disabled={!unit}
               onClick={() => unit && (window === "fixed" ? fixed(periodAround(unit, now)) : choose(unit, "current"))}
             >
@@ -217,32 +206,36 @@ export function DatePeriodFilter({
             </IconButton>
           </span>
         )}
-        {/* Pin and × touching, as a rule's pin and remove below them (query-editor__actions). */}
-        {(pin || rule || rangeChosen) && (
-          <span className="query-editor__actions">
-            {pin && (
-              <IconButton autoAlign label={pin.on ? "Remove from filter bar" : "Show on filter bar"} kind="ghost" size="sm" align="left" onClick={() => pin.set(!pin.on)}>
-                {pin.on ? <PinFilled /> : <Pin />}
-              </IconButton>
-            )}
-            {rule || rangeChosen ? (
-              <IconButton autoAlign label="Any date" kind="ghost" size="sm" align="left" onClick={clear}>
-                <Close />
-              </IconButton>
-            ) : (
-              // Where × goes, so the pin lines up with the rules' pins below.
-              pin && <span className="date-period__gap" />
-            )}
-          </span>
-        )}
       </div>
-      {unit && window && period && (
-        <div className="date-period__pick">
-          <Select id={`${uid}-date-window`} labelText="Which" size="sm" value={window} onChange={(e) => choose(unit, e.target.value as Window, window === "fixed" ? period.start : now)}>
+      {/* The field it goes by and which one of its kind, on the rules' columns: the field across field and condition,
+          Which in the value column (stacked on a phone). */}
+      <div className="date-period__by">
+        <Select
+          id={`${uid}-date-field`}
+          className="date-period__field"
+          labelText="Date field"
+          hideLabel
+          size="sm"
+          value={fieldId}
+          onChange={(e) => {
+            setChosenField(e.target.value);
+            if (rule) onChange(filters.map((r) => (r === rule ? { ...r, fieldId: e.target.value } : r)));
+          }}
+        >
+          {fields.map((f) => (
+            <SelectItem key={f.id} value={f.id} text={f.name} />
+          ))}
+        </Select>
+        {unit && window && period && (
+          <Select id={`${uid}-date-window`} className="date-period__window" labelText="Which" hideLabel size="sm" value={window} onChange={(e) => choose(unit, e.target.value as Window, window === "fixed" ? period.start : now)}>
             {windows(unit).map((w) => (
               <SelectItem key={w.value} value={w.value} text={w.text} />
             ))}
           </Select>
+        )}
+      </div>
+      {unit && window && period && (window === "fixed" || ((window === "last" || window === "lastMinutes") && last)) && (
+        <div className="date-period__pick">
           {(window === "last" || window === "lastMinutes") && last && (
             <NumberInput
               id={`${uid}-date-last`}
