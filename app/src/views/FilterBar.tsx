@@ -19,9 +19,10 @@ import { defaultDateField, latestValue, nowMinute, periodParts, periodRule, peri
  * none yet "Any date", the same at every width; the whole line with its days is the tooltip. The kind and
  * everything else is changed in the filter panel (DatePeriodFilter); every change here is an edit of the
  * view's filter as there. The line takes what room is left and is ellipsized, so stepping never moves the buttons.
- * Below it, a row for each rule put on the bar (`FilterRule.onBar`, the pin in the filter panel), at every width:
- * the rule in words ("Genre is", "Pages below") and its value, filling the line (RuleValue: the field's existing
- * values offered); its field and comparison are changed in the panel.
+ * The rules put on the bar (`FilterRule.onBar`, the pin in the filter panel) follow the period on its line, each
+ * the rule in words ("Genre is", "Pages below") and its value (RuleValue: the field's existing values offered),
+ * wrapping onto more lines of the bar when they don't fit; on a phone each is a row of its own below the line,
+ * its value filling it. Their field and comparison are changed in the panel.
  */
 export function FilterBar({
   collection,
@@ -58,11 +59,23 @@ export function FilterBar({
     return f && operator?.needsValue ? [{ rule, field: f, words: `${f.name} ${operator.label}` }] : [];
   });
   const setValue = (id: string, value: string) => onChange(filters.map((r) => (r.id === id ? { ...r, value } : r)));
-  const line = (
-    <div className="filter-bar">
+  return (
+    <div className={pinned.length ? "filter-bar filter-bar--rules" : "filter-bar"}>
       <span className="filter-bar__label" title={state ? periodText(state) : text}>
         {text}
       </span>
+      {pinned.length > 0 && (
+        <div className="filter-bar__rules">
+          {pinned.map(({ rule, field, words }) => (
+            <div key={rule.id} className="filter-bar__rule">
+              <label className="filter-bar__words" htmlFor={`${uid}-bar-${rule.id}`} title={words}>
+                {words}
+              </label>
+              <RuleValue id={`${uid}-bar-${rule.id}`} owner={ownerOf(field.id)} field={field} rule={rule} refs={refs} labelText={words} onChange={(value) => setValue(rule.id, value)} />
+            </div>
+          ))}
+        </div>
+      )}
       <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Previous" disabled={still} onClick={() => value && set(stepValue(value.value, -1, now))}>
         <ChevronLeft />
       </IconButton>
@@ -73,22 +86,6 @@ export function FilterBar({
         <PageLast />
       </IconButton>
       {children}
-    </div>
-  );
-  if (pinned.length === 0) return line;
-  return (
-    <div className="filter-bar-wrap">
-      {line}
-      <div className="filter-bar__rules">
-        {pinned.map(({ rule, field, words }) => (
-          <div key={rule.id} className="filter-bar__rule">
-            <label className="filter-bar__words" htmlFor={`${uid}-bar-${rule.id}`} title={words}>
-              {words}
-            </label>
-            <RuleValue id={`${uid}-bar-${rule.id}`} owner={ownerOf(field.id)} field={field} rule={rule} refs={refs} labelText={words} onChange={(value) => setValue(rule.id, value)} />
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

@@ -122,9 +122,11 @@ Extension points are registries, not special cases in pages:
   horizontal scroll: the line takes the room that is left (ellipsized, whole in the tooltip), the buttons never
   shrink or move while stepping. **Rules on the bar**: while the bar is shown, each rule in the view's filter panel that
   takes a value has a pin ("Show on filter bar", `FilterRule.onBar: true`, saved with the view's filter like any edit of
-  it); below the bar's line each such rule is a row of its own at every width, its words at the left ("Genre is", "Pages
-  below": field and comparison, changed only in the panel; one column as wide as the longest, at most 40%, then ellipsized)
-  and its value filling the rest of the line (`RuleValue`, the panel's own value box). A rule whose comparison takes no
+  it); each such rule follows the period on the bar's line, its words ("Genre is", "Pages below": field and comparison,
+  changed only in the panel) and its value (`RuleValue`, the panel's own value box, 10rem), wrapping onto more lines of
+  the bar between the period and the buttons when they don't fit. On a phone (under 42rem) each is a row of its own below
+  the line instead, its words in one column (as wide as the longest, at most 40%, then ellipsized) and its value filling
+  the rest of the line. A rule whose comparison takes no
   value ("is empty") or whose field is gone shows no row. Switching the setting while a panel (View settings) is open moves
   the Filter button only when it closes (`panels.hold`), so the buttons after it don't jump under the open panel; the
   bar itself shows at once.
