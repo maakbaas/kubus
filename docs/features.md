@@ -13,7 +13,8 @@ What the app does, feature by feature (read the part you work on).
   to an item of another collection, e.g. Book → Author), List of strings, List of numbers (`number_list`, numbers in the order typed,
   `domain/numberList.ts`; filtered by an entry, sorted by the sum, grouped by each entry), Checklist (items with a
   checkbox, stored as GFM task lines "[x] text", `domain/checklist.ts`; tables show "2/5"),
-  List of items, Component (computed from a component, or with Value "AI prompt" written by a language
+  List of items (a list's entries on an item page with a faint line between them, `--cds-layer-01`: fainter than the lines
+  between fields and blocks; `ui/ListField.tsx`), Component (computed from a component, or with Value "AI prompt" written by a language
   model from the component as a prompt: an AI field, kind `ai`).
 - **Checkbox and Checklist fields can show an icon instead of the box** (`fields.toggle_icon`, a
   key of `TOGGLE_ICONS` in `ui/ToggleInput.tsx`: heart, star, flag, bookmark, checkmark, thumbs up,

@@ -1374,6 +1374,20 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   display: flex;
   align-items: center;
 }
+/* Between a list's items (a list of strings or numbers, a checklist, a list of items: ListField) a faint line, fainter
+   than the lines between fields and blocks (border-subtle): layer-01 on the page. In the middle of the rows' gap, drawn
+   over it, so nothing moves and the list is no taller. */
+.view-field__rows > .checklist-row + .checklist-row {
+  position: relative;
+}
+.view-field__rows > .checklist-row + .checklist-row::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: calc(-0.5 * var(--cds-spacing-03) - 0.5px);
+  border-block-start: 1px solid var(--cds-layer-01);
+  pointer-events: none;
+}
 .checklist-row > :is(.view-field__value, .cds--form-item) {
   flex: 1;
   min-inline-size: 0;
