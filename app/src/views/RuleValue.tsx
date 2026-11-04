@@ -187,7 +187,6 @@ function RemoteValues(props: TypedProps) {
 }
 
 function ValueBox({ id, field, rule, label, hideLabel, placeholder, note, onChange, options }: TypedProps & { options: ValueOption[] }) {
-  const counts = useMemo(() => new Map(options.map((o) => [o.value, o.count])), [options]);
   return (
     <ComboBox
       autoAlign
@@ -199,12 +198,6 @@ function ValueBox({ id, field, rule, label, hideLabel, placeholder, note, onChan
       placeholder={placeholder}
       items={options.map((o) => o.value)}
       itemToString={(v) => v ?? ""}
-      itemToElement={(v) => (
-        <span className="value-option">
-          <span>{v}</span>
-          <span className="value-option__count">{counts.get(v) ?? ""}</span>
-        </span>
-      )}
       allowCustomValue
       selectedItem={rule.value || null}
       helperText={note.helper}

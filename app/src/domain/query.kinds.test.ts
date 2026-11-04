@@ -61,7 +61,7 @@ describe("operators per kind", () => {
     expect(operatorsFor("checkbox").map((o) => o.id)).toEqual(["isChecked", "isNotChecked", "is"]);
     expect(operatorsFor("date").map((o) => o.id)).toContain("before");
     expect(operatorsFor("datetime").find((o) => o.id === "is")?.label).toBe("is on");
-    expect(operatorsFor("item_list").find((o) => o.id === "is")?.label).toBe("includes");
+    expect(operatorsFor("item_list").find((o) => o.id === "is")?.label).toBe("include");
     expect(operatorsFor("image").map((o) => o.id)).toEqual(["isEmpty", "isNotEmpty"]);
     expect(operatorsFor("ai").map((o) => o.id)).toEqual(["contains", "notContains", "is", "isNot", "lt", "gt", "isEmpty", "isNotEmpty"]);
     expect(operatorsFor("string").find((o) => o.id === "isEmpty")?.needsValue).toBe(false);

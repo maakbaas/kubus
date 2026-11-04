@@ -143,9 +143,9 @@ const OPERATORS = {
   Read: ["is checked", "is not checked", "is"],
   Cover: ["is empty", "is not empty"],
   Author: ["is", "is not", "is empty", "is not empty"],
-  Tags: ["contains", "does not contain", "includes", "does not include", "is empty", "is not empty"],
-  Todo: ["contains", "does not contain", "includes", "does not include", "is empty", "is not empty"],
-  "Co-authors": ["includes", "does not include", "is empty", "is not empty"],
+  Tags: ["contains", "does not contain", "include", "do not include", "is empty", "is not empty"],
+  Todo: ["contains", "does not contain", "include", "do not include", "is empty", "is not empty"],
+  "Co-authors": ["include", "do not include", "is empty", "is not empty"],
 };
 
 const empty = (v) => v === null || v === "" || (Array.isArray(v) && v.length === 0);
@@ -191,14 +191,14 @@ const CASES = [
   // Contains: in one entry alone (never across two); includes: a whole entry, whatever its case.
   ["Tags", "contains", "lassic", (b) => b.tags.some((t) => t.toLowerCase().includes("lassic"))],
   ["Tags", "does not contain", "lassic", (b) => !b.tags.some((t) => t.toLowerCase().includes("lassic"))],
-  ["Tags", "includes", "classic", (b) => b.tags.some((t) => t.toLowerCase() === "classic")],
-  ["Tags", "does not include", "classic", (b) => !b.tags.some((t) => t.toLowerCase() === "classic")],
+  ["Tags", "include", "classic", (b) => b.tags.some((t) => t.toLowerCase() === "classic")],
+  ["Tags", "do not include", "classic", (b) => !b.tags.some((t) => t.toLowerCase() === "classic")],
   ["Tags", "is empty", undefined, (b) => b.tags.length === 0],
   ["Tags", "is not empty", undefined, (b) => b.tags.length > 0],
   ["Todo", "contains", "sail", (b) => b.todo.some((x) => x.includes("sail"))],
   ["Todo", "is empty", undefined, (b) => b.todo.length === 0],
-  ["Co-authors", "includes", "Bram", (b) => b.authors.includes("bram")],
-  ["Co-authors", "does not include", "Bram", (b) => !b.authors.includes("bram")],
+  ["Co-authors", "include", "Bram", (b) => b.authors.includes("bram")],
+  ["Co-authors", "do not include", "Bram", (b) => !b.authors.includes("bram")],
   ["Co-authors", "is empty", undefined, (b) => b.authors.length === 0],
   ["Co-authors", "is not empty", undefined, (b) => b.authors.length > 0],
 ];

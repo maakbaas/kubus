@@ -138,9 +138,9 @@ Extension points are registries, not special cases in pages:
   bar itself shows at once.
 - **A rule's value box** (`views/RuleValue.tsx`, the filter panel's and the filter bar's): where the rule compares with a value
   (`offersValues` in domain/query.ts) only where picking a value means just that value: is / is not of text and numbers,
-  includes / does not include of a list of text, a checklist or a list of numbers (contains, any part, and below / above,
+  include / do not include of a list of text, a checklist or a list of numbers (contains, any part, and below / above,
   a threshold, are typed; item fields pick from items already) it is a Carbon
-  ComboBox offering the field's existing values with how many items have each, most common first, any other text typed
+  ComboBox offering the field's existing values, most common first (no counts shown), any other text typed
   as well (custom values allowed; code with {{ }} is always plain text). A native collection's from its items in the
   cache (this space's; `valueOptions`, a list's each entry, as grouping makes them); a remote one's from its source, one
   grouped query (`groupBy` the column, `counts`, `limit: 1`: the groups, at most `MAX_SOURCE_GROUPS`) asked once a session
@@ -149,7 +149,7 @@ Extension points are registries, not special cases in pages:
   a value: titles, notes; `chosenOptions`) or there are more than `MAX_VALUE_OPTIONS`: then a plain input. Numbers are
   compared in words: is, is not, below, above. **Lists of text and checklists** (and their remote columns): contains /
   does not contain look in each entry alone, never across two ("p,b" is in no entry of aap, boot; a MySQL SET's members
-  hold no commas), and includes / does not include (operators `is` / `isNot`, as a list of numbers' or items') take a
+  hold no commas), and include / do not include (operators `is` / `isNot`, as a list of numbers' or items') take a
   whole entry, whatever its case (Postgres `unnest`, MySQL `FIND_IN_SET`, the memory connector).
 - **Limit** (a block's Filter panel, beside Add filter: "Show [100] items at a time"; `ViewBlock.limit`, saved with the
   view): how many items it shows at first and each "Show more" adds; empty is all. Unset it is 100, or all for a block
