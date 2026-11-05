@@ -29,6 +29,11 @@ export interface RemoteResult {
   everything: boolean;
   /** Loading every row (`all`): the rows in, of the source's total, and a way to stop; null when done or stopped. */
   progress: { loaded: number; total: number; cancel: () => void } | null;
+  /**
+   * What is shown is an earlier request's (`useHeld`: a changed query on its way): the block draws it with the query it
+   * was made for, not the new one (a stat's current step of the new period over the old rows would read 0).
+   */
+  held: boolean;
   /** The first page of the request now (a new query, "Read again") is still on its way. */
   waiting: boolean;
   /** Stops loading every row (`all`): the pages in stay, "Load all rows" goes on. */
@@ -68,10 +73,11 @@ export function useThrottled<T>(value: T, ms: number): T {
  * replaces it at once: nothing half-loaded or worked out on the old rows in between. The first one is shown as it comes
  * in (`coming`).
  */
-export function useHeld<T>(result: T | null, coming: T | null, done: boolean): T | null {
+export function useHeld<T>(result: T | null, coming: T | null, done: boolean): { shown: T | null; held: boolean } {
   const last = useRef<T | null>(null);
   if (done && result) last.current = result;
-  return !done && last.current ? last.current : coming;
+  const held = !done && !!last.current;
+  return { shown: held ? last.current : coming, held };
 }
 
 /** The value after it stopped changing for `ms`. */
@@ -187,13 +193,14 @@ export function useRemoteResult(
 
   // While every row is loading, the block (a chart, a map: drawn anew each time) gets them at most once a second.
   const throttled = useThrottled(result, loadingAll ? LOADING_SHOWN_MS : 0);
-  const shown = useHeld(result, throttled, fresh && !loadingAll);
+  const { shown, held } = useHeld(result, throttled, fresh && !loadingAll);
 
   if (!remote) return null;
   return {
     result: shown?.result ?? EMPTY,
     items: shown?.items ?? null,
     everything: all,
+    held,
     error: fresh ? loaded?.error : undefined,
     more: fresh && loaded?.more && !loadingAll ? (all ? () => setStopped("") : more) : null,
     loadingMore,

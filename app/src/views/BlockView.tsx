@@ -523,6 +523,10 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   // Block settings being used.
   const shownOnce = useRef(false);
   const lastView = useRef<ReactNode>(null);
+  // The query of the rows shown: while a remote block still shows the rows of the query before (`held`), the one they were
+  // made for, so what is worked out of them (a stat's current step, a chart's period) matches them until the new rows are in.
+  const shownQuery = useRef(query);
+  if (!remote?.held) shownQuery.current = query;
   useEffect(() => {
     if (items || error) shownOnce.current = true;
   });
@@ -551,7 +555,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
       actions={actions}
       all={items}
       page={page}
-      query={query}
+      query={shownQuery.current}
       collapsedGroups={groups}
       onGroupCollapse={(key, on) => block.groupBy && onCollapse(withGroupCollapsed(state, block.id, block.groupBy, key, on))}
     />

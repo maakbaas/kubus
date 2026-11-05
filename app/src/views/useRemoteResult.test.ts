@@ -297,10 +297,12 @@ describe("every row", () => {
     // Half of the new rows in: still the old ones, whole.
     expect(h.result.current!.progress).toMatchObject({ loaded: 2, total: 4 });
     expect(h.result.current!.items).toBe(before);
+    expect(h.result.current!.held).toBe(true); // drawn with the query they were made for
     await p.answerNext(h);
     await settle(h);
     expect(h.result.current!.progress).toBeNull();
     expect(h.result.current!.items).not.toBe(before);
+    expect(h.result.current!.held).toBe(false);
     expect(h.result.current!.items).toHaveLength(4);
   });
 

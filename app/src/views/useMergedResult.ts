@@ -192,7 +192,7 @@ export function useMergedResult(collection: Collection, query: ViewQuery, search
     return mergedQueryResult(rows, loaded.groups, loaded.total, grouped);
   }, [loaded, grouped]);
   const throttled = useThrottled(result, loadingAll ? LOADING_SHOWN_MS : 0);
-  const shown = useHeld(result, throttled, fresh && !loadingAll);
+  const { shown, held } = useHeld(result, throttled, fresh && !loadingAll);
 
   if (!mergedOn) return null;
   const nothing = parts.length === 0;
@@ -200,6 +200,7 @@ export function useMergedResult(collection: Collection, query: ViewQuery, search
     result: nothing ? EMPTY : (shown?.result ?? EMPTY),
     items: nothing ? [] : (shown?.items ?? null),
     everything: all,
+    held: !nothing && held,
     error: fresh ? loaded?.error : undefined,
     more: fresh && loaded?.more && !loadingAll ? (all ? () => setStopped("") : more) : null,
     loadingMore,
