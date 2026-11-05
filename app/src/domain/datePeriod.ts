@@ -480,31 +480,20 @@ export function viewMoment(inherited: FilterRule[], now = nowMinute()): string |
 
 /**
  * A block's filter on the filter it builds on (`inherited`, worked out), its date period worked out: counted from
- * today (FROM_NOW) it is as it is, joined as it says; a rolling one counted from nothing else is counted from the
- * view's date (`viewMoment`: its days then, as if that were now) and, on the field of the view's period, takes that
- * period's place: the view picks the date, the block the window around it (the view's other rules still hold). One
- * counted from a page item's date, or of chosen days, is left to the rest (resolvePageValues) and joins as it says.
+ * today (FROM_NOW) it is as it is; a rolling one counted from nothing else is counted from the view's date
+ * (`viewMoment`: its days then, as if that were now). One counted from a page item's date, or of chosen days, is left to
+ * the rest (resolvePageValues). Either way it joins the view's filter as it says (And / Or: domain/filterTree.ts).
  */
-export function blockPeriod(filters: FilterRule[], inherited: FilterRule[], now = nowMinute()): { filters: FilterRule[]; inherited: FilterRule[] } {
+export function blockPeriod(filters: FilterRule[], inherited: FilterRule[], now = nowMinute()): FilterRule[] {
   const rule = periodRule(filters);
-  if (!rule) return { filters, inherited };
+  if (!rule) return filters;
   const { value, fieldId } = splitAnchor(rule.value);
-  const set = (next: FilterRule) => filters.map((r) => (r === rule ? next : r));
-  if (fieldId === FROM_NOW) return { filters: set({ ...rule, value }), inherited };
-  if (fieldId !== null || !isCounted(value)) return { filters, inherited };
+  const set = (next: string) => filters.map((r) => (r === rule ? { ...r, value: next } : r));
+  if (fieldId === FROM_NOW) return set(value);
+  if (fieldId !== null || !isCounted(value)) return filters;
   const moment = viewMoment(inherited, now);
   const period = moment ? resolveRange(value, moment) : null;
-  const shown = period ? rangeValue(period) : value;
-  const view = periodRule(inherited);
-  if (!view || view.fieldId !== rule.fieldId) return { filters: set({ ...rule, value: shown }), inherited };
-  const { join: _join, ...own } = rule;
-  return { filters: set({ ...own, value: shown }), inherited: inherited.filter((r) => r !== view) };
-}
-
-/** Whether a block's period takes the place of the view's (`blockPeriod`): counted from the view's date, on its period's field. */
-export function replacesViewPeriod(rule: FilterRule | undefined, inherited: FilterRule[]): boolean {
-  const view = periodRule(inherited);
-  return !!rule && !!view && view.fieldId === rule.fieldId && splitAnchor(rule.value).fieldId === null && isCounted(rule.value);
+  return period ? set(rangeValue(period)) : filters;
 }
 
 /**

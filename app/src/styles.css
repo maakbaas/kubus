@@ -1444,6 +1444,16 @@ td.space-icon .icon-picker > .cds--popover-container > .cds--btn svg path {
   border-block-start: 1px solid var(--cds-layer-01);
   pointer-events: none;
 }
+/* On an item page, whose fields are pulled left by their inset, it runs where the lines between fields do: from the page
+   edge (where the text starts), not from the pulled box's (below: half an inset each side on a phone). */
+.item-fields:not(.item-fields--form) > :not(.block-row) .view-field__rows > .checklist-row + .checklist-row::before {
+  inset-inline-start: var(--cds-spacing-05);
+}
+@media (max-width: 42rem) {
+  .item-fields:not(.item-fields--form) > :not(.block-row) .view-field__rows > .checklist-row + .checklist-row::before {
+    inset-inline: calc(0.5 * var(--cds-spacing-05));
+  }
+}
 .checklist-row > :is(.view-field__value, .cds--form-item) {
   flex: 1;
   min-inline-size: 0;

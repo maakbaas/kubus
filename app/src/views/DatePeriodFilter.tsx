@@ -18,7 +18,6 @@ import {
   periodState,
   periodText,
   rangeValue,
-  replacesViewPeriod,
   rollingLabel,
   splitAnchor,
   stepValue,
@@ -100,7 +99,7 @@ export function DatePeriodFilter({
   joins?: boolean;
   /**
    * A block's: what it builds on ("view", "page", "dashboard"). Its rolling period is then counted from that one's date
-   * ("Counted from": The view's date, Today, the page's item's), and on its period's field takes that period's place.
+   * ("Counted from": The view's date, Today, the page's item's); it joins that filter as its And / Or says.
    */
   basis?: "view" | "page" | "dashboard";
   /** The filter it builds on (a block's: its view's), whose period gives the view's date. */
@@ -180,16 +179,12 @@ export function DatePeriodFilter({
   const parts = state && kind ? periodParts(state, kind) : null;
   const short = parts ? parts.counting || parts.days.split(" - ")[0] : label;
   const set = !!(rule || rangeChosen);
-  // Counted from the view's date on the view's period's field: it takes that period's place (no And / Or).
-  const replaces = !!basis && replacesViewPeriod(rule, inherited ?? []);
 
   return (
     <div className="date-period filter-group">
       {/* As every group of the filter (QueryEditor's rules): a top row, its And / Or (else "During") and its buttons. */}
       <div className="filter-group__head">
-        {replaces ? (
-          <span className="filter-group__word">Instead of the {basis}&rsquo;s period</span>
-        ) : joins ? (
+        {joins ? (
           <JoinSelect
             id={`${uid}-date-join`}
             value={join}

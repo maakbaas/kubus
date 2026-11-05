@@ -452,12 +452,11 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   const uses = type.uses(block.options, components);
   // Page-item values ("this item") filled in from the page's item; {{ }} code worked out.
   const base = blockQuery(viewFilters, block, blockSort(block, collection));
-  // Its rolling date period counted from the view's date (now unless the view is stepped away from it), in place of the
-  // view's period (domain/datePeriod.ts blockPeriod): worked out before anything reads the filters (query, source, chart).
-  const viewResolved = useMemo(() => resolveFilterValues(viewFilters ?? NO_FILTERS, page ?? null), [viewFilters, page]);
-  const counted = useMemo(() => blockPeriod(base.filters, viewResolved), [base.filters, viewResolved]);
-  const filters = useMemo(() => resolveFilterValues(counted.filters, page ?? null), [counted.filters, page]);
-  const inherited = counted.inherited;
+  // Its rolling date period counted from the view's date (now unless the view is stepped away from it: domain/datePeriod.ts
+  // blockPeriod): worked out before anything reads the filters (query, source, chart).
+  const inherited = useMemo(() => resolveFilterValues(viewFilters ?? NO_FILTERS, page ?? null), [viewFilters, page]);
+  const counted = useMemo(() => blockPeriod(base.filters, inherited), [base.filters, inherited]);
+  const filters = useMemo(() => resolveFilterValues(counted, page ?? null), [counted, page]);
   const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder, block.groupCustom, base.groupDate]); // eslint-disable-line react-hooks/exhaustive-deps
   // A remote collection's rows come from its source a page at a time, filtered and sorted there; several collections' from their parts, merged.
   // Its Limit: items shown at first and added by each "Show more" (0: all, a remote collection's loaded page by page).

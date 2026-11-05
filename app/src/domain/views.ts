@@ -226,10 +226,9 @@ export function blockQuery(inherited: FilterRule[] | null, block: ViewBlock, sor
   };
 }
 
-/** A block's query with its date period counted from the view's date, in place of the view's period (`blockPeriod`): as it is shown. */
+/** A block's query with its date period counted from the view's date (`blockPeriod`): as it is shown. */
 export function countedQuery(query: ViewQuery): ViewQuery {
-  const { filters, inherited } = blockPeriod(query.filters, query.inherited ?? NO_FILTERS);
-  return { ...query, filters, inherited };
+  return { ...query, filters: blockPeriod(query.filters, query.inherited ?? NO_FILTERS) };
 }
 
 /** A block with a changed sort / grouping (the query editor edits a whole query). */

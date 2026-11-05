@@ -83,11 +83,10 @@ Extension points are registries, not special cases in pages:
   applied in `BlockView` before the query, a remote source or a chart reads the filters): now, kept inside the view's
   (dashboard's, page's) period: its last day (minute) once that period is over (the view stepped back with ‹ ›), its first
   while it is to come; with no period, or one holding now, it is now, so an unstepped view shows what it always did. Its
-  days are then worked out as if that date were now, and on the field of the view's period it takes that period's place:
-  the view picks the date, the block the window around it ("Instead of the view's period" where the And / Or was; the
-  view's other rules still hold): a daily dashboard's 7-day sparkline steps with the day. "Counted from" in the block's
-  period: The view's date (default, nothing stored), Today (`@$now`: counted from now and joined by And / Or as before)
-  or, on an item page, the page's item's date. Its ‹ › still step it from there (the week before the view's). A rule without its value yet, or on a missing field, takes no part
+  days are then worked out as if that date were now, and it joins the view's filter as its And / Or says (a daily
+  dashboard's 7-day sparkline: Or, the view's day or the block's week, steps with the day). "Counted from" in the block's
+  period: The view's date (default, nothing stored), Today (`@$now`: counted from now) or, on an item page, the page's
+  item's date. Its ‹ › still step it from there (the week before the view's). A rule without its value yet, or on a missing field, takes no part
   (`waitsForValue`), so a half-written Or never lets everything through. The result is one condition tree
   (`filterTree`), checked locally (`filterOf`) and sent as is to remote sources (`sourceQuery`,
   `SourceCondition`), so every connector filters the same way; a new item is preset only from rules every
