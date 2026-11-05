@@ -385,9 +385,10 @@ takes the new one when its settings are opened. A source's name: letters, digits
   scalars as lists, anything mixed as text. The key: a column `id`, `uuid` or `key` (any case) with its own value in
   every row, else the row's place (`_row`, hidden), which `check` warns about: a row's page and links to it change
   when rows are added above it.
-- *App*: until the first page of its request is in (a new query, "Read again") a remote block shows a "Loading rows"
-  bar under it (`RemoteResult.waiting`; the total comes with that page): the same bar a block loading every row fills
-  from then on (moving while each request is out, never back: `ui/LoadingBar.tsx`). A block of a remote collection asks the source for its query (`useRemoteResult`, its Limit of rows
+- *App*: while rows are on their way (the first page of a request: `RemoteResult.waiting`; every row loading:
+  `progress`; "Show more": `loadingMore`) a turning sync icon follows the block's name in its header ("Loading rows", the count
+  in its tooltip; no bar, nothing to stop). What the block showed stays until the new request is done (all its rows when it
+  loads every row, `useHeld`), then is replaced at once; the first load shows rows as they come. A block of a remote collection asks the source for its query (`useRemoteResult`, its Limit of rows
   a page (100 unless set; 0, a chart's unless set: every page, one after the other), "Show more"; search waits for typing to pause) instead of `applyQuery`;
   a query asked while the same one is on its way shares its answer (`SourcesClient.query`); the first page is asked again
   when the request changes, not when another collection does (each is a new object then). The item page reads

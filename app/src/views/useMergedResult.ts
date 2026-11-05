@@ -7,7 +7,7 @@ import type { Collection, Item } from "../domain/model";
 import { isGroupable, sortComparator, type QueryContext, type ViewQuery } from "../domain/query";
 import { deviceTimeZone, isRemote } from "../domain/sources";
 import { refLabelOf } from "../ui/useReferenceOptions";
-import { EMPTY, LOADING_SHOWN_MS, useSettled, useThrottled, type RemoteResult } from "./useRemoteResult";
+import { EMPTY, LOADING_SHOWN_MS, useHeld, useSettled, useThrottled, type RemoteResult } from "./useRemoteResult";
 import { errorMessage } from "../domain/errors";
 
 // A block of a merged collection: its query asked of every part (a native part answered from the items in memory, a remote one
@@ -191,7 +191,8 @@ export function useMergedResult(collection: Collection, query: ViewQuery, search
     known.current = seen;
     return mergedQueryResult(rows, loaded.groups, loaded.total, grouped);
   }, [loaded, grouped]);
-  const shown = useThrottled(result, loadingAll ? LOADING_SHOWN_MS : 0);
+  const throttled = useThrottled(result, loadingAll ? LOADING_SHOWN_MS : 0);
+  const shown = useHeld(result, throttled, fresh && !loadingAll);
 
   if (!mergedOn) return null;
   const nothing = parts.length === 0;

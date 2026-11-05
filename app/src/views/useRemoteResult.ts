@@ -62,6 +62,18 @@ export function useThrottled<T>(value: T, ms: number): T {
   return ms === 0 ? value : shown;
 }
 
+/**
+ * What a block is shown of a request's result: once one was finished (`done`: its own query's, every row it wants in),
+ * that one stays while the next is asked and its rows come in (a changed filter, "Read again"), then the new one
+ * replaces it at once: nothing half-loaded or worked out on the old rows in between. The first one is shown as it comes
+ * in (`coming`).
+ */
+export function useHeld<T>(result: T | null, coming: T | null, done: boolean): T | null {
+  const last = useRef<T | null>(null);
+  if (done && result) last.current = result;
+  return !done && last.current ? last.current : coming;
+}
+
 /** The value after it stopped changing for `ms`. */
 export function useSettled<T>(value: T, ms: number): T {
   const [settled, setSettled] = useState(value);
@@ -174,7 +186,8 @@ export function useRemoteResult(
   }, [made, loaded, shape, collection, query, grouped, inApp]);
 
   // While every row is loading, the block (a chart, a map: drawn anew each time) gets them at most once a second.
-  const shown = useThrottled(result, loadingAll ? LOADING_SHOWN_MS : 0);
+  const throttled = useThrottled(result, loadingAll ? LOADING_SHOWN_MS : 0);
+  const shown = useHeld(result, throttled, fresh && !loadingAll);
 
   if (!remote) return null;
   return {

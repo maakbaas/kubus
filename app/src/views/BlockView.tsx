@@ -1,6 +1,6 @@
-import { useContext, useEffect, useId, useMemo, useRef, useState, type DragEvent } from "react";
+import { useContext, useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { Accordion, AccordionItem, Button, Checkbox, Dropdown, InlineNotification, MultiSelect, NumberInput, Select, SelectItem, TextInput } from "@carbon/react";
-import { ArrowsVertical, Filter, ListChecked, Save, Settings, TrashCan } from "@carbon/icons-react";
+import { ArrowsVertical, Filter, ListChecked, Renew, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
 import { groupsInApp, isReadOnly } from "../domain/sources";
 import { BACKLINKS_FIELDS, virtualCollections } from "../domain/backlinks";
@@ -16,8 +16,6 @@ import { BLOCK_HEIGHT, blockLimit, blockQuery, DEFAULT_ASPECT, ownBlockHeightCss
 import { blockPeriod } from "../domain/datePeriod";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
-import { LoadingBar } from "../ui/LoadingBar";
-import { MAX_SOURCE_PAGE } from "../../../shared/sources";
 import { ToolbarPopover, usePanelsOpen } from "../ui/ToolbarPopover";
 import { SectionHeader } from "../ui/SectionHeader";
 import { useConfirm } from "../ui/useConfirm";
@@ -524,6 +522,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   // Once shown, a block stays while its rows are read again (its collections changed): unmounted, it would close the
   // Block settings being used.
   const shownOnce = useRef(false);
+  const lastView = useRef<ReactNode>(null);
   useEffect(() => {
     if (items || error) shownOnce.current = true;
   });
@@ -532,7 +531,34 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   // Searching the view: a block listing items that has none matching is left out altogether.
   if (search.trim() && uses.query && items && result.total === 0) return null;
   // Not even its header until its items are in: a header alone would sit where the blocks above are about to push it away.
-  if (!items && !error && !remote?.waiting && !remote?.stopped && !shownOnce.current) return null;
+  if (!items && !error && !remote?.waiting && !shownOnce.current) return null;
+  // Rows on their way (a remote source's, a merged block's remote parts): a turning sync icon after its name, its count in the tooltip.
+  const syncing = !!remote && (remote.waiting || !!remote.progress || remote.loadingMore);
+  const syncingLabel = remote?.progress ? `Loading rows: ${remote.progress.loaded} of ${remote.progress.total}` : "Loading rows";
+  // What it shows, drawn once its items are in; while they aren't (another collection's, loading) what it showed before
+  // stays, then is replaced at once: nothing blank or half-made in between (a remote block's hooks hold their rows likewise).
+  const view = items ? (
+    <type.View
+      collection={collection}
+      result={result}
+      fields={fields}
+      layout={block.layout}
+      options={block.options}
+      editable={editable && (!isReadOnly(collection) || !!entriesOn)}
+      onOptions={(options) => onSet({ options })}
+      refs={data.refs}
+      search={search}
+      actions={actions}
+      all={items}
+      page={page}
+      query={query}
+      collapsedGroups={groups}
+      onGroupCollapse={(key, on) => block.groupBy && onCollapse(withGroupCollapsed(state, block.id, block.groupBy, key, on))}
+    />
+  ) : (
+    lastView.current
+  );
+  lastView.current = view;
   return (
     <section className={own ? "block block--fills" : uses.fixedHeight ? "block block--fixed" : "block"} data-block-id={block.id}>
       {/* Its own height (Height, Aspect ratio, what is around its box), measured for its row (views/BlockRows.tsx): a box of
@@ -552,6 +578,11 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
           <span className="icon-label">
             <type.icon size={16} aria-hidden="true" />
             <span className="icon-label__text">{blockName(block)}</span>
+            {syncing && (
+              <span className="block-syncing" title={syncingLabel} role="img" aria-label={syncingLabel}>
+                <Renew size={16} aria-hidden="true" />
+              </span>
+            )}
           </span>
         }
       >
@@ -584,47 +615,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
             )}
             {/* Nothing until everything is in (a fraction of a second): a placeholder table would only
                 flash, shaped unlike the real one. */}
-            {items && (
-              <type.View
-                collection={collection}
-                result={result}
-                fields={fields}
-                layout={block.layout}
-                options={block.options}
-                editable={editable && (!isReadOnly(collection) || !!entriesOn)}
-                onOptions={(options) => onSet({ options })}
-                refs={data.refs}
-                search={search}
-                actions={actions}
-                all={items}
-                page={page}
-                query={query}
-                collapsedGroups={groups}
-                onGroupCollapse={(key, on) => block.groupBy && onCollapse(withGroupCollapsed(state, block.id, block.groupBy, key, on))}
-              />
-            )}
-            {/* A remote collection's rows come a page at a time, or (a chart, no Limit) all of them, which can be
-                stopped. One bar from the request on: it moves while each request is out (LoadingBar: the first one fills the bar
-                as if it brought every row, the next ones their page's share), then on as the rows come in; it never moves back
-                and doesn't change shape when the total arrives. */}
-            {remote && (remote.waiting || remote.progress) && (
-              <div className="block-more">
-                <LoadingBar
-                  label={remote.progress ? `Loading rows: ${remote.progress.loaded} of ${remote.progress.total}` : "Loading rows"}
-                  value={remote.progress?.loaded}
-                  max={remote.progress?.total}
-                  step={MAX_SOURCE_PAGE}
-                  onStop={remote.progress?.cancel ?? remote.stop}
-                />
-              </div>
-            )}
-            {remote?.stopped && (
-              <div className="block-more">
-                <Button kind="tertiary" size="sm" onClick={remote.resume}>
-                  Load rows
-                </Button>
-              </div>
-            )}
+            {view}
             {items && stepped && (
               <div className="block-more">
                 <Button kind="tertiary" size="sm" onClick={() => setShown((n) => n + limit)}>

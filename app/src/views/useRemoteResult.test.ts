@@ -280,6 +280,30 @@ describe("stopping the first page", () => {
 });
 
 describe("every row", () => {
+  it("keeps showing the rows it had while a changed query loads every row, then shows the new ones at once", async () => {
+    const p = paged(4, 2);
+    const h = hook(p.client, { all: true });
+    await settle(h);
+    await p.answerNext(h);
+    await p.answerNext(h);
+    await settle(h, 1100);
+    const before = h.result.current!.items;
+    expect(before).toHaveLength(4);
+    h.rerender({ all: true, search: "task" });
+    await settle(h, 400);
+    expect(h.result.current!.waiting).toBe(true);
+    await p.answerNext(h);
+    await settle(h, 1100);
+    // Half of the new rows in: still the old ones, whole.
+    expect(h.result.current!.progress).toMatchObject({ loaded: 2, total: 4 });
+    expect(h.result.current!.items).toBe(before);
+    await p.answerNext(h);
+    await settle(h);
+    expect(h.result.current!.progress).toBeNull();
+    expect(h.result.current!.items).not.toBe(before);
+    expect(h.result.current!.items).toHaveLength(4);
+  });
+
   it("loads the pages one after the other in big pages, shows how far it is, and ends with all rows", async () => {
     const p = paged(6, 2);
     const h = hook(p.client, { all: true });

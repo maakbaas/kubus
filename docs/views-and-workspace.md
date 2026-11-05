@@ -183,14 +183,12 @@ Extension points are registries, not special cases in pages:
   view): how many items it shows at first and each "Show more" adds; empty is all. Unset it is 100, or all for a block
   that needs every item (a chart: `BlockUses.all`; `blockLimit`). A remote collection is asked that many rows a page
   (all: every page, one after the other). The Filter button is blue while a Limit is set.
-  **Loading bars**: the only progress bar in the app is `ui/LoadingBar.tsx` (a remote block's rows), shown from the request on
-  (table, cards, chart, map alike). It moves while a request is out: the request on its way fills its share of the bar (the whole
-  bar while the total isn't known, then the next page's) in about 3 s (`REQUEST_MS`), quickly at first and ever slower towards
-  97% (`requestShare`), only its answer filling it; it never moves back (once the total is known the rest is measured from
-  where it got to). Its stop control is always a small "×" ghost icon button ("Stop loading", 32px) at the right
-  of the bar, on the right edge of the block's header buttons (design rule `progress-stop`). Stopping while every row loads
-  keeps the pages in ("Load all rows" resumes); stopping the first page (which the source can't be told to abandon: no
-  abort in the sources client) drops its answer, and "Load rows" asks again. A new progress bar must use `LoadingBar` with `onStop`.
+  **Loading**: no progress bar: while a block's rows are on their way (a remote source's, a merged block's remote parts) a
+  turning sync icon follows its name in the header (`.block-syncing`, Carbon's Renew; "Loading rows: n of m" in its tooltip;
+  nothing to stop). Whatever the block showed stays until what replaces it is done (`useHeld` in `useRemoteResult` /
+  `useMergedResult`: a changed filter, sort or search, "Read again", every row of a chart), then is swapped in at once; a block
+  whose items aren't in yet (another collection chosen) keeps its last drawing likewise (`BlockView` `lastView`). Only a
+  first load shows rows as they come (at most once a second).
 - **Dashboard filter** (a dashboard view's Filter, `pages/DashboardPage.tsx`): like a collection view's (the same panel, the filter bar
   with "Show filter bar", default off; unsaved until Save changes), edited over the fields of all the view's blocks' collections
   (`dashboardScope` in `domain/dashboards.ts`: `pageFilterScope` with the filter-only field "Date", `$date`, first, so the bar's period

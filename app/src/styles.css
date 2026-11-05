@@ -3112,19 +3112,25 @@ img[data-lightbox] {
 .block-more .helper {
   margin-bottom: 0;
 }
-/* The app's loading bar (ui/LoadingBar.tsx): the bar takes the room beside its "×" stop button, a 32px icon
-   button at the row's right edge, in line with the heading's buttons above. */
-/* The bar is Carbon's inline one (its label beside the track): one line, so the × centred beside it is level with the track. */
-.loading-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--cds-spacing-05);
-  flex: 1;
-  min-inline-size: 0;
+/* Rows on their way into a block (BlockView `syncing`): a turning sync icon right after its name, in the name's colour,
+   its count in the tooltip. Instead of a bar below the block, which moved what was under it. */
+.block-syncing {
+  display: inline-flex;
+  flex: none;
+  color: var(--cds-icon-secondary);
 }
-.loading-bar__bar {
-  flex: 1;
-  min-inline-size: 0;
+.block-syncing svg {
+  animation: block-syncing 1s linear infinite;
+}
+@keyframes block-syncing {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .block-syncing svg {
+    animation-duration: 4s;
+  }
 }
 
 /* Tables */
