@@ -431,6 +431,12 @@ export const periodRule = (filters: FilterRule[]) => filters.find((r) => r.opera
  * filter works it out from that item's value (query.ts resolvePageValues); elsewhere it matches nothing.
  */
 const ANCHOR = "@$item.";
+/**
+ * A block's rolling period is counted from the view's date (`blockPeriod`) unless it says "@$now": counted from
+ * today (now) whatever the view shows. `splitAnchor` gives it as this field id.
+ */
+export const FROM_NOW = "$now";
+const NOW_ANCHOR = `@${FROM_NOW}`;
 
 /**
  * The filters with the period set to `value`: the existing rule's (keeping its field, and its
@@ -445,14 +451,61 @@ export function withPeriod(filters: FilterRule[], fieldId: string, value: string
   return rule ? filters.map((r) => (r === rule ? written : r)) : [written, ...filters];
 }
 
-/** A period value and the page item's date field it is counted from (null: today). */
+/** A period value and what it is counted from: a page item's date field, FROM_NOW (today), or null (as it is: from now; a block's from the view's date). */
 export function splitAnchor(value: string): { value: string; fieldId: string | null } {
+  if (value.endsWith(NOW_ANCHOR)) return { value: value.slice(0, -NOW_ANCHOR.length), fieldId: FROM_NOW };
   const at = value.lastIndexOf(ANCHOR);
   return at < 0 ? { value, fieldId: null } : { value: value.slice(0, at), fieldId: value.slice(at + ANCHOR.length) || null };
 }
 
-/** A period value counted from the page item's date field (null: from today, as it is). */
-export const anchoredValue = (value: string, fieldId: string | null) => (fieldId ? `${value}${ANCHOR}${fieldId}` : value);
+/** A period value counted from the page item's date field, or FROM_NOW (today; null: as it is). */
+export const anchoredValue = (value: string, fieldId: string | null) => (fieldId === FROM_NOW ? `${value}${NOW_ANCHOR}` : fieldId ? `${value}${ANCHOR}${fieldId}` : value);
+
+/** Whether a period value is counted (rolling: this week, the last 7 days, year to date), not its days. */
+export const isCounted = (value: string) => !!(parseRolling(value) || parseRollingRange(value) || parseToDate(value));
+
+/**
+ * The view's date, which a block's rolling period is counted from (`blockPeriod`): now, kept inside the period of
+ * the filter the block builds on (`inherited`, its page values worked out): that period's last day (or minute) once it
+ * is over, its first while it is to come. Null when that is now: no period, or one holding now (unstepped, the block
+ * is counted as it always was).
+ */
+export function viewMoment(inherited: FilterRule[], now = nowMinute()): string | null {
+  const rule = periodRule(inherited);
+  const period = rule ? resolveRange(splitAnchor(rule.value).value, now) : null;
+  if (!period) return null;
+  const at = inMinutes(period) ? now.slice(0, 16) : now.slice(0, 10);
+  return at < period.start ? period.start : at > period.end ? period.end : null;
+}
+
+/**
+ * A block's filter on the filter it builds on (`inherited`, worked out), its date period worked out: counted from
+ * today (FROM_NOW) it is as it is, joined as it says; a rolling one counted from nothing else is counted from the
+ * view's date (`viewMoment`: its days then, as if that were now) and, on the field of the view's period, takes that
+ * period's place: the view picks the date, the block the window around it (the view's other rules still hold). One
+ * counted from a page item's date, or of chosen days, is left to the rest (resolvePageValues) and joins as it says.
+ */
+export function blockPeriod(filters: FilterRule[], inherited: FilterRule[], now = nowMinute()): { filters: FilterRule[]; inherited: FilterRule[] } {
+  const rule = periodRule(filters);
+  if (!rule) return { filters, inherited };
+  const { value, fieldId } = splitAnchor(rule.value);
+  const set = (next: FilterRule) => filters.map((r) => (r === rule ? next : r));
+  if (fieldId === FROM_NOW) return { filters: set({ ...rule, value }), inherited };
+  if (fieldId !== null || !isCounted(value)) return { filters, inherited };
+  const moment = viewMoment(inherited, now);
+  const period = moment ? resolveRange(value, moment) : null;
+  const shown = period ? rangeValue(period) : value;
+  const view = periodRule(inherited);
+  if (!view || view.fieldId !== rule.fieldId) return { filters: set({ ...rule, value: shown }), inherited };
+  const { join: _join, ...own } = rule;
+  return { filters: set({ ...own, value: shown }), inherited: inherited.filter((r) => r !== view) };
+}
+
+/** Whether a block's period takes the place of the view's (`blockPeriod`): counted from the view's date, on its period's field. */
+export function replacesViewPeriod(rule: FilterRule | undefined, inherited: FilterRule[]): boolean {
+  const view = periodRule(inherited);
+  return !!rule && !!view && view.fieldId === rule.fieldId && splitAnchor(rule.value).fieldId === null && isCounted(rule.value);
+}
 
 /**
  * A period counted from a page item's date or time (`moment`: a day or a minute), worked out. One that

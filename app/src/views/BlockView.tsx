@@ -13,6 +13,7 @@ import type { ComponentBlockOptions } from "./ComponentBlock";
 import { applyQuery, filterPreset, PAGE_ITEM, resolveFilterValues, type FilterRule, type ItemGroup, type QueryResult } from "../domain/query";
 import { blockSort, isDefaultBlockSort } from "../domain/blockSort";
 import { BLOCK_HEIGHT, blockLimit, blockQuery, DEFAULT_ASPECT, ownBlockHeightCss, listedCollection, NO_FILTERS, collapsedGroups, newBlock, withBlockCollapsed, withGroupCollapsed, withQuery, type Collapsed, type ViewBlock } from "../domain/views";
+import { blockPeriod } from "../domain/datePeriod";
 import { CollectionIcon } from "../ui/collectionIcons";
 import { FieldOrderEditor } from "../ui/FieldOrderEditor";
 import { LoadingBar } from "../ui/LoadingBar";
@@ -194,6 +195,7 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
             // It always builds on its place's filter (even one without rules): said above it, its groups joining it.
             title={place === "item" ? "Block filters combine with page filters" : place === "dashboard" ? "Block filters combine with dashboard filters" : "Block filters combine with view filters"}
             builds
+            basis={place === "item" ? "page" : place === "dashboard" ? "dashboard" : "view"}
             emptyText=""
             onChange={(q) => onChange({ ...block, filters: q.filters.length > 0 ? q.filters : null })}
             footer={
@@ -452,8 +454,12 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   const uses = type.uses(block.options, components);
   // Page-item values ("this item") filled in from the page's item; {{ }} code worked out.
   const base = blockQuery(viewFilters, block, blockSort(block, collection));
-  const filters = useMemo(() => resolveFilterValues(base.filters, page ?? null), [base.filters, page]);
-  const inherited = useMemo(() => resolveFilterValues(viewFilters ?? NO_FILTERS, page ?? null), [viewFilters, page]);
+  // Its rolling date period counted from the view's date (now unless the view is stepped away from it), in place of the
+  // view's period (domain/datePeriod.ts blockPeriod): worked out before anything reads the filters (query, source, chart).
+  const viewResolved = useMemo(() => resolveFilterValues(viewFilters ?? NO_FILTERS, page ?? null), [viewFilters, page]);
+  const counted = useMemo(() => blockPeriod(base.filters, viewResolved), [base.filters, viewResolved]);
+  const filters = useMemo(() => resolveFilterValues(counted.filters, page ?? null), [counted.filters, page]);
+  const inherited = counted.inherited;
   const query = useMemo(() => ({ ...base, filters, inherited }), [filters, inherited, base.sort, base.groupBy, base.groupOrder, block.groupCustom, base.groupDate]); // eslint-disable-line react-hooks/exhaustive-deps
   // A remote collection's rows come from its source a page at a time, filtered and sorted there; several collections' from their parts, merged.
   // Its Limit: items shown at first and added by each "Show more" (0: all, a remote collection's loaded page by page).

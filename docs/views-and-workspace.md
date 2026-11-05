@@ -78,7 +78,16 @@ Extension points are registries, not special cases in pages:
   frames that filter (and-ed with its other rules and what it builds on), so a block's Or can step outside
   the view's period but not its own; in a filter building on another (a block's) the period has its own And / Or
   in front of its line (`DatePeriodFilter` `joins`), and with Or it is or-ed with the filter it builds on, the
-  block's other rules following on that: "(view's filter or period) and …". A rule without its value yet, or on a missing field, takes no part
+  block's other rules following on that: "(view's filter or period) and …". A block's rolling period ("Last 7 days",
+  "This week", "Year to date") is counted from the **view's date** (`viewMoment`, `blockPeriod` in domain/datePeriod.ts,
+  applied in `BlockView` before the query, a remote source or a chart reads the filters): now, kept inside the view's
+  (dashboard's, page's) period: its last day (minute) once that period is over (the view stepped back with ‹ ›), its first
+  while it is to come; with no period, or one holding now, it is now, so an unstepped view shows what it always did. Its
+  days are then worked out as if that date were now, and on the field of the view's period it takes that period's place:
+  the view picks the date, the block the window around it ("Instead of the view's period" where the And / Or was; the
+  view's other rules still hold): a daily dashboard's 7-day sparkline steps with the day. "Counted from" in the block's
+  period: The view's date (default, nothing stored), Today (`@$now`: counted from now and joined by And / Or as before)
+  or, on an item page, the page's item's date. Its ‹ › still step it from there (the week before the view's). A rule without its value yet, or on a missing field, takes no part
   (`waitsForValue`), so a half-written Or never lets everything through. The result is one condition tree
   (`filterTree`), checked locally (`filterOf`) and sent as is to remote sources (`sourceQuery`,
   `SourceCondition`), so every connector filters the same way; a new item is preset only from rules every
@@ -90,7 +99,7 @@ Extension points are registries, not special cases in pages:
   (the date) or "Where" (the first rule), at the left; its buttons (pin while the filter bar is shown, × / remove) at the far
   right. Then what is edited in it: the date's Hour … Range switcher, its period in short at the left as the filter bar says
   it ("This week", "Last 7 days", "October 2026"; whole, with its days, in the tooltip) with ‹ › >| at the far right, the
-  field it goes by across two of the rules' three columns and Which ("Counted from today") in the third; a rule's field,
+  field it goes by across two of the rules' three columns and Which ("This week", named as it is: "Last week" once stepped) in the third; a rule's field,
   condition and value in three equal columns. Groups are a step further apart than their rows. On a phone a rule's field
   has its row, condition and value beside each other below it, and the date's field and Which are stacked. A rolling period (counted from now:
   "This week", "Last 7 days") has Carbon's Activity icon before its words, here and on the filter bar (`RollingMark`, its
@@ -117,7 +126,7 @@ Extension points are registries, not special cases in pages:
   months, 3 years). It is stored as the filter's first `between` rule, which the rule list leaves out (a date & time by
   its local day; in an hour or a range of minutes by its local minute, `yyyy-mm-ddTHH:MM..yyyy-mm-ddTHH:MM` with an
   hour `…T14:00..…T14:59`, a date there by its day). On an item page a rolling period can be counted from the page's
-  item's date instead ("Counted from": Today or "This measurement's Date"; stored as the value then
+  item's date instead ("Counted from": the page's date (a block's: the page filter's, see above; the page's own filter: Today) or "This measurement's Date"; stored as the value then
   `@$item.<field>`, `anchoredValue` in domain/datePeriod.ts, worked out for each page's item by `resolvePageValues`;
   elsewhere, or for an item without that date, it matches nothing). A period that ends now ("Last 2 months", "Last 7 days", a year to date) then ends at that date or time (`resolveAnchored`: with a time, the period is in minutes), not at the end of its month, so a historical weigh-in's page counts only what came up to it; "This month" alone stays the whole month. `between` isn't in the operator menus
   (`operatorsFor`), but the API can set it.

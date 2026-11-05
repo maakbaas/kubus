@@ -9,6 +9,7 @@ import { RollingMark } from "./RollingMark";
 import {
   dateFields,
   defaultDateField,
+  FROM_NOW,
   kindValue,
   nowMinute,
   periodAround,
@@ -17,10 +18,12 @@ import {
   periodState,
   periodText,
   rangeValue,
+  replacesViewPeriod,
   rollingLabel,
   splitAnchor,
   stepValue,
   toDateLabel,
+  viewMoment,
   windowValue,
   withPeriod,
   type Period,
@@ -40,7 +43,7 @@ export const KINDS: { kind: PeriodKind; text: string }[] = [
   { kind: "range", text: "Range" },
 ];
 
-/** Whether ‹ › step the period: one so far (year to date) has nothing before or after it, nor has one counted from a page's item. */
+/** Whether ‹ › step the period: one so far (year to date) has nothing before or after it, nor has one counted from a page's item (`anchored`). */
 export const steps = (state: PeriodState | null, anchored: boolean): boolean => !!state && !anchored && !state.toDate;
 
 const withoutJoin = ({ join: _join, ...rule }: FilterRule): FilterRule => rule;
@@ -55,10 +58,13 @@ function yearsAround(shown: number, current: number): number[] {
   return Array.from({ length: last - first + 1 }, (_, i) => last - i);
 }
 
-/** The window choices of a kind ("Last n minutes" only for an hour, "… to date" not for an hour or a day). */
-function windows(kind: Unit): { value: Window; text: string }[] {
+/**
+ * The window choices of a kind ("Last n minutes" only for an hour, "… to date" not for an hour or a day). The current
+ * one (‹ › make it another: last week) is named as it is now (`counting`), else "This week".
+ */
+function windows(kind: Unit, counting: string | null): { value: Window; text: string }[] {
   return [
-    { value: "current", text: kind === "hour" ? "Counted from now" : "Counted from today" },
+    { value: "current", text: counting ?? rollingLabel({ kind, offset: 0 }) },
     ...(kind === "week" || kind === "month" || kind === "year" ? [{ value: "toDate" as const, text: toDateLabel(kind) }] : []),
     { value: "last", text: `Last n ${kind}s` },
     ...(kind === "hour" ? [{ value: "lastMinutes" as const, text: "Last n minutes" }] : []),
@@ -82,6 +88,8 @@ export function DatePeriodFilter({
   filters,
   page,
   joins,
+  basis,
+  inherited,
   pin,
   onChange,
 }: {
@@ -90,6 +98,13 @@ export function DatePeriodFilter({
   page?: Collection;
   /** It builds on another filter (a block's on its view's): the period says how it joins it (And / Or, domain/filterTree.ts). */
   joins?: boolean;
+  /**
+   * A block's: what it builds on ("view", "page", "dashboard"). Its rolling period is then counted from that one's date
+   * ("Counted from": The view's date, Today, the page's item's), and on its period's field takes that period's place.
+   */
+  basis?: "view" | "page" | "dashboard";
+  /** The filter it builds on (a block's: its view's), whose period gives the view's date. */
+  inherited?: FilterRule[];
   /** A view's filter while its filter bar is shown: whether the period is on the bar (`filterBarPeriod`), and its pin. */
   pin?: { on: boolean; set(on: boolean): void };
   onChange(filters: FilterRule[]): void;
@@ -100,11 +115,17 @@ export function DatePeriodFilter({
   const now = nowMinute();
   const today = now.slice(0, 10);
   const { value, fieldId: anchor } = rule ? splitAnchor(rule.value) : { value: "", fieldId: null };
-  const state = rule ? periodState(value, now) : null;
+  // Counted from a page's item's date (not from today, nor the view's date).
+  const fromItem = anchor !== null && anchor !== FROM_NOW;
+  // A block's period counted from the view's date: shown as it is counted from there (the view stepped back: its last day).
+  const fromView = !!basis && anchor === null;
+  const moment = fromView ? viewMoment(inherited ?? [], now) : null;
+  const at = moment ?? now;
+  const state = rule ? periodState(value, at) : null;
   const { last, counted } = state ?? { last: null, counted: false };
   // The page's item's dates a period can be counted from; the one it is.
   const pageDates = page ? page.fields.filter((f) => f.kind === "date" || f.kind === "datetime") : [];
-  const anchorField = anchor ? pageDates.find((f) => f.id === anchor) : undefined;
+  const anchorField = fromItem ? pageDates.find((f) => f.id === anchor) : undefined;
   const period = state?.period ?? null;
   // The field and "Range" before a period is set (no rule yet), and "Range" for a period
   // that is also a whole month (say), so the switcher doesn't jump to "Month" while start and end are chosen.
@@ -131,16 +152,16 @@ export function DatePeriodFilter({
   };
   const fixed = (p: Period) => store(rangeValue(p));
   /** A window of a kind: the current one, so far, the last n (`n`, else the unit's own), or the chosen one around `at`. */
-  const choose = (next: Unit, w: Window, at = period?.start ?? now, n?: number) => store(windowValue(next, w, at, n));
+  const choose = (next: Unit, w: Window, around = period?.start ?? at, n?: number) => store(windowValue(next, w, around, n));
   const pick = (next: PeriodKind) => {
     setRangeChosen(next === "range");
     // A range starts as the days shown (to change).
     if (next === "range") return period && fixed({ start: period.start.slice(0, 10), end: period.end.slice(0, 10) });
     // The same window in the other kind (see kindValue).
-    store(kindValue(rule && !rangeChosen ? value : null, next, now));
+    store(kindValue(rule && !rangeChosen ? value : null, next, at));
   };
   const step = (direction: 1 | -1) => {
-    const next = rule && stepValue(value, direction, now, kind ?? undefined);
+    const next = rule && stepValue(value, direction, at, kind ?? undefined);
     if (next) store(next);
   };
 
@@ -148,21 +169,27 @@ export function DatePeriodFilter({
     ? kind === "range"
       ? "Choose the first and last day"
       : "Any date"
-    : anchor
+    : fromItem
       ? `${state.counting} - counted from this ${page?.name ?? "item"}'s ${anchorField?.name ?? "date"}`
-      : periodText(state, kind);
+      : moment && state.counted
+        ? `${periodText(state, kind)} - counted from the ${basis}'s date`
+        : periodText(state, kind);
   const unit = kind && kind !== "range" ? kind : null;
 
   // The period in short, as the filter bar says it ("This week", "Last 7 days", "October 2026"); whole in its tooltip.
   const parts = state && kind ? periodParts(state, kind) : null;
   const short = parts ? parts.counting || parts.days.split(" - ")[0] : label;
   const set = !!(rule || rangeChosen);
+  // Counted from the view's date on the view's period's field: it takes that period's place (no And / Or).
+  const replaces = !!basis && replacesViewPeriod(rule, inherited ?? []);
 
   return (
     <div className="date-period filter-group">
       {/* As every group of the filter (QueryEditor's rules): a top row, its And / Or (else "During") and its buttons. */}
       <div className="filter-group__head">
-        {joins ? (
+        {replaces ? (
+          <span className="filter-group__word">Instead of the {basis}&rsquo;s period</span>
+        ) : joins ? (
           <JoinSelect
             id={`${uid}-date-join`}
             value={join}
@@ -200,10 +227,10 @@ export function DatePeriodFilter({
         </span>
         {set && (
           <span className="date-period__steps">
-            <IconButton autoAlign label="Previous" kind="ghost" size="sm" disabled={!steps(state, !!anchor)} onClick={() => step(-1)}>
+            <IconButton autoAlign label="Previous" kind="ghost" size="sm" disabled={!steps(state, fromItem)} onClick={() => step(-1)}>
               <ChevronLeft />
             </IconButton>
-            <IconButton autoAlign label="Next" kind="ghost" size="sm" disabled={!steps(state, !!anchor)} onClick={() => step(1)}>
+            <IconButton autoAlign label="Next" kind="ghost" size="sm" disabled={!steps(state, fromItem)} onClick={() => step(1)}>
               <ChevronRight />
             </IconButton>
             <IconButton
@@ -213,7 +240,7 @@ export function DatePeriodFilter({
               size="sm"
               align="left"
               disabled={!unit}
-              onClick={() => unit && (window === "fixed" ? fixed(periodAround(unit, now)) : choose(unit, "current"))}
+              onClick={() => unit && (window === "fixed" ? fixed(periodAround(unit, at)) : choose(unit, "current"))}
             >
               <PageLast />
             </IconButton>
@@ -240,8 +267,8 @@ export function DatePeriodFilter({
           ))}
         </Select>
         {unit && window && period && (
-          <Select id={`${uid}-date-window`} className="date-period__window" labelText="Which" hideLabel size="sm" value={window} onChange={(e) => choose(unit, e.target.value as Window, window === "fixed" ? period.start : now)}>
-            {windows(unit).map((w) => (
+          <Select id={`${uid}-date-window`} className="date-period__window" labelText="Which" hideLabel size="sm" value={window} onChange={(e) => choose(unit, e.target.value as Window, window === "fixed" ? period.start : at)}>
+            {windows(unit, window === "current" ? state?.counting || null : null).map((w) => (
               <SelectItem key={w.value} value={w.value} text={w.text} />
             ))}
           </Select>
@@ -263,7 +290,7 @@ export function DatePeriodFilter({
               onChange={(_, { value: n }) => {
                 setLastDraft(String(n ?? ""));
                 const count = Number(n);
-                if (String(n ?? "").trim() !== "" && Number.isInteger(count) && count >= 1) choose(unit, window, now, count);
+                if (String(n ?? "").trim() !== "" && Number.isInteger(count) && count >= 1) choose(unit, window, at, count);
               }}
               onBlur={() => setLastDraft(null)}
             />
@@ -308,9 +335,10 @@ export function DatePeriodFilter({
           )}
         </div>
       )}
-      {pageDates.length > 0 && counted && (
+      {(basis || pageDates.length > 0) && counted && (
         <Select id={`${uid}-date-from`} labelText="Counted from" size="sm" value={anchor ?? ""} onChange={(e) => store(value, e.target.value || null)}>
-          <SelectItem value="" text="Today" />
+          <SelectItem value="" text={basis ? `The ${basis}'s date` : "Today"} />
+          {basis && <SelectItem value={FROM_NOW} text="Today" />}
           {pageDates.map((f) => (
             <SelectItem key={f.id} value={f.id} text={`This ${page!.name}'s ${f.name}`} />
           ))}

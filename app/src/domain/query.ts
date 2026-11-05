@@ -4,7 +4,7 @@
 
 import { dollarNames, ERROR_PREFIX, fieldLookup, render, splitWarnings, type RefLabel } from "./components";
 import { checklistItems } from "./checklist";
-import { formatMinute, inMinutes, momentOfValue, resolveAnchored, resolveRange, splitAnchor } from "./datePeriod";
+import { formatMinute, FROM_NOW, inMinutes, momentOfValue, resolveAnchored, resolveRange, splitAnchor } from "./datePeriod";
 import { formatDate, htmlPlainText } from "./fieldKinds";
 import { dateGroup, dateGroupValue, type GroupDate } from "./groupDate";
 import { filterTree, holds, requiredRules } from "./filterTree";
@@ -299,6 +299,8 @@ export function resolvePageValues(filters: FilterRule[], page: Item | null): Fil
   const anchored = (r: FilterRule) => r.operator === "between" && splitAnchor(r.value).fieldId !== null;
   if (!filters.some((r) => isPageValue(r.value) || anchored(r))) return filters;
   return filters.map((r) => {
+    // Counted from today: as it is (a block's, `blockPeriod`, said so already).
+    if (anchored(r) && splitAnchor(r.value).fieldId === FROM_NOW) return { ...r, value: splitAnchor(r.value).value };
     // A period counted from the page's item's date: its days from that date (none: matches nothing).
     if (anchored(r)) {
       const { value, fieldId } = splitAnchor(r.value);

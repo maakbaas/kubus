@@ -48,6 +48,8 @@ interface Props {
   /** A block's filter: it builds on its view's (page's, dashboard's) filter, even one without rules, so its date period and
    * first rule always say how they join it (And / Or), never "During" / "Where". */
   builds?: boolean;
+  /** With `builds`: what it builds on, as its date period's "Counted from" names it ("The view's date"). */
+  basis?: "view" | "page" | "dashboard";
   emptyText?: string;
   footer?: ReactNode;
   /** A page-wide filter over several collections (`collection` holds all their fields): each field's operators are its own collection's (a remote one's, what its column supports). */
@@ -65,7 +67,7 @@ interface Props {
  */
 const SHOWING_ALL = "Showing all items.";
 
-export function QueryEditor({ collection, query, refs, part, noGroup, page, groups, title, builds, emptyText = SHOWING_ALL, footer, owners, bar, periodPin, onChange }: Props) {
+export function QueryEditor({ collection, query, refs, part, noGroup, page, groups, title, builds, basis, emptyText = SHOWING_ALL, footer, owners, bar, periodPin, onChange }: Props) {
   // Element ids unique per editor: several item lists (tabs, panes) can be open at once.
   const uid = useId();
   // On an item page, a block of its own collection can also be filtered on the item itself
@@ -108,7 +110,7 @@ export function QueryEditor({ collection, query, refs, part, noGroup, page, grou
       <section>
         {title && <Heading className="query-editor__title">{title}</Heading>}
         {/* Not for a remote collection without dates (its rows have no Created or Updated). */}
-        {dated && <DatePeriodFilter collection={collection} filters={query.filters} page={page} joins={joinsFirst} pin={bar ? periodPin : undefined} onChange={(filters) => onChange({ ...query, filters })} />}
+        {dated && <DatePeriodFilter collection={collection} filters={query.filters} page={page} joins={joinsFirst} basis={builds ? (basis ?? "view") : undefined} inherited={query.inherited} pin={bar ? periodPin : undefined} onChange={(filters) => onChange({ ...query, filters })} />}
         {query.filters.length === 0 && emptyText !== "" && (emptyText !== SHOWING_ALL || !dated) && <p className="helper">{emptyText}</p>}
         {query.filters.map((rule) => {
           if (rule === period) return null;

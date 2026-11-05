@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { defaultDateField, kindValue, latestValue, periodState, periodText, stepValue, windowValue, withPeriod, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveAnchored, resolveRange, rollingLabel, rollingRangeLabel, rollingRangeValue, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
+import type { FilterRule } from "./query";
+import { anchoredValue, blockPeriod, FROM_NOW, replacesViewPeriod, splitAnchor, viewMoment, defaultDateField, kindValue, latestValue, periodState, periodText, stepValue, windowValue, withPeriod, weekNumber, parseRange, parseRolling, parseRollingRange, periodAround, periodKind, periodLabel, rangeOrRolling, rangeValue, resolveAnchored, resolveRange, rollingLabel, rollingRangeLabel, rollingRangeValue, rollingValue, shiftPeriod, toDateLabel, toDateValue } from "./datePeriod";
 
 describe("date periods", () => {
   it("finds the day, week (Sunday first), month and year around a day", () => {
@@ -61,6 +62,55 @@ describe("periods counted from a page item's moment", () => {
     expect(resolveAnchored("month+0", "2026-03-10T07:45")).toEqual({ start: "2026-03-01", end: "2026-03-31" });
     expect(resolveAnchored("2026-01-01..2026-01-31", "2026-03-10")).toEqual({ start: "2026-01-01", end: "2026-01-31" });
     expect(resolveAnchored("nonsense", "2026-03-10")).toBeNull();
+  });
+});
+
+describe("a block's period counted from the view's date", () => {
+  const now = "2026-11-05T14:30";
+  const between = (fieldId: string, value: string, join?: "or"): FilterRule => ({ id: `${fieldId}-${value}`, fieldId, operator: "between", value, ...(join && { join }) });
+  const other: FilterRule = { id: "s", fieldId: "status", operator: "is", value: "done" };
+
+  it("takes the view's date as now kept inside the view's period: its last day once over, its first while to come", () => {
+    expect(viewMoment([], now)).toBeNull();
+    expect(viewMoment([between("d", "day+0")], now)).toBeNull();
+    expect(viewMoment([between("d", "month+0")], now)).toBeNull();
+    expect(viewMoment([between("d", "day-6")], now)).toBe("2026-10-30");
+    expect(viewMoment([between("d", "week+1")], now)).toBe("2026-11-08");
+    expect(viewMoment([between("d", "2026-10-01..2026-10-31")], now)).toBe("2026-10-31");
+    // A period of minutes: its last minute.
+    expect(viewMoment([between("d", "hour-2")], now)).toBe("2026-11-05T12:59");
+  });
+
+  it("counts a rolling period from the view's date and puts it in place of the view's period on its field", () => {
+    // The daily dashboard stepped back to 30 October: the sparkline's last 7 days are those up to it.
+    const view = [between("d", "day-6"), other];
+    const out = blockPeriod([between("d", "day-6..day+0", "or")], view, now);
+    expect(out.filters.map((r) => [r.value, r.join])).toEqual([["2026-10-24..2026-10-30", undefined]]);
+    expect(out.inherited).toEqual([other]);
+    expect(blockPeriod([between("d", "week+0")], view, now).filters[0].value).toBe("2026-10-25..2026-10-31");
+    expect(blockPeriod([between("d", "week-1")], view, now).filters[0].value).toBe("2026-10-18..2026-10-24");
+    expect(blockPeriod([between("d", "month+0..day+0")], view, now).filters[0].value).toBe("2026-10-01..2026-10-30");
+    // Unstepped: counted as it always was (from now), still in place of the view's period.
+    const today = blockPeriod([between("d", "day-6..day+0")], [between("d", "day+0")], now);
+    expect(today.filters[0].value).toBe("day-6..day+0");
+    expect(today.inherited).toEqual([]);
+  });
+
+  it("leaves the view's period on another field, and periods counted from today, an item or of chosen days, joined as they say", () => {
+    const view = [between("d", "day-6")];
+    const onOther = blockPeriod([between("c", "day-6..day+0", "or")], view, now);
+    expect(onOther.filters[0]).toMatchObject({ value: "2026-10-24..2026-10-30", join: "or" });
+    expect(onOther.inherited).toBe(view);
+    const fromToday = blockPeriod([between("d", anchoredValue("day-6..day+0", FROM_NOW))], view, now);
+    expect(fromToday.filters[0].value).toBe("day-6..day+0");
+    expect(fromToday.inherited).toBe(view);
+    const fromItem = [between("d", "day-6..day+0@$item.read")];
+    expect(blockPeriod(fromItem, view, now)).toEqual({ filters: fromItem, inherited: view });
+    const chosen = [between("d", "2026-01-01..2026-01-31")];
+    expect(blockPeriod(chosen, view, now)).toEqual({ filters: chosen, inherited: view });
+    expect(replacesViewPeriod(view[0], view)).toBe(true);
+    expect(replacesViewPeriod(fromItem[0], view)).toBe(false);
+    expect(splitAnchor(anchoredValue("week+0", FROM_NOW))).toEqual({ value: "week+0", fieldId: FROM_NOW });
   });
 });
 

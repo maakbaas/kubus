@@ -23,7 +23,7 @@ import { resolveParts } from "../domain/mergedCollection";
 import { nativeItems } from "../domain/mergedRows";
 import { isRemote } from "../domain/sources";
 import { blockSort } from "../domain/blockSort";
-import { blockQuery, defaultViewState, isFullWidth, listedCollection, NOTHING_COLLAPSED, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
+import { blockQuery, countedQuery, defaultViewState, isFullWidth, listedCollection, NOTHING_COLLAPSED, parseBlock, type CollectionView, type ViewBlock } from "../domain/views";
 import { draftProblem } from "../domain/collectionDraft";
 import { computeItems, loadWorld, type World } from "../domain/world";
 import { entryItems, findListCollection, isListCollectionId } from "../domain/listEntries";
@@ -535,7 +535,7 @@ export function createApi(repo: Repository): Router {
     if (remote) throw new HttpError(400, `The block reads ${remote.pluralName}, a remote collection: its rows aren't items in the API`);
     if (!block.collectionIds) {
       const collection = parts[0]!;
-      return queried(w, collection, tab.spaceId, blockQuery(dashboardFiltersFor(collection, tab.filters), block, blockSort(block, collection)), limit, offset);
+      return queried(w, collection, tab.spaceId, countedQuery(blockQuery(dashboardFiltersFor(collection, tab.filters), block, blockSort(block, collection))), limit, offset);
     }
     const merged = listedCollection(parts[0]!, block, w.collections).collection;
     const items: Item[] = [];
@@ -544,7 +544,7 @@ export function createApi(repo: Repository): Router {
       items.push(...nativeItems(merged, part, own, new WeakMap()));
     }
     // Merged columns are never references: no labels to look up.
-    const query = blockQuery(dashboardFiltersFor(merged, tab.filters), block, blockSort(block, merged));
+    const query = countedQuery(blockQuery(dashboardFiltersFor(merged, tab.filters), block, blockSort(block, merged)));
     return page(merged, applyQuery(merged, items, query, { refLabel: () => "" }), limit, offset);
   };
 
@@ -839,7 +839,7 @@ export function createApi(repo: Repository): Router {
         const { limit, offset } = paging(req, 100, 1000);
         // A block of a list field's entries lists those (not under the view's filter: it is over the items).
         const listed = isListCollectionId(block.collectionId) ? blockCollectionOf(w, block.collectionId) : collection;
-        const result = await queried(w, listed, view.spaceId, blockQuery(listed === collection ? view.filters : null, block, blockSort(block, block.collectionId ? blockCollectionOf(w, block.collectionId) : collection)), limit, offset);
+        const result = await queried(w, listed, view.spaceId, countedQuery(blockQuery(listed === collection ? view.filters : null, block, blockSort(block, block.collectionId ? blockCollectionOf(w, block.collectionId) : collection))), limit, offset);
         return json(200, {
           view: { id: view.id, name: view.name },
           block: { id: block.id, title: block.title, kind: block.kind },

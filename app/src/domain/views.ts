@@ -11,6 +11,7 @@ import { parseFieldLayout, type FieldLayout } from "./fieldLayout";
 import { newId, pickableFields, type Collection } from "./model";
 import { parseGroupDate, type GroupDate } from "./groupDate";
 import { defaultQuery, type FilterRule, type GroupOrder, type SortRule, type ViewQuery } from "./query";
+import { blockPeriod } from "./datePeriod";
 
 /** Name of a block type in the registry (src/views/index.ts). */
 export type BlockKind = string;
@@ -223,6 +224,12 @@ export function blockQuery(inherited: FilterRule[] | null, block: ViewBlock, sor
     ...(block.groupOrder === "custom" && { groupCustom: block.groupCustom ?? [] }),
     ...(block.groupDate && { groupDate: block.groupDate }),
   };
+}
+
+/** A block's query with its date period counted from the view's date, in place of the view's period (`blockPeriod`): as it is shown. */
+export function countedQuery(query: ViewQuery): ViewQuery {
+  const { filters, inherited } = blockPeriod(query.filters, query.inherited ?? NO_FILTERS);
+  return { ...query, filters, inherited };
 }
 
 /** A block with a changed sort / grouping (the query editor edits a whole query). */
