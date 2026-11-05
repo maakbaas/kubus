@@ -917,6 +917,10 @@ body {
   padding: 0.0625rem var(--cds-spacing-03);
   font-size: var(--cds-label-01-font-size, 0.75rem);
   line-height: 1rem;
+  /* Centred on the line of 14px text it sits in, not Carbon's `middle` (the baseline plus half the x-height: ~1px
+     low). On the baseline, Plex's content area is centred 0.375em above it (ascent 1.025, descent 0.275), so the
+     12px tag's middle is 0.375 × 2px = 0.75px (1/16 of its em) below the 14px text's: raised by that. */
+  vertical-align: 0.0625em;
   cursor: pointer;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
@@ -4547,7 +4551,7 @@ img[data-lightbox] {
   backface-visibility: hidden;
   animation-timeline: --table-wrap;
   /* From the table's top (below the wrap's by --table-head-start) passing the pane's top edge, as far as the
-     table's height less its header's and its last row's (--table-head-travel: a whole row always shows below it). */
+     table's height less its header's and its last item's row and any add row after it (--table-head-travel: a whole row of content always shows below it). */
   animation-range: exit-crossing var(--table-head-start, 0px) exit-crossing calc(var(--table-head-start, 0px) + var(--table-head-travel, 0px));
 }
 @keyframes table-head-follow {

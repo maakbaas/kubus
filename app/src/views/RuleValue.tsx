@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ComboBox, Select, SelectItem, TextInput } from "@carbon/react";
+import { ComboBox, Dropdown, Select, SelectItem, TextInput } from "@carbon/react";
 import type { Collection, FieldDef, FieldKind } from "../domain/model";
 import { dollarNames } from "../domain/components";
 import { canGroup, deviceTimeZone, sourceQuery } from "../domain/sources";
@@ -58,6 +58,7 @@ export function RuleValue({
   refs,
   page,
   labelText,
+  pickOnly,
   onChange,
 }: {
   id: string;
@@ -69,6 +70,8 @@ export function RuleValue({
   page?: Collection;
   /** Its (hidden) label: the filter bar names the rule ("Genre is"); default "Value". */
   labelText?: string;
+  /** Existing values are picked from a menu, not typed (the filter bar on a touch screen: no keyboard comes up); other values are typed in the filter panel. */
+  pickOnly?: boolean;
   onChange(value: string): void;
 }) {
   const label = labelText ?? "Value";
@@ -102,6 +105,7 @@ export function RuleValue({
       hideLabel={hideLabel}
       placeholder={field.kind === "checkbox" ? "true or false" : date ? "yyyy-mm-dd" : "Value"}
       note={note}
+      pickOnly={pickOnly}
       onChange={onChange}
     />
   );
@@ -137,6 +141,7 @@ interface TypedProps {
   hideLabel: boolean;
   placeholder: string;
   note: { helper?: string; problem?: string };
+  pickOnly?: boolean;
   onChange(value: string): void;
 }
 
@@ -186,7 +191,29 @@ function RemoteValues(props: TypedProps) {
   return options?.length ? <ValueBox {...props} options={options} /> : <PlainValue {...props} />;
 }
 
-function ValueBox({ id, field, rule, label, hideLabel, placeholder, note, onChange, options }: TypedProps & { options: ValueOption[] }) {
+function ValueBox({ id, field, rule, label, hideLabel, placeholder, note, pickOnly, onChange, options }: TypedProps & { options: ValueOption[] }) {
+  if (pickOnly) {
+    // "Any" (no value: the rule doesn't filter yet) first, and a value typed in the panel that isn't among them.
+    const values = ["", ...options.map((o) => o.value)];
+    if (!values.includes(rule.value)) values.push(rule.value);
+    return (
+      <Dropdown
+        autoAlign
+        id={id}
+        size="sm"
+        titleText={hideLabel ? undefined : label}
+        aria-label={label}
+        label="Any"
+        items={values}
+        itemToString={(v) => (v ? v : "Any")}
+        selectedItem={rule.value}
+        helperText={note.helper}
+        invalid={!!note.problem}
+        invalidText={note.problem}
+        onChange={({ selectedItem }) => onChange(selectedItem ?? "")}
+      />
+    );
+  }
   return (
     <ComboBox
       autoAlign

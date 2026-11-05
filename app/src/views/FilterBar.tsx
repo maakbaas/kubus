@@ -5,6 +5,7 @@ import { pickableFields, type Collection } from "../domain/model";
 import { fieldOperators } from "../domain/sources";
 import type { RefOptions } from "../ui/useReferenceOptions";
 import { RuleValue } from "./RuleValue";
+import { useMediaQuery } from "../ui/useMediaQuery";
 import { RollingMark } from "./RollingMark";
 import type { FilterRule } from "../domain/query";
 import { steps } from "./DatePeriodFilter";
@@ -24,7 +25,8 @@ import { defaultDateField, latestValue, nowMinute, periodParts, periodRule, peri
  * "Pages below") and its value (RuleValue: the field's existing values offered), follow the period on its line
  * while they all fit there; else they all go below it in a grid of as many columns as fit (one on a phone), the
  * words of each as wide as the longest and its value filling its column. Their field and comparison are changed
- * in the panel.
+ * in the panel. On a touch screen a value with existing values offered is picked from a menu (or "Any"), not typed:
+ * no keyboard comes up for it; any other value is typed in the panel.
  */
 export function FilterBar({
   collection,
@@ -49,6 +51,8 @@ export function FilterBar({
   children: ReactNode;
 }) {
   const uid = useId();
+  // A touch screen picks a rule's value from its menu: tapping the box brings up no keyboard.
+  const touch = useMediaQuery("(hover: none)");
   const now = nowMinute();
   const rule = periodRule(filters);
   const value = rule ? splitAnchor(rule.value) : null;
@@ -120,7 +124,7 @@ export function FilterBar({
               <label className="filter-bar__words" htmlFor={`${uid}-bar-${rule.id}`} title={words}>
                 {words}
               </label>
-              <RuleValue id={`${uid}-bar-${rule.id}`} owner={ownerOf(field.id)} field={field} rule={rule} refs={refs} labelText={words} onChange={(value) => setValue(rule.id, value)} />
+              <RuleValue id={`${uid}-bar-${rule.id}`} owner={ownerOf(field.id)} field={field} rule={rule} refs={refs} labelText={words} pickOnly={touch} onChange={(value) => setValue(rule.id, value)} />
             </div>
           ))}
         </div>

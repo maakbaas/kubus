@@ -158,7 +158,9 @@ Extension points are registries, not special cases in pages:
   includes / does not include of a list of text, a checklist or a list of numbers (contains, any part, and below / above,
   a threshold, are typed; item fields pick from items already) it is a Carbon
   ComboBox offering the field's existing values, most common first (no counts shown), any other text typed
-  as well (custom values allowed; code with {{ }} is always plain text). A native collection's from its items in the
+  as well (custom values allowed; code with {{ }} is always plain text). On the filter bar on a touch screen (`(hover: none)`,
+  `pickOnly`) it is a Carbon Dropdown instead: "Any" (no value) and the same values, picked, so tapping it brings up no
+  keyboard; another value is typed in the filter panel (and then listed in the bar's menu too). A native collection's from its items in the
   cache (this space's; `valueOptions`, a list's each entry, as grouping makes them); a remote one's from its source, one
   grouped query (`groupBy` the column, `counts`, `limit: 1`: the groups, at most `MAX_SOURCE_GROUPS`) asked once a session
   per source and column, not for a column the source can't group (text-only); none for Backlinks, a list's entries or

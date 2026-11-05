@@ -352,13 +352,18 @@ export function FillTable({ children, style }: { children: ReactNode; /** E.g. a
     const scrollDriven = typeof CSS !== "undefined" && CSS.supports("animation-timeline: --a");
     let follow = false;
     let shown = 0;
-    // How far down the table its header can move: to just above its last row, so a whole row always shows
-    // below it (it never sits alone at the table's end, nor comes into view before a row when scrolling up).
+    // How far down the table its header can move: to just above its last item's row, so a whole row of content
+    // always shows below it (it never sits alone at the table's end, nor comes into view before a row when
+    // scrolling up). The add row at the end (inline editing) doesn't count as that row: it stays below it too.
     const travel = () => {
       const head = table.tHead;
-      const last = table.rows[table.rows.length - 1];
-      const lastRow = last && last.parentElement !== head ? last.offsetHeight : 0;
-      return Math.max(0, table.offsetHeight - (head?.offsetHeight ?? 0) - lastRow);
+      const body = [...table.rows].filter((r) => r.parentElement !== head);
+      let below = 0;
+      for (let i = body.length - 1; i >= 0; i--) {
+        below += body[i].offsetHeight;
+        if (!body[i].classList.contains("table-add-row")) break;
+      }
+      return Math.max(0, table.offsetHeight - (head?.offsetHeight ?? 0) - below);
     };
     const shift = () => {
       const head = table.tHead;
