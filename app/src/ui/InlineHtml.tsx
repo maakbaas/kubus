@@ -57,7 +57,24 @@ export function sanitizeInline(html: string): string {
  * Its box: the cell's font and colour; what doesn't fit the cell is cut off. A link in it that has focus marks the box
  * (Carbon's focus ring, inside: the box clips), as the page sees focus on the box, not in its shadow root.
  */
-const HOST_STYLE = `<style>:host{display:block;min-inline-size:0;overflow:hidden;font:inherit;color:inherit;overflow-wrap:anywhere}:host(:focus-within){outline:2px solid var(--cds-focus);outline-offset:-2px}:focus{outline:none}img,svg{max-inline-size:100%}</style>`;
+const HOST_CSS = `:host{display:block;min-inline-size:0;overflow:hidden;font:inherit;color:inherit;overflow-wrap:anywhere}:host(:focus-within){outline:2px solid var(--cds-focus);outline-offset:-2px}:focus{outline:none}img,svg{max-inline-size:100%}`;
+
+/**
+ * That style as one sheet every cell's shadow root adopts: as a <style> in each, every cell parsed and set up a sheet of
+ * its own (a table's column of HTML: a hundred). Null where sheets can't be shared (older browsers): then the <style>.
+ */
+let hostSheet: CSSStyleSheet | null | undefined;
+function sharedHostSheet(): CSSStyleSheet | null {
+  if (hostSheet !== undefined) return hostSheet;
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(HOST_CSS);
+    hostSheet = "adoptedStyleSheets" in ShadowRoot.prototype ? sheet : null;
+  } catch {
+    hostSheet = null;
+  }
+  return hostSheet;
+}
 
 export function InlineHtml({ html }: { html: string }) {
   const host = useRef<HTMLSpanElement>(null);
@@ -67,7 +84,11 @@ export function InlineHtml({ html }: { html: string }) {
     const el = host.current;
     if (!el || resolved === undefined) return;
     const root = el.shadowRoot ?? el.attachShadow({ mode: "open" });
-    root.innerHTML = HOST_STYLE + sanitizeInline(resolved);
+    const sheet = sharedHostSheet();
+    if (sheet) {
+      if (root.adoptedStyleSheets[0] !== sheet) root.adoptedStyleSheets = [sheet];
+      root.innerHTML = sanitizeInline(resolved);
+    } else root.innerHTML = `<style>${HOST_CSS}</style>` + sanitizeInline(resolved);
   }, [resolved]);
   return <span ref={host} className="inline-html" />;
 }
