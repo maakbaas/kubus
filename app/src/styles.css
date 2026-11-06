@@ -2665,6 +2665,27 @@ img[data-lightbox] {
   flex-direction: column;
   gap: var(--cds-spacing-05);
 }
+/* Fields → Merge fields (views/MergeFields.tsx): its heading with the merged columns under it (one line each, the
+   unmerge button at the panel's right edge), then the controls spaced as the panel's. */
+.merge-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-05);
+}
+.merge-fields__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cds-spacing-03);
+  min-block-size: 2rem;
+}
+.merge-fields__text {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Dashboard settings: the icon picker's button left of the name's input, on its line (below the label). */
 .dashboard-settings__name {
   display: flex;

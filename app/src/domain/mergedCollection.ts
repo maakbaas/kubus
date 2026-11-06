@@ -14,7 +14,7 @@
 //    the Collection column has the part's name (a constant per part: `partConstants`).
 
 import { formatDate } from "./fieldKinds";
-import { blankField, fieldValue, META_FIELDS, NO_TITLE, type Collection, type FieldDef, type FieldKind, type FieldValue, type Item, type MergedPart, type MergeProblem } from "./model";
+import { blankField, canBeTitle, fieldValue, META_FIELDS, NO_TITLE, titleFields, type Collection, type FieldDef, type FieldKind, type FieldValue, type Item, type MergedPart, type MergeProblem } from "./model";
 import { rowItem, rowItemId, setReadKinds, sourceColumn, type ConstantFields } from "./sources";
 import type { SourceShape, SourceRow } from "../../../shared/sources";
 
@@ -281,10 +281,20 @@ export function mergeCollections(ids: string[], collections: Collection[], merge
   }
   // After the others, the columns merged by hand; Collection last: the title is the first text field (a table's first column), and that is a collection's own text, not its name.
   columns.push(...byHand);
+  // But first the columns showing the parts' own titles (in the parts' order): a row is called what its item is called in
+  // its collection, wherever the merging put that field. One column holding every part's title is the title.
+  const titles = parts.flatMap((c) => {
+    const own = partTitle(c);
+    const column = own && columns.find((col) => col.kinds.get(c.id)?.field.id === own.id);
+    return column ? [column] : [];
+  });
+  const firsts = [...new Set(titles)];
+  columns.sort((a, b) => (firsts.includes(a) ? firsts.indexOf(a) : firsts.length) - (firsts.includes(b) ? firsts.indexOf(b) : firsts.length));
   const fields: FieldDef[] = [
     ...columns.map((c) => blankField(c.id, c.name, columnKind([...c.kinds.values()].map((x) => x.kind))!, { collectionId: mergedId })),
     blankField(COLLECTION_COLUMN, "Collection", "string", { collectionId: mergedId }),
   ].map((f, position) => ({ ...f, position }));
+  const titleColumn = firsts.length === 1 && titles.length === parts.length ? fields.find((f) => f.id === firsts[0].id && canBeTitle(f)) : undefined;
   const collection: Collection = {
     id: mergedId,
     name: "Item",
@@ -294,7 +304,7 @@ export function mergeCollections(ids: string[], collections: Collection[], merge
     fields,
     itemViews: [],
     spaceIds: null,
-    titleField: null,
+    titleField: titleColumn?.id ?? null,
     mergedFrom: {
       collectionField: COLLECTION_COLUMN,
       parts: parts.map((c) => ({ collectionId: c.id, map: Object.fromEntries(columns.flatMap((col) => (col.kinds.has(c.id) ? [[col.id, col.kinds.get(c.id)!.field.id]] : []))) })),
@@ -304,6 +314,41 @@ export function mergeCollections(ids: string[], collections: Collection[], merge
     updatedAt: "",
   };
   return { collection, problems };
+}
+
+/** The field a part's items are called by (its chosen title field, else its first text field), if a column can show it. */
+function partTitle(part: Collection): FieldDef | undefined {
+  const readable = new Set(partFields(part).map((f) => f.id));
+  return titleFields(part).find((f) => readable.has(f.id));
+}
+
+/**
+ * A block's shown fields (`ViewBlock.layout.fields`) once its merged collection changed from `before` to `after` (a column merged
+ * or taken apart): a column still there keeps its place, a gone one is dropped, a new one is shown where the first shown column
+ * holding one of its fields was (hidden when none was shown). Null (every field) stays null.
+ */
+export function carryShownFields(before: Collection, after: Collection, shown: string[] | null): string[] | null {
+  if (!shown) return null;
+  const refs = (c: Collection) => {
+    const out = new Map<string, Set<string>>();
+    for (const part of c.mergedFrom?.parts ?? []) for (const [column, id] of Object.entries(part.map)) if (id) (out.get(column) ?? out.set(column, new Set()).get(column)!).add(mergeRef(part.collectionId, id));
+    return out;
+  };
+  const was = refs(before);
+  const now = refs(after);
+  const oldIds = new Set(before.fields.map((f) => f.id));
+  const newIds = new Set(after.fields.map((f) => f.id));
+  const next: string[] = [];
+  for (const id of shown) {
+    if (!oldIds.has(id) || newIds.has(id)) {
+      if (!next.includes(id)) next.push(id);
+      continue;
+    }
+    // A gone column: in its place, the new columns showing any of its fields.
+    const held = was.get(id) ?? new Set<string>();
+    for (const f of after.fields) if (!oldIds.has(f.id) && !next.includes(f.id) && [...(now.get(f.id) ?? [])].some((r) => held.has(r))) next.push(f.id);
+  }
+  return next;
 }
 
 /** Fields of the listed collections that can be merged by hand into `column`'s partner: those of another collection that can be shown alike. */

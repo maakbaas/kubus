@@ -312,8 +312,8 @@ describe("the remote request", () => {
     expect(call).toMatchObject({
       target: shopSales.source!.target,
       key: "id",
-      columns: ["ordered_at", "customer", "paid", "meta", "total"],
-      title: ["customer", "meta"],
+      columns: ["customer", "ordered_at", "paid", "meta", "total"],
+      title: ["customer"],
       filter: { and: [{ column: "ordered_at", operator: "between", value: "2026-10-01..2026-10-31" }, { column: "customer", operator: "contains", value: "e" }] },
       search: "x",
       sort: [{ column: "total", direction: "desc" }],

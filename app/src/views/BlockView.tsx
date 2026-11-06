@@ -244,7 +244,8 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
               id={`${uid}-fields`}
               label="Fields"
               fields={pickableFields(collection)}
-              collection={collection}
+              // Fields are added to a collection of its own: not to several read as one.
+              collection={merged ? undefined : collection}
               value={block.layout.fields}
               onChange={(fields) => onChange({ ...block, layout: { ...block.layout, fields } })}
               {...(uses.fields.labels && {

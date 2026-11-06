@@ -7,6 +7,7 @@ import {
   mergedRowItem,
   mergedValue,
   canShow,
+  carryShownFields,
   hasRemotePart,
   mergeCandidates,
   mergeCollections,
@@ -86,9 +87,10 @@ describe("merging collections into the one a block reads", () => {
     const { collection, problems } = merged(["sales", "invoices"]);
     expect(problems).toEqual([]);
     expect(columns(collection)).toEqual([
+      // The column of the parts' titles first (both are called by their Client): the title.
+      [COL.client, "Client", "string"],
       // A date & time and a date: a date column (the day).
       [COL.date, "Date", "date"],
-      [COL.client, "Client", "string"],
       [COL.paid, "Paid", "checkbox"],
       ["merged:name:meta", "Meta", "string"],
       ["merged:name:note", "Note", "markdown"],
@@ -101,8 +103,35 @@ describe("merging collections into the one a block reads", () => {
       { collectionId: "sales", map: { [COL.amount]: "s-total", [COL.date]: "s-at", [COL.client]: "s-customer", [COL.paid]: "s-paid", "merged:name:meta": "s-meta" } },
       { collectionId: "invoices", map: { [COL.amount]: "i-price", [COL.date]: "i-date", [COL.client]: "i-client", "merged:name:note": "i-note" } },
     ]);
+    expect(collection.titleField).toBe(COL.client);
     expect(collection.pluralName).toBe("Shop sales + Invoices");
     expect(isReadOnly(collection)).toBe(true);
+  });
+
+  it("puts the columns of the parts' titles first, wherever they were merged; one column of every part's title is the title", () => {
+    // Films are called by their Name, Books by their chosen Title; Name and Title merged by hand (they would be last).
+    const books: Collection = { ...invoices, id: "books", pluralName: "Books", titleField: "b-title", fields: [blankField("b-author", "Author", "string", { collectionId: "books" }), blankField("b-title", "Title", "string", { collectionId: "books" })] };
+    const films: Collection = { ...invoices, id: "films", pluralName: "Films", fields: [blankField("f-name", "Name", "string", { collectionId: "films" }), blankField("f-author", "Author", "string", { collectionId: "films" })] };
+    const byHand = [{ id: "t", name: "Title", fields: ["books/b-title", "films/f-name"] }];
+    const one = mergeCollections(["books", "films"], [books, films], byHand).collection;
+    expect(one.fields.map((f) => f.id)).toEqual(["merged:t", "merged:name:author", COLLECTION_COLUMN]);
+    expect(one.titleField).toBe("merged:t");
+    // Apart: each part's title column first (in the parts' order), and no one title (each row's first text with a value).
+    const apart = mergeCollections(["books", "films"], [books, films], []).collection;
+    expect(apart.fields.map((f) => f.id)).toEqual(["merged:name:title", "merged:name:name", "merged:name:author", COLLECTION_COLUMN]);
+    expect(apart.titleField).toBeNull();
+  });
+
+  it("keeps a block's choice of fields when columns are merged by hand or taken apart", () => {
+    const apart = merged(["sales", "invoices"], world, []).collection;
+    const together = revenue;
+    // Total shown, Price hidden: Amount (both) is shown in Total's place; Date hidden stays hidden; Created stays.
+    const shown = ["merged:name:total", COL.client, "$created"];
+    expect(carryShownFields(apart, together, shown)).toEqual([COL.amount, COL.client, "$created"]);
+    expect(carryShownFields(apart, together, [COL.client])).toEqual([COL.client]);
+    // Taken apart: both its fields in its place.
+    expect(carryShownFields(together, apart, [COL.date, COL.amount])).toEqual([COL.date, "merged:name:total", "merged:name:price"]);
+    expect(carryShownFields(together, apart, null)).toBeNull();
   });
 
   it("keeps the same ids for the same collections, however the others change (blocks keep them in their layout)", () => {
@@ -170,11 +199,11 @@ describe("a merged collection's parts", () => {
   it("resolves its parts with the fields they show", () => {
     const parts = resolveParts(revenue, world);
     expect(parts.map((p) => [p.collection.id, p.label])).toEqual([["sales", "Shop sales"], ["invoices", "Invoices"]]);
-    expect([...parts[1].fields.keys()]).toEqual([COL.date, COL.client, "merged:name:note", COL.amount]);
+    expect([...parts[1].fields.keys()]).toEqual([COL.client, COL.date, "merged:name:note", COL.amount]);
     // Collections changed since it was made: a part that is gone, a field that was removed, are left out.
     const fewer = resolveParts(revenue, [{ ...invoices, fields: invoices.fields.filter((f) => f.id !== "i-note") }]);
     expect(fewer.map((p) => p.collection.id)).toEqual(["invoices"]);
-    expect([...fewer[0].fields.keys()]).toEqual([COL.date, COL.client, COL.amount]);
+    expect([...fewer[0].fields.keys()]).toEqual([COL.client, COL.date, COL.amount]);
   });
 
   it("opens a row's own item or remote row", () => {
@@ -204,14 +233,15 @@ describe("a merged collection's rows", () => {
   it("are a remote part's rows through the same mapping, a date & time shown as a date", () => {
     const projection = partProjection(revenue, sales);
     const shape = sourceShape(projection);
-    expect(shape.columns).toEqual(["ordered_at", "customer", "paid", "meta", "total"]);
+    expect(shape.columns).toEqual(["customer", "ordered_at", "paid", "meta", "total"]);
     const at = new Date(2026, 9, 5, 12, 0).toISOString();
-    const item = mergedRowItem(revenue, sales, projection, shape, { key: "42", values: [at, "Bo", true, null, 99.5] });
+    const item = mergedRowItem(revenue, sales, projection, shape, { key: "42", values: ["Bo", at, true, null, 99.5] });
     expect(item).toMatchObject({ id: `sales:${rowItemId("42")}`, values: { [COL.amount]: 99.5, [COL.date]: "2026-10-05", [COL.client]: "Bo", [COL.paid]: true, [COL.collection]: "Shop sales" } });
   });
 
   it("are called by the first text field with a value, never Collection unless it is chosen; Created and Updated are there", () => {
-    expect(titleFields(revenue).map((f) => f.id)).toEqual([COL.client, "merged:name:meta"]);
+    expect(titleFields(revenue).map((f) => f.id)).toEqual([COL.client]);
+    expect(titleFields({ ...revenue, titleField: null }).map((f) => f.id)).toEqual([COL.client, "merged:name:meta"]);
     const item = mergedItem(revenue, inv, invoice(1, "Ada", 120, "2026-02-03"));
     expect(itemLabel(revenue, item)).toBe("Ada");
     expect(itemLabel(revenue, { ...item, values: { ...item.values, [COL.client]: "" } })).toBe("Item");
@@ -225,8 +255,8 @@ describe("a remote part as a collection of the merged columns", () => {
   it("has the columns it shows, each on the part's source column", () => {
     const projection = partProjection(revenue, sales);
     expect(projection.fields.map((f) => [f.id, f.kind, f.column])).toEqual([
-      [COL.date, "date", "ordered_at"],
       [COL.client, "string", "customer"],
+      [COL.date, "date", "ordered_at"],
       [COL.paid, "checkbox", "paid"],
       ["merged:name:meta", "string", "meta"],
       [COL.amount, "number", "total"],
@@ -235,7 +265,7 @@ describe("a remote part as a collection of the merged columns", () => {
   });
 
   it("has no title where the chosen title field isn't one of its columns", () => {
-    expect(partProjection(revenue, sales).titleField).toBeNull();
+    expect(partProjection({ ...revenue, titleField: null }, sales).titleField).toBeNull();
     expect(partProjection({ ...revenue, titleField: COL.client }, sales).titleField).toBe(COL.client);
     expect(partProjection({ ...revenue, titleField: COL.collection }, sales).titleField).toBe("none");
   });

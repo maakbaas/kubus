@@ -296,7 +296,10 @@ What the app does, feature by feature (read the part you work on).
   separate columns, the later ones named with their collection ("Total (Shop sales)"); references, images, checklists and component
   fields are left out. Always there: Collection (the part a row is from; never the title unless chosen), Title, Created and Updated
   (rows of a remote collection have neither). Fields → Merge fields merges two differently named fields of different collections that
-  fit (Total and Price as Amount; stored with the block, "Unmerge" takes it apart). Column ids are stable (`merged:name:<name>`,
+  fit (Total and Price as Amount; stored with the block, "Unmerge" takes it apart); the block's choice of fields stays (`carryShownFields`:
+  a merged column is shown where the first shown field it holds was, taken apart its fields take its place). The columns showing
+  the parts' own titles (a part's title field, else its first text field) come first, wherever they were merged; one column holding every
+  part's title is the merged collection's title field. Column ids are stable (`merged:name:<name>`,
   `merged:<id>`, `merged:collection`), so the block's fields, filters, sort, grouping and chart settings stay. The dashboard's filter
   reaches the columns that show its fields (`dashboardFiltersFor`; see Dashboards). How rows come: a native part's items become merged items in memory and the query runs over
   them (`applyQuery`); a remote part is asked by its source with the query rewritten to its columns (`partProjection` + `sourceQuery`:

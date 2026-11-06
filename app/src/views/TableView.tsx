@@ -225,12 +225,17 @@ interface CellProps {
   editable: boolean;
   /** Where the click that started editing was (the caret goes there), if it was a click. */
   editing: { start?: EditStart } | null;
-  onEdit(start?: EditStart): void;
-  onDone(): void;
+  setEditing: Dispatch<SetStateAction<EditingCell | null>>;
 }
 
-/** A table cell: the title opens the item, inline-editable values edit in place. */
-function Cell({ collection, isTitle, field, item, refs, search, actions, editable, editing, onEdit, onDone }: CellProps) {
+/**
+ * A table cell: the title opens the item, inline-editable values edit in place. Memoized (its props are stable while its
+ * item, field and the table's settings are): a column shown or hidden renders only that column's cells, not the row's others.
+ */
+const Cell = memo(function Cell({ collection, isTitle, field, item, refs, search, actions, editable, editing, setEditing }: CellProps) {
+  const onEdit = (start?: EditStart) => setEditing({ itemId: item.id, fieldId: field.id, start });
+  // Clicking another cell saves this one; don't close the editor that click opened.
+  const onDone = () => setEditing((cur) => (cur?.itemId === item.id && cur.fieldId === field.id ? null : cur));
   if (isTitle) {
     return (
       <Link href={`#${itemPath(collection, item)}`} {...itemLinkProps(item, actions)}>
@@ -299,7 +304,7 @@ function Cell({ collection, isTitle, field, item, refs, search, actions, editabl
       <FieldCell field={field} item={item} refs={refs} search={search} actions={actions} />
     </div>
   );
-}
+});
 
 /**
  * An items table. Columns are as wide as their content (see styles.css), so the table can end
@@ -610,10 +615,8 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
               search={search}
               actions={actions}
               editable={editable}
-              editing={isEditing ? { start: editing.start } : null}
-              onEdit={(start) => setEditing({ itemId: item.id, fieldId: f.id, start })}
-              // Clicking another cell saves this one; don't close the editor that click opened.
-              onDone={() => setEditing((cur) => (cur?.itemId === item.id && cur.fieldId === f.id ? null : cur))}
+              editing={isEditing ? editing : null}
+              setEditing={setEditing}
             />
           </TableCell>
         );
