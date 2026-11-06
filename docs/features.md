@@ -607,7 +607,12 @@ What the app does, feature by feature (read the part you work on).
   keeps the fields' names, order and types and adds or drops the columns that came or went. A column's
   field isn't removed but hidden (the eye icon; `source.hiddenColumns`, "Hidden columns" lists them to show
   again): reading the columns again doesn't bring it back. A text
-  column's field can be shown as Markdown or HTML; fields added there are component fields (computed
+  column's field can be shown as Markdown or HTML, and a column's field as another type its values can be read as
+  (`columnKinds`, `columnValue`): text as a number, checkbox, date or date & time (numbers stored as text: "3,5",
+  "1,234.5"; "yes" / "0"), a number as text or a checkbox, a checkbox as text or a number, a date as a date & time and
+  back, a list as text. A value that doesn't convert is empty, never NaN (left out of sums and charts like a missing
+  one). Such a converted field isn't filtered, sorted or grouped by (the source would compare its own text: "10" before
+  "9"); reading the columns again keeps it while its column can still be read so. Fields added there are component fields (computed
   for the rows shown); no AI or reference fields, no Created / Updated. Views, blocks, item views,
   bookmarks are as for any collection (stored here, synced); filters, sorts and groupings offer only
   what a column supports (`fieldOperators`, `canSort`, `canGroup`: JSON and the like only "contains" /

@@ -17,8 +17,111 @@ export const isRemote = (collection: Pick<Collection, "source">): boolean => !!c
 /** Whether a collection's items can't be changed here: a remote one's rows, a virtual one's (the backlinks), a merged collection's. */
 export const isReadOnly = (collection: Pick<Collection, "source" | "virtual" | "mergedFrom">): boolean => isRemote(collection) || !!collection.virtual || !!collection.mergedFrom;
 
-/** Field types a column's field can be shown as (they read the same values): text also as Markdown or HTML. */
-export const columnKinds = (kind: FieldKind): FieldKind[] => (kind === "string" || kind === "markdown" || kind === "html" ? ["string", "markdown", "html"] : [kind]);
+const TEXT_KINDS: FieldKind[] = ["string", "markdown", "html"];
+const isText = (kind: FieldKind) => TEXT_KINDS.includes(kind);
+
+/**
+ * Field types a column's field can be shown as: its own (text also as Markdown or HTML, the same values) and those its
+ * values can be read as (numbers or dates stored as text, a checkbox as a number, ...): see `columnValue`.
+ */
+export function columnKinds(kind: FieldKind): FieldKind[] {
+  if (isText(kind)) return [...TEXT_KINDS, "number", "checkbox", "date", "datetime"];
+  switch (kind) {
+    case "number":
+      return ["number", "string", "checkbox"];
+    case "checkbox":
+      return ["checkbox", "string", "number"];
+    case "date":
+      return ["date", "datetime", "string"];
+    case "datetime":
+      return ["datetime", "date", "string"];
+    case "string_list":
+      return ["string_list", "string"];
+    default:
+      return [kind];
+  }
+}
+
+/** Whether a field shows its column's values as they are (the same type, or text as Markdown or HTML). */
+const sameValues = (columnKind: FieldKind, fieldKind: FieldKind) => columnKind === fieldKind || (isText(columnKind) && isText(fieldKind));
+
+/**
+ * A merged block's part as a collection of the merged fields (mergedCollection.ts partProjection): its fields have the
+ * merged types, over the part's columns, and the merged code turns the part's values into them. What a column is
+ * read as there is the part's own field's type: set here, by field id.
+ */
+const projectedKinds = new WeakMap<Collection, Map<string, FieldKind>>();
+export function setReadKinds(projection: Collection, kinds: Map<string, FieldKind>) {
+  projectedKinds.set(projection, kinds);
+}
+
+/** The type a field reads its column as: its own, or in a merged block's part its part's field's. */
+const readKind = (collection: Collection, field: FieldDef) => projectedKinds.get(collection)?.get(field.id) ?? field.kind;
+
+/** A field showing its column's values converted to another type (text as a number, ...): see `columnValue`. */
+export function isConverted(collection: Collection, field: FieldDef): boolean {
+  const column = sourceColumn(collection, field);
+  return !!column && !sameValues(column.kind, readKind(collection, field));
+}
+
+const TRUE = new Set(["true", "t", "yes", "y", "1", "on"]);
+const FALSE = new Set(["false", "f", "no", "n", "0", "off"]);
+
+/** A number written as text: "12", "-3.5", "1e3", a decimal comma ("3,5"), thousands separators ("1,234.5"); else null. */
+function textNumber(text: string): number | null {
+  let t = text.trim().replace(/[\s\u00a0']/g, "");
+  if (!t) return null;
+  if (t.includes(",") && t.includes(".")) t = t.lastIndexOf(",") > t.lastIndexOf(".") ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "");
+  else if (/^-?\d{1,3}(,\d{3})+$/.test(t)) t = t.replace(/,/g, "");
+  else t = t.replace(",", ".");
+  const n = Number(t);
+  return t !== "" && Number.isFinite(n) ? n : null;
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * A column's value as a field of another type reads it (`columnKinds`); one that doesn't convert (a word as a
+ * number, a date that isn't one) is empty, not NaN or a made-up value: an empty value is left out of sums, charts and
+ * sorting the way a missing one is, where NaN would spread through them.
+ */
+export function columnValue(columnKind: FieldKind, fieldKind: FieldKind, v: FieldValue): FieldValue {
+  if (v === null || v === undefined || sameValues(columnKind, fieldKind)) return v;
+  switch (fieldKind) {
+    case "string":
+    case "markdown":
+    case "html":
+      if (Array.isArray(v)) return v.join(", ");
+      return typeof v === "boolean" ? (v ? "true" : "false") : String(v);
+    case "number":
+      if (typeof v === "number") return Number.isFinite(v) ? v : null;
+      if (typeof v === "boolean") return v ? 1 : 0;
+      return typeof v === "string" ? textNumber(v) : null;
+    case "checkbox": {
+      if (typeof v === "boolean") return v;
+      if (typeof v === "number") return Number.isNaN(v) ? null : v !== 0;
+      const t = typeof v === "string" ? v.trim().toLowerCase() : "";
+      return TRUE.has(t) ? true : FALSE.has(t) ? false : null;
+    }
+    case "date": {
+      if (typeof v !== "string") return null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v.trim())) return v.trim();
+      const d = new Date(v.trim());
+      if (Number.isNaN(d.getTime())) return null;
+      // A date & time's day where it is shown (local); a date-only text ("2024-03-05") above, as written.
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+    case "datetime": {
+      if (typeof v !== "string") return null;
+      // A date alone is its day's start, here.
+      const t = v.trim();
+      const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(t) ? `${t}T00:00` : t);
+      return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    }
+    default:
+      return null;
+  }
+}
 
 /**
  * The field types offered for a field: any (but AI, chosen as a component field) in a native
@@ -43,7 +146,8 @@ export function fieldOperators(collection: Collection, field: FieldDef): Operato
   if (field.id === SELF_FIELD) return operatorsFor(field.kind).filter((o) => o.needsValue);
   if (!collection.source || isMetaField(field)) return operatorsFor(field.kind);
   const column = sourceColumn(collection, field);
-  if (!column) return [];
+  // Converted values (text as a number, ...) aren't what the source compares: it would compare its own ("10" < "9").
+  if (!column || isConverted(collection, field)) return [];
   return column.plain ? operatorsFor(field.kind).filter((o) => PLAIN_OPS.has(o.id)) : operatorsFor(field.kind);
 }
 
@@ -56,7 +160,7 @@ export function canSort(collection: Collection, fieldId: string): boolean {
   if (fieldId === TITLE) return true;
   const field = collection.fields.find((f) => f.id === fieldId);
   const column = field && sourceColumn(collection, field);
-  return !!column && !column.plain;
+  return !!column && !column.plain && !isConverted(collection, field);
 }
 
 /** Whether items can be grouped by a field. */
@@ -64,7 +168,7 @@ export function canGroup(collection: Collection, field: FieldDef): boolean {
   if (!isGroupable(field.kind)) return false;
   if (!collection.source) return true;
   const column = sourceColumn(collection, field);
-  return !!column && !column.plain;
+  return !!column && !column.plain && !isConverted(collection, field);
 }
 
 /**
@@ -127,7 +231,8 @@ export function rowItem(collection: Collection, shape: SourceShape, row: SourceR
   for (const f of collection.fields) {
     const i = f.column ? at.get(f.column) : undefined;
     if (i === undefined) continue;
-    const v = row.values[i];
+    const column = sourceColumn(collection, f);
+    const v = column ? columnValue(column.kind, readKind(collection, f), row.values[i]) : row.values[i];
     if (v !== null && v !== undefined) values[f.id] = v;
   }
   return { id: rowItemId(row.key), collectionId: collection.id, spaceId: "", values, createdAt: "", updatedAt: "" };
@@ -232,11 +337,16 @@ export function withSourceColumns<D extends { source?: CollectionSource | null; 
   const columns = new Map(description.columns.map((c) => [c.name, c]));
   const hidden = (draft.source?.hiddenColumns ?? []).filter((name) => columns.has(name));
   const had = new Set([...draft.fields.flatMap((f) => (f.column ? [f.column] : [])), ...hidden]);
+  const before = new Map((draft.source?.columns ?? []).map((c) => [c.name, c]));
   const fields = draft.fields.flatMap((f) => {
     if (!f.column) return [f];
     const c = columns.get(f.column);
     if (!c) return [];
-    return [columnKinds(c.kind).includes(f.kind) ? f : { ...f, kind: c.kind }];
+    // A column whose type changed gives its field its new one, unless the field was set to read it as another type
+    // (text as a number) and still can.
+    const was = before.get(f.column);
+    const converted = !!was && !sameValues(was.kind, f.kind);
+    return [sameValues(c.kind, f.kind) || (converted && columnKinds(c.kind).includes(f.kind)) ? f : { ...f, kind: c.kind }];
   });
   for (const c of description.columns) {
     if (had.has(c.name)) continue;

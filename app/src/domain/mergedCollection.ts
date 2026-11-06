@@ -15,7 +15,7 @@
 
 import { formatDate } from "./fieldKinds";
 import { blankField, fieldValue, META_FIELDS, NO_TITLE, type Collection, type FieldDef, type FieldKind, type FieldValue, type Item, type MergedPart, type MergeProblem } from "./model";
-import { rowItem, rowItemId, sourceColumn, type ConstantFields } from "./sources";
+import { rowItem, rowItemId, setReadKinds, sourceColumn, type ConstantFields } from "./sources";
 import type { SourceShape, SourceRow } from "../../../shared/sources";
 
 export type { MergeProblem };
@@ -145,7 +145,7 @@ export function partProjection(merged: Collection, part: ResolvedPart): Collecti
     return theirs?.column ? [blankField(f.id, f.name, f.kind, { collectionId: merged.id, column: theirs.column, position })] : [];
   });
   const title = merged.titleField;
-  return {
+  const projection: Collection = {
     ...part.collection,
     id: merged.id,
     name: merged.name,
@@ -154,6 +154,10 @@ export function partProjection(merged: Collection, part: ResolvedPart): Collecti
     mergedFrom: null,
     titleField: title === NO_TITLE || !title || fields.some((f) => f.id === title) ? (title ?? null) : NO_TITLE,
   };
+  // Its columns read as the part's own fields read them (a text column as the part's number field); mergedValue then
+  // turns those values into the merged types.
+  setReadKinds(projection, new Map(fields.map((f) => [f.id, part.fields.get(f.id)!.kind])));
+  return projection;
 }
 
 /**

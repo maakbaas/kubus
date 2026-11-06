@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SourceColumn, SourceRow } from "../../../shared/sources";
 import { blankField, pickableFields, type Collection } from "./model";
-import { addRows, canGroup, groupsInApp, canSort, sourcePeriod, fieldOperators, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
+import { addRows, canGroup, columnValue, groupsInApp, canSort, sourcePeriod, fieldOperators, isConverted, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
 import { defaultQuery, TITLE } from "./query";
 
 const columns: SourceColumn[] = [
@@ -45,7 +45,8 @@ describe("remote collections", () => {
     expect(canGroup(people, data)).toBe(false);
     // No Created or Updated: rows have neither.
     expect(pickableFields(people).map((f) => f.id)).not.toContain("$created");
-    expect(offeredKinds(people, name)).toEqual(["string", "markdown", "html"]);
+    expect(offeredKinds(people, name)).toEqual(["string", "markdown", "html", "number", "checkbox", "date", "datetime"]);
+    expect(offeredKinds(people, born)).toEqual(["date", "datetime", "string"]);
     expect(offeredKinds(people, null)).toEqual(["component"]);
   });
 
@@ -55,6 +56,45 @@ describe("remote collections", () => {
     const item = rowItem(people, shape, { key: "7", values: ["Ada", null, "{}", ["x"]] });
     expect(item).toMatchObject({ id: rowItemId("7"), values: { "f-name": "Ada", "f-data": "{}", "f-tags": ["x"] } });
     expect(item.values).not.toHaveProperty("f-born");
+  });
+
+  it("read a column as another field type: converted, what doesn't convert empty (never NaN)", () => {
+    expect(columnValue("string", "number", " 12 ")).toBe(12);
+    expect(columnValue("string", "number", "3,5")).toBe(3.5);
+    expect(columnValue("string", "number", "1,234.5")).toBe(1234.5);
+    expect(columnValue("string", "number", "1.234,5")).toBe(1234.5);
+    expect(columnValue("string", "number", "-1e3")).toBe(-1000);
+    expect(columnValue("string", "number", "abc")).toBeNull();
+    expect(columnValue("string", "number", "")).toBeNull();
+    expect(columnValue("string", "checkbox", "Yes")).toBe(true);
+    expect(columnValue("string", "checkbox", "0")).toBe(false);
+    expect(columnValue("string", "checkbox", "maybe")).toBeNull();
+    expect(columnValue("number", "checkbox", 2)).toBe(true);
+    expect(columnValue("checkbox", "number", false)).toBe(0);
+    expect(columnValue("number", "string", 4.5)).toBe("4.5");
+    expect(columnValue("string_list", "string", ["a", "b"])).toBe("a, b");
+    expect(columnValue("string", "date", "2024-03-05")).toBe("2024-03-05");
+    expect(columnValue("string", "date", "not a date")).toBeNull();
+    expect(columnValue("string", "datetime", "2024-03-05T10:00:00Z")).toBe("2024-03-05T10:00:00.000Z");
+    expect(columnValue("string", "datetime", "yesterday-ish")).toBeNull();
+    // The same values: passed on as they are.
+    expect(columnValue("string", "markdown", "*a*")).toBe("*a*");
+
+    const text: SourceColumn = { name: "amount", type: "varchar", kind: "string" };
+    const orders: Collection = {
+      ...people,
+      source: { ...people.source!, columns: [...columns, text] },
+      fields: [blankField("f-amount", "Amount", "number", { column: "amount" })],
+    };
+    const amount = orders.fields[0];
+    expect(isConverted(orders, amount)).toBe(true);
+    const shape = sourceShape(orders);
+    expect(rowItem(orders, shape, { key: "1", values: ["42.5"] }).values).toEqual({ "f-amount": 42.5 });
+    expect(rowItem(orders, shape, { key: "2", values: ["n/a"] }).values).toEqual({});
+    // The source compares its own text ("10" before "9"): not filtered, sorted or grouped by the converted value.
+    expect(fieldOperators(orders, amount)).toEqual([]);
+    expect(canSort(orders, amount.id)).toBe(false);
+    expect(canGroup(orders, amount)).toBe(false);
   });
 
   it("translate a view's query, its periods worked out", () => {
@@ -97,7 +137,11 @@ describe("remote collections", () => {
     expect(groupsInApp(people, { ...defaultQuery(), groupBy: "f-name", groupDate: "month" })).toBe(false); // not a date
     expect(groupsInApp(people, { ...defaultQuery(), groupDate: "month" })).toBe(false); // no grouping
     expect(groupsInApp({ ...people, source: undefined }, by("month"))).toBe(false); // a native collection groups itself
-    const stamped: Collection = { ...people, fields: [blankField("f-at", "At", "datetime", { column: "born" })] };
+    const stamped: Collection = {
+      ...people,
+      source: { ...people.source!, columns: [...columns, { name: "at", type: "timestamptz", kind: "datetime" }] },
+      fields: [blankField("f-at", "At", "datetime", { column: "at" })],
+    };
     expect(groupsInApp(stamped, { ...defaultQuery(), groupBy: "f-at", groupDate: "hour" })).toBe(true);
   });
 
