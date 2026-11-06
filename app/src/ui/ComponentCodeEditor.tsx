@@ -1,6 +1,6 @@
 import { createElement, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { ElementContent } from "hast";
-import { highlightCode, highlightComponent } from "./codeHighlight";
+import { useCodeHighlight } from "./useCodeHighlight";
 
 /** Highlighted code (hast, codeHighlight.ts) as React elements: just the parts highlighting produces. */
 const toReact = (nodes: ElementContent[]): ReactNode[] =>
@@ -44,7 +44,12 @@ export function ComponentCodeEditor({
   onChange(value: string): void;
 }) {
   const lines = value.split("\n").length;
-  const highlighted = useMemo(() => toReact(language ? highlightCode(value, language) : highlightComponent(value, html ? "markup" : "markdown")), [value, html, language]);
+  // Plain text (laid out the same) until the highlighter has loaded (useCodeHighlight).
+  const code = useCodeHighlight();
+  const highlighted = useMemo(
+    () => (code ? toReact(language ? code.highlightCode(value, language) : code.highlightComponent(value, html ? "markup" : "markdown")) : [value]),
+    [code, value, html, language],
+  );
   const pre = useRef<HTMLPreElement>(null);
   /** Set by Escape: the next Tab leaves the editor instead of indenting. */
   const tabLeaves = useRef(false);

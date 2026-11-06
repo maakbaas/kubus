@@ -148,6 +148,10 @@ headless device that answers the server's HTTP API (bundled into `server/headles
   page at a time (`domain/mergedRows.ts`); the merged collection is `Collection.mergedFrom` (runtime only: the UI says "Collections").
   The database worker loads `domain/backlinks.ts` and what it imports: no domain module may touch the DOM when it loads (micromark's entity
   decoder is aliased to a lazy copy, `app/src/decodeNamedCharacterReference.ts`; the GFM parser is made on first use). `docs/features.md` "Several collections in one block".
+- **Startup**: `main.tsx` imports `data/openEarly.ts` first, so the database worker opens while the rest loads; the main chunk
+  is what is evaluated before anything shows, so big, seldom-first code stays out of it: rare pages and the Markdown editor are
+  `app/lazyParts.tsx` (preloaded in the background once the app shows), the code highlighter `ui/useCodeHighlight.ts`, KaTeX,
+  charts, maps and the icon table load on use. Don't import them statically.
 - **Workspace**: every tab renders `AppRoutes` in its own `MemoryRouter`; in-app links are plain
   `href="#/…"` anchors; navigate with `useNavigate()` (this tab) or `useOpenRelated()`.
 

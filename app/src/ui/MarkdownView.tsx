@@ -12,7 +12,7 @@ import { useLinks } from "../app/useLinks";
 import { openModeOf } from "../workspace/Workspace";
 import { splitWarnings } from "../domain/components";
 import { splitTags } from "../domain/tags";
-import { COMPONENT_LANGUAGE, highlightCode, highlightComponent } from "./codeHighlight";
+import { useCodeHighlight } from "./useCodeHighlight";
 import { matcher, splitMatches } from "./Highlight";
 import { ComponentWarning } from "./ComponentWarning";
 import { TagChip } from "./TagChip";
@@ -29,8 +29,8 @@ import { UrlImage, useFileUrl } from "./images";
  * rehype plugin: colors fenced code with refractor (same tokens/CSS as the editor's prism plugin);
  * a `component` fence like the component editor ({{ }} sections as JavaScript).
  */
-function rehypeCodeColor() {
-  return (tree: Root) => {
+function rehypeCodeColor({ COMPONENT_LANGUAGE, highlightCode, highlightComponent }: typeof import("./codeHighlight")) {
+  return () => (tree: Root) => {
     const walk = (nodes: RootContent[]) => {
       for (const node of nodes) {
         if (node.type !== "element") continue;
@@ -149,6 +149,9 @@ function rehypeTags() {
     tree.children = walk(tree.children);
   };
 }
+
+/** Text that may hold a code fence: the code highlighter is loaded for it. */
+const HAS_CODE = /```|~~~/;
 
 /** Text that may hold math (a `$`, a math fence): KaTeX is loaded for it. */
 const HAS_MATH = /\$|```\s*math/;
@@ -323,13 +326,15 @@ export const MarkdownView = memo(function MarkdownView({ source, highlight = "",
     [source, onChange],
   );
   const math = useMath(source);
+  // Loaded on first use (useCodeHighlight): code fences show uncoloured until then.
+  const code = useCodeHighlight(HAS_CODE.test(source));
   return (
     <div className={`md-editor__content md-view md-view--${variant}`}>
       <TaskContext.Provider value={tasks}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath, remarkEditorBreaks]}
           // KaTeX last: the plugins before it leave a formula's source (a code element) alone.
-          rehypePlugins={[rehypeSoftBreaks, rehypeWarnings, rehypeTags, rehypeCodeColor, rehypeMark(highlight, exactTag), ...(math ? [math] : [])]}
+          rehypePlugins={[rehypeSoftBreaks, rehypeWarnings, rehypeTags, ...(code ? [rehypeCodeColor(code)] : []), rehypeMark(highlight, exactTag), ...(math ? [math] : [])]}
           components={variant === "full" ? fullComponents : excerptComponents}
           // Links to other apps (spotify:, obsidian:, …) are kept; react-markdown's default drops them.
           urlTransform={safeUrl}

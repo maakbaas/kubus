@@ -11,6 +11,7 @@ import { useMediaQuery } from "../ui/useMediaQuery";
 import { AiDialogs, AiStatusButton } from "../ui/AiBanner";
 import { AiBackfillRunner } from "./AiBackfillRunner";
 import { NavFooter, NavTree } from "./NavTree";
+import { preloadLazyParts } from "./lazyParts";
 import { StoreProvider, useStore } from "./store";
 import { DisplaySettingsSync } from "./settings";
 import { TagIndexProvider } from "./tagIndex";
@@ -111,6 +112,9 @@ function Shell() {
     writePref(NAV_WIDTH_KEY, undefined);
   };
   const [pathname, queryString = ""] = ws.activePath.split("?");
+
+  // What was left out of the main chunk (lazyParts.tsx), in the background now that the app shows.
+  useEffect(() => preloadLazyParts(), []);
 
   // A link opened from outside (e.g. "#/collections/…" in the address bar) goes to the active tab.
   useEffect(() => {

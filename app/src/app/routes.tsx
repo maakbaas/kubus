@@ -1,25 +1,22 @@
+import { Suspense } from "react";
 import { Route, Routes } from "react-router";
+import { CollectionEditorPage, ComponentEditorPage, ComponentsPage, HelpPage, RemotesPage, SettingsPage, SpacesPage } from "./lazyParts";
 import { BookmarksPage } from "../pages/BookmarksPage";
 import { HomePage } from "../pages/HomePage";
 import { ItemPage } from "../pages/ItemPage";
-import { ComponentEditorPage } from "../pages/ComponentEditorPage";
-import { ComponentsPage } from "../pages/ComponentsPage";
 import { NewItemPage } from "../pages/NewItemPage";
 import { CollectionPage } from "../pages/CollectionPage";
 import { SearchPage } from "../pages/SearchPage";
-import { SpacesPage } from "../pages/SpacesPage";
-import { HelpPage } from "../pages/HelpPage";
-import { SettingsPage } from "../pages/SettingsPage";
-import { CollectionEditorPage } from "../pages/CollectionEditorPage";
 import { CollectionsPage } from "../pages/CollectionsPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { DashboardsPage } from "../pages/DashboardsPage";
-import { RemotesPage } from "../pages/RemotesPage";
 import { NotFound } from "../ui/NotFound";
 
 /** The app's pages. Rendered inside every workspace tab (each tab has its own router). */
 export function AppRoutes() {
+  // A page not loaded yet (lazyParts.tsx) draws nothing meanwhile; navigating to one keeps the page before (a transition) until it is there.
   return (
+    <Suspense fallback={null}>
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/search" element={<SearchPage />} />
@@ -44,5 +41,6 @@ export function AppRoutes() {
       <Route path="/collections/:collectionId/items/:itemId" element={<ItemPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </Suspense>
   );
 }

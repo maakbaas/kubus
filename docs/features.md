@@ -77,7 +77,7 @@ What the app does, feature by feature (read the part you work on).
   them (a remote collection's column fields are hidden); the rows below hold each field's name, type and settings only.
   A save that can't go ahead scrolls the first problem into view (a field's component, often far above Save).
 - **Collections have an icon** from the full Carbon set (`collections.icon`, an `@carbon/icons-react`
-  export name). The icon module is lazy-loaded (`app/src/ui/collectionIcons.tsx`); the picker is a search
+  export name). Each icon module is lazy-loaded (`app/src/ui/collectionIcons.tsx`), and so is the table of their loaders (`ui/iconLoaders.ts`, ~2,700 entries kept out of the main chunk); the picker is a search
   box over a grid of matches. App icon: `app/public/favicon.svg` (isometric cube, three shades of Carbon blue, transparent background),
   rendered to `desktop/icons` with `tauri icon`; the iOS home-screen icon (the PWA's icon-1024 and apple-touch-icon, and the Tauri iOS icons in `desktop/icons/ios`) has its own drawing, `desktop/icons/home-screen.svg`: the cube at 73% with narrower seams (0.7 of the 16-unit grid, as it's drawn large) on Carbon Blue 100 (`#001141`), rendered to every size by `node scripts/render-ios-icons.mjs` (after `tauri icon`, which would overwrite the iOS ones). Display name: Kubus (app identifier `com.kubus.app`; changing it, or the database / pool
   names, the lock or the `kubus.*` storage keys, orphans existing data).

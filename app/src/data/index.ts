@@ -13,8 +13,9 @@ let opening: Promise<Repository> | null = null;
 /** Same code path in the Tauri shell and in a plain browser / home-screen web app. */
 export function openRepository(): Promise<Repository> {
   opening ??= (async () => {
-    // Ask the browser not to evict our storage (matters most on iOS Safari).
-    await navigator.storage?.persist?.().catch(() => false);
+    // Ask the browser not to evict our storage (matters most on iOS Safari). Not waited for: the database
+    // opens meanwhile (Firefox asks the user, and its answer can take any time).
+    void navigator.storage?.persist?.().catch(() => false);
     return SqliteRepository.open(await WorkerSqlClient.open(), browserEnvironment);
   })();
   opening.catch(() => (opening = null)); // allow a retry (e.g. after closing another tab)

@@ -32,6 +32,11 @@ class WorkerChannel {
     };
   }
 
+  terminate() {
+    this.worker.terminate();
+    workers.delete(this.worker);
+  }
+
   send(req: DistributiveOmit<Request, "id">): Promise<unknown> {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
@@ -50,8 +55,14 @@ export class WorkerSqlClient implements SqlClient {
 
   static async open(): Promise<WorkerSqlClient> {
     const channel = new WorkerChannel();
-    const info = (await channel.send({ op: "open" })) as OpenResult;
-    return new WorkerSqlClient(channel, info);
+    try {
+      const info = (await channel.send({ op: "open" })) as OpenResult;
+      return new WorkerSqlClient(channel, info);
+    } catch (e) {
+      // A worker that couldn't open the database goes, and the database lock with it: a retry's worker would wait for it forever.
+      channel.terminate();
+      throw e;
+    }
   }
 
   select<T>(sql: string, bind?: Bind): Promise<T[]> {

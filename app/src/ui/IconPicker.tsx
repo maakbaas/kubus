@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Button, IconButton, Popover, PopoverContent, Search } from "@carbon/react";
-import { iconNames, CollectionIcon } from "./collectionIcons";
+import { useIconNames, CollectionIcon } from "./collectionIcons";
 import { onViewportChange, panelRoom, setRoom as applyRoom, sideOf, typingIn, type PanelSide } from "./panelRoom";
 
 const MAX_SHOWN = 60;
@@ -19,7 +19,7 @@ interface Props {
  * stays fast). Choosing an icon, Escape or clicking outside closes it.
  */
 export function IconPicker({ id, value, onChange, size = 24 }: Props) {
-  const names = iconNames();
+  const names = useIconNames();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const searchBox = useRef<HTMLDivElement>(null);

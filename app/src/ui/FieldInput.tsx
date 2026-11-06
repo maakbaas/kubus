@@ -1,9 +1,10 @@
-import { useId, useLayoutEffect, useRef, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Suspense, useId, useLayoutEffect, useRef, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 import {
   ComboBox,
   DatePicker,
   DatePickerInput,
   FormGroup,
+  FormLabel,
   IconButton,
   Stack,
   TextInput,
@@ -16,7 +17,8 @@ import { stringList, type FieldDef, type FieldKind, type FieldValue, type Collec
 import type { EditStart } from "./editStart";
 import { FieldLabel } from "./fieldKindIcons";
 import { ImageInput } from "./images";
-import { MarkdownEditor } from "./MarkdownEditor";
+import { MarkdownEditor } from "../app/lazyParts";
+import { MarkdownView } from "./MarkdownView";
 import { ComponentCodeEditor } from "./ComponentCodeEditor";
 import { RefCombo } from "./RefCombo";
 import { ToggleInput } from "./ToggleInput";
@@ -334,13 +336,27 @@ export function FieldInput({
 
     case "markdown":
       return (
-        <MarkdownEditor
-          label={<FieldLabel field={field} />}
-          value={String(value)}
-          onChange={onChange}
-          onFileStored={onFileStored}
-          start={start}
-        />
+        // The editor is loaded on first use (app/lazyParts.tsx, nearly always in the background before): meanwhile its text, as it will look.
+        <Suspense
+          fallback={
+            <div className="cds--form-item md-field">
+              <FormLabel>
+                <FieldLabel field={field} />
+              </FormLabel>
+              <div className="md-editor">
+                <MarkdownView source={String(value)} />
+              </div>
+            </div>
+          }
+        >
+          <MarkdownEditor
+            label={<FieldLabel field={field} />}
+            value={String(value)}
+            onChange={onChange}
+            onFileStored={onFileStored}
+            start={start}
+          />
+        </Suspense>
       );
 
     case "html":

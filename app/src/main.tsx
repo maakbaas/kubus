@@ -1,3 +1,5 @@
+// First: the database starts opening before anything else is evaluated (data/openEarly.ts).
+import "./data/openEarly";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Theme } from "@carbon/react";
