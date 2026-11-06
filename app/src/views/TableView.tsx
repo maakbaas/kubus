@@ -47,6 +47,7 @@ import { formatValue, type RefOptions } from "../ui/useReferenceOptions";
 import { errorMessage } from "../ui/useConfirm";
 import { itemLinkProps, FieldCell, isInlineEditable, isMetaField } from "./cells";
 import { openModeOf } from "../workspace/Workspace";
+import { observeSize, requestLayout, type LayoutJob } from "./layoutBatch";
 import { defineBlockType, type BlockOptionsProps, type BlockProps, type ItemActions } from "./registry";
 
 /** Table options (its columns are the block's fields; without the title column, rows get an open button). */
@@ -313,18 +314,28 @@ export function FillTable({ children, style }: { children: ReactNode; /** E.g. a
     const el = box.current;
     const table = el?.querySelector("table");
     if (!el || !table) return;
-    const fill = () => {
-      const last = table.rows[0]?.lastElementChild as HTMLElement | null;
-      if (!last || el.offsetParent === null) return; // hidden (a collapsed group)
-      last.style.inlineSize = ""; // measure the table at its natural width
-      const extra = Math.floor(el.clientWidth - table.getBoundingClientRect().width);
-      if (extra > 0) last.style.inlineSize = `${parseFloat(getComputedStyle(last).width) + extra}px`;
+    // With every other table's (layoutBatch.ts): all reset, then all measured, then all set.
+    let last: HTMLElement | null = null;
+    let width = "";
+    const job: LayoutJob = {
+      reset: () => {
+        last = table.rows[0]?.lastElementChild as HTMLElement | null;
+        if (last && el.offsetParent !== null) last.style.inlineSize = ""; // measure the table at its natural width
+      },
+      measure: () => {
+        width = "";
+        if (!last || el.offsetParent === null) return; // hidden (a collapsed group)
+        const extra = Math.floor(el.clientWidth - table.getBoundingClientRect().width);
+        if (extra > 0) width = `${parseFloat(getComputedStyle(last).width) + extra}px`;
+      },
+      apply: () => {
+        if (last && width) last.style.inlineSize = width;
+      },
     };
+    const fill = () => requestLayout(job);
     fill();
-    const observer = new ResizeObserver(fill);
-    observer.observe(el);
-    observer.observe(table);
-    return () => observer.disconnect();
+    const stops = [observeSize(el, fill), observeSize(table, fill)];
+    return () => stops.forEach((stop) => stop());
   }, []);
   // A table that scrolls sideways shows where more of it is: a fade at that edge (styles.css).
   // Touch screens hide scrollbars until scrolling, and they can't be made to stay.
@@ -381,32 +392,50 @@ export function FillTable({ children, style }: { children: ReactNode; /** E.g. a
     const set = (name: string, value: string) => {
       if (el.style.getPropertyValue(name) !== value) el.style.setProperty(name, value);
     };
-    const update = () => {
-      follow = !!pane && scrollDriven && !clipped();
-      if (el.hasAttribute("data-head-follow") !== follow) el.toggleAttribute("data-head-follow", follow);
-      // Where the table starts in its wrap (the animation's timeline), and how far its header can go down it.
-      set("--table-head-start", `${Math.round(table.getBoundingClientRect().top - el.getBoundingClientRect().top)}px`);
-      set("--table-head-travel", `${travel()}px`);
-      el.toggleAttribute("data-more-start", scroller.scrollLeft > 1);
-      el.toggleAttribute("data-more-end", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
-      shift();
+    // Measured with every other table, then set (layoutBatch.ts): set one table at a time, each one's change made the
+    // next one's measuring lay the page out again.
+    let measured = { start: "", travel: "", moreStart: false, moreEnd: false };
+    const update: LayoutJob = {
+      measure: () => {
+        follow = !!pane && scrollDriven && !clipped();
+        measured = {
+          // Where the table starts in its wrap (the animation's timeline), and how far its header can go down it.
+          start: `${Math.round(table.getBoundingClientRect().top - el.getBoundingClientRect().top)}px`,
+          travel: `${travel()}px`,
+          moreStart: scroller.scrollLeft > 1,
+          moreEnd: scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1,
+        };
+      },
+      apply: () => {
+        if (el.hasAttribute("data-head-follow") !== follow) el.toggleAttribute("data-head-follow", follow);
+        set("--table-head-start", measured.start);
+        set("--table-head-travel", measured.travel);
+        el.toggleAttribute("data-more-start", measured.moreStart);
+        el.toggleAttribute("data-more-end", measured.moreEnd);
+        // Following, the header isn't moved here (the browser does it): nothing more to measure.
+        if (follow) {
+          if (shown !== 0) {
+            shown = 0;
+            el.toggleAttribute("data-head-shift", false);
+            el.style.setProperty("--table-head-shift", "0px");
+            el.style.setProperty("--table-head-cover", "0");
+          }
+        } else shift();
+      },
     };
     const sideways = () => {
       el.toggleAttribute("data-more-start", scroller.scrollLeft > 1);
       el.toggleAttribute("data-more-end", scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
     };
-    update();
+    const request = () => requestLayout(update);
+    request();
     scroller.addEventListener("scroll", sideways, { passive: true });
     pane?.addEventListener("scroll", shift, { passive: true });
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    observer.observe(scroller);
-    observer.observe(table);
-    if (pane) observer.observe(pane);
+    const stops = [el, scroller, table, ...(pane ? [pane] : [])].map((box) => observeSize(box, request));
     return () => {
       scroller.removeEventListener("scroll", sideways);
       pane?.removeEventListener("scroll", shift);
-      observer.disconnect();
+      stops.forEach((stop) => stop());
     };
   }, []);
   return (
@@ -472,10 +501,18 @@ export function useSharedColumns(box: RefObject<HTMLDivElement | null>, active: 
         room -= Math.ceil(over);
         apply(measure());
       }
+      // The sizes this left: a resize to them is this sync's own doing, not a reason for another.
+      left.clear();
+      for (const t of [el, ...tables]) left.set(t, Math.round(t.getBoundingClientRect().width));
     };
     // Set up once: re-synced when the box or a table changes size, and when groups come and go
-    // (rows, opened / closed groups), at most once a frame.
-    const sizes = new ResizeObserver(() => schedule());
+    // (rows, opened / closed groups), at most once a frame. Each sync lays the page out several times (and a page of
+    // many groups, grouped by a list, is costly to lay out): not again for what doesn't change the columns, the
+    // sizes it left itself or what mounts inside a cell (a tooltip, an image).
+    const left = new Map<Element, number>();
+    const sizes = new ResizeObserver((entries) => {
+      if (entries.some((e) => left.get(e.target) !== Math.round(e.borderBoxSize?.[0]?.inlineSize ?? e.target.getBoundingClientRect().width))) schedule();
+    });
     const watched = new Set<Element>();
     const watch = (tables: Element[]) => {
       for (const t of tables) if (!watched.has(t)) (watched.add(t), sizes.observe(t));
@@ -485,7 +522,11 @@ export function useSharedColumns(box: RefObject<HTMLDivElement | null>, active: 
       if (!frame) frame = requestAnimationFrame(() => ((frame = 0), sync()));
     };
     sizes.observe(el);
-    const changes = new MutationObserver(schedule);
+    // Rows or whole tables (groups) added or removed; not what changes inside a row.
+    const structural = (n: Node) => n instanceof HTMLTableRowElement || (n instanceof Element && (n.matches("table, tbody") || !!n.querySelector("table")));
+    const changes = new MutationObserver((records) => {
+      if (records.some((r) => [...r.addedNodes, ...r.removedNodes].some(structural))) schedule();
+    });
     changes.observe(el, { childList: true, subtree: true });
     sync();
     return () => {
