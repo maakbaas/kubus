@@ -402,13 +402,15 @@ body {
   min-block-size: 0;
 }
 /* While the page is scrolled down, content fades out below the tab strip: into the tab's own
-   background (the selected tab and the page share it), so it reads as one surface. */
+   background (the selected tab and the page share it), so it reads as one surface. Above every layer of the
+   page (a table's following header row and its cover: 1; edge fades, map tips, dragged rows: 2), below what
+   floats from it (menus and popovers: 10 and up); the pane body isn't a stacking context (dialogs in it). */
 .ws-pane__frame::before {
   content: "";
   position: absolute;
   inset: 0 0 auto 0;
   block-size: 0.75rem;
-  z-index: 1;
+  z-index: 3;
   pointer-events: none;
   background: linear-gradient(to bottom, var(--cds-background), transparent);
   opacity: 0;
