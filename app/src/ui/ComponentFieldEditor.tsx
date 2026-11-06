@@ -6,6 +6,7 @@ import { placeProblem, type Component, type ComponentCode } from "../domain/comp
 import { FieldLabel } from "./fieldKindIcons";
 import { ComponentCodeEditor } from "./ComponentCodeEditor";
 import { errorMessage } from "./useConfirm";
+import { ShownDialog } from "./ShownDialog";
 
 /** What to do with a changed component: save it, throw the edit away, or go back to it. */
 type Choice = "save" | "discard" | "edit";
@@ -121,21 +122,26 @@ export function ComponentFieldEditor({
         onChange={setCode}
       />
       {error && <InlineNotification kind="error" lowContrast hideCloseButton title={error} />}
-      <Modal
-        open={answer !== null}
-        size="xs"
-        modalHeading={`Change component “${shared?.name ?? ""}”?`}
-        primaryButtonText="Change component"
-        // Closing the dialog (×, Escape) goes back to editing; nothing is lost.
-        secondaryButtons={[
-          { buttonText: "Keep editing", onClick: () => choose("edit") },
-          { buttonText: "Discard changes", onClick: () => choose("discard") },
-        ]}
-        onRequestSubmit={() => choose("save")}
-        onRequestClose={() => choose("edit")}
-      >
-        <p>This changes it everywhere it is used, for every item.</p>
-      </Modal>
+      {/* Only while asking (ShownDialog): mounted, it measured itself on every keystroke in the code. */}
+      <ShownDialog shown={answer !== null}>
+        {(open) => (
+          <Modal
+            open={open}
+            size="xs"
+            modalHeading={`Change component “${shared?.name ?? ""}”?`}
+            primaryButtonText="Change component"
+            // Closing the dialog (×, Escape) goes back to editing; nothing is lost.
+            secondaryButtons={[
+              { buttonText: "Keep editing", onClick: () => choose("edit") },
+              { buttonText: "Discard changes", onClick: () => choose("discard") },
+            ]}
+            onRequestSubmit={() => choose("save")}
+            onRequestClose={() => choose("edit")}
+          >
+            <p>This changes it everywhere it is used, for every item.</p>
+          </Modal>
+        )}
+      </ShownDialog>
     </div>
   );
 }

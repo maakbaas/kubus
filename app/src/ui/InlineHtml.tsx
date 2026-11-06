@@ -28,18 +28,29 @@ function purify() {
       node.setAttribute("rel", "noopener noreferrer");
     }
   });
-  return (purifier = p);
-}
-
-/** The HTML made safe to draw in the page: ui/inlineHtmlPolicy.ts. */
-export function sanitizeInline(html: string): string {
-  return purify().sanitize(html, {
+  // Set once: given with every call, DOMPurify worked the whole configuration out again each time (every cell).
+  p.setConfig({
     USE_PROFILES: { html: true, svg: true, svgFilters: true },
     FORBID_TAGS: FORBIDDEN_TAGS,
     ALLOW_DATA_ATTR: false,
     // A leading <style> kept (it would be taken for the document's head and dropped).
     FORCE_BODY: true,
   });
+  return (purifier = p);
+}
+
+/** Recent results by their HTML: a table's cells are drawn again with the same HTML (another view, a group opened). */
+const sanitized = new Map<string, string>();
+const KEPT = 500;
+
+/** The HTML made safe to draw in the page: ui/inlineHtmlPolicy.ts. */
+export function sanitizeInline(html: string): string {
+  const known = sanitized.get(html);
+  if (known !== undefined) return known;
+  const safe = purify().sanitize(html);
+  if (sanitized.size >= KEPT) sanitized.delete(sanitized.keys().next().value!);
+  sanitized.set(html, safe);
+  return safe;
 }
 
 /**

@@ -40,6 +40,7 @@ import { tagClasses } from "./TagChip";
 import { useTags } from "../app/tagIndex";
 import { LINK_KEY, LINK_PICKER_OPEN, LINK_TRIGGER, LinkPicker, type LinkTrigger } from "./LinkPicker";
 import { TagPicker } from "./TagPicker";
+import { ShownDialog } from "./ShownDialog";
 import { LinkTargetInput } from "./LinkTargetInput";
 import { markdownMath } from "./markdownMath";
 import { caretInText, markdownKeys } from "./markdownKeys";
@@ -930,31 +931,36 @@ function EditorChrome(props: Props) {
         )}
       </div>
 
-      <Modal
-        open={linkEdit !== null}
-        size="xs"
-        modalHeading="Edit link"
-        primaryButtonText="Apply"
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={!linkEdit?.href.trim()}
-        onRequestClose={() => setLinkEdit(null)}
-        onRequestSubmit={() => {
-          // A page of the app typed by name is stored by id.
-          if (linkEdit) {
-            const { href, from, to } = linkEdit;
-            links.toStored(href.trim()).then((stored) => applyLink(stored, from, to));
-          }
-          setLinkEdit(null);
-        }}
-      >
-        <LinkTargetInput
-          id={`${labelId}-href`}
-          primaryFocus
-          value={linkEdit?.href ?? ""}
-          onChange={(href) => setLinkEdit((d) => (d ? { ...d, href } : d))}
-          toShown={links.toShown}
-        />
-      </Modal>
+      {/* Only while editing a link (ShownDialog): mounted, it measured itself on every keystroke in the editor. */}
+      <ShownDialog shown={linkEdit !== null}>
+        {(open) => (
+          <Modal
+            open={open}
+            size="xs"
+            modalHeading="Edit link"
+            primaryButtonText="Apply"
+            secondaryButtonText="Cancel"
+            primaryButtonDisabled={!linkEdit?.href.trim()}
+            onRequestClose={() => setLinkEdit(null)}
+            onRequestSubmit={() => {
+              // A page of the app typed by name is stored by id.
+              if (linkEdit) {
+                const { href, from, to } = linkEdit;
+                links.toStored(href.trim()).then((stored) => applyLink(stored, from, to));
+              }
+              setLinkEdit(null);
+            }}
+          >
+            <LinkTargetInput
+              id={`${labelId}-href`}
+              primaryFocus
+              value={linkEdit?.href ?? ""}
+              onChange={(href) => setLinkEdit((d) => (d ? { ...d, href } : d))}
+              toShown={links.toShown}
+            />
+          </Modal>
+        )}
+      </ShownDialog>
 
       {error && <InlineNotification kind="error" lowContrast title={error} onClose={() => setError(undefined)} />}
     </div>

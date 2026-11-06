@@ -17,6 +17,7 @@ import { useTableSort } from "../ui/useTableSort";
 import { LIST_MAIN, LIST_TABLE } from "../ui/listTable";
 import { RowActions, ROW_BUTTON } from "../ui/RowActions";
 import { FillTable, useSharedColumns } from "../views/TableView";
+import { ShownDialog } from "../ui/ShownDialog";
 
 /** A component's kind as the list shows it (Field, Block, Static), from what its code uses. */
 /** Its kind; asking AI makes it a kind of its own ("AI field": only a field can ask AI). */
@@ -281,32 +282,36 @@ export function ComponentsPage() {
         />
       )}
       {/* Deleting one that fields use: they can go along (an extra checkbox), else it's refused. */}
-      <Modal
-        open={deleting !== null}
-        danger
-        size="xs"
-        modalHeading={`Delete component “${deleting?.name ?? ""}”?`}
-        primaryButtonText="Delete"
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={users.length > 0 && !withFields}
-        onRequestSubmit={() => remove()}
-        onRequestClose={() => setDeleting(null)}
-      >
-        {users.length === 0 ? (
-          <p>No fields use it.</p>
-        ) : (
-          <>
-            <p>Used by {users.join(", ")}.</p>
-            <Checkbox
-              id="delete-component-fields"
-              className="modal-checkbox"
-              labelText={users.length === 1 ? "Also delete this field" : `Also delete these ${users.length} fields`}
-              checked={withFields}
-              onChange={(_, { checked }) => setWithFields(checked)}
-            />
-          </>
+      <ShownDialog shown={deleting !== null}>
+        {(open) => (
+          <Modal
+            open={open}
+            danger
+            size="xs"
+            modalHeading={`Delete component “${deleting?.name ?? ""}”?`}
+            primaryButtonText="Delete"
+            secondaryButtonText="Cancel"
+            primaryButtonDisabled={users.length > 0 && !withFields}
+            onRequestSubmit={() => remove()}
+            onRequestClose={() => setDeleting(null)}
+          >
+            {users.length === 0 ? (
+              <p>No fields use it.</p>
+            ) : (
+              <>
+                <p>Used by {users.join(", ")}.</p>
+                <Checkbox
+                  id="delete-component-fields"
+                  className="modal-checkbox"
+                  labelText={users.length === 1 ? "Also delete this field" : `Also delete these ${users.length} fields`}
+                  checked={withFields}
+                  onChange={(_, { checked }) => setWithFields(checked)}
+                />
+              </>
         )}
       </Modal>
+        )}
+      </ShownDialog>
     </>
   );
 }
