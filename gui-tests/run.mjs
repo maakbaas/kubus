@@ -18,8 +18,8 @@
 //   --port <n>         port for serving the build (default 1430)
 //   --base-url <url>   test an app that is already running there (no build, no server)
 //   --list             list the tests and exit
-//   --test-timeout <s> a test running longer than this many seconds (wall clock; default 600, 3x for
-//                      `heavy` tests) is recorded as errored and not retried; its browser is reopened, the run goes on
+//   --test-timeout <s> a test running longer than this many seconds (wall clock; default 300, heavy tests too:
+//                      the slowest takes ~2 min) is recorded as errored and not retried; its browser is reopened, the run goes on
 //   --retries <n>      re-run a test that errored or failed up to n times (default 1); one that
 //                      failed and then passed is "flaky" in the report, and counts as a failure
 //   --repeat <n>       run each selected test n times (names get " #k"), to measure how flaky it is
@@ -135,8 +135,8 @@ function run(cmd, cmdArgs, { timeout = 0 } = {}) {
     child.on("error", (e) => done({ code: -1, out, err: String(e) }));
   });
 }
-/** A test that takes longer has hung: wall-clock seconds (`--test-timeout`, `heavy` tests get 3x). */
-const TEST_TIMEOUT = Number(opt("test-timeout", 600)) * 1000;
+/** A test that takes longer has hung: wall-clock seconds (`--test-timeout`). A hung test costs this much of the run's budget. */
+const TEST_TIMEOUT = Number(opt("test-timeout", 300)) * 1000;
 const cli = (session, ...rest) => run("playwright-cli", [`-s=${session}`, ...rest], { timeout: rest.includes("run-code") ? TEST_TIMEOUT : 120000 });
 
 function killTree(pid) {
@@ -284,11 +284,11 @@ async function runTest(session, t, n) {
   const code = `async page => {\nconst __OPTS = ${JSON.stringify(opts)};\n${lib}\n${t.src}\nreturn await __main(page);\n}`;
   const file = join(tmpDir, `t${n}.js`);
   writeFileSync(file, code);
-  const limit = t.opts.heavy ? TEST_TIMEOUT * 3 : TEST_TIMEOUT;
+  const limit = TEST_TIMEOUT;
   const r = await run("playwright-cli", [`-s=${session}`, "--raw", "run-code", `--filename=${file}`], { timeout: limit });
   let result;
   if (r.timedOut) {
-    result = { name: t.name, status: "error", timedOut: true, error: `Timed out: the test ran longer than ${limit / 1000}s (--test-timeout${t.opts.heavy ? ", x3 for a heavy test" : ""}); its browser session was killed and reopened`, checkpoints: [] };
+    result = { name: t.name, status: "error", timedOut: true, error: `Timed out: the test ran longer than ${limit / 1000}s (--test-timeout); its browser session was killed and reopened`, checkpoints: [] };
   } else try {
     let v = JSON.parse(r.out.trim());
     if (typeof v === "string") v = JSON.parse(v);

@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent, type RefObject } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type RefObject } from "react";
 import { Link } from "@carbon/react";
 import { Checkmark, ChevronDown } from "@carbon/icons-react";
 import { ToolbarPopover } from "./ToolbarPopover";
@@ -21,6 +21,8 @@ export function occupied(bar: Element, skip: Element | null): number {
  */
 export function useClippedTabs(bar: RefObject<HTMLElement | null>, widthOf?: (item: HTMLElement) => number): boolean {
   const [clipped, setClipped] = useState(false);
+  /** The bar's width and the tabs' total when they were clipped. */
+  const clippedAt = useRef<{ width: number; total: number } | null>(null);
   useEffect(() => {
     const el = bar.current;
     if (!el) return;
@@ -37,7 +39,14 @@ export function useClippedTabs(bar: RefObject<HTMLElement | null>, widthOf?: (it
       // flipping back and forth when the tabs fit by less than that.
       const menu = el.querySelector<HTMLElement>(".tab-menu--arrow");
       const free = clipped && menu ? menu.offsetWidth : 0;
-      const over = total > el.clientWidth - occupied(el, tabs) + free + 1;
+      let over = total > el.clientWidth - occupied(el, tabs) + free + 1;
+      // Clipped, they stay so until the bar is wider or the tabs narrower than when they were clipped: clipping moves
+      // what the bar holds ("+" into the "⋮" bar, which may then fold up), so the room it is judged by changes with it,
+      // and where both answers undid themselves the bar flipped between them every frame, without end (a narrow
+      // window, long view names: the page froze).
+      const at = clippedAt.current;
+      if (clipped && at && el.clientWidth <= at.width + 1 && total >= at.total - 1) over = true;
+      clippedAt.current = over ? (clipped && at ? at : { width: el.clientWidth, total }) : null;
       setClipped(over);
       const shown = list.querySelector<HTMLElement>(".cds--tabs__nav-item--selected");
       if (over && shown) {
