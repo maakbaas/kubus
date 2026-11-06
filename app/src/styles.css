@@ -191,7 +191,9 @@ body {
   padding-block-end: calc(var(--cds-spacing-05) + var(--keyboard-inset, 0px));
 }
 /* While a field is typed in (keyboardInset.ts TEXT_FIELD) the bar makes way for the keyboard: on Android the window
-   shrinks to above it and the bar would sit on top of it. The page grows downwards only, so the field stays put. */
+   shrinks to above it and the bar would sit on top of it. The page grows downwards only, so the field stays put: the
+   pane gets the bar's height more to scroll as well (an empty block after the page, which keeps its own size), else
+   a page scrolled to its end lost that much scroll and everything on it jumped down by the bar's height. */
 :root:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=color]):not([type=image]):not([type=hidden]), textarea, select, [contenteditable]:not([contenteditable=false])):focus) .bottom-bar {
   display: none;
 }
@@ -200,6 +202,11 @@ body {
 }
 :root:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=color]):not([type=image]):not([type=hidden]), textarea, select, [contenteditable]:not([contenteditable=false])):focus) .app-content--bottom-bar .ws-tab-content {
   padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
+}
+:root:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=color]):not([type=image]):not([type=hidden]), textarea, select, [contenteditable]:not([contenteditable=false])):focus) .app-content--bottom-bar .ws-pane__body::after {
+  content: "";
+  display: block;
+  block-size: var(--bottom-bar-height);
 }
 .ws-pane__spacer {
   flex: 1;
