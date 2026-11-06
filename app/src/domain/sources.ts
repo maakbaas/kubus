@@ -28,7 +28,8 @@ export function columnKinds(kind: FieldKind): FieldKind[] {
   if (isText(kind)) return [...TEXT_KINDS, "number", "checkbox", "date", "datetime"];
   switch (kind) {
     case "number":
-      return ["number", "string", "checkbox"];
+      // A date & time or date also from a Unix timestamp (`columnValue`).
+      return ["number", "string", "checkbox", "datetime", "date"];
     case "checkbox":
       return ["checkbox", "string", "number"];
     case "date":
@@ -81,6 +82,24 @@ function textNumber(text: string): number | null {
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /**
+ * A moment from a value: a Unix timestamp (a number, or text of digits alone: seconds, or milliseconds when that many
+ * seconds would be past the year 5000), else text the browser reads as a date ("2024-03-05", ISO 8601, ...); a date
+ * alone is its day's start here. Null when it is none.
+ */
+function moment(v: FieldValue): Date | null {
+  const t = typeof v === "string" ? v.trim() : v;
+  const stamp = typeof t === "number" ? t : typeof t === "string" && /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : null;
+  if (stamp !== null) {
+    if (!Number.isFinite(stamp)) return null;
+    const d = new Date(Math.abs(stamp) < 1e11 ? stamp * 1000 : stamp);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof t !== "string" || !t) return null;
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(t) ? `${t}T00:00` : t);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
  * A column's value as a field of another type reads it (`columnKinds`); one that doesn't convert (a word as a
  * number, a date that isn't one) is empty, not NaN or a made-up value: an empty value is left out of sums, charts and
  * sorting the way a missing one is, where NaN would spread through them.
@@ -104,20 +123,13 @@ export function columnValue(columnKind: FieldKind, fieldKind: FieldKind, v: Fiel
       return TRUE.has(t) ? true : FALSE.has(t) ? false : null;
     }
     case "date": {
-      if (typeof v !== "string") return null;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(v.trim())) return v.trim();
-      const d = new Date(v.trim());
-      if (Number.isNaN(d.getTime())) return null;
-      // A date & time's day where it is shown (local); a date-only text ("2024-03-05") above, as written.
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      // A date written as one stays as written; anything else is the day of its moment where it is shown (local).
+      if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) return v.trim();
+      const d = moment(v);
+      return d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : null;
     }
-    case "datetime": {
-      if (typeof v !== "string") return null;
-      // A date alone is its day's start, here.
-      const t = v.trim();
-      const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(t) ? `${t}T00:00` : t);
-      return Number.isNaN(d.getTime()) ? null : d.toISOString();
-    }
+    case "datetime":
+      return moment(v)?.toISOString() ?? null;
     default:
       return null;
   }

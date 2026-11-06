@@ -77,6 +77,12 @@ describe("remote collections", () => {
     expect(columnValue("string", "date", "not a date")).toBeNull();
     expect(columnValue("string", "datetime", "2024-03-05T10:00:00Z")).toBe("2024-03-05T10:00:00.000Z");
     expect(columnValue("string", "datetime", "yesterday-ish")).toBeNull();
+    // Unix timestamps, as numbers or as text: seconds, or milliseconds.
+    expect(columnValue("number", "datetime", 1700000000)).toBe("2023-11-14T22:13:20.000Z");
+    expect(columnValue("string", "datetime", " 1700000000 ")).toBe("2023-11-14T22:13:20.000Z");
+    expect(columnValue("number", "datetime", 1700000000123)).toBe("2023-11-14T22:13:20.123Z");
+    expect(columnValue("number", "date", 1700000000)).toMatch(/^2023-11-1[45]$/); // its day where it is shown
+    expect(columnValue("number", "datetime", Number.NaN)).toBeNull();
     // The same values: passed on as they are.
     expect(columnValue("string", "markdown", "*a*")).toBe("*a*");
 
