@@ -336,7 +336,8 @@ export function FieldInput({
 
     case "markdown":
       return (
-        // The editor is loaded on first use (app/lazyParts.tsx, nearly always in the background before): meanwhile its text, as it will look.
+        // The editor is loaded on first use (app/lazyParts.tsx, nearly always in the background before): meanwhile its text
+        // in the editor's box, as tall as the editor will be (an empty one holds one empty line), so nothing moves.
         <Suspense
           fallback={
             <div className="cds--form-item md-field">
@@ -344,7 +345,7 @@ export function FieldInput({
                 <FieldLabel field={field} />
               </FormLabel>
               <div className="md-editor">
-                <MarkdownView source={String(value)} />
+                <div className="md-editor__content">{String(value) ? <MarkdownView source={String(value)} /> : <p>{"\u200b"}</p>}</div>
               </div>
             </div>
           }
