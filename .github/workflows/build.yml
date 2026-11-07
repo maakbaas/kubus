@@ -173,9 +173,11 @@ jobs:
           pattern: kubus-*-${{ github.sha }}
           path: dist-artifacts
           merge-multiple: true
+      # Every file at any depth: an artifact of several paths keeps their folders (nsis/, msi/; deb/, rpm/, appimage/),
+      # which `dist-artifacts/*` matched instead of the files in them (v0.1.0 had only the portable .exe and the .dmg).
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist-artifacts/*
+          files: dist-artifacts/**/*
 
   # The server: the Docker image builds (web app included); its type check is in test.yml.
   server:
