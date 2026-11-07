@@ -212,7 +212,7 @@ connection string); its kind picks the connector, which reads the fields (`Sourc
 kinds and their fields (`server/src/connectors/kinds.ts`; `ConnectionKind` in `shared/settings.ts`, `GET
 /api/settings` → `kinds`), so the app knows no database: PostgreSQL (host, port, database, user, TLS), n8n data tables
 (address), InfluxDB 2 (address, organization), Cloudflare D1 (account ID, database ID), MySQL and MariaDB (host, port,
-database, user, TLS), Actual Budget (address, budget sync ID, encryption password), PostHog (address, project ID), Calendar (ICS) (address), JSON and CSV over HTTP
+database, user, TLS), Actual Budget (address, budget sync ID, encryption password), Calendar (ICS) (address), JSON and CSV over HTTP
 (address, rows at, query parameter, header name). Addresses are stored and shown as typed: a secret in one (a calendar's secret
 path, a key in a query string, a published sheet's id) is written `{secret}` there and given as the source's
 password, which fills it in. A kind can mark a field secret (`ConnectionField.secret`: a second secret, a budget's
@@ -346,33 +346,6 @@ takes the new one when its settings are opened. A source's name: letters, digits
   they are read. A budget actual-http-api can't open answers a bare 500, so its list of budgets (`GET /v1/budgets`)
   tells a wrong sync ID, or an encrypted budget (`encryptKeyId`) without its password or with a wrong one, in words;
   a refused key (403) likewise. No schemas.
-- *PostHog* (`connectors/posthog.ts`, HogQL in `posthogHogql.ts`, pure and tested without PostHog; the connector
-  against a stand-in for its API): PostHog's query API (`POST /api/projects/<id>/query/`, one HogQL statement as
-  `{ query: { kind: "HogQLQuery", query } }`), its address (https://us.posthog.com, https://eu.posthog.com or a
-  self-hosted one; the ingestion hosts `us.i.` / `eu.i.posthog.com` are read as those) and project ID (empty: the
-  key's current project, `@current`), a personal API key as the password (`Authorization: Bearer`). Strictly
-  read-only: HogQL only reads and only statements made here are sent; give it a key with only the Query: Read
-  scope (its scopes can't be read back). Tables only, for now (no written HogQL; `schema` null): what HogQL's
-  `DatabaseSchemaQuery` lists (events, persons, sessions, groups, data warehouse tables as `stripe.customers`,
-  saved views; PostHog's own first), else those four. A table's columns are read by one probe row of every field
-  its schema lists but joins (of events and sessions one of the last day: unbounded, sessions are made from every event first) (so sessions' expression fields, `$is_bounce`, `$channel_type`, are read too; `*`
-  when there is no schema), each by its ClickHouse type from the answer's `types` (`Nullable` / `LowCardinality`
-  unwrapped: numbers, `Bool`, `Date`, `DateTime64`, text, UUIDs, enums; arrays of those as lists; maps and tuples
-  dropped), the schema's `json` (`properties`) as hidden plain text, its `boolean` as a checkbox. Keys `uuid`
-  (events), `id` (persons), `session_id` (sessions), else none; time columns `timestamp` and `$start_timestamp`
-  (a new view starts on the last 7 days). Values are written into the statement as escaped literals (the API takes
-  text), names backtick-quoted, the time zone only one `Intl` knows. Dates & times come back in the project's
-  zone and are made UTC; a day in the device's zone is compared as its UTC bounds (`fromUnixTimestamp`, so the
-  column itself is compared and ClickHouse reads only the parts in the period), grouped by
-  `formatDateTime(toTimeZone(…))`; text by `ILIKE` / `lower`, a list grouped once per value (`arrayJoin`). A page
-  is at most 5,000 rows a request (HogQL cuts a larger LIMIT short without a word); the app asks for the next. No
-  OFFSET (PostHog refuses it with a personal API key, on events): a row carries its sort keys (text, numbers, a date & time
-  as Unix seconds, the key last), and the page after one goes on after its last row's (keyset, `keysetSql`; where the
-  pages end is kept per query, the 50 most recent), by OFFSET only when that isn't known; grouped, the rows and their
-  keys (a group's size is a window) are a subquery the page is read from. The
-  query API has rate limits: an answer is kept 5 s (a view's page and counts, its item pages). An event's item page
-  looks it up by `uuid`, which `events` isn't ordered by: a scan, slow on a large project. 400 is the statement's
-  fault (`SourceError`), 401 / 403 the key's, 429 the rate limit.
 - *Calendar (ICS)* (`connectors/ics.ts`, parsed by `ical.js`): one calendar per source, its address in clear
   (`webcal://`, `webcals://` or https; `httpDocument.ts`); a secret in it is written `{secret}` and filled in from
   the source's secret (`withSecret`, URL-encoded), else a set secret is sent as `Authorization: Bearer`. One GET,

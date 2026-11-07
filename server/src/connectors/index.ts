@@ -8,10 +8,9 @@ import { JsonConnector } from "./json.ts";
 import { MysqlConnector } from "./mysql.ts";
 import { N8nConnector } from "./n8n.ts";
 import { PostgresConnector } from "./postgres.ts";
-import { PostHogConnector } from "./posthog.ts";
 
 // The connectors, by a source's kind (postgres.ts, n8n.ts, influx.ts: InfluxDB 2, d1.ts: Cloudflare D1, ics.ts: a calendar subscription,
-// mysql.ts: MySQL and MariaDB, actual.ts: Actual Budget, posthog.ts: PostHog, json.ts / csv.ts: JSON and CSV over HTTP). Another kind of source is
+// mysql.ts: MySQL and MariaDB, actual.ts: Actual Budget, json.ts / csv.ts: JSON and CSV over HTTP). Another kind of source is
 // another entry here, its fields in kinds.ts (and its own file beside them); nothing else on the
 // server or in the app changes.
 
@@ -21,7 +20,6 @@ const CONNECTORS: Record<string, (config: SourceConfig) => Connector> = {
   influxdb: (config) => new InfluxConnector(config),
   d1: (config) => new D1Connector(config),
   actual: (config) => new ActualConnector(config),
-  posthog: (config) => new PostHogConnector(config),
   json: (config) => new JsonConnector(config),
   csv: (config) => new CsvConnector(config),
   ics: (config) => new IcsConnector(config),

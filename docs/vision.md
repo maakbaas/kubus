@@ -62,7 +62,7 @@ The stages, in order:
   docs/sync.md "Backup and restore"). Built.
 - **Remote sources**, read-only: tables through the server (written queries: roadmap #19), same views and
   components (docs/sync.md "Remote sources"). Built for Postgres, MySQL / MariaDB, n8n data tables, InfluxDB 2,
-  Cloudflare D1, Actual Budget, PostHog, calendar (ICS) subscriptions and JSON / CSV over HTTP. Remote data stays read-only by
+  Cloudflare D1, Actual Budget, calendar (ICS) subscriptions and JSON / CSV over HTTP. Remote data stays read-only by
   design (no Directus side).
 - **Chart / dashboard block types** (Metabase side). The chart block is built (docs/views-and-workspace.md
   "Block types"), and so is reading several collections as one in a dashboard's block (native and remote mixed, fields merged by name or by hand,
@@ -98,12 +98,13 @@ Remote sources:
 18. Charts asking a source for their numbers instead of its rows: a chart's count, sum or average per
     category (or per day) worked out by the source (`SourceQuery` growing aggregates beside `counts`, each
     connector writing them in its language; memory.ts for the rest), so a chart over a large remote table
-    (PostHog's `events`, a busy Postgres table) reads a few hundred numbers, not every row. A protocol change
+    (a busy Postgres table, an analytics store's events) reads a few hundred numbers, not every row. A protocol change
     (`shared/sources.ts`), so app and server together.
-19. Written queries for remote collections: a collection reads a query in the source's language (SQL,
-    HogQL) instead of a table, typed in its settings beside the table picker (`SourceTarget`'s `query`;
-    the SQL builders already wrap one as a subquery, but every connector refuses it today). Lets a source
-    compute what the app can't cheaply (PostHog: bounce rate per channel, time on site per person).
+19. Written queries for remote collections: a collection reads a query in the source's language (SQL) instead
+    of a table, typed in its settings beside the table picker (`SourceTarget`'s `query`; the SQL builders already
+    wrap one as a subquery, but every connector refuses it today). Lets a source compute what the app can't cheaply
+    (a rate per category, totals per person). Then analytics sources (PostHog: its data is mostly JSON properties,
+    useful only through queries; a tables-only connector was tried and removed).
 
 Local storage:
 
