@@ -30,7 +30,7 @@ import { useMergedResult } from "./useMergedResult";
 import { useBlockName } from "./BlockListEditor";
 import { useShownOnce } from "../ui/useShownOnce";
 import { MergeFields } from "./MergeFields";
-import { dashboardFiltersFor } from "../domain/dashboards";
+import { dashboardFiltersFor, datedTab, newDashboardBlock } from "../domain/dashboards";
 import { ROW_HEIGHT } from "../domain/blockRows";
 import { RowSideBySide, type RowCollapse, type RowControls } from "./BlockRows";
 
@@ -102,10 +102,12 @@ interface MenusProps {
   onOpenChange?(open: boolean): void;
   /** Its place in a row (Block settings: beside the block above, the row's max height); absent where blocks have no rows. */
   row?: RowControls;
+  /** Being set up (a block just added): its Block settings open by themselves, and this is called once they close. */
+  onSetUp?(): void;
 }
 
 /** A block's menus: Filter, Sort and group, Fields (each where its block type uses it), and its type's settings. */
-export function BlockMenus({ collection, home, block, refs, result, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange, row }: MenusProps) {
+export function BlockMenus({ collection, home, block, refs, result, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange, row, onSetUp }: MenusProps) {
   const uid = useId();
   const { components, collections } = useStore();
   const dashboard = place === "dashboard";
@@ -151,7 +153,9 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
     // The block keeps its type and the options that still apply (fields found again by name).
     const keep = (to: Collection) => ({ kind: type.kind, options: carryOptions(block.options, collection, to) });
     // On a dashboard there is no page's item to link to: a plain block of the collection (down to one: a plain block of it).
-    const start = (to: Collection) => (page ? newPageBlock(to, page, keep(to)) : normalizeBlock(to, newBlock(type.kind, keep(to).options)));
+    // A dashboard's block of a time series starts with its date period (dashboards.ts newDashboardBlock).
+    const plain = (to: Collection) => (dashboard ? newDashboardBlock(type.kind, keep(to).options, to, datedTab(viewFilters ?? [], collections)) : newBlock(type.kind, keep(to).options));
+    const start = (to: Collection) => (page ? newPageBlock(to, page, keep(to)) : normalizeBlock(to, plain(to)));
     if (list.length === 1) {
       const { id: _id, title: _title, ...fresh } = start(list[0]);
       // A collection view's own collection is no collection of the block's own.
@@ -257,15 +261,16 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
         </ToolbarPopover>
       )}
       {/* A gear, not the type's icon: this is also where the type is switched. */}
-      {/* Opened by itself while the block's settings are still to be made (a new linked block's link). */}
+      {/* Opened by itself while the block's settings are still to be made (a new linked block's link, a block just added). */}
       <ToolbarPopover
         label="Block settings"
         icon={Settings}
         width="narrow"
-        openRequest={type.unset?.(block.options) ? 1 : undefined}
+        openRequest={type.unset?.(block.options) || onSetUp ? 1 : undefined}
         onOpenChange={(open) => {
           settingsPanel.onOpenChange(open);
           onOpenChange?.(open);
+          if (!open) onSetUp?.();
         }}
       >
         <div className="view-settings">
@@ -431,9 +436,14 @@ interface Props {
   onDragStart?(e: DragEvent): void;
   /** Its place in a row, set in Block settings. */
   row?: RowControls;
+  /**
+   * Being set up (a block just added to a dashboard): it reads nothing (no remote rows, no query) and says so while its
+   * Block settings, open by themselves, are used; called when they close, after which it reads as any block.
+   */
+  onSetUp?(): void;
 }
 
-export function BlockView({ collection: home, data: given, block, viewFilters: givenFilters, search, place, page, editable, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange, collapse, onDragStart, row }: Props) {
+export function BlockView({ collection: home, data: given, block, viewFilters: givenFilters, search, place, page, editable, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange, collapse, onDragStart, row, onSetUp }: Props) {
   const { components, collections } = useStore();
   const { confirm, dialog } = useConfirm();
   // Several collections chosen (only on a dashboard): the block reads them as one (its columns merged by name), from the
@@ -451,6 +461,8 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
 
   const type = blockType(block.kind);
   const uses = type.uses(block.options, components);
+  // A block being set up reads nothing yet: what it would read first (every row of a large remote table) may not be what it is set to.
+  const reads = uses.query && !onSetUp;
   // Page-item values ("this item") filled in from the page's item; {{ }} code worked out.
   const base = blockQuery(viewFilters, block, blockSort(block, collection));
   // Its rolling date period counted from the view's date (now unless the view is stepped away from it: domain/datePeriod.ts
@@ -464,12 +476,12 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   const limit = blockLimit(block, !!uses.all);
   // A block that doesn't show groups (a chart: its X axis is its own) doesn't make a remote collection load every row to group by a date part.
   const remoteQuery = useMemo(() => (uses.groups || !query.groupDate ? query : { ...query, groupDate: undefined }), [uses.groups, query]);
-  const remoteRows = useRemoteResult(collection, remoteQuery, search, uses.query, limit === 0, limit || undefined);
-  const mergedRows = useMergedResult(collection, query, search, uses.query, limit === 0, limit || undefined);
+  const remoteRows = useRemoteResult(collection, remoteQuery, search, reads, limit === 0, limit || undefined);
+  const mergedRows = useMergedResult(collection, query, search, reads, limit === 0, limit || undefined);
   const remote = remoteRows ?? mergedRows;
   const local = useMemo(
-    () => (!remote && data.items && uses.query ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),
-    [remote, collection, data.items, data.ctx, uses.query, query, search],
+    () => (!remote && data.items && reads ? applyQuery(collection, data.items, query, data.ctx, search) : NO_RESULT),
+    [remote, collection, data.items, data.ctx, reads, query, search],
   );
   // A native collection's items are shown a Limit at a time too (a table of thousands rows is slow), in the order of the groups.
   const [shown, setShown] = useState(limit);
@@ -533,15 +545,17 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   // Drawn in a box of its own (a chart, map, HTML component): in a row side by side it fills the row (styles.css .block--fills).
   const own = uses.ownHeight && typeof uses.ownHeight.height === "number" ? uses.ownHeight : null;
   // Searching the view: a block listing items that has none matching is left out altogether.
-  if (search.trim() && uses.query && items && result.total === 0) return null;
+  if (!onSetUp && search.trim() && uses.query && items && result.total === 0) return null;
   // Not even its header until its items are in: a header alone would sit where the blocks above are about to push it away.
-  if (!items && !error && !remote?.waiting && !shownOnce.current) return null;
+  if (!onSetUp && !items && !error && !remote?.waiting && !shownOnce.current) return null;
   // Rows on their way (a remote source's, a merged block's remote parts): a turning sync icon after its name, its count in the tooltip.
   const syncing = !!remote && (remote.waiting || !!remote.progress || remote.loadingMore);
   const syncingLabel = remote?.progress ? `Loading rows: ${remote.progress.loaded} of ${remote.progress.total}` : "Loading rows";
   // What it shows, drawn once its items are in; while they aren't (another collection's, loading) what it showed before
   // stays, then is replaced at once: nothing blank or half-made in between (a remote block's hooks hold their rows likewise).
-  const view = items ? (
+  const view = onSetUp ? (
+    <InlineNotification kind="info" lowContrast hideCloseButton title="Shown once Block settings close" subtitle="Choose what it shows first: nothing is read until then." />
+  ) : items ? (
     <type.View
       collection={collection}
       result={result}
@@ -562,7 +576,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
   ) : (
     lastView.current
   );
-  lastView.current = view;
+  if (!onSetUp) lastView.current = view;
   return (
     <section className={own ? "block block--fills" : uses.fixedHeight ? "block block--fixed" : "block"} data-block-id={block.id}>
       {/* Its own height (Height, Aspect ratio, what is around its box), measured for its row (views/BlockRows.tsx): a box of
@@ -605,6 +619,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
           onError={onError}
           onOpenChange={onOpenChange}
           row={row}
+          onSetUp={onSetUp}
         />
       </SectionHeader>
       {/* Below its header (none while collapsed): in a row side by side as tall as the row, scrolling inside past it; its

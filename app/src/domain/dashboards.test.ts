@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { blankField, type Collection } from "./model";
 import type { FilterRule } from "./query";
-import { DASHBOARD_DATE, dashboardBlockCollection, dashboardFiltersFor, dashboardScope, dashboardViewsIn, isVirtualTab, newDashboardBlock, type DashboardView } from "./dashboards";
+import { DASHBOARD_DATE, dashboardBlockCollection, dashboardFiltersFor, dashboardScope, dashboardViewsIn, datedTab, isVirtualTab, newDashboardBlock, type DashboardView } from "./dashboards";
 import { mergeCollections } from "./mergedCollection";
 import { NOTHING_COLLAPSED } from "./views";
 import { inSpace } from "./spaces";
@@ -57,6 +57,18 @@ describe("a dashboard's blocks", () => {
     expect(dashboardBlockCollection(block)).toBe("Book");
     expect(dashboardBlockCollection({ collectionId: null, collectionIds: ["Person", "Book"] })).toBe("Person");
     expect(dashboardBlockCollection({ collectionId: null })).toBeNull();
+  });
+
+  it("of a time series start with its date period, unless the tab already holds a date", () => {
+    const at = { ...blankField("at", "Time", "datetime"), column: "_time" };
+    const series = { ...collection("Metrics", [at]), source: { name: "Influx", target: { table: { schema: null, name: "cpu" } }, key: "_id", columns: [], time: "_time" } } as Collection;
+    expect(newDashboardBlock("chart", {}, series).filters).toEqual([{ id: "at-period", fieldId: "at", operator: "between", value: expect.any(String) }]);
+    expect(newDashboardBlock("chart", {}, series, true).filters).toBeNull();
+    expect(newDashboardBlock("chart", {}, books).filters).toBeNull();
+    const rule = (fieldId: string): FilterRule => ({ id: "r", fieldId, operator: "between", value: "x" });
+    expect(datedTab([rule(DASHBOARD_DATE)], [])).toBe(true);
+    expect(datedTab([rule("done")], [books])).toBe(true);
+    expect(datedTab([rule("title")], [books])).toBe(false);
   });
 });
 

@@ -332,7 +332,12 @@ What the app does, feature by feature (read the part you work on).
   the view's name, Show filter bar, Full width and collapsing are stored at once. A view without blocks shows an empty state with
   Add block (disabled while there is no collection). A new block lists the collection of the view's last block (else the space's
   first) and is changed in Block settings → Collections: one, or several read as one ("Several collections in one block"; Backlinks
-  isn't offered). The view's filter is edited over the fields of all its blocks' collections (`dashboardScope`, `pageFilterScope`
+  isn't offered). A block just added is being set up: its Block settings open by themselves and it reads nothing (no remote rows, no
+  query; "Shown once Block settings close") until they close, so the collection and type it merely starts with (a chart of every
+  row of a large remote table) aren't read for nothing (`BlockView`'s `onSetUp`; the ids being set up are the page's state, never
+  stored: after a reload the block reads at once). A new block of a time series (a remote collection read by time, `sourcePeriod`),
+  added or switched to in Collections, starts with its last 7 days as its own filter, unless the tab's filter already holds a date
+  (`newDashboardBlock`, `datedTab`). The view's filter is edited over the fields of all its blocks' collections (`dashboardScope`, `pageFilterScope`
   with "Date" first): a rule on a field narrows the blocks listing that field's collection (a merged block: the column showing it), a
   rule on **Date** (`DASHBOARD_DATE`, `$date`) each block's own first date or date & time field (a block without one is left alone),
   so the filter bar's period (on Date unless another field is picked) steps every dated block at once (`dashboardFiltersFor`, applied

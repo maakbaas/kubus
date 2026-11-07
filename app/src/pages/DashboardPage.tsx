@@ -8,7 +8,7 @@ import { useItemsLoaded } from "../app/useItems";
 import { useFreshLoads } from "../app/useFreshLoads";
 import { blockCollections, findCollection } from "../domain/backlinks";
 import { DASHBOARD_ICON, findTab, dashboardBlockCollection,
- dashboardIcon, dashboardScope, FIRST_TAB_NAME, newDashboardBlock, type Dashboard, type DashboardView } from "../domain/dashboards";
+ dashboardIcon, dashboardScope, FIRST_TAB_NAME, newDashboardBlock, datedTab, type Dashboard, type DashboardView } from "../domain/dashboards";
 
 import { newId, newName, now, type Collection } from "../domain/model";
 import { isRemote } from "../domain/sources";
@@ -267,11 +267,22 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
   // A new block lists the collection of the last block that has one (the next is often of the same), else the space's first.
   const lastCollection = [...view.blocks].reverse().map((b) => findCollection(collections, dashboardBlockCollection(b))).find((c) => c);
   const newBlockCollection = lastCollection ?? spaceCollections[0] ?? collections[0];
+  // Blocks just added, being set up: they read nothing until their Block settings (open by themselves) close, so a
+  // collection they only start with (a large remote table, every row of it for a chart) isn't read for nothing. Not stored.
+  const [settingUp, setSettingUp] = useState<ReadonlySet<string>>(new Set());
   const addBlock = (spec: NewBlockSpec) => {
     if (!newBlockCollection) return;
-    const block = normalizeBlock(newBlockCollection, newDashboardBlock(spec.kind, spec.options ?? blockType(spec.kind).defaultOptions(newBlockCollection), newBlockCollection));
+    const block = normalizeBlock(newBlockCollection, newDashboardBlock(spec.kind, spec.options ?? blockType(spec.kind).defaultOptions(newBlockCollection), newBlockCollection, datedTab(view.filters, collections)));
+    setSettingUp((ids) => new Set(ids).add(block.id));
     arrangeNow((blocks) => [...blocks, block]);
   };
+  const setUp = (id: string) =>
+    setSettingUp((ids) => {
+      if (!ids.has(id)) return ids;
+      const next = new Set(ids);
+      next.delete(id);
+      return next;
+    });
   // Collapsed per block, a row side by side as one (views/BlockRows.tsx rowCollapse).
   const collapsedState = active?.collapsed ?? NOTHING_COLLAPSED;
   const collapseOf = (block: ViewBlock) =>
@@ -487,6 +498,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
               onOpenChange={panels.onOpenChange}
               onDragStart={placed.onDragStart}
               row={rowActions.controls(block)}
+              onSetUp={settingUp.has(block.id) ? () => setUp(block.id) : undefined}
             />
           )}
         />
@@ -575,6 +587,8 @@ interface BlockProps {
   collapse: RowCollapse;
   onDragStart?(e: React.DragEvent): void;
   row?: RowControls;
+  /** Just added: read once its Block settings close (BlockView). */
+  onSetUp?(): void;
 }
 
 /** A block of a dashboard: its (first remaining) collection's, or a warning when the collections it listed are gone. */
@@ -598,7 +612,7 @@ function NativeDashboardBlock(props: BlockProps & { home: Collection }) {
   return <DashboardBlockContent data={data} {...props} />;
 }
 
-function DashboardBlockContent({ home, data, block, filters, search, editable, collapsed, onCollapse, collapse, onChange, onSet, onRemove, onError, onOpenChange, onDragStart, row }: BlockProps & { home: Collection; data: CollectionData }) {
+function DashboardBlockContent({ home, data, block, filters, search, editable, collapsed, onCollapse, collapse, onChange, onSet, onRemove, onError, onOpenChange, onDragStart, row, onSetUp }: BlockProps & { home: Collection; data: CollectionData }) {
   const { collections } = useStore();
   const normalized = useMemo(() => normalizeBlock(home, block, collections), [home, block, collections]);
   return (
@@ -621,6 +635,7 @@ function DashboardBlockContent({ home, data, block, filters, search, editable, c
       collapse={collapse}
       onDragStart={onDragStart}
       row={row}
+      onSetUp={onSetUp}
     />
   );
 }

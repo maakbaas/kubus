@@ -9,6 +9,7 @@
 import { pageFilterScope, pageFiltersFor, newBlock, type BlockKind, type Collapsed, type ViewBlock, type ViewState } from "./views";
 import { blankField, nextName, type Collection, type FieldDef } from "./model";
 import type { FilterRule } from "./query";
+import { sourcePeriod } from "./sources";
 
 export interface Dashboard {
   id: string;
@@ -128,9 +129,20 @@ function onColumn(merged: Collection, rule: FilterRule): FilterRule {
 export const dashboardBlockCollection = (block: Pick<ViewBlock, "collectionId" | "collectionIds">): string | null =>
   block.collectionId ?? block.collectionIds?.[0] ?? null;
 
-/** A new block of a dashboard: as a collection view's, but it always names its collection (a dashboard has none of its own). */
-export function newDashboardBlock(kind: BlockKind, options: unknown, collection: Pick<Collection, "id">): ViewBlock {
-  return { ...newBlock(kind, options), collectionId: collection.id };
+/**
+ * A new block of a dashboard: as a collection view's, but it always names its collection (a dashboard has none of its own).
+ * Of a time series (a remote one read by time) it starts with the date period a new view of it does (sources.ts sourcePeriod),
+ * unless the tab's filter already holds a date (`datedTab`): else it would read all of it.
+ */
+export function newDashboardBlock(kind: BlockKind, options: unknown, collection: Pick<Collection, "id" | "source" | "fields">, datedTab = false): ViewBlock {
+  const period = datedTab ? [] : sourcePeriod(collection);
+  return { ...newBlock(kind, options), collectionId: collection.id, ...(period.length > 0 && { filters: period }) };
+}
+
+/** Whether a tab's filter holds a date: a rule on "Date", or on a date or date & time field of a collection. */
+export function datedTab(filters: FilterRule[], collections: Pick<Collection, "fields">[]): boolean {
+  const dates = new Set(collections.flatMap((c) => c.fields.filter((f) => f.kind === "date" || f.kind === "datetime").map((f) => f.id)));
+  return filters.some((r) => r.fieldId === DASHBOARD_DATE || dates.has(r.fieldId));
 }
 
 /** The icon a dashboard without one of its own shows (Carbon's Dashboard). */

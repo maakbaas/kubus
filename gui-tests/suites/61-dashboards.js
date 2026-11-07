@@ -179,7 +179,13 @@ test("dashboards: blocks of one collection and of several, added from the empty 
   await empty.getByRole("button", { name: "Add block" }).click();
   await t.settle(100);
   await t.page.getByRole("menuitem", { name: "Table" }).click();
-  await t.until("Add block adds a table of the space's first collection", async () => (await t.page.locator(`${D_SHOWN} .block`).count()) === 1 && (await dRows(t, "Table"))?.length === BOOKS_READ.length);
+  // Being set up: its Block settings open by themselves and nothing is read until they close.
+  await t.until(
+    "Add block adds a block being set up: Block settings open, nothing read yet",
+    async () => (await t.page.locator(`${D_SHOWN} .block`).count()) === 1 && (await shownPopover(t).count()) > 0 && (await dBlock(t, "Table").getByText("Shown once Block settings close").count()) === 1,
+  );
+  await t.closeAll();
+  await t.until("closed: a table of the space's first collection", async () => (await dRows(t, "Table"))?.length === BOOKS_READ.length);
   const tabs = await storedTabs(t, ids.dashboards.health);
   await t.check("stored at once, naming its collection", tabs[0].blocks.length === 1 && tabs[0].blocks[0].collectionId === ids.collections.books, JSON.stringify(tabs[0].blocks));
   await t.check("no change to save", (await dActiveTab(t)) === "Empty");
