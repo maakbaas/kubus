@@ -9,7 +9,7 @@ import { TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilte
 import { resolveRange, rollingRangeValue } from "./datePeriod";
 import { fieldKindList } from "./fieldKinds";
 import { dateGroupLabel } from "./groupDate";
-import { blankField, isMetaField, newId, SELF_FIELD, selfField, titleFields, type Collection, type CollectionSource, type FieldDef, type FieldKind, type FieldValue, type Item } from "./model";
+import { blankField, isMetaField, newId, SELF_FIELD, selfField, titleFields, valueKind, type Collection, type CollectionSource, type FieldDef, type FieldKind, type FieldValue, type Item } from "./model";
 import { filterTree, mapTree } from "./filterTree";
 import { filterValueProblem, isGroupable, ruleMatches, waitsForValue, operatorsFor, TITLE, type FilterRule, type OperatorSpec, type ViewQuery } from "./query";
 
@@ -166,17 +166,17 @@ export function queriedInApp(collection: Collection, field: FieldDef): boolean {
 /** The filter operators the source has for a field: those its column supports (none for a field of its own, or one converted). */
 function sourceOperators(collection: Collection, field: FieldDef): OperatorSpec[] {
   // The item itself is this one or not (always set: never empty).
-  if (field.id === SELF_FIELD) return operatorsFor(field.kind).filter((o) => o.needsValue);
-  if (!collection.source || isMetaField(field)) return operatorsFor(field.kind);
+  if (field.id === SELF_FIELD) return operatorsFor(valueKind(field)).filter((o) => o.needsValue);
+  if (!collection.source || isMetaField(field)) return operatorsFor(valueKind(field));
   const column = sourceColumn(collection, field);
   // Converted values (text as a number, ...) aren't what the source compares: it would compare its own ("10" < "9").
   if (!column || isConverted(collection, field)) return [];
-  return column.plain ? operatorsFor(field.kind).filter((o) => PLAIN_OPS.has(o.id)) : operatorsFor(field.kind);
+  return column.plain ? operatorsFor(valueKind(field)).filter((o) => PLAIN_OPS.has(o.id)) : operatorsFor(valueKind(field));
 }
 
 /** The filter operators of a field: in a remote collection, those its column supports, or all of its type where the app filters (`queriedInApp`). */
 export function fieldOperators(collection: Collection, field: FieldDef): OperatorSpec[] {
-  return queriedInApp(collection, field) ? operatorsFor(field.kind) : sourceOperators(collection, field);
+  return queriedInApp(collection, field) ? operatorsFor(valueKind(field)) : sourceOperators(collection, field);
 }
 
 /** Whether items can be filtered by a field. */
@@ -198,7 +198,7 @@ export function canSort(collection: Collection, fieldId: string): boolean {
 
 /** Whether the source groups by a field. */
 function sourceGroups(collection: Collection, field: FieldDef): boolean {
-  if (!isGroupable(field.kind)) return false;
+  if (!isGroupable(field)) return false;
   if (!collection.source) return true;
   const column = sourceColumn(collection, field);
   return !!column && !column.plain && !isConverted(collection, field);
@@ -206,7 +206,7 @@ function sourceGroups(collection: Collection, field: FieldDef): boolean {
 
 /** Whether items can be grouped by a field: by the source, or by the app (`queriedInApp`). */
 export function canGroup(collection: Collection, field: FieldDef): boolean {
-  return sourceGroups(collection, field) || (isGroupable(field.kind) && queriedInApp(collection, field));
+  return sourceGroups(collection, field) || (isGroupable(field) && queriedInApp(collection, field));
 }
 
 /**
@@ -367,7 +367,7 @@ export function sourceQuery(
     rules.flatMap((rule) => {
       const constant = constants?.get(rule.fieldId);
       if (constant && !byId.has(rule.fieldId)) {
-        if (waitsForValue(constant.field, rule) || !operatorsFor(constant.field.kind).some((o) => o.id === rule.operator || rule.operator === "between")) return [];
+        if (waitsForValue(constant.field, rule) || !operatorsFor(valueKind(constant.field)).some((o) => o.id === rule.operator || rule.operator === "between")) return [];
         return [{ ...rule, field: constant.field, column: "", always: ruleMatches(constant.field, constant.value, rule, { refLabel: () => "" }) }];
       }
       const field = byId.get(rule.fieldId);

@@ -14,7 +14,7 @@
 //    the Collection column has the part's name (a constant per part: `partConstants`).
 
 import { formatDate } from "./fieldKinds";
-import { blankField, canBeTitle, fieldValue, META_FIELDS, NO_TITLE, titleFields, type Collection, type FieldDef, type FieldKind, type FieldValue, type Item, type MergedPart, type MergeProblem } from "./model";
+import { blankField, canBeTitle, fieldValue, META_FIELDS, NO_TITLE, titleFields, type Collection, type FieldDef, type FieldKind, type FieldValue, type Item, type MergedPart, type MergeProblem, valueKind } from "./model";
 import { rowItem, rowItemId, setReadKinds, sourceColumn, type ConstantFields } from "./sources";
 import type { SourceShape, SourceRow } from "../../../shared/sources";
 
@@ -31,7 +31,7 @@ const TEXT: readonly FieldKind[] = ["string", "markdown", "html"];
  * text, number or Markdown it holds.
  */
 export function readKind(field: Pick<FieldDef, "kind" | "output">): FieldKind | null {
-  const kind = field.kind === "ai" ? (field.output === "number" ? "number" : field.output === "markdown" ? "markdown" : "string") : field.kind;
+  const kind = valueKind(field);
   return MERGED_KINDS.includes(kind) ? kind : null;
 }
 

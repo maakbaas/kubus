@@ -192,6 +192,9 @@ What the app does, feature by feature (read the part you work on).
   sync icon and only there while something needs saying: not set up, paused, writing many, failed); items have
   a "Generate again" button in the label row whose popover shows when the value was generated (or edited) and takes
   a nudge for that value, sent once and not kept. AI fields are skipped by duplicate and the new-item form.
+  **It behaves as its output's kind** (`valueKind` in `domain/model.ts`: Text as a text field, Number as a number,
+  Markdown as a Markdown field): its filter operators, value box (the field's existing values for is / is not), sorting,
+  grouping and search are that kind's (`KIND_RULES` has no `ai` rules); only a group's preset never sets it.
   **Values can be typed over** (item page, table cells for text and numbers; `editableField` edits an AI field as its
   output type): an edited value is stored with `edited` in `value_json` and an empty fingerprint, which the next look at
   the item (`aiStaleness` "adopt", `Repository.acceptEdit`) replaces with the prompt as it reads then. It is never

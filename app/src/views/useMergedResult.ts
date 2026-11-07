@@ -175,7 +175,7 @@ export function useMergedResult(collection: Collection, query: ViewQuery, search
   shownRows.current = loaded?.rows.length ?? 0;
 
   const groupField = q.groupBy ? merged.fields.find((f) => f.id === q.groupBy) : undefined;
-  const grouped = !!groupField && isGroupable(groupField.kind);
+  const grouped = !!groupField && isGroupable(groupField);
   // Rows that didn't change keep their item (memoized rows rely on it): a new first page reuses the items of the one before.
   const known = useRef(new Map<string, { json: string; item: Item }>());
   const result = useMemo(() => {

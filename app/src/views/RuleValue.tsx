@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ComboBox, Dropdown, Select, SelectItem, TextInput } from "@carbon/react";
-import type { Collection, FieldDef, FieldKind } from "../domain/model";
+import { valueKind, type Collection, type FieldDef, type FieldKind } from "../domain/model";
 import { dollarNames } from "../domain/components";
 import { canGroup, deviceTimeZone, sourceQuery } from "../domain/sources";
 import {
@@ -21,10 +21,10 @@ import { useItems } from "../app/useItems";
 import { useStore } from "../app/store";
 
 /** The page's fields whose values a rule on a field of this kind compares with (same kind; text with text). */
-const TEXT_KINDS: FieldKind[] = ["string", "markdown", "html", "ai", "string_list", "checklist"];
+const TEXT_KINDS: FieldKind[] = ["string", "markdown", "html", "string_list", "checklist"];
 function comparablePageFields(kind: FieldKind, page: Collection): FieldDef[] {
-  const kinds: FieldKind[] = TEXT_KINDS.includes(kind) ? ["string", "ai"] : kind === "number_list" ? ["number"] : kind === "number" || kind === "date" || kind === "datetime" || kind === "checkbox" ? [kind] : [];
-  return page.fields.filter((f) => kinds.includes(f.kind));
+  const kinds: FieldKind[] = TEXT_KINDS.includes(kind) ? ["string"] : kind === "number_list" ? ["number"] : kind === "number" || kind === "date" || kind === "datetime" || kind === "checkbox" ? [kind] : [];
+  return page.fields.filter((f) => kinds.includes(valueKind(f)));
 }
 
 /** A rule's value as typed (not taken from the page's item). */
@@ -93,7 +93,9 @@ export function RuleValue({
     );
   }
   // Text for every kind, so {{ }} code can be typed (a number or date input would refuse the braces).
-  const date = field.kind === "date" || field.kind === "datetime";
+  // An AI field as the kind of its output (text, a number or Markdown).
+  const kind = valueKind(field);
+  const date = kind === "date" || kind === "datetime";
   const note = valueNote(field, rule, page);
   const input = (
     <TypedValue
@@ -103,13 +105,13 @@ export function RuleValue({
       rule={rule}
       label={label}
       hideLabel={hideLabel}
-      placeholder={field.kind === "checkbox" ? "true or false" : date ? "yyyy-mm-dd" : "Value"}
+      placeholder={kind === "checkbox" ? "true or false" : date ? "yyyy-mm-dd" : "Value"}
       note={note}
       pickOnly={pickOnly}
       onChange={onChange}
     />
   );
-  const pageFields = page ? comparablePageFields(field.kind, page) : [];
+  const pageFields = page ? comparablePageFields(kind, page) : [];
   if (pageFields.length === 0) return input;
   const fromPage = isPageValue(rule.value);
   return (
@@ -166,7 +168,7 @@ function PlainValue({ id, field, rule, label, hideLabel, placeholder, note, onCh
       labelText={label}
       hideLabel={hideLabel}
       size="sm"
-      inputMode={field.kind === "number" || field.kind === "number_list" ? "decimal" : undefined}
+      inputMode={valueKind(field) === "number" || valueKind(field) === "number_list" ? "decimal" : undefined}
       placeholder={placeholder}
       value={rule.value}
       helperText={note.helper}
@@ -221,7 +223,7 @@ function ValueBox({ id, field, rule, label, hideLabel, placeholder, note, pickOn
       size="sm"
       titleText={hideLabel ? undefined : label}
       aria-label={label}
-      inputMode={field.kind === "number" || field.kind === "number_list" ? "decimal" : undefined}
+      inputMode={valueKind(field) === "number" || valueKind(field) === "number_list" ? "decimal" : undefined}
       placeholder={placeholder}
       items={options.map((o) => o.value)}
       itemToString={(v) => v ?? ""}

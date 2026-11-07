@@ -312,10 +312,20 @@ export function fieldValue(item: Item, field: FieldDef): FieldValue {
   return item.values[field.id] ?? null;
 }
 
+/** A kind values behave as (every kind but AI, whose values are text, a number or Markdown). */
+export type ValueKind = Exclude<FieldKind, "ai">;
+
+/**
+ * The kind a field's values behave as: an AI field's is that of its output (text, a number or Markdown), so it is
+ * filtered, sorted, grouped and edited as that kind; any other field's is its own.
+ */
+export const valueKind = (field: Pick<FieldDef, "kind" | "output">): ValueKind =>
+  field.kind !== "ai" ? field.kind : field.output === "number" ? "number" : field.output === "markdown" ? "markdown" : "string";
+
 /** The field as its value is edited: an AI field is edited as text, a number or Markdown, by its output. */
 export function editableField(field: FieldDef): FieldDef {
   if (field.kind !== "ai") return field;
-  return { ...field, editedAi: true, kind: field.output === "number" ? "number" : field.output === "markdown" ? "markdown" : "string" };
+  return { ...field, editedAi: true, kind: valueKind(field) };
 }
 
 /** `titleField` of a collection whose items have no title (they are called by the collection's name). */

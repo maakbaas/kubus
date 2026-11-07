@@ -322,7 +322,7 @@ function CollectionPreview({
         <Select size="sm" id={`${uid}-preview-group`} labelText="Preview grouped by" value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
           <SelectItem value="" text="No grouping" />
           {fieldChoices
-            .filter((f) => isGroupable(f.kind))
+            .filter((f) => isGroupable(f))
             .map((f) => (
               <SelectItem key={f.id} value={f.id} text={f.name} />
             ))}
