@@ -499,6 +499,7 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
               onDragStart={placed.onDragStart}
               row={rowActions.controls(block)}
               onSetUp={settingUp.has(block.id) ? () => setUp(block.id) : undefined}
+              setUpWaits={panels.open}
             />
           )}
         />
@@ -589,6 +590,8 @@ interface BlockProps {
   row?: RowControls;
   /** Just added: read once its Block settings close (BlockView). */
   onSetUp?(): void;
+  /** Another panel is open: its Block settings open once it closes. */
+  setUpWaits?: boolean;
 }
 
 /** A block of a dashboard: its (first remaining) collection's, or a warning when the collections it listed are gone. */
@@ -612,7 +615,7 @@ function NativeDashboardBlock(props: BlockProps & { home: Collection }) {
   return <DashboardBlockContent data={data} {...props} />;
 }
 
-function DashboardBlockContent({ home, data, block, filters, search, editable, collapsed, onCollapse, collapse, onChange, onSet, onRemove, onError, onOpenChange, onDragStart, row, onSetUp }: BlockProps & { home: Collection; data: CollectionData }) {
+function DashboardBlockContent({ home, data, block, filters, search, editable, collapsed, onCollapse, collapse, onChange, onSet, onRemove, onError, onOpenChange, onDragStart, row, onSetUp, setUpWaits }: BlockProps & { home: Collection; data: CollectionData }) {
   const { collections } = useStore();
   const normalized = useMemo(() => normalizeBlock(home, block, collections), [home, block, collections]);
   return (
@@ -636,6 +639,7 @@ function DashboardBlockContent({ home, data, block, filters, search, editable, c
       onDragStart={onDragStart}
       row={row}
       onSetUp={onSetUp}
+      setUpWaits={setUpWaits}
     />
   );
 }

@@ -104,10 +104,12 @@ interface MenusProps {
   row?: RowControls;
   /** Being set up (a block just added): its Block settings open by themselves, and this is called once they close. */
   onSetUp?(): void;
+  /** Another panel is open (View settings, where the block was added): its Block settings open once it closes. */
+  setUpWaits?: boolean;
 }
 
 /** A block's menus: Filter, Sort and group, Fields (each where its block type uses it), and its type's settings. */
-export function BlockMenus({ collection, home, block, refs, result, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange, row, onSetUp }: MenusProps) {
+export function BlockMenus({ collection, home, block, refs, result, place, viewFilters, page, onChange, onSet, onRemove, onOpenChange, row, onSetUp, setUpWaits }: MenusProps) {
   const uid = useId();
   const { components, collections } = useStore();
   const dashboard = place === "dashboard";
@@ -174,6 +176,15 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
     onChange(n === blockLimit({}, !!uses.all) ? rest : { ...rest, limit: n });
   };
   // A row's height and its limit: only where they apply, a row of several blocks side by side (blockRows.ts). Held while
+  // Being set up: its Block settings open by themselves once no other panel is (opened inside View settings, which stays open
+  // after Add block, they would close at once), a frame after it closed, so the focus it gives back doesn't close them.
+  const [setUpRequest, setSetUpRequest] = useState<number>();
+  const settingUp = !!onSetUp;
+  useEffect(() => {
+    if (!settingUp || setUpWaits) return;
+    const frame = requestAnimationFrame(() => setSetUpRequest((n) => (n ?? 0) + 1));
+    return () => cancelAnimationFrame(frame);
+  }, [settingUp, setUpWaits]);
   // Block settings is open (ticking Beside the block above changes it): its Display section would move what is clicked.
   const settingsPanel = usePanelsOpen();
   const inRow = settingsPanel.hold("inRow", !!row?.inRow);
@@ -266,7 +277,7 @@ export function BlockMenus({ collection, home, block, refs, result, place, viewF
         label="Block settings"
         icon={Settings}
         width="narrow"
-        openRequest={type.unset?.(block.options) || onSetUp ? 1 : undefined}
+        openRequest={type.unset?.(block.options) ? 1 : settingUp ? setUpRequest : undefined}
         onOpenChange={(open) => {
           settingsPanel.onOpenChange(open);
           onOpenChange?.(open);
@@ -441,9 +452,11 @@ interface Props {
    * Block settings, open by themselves, are used; called when they close, after which it reads as any block.
    */
   onSetUp?(): void;
+  /** Being set up while another panel is open: its Block settings open once that closes. */
+  setUpWaits?: boolean;
 }
 
-export function BlockView({ collection: home, data: given, block, viewFilters: givenFilters, search, place, page, editable, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange, collapse, onDragStart, row, onSetUp }: Props) {
+export function BlockView({ collection: home, data: given, block, viewFilters: givenFilters, search, place, page, editable, headerHidden, collapsed: state, onCollapse, onChange, onSet, onRemove, onError, onOpenChange, collapse, onDragStart, row, onSetUp, setUpWaits }: Props) {
   const { components, collections } = useStore();
   const { confirm, dialog } = useConfirm();
   // Several collections chosen (only on a dashboard): the block reads them as one (its columns merged by name), from the
@@ -620,6 +633,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
           onOpenChange={onOpenChange}
           row={row}
           onSetUp={onSetUp}
+          setUpWaits={setUpWaits}
         />
       </SectionHeader>
       {/* Below its header (none while collapsed): in a row side by side as tall as the row, scrolling inside past it; its
