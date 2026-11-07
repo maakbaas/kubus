@@ -67,9 +67,15 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
   }, [open]);
   // Opened in the same render as the request, so what the panel focuses (a name to rename) is there.
   const [seenRequest, setSeenRequest] = useState<number>();
+  // Opened by a request with focus elsewhere (a block being set up, opened once another panel closed): focus goes to its
+  // button, so Escape and moving focus away close it as when it was opened by hand (unless the panel focused something itself).
+  const [requested, setRequested] = useState(false);
   if (openRequest !== seenRequest) {
     setSeenRequest(openRequest);
-    if (openRequest) setOpen(true);
+    if (openRequest) {
+      setOpen(true);
+      setRequested(true);
+    }
   }
   // The panel is rendered once first opened (then kept): closed panels full of icon buttons and
   // their tooltips made every page that has them slow to open.
@@ -85,6 +91,11 @@ export function ToolbarPopover({ label, icon: Icon, active, fit, width, openRequ
   const id = useId();
   const root = useRef<HTMLSpanElement>(null);
   const pressedOutside = useRef(false);
+  useEffect(() => {
+    if (!requested) return;
+    setRequested(false);
+    if (!root.current?.contains(document.activeElement)) document.getElementById(id)?.focus({ preventScroll: true });
+  }, [requested]); // eslint-disable-line react-hooks/exhaustive-deps
   // A dialog or a date picker's calendar opened from the panel (rendered at the window level) counts as part of it.
   const inside = (n: Node | null) => !!n && (!!root.current?.contains(n) || (n instanceof Element && !!n.closest(WINDOW_LEVEL)));
   useEffect(() => {
