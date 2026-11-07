@@ -36,9 +36,10 @@ function standIn(q: Sent["query"]): Response {
     return Response.json({
       columns: ["toString(uuid)", "event", "timestamp"],
       results: [
-        ["u1", "$pageview", "2024-07-01T10:00:00.123000+02:00"],
-        ["u2", "signed_up", "2024-07-01T11:00:00+02:00"],
-        ["u3", "$pageview", null],
+        // Key, values, then the sort keys (a time sort's Unix seconds, the key).
+        ["u1", "$pageview", "2024-07-01T10:00:00.123000+02:00", 1719820800, "u1"],
+        ["u2", "signed_up", "2024-07-01T11:00:00+02:00", 1719824400, "u2"],
+        ["u3", "$pageview", null, null, "u3"],
       ],
     });
   return Response.json({ type: "validation_error", detail: `Unknown table in: ${text}` }, { status: 400 });
@@ -134,6 +135,19 @@ describe("PostHog connector", () => {
     const asked = sent.length;
     await c.query(events());
     expect(sent.length).toBe(asked);
+  });
+
+  it("asks for a later page after the last row's keys, never by OFFSET (refused with a personal API key)", async () => {
+    // PostHog's own answer to OFFSET on events with a personal API key.
+    answer = (q) => (q.query?.includes("OFFSET") ? Response.json({ type: "validation_error", detail: "OFFSET is not supported on queries made with a personal API key." }, { status: 400 }) : standIn(q));
+    const c = connector();
+    const first = await c.query(events({ sort: [{ column: "timestamp", direction: "asc" }] }));
+    expect(first.more).toBe(true);
+    await c.query(events({ sort: [{ column: "timestamp", direction: "asc" }], offset: 2, counts: false }));
+    const next = sent.at(-1)!.query.query!;
+    expect(next).not.toContain("OFFSET");
+    // After the second row's keys: its time and its key.
+    expect(next).toContain("WHERE (((toUnixTimestamp(`timestamp`) > 1719824400 OR toUnixTimestamp(`timestamp`) IS NULL)) OR (toUnixTimestamp(`timestamp`) = 1719824400 AND (toString(`uuid`) > 'u2' OR toString(`uuid`) IS NULL)))");
   });
 
   it("says what PostHog refuses, and tells the key's fault apart", async () => {

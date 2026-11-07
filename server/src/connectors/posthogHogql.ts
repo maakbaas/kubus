@@ -238,7 +238,11 @@ export function filterSql(c: PhColumn, rule: SourceFilter, tz: string): string {
   }
 }
 
-/** A sort key: comparable, null for none (sorted last). */
+/**
+ * A sort key: comparable, null for none (sorted last). A text, a number or Unix seconds, so a page's last key can be
+ * written back into the next page's condition as a plain literal (keyset paging: `querySql`); a date & time by its
+ * second (the key breaks ties within one).
+ */
 function sortSql(c: PhColumn): string {
   if (c.plain) throw new SourceError(`“${c.name}” can't be sorted`);
   const r = ref(c);
@@ -248,8 +252,12 @@ function sortSql(c: PhColumn): string {
       return `nullIf(lower(${textSql(c)}), '')`;
     case "bool":
       return boolSql(r); // unchecked is a value, not empty
-    default:
-      return r;
+    case "number":
+      return `toFloat(${r})`;
+    case "date":
+      return `toString(${r})`;
+    case "datetime":
+      return `toUnixTimestamp(${r})`;
   }
 }
 
@@ -288,10 +296,43 @@ function groupKeySql(c: PhColumn, tz: string): string {
 /** The group column a grouped query reads. */
 const G = "kubus_group";
 
+/** A sort key and its direction (empty values last either way). */
+interface SortKey {
+  expr: string;
+  desc: boolean;
+}
+
 /** Groups in order: the empty one last, then by size (largest first) or by value either way. */
-function groupOrderSql(c: PhColumn, order: SourceQuery["groupOrder"], count: string): string[] {
+function groupKeys(c: PhColumn, order: SourceQuery["groupOrder"], count: string): SortKey[] {
   const value = c.kind === "number" ? `toFloatOrNull(${G})` : c.kind === "checkbox" ? `if(${G} = 'yes', 0, 1)` : c.kind === "string" || c.kind === "string_list" ? `lower(${G})` : G;
-  return [`${G} = '' ASC`, ...(order === "count" ? [`${count} DESC`] : []), `${value} ${order === "desc" ? "DESC" : "ASC"}`];
+  return [{ expr: `if(${G} = '', 1, 0)`, desc: false }, ...(order === "count" ? [{ expr: count, desc: true }] : []), { expr: value, desc: order === "desc" }];
+}
+
+const orderBy = (keys: SortKey[]) => keys.map((k) => `${k.expr} ${k.desc ? "DESC" : "ASC"} NULLS LAST`).join(", ");
+
+/** A page's last key value as a literal (as PostHog answered it: a number, text, true / false or null). */
+function literal(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "boolean") return v ? "1" : "0";
+  if (typeof v === "number") return num(v);
+  return str(String(v));
+}
+
+/**
+ * The rows after a page's last one in `keys`' order (empty values last both ways), from its keys' values (`after`):
+ * the first key past its value, or it equal and the next past its, and so on. PostHog refuses OFFSET with a
+ * personal API key (on events), so a page after the first is asked for this way.
+ */
+export function keysetSql(keys: SortKey[], after: unknown[]): string {
+  if (after.length !== keys.length) throw new SourceError("The page to go on from doesn't fit the query");
+  const values = after.map(literal);
+  const equal = (i: number) => (values[i] === null ? `${keys[i].expr} IS NULL` : `${keys[i].expr} = ${values[i]}`);
+  const past = (i: number) => (values[i] === null ? null : `(${keys[i].expr} ${keys[i].desc ? "<" : ">"} ${values[i]} OR ${keys[i].expr} IS NULL)`);
+  const ways = keys.flatMap((_, i) => {
+    const p = past(i);
+    return p ? [[...keys.slice(0, i).map((__, j) => equal(j)), p].join(" AND ")] : [];
+  });
+  return ways.length ? `(${ways.map((w) => `(${w})`).join(" OR ")})` : "false";
 }
 
 function column(columns: Map<string, PhColumn>, name: string): PhColumn {
@@ -324,26 +365,45 @@ function whereSql(query: SourceQuery, columns: Map<string, PhColumn>): string {
  */
 export const POSTHOG_PAGE = 5000;
 
-/** The statements of a query: its page of rows (as many as `pageRows`), and (with `counts`) its total and groups. */
-export function querySql(query: SourceQuery, columns: Map<string, PhColumn>): { rows: string; pageRows: number; total?: string; groups?: string } {
+/**
+ * The statements of a query: its page of rows (at most `pageRows`), and (with `counts`) its total and groups. A row
+ * is its key, its values, its group when grouped, then its sort keys (`sortKeys` of them: the last row's are where the
+ * next page goes on from, `after`). The first page has no OFFSET; a later one goes on from `after` (keyset), else (it
+ * isn't known) by OFFSET, which PostHog allows on some tables only.
+ */
+export function querySql(query: SourceQuery, columns: Map<string, PhColumn>, after: unknown[] | null = null): { rows: string; pageRows: number; sortKeys: number; total?: string; groups?: string } {
   if (!Number.isInteger(query.offset) || query.offset < 0) throw new SourceError("offset must be a whole number");
   if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > MAX_SOURCE_PAGE) throw new SourceError(`limit must be 1 to ${MAX_SOURCE_PAGE}`);
   const group = query.groupBy ? column(columns, query.groupBy) : null;
   const from = fromSql(query.target);
   const where = whereSql(query, columns);
   const pageRows = Math.min(query.limit, POSTHOG_PAGE);
-  const select = [selectSql(query, columns), ...(group ? [`${groupKeySql(group, query.timeZone)} AS ${G}`, `count() OVER (PARTITION BY ${G}) AS kubus_group_size`] : [])].join(", ");
-  const order = [
-    ...(group ? groupOrderSql(group, query.groupOrder, "kubus_group_size") : []),
-    ...query.sort.map((s) => `${s.column === TITLE_COLUMN ? `lower(${titleSql(query, columns)})` : sortSql(column(columns, s.column))} ${s.direction === "desc" ? "DESC" : "ASC"} NULLS LAST`),
-    `${ref(column(columns, query.key))} ASC`,
+  const keys: SortKey[] = [
+    ...(group ? groupKeys(group, query.groupOrder, "kubus_group_size") : []),
+    ...query.sort.map((s) => ({ expr: s.column === TITLE_COLUMN ? `lower(${titleSql(query, columns)})` : sortSql(column(columns, s.column)), desc: s.direction === "desc" })),
+    { expr: `toString(${ref(column(columns, query.key))})`, desc: false },
   ];
-  const rows = `SELECT ${select} FROM ${from} WHERE ${where} ORDER BY ${order.join(", ")} LIMIT ${pageRows + 1} OFFSET ${query.offset}`;
-  if (!query.counts) return { rows, pageRows };
+  const page = (rest: string) => `${rest} LIMIT ${pageRows + 1}${query.offset > 0 && !after ? ` OFFSET ${query.offset}` : ""}`;
+  let rows: string;
+  if (!group) {
+    // Flat, so ClickHouse can read a table in its own order where the sort is it (events by time).
+    const conditions = [where, ...(query.offset > 0 && after ? [keysetSql(keys, after)] : [])].filter((c) => c !== "true");
+    rows = page(`SELECT ${selectSql(query, columns)}, ${keys.map((k) => k.expr).join(", ")} FROM ${from} WHERE ${conditions.join(" AND ") || "true"} ORDER BY ${orderBy(keys)}`);
+  } else {
+    // Grouped: a group's size is a window, which a condition can't use; the rows with their keys are read first.
+    const named = keys.map((k, i) => ({ ...k, name: `kubus_s${i}` }));
+    const values = query.columns.map((_, i) => `kubus_v${i}`);
+    const inner = `SELECT toString(${ref(column(columns, query.key))}) AS kubus_key, ${query.columns.map((name, i) => `${valueSql(column(columns, name))} AS kubus_v${i}`).join(", ")}${query.columns.length ? ", " : ""}${groupKeySql(group, query.timeZone)} AS ${G}, count() OVER (PARTITION BY ${G}) AS kubus_group_size, ${named.map((k) => `${k.expr} AS ${k.name}`).join(", ")} FROM ${from} WHERE ${where}`;
+    const aliased = named.map((k) => ({ expr: k.name, desc: k.desc }));
+    const condition = query.offset > 0 && after ? ` WHERE ${keysetSql(aliased, after)}` : "";
+    rows = page(`SELECT kubus_key, ${[...values, G, ...named.map((k) => k.name)].join(", ")} FROM (${inner})${condition} ORDER BY ${orderBy(aliased)}`);
+  }
+  const result = { rows, pageRows, sortKeys: keys.length };
+  if (!query.counts) return result;
   const total = `SELECT count() FROM ${from} WHERE ${where}`;
-  if (!group) return { rows, pageRows, total };
-  const groups = `SELECT ${groupKeySql(group, query.timeZone)} AS ${G}, count() AS n FROM ${from} WHERE ${where} GROUP BY ${G} ORDER BY ${groupOrderSql(group, query.groupOrder, "n").join(", ")} LIMIT ${MAX_SOURCE_GROUPS}`;
-  return { rows, pageRows, total, groups };
+  if (!group) return { ...result, total };
+  const groups = `SELECT ${groupKeySql(group, query.timeZone)} AS ${G}, count() AS n FROM ${from} WHERE ${where} GROUP BY ${G} ORDER BY ${orderBy(groupKeys(group, query.groupOrder, "n"))} LIMIT ${MAX_SOURCE_GROUPS}`;
+  return { ...result, total, groups };
 }
 
 /** One row by its key (compared as text). */

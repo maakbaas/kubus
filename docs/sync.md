@@ -365,7 +365,11 @@ takes the new one when its settings are opened. A source's name: letters, digits
   zone and are made UTC; a day in the device's zone is compared as its UTC bounds (`fromUnixTimestamp`, so the
   column itself is compared and ClickHouse reads only the parts in the period), grouped by
   `formatDateTime(toTimeZone(…))`; text by `ILIKE` / `lower`, a list grouped once per value (`arrayJoin`). A page
-  is at most 5,000 rows a request (HogQL cuts a larger LIMIT short without a word); the app asks for the next. The
+  is at most 5,000 rows a request (HogQL cuts a larger LIMIT short without a word); the app asks for the next. No
+  OFFSET (PostHog refuses it with a personal API key, on events): a row carries its sort keys (text, numbers, a date & time
+  as Unix seconds, the key last), and the page after one goes on after its last row's (keyset, `keysetSql`; where the
+  pages end is kept per query, the 50 most recent), by OFFSET only when that isn't known; grouped, the rows and their
+  keys (a group's size is a window) are a subquery the page is read from. The
   query API has rate limits: an answer is kept 5 s (a view's page and counts, its item pages). An event's item page
   looks it up by `uuid`, which `events` isn't ordered by: a scan, slow on a large project. 400 is the statement's
   fault (`SourceError`), 401 / 403 the key's, 429 the rate limit.

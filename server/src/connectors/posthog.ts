@@ -75,6 +75,12 @@ export class PostHogConnector implements Connector {
   private endpoint: string;
   private columns = new Map<string, { at: number; columns: Promise<Map<string, PhColumn>> }>();
   private answers = new Map<string, { at: number; answer: Promise<HogQLResponse> }>();
+  /**
+   * Where pages end, by query (all of it but its offset, limit and counts) and the offset of the page that follows:
+   * that row's sort keys. The app asks for the next page from the rows it has, and PostHog refuses OFFSET with a
+   * personal API key (on events): the next page is asked for after them (keyset). The most recent queries only.
+   */
+  private pageEnds = new Map<string, Map<number, unknown[]>>();
   private tableList: { at: number; tables: Promise<{ tables: SourceTable[]; schema: Map<string, SchemaTable> | null }> } | null = null;
 
   constructor(config: SourceConfig) {
@@ -207,9 +213,21 @@ export class PostHogConnector implements Connector {
 
   async query(query: SourceQuery): Promise<SourceResult> {
     const columns = await this.columnsOf(query.target);
-    const statements = querySql(query, columns);
+    const { offset: _o, limit: _l, counts: _c, ...asked } = query;
+    const which = JSON.stringify(asked);
+    const after = query.offset > 0 ? (this.pageEnds.get(which)?.get(query.offset) ?? null) : null;
+    const statements = querySql(query, columns, after);
     const [page, total, groups] = await Promise.all([this.run(statements.rows), statements.total && this.run(statements.total), statements.groups && this.run(statements.groups)]);
     const rows = page.results ?? [];
+    const last = rows[Math.min(rows.length, statements.pageRows) - 1];
+    if (rows.length > statements.pageRows && last) {
+      const ends = this.pageEnds.get(which) ?? new Map<number, unknown[]>();
+      ends.set(query.offset + statements.pageRows, last.slice(last.length - statements.sortKeys));
+      // Most recent last; at most 50 queries remembered.
+      this.pageEnds.delete(which);
+      this.pageEnds.set(which, ends);
+      if (this.pageEnds.size > 50) this.pageEnds.delete(this.pageEnds.keys().next().value!);
+    }
     const result: SourceResult = {
       rows: rows.slice(0, statements.pageRows).map((r) => toRow(r, query, columns, !!query.groupBy)),
       // A page cut at POSTHOG_PAGE has more too: the app asks for the next from the rows it has.
