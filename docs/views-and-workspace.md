@@ -230,7 +230,7 @@ Extension points are registries, not special cases in pages:
   sideways scroller: by a CSS scroll-driven animation in step with the scroll where the browser has them, Chrome and
   Safari 26, `data-head-follow`; else by `FillTable` on each scroll, a frame behind); `FillTable`, also the
   tables of the app's own pages; an image column is as wide as its widest image shown at the row's height, from square to
-  3:1 (at most 6rem, or 1.5 times a taller Image height), its images centred: shapes noted as thumbnails load
+  3:1 (at most 6rem, or 1.5 times a taller Image height), its images on its left edge: shapes noted as thumbnails load
   (`ui/images.tsx` `imageShape`, kept for the session), `domain/imageColumns.ts`; the first time, the table stays hidden
   until the shapes of the images it shows are known, at most a second, so it is laid out once) and `cards` (show title, fields, cover = an image or a markdown field rendered in its place, card width (slider: the column count whose width comes closest), cover shape:
   a fixed ratio (image shown whole, the rest filled with its average colour) or the images'
