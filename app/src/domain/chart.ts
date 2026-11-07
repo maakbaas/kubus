@@ -349,7 +349,7 @@ export function axisFields(collection: Collection, components: Component[]): Fie
 }
 
 /** Fields whose values can be categories or split series (what grouping can use). */
-export const splitFields = (collection: Collection): FieldDef[] => pickableFields(collection).filter((f) => isGroupable(f.kind));
+export const splitFields = (collection: Collection): FieldDef[] => pickableFields(collection).filter((f) => isGroupable(f));
 
 /** A new series: a count, or (with `field`) the sum of a number field. */
 export const newSeries = (patch: Partial<ChartSeries> = {}): ChartSeries => ({
@@ -653,7 +653,7 @@ const fieldsOf = (collection: Collection) => new Map(pickableFields(collection).
 export function xField(collection: Collection, x: ChartX): FieldDef | undefined {
   const field = x.field ? fieldsOf(collection).get(x.field) : undefined;
   if (!field) return undefined;
-  if (x.by === "field") return isGroupable(field.kind) ? field : undefined;
+  if (x.by === "field") return isGroupable(field) ? field : undefined;
   // A number is checked on each item (an AI or component field may give one).
   if (x.by === "item") return isDateField(field) || ["number", "ai", "component"].includes(field.kind) ? field : undefined;
   return undefined;

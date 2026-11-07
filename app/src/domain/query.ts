@@ -10,7 +10,7 @@ import { dateGroup, dateGroupValue, type GroupDate } from "./groupDate";
 import { filterTree, holds, requiredRules } from "./filterTree";
 import { markdownPlainText } from "./markdownExcerpt";
 import { numberList } from "./numberList";
-import { fieldValue, itemLabel, pickableFields, selfField, stringList, type FieldDef, type FieldKind, type FieldValue, type Item, type Collection } from "./model";
+import { fieldValue, itemLabel, pickableFields, selfField, stringList, valueKind, type FieldDef, type FieldValue, type Item, type Collection, type ValueKind } from "./model";
 
 /** Pseudo fields that every item has, usable for sorting (and the default sort). */
 export const TITLE = "$title";
@@ -133,7 +133,8 @@ const dayOf = (field: FieldDef, v: FieldValue) => (!str(v) ? "" : field.kind ===
 /** A number compared with another, in words: below (<), above (>). */
 const NUMBER_OPS = [op("lt", "below"), op("gt", "above")];
 
-const KIND_RULES: Record<FieldKind, KindRules> = {
+// An AI field has no rules of its own: it behaves as the kind of its output (`valueKind`: text, a number or Markdown).
+const KIND_RULES: Record<ValueKind, KindRules> = {
   string: {
     operators: TEXT_OPS,
     text: (_, v) => str(v),
@@ -254,14 +255,6 @@ const KIND_RULES: Record<FieldKind, KindRules> = {
     sortKey: (_f, v) => (typeof v === "number" ? v : v == null || v === "" ? null : String(v).toLowerCase()),
     groupKeys: (_f, v) => single(v == null ? "" : String(v)),
   },
-  // Generated text, Markdown or a number (the field says which): compared as text, or as a number
-  // by below / above (numbers sort as numbers).
-  ai: {
-    operators: [...TEXT_OPS.slice(0, 4), ...NUMBER_OPS, ...EMPTY_OPS],
-    text: (_f, v) => (typeof v === "string" ? markdownPlainText(v) : v == null ? "" : String(v)),
-    sortKey: (_f, v) => (typeof v === "number" ? v : typeof v === "string" && v ? markdownPlainText(v).toLowerCase() : null),
-    groupKeys: (_f, v) => single(v == null ? "" : String(v)),
-  },
 };
 
 /** Whether a result is grouped (several groups, or one that isn't the whole list). */
@@ -271,7 +264,10 @@ export const isGrouped = (result: QueryResult) => result.groups.length > 1 || re
  * Filter operators offered for a field kind. Not "between" (dates: a day, week, month, year or
  * range, both days included), which only the filter's date period sets (domain/datePeriod.ts).
  */
-export const operatorsFor = (kind: FieldKind) => KIND_RULES[kind].operators;
+export const operatorsFor = (kind: ValueKind) => KIND_RULES[kind].operators;
+
+/** A field's kind rules: those of the kind its values behave as (an AI field's output). */
+const rulesOf = (field: Pick<FieldDef, "kind" | "output">) => KIND_RULES[valueKind(field)];
 
 /**
  * The values a new item needs to land in a group (the grouped-by field set to the group's
@@ -279,7 +275,8 @@ export const operatorsFor = (kind: FieldKind) => KIND_RULES[kind].operators;
  */
 export function groupPreset(collection: Collection, query: ViewQuery, groupKey: string): Record<string, FieldValue> {
   const field = query.groupBy ? collection.fields.find((f) => f.id === query.groupBy) : undefined;
-  const toValue = field && KIND_RULES[field.kind].groupValue;
+  // Not an AI field: its values are generated.
+  const toValue = field && field.kind !== "ai" && rulesOf(field).groupValue;
   return field && toValue && groupKey !== "" ? { [field.id]: toValue(groupKey) } : {};
 }
 
@@ -362,13 +359,14 @@ export function resolveFilterValues(filters: FilterRule[], page: FilterPage | nu
 export function filterValueProblem(field: FieldDef, operator: FilterOperator, value: string): string | undefined {
   if (value.startsWith(ERROR_PREFIX)) return value.slice(ERROR_PREFIX.length);
   const v = value.trim();
+  const kind = valueKind(field);
   if (v === "" || isPageValue(v)) return undefined;
-  if (operator === "between") return (field.kind === "date" || field.kind === "datetime") && resolveRange(splitAnchor(v).value) ? undefined : "A period is yyyy-mm-dd..yyyy-mm-dd (or yyyy-mm-ddTHH:MM..yyyy-mm-ddTHH:MM), day-n..day+0 (hour, minute), week, month or year+0..day+0 (so far), or hour, day, week, month or year +/- a number";
+  if (operator === "between") return (kind === "date" || kind === "datetime") && resolveRange(splitAnchor(v).value) ? undefined : "A period is yyyy-mm-dd..yyyy-mm-dd (or yyyy-mm-ddTHH:MM..yyyy-mm-ddTHH:MM), day-n..day+0 (hour, minute), week, month or year+0..day+0 (so far), or hour, day, week, month or year +/- a number";
   const compares = operator === "is" || operator === "isNot" || operator === "gt" || operator === "lt" || operator === "before" || operator === "after";
   if (!compares) return undefined;
-  if (field.kind === "checkbox" && !/^(true|false)$/i.test(v)) return "A checkbox is true or false";
-  if (field.kind === "number" && !Number.isFinite(Number(v))) return "Not a number";
-  if ((field.kind === "date" || field.kind === "datetime") && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return "A date is yyyy-mm-dd";
+  if (kind === "checkbox" && !/^(true|false)$/i.test(v)) return "A checkbox is true or false";
+  if (kind === "number" && !Number.isFinite(Number(v))) return "Not a number";
+  if ((kind === "date" || kind === "datetime") && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return "A date is yyyy-mm-dd";
   return undefined;
 }
 
@@ -381,7 +379,7 @@ export function filterPreset(collection: Collection, filters: FilterRule[], inhe
   // Only rules every listed item meets (an Or rule's alternatives aren't required).
   for (const rule of requiredRules(filterTree([inherited, filters]))) {
     const field = collection.fields.find((f) => f.id === rule.fieldId);
-    const value = field && KIND_RULES[field.kind].preset?.(rule, preset[field.id]);
+    const value = field && rulesOf(field).preset?.(rule, preset[field.id]);
     if (field && value !== undefined) preset[field.id] = value;
   }
   return preset;
@@ -391,14 +389,14 @@ export function filterPreset(collection: Collection, filters: FilterRule[], inhe
 export const filterFields = (collection: Collection): FieldDef[] => [...pickableFields(collection), selfField(collection)];
 
 /** Whether items can be grouped by fields of this kind. */
-export const isGroupable = (kind: FieldKind) => !!KIND_RULES[kind].groupKeys;
+export const isGroupable = (field: Pick<FieldDef, "kind" | "output">) => !!rulesOf(field).groupKeys;
 
 /** A field's value on an item as text (as filters and search read it: a date as yyyy-mm-dd, a reference by its label). */
-export const fieldText = (field: FieldDef, item: Item, ctx: QueryContext): string => KIND_RULES[field.kind].text(field, item.values[field.id] ?? null, ctx);
+export const fieldText = (field: FieldDef, item: Item, ctx: QueryContext): string => rulesOf(field).text(field, item.values[field.id] ?? null, ctx);
 
 /** The groups an item falls in by a field, as grouping makes them (none for a field that can't group). */
 export const groupKeysOf = (field: FieldDef, item: Item, ctx: QueryContext): { key: string; label: string }[] =>
-  KIND_RULES[field.kind].groupKeys?.(field, fieldValue(item, field), ctx) ?? [];
+  rulesOf(field).groupKeys?.(field, fieldValue(item, field), ctx) ?? [];
 
 /** Fields usable for sorting, including the pseudo fields. */
 export function sortableFields(collection: Collection): { id: string; name: string }[] {
@@ -435,11 +433,12 @@ export function isEmptyValue(v: FieldValue | undefined) {
 
 function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: QueryContext): boolean {
   const arg = rule.value.trim();
+  const kind = valueKind(field);
   // A value that can't be compared (failing code, "maybe" for a checkbox) matches nothing.
   if (filterValueProblem(field, rule.operator, arg)) return false;
   // The value as text, only computed by the operators that compare text.
   let cached: string | undefined;
-  const text = () => (cached ??= KIND_RULES[field.kind].text(field, value, ctx).toLowerCase());
+  const text = () => (cached ??= rulesOf(field).text(field, value, ctx).toLowerCase());
   switch (rule.operator) {
     case "isEmpty":
       return isEmptyValue(value);
@@ -454,9 +453,9 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
       // A list by each entry alone: "p,b" is in no entry of aap, boot.
       const needle = arg.toLowerCase();
       const found =
-        field.kind === "string_list"
+        kind === "string_list"
           ? list(value).some((s) => s.toLowerCase().includes(needle))
-          : field.kind === "checklist"
+          : kind === "checklist"
             ? checklistItems(value).some((i) => i.text.toLowerCase().includes(needle))
             : text().includes(needle);
       return rule.operator === "contains" ? found : !found;
@@ -464,14 +463,14 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
     case "is":
     case "isNot": {
       let equal: boolean;
-      if (field.kind === "number") equal = typeof value === "number" && value === Number(arg);
-      else if (field.kind === "item") equal = value === arg;
-      else if (field.kind === "item_list") equal = list(value).includes(arg);
-      else if (field.kind === "number_list") equal = arg.trim() !== "" && numberList(value).includes(Number(arg));
-      else if (field.kind === "string_list") equal = list(value).some((s) => s.trim().toLowerCase() === arg.trim().toLowerCase());
-      else if (field.kind === "checklist") equal = checklistItems(value).some((i) => i.text.trim().toLowerCase() === arg.trim().toLowerCase());
-      else if (field.kind === "datetime") equal = dayOf(field, value) === arg;
-      else if (field.kind === "checkbox") equal = (value === true) === (arg.toLowerCase() === "true");
+      if (kind === "number") equal = typeof value === "number" && value === Number(arg);
+      else if (kind === "item") equal = value === arg;
+      else if (kind === "item_list") equal = list(value).includes(arg);
+      else if (kind === "number_list") equal = arg.trim() !== "" && numberList(value).includes(Number(arg));
+      else if (kind === "string_list") equal = list(value).some((s) => s.trim().toLowerCase() === arg.trim().toLowerCase());
+      else if (kind === "checklist") equal = checklistItems(value).some((i) => i.text.trim().toLowerCase() === arg.trim().toLowerCase());
+      else if (kind === "datetime") equal = dayOf(field, value) === arg;
+      else if (kind === "checkbox") equal = (value === true) === (arg.toLowerCase() === "true");
       else equal = text() === arg.toLowerCase();
       return rule.operator === "is" ? equal : !equal;
     }
@@ -487,7 +486,7 @@ function matches(field: FieldDef, value: FieldValue, rule: FilterRule, ctx: Quer
       const period = resolveRange(arg);
       if (!period || !str(value)) return false;
       // A date & time in a period of minutes by its minute; anything else by its day.
-      if (field.kind === "datetime" && inMinutes(period)) {
+      if (kind === "datetime" && inMinutes(period)) {
         const t = new Date(str(value));
         const minute = Number.isNaN(t.getTime()) ? "" : formatMinute(t);
         return !!minute && minute >= period.start && minute <= period.end;
@@ -505,7 +504,7 @@ function sortKey(collection: Collection, item: Item, field: FieldDef | string | 
   if (field === TITLE) return itemLabel(collection, item).toLowerCase();
   if (field === UPDATED) return item.updatedAt;
   if (field === CREATED) return item.createdAt;
-  return typeof field === "object" ? KIND_RULES[field.kind].sortKey(field, item.values[field.id] ?? null, ctx) : null;
+  return typeof field === "object" ? rulesOf(field).sortKey(field, item.values[field.id] ?? null, ctx) : null;
 }
 
 /**
@@ -594,7 +593,7 @@ export function filterOf(collection: Collection, filters: FilterRule[], ctx: Que
 
 /** A rule still without the value its operator needs (just added): it doesn't filter yet. */
 export const waitsForValue = (field: FieldDef, rule: FilterRule) =>
-  rule.value.trim() === "" && !!operatorsFor(field.kind).find((o) => o.id === rule.operator)?.needsValue;
+  rule.value.trim() === "" && !!operatorsFor(valueKind(field)).find((o) => o.id === rule.operator)?.needsValue;
 
 /** Applies a query (plus an optional free-text search) to a collection's items. */
 export function applyQuery(
@@ -611,7 +610,7 @@ export function applyQuery(
   const filtered = items.filter((item) => {
     if (!passes(item)) return false;
     if (!needle) return true;
-    return collection.fields.some((f) => KIND_RULES[f.kind].text(f, item.values[f.id] ?? null, ctx).toLowerCase().includes(needle));
+    return collection.fields.some((f) => rulesOf(f).text(f, item.values[f.id] ?? null, ctx).toLowerCase().includes(needle));
   });
 
   // Keys are computed once per item, not in every comparison.
@@ -634,7 +633,7 @@ export function applyQuery(
  */
 export function groupItems(collection: Collection, sorted: Item[], query: ViewQuery, ctx: QueryContext): ItemGroup[] {
   const groupField = query.groupBy ? pickableFields(collection).find((f) => f.id === query.groupBy) : undefined;
-  const groupKeys = groupField && KIND_RULES[groupField.kind].groupKeys;
+  const groupKeys = groupField && rulesOf(groupField).groupKeys;
   if (!groupField || !groupKeys) return [{ key: "", label: "", items: sorted }];
 
   // A date's groups: by what the query says (a date has no hours).
@@ -662,7 +661,7 @@ export function groupItems(collection: Collection, sorted: Item[], query: ViewQu
  */
 export function withEmptyGroups(collection: Collection, result: QueryResult, all: Item[], query: ViewQuery, ctx: QueryContext): QueryResult {
   const field = query.groupBy ? pickableFields(collection).find((f) => f.id === query.groupBy) : undefined;
-  const rules = field && KIND_RULES[field.kind];
+  const rules = field && rulesOf(field);
   if (!field || !rules?.groupKeys) return result;
   const shown = new Set(result.groups.map((g) => g.key));
   const extra = new Map<string, ItemGroup>();
@@ -689,7 +688,7 @@ export interface ValueOption {
  * dates and checkboxes offer none.
  */
 export function offersValues(field: FieldDef, operator: FilterOperator): boolean {
-  switch (field.kind) {
+  switch (valueKind(field)) {
     case "string":
     case "string_list":
     case "checklist":
@@ -712,7 +711,7 @@ export const MAX_VALUE_OPTIONS = 1000;
 export function valueOptions(field: FieldDef, items: readonly Item[]): ValueOption[] {
   // A checklist isn't grouped, but offers its entries' text as a list of text does.
   const keys: KindRules["groupKeys"] =
-    field.kind === "checklist" ? (_f, v) => checklistItems(v).map((i) => ({ key: i.text.trim(), label: i.text })) : KIND_RULES[field.kind].groupKeys;
+    valueKind(field) === "checklist" ? (_f, v) => checklistItems(v).map((i) => ({ key: i.text.trim(), label: i.text })) : rulesOf(field).groupKeys;
   if (!keys) return [];
   const counts = new Map<string, number>();
   let valued = 0;

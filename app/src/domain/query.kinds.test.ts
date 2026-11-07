@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blankField, type Collection, type FieldKind, type Item } from "./model";
+import { blankField, valueKind, type Collection, type FieldKind, type Item } from "./model";
 import {
   applyQuery,
   defaultQuery,
@@ -15,6 +15,7 @@ import {
   isGrouped,
   chosenOptions,
   offersValues,
+  ruleMatches,
   operatorsFor,
   valueOptions,
   sortableFields,
@@ -49,8 +50,9 @@ const ids = (items: Item[]) => items.map((i) => i.id);
 
 describe("operators per kind", () => {
   it("every kind offers some, and 'between' is only the date period's", () => {
-    for (const kind of Object.keys(fieldsByKind()) as FieldKind[]) {
-      const ops = operatorsFor(kind).map((o) => o.id);
+    for (const field of Object.values(fieldsByKind())) {
+      const kind = field.kind;
+      const ops = operatorsFor(valueKind(field)).map((o) => o.id);
       expect(ops.length, kind).toBeGreaterThan(0);
       expect(ops, kind).not.toContain("between");
     }
@@ -63,7 +65,6 @@ describe("operators per kind", () => {
     expect(operatorsFor("datetime").find((o) => o.id === "is")?.label).toBe("is on");
     expect(operatorsFor("item_list").find((o) => o.id === "is")?.label).toBe("includes");
     expect(operatorsFor("image").map((o) => o.id)).toEqual(["isEmpty", "isNotEmpty"]);
-    expect(operatorsFor("ai").map((o) => o.id)).toEqual(["contains", "notContains", "is", "isNot", "lt", "gt", "isEmpty", "isNotEmpty"]);
     expect(operatorsFor("string").find((o) => o.id === "isEmpty")?.needsValue).toBe(false);
   });
 });
@@ -262,9 +263,9 @@ describe("grouping", () => {
   });
 
   it("knows which kinds group, and what groups an item falls in", () => {
-    expect(isGroupable("string")).toBe(true);
-    expect(isGroupable("markdown")).toBe(false);
-    expect(isGroupable("checklist")).toBe(false);
+    expect(isGroupable(fields.s)).toBe(true);
+    expect(isGroupable(fields.md)).toBe(false);
+    expect(isGroupable(fields.chk)).toBe(false);
     expect(groupKeysOf(fields.tags, item("1", { tags: ["x"] }), ctx)).toEqual([{ key: "x", label: "x" }]);
     expect(groupKeysOf(fields.md, item("1", {}), ctx)).toEqual([]);
     expect(groupKeysOf({ ...fields.s, id: "$created" }, item("1", {}), ctx)).toEqual([{ key: "2026-01-01T00:00:00.000Z", label: "2026-01-01T00:00:00.000Z" }]);
@@ -381,6 +382,30 @@ describe("a list of numbers", () => {
     expect(titles({ filters: [{ id: "r", fieldId: "sc", operator: "isNot", value: "4" }] })).toEqual([["", ["B", "E"]]]);
     expect(titles({ sort: [{ fieldId: "sc", direction: "desc" }] })[0][1].slice(0, 2)).toEqual(["B", "A"]);
     expect(groupKeysOf(scores, rows[0], ctx).map((k) => k.key)).toEqual(["3", "4"]);
+  });
+});
+
+describe("an AI field behaves as the kind of its output", () => {
+  const aiText = blankField("ait", "Mood", "ai", { code: "x", output: "string" });
+  const aiNumber = blankField("ain", "Score", "ai", { code: "x", output: "number" });
+  const aiMarkdown = blankField("aim", "Summary", "ai", { code: "x", output: "markdown" });
+
+  it("its operators, value box and grouping are its output's", () => {
+    expect(valueKind(aiText)).toBe("string");
+    expect(valueKind(aiNumber)).toBe("number");
+    expect(valueKind(aiMarkdown)).toBe("markdown");
+    expect(offersValues(aiText, "is")).toBe(true);
+    expect(offersValues(aiText, "contains")).toBe(false);
+    expect(offersValues(aiNumber, "is")).toBe(true);
+    expect(offersValues(aiMarkdown, "is")).toBe(false);
+    expect(isGroupable(aiText)).toBe(true);
+    expect(isGroupable(aiMarkdown)).toBe(false);
+    expect(valueOptions(aiText, [item("1", { ait: "happy" }), item("2", { ait: "happy" }), item("3", { ait: "sad" })]).map((o) => o.value)).toEqual(["happy", "sad"]);
+  });
+
+  it("a number output is compared as a number", () => {
+    expect(ruleMatches(aiNumber, 7, { id: "r", fieldId: "ain", operator: "is", value: "7.0" }, ctx)).toBe(true);
+    expect(filterValueProblem(aiNumber, "is", "seven")).toBe("Not a number");
   });
 });
 

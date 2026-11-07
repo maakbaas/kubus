@@ -168,7 +168,7 @@ Extension points are registries, not special cases in pages:
   the Filter button only when it closes (`panels.hold`), so the buttons after it don't jump under the open panel; the
   bar itself shows at once.
 - **A rule's value box** (`views/RuleValue.tsx`, the filter panel's and the filter bar's): where the rule compares with a value
-  (`offersValues` in domain/query.ts) only where picking a value means just that value: is / is not of text and numbers,
+  (`offersValues` in domain/query.ts) only where picking a value means just that value: is / is not of text and numbers (an AI field as its output, `valueKind`),
   includes / does not include of a list of text, a checklist or a list of numbers (contains, any part, and below / above,
   a threshold, are typed; item fields pick from items already) it is a Carbon
   ComboBox offering the field's existing values, most common first (no counts shown), any other text typed

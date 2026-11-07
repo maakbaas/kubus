@@ -14,7 +14,7 @@ import { isComponentOutput, placeProblem, type Component } from "../domain/compo
 import { fieldKinds } from "../domain/fieldKinds";
 import { fileSrc, IMAGE_TYPES } from "../domain/files";
 import { parseItemViews, type ItemView } from "../domain/fieldLayout";
-import { canBeTitle, collectionDraft, isReferenceKind, newId, NO_TITLE, suggestPlural, type Collection, type CollectionDraft, type FieldDef, type FieldDraft, type Item, type ItemLabel } from "../domain/model";
+import { canBeTitle, collectionDraft, isReferenceKind, newId, NO_TITLE, suggestPlural, type Collection, type CollectionDraft, type FieldDef, type FieldDraft, type Item, type ItemLabel, valueKind } from "../domain/model";
 import { applyQuery, filterValueProblem, isGrouped, operatorsFor, type FilterRule, type QueryResult, type SortRule, type ViewQuery } from "../domain/query";
 import { refLabelForSpace } from "../domain/refOptions";
 import { DEFAULT_SPACE_ID, inSpace, type Space } from "../domain/spaces";
@@ -222,7 +222,7 @@ function rulesParam(req: ApiRequest, name: string): unknown {
 function checkedFilters(collection: Collection, rules: FilterRule[]): FilterRule[] {
   return rules.map((rule) => {
     const field = collection.fields.find((f) => f.id === rule.fieldId)!;
-    const operators = operatorsFor(field.kind).map((o) => o.id);
+    const operators = operatorsFor(valueKind(field)).map((o) => o.id);
     const dated = field.kind === "date" || field.kind === "datetime";
     if (!operators.includes(rule.operator) && !(dated && rule.operator === "between")) {
       throw new HttpError(400, `“${field.name}” has no operator “${String(rule.operator)}”: ${[...operators, ...(dated ? ["between"] : [])].join(", ")}`);
