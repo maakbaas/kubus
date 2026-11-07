@@ -49,7 +49,9 @@ describe("literals and names", () => {
   it("escapes what goes into a statement", () => {
     expect(str("it's a \\ test\n")).toBe("'it\\'s a \\\\ test\\n'");
     expect(tableName("stripe.customer`s")).toBe("`stripe`.`customer\\`s`");
-    expect(probeSql("sessions", ["$is_bounce", "session_id"])).toBe("SELECT `$is_bounce`, `session_id` FROM `sessions` LIMIT 1");
+    expect(probeSql("persons", ["id", "properties"])).toBe("SELECT `id`, `properties` FROM `persons` LIMIT 1");
+    // A table read by time: the last day only (sessions are made from all events otherwise).
+    expect(probeSql("sessions", ["$is_bounce", "session_id"], "$start_timestamp")).toBe("SELECT `$is_bounce`, `session_id` FROM `sessions` WHERE `$start_timestamp` >= now() - INTERVAL 1 DAY LIMIT 1");
   });
 });
 

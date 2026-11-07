@@ -29,7 +29,7 @@ function standIn(q: Sent["query"]): Response {
   if (q.kind === "DatabaseSchemaQuery") return Response.json(SCHEMA);
   const text = q.query ?? "";
   if (text === "SELECT 1") return Response.json({ columns: ["1"], types: [["1", "UInt8"]], results: [[1]] });
-  if (text.startsWith("SELECT `uuid`, `event`, `timestamp` FROM `events` LIMIT 1"))
+  if (text === "SELECT `uuid`, `event`, `timestamp` FROM `events` WHERE `timestamp` >= now() - INTERVAL 1 DAY LIMIT 1")
     return Response.json({ columns: ["uuid", "event", "timestamp"], types: [["uuid", "UUID"], ["event", "String"], ["timestamp", "DateTime64(6, 'Europe/Amsterdam')"]], results: [] });
   if (text.startsWith("SELECT count()")) return Response.json({ columns: ["count()"], results: [[3]] });
   if (text.includes("FROM `events`"))
@@ -107,7 +107,7 @@ describe("PostHog connector", () => {
 
   it("describes a table by a probe row of its listed fields (joins left out), with its key and time", async () => {
     const d = await connector().describe({ table: { schema: null, name: "events" } });
-    expect(sent.at(-1)!.query.query).toBe("SELECT `uuid`, `event`, `timestamp` FROM `events` LIMIT 1");
+    expect(sent.at(-1)!.query.query).toBe("SELECT `uuid`, `event`, `timestamp` FROM `events` WHERE `timestamp` >= now() - INTERVAL 1 DAY LIMIT 1");
     expect(d).toEqual({
       columns: [
         { name: "uuid", type: "UUID", kind: "string" },

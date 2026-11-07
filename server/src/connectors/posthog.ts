@@ -180,12 +180,14 @@ export class PostHogConnector implements Connector {
     const fields = schema?.get(table)?.fields;
     const listed = fields ? Object.entries(fields).map(([key, f]) => ({ name: f.name || key, type: f.type ?? "unknown" })).filter((f) => !JOINS.has(f.type)) : null;
     // One row of every listed column (expression fields too, which `*` leaves out); `*` when there is no schema, or the list is refused.
+    // Of a table read by time, the last day only (its time column, where the schema has it or doesn't say).
+    const recent = TIMES[table] && (!listed || listed.some((f) => f.name === TIMES[table])) ? TIMES[table] : null;
     let probe: HogQLResponse;
     try {
-      probe = await this.send({ kind: "HogQLQuery", query: probeSql(table, listed?.length ? listed.map((f) => f.name) : null) });
+      probe = await this.send({ kind: "HogQLQuery", query: probeSql(table, listed?.length ? listed.map((f) => f.name) : null, recent) });
     } catch (e) {
       if (!(e instanceof SourceError) || !listed?.length) throw e;
-      probe = await this.send({ kind: "HogQLQuery", query: probeSql(table, null) });
+      probe = await this.send({ kind: "HogQLQuery", query: probeSql(table, null, recent) });
     }
     const names = probe.columns ?? [];
     if (!names.length) throw new SourceError("It returns no columns");

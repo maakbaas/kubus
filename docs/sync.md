@@ -355,7 +355,7 @@ takes the new one when its settings are opened. A source's name: letters, digits
   scope (its scopes can't be read back). Tables only, for now (no written HogQL; `schema` null): what HogQL's
   `DatabaseSchemaQuery` lists (events, persons, sessions, groups, data warehouse tables as `stripe.customers`,
   saved views; PostHog's own first), else those four. A table's columns are read by one probe row of every field
-  its schema lists but joins (so sessions' expression fields, `$is_bounce`, `$channel_type`, are read too; `*`
+  its schema lists but joins (of events and sessions one of the last day: unbounded, sessions are made from every event first) (so sessions' expression fields, `$is_bounce`, `$channel_type`, are read too; `*`
   when there is no schema), each by its ClickHouse type from the answer's `types` (`Nullable` / `LowCardinality`
   unwrapped: numbers, `Bool`, `Date`, `DateTime64`, text, UUIDs, enums; arrays of those as lists; maps and tuples
   dropped), the schema's `json` (`properties`) as hidden plain text, its `boolean` as a checkbox. Keys `uuid`

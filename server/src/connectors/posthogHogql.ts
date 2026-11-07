@@ -412,6 +412,9 @@ export function rowSql(shape: SourceShape & { keyValue: string }, columns: Map<s
 }
 
 /** What a table's columns are read by: one row of every column the schema lists (their ClickHouse types come back with it). */
-export function probeSql(table: string, names: string[] | null): string {
-  return `SELECT ${names ? names.map(ident).join(", ") : "*"} FROM ${tableName(table)} LIMIT 1`;
+export function probeSql(table: string, names: string[] | null, time: string | null = null): string {
+  // Of a table read by time (events, sessions) only the last day: unbounded, sessions are made from every event ever
+  // (its expression fields too) before one row comes back, which outlasts the time limit or a proxy's.
+  const recent = time ? ` WHERE ${ident(time)} >= now() - INTERVAL 1 DAY` : "";
+  return `SELECT ${names ? names.map(ident).join(", ") : "*"} FROM ${tableName(table)}${recent} LIMIT 1`;
 }
