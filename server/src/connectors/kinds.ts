@@ -120,6 +120,17 @@ const KINDS: Kind[] = [
     place: ["address"],
   },
   {
+    id: "posthog",
+    label: "PostHog",
+    fields: [
+      { key: "address", label: "Address", placeholder: "https://eu.posthog.com", helperText: "https://us.posthog.com, https://eu.posthog.com or your own PostHog's." },
+      { key: "project", label: "Project ID", placeholder: "12345", helperText: "In PostHog: Settings → Project. Empty: the API key's current project." },
+    ],
+    password: { label: "Personal API key", helperText: "One with only the Query: Read scope. Kept while left empty (unless the address or project changes)." },
+    schemas: null,
+    place: ["address", "project"],
+  },
+  {
     id: "ics",
     label: "Calendar (ICS)",
     fields: [

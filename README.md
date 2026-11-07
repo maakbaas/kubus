@@ -83,7 +83,7 @@ Settings → API tokens (read, or read & write; the devices' token works too), a
 on every change when set (commented in `docker-compose.yml`); Help → API in the app documents both.
 In the app, the server's own settings set up what it offers every device: a language model
 (Settings → AI → "The server's", used through the server so the key stays there; a device can still
-set its own instead) and remote sources (Settings → Connections), databases the server reads (read-only: Postgres, MySQL / MariaDB, n8n, InfluxDB 2, Cloudflare D1, Actual Budget, ICS calendars, JSON and CSV over HTTP) for remote
+set its own instead) and remote sources (Settings → Connections), databases the server reads (read-only: Postgres, MySQL / MariaDB, n8n, InfluxDB 2, Cloudflare D1, Actual Budget, PostHog, ICS calendars, JSON and CSV over HTTP) for remote
 collections. Both are stored on the server only; keys and passwords are never shown again, and
 with `KUBUS_SECRET_KEY` set (commented in `docker-compose.yml`) they are stored encrypted.
 The API's copy of your data (the *headless device*) is kept in `KUBUS_HEADLESS_DIR` (`/data/headless` in the image,

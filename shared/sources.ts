@@ -2,7 +2,7 @@
 // and queries the app shows as collections (docs/sync.md "Remote sources"). This is what the app
 // and the server say to each other about them: nothing in it is specific to one kind of database.
 // The server answers with a connector per source (server/src/connectors/: Postgres, MySQL / MariaDB, n8n's data tables, InfluxDB 2,
-// Cloudflare D1, Actual Budget, ICS calendars, JSON and CSV over HTTP); the
+// Cloudflare D1, Actual Budget, PostHog, ICS calendars, JSON and CSV over HTTP); the
 // app never knows which. Types only (no imports, no enums), so the server runs it directly with
 // Node, like shared/sync.ts.
 //
