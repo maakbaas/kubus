@@ -263,7 +263,7 @@ function sortSql(c: PhColumn): string {
 
 /** The title (the app's itemLabel): the first non-blank of the title columns, else the untitled name. */
 function titleSql(shape: SourceShape, columns: Map<string, PhColumn>): string {
-  const parts = shape.title.map((name) => `nullIf(trimBoth(${textSql(column(columns, name))}), '')`);
+  const parts = shape.title.map((name) => `nullIf(trim(${textSql(column(columns, name))}), '')`);
   return `coalesce(${[...parts, str(shape.untitled)].join(", ")})`;
 }
 
@@ -304,7 +304,7 @@ interface SortKey {
 
 /** Groups in order: the empty one last, then by size (largest first) or by value either way. */
 function groupKeys(c: PhColumn, order: SourceQuery["groupOrder"], count: string): SortKey[] {
-  const value = c.kind === "number" ? `toFloatOrNull(${G})` : c.kind === "checkbox" ? `if(${G} = 'yes', 0, 1)` : c.kind === "string" || c.kind === "string_list" ? `lower(${G})` : G;
+  const value = c.kind === "number" ? `toFloat(${G})` : c.kind === "checkbox" ? `if(${G} = 'yes', 0, 1)` : c.kind === "string" || c.kind === "string_list" ? `lower(${G})` : G;
   return [{ expr: `if(${G} = '', 1, 0)`, desc: false }, ...(order === "count" ? [{ expr: count, desc: true }] : []), { expr: value, desc: order === "desc" }];
 }
 

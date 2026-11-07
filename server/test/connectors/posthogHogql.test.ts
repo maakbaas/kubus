@@ -123,7 +123,7 @@ describe("querySql", () => {
   });
 
   it("sorts by the title, and refuses what isn't a table", () => {
-    expect(querySql(query({ sort: [{ column: "$title", direction: "asc" }] }), columns).rows).toContain("ORDER BY lower(coalesce(nullIf(trimBoth(ifNull(toString(`event`), '')), ''), 'Event')) ASC NULLS LAST");
+    expect(querySql(query({ sort: [{ column: "$title", direction: "asc" }] }), columns).rows).toContain("ORDER BY lower(coalesce(nullIf(trim(ifNull(toString(`event`), '')), ''), 'Event')) ASC NULLS LAST");
     expect(() => querySql(query({ target: { query: "SELECT 1" } }), columns)).toThrow(/tables only/);
   });
 
