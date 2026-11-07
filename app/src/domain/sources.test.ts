@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SourceColumn, SourceRow } from "../../../shared/sources";
 import { blankField, pickableFields, type Collection } from "./model";
-import { addRows, canGroup, columnValue, groupsInApp, canSort, sourcePeriod, fieldOperators, isConverted, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
+import { addRows, appQuery, canGroup, columnValue, groupsInApp, queriesInApp, canSort, sourcePeriod, fieldOperators, isConverted, namesOfTable, offeredKinds, rowItem, rowItemId, rowKey, sourceQuery, sourceShape, withHiddenColumns, withSourceColumns } from "./sources";
 import { defaultQuery, TITLE } from "./query";
 
 const columns: SourceColumn[] = [
@@ -35,7 +35,8 @@ describe("remote collections", () => {
   it("offer only what their columns can do", () => {
     const [name, born, data, tags, calc] = people.fields;
     expect(fieldOperators(people, data).map((o) => o.id)).toEqual(["contains", "notContains", "isEmpty", "isNotEmpty"]);
-    expect(fieldOperators(people, calc)).toEqual([]);
+    // A component field: filtered by the app (queriesInApp).
+    expect(fieldOperators(people, calc).map((o) => o.id)).toContain("contains");
     expect(fieldOperators(people, name).map((o) => o.id)).toContain("is");
     expect(canSort(people, TITLE)).toBe(true);
     expect(canSort(people, "$updated")).toBe(false);
@@ -97,10 +98,13 @@ describe("remote collections", () => {
     const shape = sourceShape(orders);
     expect(rowItem(orders, shape, { key: "1", values: ["42.5"] }).values).toEqual({ "f-amount": 42.5 });
     expect(rowItem(orders, shape, { key: "2", values: ["n/a"] }).values).toEqual({});
-    // The source compares its own text ("10" before "9"): not filtered, sorted or grouped by the converted value.
-    expect(fieldOperators(orders, amount)).toEqual([]);
-    expect(canSort(orders, amount.id)).toBe(false);
-    expect(canGroup(orders, amount)).toBe(false);
+    // The source compares its own text ("10" before "9"): filtered, sorted and grouped by the converted value in the app.
+    expect(fieldOperators(orders, amount).map((o) => o.id)).toContain("gt");
+    expect(canSort(orders, amount.id)).toBe(true);
+    expect(canGroup(orders, amount)).toBe(true);
+    const sorted = { ...defaultQuery(), sort: [{ fieldId: amount.id, direction: "asc" as const }] };
+    expect(queriesInApp(orders, sorted)).toBe(true);
+    expect(sourceQuery(orders, sorted, "", "UTC").sort).toEqual([]);
   });
 
   it("translate a view's query, its periods worked out", () => {
@@ -110,7 +114,7 @@ describe("remote collections", () => {
         ...defaultQuery(),
         filters: [
           { id: "1", fieldId: "f-born", operator: "between", value: "2026-01-01..2026-01-31" },
-          { id: "2", fieldId: "f-calc", operator: "is", value: "3" }, // a component field: left out
+          { id: "2", fieldId: "f-calc", operator: "is", value: "3" }, // a component field: the app's, every row kept
           { id: "3", fieldId: "f-name", operator: "contains", value: " ad " },
           { id: "4", fieldId: "f-name", operator: "is", value: "" }, // no value yet: doesn't filter
         ],
@@ -121,13 +125,39 @@ describe("remote collections", () => {
       "UTC",
     );
     expect(q).toMatchObject({
-      filter: { and: [{ column: "born", operator: "between", value: "2026-01-01..2026-01-31" }, { column: "name", operator: "contains", value: "ad" }] },
+      filter: { and: [{ column: "born", operator: "between", value: "2026-01-01..2026-01-31" }, { and: [] }, { column: "name", operator: "contains", value: "ad" }] },
       sort: [{ column: "$title", direction: "desc" }],
-      groupBy: "tags",
+      // The app works it out (the component field), so each row once.
+      groupBy: null,
       search: "x",
     });
     // A value that can't be compared matches nothing, as in the app.
     expect(sourceQuery(people, { ...defaultQuery(), filters: [{ id: "1", fieldId: "f-born", operator: "before", value: "soon" }] }, "", "UTC").filter).toEqual({ or: [] });
+  });
+
+  it("are worked out by the app where a rule, sort or grouping is on a field the source can't do, the source keeping at least those rows", () => {
+    const text: SourceColumn = { name: "amount", type: "varchar", kind: "string" };
+    const orders: Collection = {
+      ...people,
+      source: { ...people.source!, columns: [...columns, text] },
+      fields: [...people.fields, blankField("f-amount", "Amount", "number", { column: "amount" })],
+    };
+    const above = { id: "a", fieldId: "f-amount", operator: "gt" as const, value: "9" };
+    const name = { id: "n", fieldId: "f-name", operator: "is" as const, value: "Ada" };
+    const plain = { ...defaultQuery(), filters: [name] };
+    expect(queriesInApp(orders, plain)).toBe(false);
+    // A rule without its value yet doesn't count.
+    expect(queriesInApp(orders, { ...plain, filters: [{ ...above, value: "" }] })).toBe(false);
+    for (const q of [{ ...plain, inherited: [above] }, { ...plain, groupBy: "f-calc" }, { ...plain, sort: [{ fieldId: "f-calc", direction: "desc" as const }] }]) {
+      expect(queriesInApp(orders, q)).toBe(true);
+    }
+    // Under an Or the app's rule keeps every row: the source's filter can only keep more than the query.
+    const either = { ...plain, filters: [name, { ...above, join: "or" as const }] };
+    expect(sourceQuery(orders, either, "", "UTC").filter).toEqual({ or: [{ column: "name", operator: "is", value: "Ada" }, { and: [] }] });
+    // What the app runs: rules on what can be filtered (here or there), not on what neither can.
+    const run = appQuery(orders, { ...either, filters: [...either.filters, { id: "u", fieldId: "$updated", operator: "isEmpty", value: "" }], groupBy: "f-data" });
+    expect(run.filters.map((r) => r.id)).toEqual(["n", "a"]);
+    expect(run.groupBy).toBeNull();
   });
 
   it("are grouped by a date part in the app: the source is not asked to group (only by the day it groups by itself)", () => {

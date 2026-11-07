@@ -1,8 +1,9 @@
 // Remote collections: a table or query of one of the server's sources (shared/sources.ts), shown
 // like any collection but read-only. Their items aren't stored here: blocks ask the source for a
 // page of rows (the view's query, translated here), and an item page for one row by its key.
-// What a field can do (filter operators, sorting, grouping) follows its column; fields of the
-// collection's own (component fields) are only shown, computed for the rows that are loaded.
+// What a field can do (filter operators, sorting, grouping) follows its column. What the source can't
+// work out (a column's field shown as another type, a component field: computed for the rows) the app
+// does itself over every row (`queriesInApp`), the source asked for a filter that keeps at least those rows.
 
 import { TITLE_COLUMN, type SourceColumn, type SourceCondition, type SourceFilter, type SourceQuery, type SourceRow, type SourceShape, type SourceSort } from "../../../shared/sources";
 import { resolveRange, rollingRangeValue } from "./datePeriod";
@@ -152,8 +153,18 @@ export function sourceColumn(collection: Collection, field: FieldDef): SourceCol
 
 const PLAIN_OPS = new Set(["contains", "notContains", "isEmpty", "isNotEmpty"]);
 
-/** The filter operators of a field: in a remote collection, those its column supports (none for a field of its own). */
-export function fieldOperators(collection: Collection, field: FieldDef): OperatorSpec[] {
+/**
+ * A field of a remote collection that the app filters, sorts and groups by itself, the source can't: a column's field
+ * shown as another type (the source would compare its own values: "10" before "9"; `columnValue`), or a component
+ * field (computed for the rows). A query using one reads every row (`queriesInApp`).
+ */
+export function queriedInApp(collection: Collection, field: FieldDef): boolean {
+  if (!collection.source || isMetaField(field) || field.id === SELF_FIELD) return false;
+  return field.column ? !!sourceColumn(collection, field) && isConverted(collection, field) : field.kind === "component";
+}
+
+/** The filter operators the source has for a field: those its column supports (none for a field of its own, or one converted). */
+function sourceOperators(collection: Collection, field: FieldDef): OperatorSpec[] {
   // The item itself is this one or not (always set: never empty).
   if (field.id === SELF_FIELD) return operatorsFor(field.kind).filter((o) => o.needsValue);
   if (!collection.source || isMetaField(field)) return operatorsFor(field.kind);
@@ -163,24 +174,39 @@ export function fieldOperators(collection: Collection, field: FieldDef): Operato
   return column.plain ? operatorsFor(field.kind).filter((o) => PLAIN_OPS.has(o.id)) : operatorsFor(field.kind);
 }
 
+/** The filter operators of a field: in a remote collection, those its column supports, or all of its type where the app filters (`queriedInApp`). */
+export function fieldOperators(collection: Collection, field: FieldDef): OperatorSpec[] {
+  return queriedInApp(collection, field) ? operatorsFor(field.kind) : sourceOperators(collection, field);
+}
+
 /** Whether items can be filtered by a field. */
 export const canFilter = (collection: Collection, field: FieldDef) => fieldOperators(collection, field).length > 0;
 
-/** Whether items can be sorted by a field (or the title, created, updated). */
-export function canSort(collection: Collection, fieldId: string): boolean {
-  if (!collection.source) return true;
-  if (fieldId === TITLE) return true;
+/** Whether the source sorts by a field (or the title). */
+function sourceSorts(collection: Collection, fieldId: string): boolean {
+  if (!collection.source || fieldId === TITLE) return true;
   const field = collection.fields.find((f) => f.id === fieldId);
   const column = field && sourceColumn(collection, field);
   return !!column && !column.plain && !isConverted(collection, field);
 }
 
-/** Whether items can be grouped by a field. */
-export function canGroup(collection: Collection, field: FieldDef): boolean {
+/** Whether items can be sorted by a field (or the title, created, updated): by the source, or by the app (`queriedInApp`). */
+export function canSort(collection: Collection, fieldId: string): boolean {
+  const field = collection.fields.find((f) => f.id === fieldId);
+  return sourceSorts(collection, fieldId) || (!!field && queriedInApp(collection, field));
+}
+
+/** Whether the source groups by a field. */
+function sourceGroups(collection: Collection, field: FieldDef): boolean {
   if (!isGroupable(field.kind)) return false;
   if (!collection.source) return true;
   const column = sourceColumn(collection, field);
   return !!column && !column.plain && !isConverted(collection, field);
+}
+
+/** Whether items can be grouped by a field: by the source, or by the app (`queriedInApp`). */
+export function canGroup(collection: Collection, field: FieldDef): boolean {
+  return sourceGroups(collection, field) || (isGroupable(field.kind) && queriedInApp(collection, field));
 }
 
 /**
@@ -193,6 +219,55 @@ export function groupsInApp(collection: Collection, query: Pick<ViewQuery, "grou
   const field = collection.fields.find((f) => f.id === query.groupBy);
   if (!field || (field.kind !== "date" && field.kind !== "datetime") || !canGroup(collection, field)) return false;
   return query.groupDate === "hour" ? field.kind === "datetime" : query.groupDate !== "day";
+}
+
+type QueryParts = Pick<ViewQuery, "filters" | "inherited" | "sort" | "groupBy" | "groupDate">;
+
+/**
+ * Whether a remote block's query is worked out by the app: grouped by a date part (`groupsInApp`), or filtered (a rule
+ * with its value), sorted or grouped by a field the source can't (`queriedInApp`). The source is then asked for a filter
+ * keeping at least the rows the query keeps (`sourceQuery`: such a rule holds for every row), the block loads every row,
+ * and the app runs the query over them (`appQuery`, applyQuery) as over a native collection's items.
+ */
+export function queriesInApp(collection: Collection, query: QueryParts): boolean {
+  if (!collection.source) return false;
+  if (groupsInApp(collection, query)) return true;
+  const byId = new Map(collection.fields.map((f) => [f.id, f]));
+  const here = (id: string | null | undefined) => {
+    const field = id ? byId.get(id) : undefined;
+    return field && queriedInApp(collection, field) ? field : undefined;
+  };
+  return (
+    [...(query.inherited ?? []), ...query.filters].some((rule) => {
+      const field = here(rule.fieldId);
+      return !!field && !waitsForValue(field, rule);
+    }) ||
+    query.sort.some((s) => !!here(s.fieldId)) ||
+    !!here(query.groupBy)
+  );
+}
+
+/**
+ * The query the app runs over a remote block's rows when it works it out (`queriesInApp`): its rules, sorts and grouping
+ * on what can be filtered, sorted and grouped (by the source or here), so a rule the source leaves out (on a field it has
+ * no column for) is left out here too.
+ */
+export function appQuery<Q extends QueryParts>(collection: Collection, query: Q): Q {
+  const byId = new Map([...collection.fields, selfField(collection)].map((f) => [f.id, f]));
+  const kept = (rules: FilterRule[]) =>
+    rules.filter((rule) => {
+      const field = byId.get(rule.fieldId);
+      if (!field || !(field.column || field.id === SELF_FIELD || queriedInApp(collection, field))) return false;
+      return fieldOperators(collection, field).some((o) => o.id === rule.operator || rule.operator === "between");
+    });
+  const group = query.groupBy ? byId.get(query.groupBy) : undefined;
+  return {
+    ...query,
+    filters: kept(query.filters),
+    ...(query.inherited ? { inherited: kept(query.inherited) } : {}),
+    sort: query.sort.filter((s) => canSort(collection, s.fieldId)),
+    groupBy: group && canGroup(collection, group) ? group.id : null,
+  };
 }
 
 /** The fields made for a table's or query's columns (hidden ones too: they are left out of the first view). */
@@ -296,8 +371,11 @@ export function sourceQuery(
         return [{ ...rule, field: constant.field, column: "", always: ruleMatches(constant.field, constant.value, rule, { refLabel: () => "" }) }];
       }
       const field = byId.get(rule.fieldId);
-      if (!field?.column || waitsForValue(field, rule)) return [];
-      if (!fieldOperators(collection, field).some((o) => o.id === rule.operator || rule.operator === "between")) return [];
+      if (!field || waitsForValue(field, rule)) return [];
+      // Worked out by the app (queriesInApp): the source keeps every row as far as this rule goes.
+      if (queriedInApp(collection, field)) return [{ ...rule, field, column: "", always: true }];
+      if (!field.column) return [];
+      if (!sourceOperators(collection, field).some((o) => o.id === rule.operator || rule.operator === "between")) return [];
       return [{ ...rule, field, column: field.column }];
     });
   const tree = filterTree([paired(query.inherited ?? []), paired(query.filters)]);
@@ -321,11 +399,13 @@ export function sourceQuery(
   const sort: SourceSort[] = query.sort.flatMap((s) => {
     if (s.fieldId === TITLE) return [{ column: TITLE_COLUMN, direction: s.direction }];
     const field = byId.get(s.fieldId);
-    return field?.column && canSort(collection, field.id) ? [{ column: field.column, direction: s.direction }] : [];
+    return field?.column && sourceSorts(collection, field.id) ? [{ column: field.column, direction: s.direction }] : [];
   });
   const groupField = query.groupBy ? byId.get(query.groupBy) : undefined;
-  const groupBy = groupField?.column && canGroup(collection, groupField) && !groupsInApp(collection, query) ? groupField.column : null;
-  return { ...shape, filter, search: search.trim(), sort, groupBy, groupOrder: groupsInApp(collection, query) || query.groupOrder === "custom" ? "asc" : (query.groupOrder ?? "asc"), timeZone };
+  // Worked out by the app: each row once, ungrouped (a list column would list a row under each value).
+  const here = queriesInApp(collection, query);
+  const groupBy = groupField?.column && sourceGroups(collection, groupField) && !here ? groupField.column : null;
+  return { ...shape, filter, search: search.trim(), sort, groupBy, groupOrder: here || query.groupOrder === "custom" ? "asc" : (query.groupOrder ?? "asc"), timeZone };
 }
 
 /** The device's time zone (its days: dates are compared and grouped by them). */

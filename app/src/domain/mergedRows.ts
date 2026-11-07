@@ -8,11 +8,11 @@
 // ordering it as the app does ("Customer 9" before "Customer 10", case-insensitive); a source with another
 // collation can leave rows slightly out of order in the merged list (docs/features.md "Several collections in one block").
 
-import type { SourceQuery, SourceResult } from "../../../shared/sources";
+import { MAX_SOURCE_PAGE, type SourceQuery, type SourceResult } from "../../../shared/sources";
 import { mergedItem, mergedRowItem, partConstants, partProjection, type ResolvedPart } from "./mergedCollection";
 import type { Collection, FieldDef, Item } from "./model";
 import { applyQuery, compareGroups, groupKeysOf, type ItemGroup, type QueryContext, type QueryResult, type ViewQuery } from "./query";
-import { canGroup, groupLabel, sourceQuery, sourceShape } from "./sources";
+import { canGroup, groupLabel, queriesInApp, sourceQuery, sourceShape } from "./sources";
 
 /** A row of a part: its merged item, and the group it is listed in ("" when not grouped, or in the empty group). */
 export interface MergedRow {
@@ -75,10 +75,13 @@ export type AskSource = (source: string, query: SourceQuery) => Promise<SourceRe
 /**
  * A remote part: the merged collection's query rewritten to the part's columns (`partProjection`) and asked of its source, which
  * filters, sorts and groups. A merged column the part doesn't map has no value there, the Collection column is the part's name:
- * rules on them are settled here (`partConstants`), a group by one is one group.
+ * rules on them are settled here (`partConstants`), a group by one is one group. A query the source can't work out (a merged
+ * field its column is converted for: queriesInApp) is worked out here: the part's rows the source keeps are all read, then
+ * queried as a native part's items are.
  */
 export function remoteStream(merged: Collection, part: ResolvedPart, query: ViewQuery, search: string, timeZone: string, ask: AskSource): PartStream {
   const projection = partProjection(merged, part);
+  if (queriesInApp(projection, query)) return readInApp(merged, part, projection, query, search, timeZone, ask);
   const shape = sourceShape(projection);
   const groupField = query.groupBy ? merged.fields.find((f) => f.id === query.groupBy) : undefined;
   const shown = groupField ? projection.fields.find((f) => f.id === groupField.id) : undefined;
@@ -105,6 +108,30 @@ export function remoteStream(merged: Collection, part: ResolvedPart, query: View
       const r = await page(offset, limit, false);
       return { rows: r.rows.map(ofRow), more: r.more };
     },
+  };
+}
+
+/** A remote part whose query the app works out: every row its source keeps (searched there), read page by page, then the query run over them. */
+function readInApp(merged: Collection, part: ResolvedPart, projection: Collection, query: ViewQuery, search: string, timeZone: string, ask: AskSource): PartStream {
+  const shape = sourceShape(projection);
+  const needle = search.trim().toLowerCase();
+  const asked = needle && part.label.toLowerCase().includes(needle) ? "" : search;
+  const request = sourceQuery(projection, { ...query, groupBy: null }, asked, timeZone, partConstants(merged, part));
+  let read: Promise<PartStream> | null = null;
+  const stream = () =>
+    (read ??= (async () => {
+      const items: Item[] = [];
+      for (let more = true; more; ) {
+        const r = await ask(part.collection.source!.name, { ...request, offset: items.length, limit: MAX_SOURCE_PAGE, counts: false });
+        items.push(...r.rows.map((row) => mergedRowItem(merged, part, projection, shape, row)));
+        more = r.more && r.rows.length > 0;
+      }
+      // Searched by the source already (its columns, as a remote part is).
+      return nativeStream(merged, items, query, "", { refLabel: () => "" });
+    })());
+  return {
+    open: async (limit) => (await stream()).open(limit),
+    next: async (offset, limit) => (await stream()).next(offset, limit),
   };
 }
 

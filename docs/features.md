@@ -615,8 +615,9 @@ What the app does, feature by feature (read the part you work on).
   "1,234.5"; "yes" / "0"; a Unix timestamp as a date & time), a number as text, a checkbox, or a date & time or date (a
   Unix timestamp: seconds, or milliseconds past the year 5000 in seconds), a checkbox as text or a number, a date as a date & time and
   back, a list as text. A value that doesn't convert is empty, never NaN (left out of sums and charts like a missing
-  one). Such a converted field isn't filtered, sorted or grouped by (the source would compare its own text: "10" before
-  "9"); reading the columns again keeps it while its column can still be read so. Fields added there are component fields (computed
+  one). Such a converted field, and a component field, is filtered, sorted and grouped by in the app (the source would
+  compare its own text: "10" before "9"): a block whose query uses one loads every row and runs the query over them
+  (`queriesInApp`, docs/views-and-workspace.md "Group by a date or date & time field"); reading the columns again keeps it while its column can still be read so. Fields added there are component fields (computed
   for the rows shown); no AI or reference fields, no Created / Updated. Views, blocks, item views,
   bookmarks are as for any collection (stored here, synced); filters, sorts and groupings offer only
   what a column supports (`fieldOperators`, `canSort`, `canGroup`: JSON and the like only "contains" /

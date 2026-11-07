@@ -2,7 +2,7 @@ import { useContext, useEffect, useId, useMemo, useRef, useState, type DragEvent
 import { Accordion, AccordionItem, Button, Checkbox, Dropdown, InlineNotification, MultiSelect, NumberInput, Select, SelectItem, TextInput } from "@carbon/react";
 import { ArrowsVertical, Filter, ListChecked, Renew, Save, Settings, TrashCan } from "@carbon/icons-react";
 import { useStore } from "../app/store";
-import { groupsInApp, isReadOnly } from "../domain/sources";
+import { isReadOnly } from "../domain/sources";
 import { BACKLINKS_FIELDS, virtualCollections } from "../domain/backlinks";
 import { orderFields } from "../domain/fieldLayout";
 import { newId, pickableFields, titleFields, type Collection } from "../domain/model";
@@ -488,8 +488,8 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
     return { ...local, groups };
   }, [stepped, local, shown]);
   const result = remote ? remote.result : cut;
-  // A date part (month, …) of a remote collection is grouped here, of the rows loaded: stopped early, the groups are marked as partial.
-  const groupedHere = !!remote && groupsInApp(collection, remoteQuery);
+  // A remote collection's query worked out here (a date part's groups, a converted or component field), of the rows loaded: stopped early, that is said.
+  const workedHere = !!remote?.here;
   const items = remote ? remote.items : data.items;
   const error = remote?.error ?? data.error;
   // Every block of a page asking the same server: its error (it can't be reached) shows once.
@@ -636,7 +636,7 @@ export function BlockView({ collection: home, data: given, block, viewFilters: g
                   {remote.everything ? "Load all rows" : "Show more"}
                 </Button>
                 <span className="helper">
-                  {groupedHere ? `Groups of the rows loaded so far: ${items.length} of ${result.total}` : `${items.length} of ${result.total}`}
+                  {workedHere ? `Of the rows loaded so far: ${items.length} of ${remote.rows}` : `${items.length} of ${result.total}`}
                 </span>
               </div>
             )}

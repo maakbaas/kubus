@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { SourceQuery } from "../../../shared/sources";
 import { mergedQueryResult, MergedCursor, nativeItems, nativeStream, remoteStream, type PartStream } from "./mergedRows";
-import { resolveParts } from "./mergedCollection";
+import { mergeCollections, resolveParts } from "./mergedCollection";
 import { applyQuery, defaultQuery, sortComparator, type FilterRule, type ViewQuery } from "./query";
-import { COL, SHOP_COLUMNS, fakeSource, invoice, revenue, sale, shopSales, world, type Row } from "../test/mergedWorld";
+import { COL, MERGES, SHOP_COLUMNS, fakeSource, invoice, invoices, revenue, sale, shopSales, world, type Row } from "../test/mergedWorld";
+import { blankField } from "./model";
 import type { Item } from "./model";
 
 const ctx = { refLabel: () => "" };
@@ -182,6 +183,26 @@ describe("a filter reaches every part, through its mapping", () => {
   it("drops a sort on a field the part can't sort by or doesn't map, keeping the key order", async () => {
     const { source } = await names({ query: { ...defaultQuery(), sort: [{ fieldId: COL.collection, direction: "asc" }, { fieldId: COL.amount, direction: "desc" }] } });
     expect(source.calls[0].sort).toEqual([{ column: "total", direction: "desc" }]);
+  });
+});
+
+describe("a part whose column is converted (text read as a number)", () => {
+  // The shop's totals stored as text: its source would sort and compare that text ("10" before "9").
+  const columns = SHOP_COLUMNS.map((c) => (c.name === "total" ? { ...c, type: "text", kind: "string" as const } : c));
+  const shop = { ...shopSales, source: { ...shopSales.source!, columns }, fields: shopSales.fields.map((f) => (f.id === "s-total" ? blankField("s-total", "Total", "number", { collectionId: "sales", column: "total" }) : f)) };
+  const merged = mergeCollections(["sales", "invoices"], [shop, invoices], MERGES).collection;
+  const rows: Row[] = [sale(1, null, null, "Eve"), sale(2, null, null, "Fay"), sale(3, null, null, "Gus")].map((r, i) => ({ ...r, total: ["10", "9", "n/a"][i] }));
+
+  it("reads all its rows and filters and sorts them here, by the converted values", async () => {
+    const source = fakeSource({ sales: { columns, key: "id", rows } });
+    const [part] = resolveParts(merged, [shop, invoices]);
+    const query: ViewQuery = { ...sorted(COL.amount), filters: [rule(COL.amount, "gt", "5")] };
+    const stream = remoteStream(merged, part, query, "", tz, source.ask);
+    const opened = await stream.open(10);
+    // The source keeps every row for the rule it can't compare, and isn't asked to sort by the text.
+    expect(source.calls[0]).toMatchObject({ sort: [], groupBy: null });
+    expect(opened.total).toBe(2);
+    expect(opened.rows.map((r) => r.item.values[COL.amount])).toEqual([9, 10]);
   });
 });
 

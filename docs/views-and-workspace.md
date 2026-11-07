@@ -38,13 +38,19 @@ Extension points are registries, not special cases in pages:
   chronologically; its label reads out ("October 2026", "Week 44, 2026", "28 Oct 2026, 14:00"). A date & time is grouped in
   the device's time zone. Items without a date form the "(empty)" group, always last. A remote collection's date column
   groups too: its source groups by the value itself (a day, as before; its keys read out as dates), so by year, month,
-  week or hour the app does it (`groupsInApp` in `domain/sources.ts`, no connector change): `sourceQuery` then leaves
-  the grouping out (and the group order, which is the app's), the block loads every row as a chart does (`useRemoteResult`
-  `everything`: pages of `MAX_SOURCE_PAGE` rows one after the other, the loading bar with its Cancel) and `groupItems`
-  (the part of `applyQuery` that groups, so labels, order and the "(empty)" group are the local ones) groups the rows
-  in so far, shown at most once a second while loading. Filters and sorting still go to the source (rows keep its sort
-  within a group). Stopped, the groups stay, the block says "Groups of the rows loaded so far: n of N" and "Load all rows"
-  goes on. A block that shows no groups (a chart) loads nothing extra for it.
+  week or hour the app does it (`groupsInApp` in `domain/sources.ts`, no connector change). The same goes for a rule
+  (with its value), sort or grouping on a field the source can't work out: a column's field shown as another type (text
+  as a number, ...: the source would compare its own values) or a component field (`queriedInApp`; together
+  `queriesInApp`). Then `sourceQuery` leaves the grouping out (and the group order, which is the app's), sorts only
+  by what the source can, and makes such a rule hold for every row (`{ and: [] }`; a filter has no "not", so the source
+  keeps at least the rows the query keeps); the block loads every row as a chart does (`useRemoteResult`
+  `everything`: pages of `MAX_SOURCE_PAGE` rows one after the other, the loading bar with its Cancel) and `applyQuery`
+  runs the query over the rows in so far (`appQuery`: its rules, sorts and grouping on what can be filtered, sorted or
+  grouped, by the source or here; labels, order and the "(empty)" group the local ones), shown at most once a second
+  while loading. The search still goes to the source. Until every row is in the total is the source's; stopped, the
+  result stays, the block says "Of the rows loaded so far: n of N" and "Load all rows" goes on. A block that shows no
+  groups (a chart) loads nothing extra for a date part. In a merged block a remote part needing it reads all its rows
+  and is queried as a native part (`mergedRows.ts` `readInApp`).
   A filter value may hold `{{ }}` code, typed and shown as raw text (the one place besides
   components where code runs): `resolveFilterValues` / `filterCodeValue` work it out when the filter
   runs, as if its result had been typed (`{{ 1 == 1 }}` is "true"), reading `$now` and, on an item

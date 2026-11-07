@@ -487,3 +487,30 @@ describe("grouping by a date part", () => {
     expect(h.result.current!.result.groups.map((g) => g.key)).toEqual(["2026-03", "2026-02", "2025-12"]);
   });
 });
+
+describe("a converted field", () => {
+  // Amounts stored as text, shown as a number: the source would sort its text ("10" before "9").
+  const priced: Collection = {
+    ...tasks,
+    source: { ...tasks.source!, columns: [...columns, { name: "amount", type: "text", kind: "string" }] },
+    fields: [...tasks.fields, blankField("f-amount", "Amount", "number", { column: "amount" })],
+  };
+  const amounts = ["10", "9", "n/a", "3,5", "12"];
+  const answer = (query: SourceQuery): SourceResult => {
+    const all = amounts.map((a, i) => ({ key: String(i + 1), values: [`task ${i + 1}`, false, a] }));
+    return { rows: all.slice(query.offset, query.offset + 2), more: query.offset + 2 < all.length, total: all.length };
+  };
+
+  it("is filtered and sorted by the app, over every row, the source keeping every row for its rule", async () => {
+    const client = sources(answer);
+    const query: ViewQuery = { ...defaultQuery(), filters: [{ id: "r", fieldId: "f-amount", operator: "gt", value: "5" }], sort: [{ fieldId: "f-amount", direction: "asc" }] };
+    const h = hook(client, { collection: priced, query });
+    for (let i = 0; i < 4; i++) await settle(h, 1100);
+    expect(client.calls[0]).toMatchObject({ filter: { and: [] }, sort: [], groupBy: null, limit: MAX_SOURCE_PAGE });
+    const r = h.result.current!;
+    expect(r.here).toBe(true);
+    expect(r.result.groups[0].items.map((i) => i.values["f-amount"])).toEqual([9, 10, 12]);
+    expect(r.result.total).toBe(3);
+    expect(r.rows).toBe(5);
+  });
+});

@@ -200,6 +200,9 @@ export function useMergedResult(collection: Collection, query: ViewQuery, search
     result: nothing ? EMPTY : (shown?.result ?? EMPTY),
     items: nothing ? [] : (shown?.items ?? null),
     everything: all,
+    // A part worked out here reads all its rows itself (mergedRows readInApp): the total is exact.
+    here: false,
+    rows: fresh && loaded ? loaded.total : 0,
     held: !nothing && held,
     error: fresh ? loaded?.error : undefined,
     more: fresh && loaded?.more && !loadingAll ? (all ? () => setStopped("") : more) : null,

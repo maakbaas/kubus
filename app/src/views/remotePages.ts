@@ -1,6 +1,6 @@
 import type { SourceResult, SourceRow } from "../../../shared/sources";
 import type { Collection } from "../domain/model";
-import { groupItems, type ItemGroup, type QueryResult, type ViewQuery } from "../domain/query";
+import { applyQuery, type ItemGroup, type QueryResult, type ViewQuery } from "../domain/query";
 import { groupLabel, type BuiltRows } from "../domain/sources";
 import { errorMessage } from "../domain/errors";
 
@@ -43,21 +43,28 @@ export function withPageError(l: Loaded | null, e: unknown): Loaded | null {
 
 const NO_REFS = { refLabel: () => "" };
 
-/** The block's result from the items built: grouped in the source's order (or, by a date part, here) (a group shows once rows of it are in), else one group. Copies: what the block got before stays as it was. */
+/**
+ * The block's result from the items built: grouped in the source's order (a group shows once rows of it are in), else one
+ * group; or, where the app works the query out (queriesInApp), the query run here over the rows in so far (`inApp`:
+ * appQuery's), its total what it keeps of them once every row is in. Copies: what the block got before stays as it was.
+ */
 export function remoteQueryResult(
   built: BuiltRows,
   loaded: Pick<Loaded, "groups" | "total">,
   collection: Collection,
   groupBy: string | null | undefined,
   grouped: boolean,
-  /** Grouped here (groupsInApp): by this query's date part, of the rows in so far. */
   inApp?: ViewQuery,
 ) {
+  const items = built.all.slice();
+  if (inApp) {
+    // Until every row is in, the total is the source's (what is being worked out of); then the query's own.
+    const result = applyQuery(collection, built.computed, inApp, NO_REFS);
+    return { result: built.count < loaded.total ? { ...result, total: loaded.total } : result, items };
+  }
   const groupField = groupBy ? collection.fields.find((f) => f.id === groupBy) : undefined;
-  const groups: ItemGroup[] = inApp
-    ? groupItems(collection, built.computed, inApp, NO_REFS)
-    : grouped
+  const groups: ItemGroup[] = grouped
     ? loaded.groups!.filter((g) => built.byGroup.has(g.key)).map((g) => ({ key: g.key, label: groupLabel(groupField, g.key), items: built.byGroup.get(g.key)!.slice() }))
     : [{ key: "", label: "", items: built.computed.slice() }];
-  return { result: { groups, total: loaded.total } satisfies QueryResult, items: built.all.slice() };
+  return { result: { groups, total: loaded.total } satisfies QueryResult, items };
 }

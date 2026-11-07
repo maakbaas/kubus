@@ -4,7 +4,7 @@ import { useStore } from "../app/store";
 import { withComputed } from "../domain/components";
 import type { Collection, Item } from "../domain/model";
 import type { QueryResult, ViewQuery } from "../domain/query";
-import { addRows, deviceTimeZone, groupsInApp, rowItem, sourceQuery, sourceShape, type BuiltRows } from "../domain/sources";
+import { addRows, appQuery, deviceTimeZone, queriesInApp, rowItem, sourceQuery, sourceShape, type BuiltRows } from "../domain/sources";
 import { firstPage, remoteQueryResult, withNextPage, withPageError, type Loaded } from "./remotePages";
 
 // A block of a remote collection: its query asked of the source (filter, sort, grouping and search
@@ -25,8 +25,12 @@ export interface RemoteResult {
   /** Loads the next page; null when every row is in. */
   more: (() => void) | null;
   loadingMore: boolean;
-  /** Every row is wanted (`all`, or the grouping by a date part is done here: groupsInApp). */
+  /** Every row is wanted (`all`, or the query is worked out here: queriesInApp). */
   everything: boolean;
+  /** The query is worked out here, over the rows loaded (queriesInApp): stopped early, the result is of those rows only. */
+  here: boolean;
+  /** How many rows the source has for the block (its filter's, before the app's): what "Load all rows" goes up to. */
+  rows: number;
   /** Loading every row (`all`): the rows in, of the source's total, and a way to stop; null when done or stopped. */
   progress: { loaded: number; total: number; cancel: () => void } | null;
   /**
@@ -103,8 +107,9 @@ export function useRemoteResult(
 ): RemoteResult | null {
   const { sources, components } = useStore();
   const remote = enabled && !!collection.source;
-  // Grouped by a date part (month, …): the app groups, so it needs every row.
-  const inApp = remote && groupsInApp(collection, query);
+  // Grouped by a date part (month, …), or filtered, sorted or grouped by a field the source can't (a converted one, a
+  // component field): the app works the query out, so it needs every row.
+  const inApp = remote && queriesInApp(collection, query);
   const all = wantsAll || inApp;
   const typed = useSettled(search, SEARCH_DELAY_MS);
   const request = useMemo(() => (remote ? sourceQuery(collection, query, typed, deviceTimeZone()) : undefined), [remote, collection, query, typed]);
@@ -188,7 +193,7 @@ export function useRemoteResult(
   }, [remote, shape, loaded, rowsFrom, components, memo, grouped, sources]);
   const result = useMemo(() => {
     if (!made || !loaded || !shape) return null;
-    return remoteQueryResult(made, loaded, collection, query.groupBy, grouped, inApp ? query : undefined);
+    return remoteQueryResult(made, loaded, collection, query.groupBy, grouped, inApp ? appQuery(collection, query) : undefined);
   }, [made, loaded, shape, collection, query, grouped, inApp]);
 
   // While every row is loading, the block (a chart, a map: drawn anew each time) gets them at most once a second.
@@ -200,6 +205,8 @@ export function useRemoteResult(
     result: shown?.result ?? EMPTY,
     items: shown?.items ?? null,
     everything: all,
+    here: inApp,
+    rows: fresh && loaded ? loaded.total : 0,
     held,
     error: fresh ? loaded?.error : undefined,
     more: fresh && loaded?.more && !loadingAll ? (all ? () => setStopped("") : more) : null,
