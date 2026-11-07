@@ -4136,8 +4136,12 @@ img[data-lightbox] {
 .toolbar-popover .view-options {
   grid-template-columns: minmax(0, 1fr);
 }
-/* Image columns centre their thumbnails; the header is left-aligned like every other column. */
+/* An image column is as wide as its widest image at the row's height (TableView: `--image-shape`, its width / height,
+   from square to 3:1; 3:1 until its images are known), at most the box every image had before (6rem, or one and a half
+   times a taller image height); its images centred in it. The header is left-aligned like every other column. */
 .items-table td.cell--image .image-thumb {
+  --image-row: var(--table-image-height, var(--cds-spacing-06));
+  inline-size: min(calc(var(--image-row) * var(--image-shape, 3)), max(6rem, calc(var(--image-row) * 1.5)));
   object-position: center;
 }
 /* A table's Image height (its block option, TableView `--table-image-height`): from the row's own 2rem up to 8rem; the

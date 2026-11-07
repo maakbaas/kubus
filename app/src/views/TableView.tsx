@@ -43,6 +43,8 @@ import { FieldEditor } from "../ui/FieldEditor";
 import { FieldInput, parseInputValue, toInputValue, type InputValue } from "../ui/FieldInput";
 import { Highlight } from "../ui/Highlight";
 import { GroupSections } from "./GroupSections";
+import { cssName, imageColumns } from "../domain/imageColumns";
+import { imageShape, useImageShapes } from "../ui/images";
 import { formatValue, type RefOptions } from "../ui/useReferenceOptions";
 import { errorMessage } from "../ui/useConfirm";
 import { itemLinkProps, FieldCell, isInlineEditable, isMetaField } from "./cells";
@@ -605,7 +607,12 @@ const ItemRow = memo(function ItemRow({ collection, item, shown, titleId: firstT
       {shown.map((f) => {
         const isEditing = editing?.fieldId === f.id;
         return (
-          <TableCell key={f.id} className={`cell--${f.kind}${isEditing ? " cell--editing" : ""}${f.id === struckId ? " cell--struck" : ""}`}>
+          <TableCell
+            key={f.id}
+            className={`cell--${f.kind}${isEditing ? " cell--editing" : ""}${f.id === struckId ? " cell--struck" : ""}`}
+            // An image column's shape, set on the table (TableView `imageColumns`): the same for every row, so rows don't render again for it.
+            style={f.kind === "image" ? ({ "--image-shape": `var(--image-shape-${cssName(f.id)})` } as CSSProperties) : undefined}
+          >
             <Cell
               collection={collection}
               isTitle={f.id === titleId}
@@ -644,6 +651,30 @@ export function TableView(props: BlockProps<TableOptions>) {
   const groupsBox = useRef<HTMLDivElement>(null);
   const grouped = isGrouped(result);
   useSharedColumns(groupsBox, grouped && result.groups.length > 0);
+
+  // Its image columns as wide as their widest image shown (domain/imageColumns.ts), by the shapes of the images as their
+  // thumbnails load. The first time, the table stays hidden until those of the images it shows are known (at most a
+  // second: they come from local storage), as cards' automatic covers do: it is laid out once, not widened image by image.
+  const images = shown.some((f) => f.kind === "image");
+  const shapesKnown = useImageShapes(images);
+  const shownItems = useMemo(
+    () => (grouped ? result.groups.filter((g) => !collapsedGroups.includes(g.key)) : result.groups.slice(0, 1)).flatMap((g) => g.items),
+    [grouped, result.groups, collapsedGroups],
+  );
+  const columns = useMemo(() => (images ? imageColumns(shown, shownItems, imageShape) : null), [images, shown, shownItems, shapesKnown]); // eslint-disable-line react-hooks/exhaustive-deps
+  const waiting = !!columns?.waiting;
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (settled || !images) return;
+    if (!waiting) return setSettled(true);
+    const timer = window.setTimeout(() => setSettled(true), 1000);
+    return () => window.clearTimeout(timer);
+  }, [settled, images, waiting]);
+  const tableStyle = useMemo((): CSSProperties | undefined => {
+    if (!columns) return imageStyle(options);
+    const shapes = Object.fromEntries(Object.entries(columns.shapes).map(([id, shape]) => [`--image-shape-${cssName(id)}`, String(shape)]));
+    return { ...imageStyle(options), ...shapes, ...(waiting && !settled && { visibility: "hidden" }) } as CSSProperties;
+  }, [columns, options, waiting, settled]);
 
   const head = (
     <TableHead>
@@ -726,7 +757,7 @@ export function TableView(props: BlockProps<TableOptions>) {
 
   if (!grouped || (result.total === 0 && result.groups.length < 2)) {
     return (
-      <FillTable style={imageStyle(options)}>
+      <FillTable style={tableStyle}>
         <Table size="sm">
           {head}
           <TableBody>
@@ -744,7 +775,7 @@ export function TableView(props: BlockProps<TableOptions>) {
     <div ref={groupsBox} className="table-groups">
       <GroupSections groups={result.groups} collapsed={collapsedGroups} onCollapse={onGroupCollapse}>
         {(group) => (
-          <FillTable style={imageStyle(options)}>
+          <FillTable style={tableStyle}>
             <Table size="sm">
               {head}
               <TableBody>

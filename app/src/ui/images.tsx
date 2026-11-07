@@ -118,11 +118,57 @@ export function useFileUrl(fileId: string | null, small = false): string | undef
   return url;
 }
 
+/**
+ * Images' shapes (width / height; NaN: it couldn't be loaded), by file, as their thumbnails loaded: a table's image
+ * column is as wide as its widest image (TableView). A file's bytes never change, so neither does its shape: kept for the session.
+ */
+const imageShapes = new Map<string, number>();
+const shapeListeners = new Set<() => void>();
+let shapesNotified = 0;
+
+/** A file's shape (width / height), NaN when it couldn't be loaded, undefined while it isn't known. */
+export const imageShape = (fileId: string): number | undefined => imageShapes.get(fileId);
+
+function noteShape(fileId: string, shape: number) {
+  if (imageShapes.has(fileId)) return;
+  imageShapes.set(fileId, shape);
+  // Once a frame for all the images that loaded in it (a table of them would otherwise render once per image).
+  if (shapesNotified) return;
+  shapesNotified = requestAnimationFrame(() => {
+    shapesNotified = 0;
+    shapeListeners.forEach((l) => l());
+  });
+}
+
+/** A number that changes whenever images' shapes become known (while `active`): what reads `imageShape` renders again. */
+export function useImageShapes(active: boolean): number {
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const listener = () => setVersion((n) => n + 1);
+    shapeListeners.add(listener);
+    return () => void shapeListeners.delete(listener);
+  }, [active]);
+  return version;
+}
+
 /** A stored image in a table cell: its thumbnail (the Lightbox shows the original, `data-file`). */
 export function ImageThumb({ fileId, alt }: { fileId: string; alt: string }) {
   const url = useFileUrl(fileId, true);
   // Its box while it loads, so the row and column don't change size when it arrives.
-  return url ? <img className="image-thumb" src={url} alt={alt} data-lightbox data-file={fileId} /> : <span className="image-thumb" aria-hidden />;
+  return url ? (
+    <img
+      className="image-thumb"
+      src={url}
+      alt={alt}
+      data-lightbox
+      data-file={fileId}
+      onLoad={(e) => noteShape(fileId, e.currentTarget.naturalHeight > 0 ? e.currentTarget.naturalWidth / e.currentTarget.naturalHeight : NaN)}
+      onError={() => noteShape(fileId, NaN)}
+    />
+  ) : (
+    <span className="image-thumb" aria-hidden />
+  );
 }
 
 interface Props {
