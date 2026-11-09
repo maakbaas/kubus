@@ -5186,16 +5186,16 @@ html[data-swiping] body {
   background: var(--cds-layer-01);
   border-block-start: 1px solid var(--cds-border-subtle-01);
 }
-/* …and on behind the top of the keyboard (iOS draws its keyboard over the page, with rounded, see-through corners), fading
-   out over its top half: no page shows between the bar and the keyboard, and it doesn't look flat. Below the window's edge
-   it is not drawn (Android's keyboard is no part of it). */
+/* …and on behind the whole keyboard (iOS draws its keyboard and its ↑ ↓ ✓ bar over the page, with rounded, see-through
+   corners): no page shows between or around them. Below the window's edge it is not drawn (Android's keyboard is no part
+   of it). */
 .md-bar--keyboard::after {
   content: "";
   position: absolute;
   inset-inline: 0;
   inset-block-start: 100%;
-  block-size: 10rem;
-  background: linear-gradient(var(--cds-layer-01), transparent);
+  block-size: 100vh;
+  background: var(--cds-layer-01);
   pointer-events: none;
 }
 .md-bar__row {
@@ -5203,7 +5203,8 @@ html[data-swiping] body {
   align-items: center;
   gap: var(--cds-spacing-03);
   inline-size: 100%;
-  min-block-size: 2rem;
+  min-block-size: 2.5rem;
+  /* (its buttons 40px for a thumb: TouchButton) */
   padding-inline: var(--cds-spacing-03);
   overflow-x: auto;
   overscroll-behavior: contain;
@@ -5223,6 +5224,10 @@ html[data-swiping] body {
   max-inline-size: none;
 }
 /* A menu button whose setting is in effect (a heading): its icon blue, as toolbar popover buttons' are. */
+/* A keyboard bar button whose setting is on: as an icon button's selected. */
+.md-bar__touch.cds--btn--selected {
+  background: var(--cds-background-selected);
+}
 .md-bar__button--on svg {
   fill: var(--cds-icon-interactive);
 }

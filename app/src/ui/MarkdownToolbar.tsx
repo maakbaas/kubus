@@ -3,9 +3,9 @@
 // floating over a selection, or over the caret stopped at the edge of styled text (SelectionBar). Every style button
 // is selected while it is on for what is typed next (or all of the selection). Pressing a button never takes focus
 // from the editor (the keyboard stays up).
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ContainedList, ContainedListItem, IconButton, Popover, PopoverContent } from "@carbon/react";
+import { Button, ContainedList, ContainedListItem, IconButton, Popover, PopoverContent } from "@carbon/react";
 import {
   Add,
   Code,
@@ -90,10 +90,37 @@ const keepFocus = (e: { preventDefault(): void }) => e.preventDefault();
 
 /** A button of the bar: a Carbon ghost icon button, selected while on. */
 function BarButton({ label, keys, on, disabled, onPress, children, align }: { label: string; keys?: string; on?: boolean; disabled?: boolean; onPress(): void; children: ReactNode; align: "top" | "bottom" }) {
+  if (useContext(TouchBar)) return <TouchButton label={label} on={on} disabled={disabled} onPress={onPress}>{children}</TouchButton>;
   return (
     <IconButton autoAlign kind="ghost" size="sm" align={align} label={keys ? `${label} (${mod(keys)})` : label} isSelected={on} disabled={disabled} onMouseDown={keepFocus} onClick={onPress}>
       {children}
     </IconButton>
+  );
+}
+
+/** The bar on top of the keyboard (KeyboardBar): its buttons are TouchButtons. */
+const TouchBar = createContext(false);
+
+/**
+ * A button of the keyboard bar: a Carbon ghost icon-only button without a tooltip, 40px square (the whole square takes
+ * the tap). An icon button's tooltip opens on hover, and iOS takes a tap on something that shows more on hover as only
+ * that hover: a tap on Undo then did nothing at times. 40px, not the 32px of the smallest size: a thumb, not a pointer.
+ */
+function TouchButton({ label, on, disabled, onPress, children }: { label: string; on?: boolean; disabled?: boolean; onPress(): void; children: ReactNode }) {
+  return (
+    <Button
+      kind="ghost"
+      size="md"
+      className={["cds--btn--icon-only", "md-bar__touch", on && "cds--btn--selected"].filter(Boolean).join(" ")}
+      aria-label={label}
+      title={label}
+      aria-pressed={on === undefined ? undefined : on}
+      disabled={disabled}
+      onMouseDown={keepFocus}
+      onClick={onPress}
+    >
+      {children}
+    </Button>
   );
 }
 
@@ -134,6 +161,7 @@ export function MenuList({ items, onDone }: { items: (MenuEntry | null)[]; onDon
 
 /** A bar button opening a menu of words above or below it; selected while open. Escape or a press elsewhere closes it. */
 function BarMenu({ label, icon, items, align, on }: { label: string; icon: ReactNode; items: (MenuEntry | null)[]; align: "top" | "bottom"; on?: boolean }) {
+  const touch = useContext(TouchBar);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const [room, setRoom] = useState<number>();
@@ -161,9 +189,15 @@ function BarMenu({ label, icon, items, align, on }: { label: string; icon: React
   return (
     <div ref={box} className="md-bar__menu" style={room !== undefined ? ({ "--popover-room": `${Math.max(room, 0)}px` } as React.CSSProperties) : undefined}>
       <Popover open={open} autoAlign align={align === "top" ? "top-start" : "bottom-start"} className="md-bar__popover">
-        <IconButton autoAlign kind="ghost" size="sm" align={align} label={label} isSelected={open} className={on ? "md-bar__button--on" : undefined} onMouseDown={keepFocus} onClick={() => setOpen(!open)}>
-          {icon}
-        </IconButton>
+        {touch ? (
+          <TouchButton label={label} on={open} onPress={() => setOpen(!open)}>
+            <span className={on ? "md-bar__button--on" : undefined}>{icon}</span>
+          </TouchButton>
+        ) : (
+          <IconButton autoAlign kind="ghost" size="sm" align={align} label={label} isSelected={open} className={on ? "md-bar__button--on" : undefined} onMouseDown={keepFocus} onClick={() => setOpen(!open)}>
+            {icon}
+          </IconButton>
+        )}
         <PopoverContent>
           {open && <MenuList items={items} onDone={() => setOpen(false)} />}
         </PopoverContent>
@@ -337,7 +371,9 @@ export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks
   return createPortal(
     <div ref={bar} className="md-bar md-bar--keyboard" role="toolbar" aria-label="Format" style={{ display: "none" }} onMouseDown={keepFocus} onPointerDown={keepFocus}>
       <div className="md-bar__row">
-        <FormatButtons view={view} keyboard hooks={hooks} />
+        <TouchBar.Provider value>
+          <FormatButtons view={view} keyboard hooks={hooks} />
+        </TouchBar.Provider>
       </div>
     </div>,
     // In the app's theme (light / dark: its Theme is `.app-root`, main.tsx), at the window's level.
