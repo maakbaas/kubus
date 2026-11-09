@@ -16,7 +16,7 @@
 
 import type { Component } from "./components";
 import { outputOf } from "./components";
-import { dateFormat, formatMinute, periodAround, resolveRange, toMoment, weekNumber } from "./datePeriod";
+import { dateFormat, formatMinute, periodAround, periodRule, resolveRange, toMoment, weekNumber } from "./datePeriod";
 import { filterTree, requiredRules } from "./filterTree";
 import { formatDate, formatTime } from "./fieldKinds";
 import { fieldValue, itemLabel, newId, pickableFields, type Collection, type FieldDef, type Item } from "./model";
@@ -1066,14 +1066,17 @@ function periodEndTime(end: string): number {
 /**
  * The moment whose step a stat's "The current step" is (`currentStepItems`): now, or, when the block's filters keep the X
  * axis's date field to a period that ends before now (the dashboard's period moved back to last week), that period's last
- * moment: its last step, empty when nothing is in it. Only rules every item meets count (`filters`: the inherited and
- * the block's own); a period on another field leaves it now.
+ * moment: its last step, empty when nothing is in it. Rules every item meets count (`filters`: the inherited and the
+ * block's own), and the inherited filter's period always (the view's date, which the block's own period is counted from):
+ * a block's period or-ed with it (a sparkline's last 7 days) widens the rows, not the step. A period on another field
+ * leaves it now.
  */
 export function stepMoment(filters: FilterRule[][], xFieldId: string | null, now: number): number {
   if (!xFieldId) return now;
   const at = formatMinute(new Date(now));
   let moment = now;
-  for (const rule of requiredRules(filterTree(filters))) {
+  const viewPeriod = periodRule(filters[0] ?? []);
+  for (const rule of [...requiredRules(filterTree(filters)), ...(viewPeriod ? [viewPeriod] : [])]) {
     if (rule.fieldId !== xFieldId || rule.operator !== "between") continue;
     const period = resolveRange(rule.value, at);
     if (period) moment = Math.min(moment, periodEndTime(period.end));

@@ -734,6 +734,9 @@ describe("statOf", () => {
     expect(stepMoment([[rule("other", "2026-01-01..2026-01-31")]], "read", at(2026, 3, 2))).toBe(at(2026, 3, 2));
     // A rolling period moves with now: last week (weeks run Sunday to Saturday) ends on its Saturday.
     expect(new Date(stepMoment([[rule("read", "week-1")]], "read", at(2026, 3, 4))).getDate()).toBe(28);
+    // The block's own period or-ed with the view's (a sparkline's last weeks): the view's period still sets the step.
+    const orOwn = { ...rule("read", "2026-02-01..2026-03-31"), id: "o", join: "or" as const };
+    expect(new Date(stepMoment([[rule("read", "2026-03-02..2026-03-02")], [orOwn]], "read", at(2026, 3, 20))).getDate()).toBe(2);
   });
 });
 
