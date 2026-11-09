@@ -60,8 +60,8 @@ What the app does, feature by feature (read the part you work on).
   does: `ui/markdownActions.ts`, no syntax of its own): with a mouse it floats over a selection (once made, not while
   dragging), and over the caret resting (0.7 s) at the edge of styled text; on a touch screen it is a bar on top of the
   on-screen keyboard while the editor has focus and a keyboard is up (placed every frame on the visual viewport's bottom: iOS
-  reports its keyboard late; the pane makes room after its content, `--keyboard-bar`; on iOS 26 its buttons sit above the
-  system's floating ↑ ↓ ✓ bar, which lies on the bar's background), one row scrolling sideways, its buttons never taking focus from the editor (the keyboard stays up; a tap on it is no tap outside
+  reports its keyboard late; the visual viewport ends where the keyboard, and on iOS 26 its floating ↑ ↓ ✓ bar, begin; its
+  surface fades out behind them; the pane makes room after its content, `--keyboard-bar`), one row scrolling sideways, its buttons never taking focus from the editor (the keyboard stays up; a tap on it is no tap outside
   the field). Its buttons: on a touch screen Undo, Redo, Insert (+: a `/` at the caret) and in a table the Table menu
   first; Bold, Italic, Strikethrough, Code, Formula (each selected while on for what is typed next, or
   for all of the selection), Link (Ctrl / ⌘+K: the link at the caret or over the selection edited, else one added over the
@@ -84,7 +84,7 @@ What the app does, feature by feature (read the part you work on).
   in it), Line break, Headings 4–6; each shows the Markdown that types it, filtered as typed (a name starting with it first);
   ↑ ↓ Enter / Tab, Escape (the `/` stays text, as does a space with nothing found).
   **Tables**: a row's and a column's handle (with a mouse Shift: from the selected rows / columns on to it; on a touch
-  screen shown for the tapped cell), and on a touch screen also the bar's Table menu, for the caret's cell. Their menus are words: Row above / below, Column left / right, Align
+  screen shown for the tapped cell), and on a touch screen also the bar's Table menu, for the caret's cell. Their menus are words: Add row above / below, Add column left / right, Align
   left / center / right (the column; again: none), Split table below (the rows below the selected ones a table of their own, its first
   row its header), Delete row(s) / column(s) (all those selected), Delete table. A new table (the `/` menu) is one column and two rows. Delete or
   Backspace with whole rows or columns selected deletes them; the whole table selected, the table.

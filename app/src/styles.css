@@ -5182,8 +5182,7 @@ html[data-swiping] body {
   position: fixed;
   z-index: 7000;
   box-sizing: border-box;
-  /* Its surface runs down to the keyboard: iOS 26's own floating bar (↑ ↓ ✓) lies on it, the buttons above it
-     (padding-block-end, set with the place). */
+  /* Its bottom on the top of what iOS lays over the page (its keyboard, on iOS 26 the floating ↑ ↓ ✓ bar above it). */
   background: var(--cds-layer-01);
   border-block-start: 1px solid var(--cds-border-subtle-01);
 }

@@ -180,8 +180,8 @@ export function tableItems(view: EditorView, part: "row" | "col" | "all"): (Menu
   const cols = rect.right - rect.left;
   const align = columnAlignment(state);
   const item = (label: string, command: Command, extra: Partial<MenuEntry> = {}): MenuEntry => ({ label, run: () => run(view, command), ...extra });
-  const rowItems = [item("Row above", addRowAbove), item("Row below", addRowBelow), item("Split table below", splitTable, { disabled: !canSplitTable(state) })];
-  const colItems = [item("Column left", addColumnLeft), item("Column right", addColumnRight)];
+  const rowItems = [item("Add row above", addRowAbove), item("Add row below", addRowBelow), item("Split table below", splitTable, { disabled: !canSplitTable(state) })];
+  const colItems = [item("Add column left", addColumnLeft), item("Add column right", addColumnRight)];
   const aligns = [
     item("Align left", alignColumn("left"), { current: align === "left" }),
     item("Align center", alignColumn("center"), { current: align === "center" }),
@@ -293,7 +293,7 @@ export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks
   const bar = useRef<HTMLDivElement>(null);
   // Placed on every frame while it exists, from the visual viewport as it is then: iOS reports its keyboard and its
   // panning of the page late, and not always with an event, so a place set from events (or `--keyboard-inset`) was hit
-  // or miss: under the keyboard, under iOS 26's ↑ ↓ ✓ bar, or above it. Shown only while an on-screen keyboard is up.
+  // or miss. Shown only while an on-screen keyboard is up.
   useEffect(() => {
     const root = document.documentElement;
     const el = bar.current;
@@ -309,14 +309,13 @@ export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks
       else tallest.height = Math.max(tallest.height, window.innerHeight);
       const seen = vv ? vv.height : window.innerHeight;
       const up = seen < window.innerHeight - 80 || window.innerHeight < tallest.height - 150;
-      // iOS 26 floats its own bar over the bottom of what can be seen: the buttons go above it, the bar's surface under it.
-      const accessory = up && floatingKeyboardBar() ? ACCESSORY_PX : 0;
+      // The bottom of what can be seen: the visual viewport ends where whatever iOS lays over the page begins, its
+      // keyboard and (iOS 26) the floating ↑ ↓ ✓ bar above it, so the bar sits right on top of them as it is.
       const top = vv ? vv.offsetTop + vv.height : window.innerHeight;
-      const key = `${up}|${Math.round(top)}|${vv ? Math.round(vv.offsetLeft) : 0}|${vv ? Math.round(vv.width) : window.innerWidth}|${accessory}`;
+      const key = `${up}|${Math.round(top)}|${vv ? Math.round(vv.offsetLeft) : 0}|${vv ? Math.round(vv.width) : window.innerWidth}`;
       if (key === last) return;
       last = key;
       el.style.display = up ? "" : "none";
-      el.style.paddingBlockEnd = `${accessory}px`;
       el.style.left = `${vv ? vv.offsetLeft : 0}px`;
       el.style.width = `${vv ? vv.width : window.innerWidth}px`;
       el.style.top = `${top - el.offsetHeight}px`;
@@ -344,18 +343,6 @@ export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks
     // In the app's theme (light / dark: its Theme is `.app-root`, main.tsx), at the window's level.
     document.querySelector(".app-root") ?? document.body,
   );
-}
-
-/** The room iOS 26's floating ↑ ↓ ✓ bar takes above its keyboard (its height and the gap above it). */
-const ACCESSORY_PX = 56;
-
-/**
- * Whether the on-screen keyboard comes with iOS 26's floating bar (↑ ↓ ✓) over the page: iOS (an iPad says it is a Mac,
- * with touch) whose Safari has CSS anchor positioning, new in Safari 26 (its user agent keeps saying iOS 18).
- */
-function floatingKeyboardBar(): boolean {
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1);
-  return ios && typeof CSS !== "undefined" && CSS.supports("anchor-name: --a");
 }
 
 /** With a mouse: the bar floating above the selection (or the caret at a style's edge), in the editor's coordinates. */
