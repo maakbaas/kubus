@@ -291,6 +291,8 @@ function FormatButtons({ view, keyboard, hooks }: { view: EditorView; keyboard: 
  */
 export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks }) {
   const bar = useRef<HTMLDivElement>(null);
+  const latestView = useRef(view);
+  latestView.current = view;
   // Placed on every frame while it exists, from the visual viewport as it is then: iOS reports its keyboard and its
   // panning of the page late, and not always with an event, so a place set from events (or `--keyboard-inset`) was hit
   // or miss. Shown only while an on-screen keyboard is up.
@@ -313,8 +315,20 @@ export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks
       // keyboard and (iOS 26) the floating ↑ ↓ ✓ bar above it, so the bar sits right on top of them as it is.
       const top = vv ? vv.offsetTop + vv.height : window.innerHeight;
       const key = `${up}|${Math.round(top)}|${vv ? Math.round(vv.offsetLeft) : 0}|${vv ? Math.round(vv.width) : window.innerWidth}`;
-      if (key === last) return;
-      last = key;
+      if (key !== last) {
+        last = key;
+        moved(up, top);
+      }
+      // The caret kept in the free part of the screen, when it moved, the text changed or the bar did (not when the page
+      // is scrolled: that is the person's).
+      const v = latestView.current;
+      const caretKey = up ? `${v.state.selection.head}|${v.state.doc.content.size}|${key}` : "";
+      if (caretKey && caretKey !== lastCaret) keepCaretInView(v, el);
+      lastCaret = caretKey;
+    };
+    let lastCaret = "";
+    const moved = (up: boolean, top: number) => {
+      const vv = window.visualViewport;
       el.style.display = up ? "" : "none";
       el.style.left = `${vv ? vv.offsetLeft : 0}px`;
       el.style.width = `${vv ? vv.width : window.innerWidth}px`;
@@ -343,6 +357,40 @@ export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks
     // In the app's theme (light / dark: its Theme is `.app-root`, main.tsx), at the window's level.
     document.querySelector(".app-root") ?? document.body,
   );
+}
+
+/** The nearest box above `el` that scrolls up and down (a pane's body). */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const y = getComputedStyle(p).overflowY;
+    if ((y === "auto" || y === "scroll") && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
+}
+
+/**
+ * The caret where it can be seen while typing on a touch screen: the editor's own scrolling into view knows the page,
+ * not what lies over it (the keyboard, iOS 26's ↑ ↓ ✓ bar, this bar), so it stopped with the caret behind them. When the
+ * caret is outside the free part of the screen (from the top of what can be seen, or of its pane, to the bar's top),
+ * its pane is scrolled to put it in the middle of that part. Its pane, never the window (iOS closes its keyboard then).
+ */
+function keepCaretInView(view: EditorView, bar: HTMLElement) {
+  let caret: { top: number; bottom: number };
+  try {
+    caret = view.coordsAtPos(view.state.selection.head);
+  } catch {
+    return;
+  }
+  const scroller = scrollParent(view.dom);
+  if (!scroller) return;
+  const vv = window.visualViewport;
+  const area = scroller.getBoundingClientRect();
+  const top = Math.max(area.top, vv ? vv.offsetTop : 0);
+  const bottom = Math.min(area.bottom, bar.getBoundingClientRect().top);
+  if (bottom - top < 48) return;
+  const margin = 8;
+  if (caret.top >= top + margin && caret.bottom <= bottom - margin) return;
+  scroller.scrollTop += (caret.top + caret.bottom) / 2 - (top + bottom) / 2;
 }
 
 /** With a mouse: the bar floating above the selection (or the caret at a style's edge), in the editor's coordinates. */

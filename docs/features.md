@@ -68,7 +68,8 @@ What the app does, feature by feature (read the part you work on).
   dragging), and over the caret resting (0.7 s) at the edge of styled text; on a touch screen it is a bar on top of the
   on-screen keyboard while the editor has focus and a keyboard is up (placed every frame on the visual viewport's bottom: iOS
   reports its keyboard late; the visual viewport ends where the keyboard, and on iOS 26 its floating ↑ ↓ ✓ bar, begin; its
-  surface goes on behind them, solid; the pane makes room after its content, `--keyboard-bar`), one row scrolling sideways, its buttons never taking focus from the editor (the keyboard stays up; a tap on it is no tap outside
+  surface goes on behind them, solid; the caret kept in the free part of the screen, above the bar: when it moves, the
+  text changes or the bar does, and it is outside that part, its pane is scrolled to put it in the middle; the pane makes room after its content, `--keyboard-bar`), one row scrolling sideways, its buttons never taking focus from the editor (the keyboard stays up; a tap on it is no tap outside
   the field). Its buttons: on a touch screen Undo, Redo, Insert (+: a `/` at the caret) and in a table the Table menu
   first; Bold, Italic, Strikethrough, Code, Formula (each selected while on for what is typed next, or
   for all of the selection), Link (Ctrl / ⌘+K: the link at the caret or over the selection edited, else one added over the
