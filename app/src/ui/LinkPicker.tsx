@@ -14,8 +14,8 @@ export const LINK_PICKER_OPEN = "open";
 
 /** A local link being typed: `[text](query` (text may be empty), or `#/query` (text empty); or a tag (`kind`). */
 export interface LinkTrigger {
-  /** A tag being typed (`#books`; TagPicker), not a link. */
-  kind?: "tag";
+  /** A tag being typed (`#books`; TagPicker), or the `/` menu's query (SlashMenu), not a link. */
+  kind?: "tag" | "slash";
   /** Where it starts and where the caret is, in the document. */
   from: number;
   to: number;

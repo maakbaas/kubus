@@ -6,6 +6,7 @@ import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { type EditorState, Plugin, Selection, TextSelection, type Transaction } from "@milkdown/kit/prose/state";
 import { liftTarget } from "@milkdown/kit/prose/transform";
 import { $prose } from "@milkdown/kit/utils";
+import { deleteSelectedLines } from "./markdownActions";
 
 /** Blocks whose text is source (code, a formula): made plain, their lines stay lines (hard breaks in a paragraph). */
 const SOURCE_BLOCKS = new Set(["code_block", "math_block"]);
@@ -178,6 +179,11 @@ export const markdownKeys = $prose(
       props: {
         handleDOMEvents: {
           keydown(view, event) {
+            // Whole rows or columns selected: Delete or Backspace deletes them (the whole table: the table).
+            if ((event.key === "Backspace" || event.key === "Delete") && !event.ctrlKey && !event.metaKey && !event.altKey && deleteSelectedLines(view.state, view.dispatch)) {
+              event.preventDefault();
+              return true;
+            }
             if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return false;
             const tr =
               event.key === "Backspace" ? unstyleAtCaret(view.state) : event.key === "Enter" ? tableFromTypedRows(view.state) : exitSourceBlockAtEnd(view.state, event.key);

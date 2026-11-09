@@ -188,7 +188,7 @@ body {
 }
 /* The bar takes the home indicator's room: a page ends a page padding above the bar (the keyboard's room too). */
 .app-content--bottom-bar .ws-tab-content {
-  padding-block-end: calc(var(--cds-spacing-05) + var(--keyboard-inset, 0px));
+  padding-block-end: calc(var(--cds-spacing-05) + var(--keyboard-inset, 0px) + var(--keyboard-bar, 0px));
 }
 /* While a field is typed in (keyboardInset.ts TEXT_FIELD) the bar makes way for the keyboard: on Android the window
    shrinks to above it and the bar would sit on top of it. The page grows downwards only, so the field stays put: the
@@ -201,7 +201,7 @@ body {
   inset-block-end: 0;
 }
 :root:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=color]):not([type=image]):not([type=hidden]), textarea, select, [contenteditable]:not([contenteditable=false])):focus) .app-content--bottom-bar .ws-tab-content {
-  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
+  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + var(--keyboard-bar, 0px));
 }
 :root:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=color]):not([type=image]):not([type=hidden]), textarea, select, [contenteditable]:not([contenteditable=false])):focus) .app-content--bottom-bar .ws-pane__body::after {
   content: "";
@@ -441,7 +441,7 @@ body {
 .ws-tab-content {
   padding: var(--cds-spacing-05);
   /* Content scrolls clear of the home indicator and of an on-screen keyboard (keyboardInset.ts). */
-  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
+  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + var(--keyboard-bar, 0px));
 }
 /* The loading indicator while the database opens, centred in the window (pages show nothing
    while loading: their data takes a fraction of a second, a spinner would only flash). */
@@ -2090,7 +2090,7 @@ img[data-lightbox] {
 }
 /* The link by name an option is (what is matched), after its place: code-01, secondary text (helper grey is too faint on the chosen row). */
 .link-option__link {
-  font-family: var(--cds-code-01-font-family, "IBM Plex Mono", monospace);
+  font-family: var(--cds-code-02-font-family);
   font-size: var(--cds-code-01-font-size, 0.75rem);
   line-height: var(--cds-code-01-line-height, 1.33333);
   letter-spacing: var(--cds-code-01-letter-spacing, 0.32px);
@@ -5151,4 +5151,96 @@ html[data-swiping] body {
 .swipe-hint[data-direction="back"] .swipe-hint__forward,
 .swipe-hint[data-direction="forward"] .swipe-hint__back {
   display: none;
+}
+
+/* The Markdown editor's format bar (MarkdownToolbar): Carbon ghost icon buttons touching (32px pitch), groups a small
+   gap apart. On a touch screen it sits on top of the on-screen keyboard (--keyboard-inset, keyboardInset.ts; 0 where
+   the window shrinks for it), full width, one row scrolling sideways; pane content makes room at its end
+   (--keyboard-bar). With a mouse it floats over the selection, in a Carbon popover. */
+.md-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+}
+.md-bar__group {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+.md-bar__group--end {
+  margin-inline-start: auto;
+}
+.md-bar--keyboard {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: var(--keyboard-inset, 0px);
+  z-index: 7000;
+  /* A bar under the home indicator when there is no on-screen keyboard (a hardware keyboard). */
+  padding-block-end: max(0px, calc(env(safe-area-inset-bottom) - var(--keyboard-inset, 0px)));
+  background: var(--cds-layer-01);
+  border-block-start: 1px solid var(--cds-border-subtle-01);
+}
+.md-bar__row {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-03);
+  inline-size: 100%;
+  min-block-size: 2rem;
+  padding-inline: var(--cds-spacing-03);
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.md-bar__row::-webkit-scrollbar {
+  display: none;
+}
+.md-bar--float {
+  padding: var(--cds-spacing-02);
+}
+.md-bar-float {
+  position: absolute;
+  z-index: 10;
+}
+.md-bar-float .cds--popover .cds--popover-content {
+  max-inline-size: none;
+}
+/* A menu button whose setting is in effect (a heading): its icon blue, as toolbar popover buttons' are. */
+.md-bar__button--on svg {
+  fill: var(--cds-icon-interactive);
+}
+/* The bar's menus and the table handles': words, the current one marked, the deleting ones red; scrolling within the
+   room beside their button (--popover-room). */
+.md-bar-menu {
+  min-inline-size: 11rem;
+  max-block-size: min(22rem, var(--popover-room, 22rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.md-bar-menu .cds--contained-list__header {
+  display: none;
+}
+.md-bar-menu .md-bar-menu__item--current,
+.md-bar-menu .md-bar-menu__item--current .cds--contained-list-item__content {
+  background: var(--cds-layer-selected);
+}
+.md-bar-menu .md-bar-menu__item--danger .cds--contained-list-item__content {
+  color: var(--cds-text-error);
+}
+/* A group's first item (after Row / Column, after the alignments): a stronger line above it. */
+.md-bar-menu .cds--contained-list-item.md-bar-menu__item--group {
+  border-block-start: 1px solid var(--cds-border-strong-01);
+}
+/* The `/` menu's options: the name, and the Markdown that types it at the right. */
+.slash-menu .cds--popover .cds--popover-content {
+  inline-size: min(18rem, 90vw);
+}
+.slash-menu__option {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--cds-spacing-05);
+}
+.slash-menu__syntax {
+  color: var(--cds-text-secondary);
+  font-family: var(--cds-code-02-font-family);
+  white-space: nowrap;
 }

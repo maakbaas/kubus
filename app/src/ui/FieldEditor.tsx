@@ -111,12 +111,12 @@ export function FieldEditor({ field: fieldDef, value, refs, start, compact, idPr
   saveRef.current = save;
 
   // No buttons (they would push the content below down): clicking outside the field saves.
-  // Clicks in its floating parts (date calendar, dropdown menus, link dialog) don't count.
+  // Clicks in its floating parts (date calendar, dropdown menus, link dialog, the Markdown editor's keyboard bar) don't count.
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as HTMLElement;
       if (box.current?.contains(target)) return;
-      if (target.closest(".flatpickr-calendar, .cds--popover, .cds--modal, [role=listbox]")) return;
+      if (target.closest(".flatpickr-calendar, .cds--popover, .cds--modal, [role=listbox], .md-bar")) return;
       saveRef.current();
     };
     document.addEventListener("pointerdown", onPointerDown, true);
@@ -144,10 +144,12 @@ export function FieldEditor({ field: fieldDef, value, refs, start, compact, idPr
       if (e.key === "Escape") {
         // An open menu or calendar takes the Escape. Not the label's collapse caret: it is
         // "expanded" whenever the field is shown, and would keep Escape from ever cancelling.
-        // (The Markdown editor's link picker, open while `data-link-picker` is set, takes it too.)
+        // (The Markdown editor's link picker, open while `data-link-picker` is set, and its bar's menus take it too.)
         const popupOpen =
           !!document.querySelector(".flatpickr-calendar.open") ||
-          !!box.current?.querySelector("[aria-expanded=true]:not(.collapse-caret *), [data-link-picker]");
+          !!box.current?.querySelector("[aria-expanded=true]:not(.collapse-caret *), [data-link-picker]") ||
+          // The Markdown editor's format bar menus (the keyboard bar's are outside the field).
+          !!document.querySelector(".md-bar-menu");
         if (popupOpen) return;
         e.preventDefault();
         cancelRef.current();

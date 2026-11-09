@@ -1,19 +1,11 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useReducer, useRef, useState, type ReactNode, type RefObject } from "react";
 import { FormLabel, IconButton, InlineNotification, Modal, Popover, PopoverContent } from "@carbon/react";
-import { ColumnDelete, ColumnInsert, Edit, Launch, OverflowMenuHorizontal, OverflowMenuVertical, RowDelete, RowInsert, TrashCan, Unlink } from "@carbon/icons-react";
+import { Edit, Launch, OverflowMenuHorizontal, OverflowMenuVertical, Unlink } from "@carbon/icons-react";
 import { Editor, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, rootCtx, serializerCtx } from "@milkdown/kit/core";
 import type { Ctx } from "@milkdown/kit/ctx";
 import { commonmark, linkSchema } from "@milkdown/kit/preset/commonmark";
-import {
-  addColAfterCommand,
-  addColBeforeCommand,
-  addRowAfterCommand,
-  addRowBeforeCommand,
-  gfm,
-  selectColCommand,
-  selectRowCommand,
-} from "@milkdown/kit/preset/gfm";
-import { deleteColumn, deleteRow, deleteTable, goToNextCell, isInTable, selectedRect } from "@milkdown/kit/prose/tables";
+import { addRowAfterCommand, gfm, selectColCommand, selectRowCommand } from "@milkdown/kit/preset/gfm";
+import { CellSelection, cellAround, goToNextCell, isInTable, selectedRect } from "@milkdown/kit/prose/tables";
 import { clipboard } from "@milkdown/kit/plugin/clipboard";
 import { history } from "@milkdown/kit/plugin/history";
 import { upload, uploadConfig, type Uploader } from "@milkdown/kit/plugin/upload";
@@ -44,14 +36,19 @@ import { ShownDialog } from "./ShownDialog";
 import { LinkTargetInput } from "./LinkTargetInput";
 import { markdownMath } from "./markdownMath";
 import { caretInText, markdownKeys } from "./markdownKeys";
+import { edgeAt, LINK_SHORTCUT, markdownEdges } from "./markdownEdges";
+import { insertChosen, markActive, markStretch, type InsertOption } from "./markdownActions";
+import { KeyboardBar, MenuList, SelectionBar, tableItems, type BarHooks } from "./MarkdownToolbar";
+import { SlashMenu } from "./SlashMenu";
 import type { LinkTarget } from "../domain/linkTargets";
 
 // Strictly GitHub Flavored Markdown: the CommonMark preset plus the GFM preset
 // (tables, task lists, strikethrough, autolinks, footnotes) and nothing else.
 // The other plugins add behaviour, never syntax: history, clipboard,
 // upload (paste/drop images), prism (code coloring), and the local plugins below.
-// There is no toolbar: formatting is typed as markdown, images are pasted or dropped,
-// links are edited from their hover popover.
+// Formatting is typed as Markdown, or set from the format bar (MarkdownToolbar: on a touch screen on top of the
+// keyboard, with a mouse over a selection); the `/` menu inserts (SlashMenu); images are pasted, dropped or inserted;
+// links are edited from their hover popover or the bar's Link.
 
 /**
  * Tab in a table's last cell adds a row and moves into its first cell (elsewhere in a table Tab
@@ -120,6 +117,9 @@ const linkInputRule = $inputRule(
     }),
 );
 
+/** A `/` typed at a line's start or after a space, and what follows it: the `/` menu (SlashMenu). */
+const SLASH_BEGIN = /(?:^|\s)\/([\p{L}\p{N}-]*)$/u;
+
 /** What is typed before the caret to begin a local link: `[text](target` (text may be empty), or `#/target` after a space. */
 const LINK_BEGIN = /\[([^[\]]*)\]\(([^()]*)$/;
 const LINK_BEGIN_HASH = /(?:^|\s)(#\/\S*)$/;
@@ -136,6 +136,8 @@ function linkBeingTyped(view: EditorView): Omit<LinkTrigger, "caret"> | null {
   if (link && before[link.index - 1] !== "!") return { from: $from.pos - link[0].length, to: $from.pos, text: link[1], query: link[2] };
   const hash = LINK_BEGIN_HASH.exec(before);
   if (hash) return { from: $from.pos - hash[1].length, to: $from.pos, text: "", query: hash[1] };
+  const slash = SLASH_BEGIN.exec(before);
+  if (slash) return { kind: "slash", from: $from.pos - slash[1].length - 1, to: $from.pos, text: "", query: slash[1] };
   // A tag begun (`#`, then what a tag may hold): TagPicker offers the tags in use.
   const tag = tagBeingTyped(before);
   return tag ? { kind: "tag", from: $from.pos - tag.length, to: $from.pos, text: "", query: tag } : null;
@@ -168,7 +170,7 @@ const linkTrigger = $prose(
             let trigger: LinkTrigger | null = null;
             if (typing) {
               // A tag's options hang from its "#" (they don't move along as it is typed); a link's from the caret.
-              const c = view.coordsAtPos(typing.kind === "tag" ? typing.from : typing.to);
+              const c = view.coordsAtPos(typing.kind === "tag" || typing.kind === "slash" ? typing.from : typing.to);
               trigger = { ...typing, caret: { left: c.left, top: c.top, bottom: c.bottom } };
             }
             const key = JSON.stringify(trigger);
@@ -178,6 +180,21 @@ const linkTrigger = $prose(
           },
         };
       },
+    }),
+);
+
+/** Dispatched on the editor's content after every change of its state (the bars show it). */
+const EDITOR_STATE = "kubus-editor-state";
+
+/** Tells the bars the editor's state changed (the selection, what is typed next, the text). */
+const stateEvents = $prose(
+  () =>
+    new Plugin({
+      view: () => ({
+        update: (view, prev) => {
+          if (view.state !== prev) view.dom.dispatchEvent(new CustomEvent(EDITOR_STATE, { bubbles: true }));
+        },
+      }),
     }),
 );
 
@@ -475,8 +492,12 @@ function EditorChrome(props: Props) {
   const labelId = useId();
   const [loading, getEditor] = useInstance();
   const [error, setError] = useState<string>();
-  /** The link being edited: its URL as typed, and where it is in the document (found when the dialog opens). */
-  const [linkEdit, setLinkEdit] = useState<{ href: string; from: number; to: number } | null>(null);
+  /**
+   * The link being edited: its URL as typed, and where it is in the document (found when the dialog opens); `add`: a new
+   * link over the selection, or (an empty one) written at the caret with its address as its text.
+   */
+  const [linkEdit, setLinkEdit] = useState<{ href: string; from: number; to: number; add?: boolean } | null>(null);
+  const { repo } = useStore();
   /** Hovered link and its box relative to the .md-editor element (the popover's positioning context). */
   const [hovered, setHovered] = useState<{
     a: HTMLElement;
@@ -542,6 +563,41 @@ function EditorChrome(props: Props) {
     });
     setTrigger(null);
   };
+  /** Inserts what was chosen in the `/` menu in place of the `/` and what was typed after it. */
+  const imagePick = useRef<HTMLInputElement>(null);
+  const imageAt = useRef<number | null>(null);
+  const pickInsert = (option: InsertOption, typing: LinkTrigger) => {
+    withView((view) => {
+      if (typing.to > view.state.doc.content.size) return;
+      const tr = insertChosen(view.state, option.kind, typing.from, typing.to);
+      if (tr) view.dispatch(tr);
+      if (option.kind === "image") {
+        imageAt.current = typing.from;
+        imagePick.current?.click();
+      }
+    });
+    setTrigger(null);
+  };
+  /** The image files picked for the `/` menu's Image: stored, and put where the `/` was. */
+  const insertImages = async (files: FileList | null) => {
+    const at = imageAt.current;
+    imageAt.current = null;
+    for (const file of Array.from(files ?? [])) {
+      if (!IMAGE_TYPES.includes(file.type)) continue;
+      try {
+        const fileId = await storeImageFile(repo, file);
+        props.onFileStored?.(fileId);
+        withView((view) => {
+          const node = view.state.schema.nodes.image.createAndFill({ src: fileSrc(fileId), alt: file.name });
+          if (!node) return;
+          const pos = at !== null && at <= view.state.doc.content.size ? at : view.state.selection.from;
+          view.dispatch(view.state.tr.insert(pos, node));
+        });
+      } catch (e) {
+        setError(errorMessage(e));
+      }
+    }
+  };
   // A link typed or pasted by name is stored by id as soon as it names a page (a rename then breaks
   // nothing). Each href is tried once: one that names nothing (yet) stays as written.
   const tried = useRef(new Set<string>());
@@ -605,7 +661,8 @@ function EditorChrome(props: Props) {
    * column handle of its column; in the top-left cell whichever edge is nearer; elsewhere none.
    */
   const trackPointer = (x: number, y: number) => {
-    if (menu) return;
+    // A touch screen has the keyboard bar's Table menu instead (a tap's emulated mouse move showed handles that went).
+    if (menu || pointerType.current !== "mouse") return;
     const margin = 20; // the handles' room outside the table, plus a little
     let found: typeof cell = null;
     for (const table of editorBox.current?.querySelectorAll<HTMLTableElement>(".md-editor__content table") ?? []) {
@@ -631,65 +688,60 @@ function EditorChrome(props: Props) {
     }
     if (found?.table !== cell?.table || found?.row !== cell?.row || found?.col !== cell?.col || found?.kind !== cell?.kind) setCell(found);
   };
-  // A click anywhere but the open menu (or its handle) closes it.
+  // A click anywhere but the open menu (or its handle) closes it; so does Escape (only it: not the editor around it).
   useEffect(() => {
     if (!menu) return;
     const onPointerDown = (e: PointerEvent) => {
       if (!(e.target as HTMLElement).closest(".md-table-handle")) setMenu(null);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      setMenu(null);
+    };
     document.addEventListener("pointerdown", onPointerDown, true);
-    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
   }, [menu]);
-  /** Opens a handle's menu, selecting its row or column in the editor (what the actions apply to). */
-  const openMenu = (kind: "row" | "col") => {
+  /**
+   * Opens a handle's menu, selecting its row or column in the editor (what the actions apply to): with Shift, from the
+   * selected ones on to it; the rows or columns already selected stay so when it is one of them (all of them go).
+   */
+  const openMenu = (kind: "row" | "col", extend: boolean) => {
     if (loading || !cell) return;
     const el = cell.table.rows[cell.row]?.cells[cell.col];
     if (!el) return;
     getEditor().action((ctx: Ctx) => {
       const view = ctx.get(editorViewCtx);
       const pos = view.posAtDOM(el, 0);
-      callCommand(kind === "row" ? selectRowCommand.key : selectColCommand.key, { index: kind === "row" ? cell.row : cell.col, pos })(ctx);
+      const sel = view.state.selection;
+      const index = kind === "row" ? cell.row : cell.col;
+      const lines = sel instanceof CellSelection && (kind === "row" ? sel.isRowSelection() : sel.isColSelection());
+      if (lines && isInTable(view.state)) {
+        const rect = selectedRect(view.state);
+        const [first, end] = kind === "row" ? [rect.top, rect.bottom] : [rect.left, rect.right];
+        if (extend) {
+          const $cell = cellAround(view.state.doc.resolve(pos));
+          if (!$cell) return;
+          const next = kind === "row" ? CellSelection.rowSelection(sel.$anchorCell, $cell) : CellSelection.colSelection(sel.$anchorCell, $cell);
+          view.dispatch(view.state.tr.setSelection(next));
+        } else if (index < first || index >= end) callCommand(kind === "row" ? selectRowCommand.key : selectColCommand.key, { index, pos })(ctx);
+      } else callCommand(kind === "row" ? selectRowCommand.key : selectColCommand.key, { index, pos })(ctx);
       view.focus();
     });
     setMenu(kind);
   };
-  /** Runs a table command on the selected row / column; the table changes, so the handles go. */
-  const tableCommand = (run: (ctx: Ctx) => void) => {
-    if (loading) return;
-    getEditor().action((ctx: Ctx) => {
-      run(ctx);
-      ctx.get(editorViewCtx).focus();
-    });
+  /** The table's menu closed: the table may have changed, so the handles go. */
+  const menuDone = () => {
     setMenu(null);
     setCell(null);
   };
-  /** Add row above: above the header too (the new row is the header, the old one moves down). */
-  const addRowAbove = () =>
-    tableCommand((ctx) => {
-      const view = ctx.get(editorViewCtx);
-      if (selectedRect(view.state).top > 0) return void callCommand(addRowBeforeCommand.key)(ctx);
-      rebuildTable(view, (rows, row) => [row.empty(rows[0], true), row.as(rows[0], false), ...rows.slice(1)], 0);
-    });
-  /** Delete row: the header too (the next row becomes the header); a table keeps one row below it. */
-  const deleteRowHere = () =>
-    tableCommand((ctx) => {
-      const view = ctx.get(editorViewCtx);
-      const index = selectedRect(view.state).top;
-      rebuildTable(
-        view,
-        (rows, row) => {
-          const rest = rows.filter((_, i) => i !== index);
-          if (index === 0) rest[0] = row.as(rest[0], true);
-          return rest.length === 1 ? [...rest, row.empty(rest[0], false)] : rest;
-        },
-        Math.max(0, index - 1),
-      );
-    });
-  const proseCommand = (command: typeof deleteRow) =>
-    tableCommand((ctx) => {
-      const view = ctx.get(editorViewCtx);
-      command(view.state, view.dispatch);
-    });
+  /** The editor's view now (null while it loads). */
+  const viewNow = (): EditorView | null => (loading ? null : (getEditor()?.action((ctx: Ctx) => ctx.get(editorViewCtx)) ?? null));
 
   /** Runs a function against the editor view and returns focus to the editor. */
   const withView = (fn: (view: EditorView) => void) => {
@@ -767,13 +819,53 @@ function EditorChrome(props: Props) {
     return found;
   }
 
-  function applyLink(href: string, from: number, to: number) {
+  /** Sets a link's address over `from`..`to`; an empty range: a new link there, `text` (its address as typed) showing. */
+  function applyLink(href: string, from: number, to: number, text: string) {
     withView((view) => {
       const type = view.state.schema.marks.link;
       if (!type || to > view.state.doc.content.size) return;
+      if (from === to) {
+        const tr = view.state.tr.insert(from, view.state.schema.text(text, [type.create({ href })]));
+        view.dispatch(tr.setStoredMarks([]).setSelection(TextSelection.create(tr.doc, from + text.length)));
+        return;
+      }
       view.dispatch(view.state.tr.removeMark(from, to, type).addMark(from, to, type.create({ href })));
     });
   }
+
+  /** The bar's Link (and Ctrl+K): the link at the caret or over the selection edited, else one added over the selection or at the caret. */
+  const startLink = () =>
+    withView((view) => {
+      const { state } = view;
+      const type = state.schema.marks.link;
+      if (!type) return;
+      const { from, to, empty, $from } = state.selection;
+      const stretch = markActive(state, "link") || (empty && type.isInSet($from.marks())) ? markStretch($from, type) : null;
+      if (stretch) {
+        const href = String(type.isInSet(state.doc.resolve(Math.min(stretch.from + 1, stretch.to)).marks())?.attrs.href ?? "");
+        setLinkEdit({ href, ...stretch });
+        void links.toShown(href).then((shown) => setLinkEdit((d) => (d && d.from === stretch.from && d.href === href ? { ...d, href: shown } : d)));
+        return;
+      }
+      setLinkEdit({ href: "", from, to: empty ? from : to, add: true });
+    });
+  const startLinkRef = useRef(startLink);
+  startLinkRef.current = startLink;
+  useEffect(() => {
+    const box = editorBox.current;
+    if (!box) return;
+    const on = () => startLinkRef.current();
+    box.addEventListener(LINK_SHORTCUT, on);
+    return () => box.removeEventListener(LINK_SHORTCUT, on);
+  }, []);
+  /** The bar's Insert: a `/` at the caret (after a space unless at a line's start or after one) opens the `/` menu. */
+  const startInsert = () =>
+    withView((view) => {
+      const { $from } = view.state.selection;
+      const before = $from.parent.textBetween(0, $from.parentOffset, undefined, "￼");
+      view.dispatch(view.state.tr.insertText(before === "" || /\s$/.test(before) ? "/" : " /"));
+    });
+  const barHooks: BarHooks = { onLink: startLink, onInsert: startInsert };
 
   function removeLink(target: HTMLElement) {
     withView((view) => {
@@ -821,53 +913,24 @@ function EditorChrome(props: Props) {
           const coarse = matchMedia("(pointer: coarse)").matches;
           const thin = coarse ? 24 : 16;
           const long = coarse ? 32 : 24;
-          const cols = cell.table.rows[0]?.cells.length ?? 1;
           const handle = (kind: "row" | "col", left: number, top: number) => (
             <div className={`md-table-handle md-table-handle--${kind}`} style={{ left, top }} onMouseDown={(e) => e.preventDefault()}>
-              <Popover open={menu === kind} align={kind === "row" ? "right-start" : "bottom-start"} autoAlign highContrast>
+              <Popover open={menu === kind} align={kind === "row" ? "right-start" : "bottom-start"} autoAlign>
                 <IconButton
                   autoAlign
                   kind="ghost"
                   size="xs"
                   align={kind === "row" ? "left" : "top"}
-                  label={kind === "row" ? "Row" : "Column"}
+                  label={kind === "row" ? "Row (Shift: several)" : "Column (Shift: several)"}
                   isSelected={menu === kind}
-                  onClick={() => (menu === kind ? setMenu(null) : openMenu(kind))}
+                  onClick={(e) => (menu === kind ? setMenu(null) : openMenu(kind, e.shiftKey))}
                 >
                   {kind === "row" ? <OverflowMenuVertical /> : <OverflowMenuHorizontal />}
                 </IconButton>
-                <PopoverContent>
-                  <div className="md-link-popover__content md-table-menu">
-                    {kind === "row" ? (
-                      <>
-                        <IconButton autoAlign label="Add row above" kind="ghost" size="sm" align="bottom" onClick={addRowAbove}>
-                          <RowInsert />
-                        </IconButton>
-                        <IconButton autoAlign label="Add row below" kind="ghost" size="sm" align="bottom" onClick={() => tableCommand(callCommand(addRowAfterCommand.key))}>
-                          <RowInsert />
-                        </IconButton>
-                        <IconButton autoAlign label="Delete row" kind="ghost" size="sm" align="bottom" onClick={deleteRowHere}>
-                          <RowDelete />
-                        </IconButton>
-                      </>
-                    ) : (
-                      <>
-                        <IconButton autoAlign label="Add column left" kind="ghost" size="sm" align="bottom" onClick={() => tableCommand(callCommand(addColBeforeCommand.key))}>
-                          <ColumnInsert />
-                        </IconButton>
-                        <IconButton autoAlign label="Add column right" kind="ghost" size="sm" align="bottom" onClick={() => tableCommand(callCommand(addColAfterCommand.key))}>
-                          <ColumnInsert />
-                        </IconButton>
-                        <IconButton autoAlign label="Delete column" kind="ghost" size="sm" align="bottom" disabled={cols <= 1} onClick={() => proseCommand(deleteColumn)}>
-                          <ColumnDelete />
-                        </IconButton>
-                      </>
-                    )}
-                    <IconButton autoAlign label="Delete table" kind="ghost" size="sm" align="bottom" onClick={() => proseCommand(deleteTable)}>
-                      <TrashCan />
-                    </IconButton>
-                  </div>
-                </PopoverContent>
+                <PopoverContent>{menu === kind && (() => {
+                  const view = viewNow();
+                  return view && isInTable(view.state) ? <MenuList items={tableItems(view, kind)} onDone={menuDone} /> : null;
+                })()}</PopoverContent>
               </Popover>
             </div>
           );
@@ -882,8 +945,14 @@ function EditorChrome(props: Props) {
           );
         })()}
 
-        <LinkPicker box={editorBox} trigger={trigger?.kind === "tag" ? null : trigger} onPick={pickLink} />
+        <LinkPicker box={editorBox} trigger={trigger?.kind ? null : trigger} onPick={pickLink} />
         <TagPicker box={editorBox} trigger={trigger?.kind === "tag" ? trigger : null} onPick={pickTag} />
+        <SlashMenu box={editorBox} trigger={trigger?.kind === "slash" ? trigger : null} onPick={pickInsert} />
+        {!loading && <FormatBars box={editorBox} getView={viewNow} hooks={barHooks} />}
+        <input ref={imagePick} type="file" accept={IMAGE_TYPES.join(",")} multiple hidden onChange={(e) => {
+          void insertImages(e.target.files);
+          e.target.value = "";
+        }} />
 
         {hovered && (
           // Positioned box exactly over the link; the Carbon Popover anchors to it.
@@ -937,7 +1006,7 @@ function EditorChrome(props: Props) {
           <Modal
             open={open}
             size="xs"
-            modalHeading="Edit link"
+            modalHeading={linkEdit?.add ? "Add link" : "Edit link"}
             primaryButtonText="Apply"
             secondaryButtonText="Cancel"
             primaryButtonDisabled={!linkEdit?.href.trim()}
@@ -946,7 +1015,7 @@ function EditorChrome(props: Props) {
               // A page of the app typed by name is stored by id.
               if (linkEdit) {
                 const { href, from, to } = linkEdit;
-                links.toStored(href.trim()).then((stored) => applyLink(stored, from, to));
+                links.toStored(href.trim()).then((stored) => applyLink(stored, from, to, href.trim()));
               }
               setLinkEdit(null);
             }}
@@ -967,45 +1036,65 @@ function EditorChrome(props: Props) {
   );
 }
 
-/** Builds rows of a GFM table: one converted to a header or normal row, or an empty one shaped like another. */
-interface RowKit {
-  as(row: ProseNode, header: boolean): ProseNode;
-  empty(like: ProseNode, header: boolean): ProseNode;
-}
+/** How long the caret rests at the edge of styled text before the bar shows over it (with a mouse). */
+const EDGE_REST_MS = 700;
 
 /**
- * Replaces the table the caret is in with the same table, its rows rebuilt by `build` (GFM: a
- * header row, then at least one normal row), and puts the caret in row `focusRow`.
+ * The format bar (MarkdownToolbar) while the editor has focus: on a touch screen on top of the keyboard; with a mouse
+ * over a selection (once it is made: not while dragging), or over the caret resting at the edge of styled text, which
+ * shows what is typed there (B selected: bold). Drawn again on every change of the editor's state.
  */
-function rebuildTable(view: EditorView, build: (rows: ProseNode[], row: RowKit) => ProseNode[], focusRow: number) {
-  const { state } = view;
-  const rect = selectedRect(state);
-  const n = state.schema.nodes;
-  const cells = (row: ProseNode) => {
-    const list: ProseNode[] = [];
-    row.forEach((c) => list.push(c));
-    return list;
-  };
-  const kit: RowKit = {
-    as: (row, header) =>
-      (header ? n.table_header_row : n.table_row).create(
-        row.attrs,
-        cells(row).map((c) => (header ? n.table_header : n.table_cell).create(c.attrs, c.content)),
-      ),
-    empty: (like, header) =>
-      (header ? n.table_header_row : n.table_row).create(
-        null,
-        cells(like).map((c) => (header ? n.table_header : n.table_cell).createAndFill(c.attrs)!),
-      ),
-  };
-  const rows: ProseNode[] = [];
-  rect.table.forEach((r) => rows.push(r));
-  const table = rect.table.type.create(rect.table.attrs, build(rows, kit));
-  const pos = rect.tableStart - 1;
-  const tr = state.tr.replaceWith(pos, pos + rect.table.nodeSize, table);
-  let at = pos + 1;
-  for (let i = 0; i < focusRow && i < table.childCount; i++) at += table.child(i).nodeSize;
-  view.dispatch(tr.setSelection(TextSelection.near(tr.doc.resolve(at + 2))));
+function FormatBars({ box, getView, hooks }: { box: RefObject<HTMLDivElement | null>; getView(): EditorView | null; hooks: BarHooks }) {
+  const [, redraw] = useReducer((n: number) => n + 1, 0);
+  const [focused, setFocused] = useState(false);
+  const [touch, setTouch] = useState(() => matchMedia("(hover: none) and (pointer: coarse)").matches);
+  const [dragging, setDragging] = useState(false);
+  const [restingAt, setRestingAt] = useState<number | null>(null);
+  const latest = useRef(getView);
+  latest.current = getView;
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    let rest: number | undefined;
+    const onState = () => {
+      redraw();
+      window.clearTimeout(rest);
+      setRestingAt(null);
+      const view = latest.current();
+      const sel = view?.state.selection;
+      if (!view || !sel?.empty || !edgeAt(view.state, sel.from)) return;
+      const at = sel.from;
+      rest = window.setTimeout(() => setRestingAt(at), EDGE_REST_MS);
+    };
+    const focus = () => setFocused(!!latest.current()?.hasFocus());
+    const onFocusOut = () => window.setTimeout(focus, 0);
+    const onDown = (e: PointerEvent) => {
+      setTouch(e.pointerType !== "mouse");
+      if (e.pointerType === "mouse" && (e.target as HTMLElement).closest(".md-editor__content")) setDragging(true);
+    };
+    const onUp = () => setDragging(false);
+    el.addEventListener(EDITOR_STATE, onState);
+    el.addEventListener("focusin", focus);
+    el.addEventListener("focusout", onFocusOut);
+    el.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("pointerup", onUp, true);
+    return () => {
+      window.clearTimeout(rest);
+      el.removeEventListener(EDITOR_STATE, onState);
+      el.removeEventListener("focusin", focus);
+      el.removeEventListener("focusout", onFocusOut);
+      el.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("pointerup", onUp, true);
+    };
+  }, [box]);
+  const view = getView();
+  if (!view || !focused || !box.current) return null;
+  if (touch) return <KeyboardBar view={view} hooks={hooks} />;
+  const sel = view.state.selection;
+  if (dragging || sel instanceof CellSelection) return null;
+  const selected = !sel.empty && sel instanceof TextSelection;
+  if (!selected && restingAt !== sel.from) return null;
+  return <SelectionBar view={view} box={box.current} at={sel.from} hooks={hooks} />;
 }
 
 function EditorSurface({
@@ -1065,6 +1154,8 @@ function EditorSurface({
         .use(gfm)
         .use(markdownMath)
         .use(markdownKeys)
+        .use(markdownEdges)
+        .use(stateEvents)
         .use(caretInText)
         .use(taskToggle)
         .use(tabAddsRow)
