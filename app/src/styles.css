@@ -5182,8 +5182,10 @@ html[data-swiping] body {
   inset-inline: 0;
   inset-block-end: var(--keyboard-inset, 0px);
   z-index: 7000;
-  /* A bar under the home indicator when there is no on-screen keyboard (a hardware keyboard). */
-  padding-block-end: max(0px, calc(env(safe-area-inset-bottom) - var(--keyboard-inset, 0px)));
+  /* Its surface runs down to the keyboard: iOS 26 floats its own bar (↑ ↓ ✓) over the bottom of the page while its
+     keyboard is up, which then lies on this bar's background, its buttons above it (--keyboard-accessory,
+     MarkdownToolbar), with no page showing between. Under the home indicator when there is no on-screen keyboard. */
+  padding-block-end: max(var(--keyboard-accessory, 0px), calc(env(safe-area-inset-bottom) - var(--keyboard-inset, 0px)));
   background: var(--cds-layer-01);
   border-block-start: 1px solid var(--cds-border-subtle-01);
 }

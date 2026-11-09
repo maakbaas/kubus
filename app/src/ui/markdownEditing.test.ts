@@ -153,7 +153,7 @@ describe("copy and paste", () => {
   });
 });
 
-describe("Backspace at the front of styled text makes it plain", () => {
+describe("Backspace at a block's start makes it text; inside a line it deletes as usual", () => {
   /** Backspace with the caret just before the first occurrence of `at` in the text. */
   async function backspaceBefore(markdown: string, at: string) {
     const { view, markdownOf } = await makeEditor(markdown);
@@ -171,15 +171,6 @@ describe("Backspace at the front of styled text makes it plain", () => {
   }
 
   test.each([
-    ["**bold** text", "bold", "bold text\n"],
-    ["a **bold** text", "bold", "a bold text\n"],
-    ["a *italic* text", "italic", "a italic text\n"],
-    ["a ~~struck~~ text", "struck", "a struck text\n"],
-    ["a `code` text", "code", "a code text\n"],
-    ["a [link](https://x.y) text", "link", "a link text\n"],
-    ["a $x^2$ formula", "x^2", "a x^2 formula\n"],
-    ["$x^2$", "x^2", "x^2\n"],
-    ["a ***both*** text", "both", "a both text\n"],
     ["## Heading", "Heading", "Heading\n"],
     ["> quoted", "quoted", "quoted\n"],
     ["```\none\ntwo\n```", "one", "one\\\ntwo\n"],
@@ -189,7 +180,9 @@ describe("Backspace at the front of styled text makes it plain", () => {
     expect(await backspaceBefore(markdown, at)).toEqual({ handled: true, markdown: expected });
   });
 
-  test("inside styled text, or in plain text, Backspace deletes as usual", async () => {
+  test("at the front of styled text, inside it or in plain text, Backspace deletes as usual (the character before)", async () => {
+    expect((await backspaceBefore("normal**bold**", "bold")).handled).toBe(false);
+    expect((await backspaceBefore("a [link](https://x.y) text", "link")).handled).toBe(false);
     expect((await backspaceBefore("a **bold** text", "old")).handled).toBe(false);
     expect((await backspaceBefore("a **bold** text", "text")).handled).toBe(false);
     expect((await backspaceBefore("plain", "lain")).handled).toBe(false);

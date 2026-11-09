@@ -1,4 +1,4 @@
-// Keys of the Markdown editor that add behaviour, never syntax: Backspace at the front of styled text makes it plain,
+// Keys of the Markdown editor that add behaviour, never syntax: Backspace at the start of a heading, code or quote makes it text,
 // the arrow keys leave a code block or formula block that ends the text, and Enter after a GFM table's header and
 // delimiter rows typed as text makes them that table (`tableFromTypedRows`). Also: the caret is put in text when a
 // change leaves it between blocks (`caretInText`: Milkdown's `|2x2|` rule put it in a table cell before its paragraph).
@@ -20,33 +20,16 @@ function plainParagraph(state: EditorState, block: ProseNode) {
 }
 
 /**
- * What Backspace at the caret does to make styled text plain, or null when it is an ordinary Backspace. At the front of
- * something styled its Markdown goes and its text stays, in one press:
- * - inline: bold, italic, strikethrough, code, a formula or a link that starts at the caret loses that style (all of it,
- *   to where it ends; a second press then deletes as usual);
- * - a block at its start: a heading of any level or a code or formula block becomes a paragraph (a block's lines kept as
- *   line breaks, a formula as its source), a paragraph in a quote comes out of it.
+ * What Backspace at a block's start does to make it plain, or null when it is an ordinary Backspace: a heading of any
+ * level or a code or formula block becomes a paragraph (a block's lines kept as line breaks, a formula as its source), a
+ * paragraph in a quote comes out of it. Inside a line Backspace always deletes the character before the caret, styled or
+ * not (a style is taken off with the format bar or its shortcut; at a style's edge the caret is inside or outside it,
+ * markdownEdges.ts).
  */
 export function unstyleAtCaret(state: EditorState): Transaction | null {
   const { $from, empty } = state.selection;
   if (!empty || !$from.parent.isTextblock) return null;
   const block = $from.parent;
-
-  if (!block.type.spec.code) {
-    const after = $from.nodeAfter;
-    const before = $from.nodeBefore;
-    const starting = (after?.marks ?? []).filter((m) => !before || !m.isInSet(before.marks));
-    if (after?.isText && starting.length > 0) {
-      const tr = state.tr;
-      for (const mark of starting) {
-        // The run of text with this mark from the caret on.
-        let end = $from.pos;
-        for (let i = $from.index(); i < block.childCount && mark.isInSet(block.child(i).marks); i++) end += block.child(i).nodeSize;
-        tr.removeMark($from.pos, end, mark);
-      }
-      return tr.setStoredMarks(before?.marks ?? []);
-    }
-  }
 
   if ($from.parentOffset !== 0) return null;
   if (block.type.name === "heading") return state.tr.setBlockType($from.pos, $from.pos, state.schema.nodes.paragraph);

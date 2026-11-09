@@ -39,6 +39,7 @@ import {
   alignColumn,
   anyStyle,
   blockKind,
+  canSplitTable,
   clearFormatting,
   columnAlignment,
   deleteColumns,
@@ -49,6 +50,7 @@ import {
   removeTable,
   setHeading,
   setList,
+  splitTable,
   toggleQuote,
   toggleStyle,
   type StyleMark,
@@ -179,7 +181,7 @@ export function tableItems(view: EditorView, part: "row" | "col" | "all"): (Menu
   const cols = rect.right - rect.left;
   const align = columnAlignment(state);
   const item = (label: string, command: Command, extra: Partial<MenuEntry> = {}): MenuEntry => ({ label, run: () => run(view, command), ...extra });
-  const rowItems = [item("Row above", addRowAbove), item("Row below", addRowBelow)];
+  const rowItems = [item("Row above", addRowAbove), item("Row below", addRowBelow), item("Split table below", splitTable, { disabled: !canSplitTable(state) })];
   const colItems = [item("Column left", addColumnLeft), item("Column right", addColumnRight)];
   const aligns = [
     item("Align left", alignColumn("left"), { current: align === "left" }),
@@ -200,13 +202,17 @@ function textItems(view: EditorView): MenuEntry[] {
   return [0, 1, 2, 3, 4, 5, 6].map((level) => ({
     label: level ? `Heading ${level}` : "Text",
     current: level ? kind.text === "heading" && kind.level === level : kind.text === "paragraph",
+    // What can't be made here (a table cell holds text only) is greyed: every item that isn't works.
+    disabled: !setHeading(level)(view.state) && !(level ? kind.text === "heading" && kind.level === level : kind.text === "paragraph"),
     run: () => run(view, setHeading(level)),
   }));
 }
 
 /**
  * The buttons: on a touch screen (`keyboard`) Undo and Redo, Insert and a table's menu first, Hide keyboard last; the
- * inline styles, Link and Clear formatting; then the block's kind (text style, quote, lists, indent).
+ * inline styles, Link and Clear formatting; then the block's kind (text style, quote, lists, indent). A button shown and
+ * not greyed always does what it says where the caret is (its command asked first): in code there are no styles and no
+ * `/` menu, so those aren't shown; a heading made a list is made text first, and so on (markdownActions.ts).
  */
 function FormatButtons({ view, keyboard, hooks }: { view: EditorView; keyboard: boolean; hooks: BarHooks }) {
   const { state } = view;
@@ -225,38 +231,42 @@ function FormatButtons({ view, keyboard, hooks }: { view: EditorView; keyboard: 
           <BarButton label="Redo" align={align} disabled={redoDepth(state) === 0} onPress={() => run(view, redo)}>
             <Redo />
           </BarButton>
-          <BarButton label="Insert" align={align} onPress={hooks.onInsert}>
-            <Add />
-          </BarButton>
+          {!inCode && (
+            <BarButton label="Insert" align={align} onPress={hooks.onInsert}>
+              <Add />
+            </BarButton>
+          )}
           {kind.table && <BarMenu label="Table" align={align} icon={<Table />} items={tableItems(view, "all")} />}
         </span>
       )}
-      <span className="md-bar__group">
-        {STYLE_BUTTONS.map((b) => (
-          <BarButton key={b.mark} label={b.label} keys={b.keys} align={align} on={markActive(state, b.mark)} disabled={inCode} onPress={() => run(view, toggleStyle(b.mark))}>
-            <b.icon />
+      {!inCode && (
+        <span className="md-bar__group">
+          {STYLE_BUTTONS.map((b) => (
+            <BarButton key={b.mark} label={b.label} keys={b.keys} align={align} on={markActive(state, b.mark)} onPress={() => run(view, toggleStyle(b.mark))}>
+              <b.icon />
+            </BarButton>
+          ))}
+          <BarButton label="Link" keys="Ctrl+K" align={align} on={link} onPress={hooks.onLink}>
+            <Link />
           </BarButton>
-        ))}
-        <BarButton label="Link" keys="Ctrl+K" align={align} on={link} disabled={inCode} onPress={hooks.onLink}>
-          <Link />
-        </BarButton>
-        <BarButton label="Clear formatting" align={align} disabled={!anyStyle(state)} onPress={() => run(view, clearFormatting)}>
-          <TextClearFormat />
-        </BarButton>
-      </span>
+          <BarButton label="Clear formatting" align={align} disabled={!anyStyle(state)} onPress={() => run(view, clearFormatting)}>
+            <TextClearFormat />
+          </BarButton>
+        </span>
+      )}
       {!kind.table && (
         <span className="md-bar__group">
           <BarMenu label="Text style" align={align} icon={<TextFont />} items={textItems(view)} on={kind.text === "heading"} />
-          <BarButton label="Quote" keys="Ctrl+Shift+B" align={align} on={kind.quote} onPress={() => run(view, toggleQuote)}>
+          <BarButton label="Quote" keys="Ctrl+Shift+B" align={align} on={kind.quote} disabled={!toggleQuote(state)} onPress={() => run(view, toggleQuote)}>
             <Quotes />
           </BarButton>
-          <BarButton label="Bulleted list" keys="Ctrl+Alt+8" align={align} on={kind.list === "bullet"} onPress={() => run(view, setList("bullet"))}>
+          <BarButton label="Bulleted list" keys="Ctrl+Alt+8" align={align} on={kind.list === "bullet"} disabled={!setList("bullet")(state)} onPress={() => run(view, setList("bullet"))}>
             <ListBulleted />
           </BarButton>
-          <BarButton label="Numbered list" keys="Ctrl+Alt+7" align={align} on={kind.list === "ordered"} onPress={() => run(view, setList("ordered"))}>
+          <BarButton label="Numbered list" keys="Ctrl+Alt+7" align={align} on={kind.list === "ordered"} disabled={!setList("ordered")(state)} onPress={() => run(view, setList("ordered"))}>
             <ListNumbered />
           </BarButton>
-          <BarButton label="Checklist" align={align} on={kind.list === "task"} onPress={() => run(view, setList("task"))}>
+          <BarButton label="Checklist" align={align} on={kind.list === "task"} disabled={!setList("task")(state)} onPress={() => run(view, setList("task"))}>
             <ListChecked />
           </BarButton>
           {inList && (
@@ -290,10 +300,22 @@ function FormatButtons({ view, keyboard, hooks }: { view: EditorView; keyboard: 
 export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks }) {
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty("--keyboard-bar", "2.5rem");
+    // iOS 26 floats its own bar (↑ ↓ ✓) over the bottom of what can be seen while its keyboard is up: this one goes
+    // above it (`--keyboard-accessory`), or it was hidden under it and couldn't be tapped.
+    const update = () => {
+      const vv = window.visualViewport;
+      const up = !!vv && window.innerHeight - vv.height - vv.offsetTop > 80;
+      const accessory = up && floatingKeyboardBar() ? "3.5rem" : "0px";
+      root.style.setProperty("--keyboard-accessory", accessory);
+      root.style.setProperty("--keyboard-bar", `calc(2.5rem + ${accessory})`);
+    };
+    update();
+    const stop = onViewportChange(update);
     root.dataset.keyboardBar = "";
     return () => {
+      stop();
       root.style.removeProperty("--keyboard-bar");
+      root.style.removeProperty("--keyboard-accessory");
       delete root.dataset.keyboardBar;
     };
   }, []);
@@ -306,6 +328,15 @@ export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks
     // In the app's theme (light / dark: its Theme is `.app-root`, main.tsx), at the window's level.
     document.querySelector(".app-root") ?? document.body,
   );
+}
+
+/**
+ * Whether the on-screen keyboard comes with iOS 26's floating bar (↑ ↓ ✓) over the page: iOS (an iPad says it is a Mac,
+ * with touch) whose Safari has CSS anchor positioning, new in Safari 26 (its user agent keeps saying iOS 18).
+ */
+function floatingKeyboardBar(): boolean {
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1);
+  return ios && typeof CSS !== "undefined" && CSS.supports("anchor-name: --a");
 }
 
 /** With a mouse: the bar floating above the selection (or the caret at a style's edge), in the editor's coordinates. */

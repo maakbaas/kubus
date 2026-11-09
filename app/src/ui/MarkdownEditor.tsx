@@ -928,7 +928,7 @@ function EditorChrome(props: Props) {
                   kind="ghost"
                   size="xs"
                   align={kind === "row" ? "left" : "top"}
-                  label={kind === "row" ? "Row (Shift: several)" : "Column (Shift: several)"}
+                  label={kind === "row" ? "Row" : "Column"}
                   isSelected={menu === kind}
                   onClick={(e) => (menu === kind ? setMenu(null) : openMenu(kind, e.shiftKey))}
                 >

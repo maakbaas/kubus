@@ -5,7 +5,7 @@
 // - A block is turned into another kind (text, heading, quote, list, checklist) in place, its text kept.
 // - Tables: rows and columns added beside the caret's, deleted (all of a selection's), a column aligned.
 // - The `/` menu inserts: on an empty line in its place, else after the line (blocks) or at the caret (inline things).
-import type { Mark, MarkType, Node as ProseNode, NodeType, ResolvedPos, Schema } from "@milkdown/kit/prose/model";
+import { NodeRange, type Mark, type MarkType, type Node as ProseNode, type NodeType, type ResolvedPos, type Schema } from "@milkdown/kit/prose/model";
 import { type Command, type EditorState, Selection, TextSelection, type Transaction } from "@milkdown/kit/prose/state";
 import { findWrapping, liftTarget } from "@milkdown/kit/prose/transform";
 import { liftListItem, sinkListItem, wrapInList } from "@milkdown/kit/prose/schema-list";
@@ -57,7 +57,7 @@ export function markStretch($pos: ResolvedPos, type: MarkType): { from: number; 
 
 /**
  * Turns a style on or off. A selection: all of it gets the style, or loses it when it all has it. A caret: on, it is for
- * what is typed next; off, the styled stretch the caret is in loses it (all of it, as Backspace at its front does) and
+ * what is typed next; off, the styled stretch the caret is in loses it (all of it) and
  * what is typed next is plain of it.
  */
 export function toggleStyle(name: StyleMark): Command {
@@ -141,8 +141,81 @@ export function blockKind(state: EditorState): BlockKind {
   };
 }
 
-/** Turns the selected text blocks into paragraphs (level 0) or headings of a level; a code or formula block's lines kept. */
+/**
+ * `tr` (made on `state`) with `next` run on what it makes, as one transaction (one undo); null when `next` can't run
+ * there. The bars' buttons use it to do what a press means where a block can't be what is asked as it is: a heading made
+ * a list is first made text (a list item starts with a paragraph), a list item made a heading first leaves its list.
+ */
+function andThen(state: EditorState, tr: Transaction, next: Command): Transaction | null {
+  const after = state.apply(tr);
+  let made: Transaction | null = null;
+  if (!next(after, (t) => (made = t))) return null;
+  const done = made as Transaction | null;
+  if (!done) return tr;
+  for (const step of done.steps) tr.step(step);
+  tr.setSelection(Selection.fromJSON(tr.doc, done.selection.toJSON()));
+  if (done.storedMarks) tr.setStoredMarks(done.storedMarks);
+  return tr;
+}
+
+/** Runs `tr` (or nothing: null) and `next` as one: true when `next` can run after it. */
+function runAfter(state: EditorState, tr: Transaction | null, next: Command, dispatch?: (tr: Transaction) => void): boolean {
+  if (!tr) return false;
+  const all = andThen(state, tr, next);
+  if (!all) return false;
+  dispatch?.(all.scrollIntoView());
+  return true;
+}
+
+/** The selected headings, code and formula blocks made paragraphs (a block's lines as line breaks); null: none to make. */
+function toParagraphs(state: EditorState): Transaction | null {
+  const { from, to } = state.selection;
+  const { paragraph, hardbreak } = state.schema.nodes;
+  const tr = state.tr;
+  state.doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isTextblock) return true;
+    if (node.type === paragraph) return false;
+    if (node.type.spec.code) {
+      const lines = node.textContent.split("\n");
+      const content = lines.flatMap((line, i) => [...(i > 0 ? [hardbreak.create()] : []), ...(line ? [state.schema.text(line)] : [])]);
+      tr.replaceWith(tr.mapping.map(pos), tr.mapping.map(pos + node.nodeSize), paragraph.create(null, content));
+    } else tr.setNodeMarkup(tr.mapping.map(pos), paragraph);
+    return false;
+  });
+  return tr.docChanged ? tr : null;
+}
+
+/** The selection taken out of every list it is in (back to text at the list's level); null when it is in none. */
+function outOfLists(state: EditorState): Transaction | null {
+  const item = state.schema.nodes.list_item;
+  let s = state;
+  let tr: Transaction | null = null;
+  for (let i = 0; i < 20 && blockKind(s).list; i++) {
+    let lifted: Transaction | null = null;
+    if (!liftListItem(item)(s, (t) => (lifted = t))) break;
+    const step = lifted as Transaction | null;
+    if (!step) break;
+    tr ??= state.tr;
+    for (const st of step.steps) tr.step(st);
+    tr.setSelection(Selection.fromJSON(tr.doc, step.selection.toJSON()));
+    s = state.apply(tr);
+  }
+  return tr;
+}
+
+/**
+ * Turns the selected text blocks into paragraphs (level 0) or headings of a level; a code or formula block's lines kept.
+ * In a list a heading can't start an item: the text leaves the list first.
+ */
 export function setHeading(level: number): Command {
+  return (state, dispatch) => {
+    if (level && !headingHere(level)(state) && blockKind(state).list) return runAfter(state, outOfLists(state), headingHere(level), dispatch);
+    return headingHere(level)(state, dispatch);
+  };
+}
+
+/** setHeading where the blocks are. */
+function headingHere(level: number): Command {
   return (state, dispatch) => {
     const { paragraph, heading } = state.schema.nodes;
     const type = level ? heading : paragraph;
@@ -187,11 +260,14 @@ export const toggleQuote: Command = (state, dispatch) => {
     dispatch?.(state.tr.lift(inner, target).scrollIntoView());
     return true;
   }
-  const range = $from.blockRange($to);
-  const wrapping = range && findWrapping(range, quote);
-  if (!range || !wrapping) return false;
-  dispatch?.(state.tr.wrap(range, wrapping).scrollIntoView());
-  return true;
+  // The blocks themselves, else (a list item's first paragraph can't be a quote) what holds them: its whole list.
+  for (let range = $from.blockRange($to); range; range = range.depth > 0 ? new NodeRange($from, $to, range.depth - 1) : null) {
+    const wrapping = findWrapping(range, quote);
+    if (!wrapping) continue;
+    dispatch?.(state.tr.wrap(range, wrapping).scrollIntoView());
+    return true;
+  }
+  return false;
 };
 
 /** The list item type's attrs for a list kind: a checklist's items have `checked`, the others none. */
@@ -220,17 +296,19 @@ export function setList(kind: "bullet" | "ordered" | "task"): Command {
       }
       return true;
     }
-    return wrapInList(listType)(state, (tr) => {
-      if (!dispatch) return;
-      // The new list's items: of its kind (a checklist's unticked).
-      const $pos = tr.selection.$from;
-      const made = listAt($pos);
-      if (made) {
-        const listPos = $pos.before(made.listDepth);
-        made.list.forEach((item, offset) => tr.setNodeMarkup(listPos + 1 + offset, undefined, itemAttrs(item, kind)));
-      }
-      dispatch(tr.scrollIntoView());
-    });
+    const wrap: Command = (s, d) =>
+      wrapInList(listType)(s, d && ((tr) => {
+        // The new list's items: of its kind (a checklist's unticked).
+        const $pos = tr.selection.$from;
+        const made = listAt($pos);
+        if (made) {
+          const listPos = $pos.before(made.listDepth);
+          made.list.forEach((item, offset) => tr.setNodeMarkup(listPos + 1 + offset, undefined, itemAttrs(item, kind)));
+        }
+        d(tr.scrollIntoView());
+      }));
+    // A heading, code or formula block can't start a list item: made text first.
+    return wrap(state) ? wrap(state, dispatch) : runAfter(state, toParagraphs(state), wrap, dispatch);
   };
 }
 
@@ -301,6 +379,30 @@ export const addRowBelow: Command = (state, dispatch) => {
 
 export const addColumnLeft: Command = addColumnBefore;
 export const addColumnRight: Command = addColumnAfter;
+
+/** Whether the table can be split below the selection's rows: there are rows below them. */
+export const canSplitTable = (state: EditorState) => isInTable(state) && selectedRect(state).bottom < selectedRect(state).map.height;
+
+/**
+ * Splits the table below the selection's rows into two: the rows below make a table of their own, its first row its
+ * header (as GFM needs one), the caret in it. Each keeps a row below its header (an empty one when none is left).
+ */
+export const splitTable: Command = (state, dispatch) => {
+  if (!canSplitTable(state)) return false;
+  if (dispatch) {
+    const rect = selectedRect(state);
+    const rows = rowsOf(rect.table);
+    const withBody = (part: ProseNode[]) => (part.length === 1 ? [...part, emptyRow(state.schema, part[0], false)] : part);
+    const first = rect.table.type.create(rect.table.attrs, withBody(rows.slice(0, rect.bottom)));
+    const below = rows.slice(rect.bottom);
+    const second = rect.table.type.create(rect.table.attrs, withBody([rowAs(state.schema, below[0], true), ...below.slice(1)]));
+    const pos = rect.tableStart - 1;
+    const tr = state.tr.replaceWith(pos, pos + rect.table.nodeSize, [first, second]);
+    // Into the new table's first cell: table, header row, cell, paragraph.
+    dispatch(tr.setSelection(TextSelection.near(tr.doc.resolve(pos + first.nodeSize + 4))).scrollIntoView());
+  }
+  return true;
+};
 
 /**
  * Deletes the selection's rows (all of them: several selected, several go). The header too: the next row becomes the
@@ -402,7 +504,7 @@ export const INSERT_OPTIONS: InsertOption[] = [
   { kind: "bullet", label: "Bulleted list", syntax: "- ", words: "bulleted list bullets unordered", block: true, group: "Lists" },
   { kind: "ordered", label: "Numbered list", syntax: "1. ", words: "numbered list ordered numbers", block: true, group: "Lists" },
   { kind: "task", label: "Checklist", syntax: "- [ ] ", words: "checklist task todo checkbox", block: true, group: "Lists" },
-  { kind: "table", label: "Table", syntax: "|3x3|", words: "table grid columns rows", block: true, group: "Insert" },
+  { kind: "table", label: "Table", syntax: "|1x2|", words: "table grid columns rows", block: true, group: "Insert" },
   { kind: "code", label: "Code block", syntax: "```", words: "code block snippet program", block: true, group: "Insert" },
   { kind: "math", label: "Formula block", syntax: "$$", words: "formula block math equation latex tex", block: true, group: "Insert" },
   { kind: "divider", label: "Divider", syntax: "---", words: "divider line rule separator horizontal", block: true, group: "Insert" },
@@ -430,12 +532,12 @@ export function insertOptions(query: string): InsertOption[] {
   return found.map((o, i) => ({ o, i })).sort((a, b) => named(a.o) - named(b.o) || a.i - b.i).map(({ o }) => o);
 }
 
-/** A new GFM table: a header row and two rows of three empty cells. */
+/** A new GFM table: one column, a header row and a row below it (columns and rows are added from its menus). */
 function newTable(schema: Schema): ProseNode {
   const n = schema.nodes;
   // No alignment written (`---`), as a table typed: the schema's default is left (`:--`).
-  const cells = (type: NodeType) => [0, 1, 2].map(() => type.createAndFill({ alignment: null })!);
-  return n.table.create(null, [n.table_header_row.create(null, cells(n.table_header)), n.table_row.create(null, cells(n.table_cell)), n.table_row.create(null, cells(n.table_cell))]);
+  const cell = (type: NodeType) => [type.createAndFill({ alignment: null })!];
+  return n.table.create(null, [n.table_header_row.create(null, cell(n.table_header)), n.table_row.create(null, cell(n.table_cell))]);
 }
 
 /** The next footnote label: one more than the highest number used. */
@@ -504,16 +606,20 @@ export function insertChosen(state: EditorState, kind: InsertKind, from: number,
   const empty = block.content.size === 0;
   const made = blockOf(schema, kind);
   if (!made) return null;
-  let at: number;
-  if (empty) {
-    const $block = tr.doc.resolve(blockPos);
-    if (!$block.parent.canReplaceWith($block.index(), $block.index() + 1, made.type)) return null;
+  let at = -1;
+  const $block = tr.doc.resolve(blockPos);
+  if (empty && $block.parent.canReplaceWith($block.index(), $block.index() + 1, made.type)) {
     tr.replaceWith(blockPos, blockPos + block.nodeSize, made);
     at = blockPos;
   } else {
-    at = blockPos + block.nodeSize;
-    const $after = tr.doc.resolve(at);
-    if (!$after.parent.canReplaceWith($after.index(), $after.index(), made.type)) return null;
+    // After the line, else after what holds it where the block can't go (a table cell: after the table; a list item's
+    // first line: a heading after the list).
+    for (let d = $pos.depth; d >= 1 && at < 0; d--) {
+      const after = $pos.after(d);
+      const $after = tr.doc.resolve(after);
+      if ($after.parent.canReplaceWith($after.index(), $after.index(), made.type)) at = after;
+    }
+    if (at < 0) return null;
     tr.insert(at, made);
   }
   // A divider has nowhere to type: a paragraph after it unless one follows.

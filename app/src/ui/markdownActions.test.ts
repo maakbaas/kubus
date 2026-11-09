@@ -21,6 +21,7 @@ import {
   deleteColumns,
   deleteRows,
   deleteSelectedLines,
+  splitTable,
   insertChosen,
   insertOptions,
   markActive,
@@ -189,6 +190,71 @@ describe("blocks", () => {
   });
 });
 
+describe("every button does what it says, wherever the caret is", () => {
+  test("a heading made a list: a list of text (a list item can't start with a heading)", async () => {
+    for (const kind of ["bullet", "ordered", "task"] as const) {
+      const e = await makeEditor("## Title");
+      e.caret(e.at("Title", 2));
+      expect(e.run(setList(kind))).toBe(true);
+      expect(e.markdown()).toBe({ bullet: "* Title\n", ordered: "1. Title\n", task: "* [ ] Title\n" }[kind]);
+    }
+  });
+
+  test("code made a list: its lines as line breaks in the item", async () => {
+    const e = await makeEditor("```\na\nb\n```");
+    e.caret(e.at("a"));
+    e.run(setList("bullet"));
+    expect(e.markdown()).toBe("* a\\\n  b\n");
+  });
+
+  test("a list item made a heading: it leaves its list", async () => {
+    const e = await makeEditor("* one\n* two\n  * deep");
+    e.caret(e.at("deep", 1));
+    expect(e.run(setHeading(2))).toBe(true);
+    expect(e.markdown()).toBe("* one\n* two\n\n## deep\n");
+  });
+
+  test("a list item quoted: the list in a quote", async () => {
+    const e = await makeEditor("* one\n* two");
+    e.caret(e.at("two", 1));
+    expect(e.run(toggleQuote)).toBe(true);
+    expect(e.markdown()).toBe("> * one\n> * two\n");
+  });
+
+  test("a block from the / menu in a table cell: after the table", async () => {
+    const e = await makeEditor("| a |\n| - |\n| b |");
+    e.caret(e.at("b", 1));
+    const from = e.view.state.selection.from;
+    e.type(" /x");
+    e.view.dispatch(insertChosen(e.view.state, "h2", from + 1, from + 3)!);
+    e.type("After");
+    expect(e.markdown()).toBe("| a |\n| - |\n| b |\n\n## After\n");
+  });
+
+  test("every block action that says it can run changes the text, at every kind of place", async () => {
+    const DOC = "## Heading\n\nText\n\n> Quoted\n\n* one\n  * deep\n\n1. first\n\n* [ ] task\n\n```\ncode\n```\n\n| a |\n| - |\n| b |";
+    const actions: [string, Command][] = [
+      ...[0, 1, 2, 3].map((l): [string, Command] => [`heading ${l}`, setHeading(l)]),
+      ["quote", toggleQuote],
+      ["bullet", setList("bullet")],
+      ["ordered", setList("ordered")],
+      ["task", setList("task")],
+      ["bold", toggleStyle("strong")],
+    ];
+    for (const place of ["Heading", "Text", "Quoted", "one", "deep", "first", "task", "code", "b"]) {
+      for (const [name, action] of actions) {
+        const e = await makeEditor(DOC);
+        e.caret(e.at(place, 1));
+        const before = e.view.state;
+        if (!action(before)) continue;
+        e.run(action);
+        const changed = !e.view.state.doc.eq(before.doc) || e.view.state.storedMarks !== before.storedMarks;
+        expect(changed, `${name} at ${place}`).toBe(true);
+      }
+    }
+  });
+});
+
 describe("tables", () => {
   const TABLE = "| a | b | c |\n| - | - | - |\n| 1 | 2 | 3 |\n| 4 | 5 | 6 |\n";
   /** A cell selection from the cell holding `from` to the one holding `to`. */
@@ -228,6 +294,18 @@ describe("tables", () => {
     const f = await makeEditor(TABLE);
     cells(f, "1", "2");
     expect(f.run(deleteSelectedLines)).toBe(false);
+  });
+
+  test("split below the selected rows: the rows below a table of their own, its first row its header", async () => {
+    const e = await makeEditor(TABLE);
+    e.caret(e.at("1"));
+    e.run(splitTable);
+    expect(e.markdown()).toBe("| a | b | c |\n| - | - | - |\n| 1 | 2 | 3 |\n\n| 4 | 5 | 6 |\n| - | - | - |\n|   |   |   |\n");
+    expect(e.view.state.selection.$from.parent.textContent).toBe("4");
+    // Below the last row there is nothing to split off.
+    const f = await makeEditor(TABLE);
+    f.caret(f.at("6"));
+    expect(f.run(splitTable)).toBe(false);
   });
 
   test("rows added above the header and below, a column aligned", async () => {
@@ -273,7 +351,7 @@ describe("the / menu", () => {
     expect(f.markdown()).toBe("text\n\n> quoted\n");
     const g = await pick("text", "table");
     g.type("x");
-    expect(g.markdown()).toBe("text\n\n| x |   |   |\n| - | - | - |\n|   |   |   |\n|   |   |   |\n");
+    expect(g.markdown()).toBe("text\n\n| x |\n| - |\n|   |\n");
   });
 
   test("inline things at the caret: a footnote with its note to write, a link to a page begun", async () => {
