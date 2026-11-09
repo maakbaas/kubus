@@ -661,8 +661,7 @@ function EditorChrome(props: Props) {
    * column handle of its column; in the top-left cell whichever edge is nearer; elsewhere none.
    */
   const trackPointer = (x: number, y: number) => {
-    // A touch screen has the keyboard bar's Table menu instead (a tap's emulated mouse move showed handles that went).
-    if (menu || pointerType.current !== "mouse") return;
+    if (menu) return;
     const margin = 20; // the handles' room outside the table, plus a little
     let found: typeof cell = null;
     for (const table of editorBox.current?.querySelectorAll<HTMLTableElement>(".md-editor__content table") ?? []) {

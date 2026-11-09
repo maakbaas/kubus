@@ -5178,14 +5178,12 @@ html[data-swiping] body {
   margin-inline-start: auto;
 }
 .md-bar--keyboard {
+  /* Placed by MarkdownToolbar (top, left, width) on the visual viewport's bottom every frame, shown only with a keyboard up. */
   position: fixed;
-  inset-inline: 0;
-  inset-block-end: var(--keyboard-inset, 0px);
   z-index: 7000;
-  /* Its surface runs down to the keyboard: iOS 26 floats its own bar (↑ ↓ ✓) over the bottom of the page while its
-     keyboard is up, which then lies on this bar's background, its buttons above it (--keyboard-accessory,
-     MarkdownToolbar), with no page showing between. Under the home indicator when there is no on-screen keyboard. */
-  padding-block-end: max(var(--keyboard-accessory, 0px), calc(env(safe-area-inset-bottom) - var(--keyboard-inset, 0px)));
+  box-sizing: border-box;
+  /* Its surface runs down to the keyboard: iOS 26's own floating bar (↑ ↓ ✓) lies on it, the buttons above it
+     (padding-block-end, set with the place). */
   background: var(--cds-layer-01);
   border-block-start: 1px solid var(--cds-border-subtle-01);
 }

@@ -10,7 +10,6 @@ import {
   Add,
   Code,
   FunctionMath,
-  KeyboardOff,
   Link,
   ListBulleted,
   ListChecked,
@@ -209,7 +208,7 @@ function textItems(view: EditorView): MenuEntry[] {
 }
 
 /**
- * The buttons: on a touch screen (`keyboard`) Undo and Redo, Insert and a table's menu first, Hide keyboard last; the
+ * The buttons: on a touch screen (`keyboard`) Undo and Redo, Insert and a table's menu first; the
  * inline styles, Link and Clear formatting; then the block's kind (text style, quote, lists, indent). A button shown and
  * not greyed always does what it says where the caret is (its command asked first): in code there are no styles and no
  * `/` menu, so those aren't shown; a heading made a list is made text first, and so on (markdownActions.ts).
@@ -281,13 +280,6 @@ function FormatButtons({ view, keyboard, hooks }: { view: EditorView; keyboard: 
           )}
         </span>
       )}
-      {keyboard && (
-        <span className="md-bar__group md-bar__group--end">
-          <BarButton label="Hide keyboard" align={align} onPress={() => view.dom.blur()}>
-            <KeyboardOff />
-          </BarButton>
-        </span>
-      )}
     </>
   );
 }
@@ -298,29 +290,53 @@ function FormatButtons({ view, keyboard, hooks }: { view: EditorView; keyboard: 
  * (`--keyboard-bar`, `data-keyboard-bar`, styles.css).
  */
 export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks }) {
+  const bar = useRef<HTMLDivElement>(null);
+  // Placed on every frame while it exists, from the visual viewport as it is then: iOS reports its keyboard and its
+  // panning of the page late, and not always with an event, so a place set from events (or `--keyboard-inset`) was hit
+  // or miss: under the keyboard, under iOS 26's ↑ ↓ ✓ bar, or above it. Shown only while an on-screen keyboard is up.
   useEffect(() => {
     const root = document.documentElement;
-    // iOS 26 floats its own bar (↑ ↓ ✓) over the bottom of what can be seen while its keyboard is up: this one goes
-    // above it (`--keyboard-accessory`), or it was hidden under it and couldn't be tapped.
-    const update = () => {
+    const el = bar.current;
+    if (!el) return;
+    let frame = 0;
+    let last = "";
+    // The tallest the window was at this width (Android shrinks the window for its keyboard, iOS only the visual viewport).
+    let tallest = { width: window.innerWidth, height: window.innerHeight };
+    const place = () => {
+      frame = requestAnimationFrame(place);
       const vv = window.visualViewport;
-      const up = !!vv && window.innerHeight - vv.height - vv.offsetTop > 80;
-      const accessory = up && floatingKeyboardBar() ? "3.5rem" : "0px";
-      root.style.setProperty("--keyboard-accessory", accessory);
-      root.style.setProperty("--keyboard-bar", `calc(2.5rem + ${accessory})`);
+      if (window.innerWidth !== tallest.width) tallest = { width: window.innerWidth, height: window.innerHeight };
+      else tallest.height = Math.max(tallest.height, window.innerHeight);
+      const seen = vv ? vv.height : window.innerHeight;
+      const up = seen < window.innerHeight - 80 || window.innerHeight < tallest.height - 150;
+      // iOS 26 floats its own bar over the bottom of what can be seen: the buttons go above it, the bar's surface under it.
+      const accessory = up && floatingKeyboardBar() ? ACCESSORY_PX : 0;
+      const top = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const key = `${up}|${Math.round(top)}|${vv ? Math.round(vv.offsetLeft) : 0}|${vv ? Math.round(vv.width) : window.innerWidth}|${accessory}`;
+      if (key === last) return;
+      last = key;
+      el.style.display = up ? "" : "none";
+      el.style.paddingBlockEnd = `${accessory}px`;
+      el.style.left = `${vv ? vv.offsetLeft : 0}px`;
+      el.style.width = `${vv ? vv.width : window.innerWidth}px`;
+      el.style.top = `${top - el.offsetHeight}px`;
+      if (up) {
+        root.dataset.keyboardBar = "";
+        root.style.setProperty("--keyboard-bar", `${el.offsetHeight}px`);
+      } else {
+        delete root.dataset.keyboardBar;
+        root.style.removeProperty("--keyboard-bar");
+      }
     };
-    update();
-    const stop = onViewportChange(update);
-    root.dataset.keyboardBar = "";
+    place();
     return () => {
-      stop();
-      root.style.removeProperty("--keyboard-bar");
-      root.style.removeProperty("--keyboard-accessory");
+      cancelAnimationFrame(frame);
       delete root.dataset.keyboardBar;
+      root.style.removeProperty("--keyboard-bar");
     };
   }, []);
   return createPortal(
-    <div className="md-bar md-bar--keyboard" role="toolbar" aria-label="Format" onMouseDown={keepFocus} onPointerDown={keepFocus}>
+    <div ref={bar} className="md-bar md-bar--keyboard" role="toolbar" aria-label="Format" style={{ display: "none" }} onMouseDown={keepFocus} onPointerDown={keepFocus}>
       <div className="md-bar__row">
         <FormatButtons view={view} keyboard hooks={hooks} />
       </div>
@@ -329,6 +345,9 @@ export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks
     document.querySelector(".app-root") ?? document.body,
   );
 }
+
+/** The room iOS 26's floating ↑ ↓ ✓ bar takes above its keyboard (its height and the gap above it). */
+const ACCESSORY_PX = 56;
 
 /**
  * Whether the on-screen keyboard comes with iOS 26's floating bar (↑ ↓ ✓) over the page: iOS (an iPad says it is a Mac,
