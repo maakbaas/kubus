@@ -1,5 +1,9 @@
-/** How long the keyboard is held for an editor that doesn't take it (a failed load): then let go. */
-const HOLD_MS = 5000;
+/**
+ * How long the keyboard is held at most for an editor that doesn't take it (a failed load): then let go. Long: the first
+ * time, the editor is loaded, read and made before it takes focus, which on a phone may take seconds; let go before
+ * then, the keyboard went and the editor's own focus came too late for iOS (the first tap needed a second one).
+ */
+const HOLD_MS = 15000;
 
 let held: { input: HTMLInputElement; timer: ReturnType<typeof setTimeout> } | null = null;
 
@@ -32,11 +36,14 @@ export function holdKeyboard(at?: { clientX: number; clientY: number }) {
   document.body.append(input);
   input.focus({ preventScroll: true });
   held = { input, timer: setTimeout(letGoOfKeyboard, HOLD_MS) };
+  // Another tap before the editor took it (editing cancelled, another field): let go.
+  document.addEventListener("pointerdown", letGoOfKeyboard, { capture: true, once: true });
 }
 
 /** The editor has focus (or won't take it): the held keyboard's input goes. */
 export function letGoOfKeyboard() {
   if (!held) return;
+  document.removeEventListener("pointerdown", letGoOfKeyboard, { capture: true });
   clearTimeout(held.timer);
   held.input.remove();
   held = null;

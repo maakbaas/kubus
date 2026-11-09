@@ -61,7 +61,8 @@ What the app does, feature by feature (read the part you work on).
   Carbon tooltip opens on mouseenter): a button or field then needed a second tap, at times. CSS `:hover` reveals are off
   on touch screens already. **Editing Markdown starts with the keyboard up** (`platform/holdKeyboard.ts`): iOS shows its
   keyboard only for a focus in the tap itself, and the Markdown editor takes focus once it has loaded; the tap focuses an
-  unseen input, whose keyboard the editor takes over.
+  unseen input, whose keyboard the editor takes over (held until it does, at most 15 s, or until another tap; the editor is
+  the first part loaded in the background after the app starts, so a first tap seldom waits for it).
 - **Markdown editor**: formatting is typed as Markdown, or set from the **format bar** (`ui/MarkdownToolbar.tsx`; what it
   does: `ui/markdownActions.ts`, no syntax of its own): with a mouse it floats over a selection (once made, not while
   dragging), and over the caret resting (0.7 s) at the edge of styled text; on a touch screen it is a bar on top of the

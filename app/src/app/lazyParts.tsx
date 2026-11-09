@@ -9,8 +9,9 @@ import { loadCodeHighlight } from "../ui/useCodeHighlight";
 const loaders: (() => Promise<unknown>)[] = [loadCodeHighlight];
 
 /** A component loaded on first render (React.lazy; a Suspense boundary above shows meanwhile), preloaded in the background. */
-function lazyPart<P extends object>(load: () => Promise<ComponentType<P>>): ComponentType<P> {
-  loaders.push(load);
+function lazyPart<P extends object>(load: () => Promise<ComponentType<P>>, first = false): ComponentType<P> {
+  if (first) loaders.unshift(load);
+  else loaders.push(load);
   return lazy(() => load().then((c) => ({ default: c })));
 }
 
@@ -21,7 +22,9 @@ export const ComponentsPage = lazyPart(() => import("../pages/ComponentsPage").t
 export const ComponentEditorPage = lazyPart(() => import("../pages/ComponentEditorPage").then((m) => m.ComponentEditorPage));
 export const CollectionEditorPage = lazyPart(() => import("../pages/CollectionEditorPage").then((m) => m.CollectionEditorPage));
 export const RemotesPage = lazyPart(() => import("../pages/RemotesPage").then((m) => m.RemotesPage));
-export const MarkdownEditor = lazyPart(() => import("../ui/MarkdownEditor").then((m) => m.MarkdownEditor));
+// First of all: a tap on a Markdown field soon after the app starts shouldn't wait for it (its keyboard is held meanwhile,
+// platform/holdKeyboard.ts, but the less it waits the better).
+export const MarkdownEditor = lazyPart(() => import("../ui/MarkdownEditor").then((m) => m.MarkdownEditor), true);
 
 let preloaded = false;
 
