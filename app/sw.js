@@ -8,9 +8,12 @@
 //  * /api (the sync server) is never cached.
 //  * Updates: the browser checks sw.js in the background (and serviceWorker.ts asks when the app is shown
 //    again); a new build's worker downloads all of its files while the old one keeps serving, then takes
-//    over. The next start (or "Reload to update", `updateAndReload`) shows the new build, entirely from cache.
-// The build replaces __BUILD__ (vite.config.ts), so every build installs a fresh worker. The previous
-// build's cache is kept (a page still running the old build may load its lazy chunks), older ones go.
+//    over. The next start (or "Reload to update", `updateAndReload`) shows the new build, entirely from cache;
+//    a running page is never reloaded by itself, so it can run an old build for days (iOS resumes it).
+// The build replaces __BUILD__ (vite.config.ts), so every build installs a fresh worker. Old builds' caches
+// stay while a page may still run them (it loads its lazy chunks from there; the server has only the newest):
+// all but the previous one go only when no page is open, or when the only page open says it started on
+// the newest build ("started", serviceWorker.ts). A second tab can't open the database, so one page is the rule.
 
 const PREFIX = "kubus-";
 const CACHE = `${PREFIX}__BUILD__`;
@@ -78,16 +81,21 @@ self.addEventListener("install", (event) => {
   event.waitUntil(precache().then(() => self.skipWaiting()));
 });
 
+/** Deletes the caches of builds older than the previous one, unless more pages are open than `started` (those that started on this build). */
+async function dropOldBuilds(started) {
+  const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  if (open.length > started) return;
+  const keys = await caches.keys();
+  const older = keys.filter((k) => k.startsWith(PREFIX) && k !== CACHE).sort((a, b) => built(b) - built(a));
+  await Promise.all(older.slice(1).map((k) => caches.delete(k)));
+}
+
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) => {
-        const older = keys.filter((k) => k.startsWith(PREFIX) && k !== CACHE).sort((a, b) => built(b) - built(a));
-        return Promise.all(older.slice(1).map((k) => caches.delete(k)));
-      })
-      .then(() => self.clients.claim()),
-  );
+  event.waitUntil(dropOldBuilds(0).then(() => self.clients.claim()));
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data === "started") event.waitUntil(dropOldBuilds(1));
 });
 
 async function page(request) {

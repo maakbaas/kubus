@@ -305,7 +305,8 @@ describe("the service worker", () => {
     vi.stubGlobal("document", doc);
     vi.stubGlobal("window", env.tauri ? { __TAURI_INTERNALS__: {} } : {});
     const takeOver: (() => void)[] = [];
-    const serviceWorker = { register, controller: env.controlled === false ? null : {}, addEventListener: (_: string, l: () => void) => takeOver.push(l) };
+    const postMessage = vi.fn();
+    const serviceWorker = { register, controller: env.controlled === false ? null : { postMessage }, addEventListener: (_: string, l: () => void) => takeOver.push(l) };
     vi.stubGlobal("navigator", env.worker ? { serviceWorker } : {});
     const reload = vi.fn();
     vi.stubGlobal("location", { reload });
@@ -315,7 +316,7 @@ describe("the service worker", () => {
     vi.stubGlobal("addEventListener", (_: string, l: () => void) => loads.push(l));
     const sw = await import("./serviceWorker");
     sw.registerServiceWorker();
-    return { register, update, loads, shown, doc, takeOver, reload, later, found, sw };
+    return { register, update, loads, shown, doc, takeOver, reload, later, found, sw, postMessage };
   }
   afterEach(() => vi.unstubAllEnvs());
 
@@ -340,29 +341,25 @@ describe("the service worker", () => {
     expect(t.update).toHaveBeenCalledOnce();
   });
 
-  it("shows a new build that took over the next time the app is shown (iOS resumes, it doesn't start again)", async () => {
+  it("never reloads by itself: a new build that took over waits for a fresh start or Reload to update", async () => {
     const t = await load({ prod: true, worker: true });
     t.loads[0]();
     await Promise.resolve();
     await Promise.resolve();
-    // In use for a while: no reload under the person's hands, only when they come back.
-    t.later(60_000);
+    // Taking over while in use, or just as the app is shown again: no reload, only "there is a newer build".
     t.takeOver[0]();
-    expect(t.reload).not.toHaveBeenCalled();
     t.doc.visibilityState = "hidden";
     t.shown[0]();
     t.doc.visibilityState = "visible";
     t.shown[0]();
-    expect(t.reload).toHaveBeenCalledOnce();
-    expect(t.update).not.toHaveBeenCalled();
-    // Taking over just as it is shown again: at once.
-    const u = await load({ prod: true, worker: true });
-    u.takeOver[0]();
-    expect(u.reload).toHaveBeenCalledOnce();
-    // A page's very first worker is no new build.
-    const first = await load({ prod: true, worker: true, controlled: false });
-    first.takeOver[0]();
-    expect(first.reload).not.toHaveBeenCalled();
+    expect(t.reload).not.toHaveBeenCalled();
+    expect(t.sw.updateAvailable()).toBe(true);
+  });
+
+  it("tells the worker it started, so old builds' caches can go (none while a page may run them)", async () => {
+    const t = await load({ prod: true, worker: true });
+    t.loads[0]();
+    expect(t.postMessage).toHaveBeenCalledWith("started");
   });
 
   it("tells when a newer build is there to load: a new worker found, or one that took over", async () => {

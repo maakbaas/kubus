@@ -59,8 +59,8 @@ export function DisplaySettings() {
           ))}
         </Select>
         {error && <InlineNotification kind="error" lowContrast hideCloseButton title="Not saved" subtitle={error} />}
-        {/* The app starts from its cache and takes a new build in the background, shown the next time it is opened;
-            this loads it now (platform/serviceWorker.ts). Only in a home-screen app, and only with a newer build there. */}
+        {/* The app starts from its cache and takes a new build in the background, shown only when it is started afresh
+            (never mid-session); this loads it now (platform/serviceWorker.ts). Only in a home-screen app, and only with a newer build there. */}
         {reloads && update && (
           <div className="settings-reload">
             <Button
@@ -75,7 +75,7 @@ export function DisplaySettings() {
             >
               {updating ? "Updating…" : "Reload to update"}
             </Button>
-            <p className="helper">Loads the newest version of Kubus, e.g.    right after the server was updated. It updates itself too, but a home-screen app can take a while.</p>
+            <p className="helper">Loads the newest version of Kubus, already downloaded. Otherwise it shows the next time Kubus is started afresh, never while you use it.</p>
           </div>
         )}
       </Stack>

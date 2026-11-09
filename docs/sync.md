@@ -543,11 +543,13 @@ weak connection the phone still counts as online (one bar never delays the start
 (8 files at a time; what didn't change comes from the old cache: React and Carbon's `Icon` are a `vendor` chunk of their own,
 `vite.config.ts`, so an app change doesn't rename the ~2,700 lazily loaded icons, which made every update thousands of
 downloads that iOS never let finish) in the background (also checked when the app is shown again: iOS resumes it without loading the page). Once it has
-taken over, the page reloads the next time it is shown again, or at once when that was just now (`platform/serviceWorker.ts`):
-iOS hardly ever starts a home-screen app afresh, so "the next start" left it on the old build for good. That reload is from
-the cache too (instant, offline), and never while the app is in use. Settings → Display's "Reload to update" (only in an installed web app, `inInstalledWebApp`: a browser tab has its own reload; and only while a newer
-build is there, `updateAvailable`: opening the settings asks for one) loads it at once
-(`updateAndReload`, as "Reload to update" does), for when iOS keeps the old one a while after the server was updated. The previous build's cache is kept for a page still running it. iOS needs HTTPS for OPFS and
+taken over, it shows on the next fresh start only: a running page is never reloaded by itself (`platform/serviceWorker.ts`; a
+page suddenly reloading, a spinner where it was, looks broken). As iOS hardly ever starts a home-screen app afresh, Settings →
+Display's "Reload to update" (only in an installed web app, `inInstalledWebApp`: a browser tab has its own reload; and only while a newer
+build is there, `updateAvailable`: opening the settings asks for one) loads it (`updateAndReload`, as the outdated notice's
+"Reload to update" does), from the cache, at once. Since a page may run an old build for days, the worker keeps old builds' caches
+(its lazy chunks are loaded from there; the server has only the newest) and drops all but the previous one only when no page is open
+or the one open says it started on the newest (`started`, `app/sw.js` `dropOldBuilds`). iOS needs HTTPS for OPFS and
 service workers: put the container behind a TLS proxy or tunnel (Caddy, Tailscale serve, Cloudflare
 tunnel). The Tauri app (https origin) can only sync with an HTTPS server too.
 
