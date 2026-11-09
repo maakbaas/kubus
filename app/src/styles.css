@@ -4231,12 +4231,6 @@ img[data-lightbox] {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-/* Not a list page's short labels beside the name (Bookmarks' Where: "Collection", "View of …"): breaking anywhere made
-   them look one letter wide to the table's layout, which then broke "Collection" into "Colle / ction" at some widths
-   and not at others. They break between words only; the name keeps breaking anywhere (a long one without spaces). */
-.list-table td:not(.list-table__main) .icon-label__text {
-  overflow-wrap: break-word;
-}
 /* A checkbox field: header label above, the box centred in an input-height (2rem) row. */
 .checkbox-field {
   display: flex;
