@@ -10,7 +10,7 @@ spaces, bookmarks, and an optional Postgres sync server.
 These are plain paths, not `@` imports on purpose: imports are inlined into every session, which
 is what this split avoids. Keep them current when behaviour changes.
 
-- `docs/features.md`: every feature in detail: field types, toggle icons, GFM-only Markdown editor,
+- `docs/features.md`: every feature in detail: field types, toggle icons, GFM-only Markdown editor (format bar, `/` menu),
   in-place item editing, collection icons and app icon, components, blocks, dashboards, field order and item
   views, spaces, bookmarks, link schemes, global search, schema-change policy.
 - `docs/views-and-workspace.md`: query (`applyQuery`, `KIND_RULES`), block types (table, cards,

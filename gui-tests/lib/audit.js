@@ -165,7 +165,7 @@ function __audit(opts) {
     ".cds--popover-content", ".cds--modal", ".cds--list-box__menu", ".cds--overflow-menu-options",
     ".flatpickr-calendar", "[role=tooltip]", "[role=menu]", "[role=listbox]", ".search-bar",
     ".cds--side-nav", ".ws-drop", ".lightbox", ".milkdown-link-popover", ".cds--toast-notification",
-    ".overflow-bar[data-open] > .overflow-bar__items", ".md-link-popover",
+    ".overflow-bar[data-open] > .overflow-bar__items", ".md-link-popover", ".md-bar--keyboard",
   ].join(",");
   // The side nav floats over the content unless it is docked (narrow windows, phones).
   const overlayNav = !document.querySelector(".app-content--nav-docked");
@@ -244,8 +244,8 @@ function __audit(opts) {
   // The nearest ancestor that clips (overflow other than visible) bounds an element: sticking out
   // of it sideways means it is cut off (hidden/clip) or makes that box scroll (auto/scroll),
   // which is only fine for boxes meant to scroll sideways. A read-only Markdown table wider than its room scrolls
-  // in its box (styles.css `.md-view__table`), never the page.
-  const H_SCROLLERS = ".cds--tab--list, .items-table .cds--data-table-content, pre, .milkdown pre, .code-editor, .cds--tabs__nav, .cm-scroller, .views-tabs, .md-view__table";
+  // in its box (styles.css `.md-view__table`), never the page; the Markdown editor's keyboard bar scrolls its row.
+  const H_SCROLLERS = ".cds--tab--list, .items-table .cds--data-table-content, pre, .milkdown pre, .code-editor, .cds--tabs__nav, .cm-scroller, .views-tabs, .md-view__table, .md-bar__row";
   function clipParent(el) {
     for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
       const s = cs(p);

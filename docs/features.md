@@ -56,8 +56,34 @@ What the app does, feature by feature (read the part you work on).
 - **List pages' tables on a phone** (Collections, Components, Spaces, Bookmarks, Dashboards; not a view's tables): below
   42rem only the name (still its link; Spaces also its icon) and the row's icon buttons show, one line per row;
   every other column is hidden (`ui/listTable.ts`: `LIST_TABLE` on the table, `LIST_MAIN` on the kept column).
-- **Markdown editor has no toolbar**: formatting is typed, images pasted/dropped, links edited from
-  their hover popover (on a touch screen a tap on a link shows it instead of opening the link; its Open link opens it). Its height follows the content (no inner scrolling, no resize handle).
+- **Markdown editor**: formatting is typed as Markdown, or set from the **format bar** (`ui/MarkdownToolbar.tsx`; what it
+  does: `ui/markdownActions.ts`, no syntax of its own): with a mouse it floats over a selection (once made, not while
+  dragging), and over the caret resting (0.7 s) at the edge of styled text; on a touch screen it is a bar on top of the
+  on-screen keyboard (`--keyboard-inset`; pane content makes room, `--keyboard-bar`) while the editor has focus, one row
+  scrolling sideways, its buttons never taking focus from the editor (the keyboard stays up; a tap on it is no tap outside
+  the field). Its buttons: on a touch screen Undo, Redo, Insert (+: a `/` at the caret) and in a table the Table menu
+  first, Hide keyboard last; Bold, Italic, Strikethrough, Code, Formula (each selected while on for what is typed next, or
+  for all of the selection), Link (Ctrl / ⌘+K: the link at the caret or over the selection edited, else one added over the
+  selection or at the caret, its address as its text), Clear formatting (every style but a link and a formula); then the
+  block: Text style (Text, Heading 1–6, the current one marked), Quote, Bulleted list, Numbered list, Checklist (each on /
+  off; another kind switches the list), Outdent and Indent in a list. Tooltips name the shortcuts. Turned off with only a
+  caret, a style goes from the whole stretch the caret is in (as Backspace at its front does) and what is typed next is
+  plain; Ctrl / ⌘+B, I, E and Ctrl / ⌘+Alt+X do the same. iOS's own Format menu (Bold, Italic) works as the buttons.
+  **Style edges** (`ui/markdownEdges.ts`): at the edge of styled text the caret is inside or outside it, the bar shows
+  which: ← and → step across an edge first without moving, arriving from inside it is inside, from outside outside; a
+  click or tap at an edge is outside; typing on inside code or a formula goes on in it. No syntax is ever shown.
+  **The `/` menu** (`ui/SlashMenu.tsx`): a `/` at a line's start or after a space opens it (not in code, not after `#`, so
+  `#/` stays a link, nor inside a word); it only inserts, never changes what is there (that is the bar's): on an empty line
+  a block in its place, after a line with text a block after it (the space before the `/` goes), an inline thing at the
+  caret. Headings 1–3, Quote, the three lists, Table, Code block, Formula block, Divider, Image (a file picked: the phone
+  has no paste or drop), Link to page (`#/` and the link picker), Formula, Footnote (its note added at the end, the caret
+  in it), Line break, Headings 4–6; each shows the Markdown that types it, filtered as typed (a name starting with it first);
+  ↑ ↓ Enter / Tab, Escape (the `/` stays text, as does a space with nothing found).
+  **Tables**: with a mouse a row's and a column's handle (Shift: from the selected rows / columns on to it); on a touch
+  screen the bar's Table menu, for the caret's cell. Their menus are words: Row above / below, Column left / right, Align
+  left / center / right (the column; again: none), Delete row(s) / column(s) (all those selected), Delete table. Delete or
+  Backspace with whole rows or columns selected deletes them; the whole table selected, the table.
+  Links are also edited from their hover popover (on a touch screen a tap on a link shows it instead of opening the link; its Open link opens it). Its height follows the content (no inner scrolling, no resize handle).
   Backspace at the front of anything styled makes it plain text in one press (`unstyleAtCaret`, `ui/markdownKeys.ts`): bold,
   italic, strikethrough, code, a formula or a link starting at the caret loses that style to where it ends (a second press
   deletes as usual); at a block's start a heading of any level, a code block or a formula block (its lines kept as line

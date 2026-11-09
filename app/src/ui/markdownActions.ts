@@ -433,7 +433,8 @@ export function insertOptions(query: string): InsertOption[] {
 /** A new GFM table: a header row and two rows of three empty cells. */
 function newTable(schema: Schema): ProseNode {
   const n = schema.nodes;
-  const cells = (type: NodeType) => [0, 1, 2].map(() => type.createAndFill()!);
+  // No alignment written (`---`), as a table typed: the schema's default is left (`:--`).
+  const cells = (type: NodeType) => [0, 1, 2].map(() => type.createAndFill({ alignment: null })!);
   return n.table.create(null, [n.table_header_row.create(null, cells(n.table_header)), n.table_row.create(null, cells(n.table_cell)), n.table_row.create(null, cells(n.table_cell))]);
 }
 
@@ -473,6 +474,10 @@ function blockOf(schema: Schema, kind: InsertKind, content?: ProseNode["content"
  * this only takes the `/query` away.
  */
 export function insertChosen(state: EditorState, kind: InsertKind, from: number, to: number): Transaction | null {
+  // A block going after the line: the space typed before the `/` goes too.
+  const option = INSERT_OPTIONS.find((o) => o.kind === kind);
+  const $slash = state.doc.resolve(from);
+  if (option?.block && $slash.parentOffset > 0 && state.doc.textBetween(from - 1, from) === " ") from -= 1;
   const tr = state.tr.delete(from, to);
   const $pos = tr.doc.resolve(from);
   const { schema } = state;

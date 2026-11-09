@@ -284,15 +284,17 @@ function FormatButtons({ view, keyboard, hooks }: { view: EditorView; keyboard: 
 
 /**
  * On a touch screen, while the editor has focus: the bar on top of the on-screen keyboard (at the bottom of what can
- * be seen: `--keyboard-inset`), one row that scrolls sideways. Pane content makes room for it at its end
- * (`--keyboard-bar`, styles.css).
+ * be seen: `--keyboard-inset`), one row that scrolls sideways. The pane makes room for it after its content
+ * (`--keyboard-bar`, `data-keyboard-bar`, styles.css).
  */
 export function KeyboardBar({ view, hooks }: { view: EditorView; hooks: BarHooks }) {
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty("--keyboard-bar", "2.5rem");
+    root.dataset.keyboardBar = "";
     return () => {
       root.style.removeProperty("--keyboard-bar");
+      delete root.dataset.keyboardBar;
     };
   }, []);
   return createPortal(

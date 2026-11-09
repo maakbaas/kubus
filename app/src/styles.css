@@ -188,7 +188,7 @@ body {
 }
 /* The bar takes the home indicator's room: a page ends a page padding above the bar (the keyboard's room too). */
 .app-content--bottom-bar .ws-tab-content {
-  padding-block-end: calc(var(--cds-spacing-05) + var(--keyboard-inset, 0px) + var(--keyboard-bar, 0px));
+  padding-block-end: calc(var(--cds-spacing-05) + var(--keyboard-inset, 0px));
 }
 /* While a field is typed in (keyboardInset.ts TEXT_FIELD) the bar makes way for the keyboard: on Android the window
    shrinks to above it and the bar would sit on top of it. The page grows downwards only, so the field stays put: the
@@ -201,12 +201,19 @@ body {
   inset-block-end: 0;
 }
 :root:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=color]):not([type=image]):not([type=hidden]), textarea, select, [contenteditable]:not([contenteditable=false])):focus) .app-content--bottom-bar .ws-tab-content {
-  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + var(--keyboard-bar, 0px));
+  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
 }
 :root:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=color]):not([type=image]):not([type=hidden]), textarea, select, [contenteditable]:not([contenteditable=false])):focus) .app-content--bottom-bar .ws-pane__body::after {
   content: "";
   display: block;
-  block-size: var(--bottom-bar-height);
+  block-size: calc(var(--bottom-bar-height) + var(--keyboard-bar, 0px));
+}
+/* The Markdown editor's keyboard bar (MarkdownToolbar, `data-keyboard-bar` while shown) covers the pane's end: the pane
+   gets its height more to scroll, as an empty block after the page (the page keeps its size: nothing jumps when it goes). */
+:root[data-keyboard-bar] .ws-pane__body::after {
+  content: "";
+  display: block;
+  block-size: var(--keyboard-bar, 0px);
 }
 .ws-pane__spacer {
   flex: 1;
@@ -441,7 +448,7 @@ body {
 .ws-tab-content {
   padding: var(--cds-spacing-05);
   /* Content scrolls clear of the home indicator and of an on-screen keyboard (keyboardInset.ts). */
-  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + var(--keyboard-bar, 0px));
+  padding-block-end: calc(var(--cds-spacing-05) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
 }
 /* The loading indicator while the database opens, centred in the window (pages show nothing
    while loading: their data takes a fraction of a second, a spinner would only flash). */
@@ -5155,8 +5162,8 @@ html[data-swiping] body {
 
 /* The Markdown editor's format bar (MarkdownToolbar): Carbon ghost icon buttons touching (32px pitch), groups a small
    gap apart. On a touch screen it sits on top of the on-screen keyboard (--keyboard-inset, keyboardInset.ts; 0 where
-   the window shrinks for it), full width, one row scrolling sideways; pane content makes room at its end
-   (--keyboard-bar). With a mouse it floats over the selection, in a Carbon popover. */
+   the window shrinks for it), full width, one row scrolling sideways; the pane makes room after its content
+   (--keyboard-bar, above). With a mouse it floats over the selection, in a Carbon popover. */
 .md-bar {
   display: flex;
   align-items: center;

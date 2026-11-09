@@ -740,8 +740,15 @@ function EditorChrome(props: Props) {
     setMenu(null);
     setCell(null);
   };
-  /** The editor's view now (null while it loads). */
-  const viewNow = (): EditorView | null => (loading ? null : (getEditor()?.action((ctx: Ctx) => ctx.get(editorViewCtx)) ?? null));
+  /** The editor's view now (null while it loads, and once it is gone: Milkdown throws for a view it no longer has). */
+  const viewNow = (): EditorView | null => {
+    if (loading) return null;
+    try {
+      return getEditor()?.action((ctx: Ctx) => ctx.get(editorViewCtx)) ?? null;
+    } catch {
+      return null;
+    }
+  };
 
   /** Runs a function against the editor view and returns focus to the editor. */
   const withView = (fn: (view: EditorView) => void) => {
