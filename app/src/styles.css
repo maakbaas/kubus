@@ -5187,6 +5187,18 @@ html[data-swiping] body {
   background: var(--cds-layer-01);
   border-block-start: 1px solid var(--cds-border-subtle-01);
 }
+/* …and on behind the top of the keyboard (iOS draws its keyboard over the page, with rounded, see-through corners), fading
+   out over its top half: no page shows between the bar and the keyboard, and it doesn't look flat. Below the window's edge
+   it is not drawn (Android's keyboard is no part of it). */
+.md-bar--keyboard::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 100%;
+  block-size: 10rem;
+  background: linear-gradient(var(--cds-layer-01), transparent);
+  pointer-events: none;
+}
 .md-bar__row {
   display: flex;
   align-items: center;
