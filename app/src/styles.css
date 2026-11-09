@@ -5203,8 +5203,7 @@ html[data-swiping] body {
   align-items: center;
   gap: var(--cds-spacing-03);
   inline-size: 100%;
-  min-block-size: 2.5rem;
-  /* (its buttons 40px for a thumb: TouchButton) */
+  min-block-size: 2rem;
   padding-inline: var(--cds-spacing-03);
   overflow-x: auto;
   overscroll-behavior: contain;
@@ -5224,10 +5223,6 @@ html[data-swiping] body {
   max-inline-size: none;
 }
 /* A menu button whose setting is in effect (a heading): its icon blue, as toolbar popover buttons' are. */
-/* A keyboard bar button whose setting is on: as an icon button's selected. */
-.md-bar__touch.cds--btn--selected {
-  background: var(--cds-background-selected);
-}
 .md-bar__button--on svg {
   fill: var(--cds-icon-interactive);
 }

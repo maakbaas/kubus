@@ -1,3 +1,4 @@
+import { holdKeyboard } from "../platform/holdKeyboard";
 import { useMemo, useState } from "react";
 import { ERROR_PREFIX, placeProblem, render } from "../domain/components";
 import { Document } from "@carbon/icons-react";
@@ -69,6 +70,8 @@ function MarkdownBlockView({ options, refs, onOptions }: BlockProps<MarkdownBloc
   const startEdit = (e: React.MouseEvent | React.KeyboardEvent) => {
     // Links keep working.
     if ((e.target as HTMLElement).closest("a")) return;
+    // The Markdown editor takes focus only once it has loaded: its keyboard is brought up in this tap (iOS).
+    if ("clientX" in e) holdKeyboard(e);
     setEditing({ start: "clientX" in e ? captureEditStart(e.currentTarget as HTMLElement, e) : undefined });
   };
   return (

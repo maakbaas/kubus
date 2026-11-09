@@ -1,3 +1,4 @@
+import { letGoOfKeyboard } from "../platform/holdKeyboard";
 import { useEffect, useId, useReducer, useRef, useState, type ReactNode, type RefObject } from "react";
 import { FormLabel, IconButton, InlineNotification, Modal, Popover, PopoverContent } from "@carbon/react";
 import { Edit, Launch, OverflowMenuHorizontal, OverflowMenuVertical, Unlink } from "@carbon/icons-react";
@@ -764,8 +765,11 @@ function EditorChrome(props: Props) {
   const startApplied = useRef(false);
   useEffect(() => {
     const start = props.start;
-    if (loading || startApplied.current || !start) return;
+    if (loading || startApplied.current) return;
+    if (!start) return letGoOfKeyboard();
     startApplied.current = true;
+    // The keyboard held since the tap (platform/holdKeyboard.ts) moves to the editor with its focus.
+    window.setTimeout(letGoOfKeyboard, 0);
     withView((view) => {
       const posAt = (p: { x: number; y: number }) => view.posAtCoords({ left: p.x, top: p.y })?.pos;
       const { doc } = view.state;

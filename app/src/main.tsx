@@ -11,6 +11,7 @@ import { suppressShellContextMenu } from "./platform/contextMenu";
 import { registerServiceWorker } from "./platform/serviceWorker";
 import { trackKeyboardInset } from "./platform/keyboardInset";
 import { keepWebLinksInHomeScreenApp } from "./platform/openExternal";
+import { tapsAreClicks } from "./platform/tapsAreClicks";
 import { useDark, usePageTheme } from "./app/settings";
 import { escapeThroughDropdowns } from "./ui/escapeThroughDropdowns";
 
@@ -33,6 +34,7 @@ for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
 registerServiceWorker();
 trackKeyboardInset();
 keepWebLinksInHomeScreenApp();
+tapsAreClicks();
 escapeThroughDropdowns();
 
 // The first render waits (at most a second) for the bundled faces nearly every page uses: drawn in

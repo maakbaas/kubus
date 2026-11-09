@@ -56,12 +56,18 @@ What the app does, feature by feature (read the part you work on).
 - **List pages' tables on a phone** (Collections, Components, Spaces, Bookmarks, Dashboards; not a view's tables): below
   42rem only the name (still its link; Spaces also its icon) and the row's icon buttons show, one line per row;
   every other column is hidden (`ui/listTable.ts`: `LIST_TABLE` on the table, `LIST_MAIN` on the kept column).
+- **A tap is always a click** (`platform/tapsAreClicks.ts`): the hover events a touch screen makes up for a tap (iOS: mouseover,
+  mouseenter, mousemove) reach nothing in the app. iOS takes a tap as only a hover when that hover shows something new (a
+  Carbon tooltip opens on mouseenter): a button or field then needed a second tap, at times. CSS `:hover` reveals are off
+  on touch screens already. **Editing Markdown starts with the keyboard up** (`platform/holdKeyboard.ts`): iOS shows its
+  keyboard only for a focus in the tap itself, and the Markdown editor takes focus once it has loaded; the tap focuses an
+  unseen input, whose keyboard the editor takes over.
 - **Markdown editor**: formatting is typed as Markdown, or set from the **format bar** (`ui/MarkdownToolbar.tsx`; what it
   does: `ui/markdownActions.ts`, no syntax of its own): with a mouse it floats over a selection (once made, not while
   dragging), and over the caret resting (0.7 s) at the edge of styled text; on a touch screen it is a bar on top of the
   on-screen keyboard while the editor has focus and a keyboard is up (placed every frame on the visual viewport's bottom: iOS
   reports its keyboard late; the visual viewport ends where the keyboard, and on iOS 26 its floating ↑ ↓ ✓ bar, begin; its
-  surface goes on behind them, solid; the pane makes room after its content, `--keyboard-bar`), one row scrolling sideways, its buttons 40px without tooltips (iOS takes a tap on what shows a tooltip on hover as only that hover), never taking focus from the editor (the keyboard stays up; a tap on it is no tap outside
+  surface goes on behind them, solid; the pane makes room after its content, `--keyboard-bar`), one row scrolling sideways, its buttons never taking focus from the editor (the keyboard stays up; a tap on it is no tap outside
   the field). Its buttons: on a touch screen Undo, Redo, Insert (+: a `/` at the caret) and in a table the Table menu
   first; Bold, Italic, Strikethrough, Code, Formula (each selected while on for what is typed next, or
   for all of the selection), Link (Ctrl / ⌘+K: the link at the caret or over the selection edited, else one added over the

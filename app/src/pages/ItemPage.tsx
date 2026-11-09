@@ -1,3 +1,4 @@
+import { holdKeyboard } from "../platform/holdKeyboard";
 import { isEmptyValue as isEmpty, type FilterRule } from "../domain/query";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
@@ -1191,6 +1192,8 @@ export function ViewField({ field, value, refs, onEdit, onSave, readOnly, fixed,
   const startEdit = (e: MouseEvent | KeyboardEvent) => {
     // Links inside the value (item references, markdown links) and task checkboxes keep working.
     if ((e.target as HTMLElement).closest("a, .md-view__task--toggle")) return;
+    // The Markdown editor takes focus only once it has loaded: its keyboard is brought up in this tap (iOS).
+    if (field.kind === "markdown" && "clientX" in e) holdKeyboard(e);
     // Keep a click position or a drag-selection, so editing starts right there.
     onEdit("clientX" in e ? captureEditStart(e.currentTarget as HTMLElement, e) : undefined);
   };

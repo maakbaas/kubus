@@ -1,3 +1,4 @@
+import { holdKeyboard } from "../platform/holdKeyboard";
 import {
   memo,
   useEffect,
@@ -295,7 +296,11 @@ const Cell = memo(function Cell({ collection, isTitle, field, item, refs, search
       role="button"
       tabIndex={0}
       aria-label={`Edit ${field.name}`}
-      onClick={(e) => onEdit(cellEditStart(e.currentTarget, e))}
+      onClick={(e) => {
+        // The Markdown editor takes focus only once it has loaded: its keyboard is brought up in this tap (iOS).
+        if (field.kind === "markdown") holdKeyboard(e);
+        onEdit(cellEditStart(e.currentTarget, e));
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();

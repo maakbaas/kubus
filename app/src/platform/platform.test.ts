@@ -403,3 +403,27 @@ describe("the service worker", () => {
     expect((await load({ prod: true, worker: true, tauri: true })).loads).toHaveLength(0);
   });
 });
+
+describe("a tap is always a click", () => {
+  it("the hover events a touch makes up reach nothing; a mouse's still do", async () => {
+    const { tapsAreClicks, HOVER_EVENTS } = await import("./tapsAreClicks");
+    const listeners = new Map<string, (e: Event) => void>();
+    let now = 0;
+    tapsAreClicks({ addEventListener: ((type: string, l: (e: Event) => void) => listeners.set(type, l)) as Window["addEventListener"] }, () => now);
+    const hover = (type: string) => {
+      const e = { stopImmediatePropagation: vi.fn() } as unknown as Event;
+      listeners.get(type)!(e);
+      return (e.stopImmediatePropagation as ReturnType<typeof vi.fn>).mock.calls.length > 0;
+    };
+    // A mouse: hovers as ever.
+    for (const type of HOVER_EVENTS) expect(hover(type)).toBe(false);
+    // A tap: the mouseover, mouseenter and mousemove made up for it are stopped.
+    now = 10_000;
+    listeners.get("touchend")!({} as Event);
+    now += 50;
+    for (const type of HOVER_EVENTS) expect(hover(type)).toBe(true);
+    // Later, a mouse (an iPad's trackpad) hovers again.
+    now += 2_000;
+    expect(hover("mouseover")).toBe(false);
+  });
+});
