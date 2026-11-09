@@ -9,7 +9,7 @@ type Check = { checked: boolean; onChange(checked: boolean): void } | null;
 
 /**
  * "View settings" of a collection view or a dashboard tab: the view's name and place among the views, Show filter bar,
- * Full width, Fields are editable, and its blocks (`children`: the block list). The same panel on both pages.
+ * Full width, Show number of items (a collection view's), Fields are editable, and its blocks (`children`: the block list). The same panel on both pages.
  */
 export function ViewSettingsPanel({
   view,
@@ -20,6 +20,7 @@ export function ViewSettingsPanel({
   onRename,
   filterBar,
   fullWidth,
+  showCount = null,
   editable,
   children,
 }: {
@@ -33,6 +34,8 @@ export function ViewSettingsPanel({
   onRename(name: string): void;
   filterBar: Check;
   fullWidth: Check;
+  /** "Show number of items" (collection views only: a dashboard's has none). */
+  showCount?: Check;
   editable: Check;
   children: ReactNode;
 }) {
@@ -64,6 +67,7 @@ export function ViewSettingsPanel({
         <div className="view-options__checks">
           {check("filter-bar", "Show filter bar", filterBar)}
           {check("full-width", "Full width", fullWidth)}
+          {check("show-count", "Show number of items", showCount)}
           {check("editable", "Fields are editable", editable)}
         </div>
         {children}

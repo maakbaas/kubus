@@ -298,7 +298,9 @@ What the app does, feature by feature (read the part you work on).
   the pages). The toolbar holds only the view's
   search, filter and settings (at the right of its tab bar). The order of the tabs is changed in the settings only (no
   dragging): "Move left" / "Move right" beside the name in View settings, Tab settings and an item view's Page layout, stored
-  at once (`orderViews`, `orderDashboardViews` in one change; an item view's order is its collection's list; `movedId`). "Show filter bar" in View settings (per view, stored right away with
+  at once (`orderViews`, `orderDashboardViews` in one change; an item view's order is its collection's list; `movedId`). "Show number of items" in a collection view's View settings (per view, stored right away; not a dashboard's
+  nor a remote collection's) puts the number of items it shows on its tab, "All (12)": those its filter keeps (the shown
+  view's as it is now, with its search). "Show filter bar" in View settings (per view, stored right away with
   it) puts the filter on a bar below the tabs instead: the Filter button and the view's date period with ‹ › to step it, a
   "most recent" button (this week, month, …, rolling) and a kind switch (Hour to Year); each step is an unsaved change of the
   view's filter (docs/views-and-workspace.md, "Filter bar"). View settings lists the blocks (reorder, remove, "Add block" = a

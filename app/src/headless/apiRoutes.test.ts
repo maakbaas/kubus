@@ -467,6 +467,10 @@ describe("views", () => {
     expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filterBar: true })).filterBar).toBe(true);
     expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { name: "Plainer" })).filterBar).toBe(true);
     expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filterBar: false })).filterBar).toBeUndefined();
+    // "Show number of items": set, kept when not sent, taken off; only true or false.
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { showCount: true })).showCount).toBe(true);
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { name: "Plainer" })).showCount).toBe(true);
+    expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { showCount: false })).showCount).toBeUndefined();
     // The date period off the filter bar: set, kept when not sent, back on with true.
     expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { filterBarPeriod: false })).filterBarPeriod).toBe(false);
     expect((await ok("PATCH", `/collections/Book/views/${made.id}?space=work`, { name: "Plainer" })).filterBarPeriod).toBe(false);

@@ -143,7 +143,13 @@ const barPeriodIn = (o: Body, existing: { filterBarPeriod?: false }): { filterBa
   return off ? { filterBarPeriod: false } : {};
 };
 
-const withoutFilterBar = ({ filterBar: _bar, filterBarPeriod: _period, ...view }: CollectionView): CollectionView => view;
+/** The view's "Show number of items" as sent (absent: as it is), without the key when off. */
+const showCountIn = (o: Body, existing: CollectionView): { showCount?: true } => {
+  if (o.showCount !== undefined && typeof o.showCount !== "boolean") throw new HttpError(400, "`showCount` is true or false");
+  return (o.showCount === undefined ? existing.showCount : o.showCount) ? { showCount: true } : {};
+};
+
+const withoutFilterBar = ({ filterBar: _bar, filterBarPeriod: _period, showCount: _count, ...view }: CollectionView): CollectionView => view;
 const withoutFullWidth = ({ fullWidth: _width, ...view }: CollectionView): CollectionView => view;
 
 /**
@@ -441,6 +447,7 @@ export function createApi(repo: Repository): Router {
     ...filterBarIn(o, existing),
     ...barPeriodIn(o, existing),
     ...fullWidthIn(o, existing.fullWidth),
+    ...showCountIn(o, existing),
   });
 
   const itemViewsIn = (w: World, collection: Collection, v: unknown): ItemView[] => {

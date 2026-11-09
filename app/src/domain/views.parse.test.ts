@@ -83,6 +83,11 @@ describe("parseViewConfig", () => {
     expect("filterBar" in parseViewConfig(JSON.stringify({ filters: [], blocks: [] }))).toBe(false);
   });
 
+  it("reads \"Show number of items\" only when it is on", () => {
+    expect(parseViewConfig(JSON.stringify({ filters: [], blocks: [], showCount: true })).showCount).toBe(true);
+    for (const showCount of [false, "yes", 1, null]) expect("showCount" in parseViewConfig(JSON.stringify({ filters: [], blocks: [], showCount }))).toBe(false);
+  });
+
   it("reads the date period's place on the filter bar only when it is off", () => {
     expect(parseViewConfig(JSON.stringify({ filters: [], blocks: [], filterBarPeriod: false })).filterBarPeriod).toBe(false);
     for (const filterBarPeriod of [true, "no", 0, null]) expect("filterBarPeriod" in parseViewConfig(JSON.stringify({ filters: [], blocks: [], filterBarPeriod }))).toBe(false);

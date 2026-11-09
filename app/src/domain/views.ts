@@ -155,6 +155,12 @@ export interface CollectionView extends ViewState {
    * the view as soon as it is set, like "Show filter bar"; absent = the place's default (`isFullWidth`).
    */
   fullWidth?: boolean;
+  /**
+   * "Show number of items": the view's tab says how many items it shows, "Books (12)" (those its filter and, while it is
+   * shown, its search keep). Collection views only (not a dashboard's: its blocks list several collections). Stored as
+   * soon as it is set, like "Show filter bar". Absent = off.
+   */
+  showCount?: true;
   createdAt: string;
   updatedAt: string;
 }
@@ -308,7 +314,7 @@ export function parseBlock(raw: unknown): ViewBlock | null {
 }
 
 /** A view's stored config (JSON `{ filters, blocks, editable, collapsed, filterBar?, filterBarPeriod?, fullWidth? }`); unreadable: no filter, no blocks. */
-export function parseViewConfig(json: string): ViewState & { collapsed: Collapsed; filterBar?: true; filterBarPeriod?: false; fullWidth?: boolean } {
+export function parseViewConfig(json: string): ViewState & { collapsed: Collapsed; filterBar?: true; filterBarPeriod?: false; fullWidth?: boolean; showCount?: true } {
   let o: Record<string, unknown> = {};
   try {
     o = (JSON.parse(json) ?? {}) as Record<string, unknown>;
@@ -323,6 +329,7 @@ export function parseViewConfig(json: string): ViewState & { collapsed: Collapse
     ...(o.filterBar === true && { filterBar: true as const }),
     ...(o.filterBarPeriod === false && { filterBarPeriod: false as const }),
     ...(typeof o.fullWidth === "boolean" && { fullWidth: o.fullWidth }),
+    ...(o.showCount === true && { showCount: true as const }),
   };
 }
 

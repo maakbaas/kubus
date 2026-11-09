@@ -24,7 +24,8 @@ export function ViewsBar({
   bookmark,
   children,
 }: {
-  views: { id: string; name: string }[];
+  /** `count`: how many items the view shows, said on its tab ("Show number of items"). */
+  views: { id: string; name: string; count?: number }[];
   activeId: string | undefined;
   /** The shown view has unsaved changes. */
   changed: boolean;
@@ -46,7 +47,7 @@ export function ViewsBar({
   const clipped = useClippedTabs(bar);
   const active = views.findIndex((v) => v.id === activeId);
   // "*" marks unsaved changes to the shown view (switching views discards them).
-  const nameOf = (v: { id: string; name: string }) => v.name + (changed && v.id === activeId ? " *" : "");
+  const nameOf = (v: { id: string; name: string; count?: number }) => v.name + (v.count !== undefined ? ` (${v.count})` : "") + (changed && v.id === activeId ? " *" : "");
   const add = (
     <IconButton autoAlign kind="ghost" size="sm" align="bottom" label="Add view" onClick={onAdd}>
       <Add />

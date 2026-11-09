@@ -28,6 +28,7 @@ import { useBlockArrangement } from "../views/useBlockArrangement";
 import { withCopy } from "../domain/blockRows";
 import { FilterBar } from "../views/FilterBar";
 import { QueryEditor } from "../views/QueryEditor";
+import { applyQuery, defaultQuery, resolveFilterValues } from "../domain/query";
 import { useCollectionData } from "../views/useCollectionData";
 import { ListData } from "../views/useListData";
 import { isListCollectionId } from "../domain/listEntries";
@@ -49,6 +50,12 @@ const normalized = (collection: Collection, state: ViewState, collections: Colle
 const withFilterBar = (view: CollectionView, on: boolean): CollectionView => {
   const { filterBar: _old, ...rest } = view;
   return on ? { ...rest, filterBar: true } : rest;
+};
+
+/** A view with "Show number of items" set or taken off (absent when off). */
+const withShowCount = (view: CollectionView, on: boolean): CollectionView => {
+  const { showCount: _old, ...rest } = view;
+  return on ? { ...rest, showCount: true } : rest;
 };
 
 /** A view with "Full width" set (stored as set: on or off). */
@@ -231,6 +238,19 @@ function CollectionContent({ collection }: { collection: Collection }) {
   // "Full width" (View settings): off, the view is the narrow column of an item page. Held while a panel is
   // open, like the filter bar: the width moves the toolbar's buttons, and the open panel with them.
   const fullWidth = panels.hold("fullWidth", isFullWidth("collection", active?.fullWidth));
+  // "Show number of items": a view's tab says how many items it shows: those its filter keeps (the shown view's as it is
+  // now, unsaved changes and its search too). A remote collection's rows are read a page at a time: it has none.
+  const tabs = useMemo(() => {
+    if (remote || !data.items) return views;
+    const items = data.items;
+    return views.map((v) => {
+      if (!v.showCount) return v;
+      const shown = v.id === active?.id;
+      const filters = resolveFilterValues(shown ? view.filters : v.filters, null);
+      const result = applyQuery(collection, items, { ...defaultQuery(), sort: [], filters }, data.ctx, shown ? viewSearch.searched : "");
+      return { ...v, count: result.total };
+    });
+  }, [remote, data.items, data.ctx, views, active?.id, view.filters, viewSearch.searched, collection]);
   // Which blocks are beside another, held likewise: a block put in a row (Block settings) would move its open panel.
   const beside = panels.hold("beside", besideOf(view.blocks));
 
@@ -267,6 +287,17 @@ function CollectionContent({ collection }: { collection: Collection }) {
     await fresh.storing(async () => {
       const id = (await storeVirtual()) ?? active.id;
       await repo.saveView({ ...withPeriod(active), id, createdAt: active.createdAt || now() });
+    });
+    await loadViews();
+  }
+
+  /** "Show number of items": stored with the shown view right away, as "Show filter bar". */
+  async function setShowCount(on: boolean) {
+    if (!active) return;
+    setSavedViews((list) => list && list.map((v) => (v.id === active.id ? withShowCount(v, on) : v)));
+    await fresh.storing(async () => {
+      const id = (await storeVirtual()) ?? active.id;
+      await repo.saveView({ ...withShowCount(active, on), id, createdAt: active.createdAt || now() });
     });
     await loadViews();
   }
@@ -401,7 +432,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
       {/* Always shown, also for a single view: its name, "+", bookmark and saving stay in one place. */}
       {savedViews !== null && (
         <ViewsBar
-          views={views}
+          views={tabs}
           activeId={active?.id}
           changed={changed}
           label="Views"
@@ -447,6 +478,7 @@ function CollectionContent({ collection }: { collection: Collection }) {
             onRename={(name) => renameActive(name).catch((e) => setError(errorMessage(e)))}
             filterBar={active && { checked: !!active.filterBar, onChange: (on) => setFilterBar(on).catch((e) => setError(errorMessage(e))) }}
             fullWidth={active && { checked: isFullWidth("collection", active.fullWidth), onChange: (on) => setFullWidth(on).catch((e) => setError(errorMessage(e))) }}
+            showCount={remote || !active ? null : { checked: !!active.showCount, onChange: (on) => setShowCount(on).catch((e) => setError(errorMessage(e))) }}
             editable={readOnly ? null : { checked: view.editable, onChange: (on) => setView((v) => ({ ...v, editable: on })) }}
           >
             <BlockListEditor
